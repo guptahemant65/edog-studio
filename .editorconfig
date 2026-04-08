@@ -1,0 +1,36 @@
+# EditorConfig – https://editorconfig.org
+root = true
+
+# ── Defaults ──────────────────────────────────────────────────────────────────
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# ── Python ────────────────────────────────────────────────────────────────────
+[*.py]
+indent_size = 4
+
+# ── C# (Windows convention) ──────────────────────────────────────────────────
+[*.cs]
+end_of_line = crlf
+indent_size = 4
+
+# ── JavaScript & CSS ─────────────────────────────────────────────────────────
+[*.{js,css}]
+indent_size = 2
+
+# ── JSON / YAML / HTML ───────────────────────────────────────────────────────
+[*.{json,yml,yaml,html}]
+indent_size = 2
+
+# ── Markdown ──────────────────────────────────────────────────────────────────
+[*.md]
+trim_trailing_whitespace = false
+
+# ── Makefiles require tabs ────────────────────────────────────────────────────
+[Makefile]
+indent_style = tab
