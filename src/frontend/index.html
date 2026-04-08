@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐕 EDOG Log Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+/* __CSS_MODULES__ */
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-left">
+      <h1>🐕 EDOG Log Viewer</h1>
+      <span id="connection-status" class="status-badge disconnected">
+        <span class="status-dot"></span>
+        <span id="status-text">Connecting...</span>
+      </span>
+      <div class="stats-bar">
+        <span>Logs: <strong id="stat-logs">0</strong></span>
+        <span>SSR: <strong id="stat-ssr">0</strong></span>
+        <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button id="theme-btn" class="icon-btn" title="Toggle theme">🌙</button>
+    </div>
+  </header>
+
+  <!-- Smart Context Bar — auto-detected execution context -->
+  <div id="smart-context-bar" class="smart-context-bar"></div>
+
+  <!-- API Activity Toast — data-rich card for API calls -->
+  <div id="api-toast" class="api-toast"></div>
+
+  <!-- Error Alert — auto-detected errors -->
+  <div id="error-alert" class="error-alert"></div>
+
+  <!-- Anomaly Warning — proactive warnings -->
+  <div id="anomaly-warning" class="anomaly-warning"></div>
+
+  <nav id="tab-bar">
+    <button class="tab-btn active" data-tab="logs">📋 Logs <span class="tab-shortcut">1</span></button>
+    <button class="tab-btn" data-tab="ssr">📡 SSR Telemetry <span class="tab-shortcut">2</span></button>
+    <button class="tab-btn" data-tab="summary">📊 Execution Summary <span class="tab-shortcut">3</span></button>
+    <button class="tab-btn" data-tab="timeline">🎮 Command Center <span class="tab-shortcut">4</span></button>
+  </nav>
+
+  <div id="toolbar">
+    <div class="time-filter">
+      <button class="time-btn active" data-range="0" title="All time">All</button>
+      <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
+      <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
+      <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
+      <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
+    </div>
+    <div class="search-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Search logs... (Ctrl+K)" />
+      <span id="search-count" class="search-count"></span>
+    </div>
+    <select id="endpoint-filter" title="Filter by API endpoint">
+      <option value="">All Endpoints</option>
+    </select>
+    <select id="component-filter" title="Filter by component">
+      <option value="">All Components</option>
+    </select>
+    <div class="raid-filter-wrapper">
+      <span class="raid-filter-icon">🔍</span>
+      <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
+      <div id="raid-dropdown" class="raid-dropdown">
+        <div class="raid-dropdown-header">Recent Executions</div>
+        <div id="raid-dropdown-list"></div>
+      </div>
+    </div>
+    <span id="execution-badge">🔒 Execution: <span id="exec-badge-id"></span> — <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">✕</span></span>
+    <div class="level-filters">
+      <button class="level-btn" data-level="Verbose">V</button>
+      <button class="level-btn active" data-level="Message">M</button>
+      <button class="level-btn active" data-level="Warning">W</button>
+      <button class="level-btn active" data-level="Error">E</button>
+    </div>
+    <div class="preset-bar">
+      <button class="preset-btn" data-preset="all" title="Show all">All</button>
+      <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
+      <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
+      <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
+    </div>
+    <div class="toolbar-actions">
+      <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">🗑 Clear</button>
+      <button id="export-btn" class="action-btn" title="Export JSON">📥 Export</button>
+      <button id="pause-btn" class="action-btn" title="Pause (Space)">⏸ Pause</button>
+      <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error (↓E)">↓E</button>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <!-- TAB 1: Logs -->
+    <div id="tab-logs" class="tab-panel active">
+      <div id="logs-panel" class="panel">
+        <div class="panel-header">
+          <h2>📋 Application Logs</h2>
+          <span id="correlation-badge" class="correlation-badge" style="display:none">
+            Filtered: <span id="correlation-id"></span> <button id="correlation-close">✕</button>
+          </span>
+        </div>
+        <div id="logs-container" class="log-scroll">
+          <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📡</div>
+            <div class="empty-text">Waiting for logs...</div>
+            <div class="empty-dots"><span>.</span><span>.</span><span>.</span></div>
+          </div>
+        </div>
+        <div class="logs-status" id="logs-status-bar">
+          Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
+        </div>
+        <button id="resume-scroll-btn" class="scroll-fab" style="display:none">↓ Resume auto-scroll</button>
+      </div>
+    </div>
+
+    <!-- TAB 2: SSR Telemetry -->
+    <div id="tab-ssr" class="tab-panel">
+      <div id="telemetry-panel" class="panel">
+        <div class="panel-header">
+          <h2>📡 SSR Telemetry</h2>
+        </div>
+        <div id="telemetry-container" class="telemetry-scroll">
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: Execution Summary -->
+    <div id="tab-summary" class="tab-panel">
+      <div id="exec-summary-panel" class="panel">
+        <div id="exec-summary-content" class="exec-summary">
+          <div class="empty-state" id="exec-summary-empty">
+            <div class="empty-icon">📊</div>
+            <div class="empty-text">Select an execution from the filter bar to see its summary</div>
+          </div>
+          <div id="exec-summary-data" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: Command Center -->
+    <div id="tab-timeline" class="tab-panel">
+      <div id="control-panel" class="control-panel">
+        <div id="cp-connection-bar" class="connection-bar loading">
+          <div class="conn-status-row">
+            <span class="conn-dot"></span>
+            <span class="conn-status-text">Checking connection...</span>
+          </div>
+          <div class="conn-ids"></div>
+        </div>
+        <div id="cp-dag-overview" class="dag-overview"></div>
+        <div id="cp-execution" class="execution-card idle"></div>
+        <div id="cp-history" class="exec-history"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="detail-panel" class="detail-panel">
+    <div class="detail-header">
+      <h3 id="detail-title">Log Detail</h3>
+      <button id="detail-close" class="icon-btn">✕</button>
+    </div>
+    <div class="detail-content">
+      <!-- DetailPanel.show() generates innerHTML dynamically -->
+    </div>
+  </div>
+
+  <script>
+/* __JS_MODULES__ */
+  </script>
+</body>
+</html>

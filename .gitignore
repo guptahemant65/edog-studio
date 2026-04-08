@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.vscode/
+.vs/
+*.suo
+*.user
+*.sln.docuser
+
+# OS
+Thumbs.db
+.DS_Store
+
+# EDOG runtime files (never commit)
+.edog-token-cache
+.edog-changes.patch
+.edog-command/
+edog-feature-overrides.json
+.edog-lock
+
+# Config with secrets
+# edog-config.json is gitignored — use config/edog-config.template.json
+
+# Build output
+src/frontend/edog-studio.html
+
+# Node modules (if any tooling added later)
+node_modules/

@@ -1,0 +1,385 @@
+.search-wrapper {
+  position: relative;
+  flex: 1;
+  max-width: 480px;
+  order: 1;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+#search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-body);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+#search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+#search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-count {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+.level-filters {
+  display: flex;
+  gap: 4px;
+  order: 2;
+}
+
+.level-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  transition: all 0.2s ease;
+}
+
+.level-btn:hover {
+  border-color: var(--border-bright);
+  background: var(--surface-2);
+}
+
+.level-btn.active[data-level="Verbose"] {
+  border-color: var(--level-verbose);
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--level-verbose);
+}
+
+.level-btn.active[data-level="Message"] {
+  border-color: var(--level-message);
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--level-message);
+}
+
+.level-btn.active[data-level="Warning"] {
+  border-color: var(--level-warning);
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--level-warning);
+}
+
+.level-btn.active[data-level="Error"] {
+  border-color: var(--level-error);
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--level-error);
+}
+
+.preset-bar { 
+  display: flex; 
+  gap: 4px; 
+  margin-left: 12px; 
+  padding-left: 12px; 
+  border-left: 1px solid var(--border); 
+  order: 3;
+}
+
+.preset-btn { 
+  font-family: var(--font-mono); 
+  font-size: 11px; 
+  padding: 4px 10px; 
+  border-radius: 6px; 
+  border: 1px solid var(--border); 
+  background: transparent; 
+  color: var(--text-dim); 
+  cursor: pointer; 
+  transition: all 0.15s; 
+}
+
+.preset-btn:hover { 
+  border-color: var(--accent); 
+  color: var(--accent); 
+}
+
+.preset-btn.active { 
+  background: var(--accent); 
+  color: white; 
+  border-color: var(--accent); 
+}
+
+.time-filter { 
+  display: flex; 
+  gap: 4px; 
+  margin-right: 12px; 
+  padding-right: 12px; 
+  border-right: 1px solid var(--border); 
+  order: 11;
+}
+
+.time-btn { 
+  font-family: var(--font-mono); 
+  font-size: 11px; 
+  padding: 4px 8px; 
+  border-radius: 6px; 
+  border: 1px solid var(--border); 
+  background: transparent; 
+  color: var(--text-dim); 
+  cursor: pointer; 
+  transition: all 0.15s; 
+}
+
+.time-btn:hover { 
+  border-color: var(--accent); 
+  color: var(--accent); 
+}
+
+.time-btn.active { 
+  background: var(--accent); 
+  color: white; 
+  border-color: var(--accent); 
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 8px;
+  order: 16;
+  margin-left: auto;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-bright);
+}
+
+.error-jump { 
+  color: var(--level-error); 
+  border-color: var(--level-error); 
+}
+
+.error-jump:hover { 
+  background: var(--level-error); 
+  color: white; 
+}
+
+/* Endpoint Filter */
+#endpoint-filter {
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  order: 12;
+}
+
+#endpoint-filter:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+#endpoint-filter option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+#component-filter {
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  order: 13;
+}
+
+#component-filter:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+#component-filter option {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* RAID / IterationId Filter */
+.raid-filter-wrapper {
+  position: relative;
+  min-width: 260px;
+  order: 14;
+}
+
+#raid-filter-input {
+  width: 100%;
+  padding: 6px 10px 6px 28px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+#raid-filter-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+#raid-filter-input::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+}
+
+.raid-filter-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.raid-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: 8px;
+  margin-top: 4px;
+  z-index: 200;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  display: none;
+}
+
+.raid-dropdown.visible {
+  display: block;
+}
+
+.raid-dropdown-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.raid-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+
+.raid-item:hover {
+  background: var(--surface-2);
+}
+
+.raid-status-dot {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.raid-item-id {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.raid-item-meta {
+  color: var(--text-dim);
+  font-size: 10px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.raid-item-dag {
+  color: var(--accent);
+  font-size: 10px;
+}
+
+/* Execution filter active badge */
+#execution-badge {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 20px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+  white-space: nowrap;
+  order: 15;
+}
+
+#execution-badge.visible {
+  display: inline-flex;
+}
+
+#execution-badge .badge-clear {
+  cursor: pointer;
+  margin-left: 4px;
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+#execution-badge .badge-clear:hover {
+  opacity: 1;
+}

@@ -1,0 +1,244 @@
+/* Log Container */
+.log-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  contain: strict;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.empty-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.empty-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.empty-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.empty-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* NOTE: height changed from 32px to 34px — update JS ROW_HEIGHT constant to match */
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 34px;
+  box-sizing: border-box;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 0.1s ease;
+}
+
+.log-row.error-row { 
+  border-left: 3px solid var(--level-error);
+  background: var(--row-error-tint);
+}
+
+.log-row.warning-row {
+  border-left: 3px solid var(--level-warning);
+  background: var(--row-warning-tint);
+}
+
+.log-row.stripe {
+  background: var(--row-stripe);
+}
+
+.log-row.stripe.error-row {
+  background: var(--row-error-tint);
+}
+
+.log-row.stripe.warning-row {
+  background: var(--row-warning-tint);
+}
+
+.log-row:hover {
+  background: var(--surface-2);
+}
+
+.log-time {
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-size: 11px;
+  width: 90px;
+  flex-shrink: 0;
+  letter-spacing: -0.2px;
+  opacity: 0.7;
+}
+
+.log-level {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 28px;
+  text-align: center;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.log-level.verbose {
+  background: rgba(100, 116, 139, 0.15);
+  color: var(--level-verbose);
+}
+
+.log-level.message {
+  background: rgba(56, 189, 248, 0.18);
+  color: var(--level-message);
+}
+
+.log-level.warning {
+  background: rgba(251, 191, 36, 0.2);
+  color: var(--level-warning);
+  font-weight: 700;
+}
+
+.log-level.error {
+  background: rgba(248, 113, 113, 0.22);
+  color: var(--level-error);
+  font-weight: 700;
+}
+
+.log-component {
+  padding: 2px 8px;
+  background: var(--comp-default-bg);
+  color: var(--comp-default);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.log-component:hover {
+  filter: brightness(1.3);
+}
+
+/* Component category colors (apply via data-category attribute on .log-component) */
+.log-component[data-category="controller"] {
+  background: var(--comp-controller-bg);
+  color: var(--comp-controller);
+}
+.log-component[data-category="dag"],
+.log-component[data-category="execution"] {
+  background: var(--comp-dag-bg);
+  color: var(--comp-dag);
+}
+.log-component[data-category="onelake"],
+.log-component[data-category="lakehouse"] {
+  background: var(--comp-onelake-bg);
+  color: var(--comp-onelake);
+}
+.log-component[data-category="dq"],
+.log-component[data-category="insights"] {
+  background: var(--comp-dq-bg);
+  color: var(--comp-dq);
+}
+.log-component[data-category="retry"],
+.log-component[data-category="error"] {
+  background: var(--comp-retry-bg);
+  color: var(--comp-retry);
+}
+
+.log-message {
+  flex: 1;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 8px;
+  color: var(--text);
+}
+
+/* Logs Status Bar */
+.logs-status {
+  padding: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  text-align: center;
+}
+
+/* Scroll FAB */
+.scroll-fab {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  left: auto;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
+  transition: all 0.2s ease;
+  z-index: 10;
+  opacity: 0.85;
+  backdrop-filter: blur(8px);
+}
+
+.scroll-fab:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes errorPulse {
+  0% { background: rgba(248, 113, 113, 0.1); }
+  50% { background: rgba(248, 113, 113, 0.3); }
+  100% { background: rgba(248, 113, 113, 0.1); }
+}
+
+.log-row.error.new {
+  animation: errorPulse 2s ease-in-out;
+}
