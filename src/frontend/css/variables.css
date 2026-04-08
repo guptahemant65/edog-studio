@@ -6,49 +6,7 @@
 }
 
 :root {
-  --bg: #0a0e1a;
-  --surface: #111827;
-  --surface-2: #1e293b;
-  --surface-3: #334155;
-  --border: rgba(255,255,255,0.06);
-  --border-bright: rgba(255,255,255,0.12);
-  --text: #e2e8f0;
-  --text-dim: #64748b;
-  --text-muted: #475569;
-  --accent: #8b5cf6;
-  --accent-dim: rgba(139,92,246,0.12);
-  --font-body: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
-  --level-verbose: #64748b;
-  --level-message: #38bdf8;
-  --level-warning: #fbbf24;
-  --level-error: #f87171;
-  --status-succeeded: #34d399;
-  --status-failed: #f87171;
-  --status-cancelled: #fbbf24;
-  --status-pending: #64748b;
-  /* Component category colors */
-  --comp-controller: #60a5fa;
-  --comp-controller-bg: rgba(96, 165, 250, 0.15);
-  --comp-dag: #34d399;
-  --comp-dag-bg: rgba(52, 211, 153, 0.15);
-  --comp-onelake: #2dd4bf;
-  --comp-onelake-bg: rgba(45, 212, 191, 0.15);
-  --comp-dq: #a78bfa;
-  --comp-dq-bg: rgba(167, 139, 250, 0.15);
-  --comp-retry: #fbbf24;
-  --comp-retry-bg: rgba(251, 191, 36, 0.15);
-  --comp-default: #94a3b8;
-  --comp-default-bg: rgba(148, 163, 184, 0.12);
-  /* Row tints */
-  --row-error-tint: rgba(248, 113, 113, 0.07);
-  --row-warning-tint: rgba(251, 191, 36, 0.05);
-  --row-stripe: rgba(255, 255, 255, 0.018);
-  /* Toolbar */
-  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-[data-theme="light"] {
+  /* ── Light Theme (Default) ── CEO decision: light-first */
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface-2: #f1f5f9;
@@ -60,6 +18,58 @@
   --text-muted: #94a3b8;
   --accent: #7c3aed;
   --accent-dim: rgba(124,58,237,0.08);
+  --accent-hover: rgba(124,58,237,0.05);
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* Spacing — 4px grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Sizing */
+  --topbar-height: 32px;
+  --sidebar-width: 48px;
+  --tree-panel-width: 260px;
+  --inspector-panel-width: 300px;
+  --row-height: 28px;
+
+  /* Transitions */
+  --transition-fast: 80ms ease-out;
+  --transition-normal: 120ms ease-out;
+
+  /* Z-index scale */
+  --z-sidebar: 50;
+  --z-topbar: 100;
+  --z-toolbar: 90;
+  --z-dropdown: 200;
+  --z-detail: 200;
+  --z-command-palette: 300;
+  --z-toast: 400;
+
+  /* Typography */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+
+  /* Semantic colors — light */
+  --level-verbose: #64748b;
+  --level-message: #0284c7;
+  --level-warning: #d97706;
+  --level-error: #dc2626;
+  --status-succeeded: #059669;
+  --status-failed: #dc2626;
+  --status-cancelled: #d97706;
+  --status-pending: #64748b;
   /* Component category colors — light */
   --comp-controller: #2563eb;
   --comp-controller-bg: rgba(37, 99, 235, 0.1);
@@ -79,4 +89,45 @@
   --row-stripe: rgba(0, 0, 0, 0.018);
   /* Toolbar */
   --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="dark"] {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface-2: #1e293b;
+  --surface-3: #334155;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+  --text: #e2e8f0;
+  --text-dim: #64748b;
+  --text-muted: #475569;
+  --accent: #8b5cf6;
+  --accent-dim: rgba(139,92,246,0.12);
+  --level-verbose: #64748b;
+  --level-message: #38bdf8;
+  --level-warning: #fbbf24;
+  --level-error: #f87171;
+  --status-succeeded: #34d399;
+  --status-failed: #f87171;
+  --status-cancelled: #fbbf24;
+  --status-pending: #64748b;
+  /* Component category colors — dark */
+  --comp-controller: #60a5fa;
+  --comp-controller-bg: rgba(96, 165, 250, 0.15);
+  --comp-dag: #34d399;
+  --comp-dag-bg: rgba(52, 211, 153, 0.15);
+  --comp-onelake: #2dd4bf;
+  --comp-onelake-bg: rgba(45, 212, 191, 0.15);
+  --comp-dq: #a78bfa;
+  --comp-dq-bg: rgba(167, 139, 250, 0.15);
+  --comp-retry: #fbbf24;
+  --comp-retry-bg: rgba(251, 191, 36, 0.15);
+  --comp-default: #94a3b8;
+  --comp-default-bg: rgba(148, 163, 184, 0.12);
+  /* Row tints — dark */
+  --row-error-tint: rgba(248, 113, 113, 0.07);
+  --row-warning-tint: rgba(251, 191, 36, 0.05);
+  --row-stripe: rgba(255, 255, 255, 0.018);
+  /* Toolbar */
+  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }

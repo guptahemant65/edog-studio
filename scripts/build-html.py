@@ -1,27 +1,31 @@
 #!/usr/bin/env python3
 """
-Build script for EDOG Log Viewer.
+Build script for EDOG Studio.
 
 Assembles modular CSS and JS files into a single self-contained edog-logs.html.
-Source: src/edog-logs/ (index.html shell + css/ + js/)
+Source: src/frontend/ (index.html shell + css/ + js/)
 Output: src/edog-logs.html (single file served by EdogLogServer)
 
 Usage:
-    python build-html.py
-    python build-html.py --watch   # Rebuild on file changes (future)
+    python scripts/build-html.py
+    python scripts/build-html.py --watch   # Rebuild on file changes (future)
 """
 
 import os
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.join(SCRIPT_DIR, "src", "edog-logs")
-OUTPUT_FILE = os.path.join(SCRIPT_DIR, "src", "edog-logs.html")
+PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
+SRC_DIR = os.path.join(PROJECT_DIR, "src", "frontend")
+OUTPUT_FILE = os.path.join(PROJECT_DIR, "src", "edog-logs.html")
 
 # CSS modules — order matters (variables first, then layout, then components)
 CSS_MODULES = [
     "css/variables.css",
     "css/layout.css",
+    "css/topbar.css",
+    "css/sidebar.css",
+    "css/workspace.css",
     "css/filters.css",
     "css/logs.css",
     "css/telemetry.css",
@@ -29,12 +33,14 @@ CSS_MODULES = [
     "css/summary.css",
     "css/smart.css",
     "css/control.css",
+    "css/command-palette.css",
 ]
 
 # JS modules — order matters (dependencies first, then features, then main)
 JS_MODULES = [
     "js/state.js",
     "js/websocket.js",
+    "js/api-client.js",
     "js/renderer.js",
     "js/filters.js",
     "js/detail-panel.js",
@@ -44,6 +50,10 @@ JS_MODULES = [
     "js/error-intel.js",
     "js/anomaly.js",
     "js/control-panel.js",
+    "js/topbar.js",
+    "js/sidebar.js",
+    "js/workspace-explorer.js",
+    "js/command-palette.js",
     "js/main.js",
 ]
 

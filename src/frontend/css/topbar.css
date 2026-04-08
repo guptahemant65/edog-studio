@@ -1,0 +1,92 @@
+/* Top Bar — 32px persistent header */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--topbar-height);
+  padding: 0 var(--space-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  z-index: var(--z-topbar);
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.topbar-brand {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: var(--text-md);
+  color: var(--text);
+  letter-spacing: 0.03em;
+}
+
+.service-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.service-status .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.service-status.running .status-dot { background: var(--status-succeeded); box-shadow: 0 0 4px var(--status-succeeded); }
+.service-status.running { color: var(--status-succeeded); }
+.service-status.building .status-dot { background: var(--status-cancelled); }
+.service-status.building { color: var(--status-cancelled); }
+.service-status.stopped .status-dot { background: var(--text-muted); }
+
+.topbar-center { flex: 1; }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.token-health {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  transition: background var(--transition-fast);
+}
+.token-health:hover { background: var(--accent-hover); }
+.token-health.green { color: var(--status-succeeded); }
+.token-health.amber { color: var(--status-cancelled); }
+.token-health.red { color: var(--status-failed); }
+.token-health.none { color: var(--text-muted); }
+
+.topbar-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.topbar-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.topbar-btn:hover { background: var(--surface-2); color: var(--text); }
+.topbar-btn.ghost { border: 1px solid var(--border); }

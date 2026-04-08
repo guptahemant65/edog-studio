@@ -1,36 +1,23 @@
 /**
- * EDOG Real-Time Log Viewer - Main Application
+ * EDOG Studio — Main Application Orchestrator
  */
 
-// ===== UTILITY FUNCTIONS FOR DETAIL PANEL =====
+// ===== UTILITY FUNCTIONS =====
 
-// Copy to clipboard function
 function copyToClipboard(btn, text) {
   navigator.clipboard.writeText(text).then(() => {
     btn.classList.add('copied');
-    btn.textContent = '✓';
+    btn.textContent = '\u2713';
     setTimeout(() => { 
       btn.classList.remove('copied'); 
-      btn.textContent = '📋'; 
+      btn.textContent = 'Copy'; 
     }, 1500);
-  }).catch(err => {
-    console.error('Failed to copy text: ', err);
-    // Fallback for older browsers
+  }).catch(() => {
     const textArea = document.createElement('textarea');
     textArea.value = text;
     document.body.appendChild(textArea);
     textArea.select();
-    try {
-      document.execCommand('copy');
-      btn.classList.add('copied');
-      btn.textContent = '✓';
-      setTimeout(() => { 
-        btn.classList.remove('copied'); 
-        btn.textContent = '📋'; 
-      }, 1500);
-    } catch (fallbackErr) {
-      console.error('Fallback copy failed: ', fallbackErr);
-    }
+    try { document.execCommand('copy'); } catch { /* ignore */ }
     document.body.removeChild(textArea);
   });
 }
@@ -115,6 +102,13 @@ class EdogLogViewer {
     this.scrollTimeout = null;
     this.raidDebounceTimeout = null;
 
+    // Cockpit modules
+    this.apiClient = new FabricApiClient();
+    this.topbar = new TopBar();
+    this.sidebar = new Sidebar();
+    this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
+    this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
+
     // Smart feature modules
     this.autoDetector = new AutoDetector(this.state);
     this.smartContext = new SmartContextBar(this.autoDetector);
@@ -125,10 +119,10 @@ class EdogLogViewer {
       { autoDetector: this.autoDetector, stateManager: this.state }
     );
 
-    // Wire error-intel jump-to-error to renderer
+    // Wire error-intel jump-to-error
     this.errorIntel.onJumpToError = (errorMsg) => {
       this.filter.setSearch(errorMsg.substring(0, 60));
-      this.switchTab('logs');
+      this.sidebar.switchView('logs');
     };
 
     // Chain auto-RAID-populate into live execution detection
@@ -145,20 +139,31 @@ class EdogLogViewer {
     // Set up WebSocket callbacks
     this.ws.onStatusChange = this.updateConnectionStatus;
     this.ws.onMessage = this.handleWebSocketMessage;
-
-    // Batch-aware callbacks (preferred path when server sends batched frames)
     this.ws.onBatch = this.handleWebSocketBatch;
     this.ws.onSummary = this.handleWebSocketSummary;
   }
   
   init = async () => {
-    console.log('Initializing EDOG Log Viewer V2');
+    console.log('Initializing EDOG Studio');
     
     // Make globally accessible
     window.edogViewer = this;
-    
-    // Restore active tab from localStorage
-    this.switchTab(this.state.activeTab);
+
+    // Initialize cockpit shell
+    await this.apiClient.init();
+    this.topbar.init();
+    this.sidebar.init();
+    this.commandPalette.init();
+
+    // Set phase based on token availability
+    const phase = this.apiClient.getPhase();
+    this.sidebar.setPhase(phase);
+
+    // Wire sidebar view switching
+    this.sidebar.onViewChange = (viewId) => this._onViewChange(viewId);
+
+    // Initialize workspace explorer (default view)
+    await this.workspaceExplorer.init();
     
     this.bindEventListeners();
     await this.loadInitialData();
@@ -166,15 +171,7 @@ class EdogLogViewer {
   }
   
   bindEventListeners = () => {
-    // Tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tab = btn.dataset.tab;
-        if (tab) this.switchTab(tab);
-      });
-    });
-
-    // Search input
+    // Search input (logs view)
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
@@ -331,16 +328,8 @@ class EdogLogViewer {
   }
   
   handleKeydown = (e) => {
-    // Skip if typing in input field
+    // Skip if typing in input field (sidebar handles 1-6 separately)
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-    
-    // Tab switching: 1/2/3/4
-    const tabMap = { 'Digit1': 'logs', 'Digit2': 'ssr', 'Digit3': 'summary', 'Digit4': 'timeline' };
-    if (tabMap[e.code]) {
-      e.preventDefault();
-      this.switchTab(tabMap[e.code]);
-      return;
-    }
 
     switch (e.code) {
       case 'Escape':
@@ -354,11 +343,7 @@ class EdogLogViewer {
       case 'KeyK':
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          const searchInput = document.getElementById('search-input');
-          if (searchInput) {
-            searchInput.focus();
-            searchInput.select();
-          }
+          this.commandPalette.toggle();
         }
         break;
         
@@ -560,7 +545,7 @@ class EdogLogViewer {
     this.state.paused = !this.state.paused;
     const btn = document.getElementById('pause-btn');
     if (btn) {
-      btn.textContent = this.state.paused ? '▶ Resume' : '⏸ Pause';
+      btn.textContent = this.state.paused ? '\u25B6 Resume' : 'Pause';
       btn.classList.toggle('paused', this.state.paused);
     }
     if (!this.state.paused) {
@@ -573,12 +558,14 @@ class EdogLogViewer {
   
   toggleTheme = () => {
     const body = document.body;
-    const currentTheme = body.dataset.theme || 'light';
-    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-    body.dataset.theme = newTheme;
-    
-    // Save preference
-    localStorage.setItem('edog-theme', newTheme);
+    const isDark = body.dataset.theme === 'dark';
+    if (isDark) {
+      delete body.dataset.theme;
+      localStorage.setItem('edog-theme', 'light');
+    } else {
+      body.dataset.theme = 'dark';
+      localStorage.setItem('edog-theme', 'dark');
+    }
   }
   
   resumeAutoScroll = () => {
@@ -602,32 +589,27 @@ class EdogLogViewer {
     if (btn) btn.style.display = 'none';
   }
   
-  // ===== TAB MANAGEMENT (W0.1) =====
+  // ===== VIEW MANAGEMENT =====
   
+  // Compatibility bridge: old switchTab calls route through sidebar
   switchTab = (tabId) => {
-    this.state.activeTab = tabId;
-    localStorage.setItem('edog-active-tab', tabId);
-
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tab === tabId);
-    });
-
-    // Update tab panels
-    document.querySelectorAll('.tab-panel').forEach(panel => {
-      panel.classList.toggle('active', panel.id === `tab-${tabId}`);
-    });
-
-    // If switching to summary and a RAID is active, refresh summary
-    if (tabId === 'summary' && this.state.raidFilter) {
-      this.refreshExecutionSummary();
+    const viewMap = { 'logs': 'logs', 'ssr': 'logs', 'summary': 'dag', 'timeline': 'dag' };
+    const viewId = viewMap[tabId] || tabId;
+    if (this.sidebar) {
+      this.sidebar.switchView(viewId);
     }
+  }
 
-    // Command Center lifecycle
-    if (tabId === 'timeline') {
+  _onViewChange = (viewId) => {
+    // Activate/deactivate view-specific modules
+    if (viewId === 'dag') {
       this.controlPanel.activate();
     } else {
       this.controlPanel.deactivate();
+    }
+
+    if (viewId === 'logs') {
+      this.renderer.flush();
     }
   }
 
@@ -896,7 +878,7 @@ class EdogLogViewer {
   }
 
   jumpToNextError = () => {
-    this.switchTab('logs');
+    this.sidebar.switchView('logs');
     const container = document.getElementById('logs-container');
     if (!container) return;
 
@@ -932,9 +914,11 @@ class EdogLogViewer {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Load theme preference
-  const savedTheme = localStorage.getItem('edog-theme') || 'light';
-  document.body.dataset.theme = savedTheme;
+  // Load theme preference — light is default (no data-theme attribute needed)
+  const savedTheme = localStorage.getItem('edog-theme');
+  if (savedTheme === 'dark') {
+    document.body.dataset.theme = 'dark';
+  }
   
   // Start the application
   new EdogLogViewer().init();

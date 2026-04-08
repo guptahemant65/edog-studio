@@ -3,173 +3,223 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🐕 EDOG Log Viewer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <title>EDOG Studio</title>
   <style>
 /* __CSS_MODULES__ */
   </style>
 </head>
 <body>
 
-  <header>
-    <div class="header-left">
-      <h1>🐕 EDOG Log Viewer</h1>
-      <span id="connection-status" class="status-badge disconnected">
+  <!-- Top Bar (32px) -->
+  <header id="topbar" class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-brand">EDOG</span>
+      <span id="service-status" class="service-status stopped">
         <span class="status-dot"></span>
-        <span id="status-text">Connecting...</span>
+        <span id="service-status-text">Stopped</span>
       </span>
-      <div class="stats-bar">
-        <span>Logs: <strong id="stat-logs">0</strong></span>
-        <span>SSR: <strong id="stat-ssr">0</strong></span>
-        <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
-      </div>
     </div>
-    <div class="header-right">
-      <button id="theme-btn" class="icon-btn" title="Toggle theme">🌙</button>
+    <div class="topbar-center"></div>
+    <div class="topbar-right">
+      <span id="token-health" class="token-health none" title="Click for Token Inspector">
+        <span id="token-countdown">No token</span>
+      </span>
+      <span class="topbar-meta"><span id="git-branch-name">--</span></span>
+      <span class="topbar-meta"><span id="patch-count">0 patches</span></span>
+      <button id="restart-btn" class="topbar-btn ghost" title="Restart service">Restart</button>
+      <button id="theme-btn" class="topbar-btn ghost" title="Toggle theme">&#9790;</button>
     </div>
   </header>
 
-  <!-- Smart Context Bar — auto-detected execution context -->
+  <!-- Smart Context + Alerts -->
   <div id="smart-context-bar" class="smart-context-bar"></div>
-
-  <!-- API Activity Toast — data-rich card for API calls -->
   <div id="api-toast" class="api-toast"></div>
-
-  <!-- Error Alert — auto-detected errors -->
   <div id="error-alert" class="error-alert"></div>
-
-  <!-- Anomaly Warning — proactive warnings -->
   <div id="anomaly-warning" class="anomaly-warning"></div>
 
-  <nav id="tab-bar">
-    <button class="tab-btn active" data-tab="logs">📋 Logs <span class="tab-shortcut">1</span></button>
-    <button class="tab-btn" data-tab="ssr">📡 SSR Telemetry <span class="tab-shortcut">2</span></button>
-    <button class="tab-btn" data-tab="summary">📊 Execution Summary <span class="tab-shortcut">3</span></button>
-    <button class="tab-btn" data-tab="timeline">🎮 Command Center <span class="tab-shortcut">4</span></button>
-  </nav>
+  <!-- Main Layout: Sidebar + Content -->
+  <div class="cockpit-body">
+    <!-- Sidebar (48px, icon-only) -->
+    <nav id="sidebar" class="sidebar">
+      <button class="sidebar-icon active" data-view="workspace" data-phase="both" title="Workspace Explorer (1)">&#9638;</button>
+      <button class="sidebar-icon" data-view="logs" data-phase="connected" title="Logs (2)">&#8801;</button>
+      <button class="sidebar-icon" data-view="dag" data-phase="connected" title="DAG Studio (3)">&#9671;</button>
+      <button class="sidebar-icon" data-view="spark" data-phase="connected" title="Spark Inspector (4)">&#9889;</button>
+      <button class="sidebar-icon" data-view="api" data-phase="both" title="API Playground (5)">&#9657;</button>
+      <button class="sidebar-icon" data-view="environment" data-phase="both" title="Environment (6)">&#9881;</button>
+      <div class="sidebar-spacer"></div>
+      <span id="sidebar-token-dot" class="sidebar-token-dot" title="Token status"></span>
+    </nav>
 
-  <div id="toolbar">
-    <div class="time-filter">
-      <button class="time-btn active" data-range="0" title="All time">All</button>
-      <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
-      <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
-      <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
-      <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
-    </div>
-    <div class="search-wrapper">
-      <span class="search-icon">🔍</span>
-      <input type="text" id="search-input" placeholder="Search logs... (Ctrl+K)" />
-      <span id="search-count" class="search-count"></span>
-    </div>
-    <select id="endpoint-filter" title="Filter by API endpoint">
-      <option value="">All Endpoints</option>
-    </select>
-    <select id="component-filter" title="Filter by component">
-      <option value="">All Components</option>
-    </select>
-    <div class="raid-filter-wrapper">
-      <span class="raid-filter-icon">🔍</span>
-      <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
-      <div id="raid-dropdown" class="raid-dropdown">
-        <div class="raid-dropdown-header">Recent Executions</div>
-        <div id="raid-dropdown-list"></div>
+    <!-- Content Area -->
+    <main id="content-area" class="content-area">
+
+      <!-- View 1: Workspace Explorer (default) -->
+      <div id="view-workspace" class="view-panel active" data-view="workspace">
+        <div class="workspace-explorer">
+          <div class="ws-tree-panel" id="ws-tree-panel">
+            <div class="ws-tree-header">
+              <span class="ws-tree-title">WORKSPACES</span>
+              <button class="ws-tree-refresh" title="Refresh">&#8635;</button>
+            </div>
+            <div id="ws-tree-content" class="ws-tree-content"></div>
+            <div class="ws-favorites">
+              <span class="ws-favorites-title">&#9733; FAVORITES</span>
+              <div id="ws-favorites-list"></div>
+            </div>
+          </div>
+          <div class="ws-content-panel" id="ws-content-panel">
+            <div id="ws-content-body" class="ws-content-body">
+              <div class="ws-empty-state">
+                <div class="ws-empty-icon">&#9638;</div>
+                <div class="ws-empty-text">Select a workspace or lakehouse</div>
+              </div>
+            </div>
+          </div>
+          <div class="ws-inspector-panel" id="ws-inspector-panel">
+            <div class="ws-inspector-header">INSPECTOR</div>
+            <div id="ws-inspector-content" class="ws-inspector-content"></div>
+          </div>
+        </div>
       </div>
-    </div>
-    <span id="execution-badge">🔒 Execution: <span id="exec-badge-id"></span> — <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">✕</span></span>
-    <div class="level-filters">
-      <button class="level-btn" data-level="Verbose">V</button>
-      <button class="level-btn active" data-level="Message">M</button>
-      <button class="level-btn active" data-level="Warning">W</button>
-      <button class="level-btn active" data-level="Error">E</button>
-    </div>
-    <div class="preset-bar">
-      <button class="preset-btn" data-preset="all" title="Show all">All</button>
-      <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
-      <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
-      <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
-    </div>
-    <div class="toolbar-actions">
-      <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">🗑 Clear</button>
-      <button id="export-btn" class="action-btn" title="Export JSON">📥 Export</button>
-      <button id="pause-btn" class="action-btn" title="Pause (Space)">⏸ Pause</button>
-      <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error (↓E)">↓E</button>
-    </div>
+
+      <!-- View 2: Logs -->
+      <div id="view-logs" class="view-panel" data-view="logs">
+        <!-- Logs toolbar (scoped to logs view) -->
+        <div id="toolbar" class="logs-toolbar">
+          <div class="time-filter">
+            <button class="time-btn active" data-range="0" title="All time">All</button>
+            <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
+            <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
+            <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
+            <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
+          </div>
+          <div class="search-wrapper">
+            <span class="search-icon">&#9906;</span>
+            <input type="text" id="search-input" placeholder="Search logs..." />
+            <span id="search-count" class="search-count"></span>
+          </div>
+          <select id="endpoint-filter" title="Filter by API endpoint">
+            <option value="">All Endpoints</option>
+          </select>
+          <select id="component-filter" title="Filter by component">
+            <option value="">All Components</option>
+          </select>
+          <div class="raid-filter-wrapper">
+            <span class="raid-filter-icon">&#9672;</span>
+            <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
+            <div id="raid-dropdown" class="raid-dropdown">
+              <div class="raid-dropdown-header">Recent Executions</div>
+              <div id="raid-dropdown-list"></div>
+            </div>
+          </div>
+          <span id="execution-badge">Execution: <span id="exec-badge-id"></span> &#8212; <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">&#10005;</span></span>
+          <div class="level-filters">
+            <button class="level-btn" data-level="Verbose">V</button>
+            <button class="level-btn active" data-level="Message">M</button>
+            <button class="level-btn active" data-level="Warning">W</button>
+            <button class="level-btn active" data-level="Error">E</button>
+          </div>
+          <div class="preset-bar">
+            <button class="preset-btn" data-preset="all" title="Show all">All</button>
+            <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
+            <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
+            <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
+          </div>
+          <div class="toolbar-actions">
+            <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">Clear</button>
+            <button id="export-btn" class="action-btn" title="Export JSON">Export</button>
+            <button id="pause-btn" class="action-btn" title="Pause (Space)">Pause</button>
+            <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error">&#8595;E</button>
+          </div>
+        </div>
+        <div id="logs-panel" class="panel">
+          <div class="panel-header">
+            <div class="stats-bar">
+              <span>Logs: <strong id="stat-logs">0</strong></span>
+              <span>SSR: <strong id="stat-ssr">0</strong></span>
+              <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
+            </div>
+            <span id="correlation-badge" class="correlation-badge" style="display:none">
+              Filtered: <span id="correlation-id"></span> <button id="correlation-close">&#10005;</button>
+            </span>
+          </div>
+          <div id="logs-container" class="log-scroll">
+            <div id="empty-state" class="empty-state">
+              <div class="empty-icon">&#8801;</div>
+              <div class="empty-text">Waiting for logs...</div>
+              <div class="empty-dots"><span></span><span></span><span></span></div>
+            </div>
+          </div>
+          <div class="logs-status" id="logs-status-bar">
+            Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
+          </div>
+          <button id="resume-scroll-btn" class="scroll-fab" style="display:none">&#8595; Resume auto-scroll</button>
+        </div>
+      </div>
+
+      <!-- View 3: DAG Studio (includes old SSR telemetry, execution summary, and command center) -->
+      <div id="view-dag" class="view-panel" data-view="dag">
+        <div id="dag-studio-content" class="dag-studio">
+          <!-- Reuse existing control panel and execution summary -->
+          <div id="control-panel" class="control-panel">
+            <div id="cp-connection-bar" class="connection-bar loading">
+              <div class="conn-status-row">
+                <span class="conn-dot"></span>
+                <span class="conn-status-text">Checking connection...</span>
+              </div>
+              <div class="conn-ids"></div>
+            </div>
+            <div id="cp-dag-overview" class="dag-overview"></div>
+            <div id="cp-execution" class="execution-card idle"></div>
+            <div id="cp-history" class="exec-history"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- View 4: Spark Inspector -->
+      <div id="view-spark" class="view-panel" data-view="spark">
+        <div class="view-empty-state connected-only">
+          <span class="empty-icon">&#9889;</span>
+          <span class="empty-text">Connect to a Lakehouse to enable Spark Inspector</span>
+          <button class="empty-action" data-goto="workspace">Go to Workspace Explorer</button>
+        </div>
+      </div>
+
+      <!-- View 5: API Playground -->
+      <div id="view-api" class="view-panel" data-view="api">
+        <div class="view-empty-state">
+          <span class="empty-icon">&#9657;</span>
+          <span class="empty-text">API Playground &#8212; coming in V1.1</span>
+        </div>
+      </div>
+
+      <!-- View 6: Environment -->
+      <div id="view-environment" class="view-panel" data-view="environment">
+        <div class="view-empty-state">
+          <span class="empty-icon">&#9881;</span>
+          <span class="empty-text">Environment panel &#8212; coming in V1.1</span>
+        </div>
+      </div>
+
+    </main>
   </div>
 
-  <div id="main-content">
-    <!-- TAB 1: Logs -->
-    <div id="tab-logs" class="tab-panel active">
-      <div id="logs-panel" class="panel">
-        <div class="panel-header">
-          <h2>📋 Application Logs</h2>
-          <span id="correlation-badge" class="correlation-badge" style="display:none">
-            Filtered: <span id="correlation-id"></span> <button id="correlation-close">✕</button>
-          </span>
-        </div>
-        <div id="logs-container" class="log-scroll">
-          <div id="empty-state" class="empty-state">
-            <div class="empty-icon">📡</div>
-            <div class="empty-text">Waiting for logs...</div>
-            <div class="empty-dots"><span>.</span><span>.</span><span>.</span></div>
-          </div>
-        </div>
-        <div class="logs-status" id="logs-status-bar">
-          Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
-        </div>
-        <button id="resume-scroll-btn" class="scroll-fab" style="display:none">↓ Resume auto-scroll</button>
-      </div>
-    </div>
-
-    <!-- TAB 2: SSR Telemetry -->
-    <div id="tab-ssr" class="tab-panel">
-      <div id="telemetry-panel" class="panel">
-        <div class="panel-header">
-          <h2>📡 SSR Telemetry</h2>
-        </div>
-        <div id="telemetry-container" class="telemetry-scroll">
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 3: Execution Summary -->
-    <div id="tab-summary" class="tab-panel">
-      <div id="exec-summary-panel" class="panel">
-        <div id="exec-summary-content" class="exec-summary">
-          <div class="empty-state" id="exec-summary-empty">
-            <div class="empty-icon">📊</div>
-            <div class="empty-text">Select an execution from the filter bar to see its summary</div>
-          </div>
-          <div id="exec-summary-data" style="display:none"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 4: Command Center -->
-    <div id="tab-timeline" class="tab-panel">
-      <div id="control-panel" class="control-panel">
-        <div id="cp-connection-bar" class="connection-bar loading">
-          <div class="conn-status-row">
-            <span class="conn-dot"></span>
-            <span class="conn-status-text">Checking connection...</span>
-          </div>
-          <div class="conn-ids"></div>
-        </div>
-        <div id="cp-dag-overview" class="dag-overview"></div>
-        <div id="cp-execution" class="execution-card idle"></div>
-        <div id="cp-history" class="exec-history"></div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Detail Panel (slide-up, shared across views) -->
   <div id="detail-panel" class="detail-panel">
     <div class="detail-header">
       <h3 id="detail-title">Log Detail</h3>
-      <button id="detail-close" class="icon-btn">✕</button>
+      <button id="detail-close" class="icon-btn">&#10005;</button>
     </div>
-    <div class="detail-content">
-      <!-- DetailPanel.show() generates innerHTML dynamically -->
+    <div class="detail-content"></div>
+  </div>
+
+  <!-- Command Palette (Ctrl+K overlay) -->
+  <div id="command-palette" class="command-palette hidden">
+    <div class="cp-backdrop"></div>
+    <div class="cp-dialog">
+      <input id="cp-input" class="cp-input" type="text" placeholder="Type a command or search..." autocomplete="off" />
+      <div id="cp-results" class="cp-results"></div>
     </div>
   </div>
 
