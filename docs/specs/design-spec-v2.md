@@ -698,12 +698,22 @@ View the MLV SQL definitions that make up each DAG node, right in the UI.
 1. Workspace Explorer — tree, content, basic inspector (table list only)
 2. Deploy to Lakehouse flow (config update → token → patch → build → launch)
 3. Favorites / named environments
-4. Enhanced Logs (breakpoints + bookmarks)
+4. Runtime View — the core debugging cockpit with 4 top-level tabs + Internals dropdown:
+   - **[Logs]** — real-time log stream with breakpoints, bookmarks, error clustering, filters
+   - **[Telemetry]** — SSR telemetry events, activity tracking
+   - **[System Files]** — runtime view of all FLT file operations on OneLake: DagExecutionMetrics (dag.json, node metrics, index files), lock files with age/holder, dagsettings.json, environment.json, MLV execution definitions. Audited: when created, what written, which iterationId. Via IFileSystem decorator → WebSocket.
+   - **[Spark Sessions]** — notebook session lifecycle: creation, MLV command→cell mapping, session reuse, disposal, timeout tracking. Via NotebookExecutionContext interception.
+   - **[Internals ▾]** dropdown with sub-views:
+     - **Tokens** — ALL tokens: Bearer (AAD), MWC (per ws/lh/cap, multiple), S2S, OBO. Full JWT decode, TTL countdown, usage stream (which API used which token), history timeline.
+     - **Caches** — all 10 FLT cache managers: TokenManager, DagExecutionStore, RateLimiterCache, DQ ReportState, ExecutionContext, NotebookContext, SkippedShortcuts, Cancellation registry, ReliableOps, SparkTokens. Full content, when written, which iterationId, TTL, eviction events.
+     - **HTTP Pipeline** — every outbound HTTP call through the 4 DelegatingHandlers: URL, method, status, duration, retry count, correlation IDs, which handlers fired. Covers OneLake, Spark, PBI, Fabric API calls.
+     - **Retries & Throttling** — every retry attempt, capacity admission window delays (20s/40s/60s/90s), 429/430 responses, jitter applied, throttle decisions from HierarchicalThrottlingService, rate limiter state per artifact/user/capacity.
+     - **Feature Flag Evals** — real-time stream of FeatureFlighter.IsEnabled() calls: flagName, tenantId, capacityId, workspaceId, result (true/false). Answer "was FLTDagExecutionHandlerV2 enabled for MY workspace?"
+     - **DI Registry** — full DI container state from WorkloadApp.cs: 25+ registrations, singleton vs transient, which EDOG interceptors are active, what got replaced.
+     - **Perf Markers** — MonitoredCodeMarkers duration metrics: PingApi, GetDag, RunDAG, each operation timed. Built-in performance profiling stream.
 5. Top bar with token health, service status, git info
 6. Sidebar navigation with phase-aware enabling/disabling
 7. Command Palette (Ctrl+K)
-8. Token Inspector — ALL tokens in one panel: Bearer (AAD), MWC (per workspace/lakehouse/capacity, multiple cached), MWC (Notebook), MWC (ML), OBO/S2S (captured from FLT runtime via interceptor). Each token shows: type, audience, TTL with color (green >10m, amber 5-10m, red <5m), decoded JWT claims on click, copy button. Token history timeline: every token event (captured, refreshed, expired) with timestamps. Auto-refresh 5 min before expiry. "Wrong token scope" detection when API calls fail.
-9. System Files Explorer — runtime view of all FLT internal file operations on OneLake: DagExecutionMetrics (dag.json, node metrics, index files), lock files with age/holder, dagsettings.json, environment.json, MLV execution definitions, sys_* metrics tables with marker files. Audited: when created, what was written, by whom. Served via C# interceptor → WebSocket (same pattern as log capture). Connected mode only.
 
 ### V1.1 (next — completes the cockpit)
 10. DAG Studio (graph + Gantt + controls + history)
