@@ -249,14 +249,15 @@ class MockRenderer {
         <div class="ws-content-name">${item.displayName}</div>
         <div class="ws-content-meta">
           <span class="ws-meta-id" title="Click to copy">${item.id.substring(0, 8)}...</span>
-          <span class="ws-meta-badge">F2 PPE \u25CF West US 2</span>
-          <span class="capacity-pill ok">\u25CF Healthy</span>
-          <span class="ws-meta-modified">Modified ${this._relativeTime(item.lastModified)}</span>
+          <span class="ws-meta-badge">F2 PPE \u00B7 West US 2</span>
+          <span>Modified ${this._relativeTime(item.lastModified)}</span>
         </div>
         <div class="ws-content-actions">
           <button class="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>
           <button class="ws-action-btn">Open in Fabric</button>
           <button class="ws-action-btn">Rename</button>
+          <button class="ws-action-btn">Clone Environment</button>
+          <span class="capacity-pill ok">\u25CF Healthy</span>
         </div>
       </div>
       <div class="ws-section">
@@ -1107,7 +1108,7 @@ class MockRenderer {
   _renderFileChangeBar() {
     const bar = document.getElementById('file-change-bar');
     if (!bar) return;
-    bar.innerHTML = `Files changed: <span class="fc-files">GTSBasedSparkClient.cs, WorkloadApp.cs</span>
+    bar.innerHTML = `<span style="color:var(--level-warning)">\u25CF</span> Files changed: <span class="fc-files">GTSBasedSparkClient.cs, WorkloadApp.cs</span>
       <div style="margin-left:auto;display:flex;gap:var(--space-2)">
         <button class="fc-btn primary">Re-deploy</button>
         <button class="fc-btn" id="fc-dismiss">Dismiss</button>
@@ -1886,12 +1887,8 @@ class MockRenderer {
 
   // ── Quick Environment Clone (P3) ──
   _bindCloneEnv() {
-    // Add a "Clone" button in content actions if lakehouse is shown
-    const actions = document.querySelector('.ws-content-actions');
-    if (!actions || actions.querySelector('.ws-clone-btn')) return;
-    const btn = document.createElement('button');
-    btn.className = 'ws-action-btn ws-clone-btn';
-    btn.textContent = 'Clone Environment';
+    const btn = document.querySelector('.ws-content-actions .ws-action-btn:last-of-type');
+    if (!btn || btn.textContent !== 'Clone Environment') return;
     btn.addEventListener('click', () => {
       const content = document.getElementById('ws-content-body');
       if (!content) return;
@@ -1907,7 +1904,6 @@ class MockRenderer {
       };
       setTimeout(advance, 300);
     });
-    actions.appendChild(btn);
   }
 
   // ── Helpers ──

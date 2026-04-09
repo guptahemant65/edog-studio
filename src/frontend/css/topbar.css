@@ -94,9 +94,9 @@
   font-size: var(--text-xs);
   font-weight: 500;
   padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
+  border: 1px solid var(--border);
 }
-.topbar-btn:hover { background: var(--surface-2); color: var(--text); }
-.topbar-btn.ghost { border: 1px solid var(--border-bright); }
+.topbar-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-bright); }
