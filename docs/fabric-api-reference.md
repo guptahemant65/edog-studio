@@ -79,6 +79,29 @@ FLT code **always** creates lakehouses with `{"enableSchemas": true}`. This mean
 2. Tables for schema-enabled lakehouses must be listed via the **capacity host DataArtifact endpoint** which requires an MWC token (Phase 2 only)
 3. In Phase 1 (disconnected), table listing is NOT available — the inspector should show "Deploy to view tables" placeholder
 
+### CRITICAL: MWC Token Auth Scheme
+
+**MWC tokens use `Authorization: MwcToken {token}` — NOT `Authorization: Bearer {token}`!**
+
+This was found by decompiling `CreateHttpMWCTokenClient` from the PowerBI.Test.E2E DLL:
+
+```csharp
+// From SSMOperationTestsBase.cs and DirectApiAuthTokenHandler.cs:
+httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("MwcToken", mwcToken.Token);
+```
+
+**Tested:** ✅ OK 200 — `Authorization: MwcToken` works against capacity host endpoints.
+
+### Required Headers for Capacity Host Endpoints
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `MwcToken {mwcToken}` | Always |
+| `x-ms-workload-resource-moniker` | Lakehouse artifact ID (GUID) | Always |
+| `x-ms-lakehouse-client-session-id` | Random UUID | For async operations |
+| `x-ms-client-authorization` | `Bearer {gtsToken}` | For custom transforms only |
+| `Content-Type` | `application/json` | Always |
+
 ### Table Listing Endpoints (Three Variants)
 
 | Endpoint | Schema Support | Token | Host | Phase |
