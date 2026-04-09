@@ -115,3 +115,17 @@
   display: none; z-index: 10;
 }
 .dag-node-detail.open { display: block; }
+
+/* DAG zoom controls */
+.dag-zoom-controls {
+  position: absolute; top: var(--space-2); right: var(--space-2);
+  display: flex; gap: 2px; z-index: 5;
+}
+.dag-zoom-btn {
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: var(--text-sm); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-body);
+}
+.dag-zoom-btn:hover { background: var(--surface-2); color: var(--text); }

@@ -1105,6 +1105,43 @@ mark {
 .capacity-pill.ok { background: rgba(24,160,88,0.06); color: var(--status-succeeded); }
 .capacity-pill.throttled { background: rgba(229,148,12,0.06); color: var(--level-warning); }
 
+/* Tenant selector */
+.tenant-select {
+  width: 100%; padding: var(--space-2) var(--space-3);
+  background: var(--surface-2); border: none; border-bottom: 1px solid var(--border);
+  color: var(--text); font-family: var(--font-body); font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+/* + New Workspace */
+.ws-new-link {
+  padding: var(--space-2) var(--space-4); font-size: var(--text-xs); color: var(--accent);
+  cursor: pointer; font-weight: 500;
+}
+.ws-new-link:hover { background: var(--accent-dim); }
+
+/* Workspace overview */
+.ws-overview-grid {
+  display: flex; gap: var(--space-3); flex-wrap: wrap;
+}
+.ws-overview-stat {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  min-width: 100px; text-align: center;
+}
+.ws-overview-num { font-size: var(--text-xl); font-weight: 700; color: var(--text); font-family: var(--font-mono); }
+.ws-overview-label { font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--space-1); }
+
+/* Favorite deploy button */
+.ws-fav-item { position: relative; }
+.ws-fav-name { flex: 1; }
+.ws-fav-deploy {
+  background: none; border: none; color: var(--accent); font-size: var(--text-xs);
+  cursor: pointer; padding: 0 var(--space-1); opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.ws-fav-item:hover .ws-fav-deploy { opacity: 1; }
+
     /* === css/filters.css === */
 .search-wrapper {
   position: relative;
@@ -3439,6 +3476,20 @@ mark {
 }
 .dag-node-detail.open { display: block; }
 
+/* DAG zoom controls */
+.dag-zoom-controls {
+  position: absolute; top: var(--space-2); right: var(--space-2);
+  display: flex; gap: 2px; z-index: 5;
+}
+.dag-zoom-btn {
+  width: 28px; height: 28px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-dim); font-size: var(--text-sm); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-body);
+}
+.dag-zoom-btn:hover { background: var(--surface-2); color: var(--text); }
+
     /* === css/spark.css === */
 /* ── Spark Inspector ── */
 .spark-inspector { display: flex; height: 100%; overflow: hidden; }
@@ -3646,6 +3697,30 @@ mark {
 .api-saved-item span, .api-history-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
 .api-history-status { font-family: var(--font-mono); min-width: 28px; text-align: right; }
 
+/* API Headers editor */
+.api-headers { display: flex; flex-direction: column; gap: var(--space-1); }
+.api-header-row {
+  display: flex; gap: var(--space-1); align-items: center;
+}
+.api-header-key, .api-header-val {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface-2);
+  color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-xs);
+}
+.api-header-key { width: 140px; }
+.api-header-val { flex: 1; }
+.api-header-key:focus, .api-header-val:focus { outline: none; border-color: var(--accent); }
+.api-header-rm {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: var(--text-sm); padding: var(--space-1);
+}
+.api-header-rm:hover { color: var(--level-error); }
+.api-header-add {
+  font-size: var(--text-xs); color: var(--accent); background: none; border: none;
+  cursor: pointer; padding: var(--space-1) 0; font-family: var(--font-body);
+}
+.api-header-add:hover { text-decoration: underline; }
+
     /* === css/environment.css === */
 /* ── Environment View ── */
 .environment-view { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
@@ -3777,6 +3852,38 @@ mark {
   font-size: var(--text-sm); border: 1px solid var(--level-error);
   background: var(--surface); color: var(--level-error); cursor: pointer;
   font-family: var(--font-body);
+}
+
+/* Flag reset + edit */
+.ff-reset-btn {
+  margin-left: auto; font-size: var(--text-xs); font-family: var(--font-body);
+  background: none; border: 1px solid var(--border-bright); color: var(--text-dim);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); cursor: pointer;
+}
+.ff-reset-btn:hover { background: var(--surface-2); color: var(--text); }
+
+.ff-edit-btn {
+  font-size: var(--text-xs); font-family: var(--font-body);
+  background: none; border: 1px solid var(--border); color: var(--accent);
+  padding: 1px var(--space-2); border-radius: var(--radius-sm); cursor: pointer;
+}
+.ff-edit-btn:hover { background: var(--accent-dim); }
+
+.ff-edit-row td { padding: 0 !important; }
+.ff-edit-panel {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2); border-top: 1px solid var(--border);
+}
+.ff-edit-title { font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2); }
+.ff-edit-toggles { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.ff-env-toggle {
+  font-size: var(--text-xs); color: var(--text-dim); display: flex; align-items: center; gap: var(--space-1); cursor: pointer;
+}
+.ff-edit-actions { display: flex; gap: var(--space-2); }
+
+/* Breakpoint add form */
+.bp-add-form {
+  display: flex; align-items: center; gap: var(--space-1);
 }
 
     /* === css/token-inspector.css === */
@@ -3932,6 +4039,31 @@ mark {
   font-family: var(--font-body);
 }
 .fc-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Session History */
+.session-history {
+  position: fixed; top: var(--topbar-height); right: 0;
+  width: 320px; height: calc(100vh - var(--topbar-height));
+  background: var(--surface); border-left: 1px solid var(--border);
+  transform: translateX(100%); transition: transform var(--transition-normal);
+  z-index: var(--z-detail); display: flex; flex-direction: column; overflow: hidden;
+}
+.session-history.open { transform: translateX(0); }
+.sh-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border);
+}
+.sh-title { font-size: var(--text-md); font-weight: 600; }
+.sh-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: var(--text-lg); }
+.sh-list { flex: 1; overflow-y: auto; padding: var(--space-3); }
+.sh-item {
+  display: flex; align-items: flex-start; gap: var(--space-2);
+  padding: var(--space-2) 0; font-size: var(--text-sm);
+  border-bottom: 1px solid var(--border);
+}
+.sh-time { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); min-width: 36px; }
+.sh-icon { font-size: var(--text-sm); min-width: 16px; text-align: center; }
+.sh-action { color: var(--text-dim); }
 
 /* ── Deploy Progress ── */
 .deploy-progress {
@@ -8304,6 +8436,7 @@ class MockRenderer {
     this._renderEnvironment();
     this._renderTokenInspector();
     this._renderFileChangeBar();
+    this._renderSessionHistory();
     this._bindInteractions();
   }
 
@@ -8334,23 +8467,33 @@ class MockRenderer {
   _renderWorkspaceTree() {
     const tree = document.getElementById('ws-tree-content');
     if (!tree) return;
+    this._expandedWs = this._expandedWs || new Set([0]);
+
+    // Tenant selector above tree header
+    const header = document.querySelector('.ws-tree-header');
+    if (header && !document.getElementById('tenant-select')) {
+      const sel = document.createElement('select');
+      sel.id = 'tenant-select';
+      sel.className = 'tenant-select';
+      sel.innerHTML = '<option>FabricFMLV08PPE</option><option>EDOG-INT3-Tenant</option><option>Personal-Tenant</option>';
+      header.parentNode.insertBefore(sel, header);
+    }
 
     let html = '';
     MockData.workspaces.forEach((ws, wsIdx) => {
-      const isFirst = wsIdx === 0;
-      html += `<div class="ws-tree-item" data-ws-idx="${wsIdx}" style="padding-left:12px">
-        <span class="ws-tree-toggle">${isFirst ? '\u25BE' : '\u25B8'}</span>
+      const expanded = this._expandedWs.has(wsIdx);
+      html += `<div class="ws-tree-item ws-tree-ws" data-ws-idx="${wsIdx}" style="padding-left:12px">
+        <span class="ws-tree-toggle">${expanded ? '\u25BE' : '\u25B8'}</span>
         <span class="ws-tree-label">${ws.displayName}</span>
       </div>`;
 
-      if (isFirst) {
+      if (expanded) {
         const items = MockData.getItemsForWorkspace(wsIdx);
         items.forEach((item, itemIdx) => {
           const isLH = item.type === 'Lakehouse';
           const cls = isLH ? '' : ' dimmed';
           const dot = isLH ? '<span class="ws-dot lakehouse"></span>' : '<span class="ws-dot other"></span>';
-          const selected = itemIdx === 0 ? ' selected' : '';
-          html += `<div class="ws-tree-item${cls}${selected}" data-ws-idx="${wsIdx}" data-item-idx="${itemIdx}" style="padding-left:28px">
+          html += `<div class="ws-tree-item${cls}" data-ws-idx="${wsIdx}" data-item-idx="${itemIdx}" style="padding-left:28px">
             ${dot}<span class="ws-tree-label">${item.displayName}</span>
             <span class="ws-tree-type">${item.type}</span>
           </div>`;
@@ -8358,21 +8501,142 @@ class MockRenderer {
       }
     });
 
-    // Favorites
+    // + New Workspace link
+    html += '<div class="ws-new-link">+ New Workspace</div>';
+    tree.innerHTML = html;
+
+    // Bind workspace expand/collapse
+    tree.querySelectorAll('.ws-tree-ws').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.wsIdx);
+        if (this._expandedWs.has(idx)) this._expandedWs.delete(idx);
+        else this._expandedWs.add(idx);
+        this._renderWorkspaceTree();
+      });
+    });
+
+    // Bind item clicks → show content
+    tree.querySelectorAll('.ws-tree-item[data-item-idx]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        tree.querySelectorAll('.ws-tree-item').forEach(i => i.classList.remove('selected'));
+        el.classList.add('selected');
+        const wsIdx = parseInt(el.dataset.wsIdx);
+        const itemIdx = parseInt(el.dataset.itemIdx);
+        const items = MockData.getItemsForWorkspace(wsIdx);
+        const item = items[itemIdx];
+        if (item.type === 'Lakehouse') {
+          this._renderLakehouseContent(wsIdx, itemIdx);
+          this._renderTableInspector(0);
+        } else {
+          this._renderNonLakehouseContent(item);
+        }
+      });
+      el.addEventListener('contextmenu', (e) => this._showContextMenu(e, el));
+    });
+
+    // Bind workspace row click → workspace summary (not toggle when clicking label area)
+    tree.querySelectorAll('.ws-tree-ws').forEach(el => {
+      el.addEventListener('dblclick', () => {
+        const wsIdx = parseInt(el.dataset.wsIdx);
+        this._renderWorkspaceSelectedContent(wsIdx);
+      });
+      el.addEventListener('contextmenu', (e) => this._showContextMenu(e, el));
+    });
+
+    // + New Workspace toast
+    const newWsLink = tree.querySelector('.ws-new-link');
+    if (newWsLink) newWsLink.addEventListener('click', () => this._showToast('Create Workspace wizard (mock)'));
+
+    // Favorites with deploy buttons
     const favEl = document.getElementById('ws-favorites-list');
     if (favEl) {
       let favHtml = '';
       MockData.favorites.forEach(f => {
-        favHtml += `<div class="ws-fav-item">\u25C6 ${f.name} <span class="ws-fav-detail">${f.workspaceName}</span></div>`;
+        favHtml += `<div class="ws-fav-item"><span class="ws-fav-name">\u25C6 ${f.name}</span><span class="ws-fav-detail">${f.workspaceName}</span><button class="ws-fav-deploy" title="Deploy">\u25B6</button></div>`;
       });
       favEl.innerHTML = favHtml;
+      favEl.querySelectorAll('.ws-fav-deploy').forEach((btn, i) => {
+        btn.addEventListener('click', (e) => { e.stopPropagation(); this._startDeployFlow(MockData.favorites[i].name); });
+      });
     }
 
-    tree.innerHTML = html;
+    // Select first lakehouse by default
+    const firstLH = tree.querySelector('.ws-tree-item[data-item-idx="0"]');
+    if (firstLH) firstLH.classList.add('selected');
 
-    // Populate content panel for first lakehouse
     this._renderLakehouseContent(0, 0);
     this._renderTableInspector(0);
+  }
+
+  _renderWorkspaceSelectedContent(wsIdx) {
+    const content = document.getElementById('ws-content-body');
+    if (!content) return;
+    const ws = MockData.workspaces[wsIdx];
+    const items = MockData.getItemsForWorkspace(wsIdx);
+    const lhCount = items.filter(i => i.type === 'Lakehouse').length;
+    const nbCount = items.filter(i => i.type === 'Notebook').length;
+    const plCount = items.filter(i => i.type === 'DataPipeline').length;
+    const other = items.length - lhCount - nbCount - plCount;
+
+    content.innerHTML = `
+      <div class="ws-content-header">
+        <div class="ws-content-name">${ws.displayName}</div>
+        <div class="ws-content-meta">
+          <span class="ws-meta-id">${ws.id.substring(0, 8)}...</span>
+          <span class="ws-meta-badge">F2 PPE \u25CF West US 2</span>
+          <span class="ws-meta-modified">${ws.state}</span>
+        </div>
+        <div class="ws-content-actions">
+          <button class="ws-action-btn">Rename</button>
+          <button class="ws-action-btn">Open in Fabric</button>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">Overview</div>
+        <div class="ws-overview-grid">
+          <div class="ws-overview-stat"><div class="ws-overview-num">${items.length}</div><div class="ws-overview-label">Total Items</div></div>
+          <div class="ws-overview-stat"><div class="ws-overview-num">${lhCount}</div><div class="ws-overview-label">Lakehouses</div></div>
+          <div class="ws-overview-stat"><div class="ws-overview-num">${nbCount}</div><div class="ws-overview-label">Notebooks</div></div>
+          <div class="ws-overview-stat"><div class="ws-overview-num">${plCount + other}</div><div class="ws-overview-label">Other</div></div>
+          <div class="ws-overview-stat"><div class="ws-overview-num">8</div><div class="ws-overview-label">Members</div></div>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">Description</div>
+        <p style="font-size:var(--text-sm);color:var(--text-dim);line-height:1.6">${ws.description || 'No description'}</p>
+      </div>`;
+  }
+
+  _renderNonLakehouseContent(item) {
+    const content = document.getElementById('ws-content-body');
+    if (!content) return;
+    content.innerHTML = `
+      <div class="ws-content-header">
+        <div class="ws-content-name">${item.displayName}</div>
+        <div class="ws-content-meta">
+          <span class="ws-meta-id">${item.id.substring(0, 8)}...</span>
+          <span class="ws-type-badge">${item.type}</span>
+          <span class="ws-meta-modified">Modified ${this._relativeTime(item.lastModified)}</span>
+        </div>
+        <div class="ws-content-actions">
+          <button class="ws-action-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)">Open in Fabric</button>
+          <button class="ws-action-btn">Copy ID</button>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">Item Details</div>
+        <dl class="ws-insp-kv" style="max-width:400px">
+          <dt>Name</dt><dd>${item.displayName}</dd>
+          <dt>Type</dt><dd>${item.type}</dd>
+          <dt>ID</dt><dd>${item.id}</dd>
+          <dt>Status</dt><dd>${item.status}</dd>
+          <dt>Modified</dt><dd>${this._relativeTime(item.lastModified)}</dd>
+        </dl>
+      </div>`; 
+    // Clear inspector
+    const insp = document.getElementById('ws-inspector-content');
+    if (insp) insp.innerHTML = '<div style="color:var(--text-muted);font-size:var(--text-sm);padding:var(--space-4)">Select a lakehouse table to inspect</div>';
   }
 
   _renderLakehouseContent(wsIdx, itemIdx) {
@@ -8546,6 +8810,15 @@ class MockRenderer {
     // Bind log toolbar filters
     this._bindLogFilters();
 
+    // Log search
+    this._bindLogSearch();
+
+    // Breakpoint add dialog
+    this._bindBreakpointAdd();
+
+    // Dynamic bookmarks
+    this._bindDynamicBookmarks();
+
     // Render breakpoints bar
     const bpBar = document.getElementById('breakpoints-bar');
     if (bpBar) {
@@ -8594,6 +8867,7 @@ class MockRenderer {
     this._renderGantt();
     this._renderDagHistory();
     this._bindDagNodeClicks();
+    this._bindDagZoom();
   }
 
   _renderDagGraph() {
@@ -8856,7 +9130,11 @@ class MockRenderer {
           </div>
           <div class="api-body-section">
             <span class="api-body-label">Headers</span>
-            <div style="font-size:var(--text-xs);color:var(--text-dim);font-family:var(--font-mono);padding:var(--space-1) 0">Authorization: Bearer eyJ0eX...  (auto-filled)</div>
+            <div class="api-headers" id="api-headers">
+              <div class="api-header-row"><input class="api-header-key" value="Authorization" readonly/><input class="api-header-val" value="Bearer eyJ0eX..." readonly/><button class="api-header-rm" disabled>\u2715</button></div>
+              <div class="api-header-row"><input class="api-header-key" value="Content-Type"/><input class="api-header-val" value="application/json"/><button class="api-header-rm">\u2715</button></div>
+            </div>
+            <button class="api-header-add" id="api-add-header">+ Add Header</button>
           </div>
         </div>
         <div class="api-response-section" id="api-response-section">
@@ -8934,6 +9212,23 @@ class MockRenderer {
         if (bodyArea) bodyArea.style.display = ['POST', 'PUT', 'PATCH'].includes(req.method) ? '' : 'none';
       });
     });
+
+    // Header add/remove
+    const addHeader = document.getElementById('api-add-header');
+    if (addHeader) {
+      addHeader.addEventListener('click', () => {
+        const headers = document.getElementById('api-headers');
+        if (!headers) return;
+        const row = document.createElement('div');
+        row.className = 'api-header-row';
+        row.innerHTML = '<input class="api-header-key" placeholder="Header name"/><input class="api-header-val" placeholder="Value"/><button class="api-header-rm">\u2715</button>';
+        headers.appendChild(row);
+        row.querySelector('.api-header-rm').addEventListener('click', () => row.remove());
+      });
+    }
+    panel.querySelectorAll('.api-header-rm').forEach(btn => {
+      if (!btn.disabled) btn.addEventListener('click', () => btn.closest('.api-header-row')?.remove());
+    });
   }
 
   _renderApiSaved() {
@@ -9009,6 +9304,7 @@ class MockRenderer {
           <button class="ff-group-tab">Partial</button>
           <button class="ff-group-tab">Disabled</button>
         </div>
+        <button class="ff-reset-btn">Reset All Overrides</button>
       </div>
       <table class="ff-table">
         <thead><tr>
@@ -9016,9 +9312,10 @@ class MockRenderer {
           <th>Description</th>
           ${rings.map(r => `<th>${r}</th>`).join('')}
           <th>Override</th>
+          <th></th>
         </tr></thead>
         <tbody>
-          ${MockData.featureFlags.map(f => `<tr>
+          ${MockData.featureFlags.map((f, fi) => `<tr data-flag-idx="${fi}">
             <td>${f.name}</td>
             <td>${f.description}</td>
             ${rings.map(r => {
@@ -9028,9 +9325,10 @@ class MockRenderer {
               return '<td class="ff-cell-off">\u2717</td>';
             }).join('')}
             <td>
-              <input type="checkbox" class="ff-override-toggle" ${f.override === true ? 'checked' : ''} ${f.override === false ? 'data-forced-off="true"' : ''}>
+              <input type="checkbox" class="ff-override-toggle" data-flag="${f.name}" ${f.override === true ? 'checked' : ''}>
               ${f.override !== null ? '<span class="ff-override-indicator"></span>' : ''}
             </td>
+            <td><button class="ff-edit-btn" data-flag-idx="${fi}">Edit</button></td>
           </tr>`).join('')}
         </tbody>
       </table>`;
@@ -9065,6 +9363,48 @@ class MockRenderer {
           else if (label === 'Partial') show = onCount > 0 && onCount < total;
           tr.style.display = show ? '' : 'none';
         });
+      });
+    });
+
+    // Override toggle toasts
+    el.querySelectorAll('.ff-override-toggle').forEach(toggle => {
+      toggle.addEventListener('change', () => {
+        const name = toggle.dataset.flag;
+        this._showToast('Override applied: ' + name + ' \u2192 ' + (toggle.checked ? 'ON' : 'OFF'));
+      });
+    });
+
+    // Reset All
+    const resetBtn = el.querySelector('.ff-reset-btn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        el.querySelectorAll('.ff-override-toggle').forEach(t => { t.checked = false; });
+        this._showToast('All overrides reset');
+      });
+    }
+
+    // Edit buttons → expand row with per-env toggles
+    el.querySelectorAll('.ff-edit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tr = btn.closest('tr');
+        const existing = tr.nextElementSibling?.classList.contains('ff-edit-row');
+        el.querySelectorAll('.ff-edit-row').forEach(r => r.remove());
+        if (existing) return;
+        const fi = parseInt(btn.dataset.flagIdx);
+        const f = MockData.featureFlags[fi];
+        if (!f) return;
+        const rings = ['onebox', 'test', 'daily', 'cst', 'dxt', 'msit', 'prod'];
+        const editRow = document.createElement('tr');
+        editRow.className = 'ff-edit-row';
+        editRow.innerHTML = '<td colspan="' + (rings.length + 4) + '"><div class="ff-edit-panel">' +
+          '<div class="ff-edit-title">Edit Rollout: ' + f.name + '</div>' +
+          '<div class="ff-edit-toggles">' + rings.map(r => {
+            const on = f.rings[r] === true;
+            return '<label class="ff-env-toggle"><input type="checkbox"' + (on ? ' checked' : '') + '/> ' + r + '</label>';
+          }).join('') + '</div>' +
+          '<div class="ff-edit-actions"><button class="ws-action-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="document.getElementById(\'edog-toast\')&&(document.getElementById(\'edog-toast\').textContent=\'PR created (mock)\',document.getElementById(\'edog-toast\').classList.add(\'visible\'),setTimeout(()=>document.getElementById(\'edog-toast\').classList.remove(\'visible\'),2000))">Create PR</button><button class="ws-action-btn" onclick="this.closest(\'.ff-edit-row\')?.remove()">Cancel</button></div>' +
+          '</div></td>';
+        tr.after(editRow);
       });
     });
   }
@@ -9356,6 +9696,127 @@ class MockRenderer {
     return safe;
   }
 
+  // ── Log Search ──
+  _bindLogSearch() {
+    const input = document.getElementById('search-input');
+    const countEl = document.getElementById('search-count');
+    if (!input) return;
+    let matches = [];
+    let matchIdx = -1;
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      matches = [];
+      matchIdx = -1;
+      document.querySelectorAll('#logs-container .log-row').forEach(row => {
+        const msgEl = row.querySelector('.log-message');
+        if (!msgEl) return;
+        const orig = this._logEntries[parseInt(row.dataset.logIdx)]?.message || '';
+        if (q && orig.toLowerCase().includes(q)) {
+          const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+          msgEl.innerHTML = this._decorateLogMessage(orig).replace(re, '<mark>$1</mark>');
+          matches.push(row);
+        } else {
+          msgEl.innerHTML = this._decorateLogMessage(orig);
+        }
+      });
+      if (countEl) countEl.textContent = q ? matches.length + ' matches' : '';
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && matches.length > 0) {
+        e.preventDefault();
+        matchIdx = (matchIdx + 1) % matches.length;
+        matches[matchIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        matches.forEach(m => m.style.outline = '');
+        matches[matchIdx].style.outline = '2px solid var(--accent)';
+      }
+    });
+  }
+
+  // ── Breakpoint Add Dialog ──
+  _bindBreakpointAdd() {
+    this._breakpoints = [
+      { regex: /NullReference/i, color: 'var(--level-error)', label: 'NullReference' },
+      { regex: /throttl/i, color: 'var(--level-warning)', label: 'throttl.*' },
+    ];
+
+    const addBtn = document.querySelector('.bp-add');
+    if (!addBtn) return;
+    addBtn.addEventListener('click', () => {
+      const bar = document.getElementById('breakpoints-bar');
+      if (!bar || bar.querySelector('.bp-add-form')) return;
+      const form = document.createElement('div');
+      form.className = 'bp-add-form';
+      form.innerHTML = `<input class="bp-add-input" placeholder="Regex..." style="width:120px;font-size:var(--text-xs);font-family:var(--font-mono);padding:2px var(--space-2);border:1px solid var(--border-bright);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text)"/>
+        <select class="bp-add-color" style="font-size:var(--text-xs);padding:2px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text)"><option value="var(--level-error)">Red</option><option value="var(--level-warning)">Amber</option><option value="var(--level-message)">Blue</option><option value="var(--status-succeeded)">Green</option></select>
+        <button class="bp-add-submit" style="font-size:var(--text-xs);padding:2px var(--space-2);border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-dim);color:var(--accent);cursor:pointer">Add</button>`;
+      bar.querySelector('.bp-pills').after(form);
+
+      form.querySelector('.bp-add-submit').addEventListener('click', () => {
+        const regex = form.querySelector('.bp-add-input').value.trim();
+        const color = form.querySelector('.bp-add-color').value;
+        if (!regex) return;
+        try {
+          this._breakpoints.push({ regex: new RegExp(regex, 'i'), color, label: regex });
+          this._renderBreakpointPills();
+          this._applyBreakpointHighlights();
+          form.remove();
+        } catch { this._showToast('Invalid regex'); }
+      });
+    });
+  }
+
+  _renderBreakpointPills() {
+    const pills = document.querySelector('.bp-pills');
+    if (!pills) return;
+    pills.innerHTML = this._breakpoints.map((bp, i) =>
+      `<span class="bp-pill"><span class="bp-pill-color" style="background:${bp.color}"></span> ${this._escapeHtml(bp.label)} <span class="bp-pill-close" data-bp-idx="${i}">\u2715</span></span>`
+    ).join('');
+    pills.querySelectorAll('.bp-pill-close').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._breakpoints.splice(parseInt(btn.dataset.bpIdx), 1);
+        this._renderBreakpointPills();
+        this._applyBreakpointHighlights();
+      });
+    });
+  }
+
+  // ── Dynamic Bookmarks ──
+  _bindDynamicBookmarks() {
+    const container = document.getElementById('logs-container');
+    if (!container) return;
+
+    // Override bookmark star clicks to update drawer
+    container.querySelectorAll('.log-bookmark-star').forEach(star => {
+      star.addEventListener('click', () => {
+        setTimeout(() => this._updateBookmarksDrawer(), 50);
+      });
+    });
+  }
+
+  _updateBookmarksDrawer() {
+    const list = document.getElementById('bm-list');
+    if (!list) return;
+    const bookmarked = this._logEntries.filter(e => e.bookmarked);
+    if (bookmarked.length === 0) {
+      list.innerHTML = '<div style="padding:var(--space-4);font-size:var(--text-sm);color:var(--text-muted)">No bookmarks yet. Click \u2606 on a log entry.</div>';
+      return;
+    }
+    list.innerHTML = bookmarked.map(e => `<div class="bm-entry" data-log-idx="${e.id - 1}">
+      <div class="bm-entry-meta"><span>${e.timestamp}</span><span style="color:var(--level-${e.level.toLowerCase()})">${e.level}</span></div>
+      <div class="bm-entry-msg">${this._escapeHtml(e.message).substring(0, 80)}</div>
+    </div>`).join('');
+
+    list.querySelectorAll('.bm-entry').forEach(entry => {
+      entry.addEventListener('click', () => {
+        const idx = parseInt(entry.dataset.logIdx);
+        const row = document.querySelector('#logs-container .log-row[data-log-idx="' + idx + '"]');
+        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
   // ── DAG Node Detail ──
   _bindDagNodeClicks() {
     const panel = document.getElementById('dag-graph-panel');
@@ -9403,6 +9864,68 @@ class MockRenderer {
       <div style="font-family:var(--font-mono);font-size:var(--text-xs);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);white-space:pre;line-height:1.7;max-height:120px;overflow-y:auto">${this._escapeHtml(mockSql)}</div>`;
 
     detail.classList.add('open');
+  }
+
+  // ── DAG Zoom Controls ──
+  _bindDagZoom() {
+    const panel = document.getElementById('dag-graph-panel');
+    if (!panel) return;
+    this._dagZoom = 1.0;
+
+    // Add zoom buttons
+    const controls = document.createElement('div');
+    controls.className = 'dag-zoom-controls';
+    controls.innerHTML = '<button class="dag-zoom-btn" data-zoom="in">+</button><button class="dag-zoom-btn" data-zoom="out">\u2212</button><button class="dag-zoom-btn" data-zoom="fit">Fit</button>';
+    panel.style.position = 'relative';
+    panel.appendChild(controls);
+
+    controls.querySelectorAll('.dag-zoom-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const svg = panel.querySelector('svg');
+        if (!svg) return;
+        const action = btn.dataset.zoom;
+        if (action === 'in') this._dagZoom = Math.min(this._dagZoom * 1.25, 3);
+        else if (action === 'out') this._dagZoom = Math.max(this._dagZoom * 0.8, 0.3);
+        else this._dagZoom = 1.0;
+        const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+        const cx = vb[2] / 2, cy = vb[3] / 2;
+        const w = vb[2] / this._dagZoom, h = vb[3] / this._dagZoom;
+        svg.setAttribute('viewBox', `${cx - w/2} ${cy - h/2} ${w} ${h}`);
+      });
+    });
+  }
+
+  // ── Session History Timeline ──
+  _renderSessionHistory() {
+    const events = [
+      { time: '14:02', action: 'Launched EDOG Studio', icon: '\u25B6' },
+      { time: '14:03', action: 'Authenticated via cert-based login', icon: '\u2713' },
+      { time: '14:05', action: 'Deployed to TestLakehouse-01', icon: '\u25C6' },
+      { time: '14:06', action: 'Ran DAG (5/8 completed, 1 failed)', icon: '\u2718' },
+      { time: '14:12', action: 'Re-deployed after code change', icon: '\u25C6' },
+      { time: '14:14', action: 'Ran DAG (8/8 completed)', icon: '\u2713' },
+      { time: '14:22', action: 'Force unlocked stuck execution', icon: '\u26A0' },
+    ];
+
+    let panel = document.getElementById('session-history-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'session-history-panel';
+      panel.className = 'session-history';
+      document.body.appendChild(panel);
+    }
+    panel.innerHTML = `
+      <div class="sh-header"><span class="sh-title">Session History</span><button class="sh-close" onclick="document.getElementById('session-history-panel').classList.remove('open')">\u2715</button></div>
+      <div class="sh-list">${events.map(e => `<div class="sh-item"><span class="sh-time">${e.time}</span><span class="sh-icon">${e.icon}</span><span class="sh-action">${e.action}</span></div>`).join('')}</div>`;
+  }
+
+  // ── Phase Transition ──
+  _bindPhaseTransition() {
+    // After deploy completes, enable sidebar tabs 2-4 with transition
+    const icons = document.querySelectorAll('.sidebar-icon[data-phase="connected"]');
+    icons.forEach(icon => {
+      icon.style.transition = 'opacity var(--transition-normal)';
+    });
   }
 
   // ── Context Menu ──

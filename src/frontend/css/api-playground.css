@@ -95,3 +95,27 @@
 .api-saved-item .method-pill, .api-history-item .method-pill { font-size: 9px; padding: 0 var(--space-1); }
 .api-saved-item span, .api-history-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
 .api-history-status { font-family: var(--font-mono); min-width: 28px; text-align: right; }
+
+/* API Headers editor */
+.api-headers { display: flex; flex-direction: column; gap: var(--space-1); }
+.api-header-row {
+  display: flex; gap: var(--space-1); align-items: center;
+}
+.api-header-key, .api-header-val {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface-2);
+  color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-xs);
+}
+.api-header-key { width: 140px; }
+.api-header-val { flex: 1; }
+.api-header-key:focus, .api-header-val:focus { outline: none; border-color: var(--accent); }
+.api-header-rm {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: var(--text-sm); padding: var(--space-1);
+}
+.api-header-rm:hover { color: var(--level-error); }
+.api-header-add {
+  font-size: var(--text-xs); color: var(--accent); background: none; border: none;
+  cursor: pointer; padding: var(--space-1) 0; font-family: var(--font-body);
+}
+.api-header-add:hover { text-decoration: underline; }

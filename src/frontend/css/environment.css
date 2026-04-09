@@ -129,3 +129,35 @@
   background: var(--surface); color: var(--level-error); cursor: pointer;
   font-family: var(--font-body);
 }
+
+/* Flag reset + edit */
+.ff-reset-btn {
+  margin-left: auto; font-size: var(--text-xs); font-family: var(--font-body);
+  background: none; border: 1px solid var(--border-bright); color: var(--text-dim);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm); cursor: pointer;
+}
+.ff-reset-btn:hover { background: var(--surface-2); color: var(--text); }
+
+.ff-edit-btn {
+  font-size: var(--text-xs); font-family: var(--font-body);
+  background: none; border: 1px solid var(--border); color: var(--accent);
+  padding: 1px var(--space-2); border-radius: var(--radius-sm); cursor: pointer;
+}
+.ff-edit-btn:hover { background: var(--accent-dim); }
+
+.ff-edit-row td { padding: 0 !important; }
+.ff-edit-panel {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2); border-top: 1px solid var(--border);
+}
+.ff-edit-title { font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2); }
+.ff-edit-toggles { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.ff-env-toggle {
+  font-size: var(--text-xs); color: var(--text-dim); display: flex; align-items: center; gap: var(--space-1); cursor: pointer;
+}
+.ff-edit-actions { display: flex; gap: var(--space-2); }
+
+/* Breakpoint add form */
+.bp-add-form {
+  display: flex; align-items: center; gap: var(--space-1);
+}
