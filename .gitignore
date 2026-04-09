@@ -25,6 +25,7 @@ Thumbs.db
 
 # EDOG runtime files (never commit)
 .edog-token-cache
+.edog-bearer-cache
 .edog-changes.patch
 .edog-command/
 edog-feature-overrides.json

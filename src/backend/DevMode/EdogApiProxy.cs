@@ -15,8 +15,9 @@ namespace Microsoft.LiveTable.Service.DevMode
     using Microsoft.AspNetCore.Http;
 
     /// <summary>
-    /// Serves EDOG config and MWC token to the Command Center frontend.
-    /// The browser calls Fabric APIs directly with the provided token.
+    /// Serves EDOG config, MWC token, and bearer (AAD/Entra) token
+    /// to the Command Center frontend. The browser calls Fabric APIs
+    /// directly with the provided tokens.
     /// </summary>
     internal sealed class EdogApiProxy
     {
@@ -55,6 +56,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                     fabricBaseUrl = BuildBaseUrl(config);
                 }
 
+                var bearerTokenInfo = ReadBearerToken();
+                string bearerToken = bearerTokenInfo?.Token;
+                string phase = mwcToken != null ? "connected" : "disconnected";
+
                 await context.Response.WriteAsync(JsonSerializer.Serialize(new
                 {
                     workspaceId = config.WorkspaceId,
@@ -63,7 +68,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     tokenExpiryMinutes = (int)expiryMinutes,
                     tokenExpired,
                     mwcToken,
-                    fabricBaseUrl
+                    fabricBaseUrl,
+                    bearerToken,
+                    phase
                 }, JsonOpts));
             }
             catch (Exception ex)
@@ -146,6 +153,54 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] Failed to read token: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Reads the cached bearer (AAD/Entra) token from .edog-bearer-cache.
+        /// Format is identical to the MWC token cache: base64(timestamp|token).
+        /// Used by the frontend to call Fabric public APIs directly.
+        /// </summary>
+        private TokenInfo? ReadBearerToken()
+        {
+            var path = Path.Combine(configDir, ".edog-bearer-cache");
+            try
+            {
+                var raw = File.ReadAllText(path).Trim();
+                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(raw));
+
+                var separatorIndex = decoded.IndexOf('|');
+                if (separatorIndex < 0)
+                {
+                    Console.WriteLine("[EDOG] Bearer token cache has invalid format (no | separator)");
+                    return null;
+                }
+
+                var expiryStr = decoded.Substring(0, separatorIndex);
+                var token = decoded.Substring(separatorIndex + 1);
+
+                if (!double.TryParse(expiryStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var expiryUnix))
+                {
+                    Console.WriteLine("[EDOG] Bearer token cache has invalid expiry timestamp");
+                    return null;
+                }
+
+                var expiryUtc = DateTimeOffset.FromUnixTimeSeconds((long)expiryUnix).UtcDateTime;
+                var now = DateTime.UtcNow;
+
+                // 5-minute buffer matching edog.py's logic
+                if (now >= expiryUtc.AddSeconds(-300))
+                {
+                    Console.WriteLine("[EDOG] Bearer token expired or expiring within 5 minutes");
+                    return null;
+                }
+
+                return new TokenInfo { Token = token, ExpiryUtc = expiryUtc };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] Failed to read bearer token: {ex.Message}");
                 return null;
             }
         }

@@ -923,9 +923,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Start the application
   new EdogLogViewer().init();
 
-  // Initialize mock data rendering for prototype — run after real components
-  // settle, then override their failed API results with mock data
-  if (typeof MockRenderer !== 'undefined') {
+  // Initialize mock data rendering — only when ?mock=true is in the URL
+  if (typeof MockRenderer !== 'undefined' && new URLSearchParams(window.location.search).get('mock') === 'true') {
     setTimeout(() => {
       const mock = new MockRenderer();
       mock.init();

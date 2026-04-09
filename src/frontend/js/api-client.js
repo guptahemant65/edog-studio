@@ -1,5 +1,13 @@
 /**
- * FabricApiClient — API wrapper for Fabric and FLT service endpoints.
+ * FabricApiClient — API wrapper for Fabric REST and FLT service endpoints.
+ *
+ * Two token modes:
+ *   - Bearer token (Phase 1 disconnected): Fabric public APIs — workspaces,
+ *     lakehouses, tables, CRUD operations.
+ *   - MWC token (Phase 2 connected): FLT service APIs — DAG, Spark, telemetry.
+ *
+ * All Fabric API methods throw on failure so callers (e.g. WorkspaceExplorer)
+ * can surface errors via toast notifications.
  */
 class FabricApiClient {
   constructor() {
@@ -7,6 +15,7 @@ class FabricApiClient {
     this._mwcToken = null;
     this._fabricBaseUrl = null;
     this._config = null;
+    this._phase = 'disconnected';
     this._baseUrl = 'https://api.fabric.microsoft.com/v1';
   }
 
@@ -14,6 +23,10 @@ class FabricApiClient {
     await this.fetchConfig();
   }
 
+  /**
+   * Fetch config from the EDOG control server and extract tokens.
+   * @returns {Promise<object|null>} Config object, or null if unavailable.
+   */
   async fetchConfig() {
     try {
       const resp = await fetch('/api/flt/config');
@@ -21,34 +34,84 @@ class FabricApiClient {
       this._config = await resp.json();
       this._mwcToken = this._config.mwcToken || null;
       this._fabricBaseUrl = this._config.fabricBaseUrl || null;
+      this._bearerToken = this._config.bearerToken || null;
+      this._phase = this._config.phase || (this._mwcToken ? 'connected' : 'disconnected');
       return this._config;
     } catch {
       return null;
     }
   }
 
+  /** @returns {'connected'|'disconnected'} Current lifecycle phase. */
   getPhase() {
-    return this._mwcToken ? 'connected' : 'disconnected';
+    return this._phase;
   }
 
+  /** @returns {object|null} Raw config object from last fetchConfig(). */
   getConfig() { return this._config; }
+
+  /** @returns {boolean} Whether a bearer token is available for Fabric APIs. */
+  hasBearerToken() {
+    return !!this._bearerToken;
+  }
 
   // --- Fabric Public APIs (bearer token) ---
 
   async listWorkspaces() {
-    return this._fabricFetch('/workspaces?$top=100');
+    return this._fabricGet('/workspaces?$top=100');
   }
 
   async listWorkspaceItems(workspaceId) {
-    return this._fabricFetch('/workspaces/' + workspaceId + '/items');
+    return this._fabricGet(`/workspaces/${workspaceId}/items`);
   }
 
   async listLakehouses(workspaceId) {
-    return this._fabricFetch('/workspaces/' + workspaceId + '/lakehouses');
+    return this._fabricGet(`/workspaces/${workspaceId}/lakehouses`);
   }
 
   async listTables(workspaceId, lakehouseId) {
-    return this._fabricFetch('/workspaces/' + workspaceId + '/lakehouses/' + lakehouseId + '/tables');
+    return this._fabricGet(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}/tables`);
+  }
+
+  // --- Fabric CRUD APIs ---
+
+  /**
+   * Rename a workspace.
+   * @param {string} workspaceId - Workspace GUID.
+   * @param {string} newName - New display name.
+   */
+  async renameWorkspace(workspaceId, newName) {
+    return this._fabricPatch(`/workspaces/${workspaceId}`, { displayName: newName });
+  }
+
+  /**
+   * Delete a workspace.
+   * @param {string} workspaceId - Workspace GUID.
+   */
+  async deleteWorkspace(workspaceId) {
+    return this._fabricDelete(`/workspaces/${workspaceId}`);
+  }
+
+  /**
+   * Rename a lakehouse.
+   * @param {string} workspaceId - Parent workspace GUID.
+   * @param {string} lakehouseId - Lakehouse GUID.
+   * @param {string} newName - New display name.
+   */
+  async renameLakehouse(workspaceId, lakehouseId, newName) {
+    return this._fabricPatch(
+      `/workspaces/${workspaceId}/lakehouses/${lakehouseId}`,
+      { displayName: newName }
+    );
+  }
+
+  /**
+   * Delete a lakehouse.
+   * @param {string} workspaceId - Parent workspace GUID.
+   * @param {string} lakehouseId - Lakehouse GUID.
+   */
+  async deleteLakehouse(workspaceId, lakehouseId) {
+    return this._fabricDelete(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}`);
   }
 
   // --- FLT Service APIs (MWC token, connected mode) ---
@@ -60,31 +123,86 @@ class FabricApiClient {
 
   async runDag(iterationId) {
     if (!this._fabricBaseUrl || !this._mwcToken) return null;
-    return this._fltFetch('/liveTableSchedule/runDAG/' + iterationId, { method: 'POST' });
+    return this._fltFetch(`/liveTableSchedule/runDAG/${iterationId}`, { method: 'POST' });
   }
 
   async cancelDag(iterationId) {
     if (!this._fabricBaseUrl || !this._mwcToken) return null;
-    return this._fltFetch('/liveTableSchedule/cancelDAG/' + iterationId, { method: 'POST' });
+    return this._fltFetch(`/liveTableSchedule/cancelDAG/${iterationId}`, { method: 'POST' });
+  }
+
+  // --- Generic HTTP method wrappers (Fabric public API) ---
+
+  /** @param {string} path - API path appended to base URL. */
+  async _fabricGet(path) {
+    return this._fabricFetch(path, { method: 'GET' });
+  }
+
+  /**
+   * @param {string} path - API path appended to base URL.
+   * @param {object} body - JSON request body.
+   */
+  async _fabricPost(path, body) {
+    return this._fabricFetch(path, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
+   * @param {string} path - API path appended to base URL.
+   * @param {object} body - JSON request body.
+   */
+  async _fabricPatch(path, body) {
+    return this._fabricFetch(path, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** @param {string} path - API path appended to base URL. */
+  async _fabricDelete(path) {
+    return this._fabricFetch(path, { method: 'DELETE' });
   }
 
   // --- Internal fetch wrappers ---
 
-  async _fabricFetch(path) {
+  /**
+   * Core Fabric API fetch. Attaches bearer token and throws on failure.
+   * @param {string} path - API path (appended to this._baseUrl).
+   * @param {object} options - fetch() options (method, body, etc.).
+   * @returns {Promise<object>} Parsed JSON response.
+   * @throws {Error} With .status, .body, .path on API errors; plain Error on network failures.
+   */
+  async _fabricFetch(path, options = {}) {
     try {
       const config = this._config || await this.fetchConfig();
-      if (!config) return { value: [] };
-      const headers = { 'Content-Type': 'application/json' };
-      if (this._bearerToken) headers['Authorization'] = 'Bearer ' + this._bearerToken;
-      const resp = await fetch(this._baseUrl + path, { headers });
-      if (!resp.ok) {
-        console.warn('Fabric API error:', resp.status, path);
-        return { value: [] };
+      if (!config) {
+        const err = new Error('No config available — is the EDOG server running?');
+        err.path = path;
+        throw err;
       }
-      return resp.json();
+      const headers = { 'Content-Type': 'application/json' };
+      if (this._bearerToken) {
+        headers['Authorization'] = `Bearer ${this._bearerToken}`;
+      }
+      const resp = await fetch(this._baseUrl + path, { ...options, headers });
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => '');
+        const err = new Error(`Fabric API error: ${resp.status}`);
+        err.status = resp.status;
+        err.body = errorText;
+        err.path = path;
+        throw err;
+      }
+      const text = await resp.text();
+      return text ? JSON.parse(text) : {};
     } catch (e) {
+      if (e.status) throw e;
       console.warn('Fabric API fetch failed:', path, e.message);
-      return { value: [] };
+      const err = new Error(`Network error: ${e.message}`);
+      err.path = path;
+      throw err;
     }
   }
 
@@ -93,7 +211,7 @@ class FabricApiClient {
       const url = this._fabricBaseUrl + path;
       const headers = {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + this._mwcToken,
+        'Authorization': `Bearer ${this._mwcToken}`,
       };
       const resp = await fetch(url, { ...options, headers });
       if (!resp.ok) {

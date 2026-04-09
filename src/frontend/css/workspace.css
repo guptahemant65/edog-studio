@@ -480,3 +480,27 @@
   display: none; font-size: var(--text-sm);
 }
 .ws-row-popover.visible { display: block; }
+
+/* Content panel table row interactions */
+.ws-content-body .ws-table-row {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  position: relative;
+}
+.ws-content-body .ws-table-row:hover {
+  background: var(--surface-2);
+}
+.ws-content-body .ws-table-row.dimmed {
+  opacity: 0.55;
+}
+.ws-content-body .ws-table-row.dimmed:hover {
+  opacity: 0.75;
+}
+
+/* Toast error/success border variants */
+.edog-toast.error {
+  border-color: var(--level-error);
+}
+.edog-toast.success {
+  border-color: var(--status-succeeded);
+}

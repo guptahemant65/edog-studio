@@ -1167,6 +1167,87 @@ def clear_token_cache():
 
 
 # ============================================================================
+# Bearer token caching (Phase 1 — disconnected Fabric API calls)
+# ============================================================================
+def get_bearer_cache_path(cache_dir: Path | None = None) -> Path:
+    """Get path to the bearer token cache file.
+
+    Args:
+        cache_dir: Override directory for the cache file. Defaults to the
+            edog.py parent directory. Pass a custom path for testing.
+
+    Returns:
+        Path to the ``.edog-bearer-cache`` file.
+    """
+    base = cache_dir if cache_dir is not None else Path(__file__).parent
+    return base / ".edog-bearer-cache"
+
+
+def cache_bearer_token(token: str, expiry_timestamp: float, cache_dir: Path | None = None) -> bool:
+    """Save bearer token to a dedicated cache file.
+
+    The token is base64-encoded as ``timestamp|token`` — the same
+    obfuscation format used by :func:`cache_token` for MWC tokens.
+
+    Args:
+        token: Raw bearer token string (JWT).
+        expiry_timestamp: Unix epoch when the token expires.
+        cache_dir: Override directory for the cache file (for testing).
+
+    Returns:
+        True if the cache was written successfully, False otherwise.
+    """
+    cache_path = get_bearer_cache_path(cache_dir)
+    try:
+        data = f"{expiry_timestamp}|{token}"
+        encoded = base64.b64encode(data.encode()).decode()
+        cache_path.write_text(encoded, encoding="utf-8")
+        return True
+    except OSError as e:
+        print(f"⚠️  Could not cache bearer token: {e}")
+        return False
+
+
+def load_cached_bearer_token(cache_dir: Path | None = None) -> tuple[str | None, datetime | None]:
+    """Load bearer token from cache if still valid.
+
+    Applies a 5-minute safety buffer before the actual expiry so
+    callers never receive a token that is about to expire.
+
+    Args:
+        cache_dir: Override directory for the cache file (for testing).
+
+    Returns:
+        Tuple of (token, expiry_datetime) when valid, or (None, None)
+        when the cache is missing, expired, or corrupted.
+    """
+    cache_path = get_bearer_cache_path(cache_dir)
+    if not cache_path.exists():
+        return None, None
+
+    try:
+        encoded = cache_path.read_text(encoding="utf-8")
+        data = base64.b64decode(encoded.encode()).decode()
+        expiry_str, token = data.split("|", 1)
+        expiry_timestamp = float(expiry_str)
+
+        # 5-minute safety buffer
+        if time.time() < expiry_timestamp - 300:
+            expiry = datetime.fromtimestamp(expiry_timestamp)
+            return token, expiry
+        else:
+            cache_path.unlink(missing_ok=True)
+            return None, None
+    except (OSError, ValueError, UnicodeDecodeError):
+        # Corrupted cache — remove and continue
+        try:
+            cache_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None, None
+
+
+# ============================================================================
 # Desktop notifications
 # ============================================================================
 def show_notification(title, message):
@@ -2270,7 +2351,19 @@ def fetch_token_with_retry(username, workspace_id, artifact_id, capacity_id, max
         if not bearer_token:
             print("❌ Failed to capture Bearer token")
             continue
-        
+
+        # Cache bearer token for Phase 1 Fabric API calls (Workspace Explorer)
+        bearer_expiry = time.time() + 3600  # default 1hr
+        try:
+            payload = bearer_token.split(".")[1]
+            payload += "=" * (4 - len(payload) % 4)
+            claims = json.loads(base64.b64decode(payload).decode("utf-8", errors="replace"))
+            if "exp" in claims:
+                bearer_expiry = float(claims["exp"])
+        except (ValueError, KeyError, IndexError, json.JSONDecodeError):
+            pass  # Use default 1hr if JWT parsing fails
+        cache_bearer_token(bearer_token, bearer_expiry)
+
         print("\n📡 Fetching MWC token...")
         mwc_token = fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id)
         
