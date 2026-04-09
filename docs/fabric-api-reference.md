@@ -112,11 +112,16 @@ httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("
 
 **Schema-enabled table listing path:**
 ```
-GET https://{capacityId}.pbidedicated.windows-int.net/webapi/capacities/{capId}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{wsId}/artifacts/DataArtifact/{lhId}/schemas/dbo/tables
-Authorization: Bearer {mwcToken}
+GET https://{capacityId-no-dashes}.pbidedicated.windows-int.net/webapi/capacities/{capId}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{wsId}/artifacts/DataArtifact/{lhId}/schemas/dbo/tables
+Authorization: MwcToken {mwcToken}
+x-ms-workload-resource-moniker: {lhId}
 ```
 
 Default schema name is `dbo` (from `properties.defaultSchema` on lakehouse GET).
+
+**Response shape:** `{ "continuationToken": null, "data": [{ "name": "tableName" }] }`
+
+**Tested:** ✅ OK 200 — Real tables returned across 10 workspaces, 17 lakehouses, 92+ tables total. The `data` array contains objects with `name` field. Additional fields (type, format, location) not present in schema-aware listing — use `batchGetTableDetails` for full metadata.
 
 ### Table Preview (Phase 2, capacity host, MWC token)
 ```
