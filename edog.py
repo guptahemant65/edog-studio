@@ -35,25 +35,6 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
-try:
-    from playwright.async_api import async_playwright
-except ImportError:
-    print("Installing playwright...")
-    import subprocess
-    subprocess.run([sys.executable, "-m", "pip", "install", "playwright"], check=True)
-    subprocess.run([sys.executable, "-m", "playwright", "install", "msedge"], check=True)
-    from playwright.async_api import async_playwright
-
-try:
-    from pywinauto import Desktop
-    PYWINAUTO_AVAILABLE = True
-except ImportError:
-    print("Installing pywinauto...")
-    import subprocess
-    subprocess.run([sys.executable, "-m", "pip", "install", "pywinauto"], check=True)
-    from pywinauto import Desktop
-    PYWINAUTO_AVAILABLE = True
-
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -550,121 +531,6 @@ PATTERNS = {
 # ============================================================================
 # EDOG change management
 # ============================================================================
-
-
-def handle_certificate_dialog(username, timeout_secs=30):
-    """Background thread to auto-select cert in Windows Security dialog.
-
-    The cert dialog is a system ``#32770`` dialog spawned by the browser
-    process. It may not appear as a top-level window with a recognizable
-    title, so we search by class name and content.
-
-    Args:
-        username: CBA username (e.g., Admin1CBA@FabricFMLV08PPE.ccsctp.net).
-        timeout_secs: Max seconds to watch for the dialog.
-
-    Returns:
-        True if the cert was selected and OK clicked, False otherwise.
-    """
-    cert_subject = username.replace("@", ".") if username else ""
-    title_keywords = ["security", "certificate", "cert", "select a certificate",
-                      "choose a digital certificate", "client authentication"]
-
-    polls = int(timeout_secs / 0.5)
-    for i in range(polls):
-        time.sleep(0.5)
-        try:
-            # Try both backends — the dialog might only be visible to one
-            for backend in ("uia", "win32"):
-                try:
-                    desktop = Desktop(backend=backend)
-                    for w in desktop.windows():
-                        try:
-                            title = w.window_text().lower()
-                            cls = ""
-                            if backend == "win32":
-                                cls = w.class_name()
-                            else:
-                                cls = getattr(w.element_info, "class_name", "")
-                        except Exception:
-                            continue
-
-                        # Match by title keywords or by #32770 dialog class with relevant content
-                        is_match = any(k in title for k in title_keywords)
-                        if not is_match and cls == "#32770":
-                            # Standard Windows dialog — check children for cert-related text
-                            try:
-                                all_text = w.window_text() + " "
-                                for child in w.children():
-                                    all_text += child.window_text() + " "
-                                all_text = all_text.lower()
-                                is_match = any(k in all_text for k in title_keywords)
-                            except Exception:
-                                pass
-
-                        if not is_match:
-                            continue
-
-                        print(f"  [cert-handler] Found dialog: '{w.window_text()[:60]}' (class={cls})")
-
-                        # Try to select the matching cert
-                        try:
-                            list_ctrl = w.child_window(control_type="List")
-                            if list_ctrl.exists():
-                                for item in list_ctrl.children():
-                                    item_text = item.window_text()
-                                    if cert_subject and cert_subject.lower() in item_text.lower():
-                                        print(f"  [cert-handler] Selecting: {item_text[:60]}")
-                                        item.click_input()
-                                        time.sleep(0.3)
-                                        break
-                        except Exception:
-                            pass
-
-                        # Also try ListView for win32 backend
-                        if backend == "win32":
-                            try:
-                                import pywinauto.controls.win32_controls as w32
-                                lv = w.child_window(class_name="SysListView32")
-                                if lv.exists():
-                                    for idx in range(lv.item_count()):
-                                        text = lv.get_item(idx).text()
-                                        if cert_subject and cert_subject.lower() in text.lower():
-                                            print(f"  [cert-handler] Selecting (lv): {text[:60]}")
-                                            lv.get_item(idx).click_input()
-                                            time.sleep(0.3)
-                                            break
-                            except Exception:
-                                pass
-
-                        # Click OK
-                        try:
-                            ok_btn = w.child_window(title="OK", control_type="Button")
-                            if ok_btn.exists():
-                                print("  [cert-handler] Clicking OK")
-                                ok_btn.click_input()
-                                return True
-                        except Exception:
-                            pass
-
-                        # Also try by class for win32
-                        try:
-                            ok_btn = w.child_window(title="OK", class_name="Button")
-                            if ok_btn.exists():
-                                print("  [cert-handler] Clicking OK (win32)")
-                                ok_btn.click_input()
-                                return True
-                        except Exception:
-                            pass
-
-                except Exception:
-                    continue
-
-        except Exception:
-            continue
-
-    print("  [cert-handler] No cert dialog found after timeout")
-    return False
 
 
 # ============================================================================
@@ -2002,17 +1868,14 @@ def fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id):
 
 
 async def get_bearer_token(username):
-    """Acquire a bearer token via Playwright with optimized cert handling.
+    """Acquire a user-delegated bearer token via Silent CBA.
 
     Strategy:
-        1. Check disk cache first (sub-millisecond, no browser).
-        2. Launch Edge with ``--auto-select-certificate-for-urls`` to skip the
-           cert dialog when possible.
-        3. Spawn a parallel ``pywinauto`` thread to auto-dismiss the cert dialog
-           if the Chrome flag doesn't suppress it.
-        4. Capture the first ``Authorization: Bearer ey*`` header from any
-           network request after login.
-        5. Close browser immediately after capture.
+        1. Check disk cache first (sub-millisecond).
+        2. Silent CBA via C# token-helper (~3-5 seconds, zero browser).
+
+    Uses ``Microsoft.Identity.Client.TestOnlySilentCBA`` — the same
+    mechanism as FabricSparkCST CI/CD. No browser, no dialog, no Playwright.
 
     Args:
         username: CBA username, e.g. ``Admin1CBA@FabricFMLV08PPE.ccsctp.net``.
@@ -2031,95 +1894,121 @@ async def get_bearer_token(username):
         print(f"  Using cached bearer token (expires in {remaining:.0f} min)")
         return cached_token
 
-    # --- 2. Browser auth ---
-    bearer_token = None
-    cert_subject = username.replace("@", ".")
-    cert_policy = f'{{"pattern":"*","filter":{{"SUBJECT":{{"CN":"{cert_subject}"}}}}}}'
-
-    print("  Launching browser for certificate auth...")
-    print("  (Select your certificate if prompted, then wait)")
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            channel="msedge",
-            headless=False,
-            args=[
-                f'--auto-select-certificate-for-urls={cert_policy}',
-                '--ignore-certificate-errors',
-                '--no-first-run',
-                '--no-default-browser-check',
-                '--disable-extensions',
-            ]
-        )
-
-        context = await browser.new_context(
-            viewport={"width": 800, "height": 600},
-        )
-        page = await context.new_page()
-
-        async def handle_request(request):
-            nonlocal bearer_token
-            auth = request.headers.get("authorization", "")
-            if auth.startswith("Bearer ey") and not bearer_token:
-                bearer_token = auth.replace("Bearer ", "")
-
-        page.on("request", handle_request)
-
-        print("  Navigating to Power BI (select cert if dialog appears)...")
-        try:
-            await page.goto(POWER_BI_URL, wait_until="domcontentloaded", timeout=60000)
-        except Exception:
-            pass  # Timeout OK — token might already be captured from redirects
-
-        if bearer_token:
-            print("  Token captured during navigation")
-        else:
-            # Fill login form if present
-            try:
-                email_input = await page.wait_for_selector(
-                    'input[type="email"], input[name="loginfmt"]', timeout=8000
-                )
-                if email_input:
-                    await email_input.fill(username)
-                    await page.keyboard.press("Enter")
-                    print("  Entered username, waiting for cert + auth...")
-            except Exception:
-                pass
-
-            # Wait for cert selection + auth redirect (user clicks cert here)
-            await asyncio.sleep(10)
-
-            # Handle "Stay signed in?" prompt
-            try:
-                yes_btn = await page.wait_for_selector(
-                    '#idSIButton9, input[value="Yes"]', timeout=5000
-                )
-                if yes_btn:
-                    await yes_btn.click()
-            except Exception:
-                pass
-
-        # Wait for token capture (max 30 seconds)
-        for i in range(60):
-            if bearer_token:
-                break
-            await asyncio.sleep(0.5)
-
-        await browser.close()
-
+    # --- 2. Silent CBA ---
+    bearer_token = _try_silent_cba(username)
     if bearer_token:
-        print(f"  Bearer token acquired ({len(bearer_token)} chars)")
-        # Cache immediately
-        try:
-            payload = bearer_token.split(".")[1]
-            payload += "=" * (4 - len(payload) % 4)
-            claims = json.loads(base64.b64decode(payload).decode("utf-8", errors="replace"))
-            expiry_ts = float(claims.get("exp", time.time() + 3600))
-        except (ValueError, KeyError, IndexError, json.JSONDecodeError):
-            expiry_ts = time.time() + 3600
-        cache_bearer_token(bearer_token, expiry_ts)
+        _cache_bearer(bearer_token)
+        return bearer_token
 
-    return bearer_token
+    print("  Failed to acquire token")
+    return None
+
+
+def _try_silent_cba(username: str) -> str | None:
+    """Acquire token via C# Silent CBA helper (no browser needed).
+
+    Uses ``Microsoft.Identity.Client.TestOnlySilentCBA`` to perform
+    3-phase certificate-based auth purely over HTTP/TLS — the same
+    mechanism used by FabricSparkCST CI/CD pipelines.
+    """
+    cert_subject = username.replace("@", ".")
+    thumbprint = _find_cert_thumbprint(cert_subject)
+    if not thumbprint:
+        return None
+
+    helper_dir = Path(__file__).parent / "scripts" / "token-helper"
+    helper_exe = helper_dir / "bin" / "Debug" / "net472" / "token-helper.exe"
+
+    if not helper_exe.exists():
+        csproj = helper_dir / "token-helper.csproj"
+        if csproj.exists():
+            print("  Building token-helper...")
+            build = subprocess.run(
+                ["dotnet", "build", str(csproj), "-v", "q"],
+                capture_output=True, text=True,
+            )
+            if build.returncode != 0:
+                return None
+        else:
+            return None
+
+    print(f"  Silent CBA: {cert_subject}")
+    try:
+        result = subprocess.run(
+            [str(helper_exe), thumbprint, username],
+            capture_output=True, text=True, timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        print("  Silent CBA timed out")
+        return None
+
+    if result.returncode == 0:
+        token = result.stdout.strip()
+        if token.startswith("eyJ"):
+            print(f"  Token acquired via Silent CBA ({len(token)} chars)")
+            return token
+
+    for line in (result.stderr or "").strip().split("\n"):
+        if "ERROR" in line:
+            print(f"  Silent CBA: {line}")
+    return None
+
+
+def _find_cert_thumbprint(cert_cn: str) -> str | None:
+    """Find certificate thumbprint from Windows cert store by CN.
+
+    Uses the token-helper itself with a ``--find-cert`` flag to avoid
+    PowerShell cert provider issues across different PS versions.
+    Falls back to a direct .NET snippet if needed.
+    """
+    try:
+        # Use a simple .NET one-liner via powershell
+        # Import-Module PKI first to ensure Cert: drive is available
+        ps_cmd = (
+            'Import-Module PKI -ErrorAction SilentlyContinue; '
+            f'Get-ChildItem Cert:\\CurrentUser\\My | '
+            f'Where-Object {{ $_.Subject -like "*CN={cert_cn}*" }} | '
+            'Select-Object -First 1 -ExpandProperty Thumbprint'
+        )
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=10,
+        )
+        tp = result.stdout.strip()
+        if tp and len(tp) == 40:
+            return tp
+
+        # Fallback: use .NET directly
+        dotnet_cmd = (
+            'Add-Type -AssemblyName System.Security; '
+            '$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('
+            '"My", [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser); '
+            '$store.Open("ReadOnly"); '
+            f'$c = $store.Certificates | Where-Object {{ $_.Subject -like "*CN={cert_cn}*" }} | '
+            'Select-Object -First 1; '
+            '$store.Close(); '
+            'if ($c) { $c.Thumbprint }'
+        )
+        result2 = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", dotnet_cmd],
+            capture_output=True, text=True, timeout=10,
+        )
+        tp2 = result2.stdout.strip()
+        return tp2 if tp2 and len(tp2) == 40 else None
+    except Exception:
+        return None
+
+
+def _cache_bearer(token: str) -> None:
+    """Parse JWT expiry and cache bearer token to disk."""
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (4 - len(payload) % 4)
+        claims = json.loads(base64.b64decode(payload).decode("utf-8", errors="replace"))
+        expiry_ts = float(claims.get("exp", time.time() + 3600))
+    except (ValueError, KeyError, IndexError, json.JSONDecodeError):
+        expiry_ts = time.time() + 3600
+    cache_bearer_token(token, expiry_ts)
 
 
 # ============================================================================

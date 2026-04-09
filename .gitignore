@@ -39,3 +39,5 @@ src/frontend/edog-studio.html
 
 # Node modules (if any tooling added later)
 node_modules/
+scripts/token-helper/bin/
+scripts/token-helper/obj/
