@@ -16,7 +16,8 @@ class FabricApiClient {
     this._fabricBaseUrl = null;
     this._config = null;
     this._phase = 'disconnected';
-    this._baseUrl = 'https://api.fabric.microsoft.com/v1';
+    // Proxy through our server to avoid CORS — server forwards to api.fabric.microsoft.com
+    this._baseUrl = '/api/fabric';
   }
 
   async init() {
