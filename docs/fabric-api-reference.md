@@ -71,11 +71,45 @@ The PBI-audience bearer token works against the **redirect host** (`biazure-int-
 | **List tables (metadata)** | GET | `/metadata/artifacts/{lhId}/tables` | redirect | ❌ 404 | — | Endpoint does not exist on metadata API. |
 | **Load table** | POST | `/v1/workspaces/{wsId}/lakehouses/{lhId}/tables/{tableName}/load` | redirect | ⚠️ NOT TESTED | LRO (202 + Location header) | From POC `ILakehousePublicApiClient`. |
 
-#### Tables Workaround Options
-1. **Create a lakehouse WITHOUT schemas enabled** — then `/v1/.../tables` should work
-2. **Use OneLake path** — lakehouse `properties.oneLakeTablesPath` gives the ADLS path; could list files via OneLake API
-3. **Use SQL endpoint** — connect to `properties.sqlEndpointProperties.connectionString` and query `INFORMATION_SCHEMA.TABLES`
-4. **Use metadata from DAG** — in connected mode, `getLatestDag` response contains table/MLV definitions
+### Key Insight: FLT Requires Schema-Enabled Lakehouses
+
+FLT code **always** creates lakehouses with `{"enableSchemas": true}`. This means:
+
+1. The public API table listing (`GET /v1/.../tables`) returns **400 UnsupportedOperationForSchemasEnabledLakehouse** for ALL FLT lakehouses
+2. Tables for schema-enabled lakehouses must be listed via the **capacity host DataArtifact endpoint** which requires an MWC token (Phase 2 only)
+3. In Phase 1 (disconnected), table listing is NOT available — the inspector should show "Deploy to view tables" placeholder
+
+### Table Listing Endpoints (Three Variants)
+
+| Endpoint | Schema Support | Token | Host | Phase |
+|----------|---------------|-------|------|-------|
+| `GET /v1/workspaces/{wsId}/lakehouses/{lhId}/tables` | Non-schema only | Bearer | redirect | Phase 1 (non-FLT lakehouses only) |
+| `GET /webapi/.../artifacts/Lakehouse/{lhId}/tables` | Non-schema only | MWC | capacity | Phase 2 |
+| `GET /webapi/.../artifacts/DataArtifact/{lhId}/schemas/{schemaName}/tables` | **Schema-enabled (FLT)** | MWC | capacity | Phase 2 |
+
+**Schema-enabled table listing path:**
+```
+GET https://{capacityId}.pbidedicated.windows-int.net/webapi/capacities/{capId}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{wsId}/artifacts/DataArtifact/{lhId}/schemas/dbo/tables
+Authorization: Bearer {mwcToken}
+```
+
+Default schema name is `dbo` (from `properties.defaultSchema` on lakehouse GET).
+
+### Table Preview (Phase 2, capacity host, MWC token)
+```
+POST /webapi/.../artifacts/Lakehouse/{lhId}/tables/{tableName}/previewAsync
+→ Returns operationId (async operation)
+GET  /webapi/.../artifacts/Lakehouse/{lhId}/tables/{tableName}/previewAsync/operationResults/{operationId}
+→ Returns table preview data
+```
+
+### Batch Table Details (Schema-enabled, Phase 2)
+```
+POST /webapi/.../artifacts/DataArtifact/{lhId}/schemas/{schemaName}/batchGetTableDetails
+→ Returns operationId
+GET  /webapi/.../artifacts/DataArtifact/{lhId}/schemas/{schemaName}/batchGetTableDetails/operationResults/{operationId}
+→ Returns detailed table metadata
+```
 
 ### CATEGORY: MWC Token & FLT Service
 

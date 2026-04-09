@@ -6,5 +6,7 @@
   "capacityId": "dd01a7f3-4198-4439-aae3-4eaf902281bb",
   "redirectHost": "https://biazure-int-edog-redirect.analysis-df.windows.net",
   "createdAt": "2026-04-09T09:26:38Z",
-  "note": "Auto-provisioned by EDOG Studio. Safe to delete."
+  "note": "Auto-provisioned by EDOG Studio. Safe to delete.",
+  "schemaLakehouseId": "a70c1b89-f2c9-44e0-9a08-f2f955179162",
+  "schemaLakehouseName": "EDOG_Test_LH_Schema"
 }
