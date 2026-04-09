@@ -13,6 +13,7 @@ class MockRenderer {
   }
 
   init() {
+    this._initContextMenu();
     this._renderTopBar();
     this._renderWorkspaceTree();
     this._renderLogs();
@@ -107,13 +108,14 @@ class MockRenderer {
         <div class="ws-content-name">${item.displayName}</div>
         <div class="ws-content-meta">
           <span class="ws-meta-id" title="Click to copy">${item.id.substring(0, 8)}...</span>
-          <span class="ws-meta-badge">F2 PPE ● West US 2</span>
+          <span class="ws-meta-badge">F2 PPE \u25CF West US 2</span>
+          <span class="capacity-pill ok">\u25CF Healthy</span>
           <span class="ws-meta-modified">Modified ${this._relativeTime(item.lastModified)}</span>
         </div>
         <div class="ws-content-actions">
           <button class="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>
-          <button class="ws-action-btn ghost">Open in Fabric</button>
-          <button class="ws-action-btn ghost">Rename</button>
+          <button class="ws-action-btn">Open in Fabric</button>
+          <button class="ws-action-btn">Rename</button>
         </div>
       </div>
       <div class="ws-section">
@@ -225,7 +227,7 @@ class MockRenderer {
         <span class="log-time">${entry.timestamp}</span>
         <span class="log-level-badge">${entry.level.charAt(0)}</span>
         <span class="log-component">${entry.component}</span>
-        <span class="log-message">${entry.message}</span>
+        <span class="log-message">${this._decorateLogMessage(entry.message)}</span>
       </div>`;
     });
     container.innerHTML = html;
@@ -233,12 +235,18 @@ class MockRenderer {
 
     // Update stats
     const errors = this._logEntries.filter(e => e.level === 'Error').length;
-    const warnings = this._logEntries.filter(e => e.level === 'Warning').length;
     this._setTextSafe('stat-logs', String(this._logEntries.length));
     this._setTextSafe('stat-ssr', '24');
     this._setTextSafe('stat-errors', String(errors));
     this._setTextSafe('visible-count', String(this._logEntries.length));
     this._setTextSafe('total-count', String(this._logEntries.length));
+
+    // Bind log row clicks → detail panel
+    container.addEventListener('click', (e) => {
+      const row = e.target.closest('.log-row');
+      if (!row || e.target.classList.contains('log-bookmark-star')) return;
+      this._openLogDetail(parseInt(row.dataset.logIdx));
+    });
 
     // Bind bookmark clicks
     container.querySelectorAll('.log-bookmark-star').forEach(star => {
@@ -250,6 +258,12 @@ class MockRenderer {
         star.closest('.log-row').classList.toggle('bookmarked');
       });
     });
+
+    // Apply breakpoint highlights
+    this._applyBreakpointHighlights();
+
+    // Bind log toolbar filters
+    this._bindLogFilters();
 
     // Render breakpoints bar
     const bpBar = document.getElementById('breakpoints-bar');
@@ -298,6 +312,7 @@ class MockRenderer {
     this._renderDagGraph();
     this._renderGantt();
     this._renderDagHistory();
+    this._bindDagNodeClicks();
   }
 
   _renderDagGraph() {
@@ -455,23 +470,45 @@ class MockRenderer {
     });
 
     this._renderSparkDetail(0);
+
+    // Spark filter buttons
+    const filterBtns = panel.querySelectorAll('.spark-filter-btn');
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.textContent.trim();
+        panel.querySelectorAll('.spark-item').forEach(item => {
+          const status = parseInt(item.querySelector('.status-code')?.textContent || '0');
+          const show = filter === 'All' ||
+            (filter === '2xx' && status >= 200 && status < 300) ||
+            (filter === '4xx' && status >= 400 && status < 500) ||
+            (filter === '5xx' && status >= 500);
+          item.style.display = show ? '' : 'none';
+        });
+      });
+    });
   }
 
   _renderSparkDetail(idx) {
     const detail = document.getElementById('spark-detail');
     if (!detail) return;
-    const req = MockData.sparkRequests[idx];
+    this._sparkDetailIdx = idx;
+    this._sparkActiveTab = this._sparkActiveTab || 'request';
+    this._renderSparkDetailTab();
+  }
+
+  _renderSparkDetailTab() {
+    const detail = document.getElementById('spark-detail');
+    if (!detail) return;
+    const req = MockData.sparkRequests[this._sparkDetailIdx || 0];
     const methodCls = req.method.toLowerCase();
     const statusCls = req.status < 300 ? 's2xx' : req.status < 500 ? 's4xx' : 's5xx';
+    const tab = this._sparkActiveTab || 'request';
 
-    detail.innerHTML = `
-      <div class="spark-detail-tabs">
-        <button class="spark-detail-tab active">Request</button>
-        <button class="spark-detail-tab">Response</button>
-        <button class="spark-detail-tab">Timing</button>
-      </div>
-      <div class="spark-detail-content">
-        <dl class="spark-kv">
+    let body = '';
+    if (tab === 'request') {
+      body = `<dl class="spark-kv">
           <dt>Method</dt><dd><span class="method-pill ${methodCls}">${req.method}</span></dd>
           <dt>Endpoint</dt><dd>${req.endpoint}</dd>
           <dt>Status</dt><dd><span class="status-code ${statusCls}">${req.status}</span></dd>
@@ -479,15 +516,43 @@ class MockRenderer {
           <dt>Retries</dt><dd>${req.retries}</dd>
           <dt>Time</dt><dd>${req.timestamp}</dd>
         </dl>
-        ${req.body ? `<div style="margin-top:var(--space-3)">
-          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:600">REQUEST BODY</div>
-          <div class="spark-code-block">${this._escapeHtml(req.body)}</div>
-        </div>` : ''}
-        <div style="margin-top:var(--space-3)">
-          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:600">RESPONSE</div>
-          <div class="spark-code-block">${this._escapeHtml(req.response)}</div>
+        ${req.body ? '<div style="margin-top:var(--space-3)"><div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:700;text-transform:uppercase;letter-spacing:0.08em">Request Body</div><div class="spark-code-block">' + this._escapeHtml(req.body) + '</div></div>' : ''}`;
+    } else if (tab === 'response') {
+      body = `<dl class="spark-kv">
+          <dt>Status</dt><dd><span class="status-code ${statusCls}">${req.status}</span></dd>
+          <dt>Content-Type</dt><dd>application/json</dd>
+          <dt>x-ms-request-id</dt><dd>${MockData.uuid().substring(0, 8)}</dd>
+        </dl>
+        <div style="margin-top:var(--space-3)"><div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:700;text-transform:uppercase;letter-spacing:0.08em">Response Body</div><div class="spark-code-block">${this._escapeHtml(req.response)}</div></div>`;
+    } else {
+      const total = req.duration;
+      const submit = Math.round(total * 0.15);
+      const process = Math.round(total * 0.7);
+      const response = total - submit - process;
+      body = `<div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Waterfall</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:60px;font-size:var(--text-xs);color:var(--text-dim)">Submit</span><div style="flex:1;height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(submit/total*100,5)}%;background:var(--level-message);border-radius:3px"></div></div><span style="width:50px;text-align:right;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted)">${submit}ms</span></div>
+          <div style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:60px;font-size:var(--text-xs);color:var(--text-dim)">Process</span><div style="flex:1;height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(process/total*100,5)}%;background:var(--status-succeeded);border-radius:3px"></div></div><span style="width:50px;text-align:right;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted)">${process}ms</span></div>
+          <div style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:60px;font-size:var(--text-xs);color:var(--text-dim)">Response</span><div style="flex:1;height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(response/total*100,5)}%;background:var(--accent);border-radius:3px"></div></div><span style="width:50px;text-align:right;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted)">${response}ms</span></div>
         </div>
-      </div>`;
+        <div style="margin-top:var(--space-3);font-size:var(--text-sm);color:var(--text-dim)">Total: ${total}ms</div>
+        ${req.retries > 0 ? '<div style="margin-top:var(--space-4);font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Retry Chain (' + req.retries + ' retries)</div><div style="display:flex;align-items:center;gap:var(--space-1);flex-wrap:wrap">' + Array.from({length: req.retries}, (_, i) => '<span style="padding:var(--space-1) var(--space-2);border:1px solid var(--level-error);border-radius:var(--radius-sm);font-size:var(--text-xs);font-family:var(--font-mono);color:var(--level-error)">Attempt ' + (i+1) + ' \u2717</span><span style="font-size:10px;color:var(--text-muted)">' + (i < req.retries - 1 ? '\u2192 2s delay \u2192' : '\u2192') + '</span>').join('') + '<span style="padding:var(--space-1) var(--space-2);border:1px solid var(--status-succeeded);border-radius:var(--radius-sm);font-size:var(--text-xs);font-family:var(--font-mono);color:var(--status-succeeded)">Final \u2713</span></div>' : ''}`;
+    }
+
+    detail.innerHTML = `
+      <div class="spark-detail-tabs">
+        <button class="spark-detail-tab${tab === 'request' ? ' active' : ''}" data-tab="request">Request</button>
+        <button class="spark-detail-tab${tab === 'response' ? ' active' : ''}" data-tab="response">Response</button>
+        <button class="spark-detail-tab${tab === 'timing' ? ' active' : ''}" data-tab="timing">Timing</button>
+      </div>
+      <div class="spark-detail-content">${body}</div>`;
+
+    detail.querySelectorAll('.spark-detail-tab').forEach(t => {
+      t.addEventListener('click', () => {
+        this._sparkActiveTab = t.dataset.tab;
+        this._renderSparkDetailTab();
+      });
+    });
   }
 
   // ── API Playground ──
@@ -499,25 +564,29 @@ class MockRenderer {
       <div class="api-main">
         <div class="api-request-section">
           <div class="api-url-row">
-            <select class="api-method-select"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
-            <input class="api-url-input" value="https://api.fabric.microsoft.com/v1/workspaces" placeholder="Enter URL..." />
-            <button class="api-send-btn">Send</button>
+            <select class="api-method-select" id="api-method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+            <input class="api-url-input" id="api-url" value="https://api.fabric.microsoft.com/v1/workspaces" placeholder="Enter URL..." />
+            <button class="api-send-btn" id="api-send-btn">Send</button>
+            <button class="api-send-btn" id="api-curl-btn" style="background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-bright)">Copy cURL</button>
+          </div>
+          <div class="api-body-section" id="api-body-area" style="display:none">
+            <span class="api-body-label">Request Body</span>
+            <textarea class="api-body-input" id="api-body-textarea" placeholder='{"key": "value"}'></textarea>
           </div>
           <div class="api-body-section">
             <span class="api-body-label">Headers</span>
             <div style="font-size:var(--text-xs);color:var(--text-dim);font-family:var(--font-mono);padding:var(--space-1) 0">Authorization: Bearer eyJ0eX...  (auto-filled)</div>
           </div>
         </div>
-        <div class="api-response-section">
-          <div class="api-response-header">
+        <div class="api-response-section" id="api-response-section">
+          <div class="api-response-header" id="api-resp-header">
             <span class="api-response-status s2xx">200 OK</span>
             <span class="api-response-timing">342ms</span>
-            <span style="margin-left:auto;font-size:var(--text-xs);color:var(--text-muted)">application/json; charset=utf-8</span>
+            <span style="margin-left:auto;font-size:var(--text-xs);color:var(--text-muted)">application/json</span>
           </div>
-          <div class="api-response-body">${this._escapeHtml(JSON.stringify({
+          <div class="api-response-body" id="api-resp-body">${this._escapeHtml(JSON.stringify({
             value: MockData.workspaces.map(ws => ({ id: ws.id, displayName: ws.displayName, type: ws.type, state: ws.state })),
             continuationToken: null,
-            continuationUri: null,
           }, null, 2))}</div>
         </div>
       </div>
@@ -532,6 +601,58 @@ class MockRenderer {
         </div>
       </div>
     </div>`;
+
+    // Method change → show/hide body
+    const methodEl = document.getElementById('api-method');
+    const bodyArea = document.getElementById('api-body-area');
+    if (methodEl && bodyArea) {
+      methodEl.addEventListener('change', () => {
+        const needsBody = ['POST', 'PUT', 'PATCH'].includes(methodEl.value);
+        bodyArea.style.display = needsBody ? '' : 'none';
+      });
+    }
+
+    // Send button → mock response
+    const sendBtn = document.getElementById('api-send-btn');
+    if (sendBtn) {
+      sendBtn.addEventListener('click', () => {
+        const respBody = document.getElementById('api-resp-body');
+        const respHeader = document.getElementById('api-resp-header');
+        if (respBody) { respBody.style.opacity = '0.3'; }
+        setTimeout(() => {
+          const duration = 100 + Math.floor(Math.random() * 400);
+          if (respHeader) respHeader.innerHTML = '<span class="api-response-status s2xx">200 OK</span><span class="api-response-timing">' + duration + 'ms</span><span style="margin-left:auto;font-size:var(--text-xs);color:var(--text-muted)">application/json</span>';
+          if (respBody) { respBody.style.opacity = '1'; respBody.textContent = JSON.stringify({ status: 'ok', message: 'Mock response', timestamp: new Date().toISOString() }, null, 2); }
+        }, 600);
+      });
+    }
+
+    // Copy cURL
+    const curlBtn = document.getElementById('api-curl-btn');
+    if (curlBtn) {
+      curlBtn.addEventListener('click', () => {
+        const method = document.getElementById('api-method')?.value || 'GET';
+        const url = document.getElementById('api-url')?.value || '';
+        const curl = 'curl -X ' + method + ' "' + url + '" -H "Authorization: Bearer eyJ0eX..."';
+        navigator.clipboard?.writeText(curl);
+        this._showToast('cURL copied to clipboard');
+      });
+    }
+
+    // Saved request clicks → populate builder
+    panel.querySelectorAll('.api-saved-item').forEach((item, i) => {
+      item.style.cursor = 'pointer';
+      item.addEventListener('click', () => {
+        const req = MockData.savedRequests[i];
+        if (!req) return;
+        const methodEl = document.getElementById('api-method');
+        const urlEl = document.getElementById('api-url');
+        if (methodEl) methodEl.value = req.method;
+        if (urlEl) urlEl.value = req.url;
+        const bodyArea = document.getElementById('api-body-area');
+        if (bodyArea) bodyArea.style.display = ['POST', 'PUT', 'PATCH'].includes(req.method) ? '' : 'none';
+      });
+    });
   }
 
   _renderApiSaved() {
@@ -632,6 +753,39 @@ class MockRenderer {
           </tr>`).join('')}
         </tbody>
       </table>`;
+
+    // Flag search
+    const search = el.querySelector('.ff-search');
+    if (search) {
+      search.addEventListener('input', () => {
+        const q = search.value.toLowerCase();
+        el.querySelectorAll('.ff-table tbody tr').forEach(tr => {
+          const name = (tr.querySelector('td:first-child')?.textContent || '').toLowerCase();
+          const desc = (tr.querySelector('td:nth-child(2)')?.textContent || '').toLowerCase();
+          tr.style.display = (name.includes(q) || desc.includes(q)) ? '' : 'none';
+        });
+      });
+    }
+
+    // Group tabs
+    const tabs = el.querySelectorAll('.ff-group-tab');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const label = tab.textContent.trim().split(' ')[0];
+        el.querySelectorAll('.ff-table tbody tr').forEach(tr => {
+          const onCount = tr.querySelectorAll('.ff-cell-on').length;
+          const offCount = tr.querySelectorAll('.ff-cell-off').length;
+          const total = onCount + offCount + tr.querySelectorAll('.ff-cell-conditional').length;
+          let show = true;
+          if (label === 'Enabled') show = onCount === total;
+          else if (label === 'Disabled') show = offCount === total;
+          else if (label === 'Partial') show = onCount > 0 && onCount < total;
+          tr.style.display = show ? '' : 'none';
+        });
+      });
+    });
   }
 
   _renderLockMonitor(el) {
@@ -774,7 +928,7 @@ class MockRenderer {
       if (drawer) drawer.classList.toggle('open');
     });
 
-    // Workspace tree clicks
+    // Workspace tree clicks + context menu
     const tree = document.getElementById('ws-tree-content');
     if (tree) {
       tree.querySelectorAll('.ws-tree-item').forEach(item => {
@@ -782,8 +936,327 @@ class MockRenderer {
           tree.querySelectorAll('.ws-tree-item').forEach(i => i.classList.remove('selected'));
           item.classList.add('selected');
         });
+        item.addEventListener('contextmenu', (e) => this._showContextMenu(e, item));
       });
     }
+
+    // Deploy button
+    const deployBtn = document.querySelector('.ws-deploy-btn');
+    if (deployBtn) deployBtn.addEventListener('click', () => this._startDeployFlow());
+
+    // Extend command palette with data types
+    if (typeof CommandPalette !== 'undefined') {
+      const origGet = CommandPalette.prototype._getCommands;
+      CommandPalette.prototype._getCommands = function() {
+        const cmds = origGet.call(this);
+        MockData.workspaces.forEach(ws => {
+          cmds.push({ group: 'Workspaces', icon: '\u25A6', label: ws.displayName, action: () => this._sidebar?.switchView('workspace') });
+        });
+        MockData.getItemsForWorkspace(0).filter(i => i.type === 'Lakehouse').forEach(item => {
+          cmds.push({ group: 'Lakehouses', icon: '\u25C6', label: item.displayName, action: () => this._sidebar?.switchView('workspace') });
+        });
+        MockData.tablesForLakehouse.forEach(t => {
+          cmds.push({ group: 'Tables', icon: '\u25A4', label: t.name, action: () => this._sidebar?.switchView('workspace') });
+        });
+        MockData.featureFlags.slice(0, 6).forEach(f => {
+          cmds.push({ group: 'Feature Flags', icon: '\u2691', label: f.name, action: () => this._sidebar?.switchView('environment') });
+        });
+        return cmds;
+      };
+    }
+  }
+
+  // ── Log Detail Panel ──
+  _openLogDetail(idx) {
+    const entry = this._logEntries[idx];
+    if (!entry) return;
+    const panel = document.getElementById('detail-panel');
+    if (!panel) return;
+
+    const title = document.getElementById('detail-title');
+    if (title) title.textContent = entry.level + ' \u2014 ' + entry.component;
+
+    const content = panel.querySelector('.detail-content');
+    if (content) {
+      const props = { Duration: '2.3s', NodeName: 'RefreshSalesData', ThreadId: 42, CorrelationId: MockData.uuid().substring(0, 8) };
+      content.innerHTML = `
+        <div style="display:grid;grid-template-columns:90px 1fr;gap:var(--space-1) var(--space-3);font-size:var(--text-sm);padding:var(--space-3)">
+          <dt style="color:var(--text-muted);font-weight:500">Timestamp</dt><dd style="font-family:var(--font-mono)">${entry.timestamp}</dd>
+          <dt style="color:var(--text-muted);font-weight:500">Level</dt><dd><span class="log-level-badge" style="font-size:var(--text-xs)">${entry.level}</span></dd>
+          <dt style="color:var(--text-muted);font-weight:500">Component</dt><dd style="font-family:var(--font-mono)">${entry.component}</dd>
+          ${entry.rootActivityId ? '<dt style="color:var(--text-muted);font-weight:500">RAID</dt><dd style="font-family:var(--font-mono)">' + entry.rootActivityId + '</dd>' : ''}
+        </div>
+        <div style="padding:0 var(--space-3) var(--space-3)">
+          <div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Message</div>
+          <div style="font-family:var(--font-mono);font-size:var(--text-sm);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);line-height:1.6">${this._escapeHtml(entry.message)}</div>
+        </div>
+        <div style="padding:0 var(--space-3) var(--space-3)">
+          <div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Properties</div>
+          <div style="font-family:var(--font-mono);font-size:var(--text-xs);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);white-space:pre;line-height:1.8">${this._escapeHtml(JSON.stringify(props, null, 2))}</div>
+        </div>`;
+    }
+
+    panel.classList.add('visible');
+    const closeBtn = document.getElementById('detail-close');
+    if (closeBtn) closeBtn.onclick = () => panel.classList.remove('visible');
+  }
+
+  // ── Breakpoint Highlights ──
+  _applyBreakpointHighlights() {
+    const breakpoints = [
+      { regex: /NullReference/i, color: 'var(--level-error)' },
+      { regex: /throttl/i, color: 'var(--level-warning)' },
+    ];
+    document.querySelectorAll('#logs-container .log-row').forEach(row => {
+      const msg = row.querySelector('.log-message')?.textContent || '';
+      for (const bp of breakpoints) {
+        if (bp.regex.test(msg)) {
+          row.style.borderLeft = '3px solid ' + bp.color;
+          break;
+        }
+      }
+    });
+  }
+
+  // ── Log Toolbar Filters ──
+  _bindLogFilters() {
+    // Level buttons
+    document.querySelectorAll('.level-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        this._applyLogFilters();
+      });
+    });
+    // Preset buttons
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this._applyLogFilters();
+      });
+    });
+  }
+
+  _applyLogFilters() {
+    const activeLevels = new Set();
+    document.querySelectorAll('.level-btn.active').forEach(b => activeLevels.add(b.dataset.level?.toLowerCase()));
+
+    const activePreset = document.querySelector('.preset-btn.active')?.dataset.preset || 'all';
+    const presetComponents = {
+      all: null,
+      flt: ['dagexecutionhandler', 'refreshengine', 'tokenmanager', 'metastoreclient'],
+      dag: ['dagexecutionhandler'],
+      spark: ['sparkclient'],
+    };
+    const allowedComps = presetComponents[activePreset];
+
+    let visible = 0;
+    document.querySelectorAll('#logs-container .log-row').forEach(row => {
+      const level = row.className.match(/log-level-(\w+)/)?.[1] || '';
+      const comp = row.querySelector('.log-component')?.textContent.toLowerCase() || '';
+      const levelOk = activeLevels.size === 0 || activeLevels.has(level);
+      const compOk = !allowedComps || allowedComps.some(c => comp.includes(c));
+      const show = levelOk && compOk;
+      row.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    this._setTextSafe('visible-count', String(visible));
+  }
+
+  // ── Error Code Decorator ──
+  _decorateLogMessage(msg) {
+    let safe = this._escapeHtml(msg);
+    for (const [code, info] of Object.entries(MockData.errorCodes)) {
+      if (safe.includes(code)) {
+        const tooltip = this._escapeHtml(info.message + '\nType: ' + info.type + '\nFix: ' + info.fix);
+        safe = safe.replace(code, '<span class="error-code-hint" title="' + tooltip + '">' + code + '</span>');
+      }
+    }
+    return safe;
+  }
+
+  // ── DAG Node Detail ──
+  _bindDagNodeClicks() {
+    const panel = document.getElementById('dag-graph-panel');
+    if (!panel) return;
+    panel.addEventListener('click', (e) => {
+      const node = e.target.closest('.dag-node');
+      if (!node) return;
+      const nodeId = node.classList.toString().match(/\b(n\d+)\b/)?.[0];
+      if (!nodeId) {
+        const allNodes = panel.querySelectorAll('.dag-node');
+        const idx = Array.from(allNodes).indexOf(node);
+        if (idx >= 0 && MockData.dagNodes[idx]) {
+          this._openDagNodeDetail(MockData.dagNodes[idx]);
+        }
+      }
+    });
+  }
+
+  _openDagNodeDetail(node) {
+    let detail = document.getElementById('dag-node-detail');
+    if (!detail) {
+      detail = document.createElement('div');
+      detail.id = 'dag-node-detail';
+      detail.className = 'dag-node-detail';
+      const graphPanel = document.querySelector('.dag-graph-panel');
+      if (graphPanel) graphPanel.appendChild(detail);
+    }
+
+    const kindBadge = node.kind === 'sql'
+      ? '<span class="status-pill" style="background:var(--comp-default-bg);color:var(--comp-default)">SQL</span>'
+      : '<span class="status-pill" style="background:var(--comp-dq-bg);color:var(--comp-dq)">PySpark</span>';
+    const statusCls = node.status;
+    const mockSql = 'CREATE OR REPLACE MATERIALIZED VIEW ' + node.name + ' AS\nSELECT region, SUM(amount) as total\nFROM sales_transactions\nWHERE date >= CURRENT_DATE - 30\nGROUP BY region';
+
+    detail.innerHTML = `
+      <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)">
+        <span style="font-size:var(--text-lg);font-weight:600">${node.name}</span>
+        ${kindBadge}
+        <span class="status-pill ${statusCls}">${node.status}</span>
+        ${node.duration ? '<span style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-mono)">' + (node.duration / 1000).toFixed(1) + 's</span>' : ''}
+        <button style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:var(--text-lg)" onclick="document.getElementById('dag-node-detail').classList.remove('open')">\u2715</button>
+      </div>
+      ${node.errorMessage ? '<div style="padding:var(--space-2) var(--space-3);background:var(--row-error-tint);border:1px solid rgba(229,69,59,0.12);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--level-error);margin-bottom:var(--space-3)">' + this._escapeHtml(node.errorMessage) + '</div>' : ''}
+      <div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Definition</div>
+      <div style="font-family:var(--font-mono);font-size:var(--text-xs);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);white-space:pre;line-height:1.7;max-height:120px;overflow-y:auto">${this._escapeHtml(mockSql)}</div>`;
+
+    detail.classList.add('open');
+  }
+
+  // ── Context Menu ──
+  _initContextMenu() {
+    const menu = document.createElement('div');
+    menu.className = 'ws-ctx-menu';
+    menu.id = 'ws-ctx-menu';
+    document.body.appendChild(menu);
+
+    const toast = document.createElement('div');
+    toast.className = 'edog-toast';
+    toast.id = 'edog-toast';
+    document.body.appendChild(toast);
+
+    document.addEventListener('click', () => this._hideContextMenu());
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this._hideContextMenu(); });
+  }
+
+  _showContextMenu(e, treeItem) {
+    e.preventDefault();
+    const menu = document.getElementById('ws-ctx-menu');
+    if (!menu) return;
+
+    const isLH = !treeItem.classList.contains('dimmed') && treeItem.dataset.itemIdx !== undefined;
+    const isWS = treeItem.dataset.wsIdx !== undefined && treeItem.dataset.itemIdx === undefined;
+    const name = treeItem.querySelector('.ws-tree-label')?.textContent || '';
+
+    let items = [];
+    if (isLH) {
+      items.push({ label: '\u25B6 Deploy to this Lakehouse', cls: 'accent', action: () => this._startDeployFlow(name) });
+      items.push({ label: '\u2606 Save as Favorite', action: () => this._showToast('Saved "' + name + '" to favorites') });
+      items.push({ sep: true });
+    }
+    items.push({ label: 'Rename', action: () => this._showToast('Rename: ' + name) });
+    items.push({ label: 'Open in Fabric', action: () => this._showToast('Opening in Fabric...') });
+    items.push({ label: 'Copy ID', action: () => { navigator.clipboard?.writeText(MockData.uuid()); this._showToast('ID copied to clipboard'); } });
+    items.push({ label: 'Copy Name', action: () => { navigator.clipboard?.writeText(name); this._showToast('"' + name + '" copied'); } });
+    if (!isWS) {
+      items.push({ sep: true });
+      items.push({ label: 'Delete', cls: 'danger', action: () => this._showToast('Delete: ' + name + ' (mock)') });
+    }
+
+    menu.innerHTML = items.map(it =>
+      it.sep ? '<div class="ws-ctx-sep"></div>'
+        : `<div class="ws-ctx-item${it.cls ? ' ' + it.cls : ''}">${it.label}</div>`
+    ).join('');
+
+    // Bind item clicks
+    const itemEls = menu.querySelectorAll('.ws-ctx-item');
+    let idx = 0;
+    items.forEach(it => {
+      if (it.sep) return;
+      const el = itemEls[idx++];
+      el.addEventListener('click', (ev) => { ev.stopPropagation(); this._hideContextMenu(); it.action(); });
+    });
+
+    // Position — keep on screen
+    menu.classList.add('visible');
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    const x = Math.min(e.clientX, window.innerWidth - mw - 8);
+    const y = Math.min(e.clientY, window.innerHeight - mh - 8);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+  }
+
+  _hideContextMenu() {
+    const menu = document.getElementById('ws-ctx-menu');
+    if (menu) menu.classList.remove('visible');
+  }
+
+  _showToast(msg) {
+    const toast = document.getElementById('edog-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => toast.classList.remove('visible'), 2000);
+  }
+
+  // ── Deploy Flow ──
+  _startDeployFlow(lakehouseName) {
+    const content = document.getElementById('ws-content-body');
+    if (!content) return;
+    lakehouseName = lakehouseName || 'TestLakehouse-01';
+
+    const steps = [
+      'Fetching MWC token\u2026',
+      'Patching FLT code\u2026',
+      'Building service\u2026',
+      'Launching service\u2026',
+      'Waiting for service ready\u2026',
+    ];
+
+    content.innerHTML = `
+      <div class="deploy-progress">
+        <div class="ws-content-name">Deploying to ${this._escapeHtml(lakehouseName)}</div>
+        <div style="margin-top:var(--space-4)">
+          ${steps.map((s, i) => `<div class="deploy-step" id="deploy-step-${i}">
+            <span class="deploy-step-num">${i + 1}</span>
+            <span class="deploy-step-label">${s}</span>
+          </div>`).join('')}
+        </div>
+        <div id="deploy-done" style="display:none;margin-top:var(--space-6)">
+          <div style="font-size:var(--text-lg);font-weight:600;color:var(--status-succeeded);margin-bottom:var(--space-2)">\u2713 Deployed successfully</div>
+          <div style="font-size:var(--text-sm);color:var(--text-dim);margin-bottom:var(--space-4)">Service is running on localhost:5555</div>
+          <button class="ws-deploy-btn" id="deploy-view-logs">\u2261 View Logs</button>
+        </div>
+      </div>`;
+
+    // Animate steps
+    let current = 0;
+    const advance = () => {
+      if (current > 0) {
+        const prev = document.getElementById('deploy-step-' + (current - 1));
+        if (prev) { prev.classList.remove('active'); prev.classList.add('done'); }
+      }
+      if (current < steps.length) {
+        const step = document.getElementById('deploy-step-' + current);
+        if (step) step.classList.add('active');
+        current++;
+        setTimeout(advance, 1200 + Math.random() * 600);
+      } else {
+        const last = document.getElementById('deploy-step-' + (steps.length - 1));
+        if (last) { last.classList.remove('active'); last.classList.add('done'); }
+        const done = document.getElementById('deploy-done');
+        if (done) done.style.display = 'block';
+        // Wire "View Logs" button
+        const btn = document.getElementById('deploy-view-logs');
+        if (btn) btn.addEventListener('click', () => {
+          const sidebar = document.querySelector('.sidebar-icon[data-view="logs"]');
+          if (sidebar) sidebar.click();
+        });
+      }
+    };
+    setTimeout(advance, 300);
   }
 
   // ── Helpers ──

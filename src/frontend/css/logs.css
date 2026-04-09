@@ -269,3 +269,11 @@
 .log-level-warning { border-left: 3px solid var(--level-warning); background: var(--row-warning-tint); }
 
 .log-scroll.has-entries .empty-state { display: none; }
+
+/* Error code decoder hint */
+.error-code-hint {
+  text-decoration: underline dashed;
+  text-decoration-color: var(--level-error);
+  text-underline-offset: 2px;
+  cursor: help;
+}

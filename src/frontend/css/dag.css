@@ -106,3 +106,12 @@
 .status-pill.failed { background: rgba(229,69,59,0.08); color: var(--status-failed); }
 .status-pill.running { background: rgba(109,92,255,0.08); color: var(--accent); }
 .status-pill.cancelled { background: rgba(229,148,12,0.08); color: var(--status-cancelled); }
+
+/* DAG Node Detail */
+.dag-node-detail {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  max-height: 240px; overflow-y: auto; padding: var(--space-4);
+  display: none; z-index: 10;
+}
+.dag-node-detail.open { display: block; }

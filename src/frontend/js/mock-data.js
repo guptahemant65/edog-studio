@@ -271,6 +271,12 @@ const MockData = (() => {
     phase: 'connected',
   };
 
+  // ── Error Codes ──
+  const errorCodes = {
+    'MLV_SPARK_SESSION_ACQUISITION_FAILED': { message: 'Cannot acquire a Spark session for the lakehouse', type: 'System', fix: 'Check capacity CU usage. Retry after a few minutes or try a different capacity.' },
+    'MLV_DAG_NODE_EXECUTION_FAILED': { message: 'A DAG node failed during execution', type: 'User/System', fix: 'Check node SQL for errors. Review Delta table write conflicts.' },
+  };
+
   // Public API
   return {
     workspaces,
@@ -290,5 +296,6 @@ const MockData = (() => {
     orphanedFolders,
     config,
     uuid: _uuid,
+    errorCodes,
   };
 })();
