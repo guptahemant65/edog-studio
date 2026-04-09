@@ -12,14 +12,14 @@
 
 .api-method-select {
   padding: var(--space-1) var(--space-2); border: 1px solid var(--border-bright);
-  border-radius: var(--space-1); background: var(--surface-2);
+  border-radius: var(--radius-sm); background: var(--surface-2);
   color: var(--text); font-family: var(--font-mono); font-size: var(--text-sm);
   font-weight: 600; min-width: 90px; cursor: pointer;
 }
 
 .api-url-input {
   flex: 1; padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border-bright); border-radius: var(--space-1);
+  border: 1px solid var(--border-bright); border-radius: var(--radius-sm);
   background: var(--surface-2); color: var(--text);
   font-family: var(--font-mono); font-size: var(--text-sm);
 }
@@ -27,7 +27,7 @@
 
 .api-send-btn {
   padding: var(--space-1) var(--space-4);
-  background: var(--accent); color: #fff; border: none; border-radius: var(--space-1);
+  background: var(--accent); color: var(--text-on-accent); border: none; border-radius: var(--radius-sm);
   font-family: var(--font-body); font-size: var(--text-sm); font-weight: 500;
   cursor: pointer; white-space: nowrap;
 }
@@ -37,7 +37,7 @@
 .api-body-label { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
 .api-body-input {
   width: 100%; min-height: 80px; padding: var(--space-2);
-  border: 1px solid var(--border); border-radius: var(--space-1);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface-2); color: var(--text);
   font-family: var(--font-mono); font-size: var(--text-xs);
   resize: vertical;
@@ -81,13 +81,13 @@
 .api-sidebar-section { border-bottom: 1px solid var(--border); padding: var(--space-3); }
 .api-sidebar-title {
   font-size: var(--text-xs); font-weight: 600; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-2);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-2);
 }
 .api-sidebar-group-label { font-size: var(--text-xs); color: var(--text-muted); margin: var(--space-2) 0 var(--space-1); font-weight: 500; }
 
 .api-saved-item, .api-history-item {
   display: flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-1) var(--space-2); border-radius: var(--space-1);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
   cursor: pointer; font-size: var(--text-xs);
   transition: background var(--transition-fast);
 }

@@ -141,7 +141,7 @@
   border-bottom: 1px solid var(--border);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .node-table tbody tr {
@@ -205,7 +205,7 @@
   border: none;
   border-radius: 6px;
   background: #059669;
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 13px;
   font-weight: 600;
   font-family: var(--font-body);
@@ -230,7 +230,7 @@
   border: none;
   border-radius: 5px;
   background: var(--status-failed);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: 12px;
   font-weight: 600;
   font-family: var(--font-body);
@@ -458,7 +458,7 @@
   border-bottom: 1px solid var(--border);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .exec-history-table tbody tr {

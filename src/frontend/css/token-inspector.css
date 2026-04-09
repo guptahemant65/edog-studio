@@ -67,13 +67,13 @@
 
 .ti-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .ti-btn {
-  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
   font-size: var(--text-sm); border: 1px solid var(--border-bright);
   background: var(--surface); color: var(--text); cursor: pointer;
   font-family: var(--font-body);
 }
 .ti-btn:hover { background: var(--surface-2); }
-.ti-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ti-btn.primary { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 
 /* ── Log Bookmarks Drawer ── */
 .bookmarks-drawer {
@@ -150,7 +150,7 @@
   font-family: var(--font-body); transition: all var(--transition-fast);
 }
 .fc-btn:hover { background: var(--surface-3); color: var(--text); }
-.fc-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.fc-btn.primary { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 .fc-btn.primary:hover { opacity: 0.88; }
 
 /* Session History */

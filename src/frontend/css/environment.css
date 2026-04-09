@@ -25,7 +25,7 @@
 .ff-search {
   flex: 1; max-width: 320px;
   padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border); border-radius: var(--space-1);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface); color: var(--text);
   font-family: var(--font-body); font-size: var(--text-sm);
 }
@@ -104,7 +104,7 @@
 .lock-meta { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
 .lock-actions { display: flex; gap: var(--space-2); }
 .lock-btn {
-  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
   font-size: var(--text-sm); border: 1px solid var(--border-bright);
   background: var(--surface); color: var(--text); cursor: pointer;
   font-family: var(--font-body);
@@ -124,7 +124,7 @@
 .orphan-total { font-size: var(--text-sm); color: var(--text-dim); margin: var(--space-2) 0; }
 
 .orphan-clean-btn {
-  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
   font-size: var(--text-sm); border: 1px solid var(--level-error);
   background: var(--surface); color: var(--level-error); cursor: pointer;
   font-family: var(--font-body);
@@ -145,7 +145,8 @@
 }
 .ff-edit-btn:hover { background: var(--accent-dim); }
 
-.ff-edit-row td { padding: 0 !important; }
+.ff-edit-row td { padding: 0; }
+.ff-table .ff-edit-row > td { padding: 0; }
 .ff-edit-panel {
   padding: var(--space-3) var(--space-4);
   background: var(--surface-2); border-top: 1px solid var(--border);

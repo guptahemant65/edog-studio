@@ -278,17 +278,17 @@ class MockRenderer {
       <div class="ws-section">
         <div class="ws-section-title">MLV DEFINITIONS</div>
         <div class="ws-mlv-grid">
-          <div class="ws-mlv-card">
+          <div class="ws-mlv-card succeeded">
             <div class="ws-mlv-name">sales_summary</div>
             <div class="ws-mlv-meta">SQL \u00B7 Auto Refresh \u00B7 Last run: 30m ago</div>
             <span class="status-pill succeeded">Succeeded</span>
           </div>
-          <div class="ws-mlv-card">
+          <div class="ws-mlv-card succeeded">
             <div class="ws-mlv-name">customer_360</div>
             <div class="ws-mlv-meta">SQL \u00B7 Auto Refresh \u00B7 Last run: 30m ago</div>
             <span class="status-pill succeeded">Succeeded</span>
           </div>
-          <div class="ws-mlv-card">
+          <div class="ws-mlv-card failed">
             <div class="ws-mlv-name">inventory_metrics</div>
             <div class="ws-mlv-meta">PySpark \u00B7 Manual \u00B7 Last run: 2h ago</div>
             <span class="status-pill failed">Failed</span>

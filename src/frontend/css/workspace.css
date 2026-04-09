@@ -148,7 +148,7 @@
   padding: var(--space-2) var(--space-4);
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--font-body);
@@ -184,7 +184,6 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: var(--space-5) 0 var(--space-3);
-}
 }
 
 .ws-table-row {
@@ -353,6 +352,8 @@
   transition: border-color var(--transition-fast);
 }
 .ws-mlv-card:hover { border-color: var(--border-bright); }
+.ws-mlv-card.succeeded { border-left: 3px solid var(--status-succeeded); }
+.ws-mlv-card.failed { border-left: 3px solid var(--status-failed); background: var(--row-error-tint); }
 .ws-mlv-name { font-size: var(--text-sm); font-weight: 600; color: var(--text); font-family: var(--font-mono); margin-bottom: var(--space-1); }
 .ws-mlv-meta { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
 
@@ -466,14 +467,14 @@
 .ws-fav-name { flex: 1; }
 .ws-fav-deploy {
   background: none; border: none; color: var(--accent); font-size: var(--text-xs);
-  cursor: pointer; padding: 0 var(--space-1); opacity: 0;
+  cursor: pointer; padding: 0 var(--space-1); opacity: 0.3;
   transition: opacity var(--transition-fast);
 }
 .ws-fav-item:hover .ws-fav-deploy { opacity: 1; }
 
 /* Row action dots */
 .ws-row-dots {
-  opacity: 0; cursor: pointer; color: var(--text-muted); font-size: var(--text-lg);
+  opacity: 0.25; cursor: pointer; color: var(--text-muted); font-size: var(--text-lg);
   padding: 0 var(--space-1); transition: opacity var(--transition-fast);
   position: absolute; right: var(--space-2); top: 50%; transform: translateY(-50%);
 }

@@ -313,7 +313,7 @@
   color: var(--text-dim);
   border-bottom: 1px solid var(--border);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .raid-item {
