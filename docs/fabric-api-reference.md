@@ -501,6 +501,290 @@ Alternative: `az repos pr create` CLI
 | F04: Spark Inspector | 1 | 0 | 0 | 1 | 1 |
 | F05: Environment | 10 | 4 | 4 | 2 | 6 |
 | F06: IPC/Commands | 5 | 0 | 0 | 5 | 5 |
+| Capacity Management | 15 | 15 | 0 | 0 | 0 |
+| Portal Metadata | 10 | 10 | 0 | 0 | 0 |
 | Token/Auth | 1 | 1 | 0 | 0 | 0 |
 | ADO/Git | 1 | 0 | 0 | 0 | 0 |
-| **Total** | **~47** | **19** | **14** | **13** | **16** |
+| **Total** | **~72** | **44** | **14** | **13** | **16** |
+
+---
+
+# RENAME OPERATIONS
+
+> **Tested:** 2026-04-09 | All using Bearer token on redirect host
+
+| What | Method | Path | Status | Response |
+|------|--------|------|--------|----------|
+| Rename workspace | PATCH | `/v1/workspaces/{wsId}` | ✅ 200 | `{ id, displayName, description, type, capacityId }` |
+| Rename lakehouse | PATCH | `/v1/workspaces/{wsId}/lakehouses/{lhId}` | ✅ 200 | `{ id, type, displayName, description, workspaceId, properties }` |
+| Rename ANY item (notebook, etc.) | PATCH | `/v1/workspaces/{wsId}/items/{itemId}` | ✅ 200 | `{ id, type, displayName, description, workspaceId }` |
+| Rename table | PATCH | `/v1/.../tables/{name}` | ❌ 404 | Tables have immutable names |
+
+**Request body for all renames:** `{ "displayName": "new name" }`
+
+**Key insight:** `PATCH /v1/workspaces/{wsId}/items/{itemId}` is the **universal rename** — works for any item type (notebooks, pipelines, etc.), not just lakehouses.
+
+---
+
+# CAPACITY MANAGEMENT (Internal APIs)
+
+> **Tested:** 2026-04-09 | Bearer token + `x-powerbi-user-admin: true` header on redirect host
+> **Host:** `https://biazure-int-edog-redirect.analysis-df.windows.net`
+
+## Required Headers for Capacity Admin APIs
+
+```
+Authorization: Bearer {pbiToken}
+x-powerbi-hostenv: Power BI Web App
+x-powerbi-user-admin: true
+origin: https://powerbi-df.analysis-df.windows.net
+referer: https://powerbi-df.analysis-df.windows.net/
+```
+
+## Capacity Endpoints
+
+| Method | Path | Status | Response | Notes |
+|--------|------|--------|----------|-------|
+| GET | `/capacities/listandgethealthbyrollouts` | ✅ 200 | `{ capacitiesMetadata[], rolloutErrors[], capacitiesHealth[] }` | **Master endpoint** — 46 entries (10 real + 36 SKU templates) |
+| GET | `/capacities/{capId}` | ✅ 200 | `{ metadata, access, copilotAccess, isCopilotAllowed }` | Single capacity detail |
+| GET | `/capacities/{capId}/workspaces` | ✅ 200 | `[{ workspaceObjectId, workspaceDisplayName, workspaceType }]` | Workspaces assigned to capacity |
+| GET | `/capacities/{capId}/metrics` | ✅ 200 | `{ metrics, data }` | Utilization metrics |
+| POST | `/capacities/new` | ✅ (from curl) | Creates capacity | Body: `{ displayName, adminsUpns: [upn], sku, region, mode: 1 }` |
+| DELETE | `/capacities/{capId}` | ✅ 204 | Empty | Deletes capacity |
+
+### NOT found (404) — may need different path patterns from portal sniffing:
+`/capacities/{id}/settings`, `/capacities/{id}/delegates`, `/capacities/{id}/users`,
+`/capacities/{id}/state`, `/capacities/{id}/resize`, `/capacities/{id}/suspend`, `/capacities/{id}/resume`
+
+## Capacity Health Data Shape
+
+From `capacitiesHealth[]` in the list+health response:
+
+```json
+{
+  "timestamp": "2026-04-09T11:21:48Z",
+  "capacityObjectId": "guid",
+  "backgroundUtilization": 0.16,
+  "interactiveUtilization": 0.0,
+  "previewInteractiveUtilization": 0.0,
+  "previewBackgroundUtilization": 0.0,
+  "cumulativeCarryForward": 0.0,
+  "interactiveDelayThrottlingPercentage": 0.0,
+  "interactiveRejectionThrottlingPercentage": 0.0,
+  "backgroundRejectionThrottlingPercentage": 0.0,
+  "interactiveDelayRisk": false,
+  "interactiveRejectionRisk": false,
+  "backgroundRejectionRisk": false
+}
+```
+
+## Capacity Metadata Shape
+
+From `capacitiesMetadata[]`:
+
+```json
+{
+  "capacityObjectId": "guid",
+  "state": 1,
+  "license": {
+    "source": 1,
+    "capacityPlan": "P1",
+    "capacityNumberOfVCores": 8,
+    "capacityMemoryInGB": 25,
+    "region": "West Central US"
+  },
+  "configuration": {
+    "displayName": "FMLVCapacity",
+    "sku": "P1",
+    "skuScale": 1,
+    "mode": 1,
+    "region": "West Central US"
+  },
+  "admins": [{ "displayName": "Admin1CBA", "userPrincipalName": "...", "objectId": "..." }],
+  "creationDate": "ISO datetime",
+  "cesClusterUrl": "...",
+  "resourceGroup": "...",
+  "subscriptionId": "..."
+}
+```
+
+## SKU Catalog (from capacitiesMetadata — state=0 entries)
+
+| SKU | vCores | Memory |
+|-----|--------|--------|
+| P1 | 8 | 25 GB |
+| P2 | 16 | 50 GB |
+| P3 | 32 | 100 GB |
+| P4 | 64 | 200 GB |
+| P5 | 128 | 400 GB |
+| F2 | 1 | 1 GB |
+| F4 | 1 | 2 GB |
+| F8 | 1 | 3 GB |
+| F16 | 2 | 3 GB |
+| F32 | 4 | 5 GB |
+| F64 | 8 | 25 GB |
+| F128 | 16 | 50 GB |
+| F256 | 32 | 100 GB |
+| F512 | 64 | 200 GB |
+| F1024 | 128 | 400 GB |
+| F2048 | 256 | 400 GB |
+| F4096 | 512 | 400 GB |
+| F8192 | 1024 | 400 GB |
+| FTL64 | 8 | 25 GB |
+
+## v1.0 Capacity Endpoints (Power BI REST API)
+
+| Method | Path | Status | Data |
+|--------|------|--------|------|
+| GET | `/v1.0/myorg/capacities` | ✅ 200 | 9 capacities with `id, displayName, admins, sku, state, region, users` |
+| GET | `/v1.0/myorg/capacities/{id}/Workloads` | ✅ 200 | **64 workload configurations** per capacity |
+| GET | `/v1.0/myorg/capacities/{id}/Refreshables` | ✅ 200 | Refresh/throttle data |
+| GET | `/v1.0/myorg/capacities/refreshables` | ✅ 200 | All refreshables across capacities |
+| GET | `/v1.0/myorg/admin/capacities` | ✅ 200 | Admin view of all capacities |
+| POST | `/v1/workspaces/{wsId}/assignToCapacity` | ✅ 202 | Assign workspace to capacity. Body: `{ "capacityId": "guid" }` |
+| POST | `/v1.0/myorg/groups/{wsId}/AssignToCapacity` | ✅ 200 | Same via v1.0 path |
+
+---
+
+# TABLE DETAILS & PREVIEW (Async LRO Pattern)
+
+> **Tested:** 2026-04-09 | MwcToken on capacity host
+> **Pattern:** POST → 202 with operationId → poll GET for result
+
+## getTableDetails (single table schema/columns)
+
+**Request:**
+```
+POST /webapi/.../artifacts/DataArtifact/{lhId}/getTableDetails
+Authorization: MwcToken {mwcToken}
+x-ms-workload-resource-moniker: {lhId}
+x-ms-lakehouse-client-session-id: {uuid}
+
+Body: { "relativePath": "Tables/dbo/{tableName}" }
+```
+
+**Response (202):** `{ "operationId": "guid" }`
+
+**Poll result:**
+```
+GET /webapi/.../artifacts/DataArtifact/{lhId}/getTableDetails/operationResults/{operationId}
+→ { "result": { "type": "MANAGED", "schema": [{ "name": "col", "type": "string", "nullable": true }] }, "status": "completed" }
+```
+
+## batchGetTableDetails (multiple tables)
+
+**Request:**
+```
+POST /webapi/.../artifacts/DataArtifact/{lhId}/schemas/dbo/batchGetTableDetails
+Body: { "tables": ["table1", "table2"] }
+```
+⚠️ Body must use `"tables"` NOT `"tableNames"` — the latter returns 400.
+
+**Response:** 202 with operationId → poll for batch result.
+
+## previewAsync (first N rows of data)
+
+**Request:**
+```
+POST /webapi/.../artifacts/Lakehouse/{lhId}/schemas/dbo/tables/{tableName}/preview
+Body: { "maxRows": 5 }
+```
+
+**Response (202):** `{ "operationId": "guid" }`
+**Poll → result with actual row data.**
+
+---
+
+# SCHEDULED JOBS
+
+> **Tested:** 2026-04-09 | Bearer token on redirect host
+
+| Method | Path | Status | Notes |
+|--------|------|--------|-------|
+| GET | `/metadata/artifacts/{lhId}/scheduledJobs` | ✅ 200 | FMLVWS TestLH has 5 scheduled jobs |
+| POST | `/metadata/artifacts/{lhId}/scheduledJobs` | ✅ 200 | Created schedule on test LH |
+
+**Schedule create body:**
+```json
+{
+  "artifactJobType": "MaterializedLakeViews",
+  "artifactObjectId": "lakehouse-guid",
+  "scheduleEnabled": false,
+  "scheduleType": 2,
+  "cronPeriod": 3,
+  "scheduleStartTime": "2026-04-09T14:00:00.000Z",
+  "scheduleEndTime": "2026-04-10T14:00:00.000Z",
+  "scheduleHours": "[14:00]",
+  "localTimeZoneId": "India Standard Time",
+  "scheduleWeekIndex": 1,
+  "scheduleWeekdays": 127
+}
+```
+
+**Rules:** POST when `jobDefinitionObjectId` is null (create new), PUT when it has a value (update existing).
+
+---
+
+# PORTAL METADATA APIs
+
+> **Tested:** 2026-04-09 | Bearer token on redirect host
+> **Source:** Network sniffing of Power BI admin portal
+
+| Method | Path | Status | Data | Use In EDOG |
+|--------|------|--------|------|-------------|
+| GET | `/metadata/recent/?limit=100` | ✅ 200 | 56 items: `objectId, displayName, type, lastAccessedTime, ownerWorkspaceObjectId, ownerWorkspaceName` | Recent items in Workspace Explorer |
+| GET | `/metadata/bootstrap/base` | ✅ 200 | `{ userSettings, branding, clientFeatureSwitches }` | Feature flags, user prefs |
+| GET | `/metadata/notifications/summary` | ✅ 200 | `{ totalCount, unseenCount, notifications[] }` | Notification badge |
+| GET | `/metadata/dataDomains` | ✅ 200 | `{ domains[] }` | Data organization |
+| GET | `/metadata/trialcapacities` | ✅ 200 | `[{ capacityId, trialExpirationDateTime, sku }]` | Trial capacity info |
+| GET | `/metadata/tenantsettings/selfserve/new` | ✅ 200 | `{ newSettings }` | Tenant config |
+| GET | `/metadata/promoted` | ✅ 200 | `{ promotedDashboards, promotedReports, promotedApps }` | Promoted content |
+| GET | `/metadata/recommendation` | ✅ 200 | `{ recommendedArtifacts }` | Recommendations |
+| GET | `/metadata/licenseEligibility` | ✅/❌ | License info | — |
+| GET | `/metadata/user/isModernCommerceAdmin` | ✅/❌ | Admin check | — |
+
+### Recent Items Response Shape
+```json
+{
+  "objectId": "guid",
+  "displayName": "hodatestworkpsace",
+  "type": 5,
+  "url": "https://powerbi-df.../MobileRedirect.html?Action=OpenGroup&groupObjectId=...",
+  "lastAccessedTime": "ISO datetime",
+  "counOfAccesses": 12,
+  "ownerWorkspaceObjectId": "guid",
+  "ownerWorkspaceName": "workspace name"
+}
+```
+
+---
+
+# NOTEBOOK & ITEM CREATION
+
+> **Tested:** 2026-04-09 | Bearer token on redirect host
+
+| Method | Path | Status | Notes |
+|--------|------|--------|-------|
+| POST | `/v1/workspaces/{wsId}/items` | ✅ 201 | Create any item type |
+
+**Create notebook body:**
+```json
+{
+  "displayName": "My Notebook",
+  "type": "Notebook"
+}
+```
+
+**Response:** `{ id, type, displayName, description, workspaceId }`
+
+---
+
+# DELETE OPERATIONS
+
+> **Tested:** 2026-04-09
+
+| Method | Path | Status | Notes |
+|--------|------|--------|-------|
+| DELETE | `/v1/workspaces/{wsId}/lakehouses/{lhId}` | ✅ 200 | Tested via create→delete cycle |
+| DELETE | `/capacities/{capId}` | ✅ 204 | Deleted "aa" test capacity |
+| DELETE | `/v1/workspaces/{wsId}` | ⚠️ Not tested | Destructive — tested rename instead |
