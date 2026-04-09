@@ -1,0 +1,1113 @@
+{
+  "capacitiesMetadata": [
+    {
+      "capacityObjectId": "47143b10-4b5f-4364-8468-fa3589e96602",
+      "state": 1,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P3",
+        "capacityNumberOfVCores": 32,
+        "capacityMemoryInGB": 100,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "aa",
+        "sku": "P3",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-04-09T11:24:28.85Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "a8a0ccd9-d1a4-42d0-ae25-2699e6176890",
+      "state": 1,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P3",
+        "capacityNumberOfVCores": 32,
+        "capacityMemoryInGB": 100,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "AgniCap",
+        "sku": "P3",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-04-09T06:35:01.92Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "357739fb-913f-4796-acaf-61767fd068bb",
+      "state": 3,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P2",
+        "capacityNumberOfVCores": 16,
+        "capacityMemoryInGB": 50,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": null,
+        "sku": "P2",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-03-24T03:28:54.487Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "6e6d887b-49bc-4688-bd4f-6f6c7414d571",
+      "state": 3,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P2",
+        "capacityNumberOfVCores": 16,
+        "capacityMemoryInGB": 50,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": null,
+        "sku": "P2",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-03-24T03:17:25.31Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "dd01a7f3-4198-4439-aae3-4eaf902281bb",
+      "state": 1,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P1",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "FMLVCapacity",
+        "sku": "P1",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-03-18T14:55:04.64Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "19524206-8f8a-4e75-a89c-3df0de08cc7f",
+      "state": 1,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P1",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "hmgcapone",
+        "sku": "P1",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-02-20T13:13:01.077Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "2b9723c4-34a8-4275-ba31-32f02ad32cce",
+      "state": 3,
+      "license": {
+        "source": 0,
+        "capacityPlan": "F2",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 1,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "ayushcap2",
+        "sku": "F2",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-02-18T11:53:49.037Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "d04b2b57-33d2-4bd6-baa7-16a2d3b6dfca"
+    },
+    {
+      "capacityObjectId": "337a4d47-c07c-4295-89e9-6bcc49800b35",
+      "state": 3,
+      "license": {
+        "source": 0,
+        "capacityPlan": "F2",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 1,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "ayushcap",
+        "sku": "F2",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-02-18T09:09:59Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "d04b2b57-33d2-4bd6-baa7-16a2d3b6dfca"
+    },
+    {
+      "capacityObjectId": "1c982d76-035d-4871-afbf-d2210bf58d2e",
+      "state": 1,
+      "license": {
+        "source": 1,
+        "capacityPlan": "PP3",
+        "capacityNumberOfVCores": 0,
+        "capacityMemoryInGB": 0,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "Premium Per User - Reserved",
+        "sku": "PP3",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [],
+      "creationDate": "2026-02-18T07:36:14.787Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "75cf4409-0cd0-4885-a014-092f45430194",
+      "state": 1,
+      "license": {
+        "source": 1,
+        "capacityPlan": "FTL64",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": "West Central US"
+      },
+      "configuration": {
+        "displayName": "Trial-20260218T073540Z-eiDzZQbftESiJRbh-Ke7pQ (Admin1CBA@FabricFMLV08PPE.ccsctp.net)",
+        "sku": "FTL64",
+        "skuScale": 1,
+        "mode": 1,
+        "region": "West Central US"
+      },
+      "admins": [
+        {
+          "displayName": "Admin1CBA",
+          "objectId": "0728ed81-7994-433b-a12f-3812521cfac2",
+          "userPrincipalName": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "isSecurityGroup": false,
+          "objectType": 1,
+          "groupType": 0,
+          "aadAppId": null,
+          "emailAddress": "Admin1CBA@FabricFMLV08PPE.ccsctp.net",
+          "relevanceScore": null,
+          "creatorObjectId": null
+        }
+      ],
+      "creationDate": "2026-02-18T07:36:07.95Z",
+      "cesClusterUrl": "https://cesedog.westcentralus.kusto.windows.net",
+      "trialInfo": {
+        "trialExpirationDateTime": "/Date(1776584140820)/",
+        "provisionState": 2,
+        "upgradeState": 1
+      },
+      "resourceGroup": "WABI_PBIP_INT_RG",
+      "subscriptionId": "b22b789c-9396-4aa1-af08-80b612569220"
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P1",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "7b26f5ab-a763-4c00-a1ac-f6c4b5506945",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "P1",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P2",
+        "capacityNumberOfVCores": 16,
+        "capacityMemoryInGB": 50,
+        "o365AddonId": "f8a7a1fb-659c-4003-af04-82fa35ff7046",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "P2",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P3",
+        "capacityNumberOfVCores": 32,
+        "capacityMemoryInGB": 100,
+        "o365AddonId": "f9c04191-f807-4163-bd70-f8f50db145f0",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "P3",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P4",
+        "capacityNumberOfVCores": 64,
+        "capacityMemoryInGB": 200,
+        "o365AddonId": "5ad225a5-a2f3-4aa8-8d53-ed3853373f31",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "P4",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "P5",
+        "capacityNumberOfVCores": 128,
+        "capacityMemoryInGB": 400,
+        "o365AddonId": "04f1ca1e-31b9-45ee-b8fb-d657eabdfbb9",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "P5",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "EM1",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 3,
+        "o365AddonId": "bc757c42-5622-4583-a483-a9e537fcb71c",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "EM1",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "EM2",
+        "capacityNumberOfVCores": 2,
+        "capacityMemoryInGB": 5,
+        "o365AddonId": "8ecbd3c1-b108-437c-a859-e3c125e3f83f",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "EM2",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "EM3",
+        "capacityNumberOfVCores": 4,
+        "capacityMemoryInGB": 10,
+        "o365AddonId": "3f0ff53b-cca4-43cc-a3f1-8f93d36b5d8e",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "EM3",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DCT1",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DCT1",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC2",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 1,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC2",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC4",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 2,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC4",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC8",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 3,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC8",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC16",
+        "capacityNumberOfVCores": 2,
+        "capacityMemoryInGB": 3,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC16",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC32",
+        "capacityNumberOfVCores": 4,
+        "capacityMemoryInGB": 5,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC32",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC64",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC64",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC128",
+        "capacityNumberOfVCores": 16,
+        "capacityMemoryInGB": 50,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC128",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC256",
+        "capacityNumberOfVCores": 32,
+        "capacityMemoryInGB": 100,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC256",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC512",
+        "capacityNumberOfVCores": 64,
+        "capacityMemoryInGB": 200,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC512",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "DC1024",
+        "capacityNumberOfVCores": 128,
+        "capacityMemoryInGB": 400,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "DC1024",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F0",
+        "capacityNumberOfVCores": 0,
+        "capacityMemoryInGB": 0,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F0",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "FT1",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "FT1",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "FTL4",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 2,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "FTL4",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "FTL64",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "FTL64",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F2",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 1,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F2",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F4",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 2,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F4",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F8",
+        "capacityNumberOfVCores": 1,
+        "capacityMemoryInGB": 3,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F8",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F16",
+        "capacityNumberOfVCores": 2,
+        "capacityMemoryInGB": 3,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F16",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F32",
+        "capacityNumberOfVCores": 4,
+        "capacityMemoryInGB": 5,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F32",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F64",
+        "capacityNumberOfVCores": 8,
+        "capacityMemoryInGB": 25,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F64",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F128",
+        "capacityNumberOfVCores": 16,
+        "capacityMemoryInGB": 50,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F128",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F256",
+        "capacityNumberOfVCores": 32,
+        "capacityMemoryInGB": 100,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F256",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F512",
+        "capacityNumberOfVCores": 64,
+        "capacityMemoryInGB": 200,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F512",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F1024",
+        "capacityNumberOfVCores": 128,
+        "capacityMemoryInGB": 400,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F1024",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F2048",
+        "capacityNumberOfVCores": 256,
+        "capacityMemoryInGB": 400,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F2048",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F4096",
+        "capacityNumberOfVCores": 512,
+        "capacityMemoryInGB": 400,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F4096",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    },
+    {
+      "capacityObjectId": "",
+      "state": 0,
+      "license": {
+        "source": 1,
+        "capacityPlan": "F8192",
+        "capacityNumberOfVCores": 1024,
+        "capacityMemoryInGB": 400,
+        "o365AddonId": "00000000-0000-0000-0000-000000000000",
+        "region": null
+      },
+      "configuration": {
+        "displayName": "",
+        "sku": "F8192",
+        "skuScale": 0,
+        "mode": 0,
+        "region": null
+      }
+    }
+  ],
+  "rolloutErrors": [],
+  "capacitiesHealth": [
+    {
+      "timestamp": "2026-04-09T11:21:48.6404689Z",
+      "capacityObjectId": "75CF4409-0CD0-4885-A014-092F45430194",
+      "backgroundUtilization": 0.163472222222222,
+      "previewInteractiveUtilization": 0.0,
+      "interactiveUtilization": 0.0,
+      "previewBackgroundUtilization": 0.0,
+      "cumulativeCarryForward": 0.0,
+      "interactiveDelayThrottlingPercentage": 0.0,
+      "interactiveRejectionThrottlingPercentage": 0.0,
+      "backgroundRejectionThrottlingPercentage": 0.0,
+      "interactiveDelayRisk": false,
+      "interactiveRejectionRisk": false,
+      "backgroundRejectionRisk": false
+    },
+    {
+      "timestamp": "2026-04-09T11:21:48.590583Z",
+      "capacityObjectId": "DD01A7F3-4198-4439-AAE3-4EAF902281BB",
+      "backgroundUtilization": 24850.1466319444,
+      "previewInteractiveUtilization": 0.0,
+      "interactiveUtilization": 0.0,
+      "previewBackgroundUtilization": 0.0,
+      "cumulativeCarryForward": 0.0,
+      "interactiveDelayThrottlingPercentage": 1.29427,
+      "interactiveRejectionThrottlingPercentage": 1.27292,
+      "backgroundRejectionThrottlingPercentage": 1.11986,
+      "interactiveDelayRisk": false,
+      "interactiveRejectionRisk": false,
+      "backgroundRejectionRisk": false
+    },
+    {
+      "timestamp": "2026-04-09T11:21:47.7788441Z",
+      "capacityObjectId": "19524206-8F8A-4E75-A89C-3DF0DE08CC7F",
+      "backgroundUtilization": 7885.65583333333,
+      "previewInteractiveUtilization": 0.0,
+      "interactiveUtilization": 0.0,
+      "previewBackgroundUtilization": 0.0,
+      "cumulativeCarryForward": 0.0,
+      "interactiveDelayThrottlingPercentage": 0.4107,
+      "interactiveRejectionThrottlingPercentage": 0.4107,
+      "backgroundRejectionThrottlingPercentage": 0.31494,
+      "interactiveDelayRisk": false,
+      "interactiveRejectionRisk": false,
+      "backgroundRejectionRisk": false
+    },
+    {
+      "timestamp": "2026-04-09T11:20:48.7865128Z",
+      "capacityObjectId": "A8A0CCD9-D1A4-42D0-AE25-2699E6176890",
+      "backgroundUtilization": 927.323159722222,
+      "previewInteractiveUtilization": 0.0,
+      "interactiveUtilization": 0.0,
+      "previewBackgroundUtilization": 0.0,
+      "cumulativeCarryForward": 0.0,
+      "interactiveDelayThrottlingPercentage": 0.01207,
+      "interactiveRejectionThrottlingPercentage": 0.01207,
+      "backgroundRejectionThrottlingPercentage": 0.00999,
+      "interactiveDelayRisk": false,
+      "interactiveRejectionRisk": false,
+      "backgroundRejectionRisk": false
+    }
+  ]
+}
