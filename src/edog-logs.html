@@ -5366,7 +5366,8 @@ class FabricApiClient {
     this._fabricBaseUrl = null;
     this._config = null;
     this._phase = 'disconnected';
-    this._baseUrl = 'https://api.fabric.microsoft.com/v1';
+    // Proxy through our server to avoid CORS — server forwards to api.fabric.microsoft.com
+    this._baseUrl = '/api/fabric';
   }
 
   async init() {
@@ -8844,8 +8845,16 @@ class WorkspaceExplorer {
 
       this._treeEl.appendChild(wsEl);
 
-      if (isExpanded && this._children[ws.id]) {
-        for (const item of this._children[ws.id]) {
+      if (isExpanded) {
+        if (!this._children[ws.id]) {
+          // Loading indicator while children are being fetched
+          const loadEl = document.createElement('div');
+          loadEl.className = 'ws-tree-item dimmed';
+          loadEl.style.paddingLeft = 'calc(var(--space-3) + 16px)';
+          loadEl.textContent = 'Loading...';
+          this._treeEl.appendChild(loadEl);
+        } else {
+          for (const item of this._children[ws.id]) {
           const isLH = this._isLakehouse(item);
           const isItemSelected = this._selectedItem && this._selectedItem.id === item.id;
           const itemEl = this._buildTreeNode({
@@ -8865,6 +8874,7 @@ class WorkspaceExplorer {
           });
 
           this._treeEl.appendChild(itemEl);
+          }
         }
       }
     }
@@ -8913,8 +8923,15 @@ class WorkspaceExplorer {
     } else {
       this._expanded.add(ws.id);
       if (!this._children[ws.id]) {
+        // Show loading state immediately
+        this._renderTree();
         try {
-          const items = await this._loadChildren(ws);
+          let items = await this._loadChildren(ws);
+          // Filter out internal artifacts (SqlAnalyticsEndpoint, etc.)
+          items = items.filter(i => {
+            const t = (i.type || '').toLowerCase();
+            return !t.includes('sqlanalyticsendpoint') && !t.includes('kqlquerysetoverride');
+          });
           items.sort((a, b) => {
             const aLH = this._isLakehouse(a) ? 0 : 1;
             const bLH = this._isLakehouse(b) ? 0 : 1;
@@ -9192,27 +9209,41 @@ class WorkspaceExplorer {
       ['ID', ws.id],
       ['Capacity', ws.capacityId || 'N/A'],
       ['State', ws.state || 'Active'],
+      ['Description', ws.description || '\u2014'],
     ];
     for (const [label, val] of fields) {
       html += `<dt>${this._esc(label)}</dt><dd>${this._esc(val || '')}</dd>`;
     }
     html += '</dl></div>';
 
-    // Item counts by type
+    // Item counts by type with lakehouse highlighting
     const children = this._children[ws.id] || [];
     if (children.length > 0) {
       const counts = {};
+      let lhCount = 0;
       for (const item of children) {
         const type = item.type || 'Unknown';
         counts[type] = (counts[type] || 0) + 1;
+        if (this._isLakehouse(item)) lhCount++;
       }
       html += '<div class="ws-insp-section">';
       html += '<div class="ws-insp-title">Item Counts</div>';
       html += '<dl class="ws-insp-kv">';
-      for (const [type, count] of Object.entries(counts)) {
-        html += `<dt>${this._esc(type)}</dt><dd>${count}</dd>`;
+      if (lhCount > 0) {
+        html += `<dt>Lakehouses</dt><dd style="color:var(--status-succeeded);font-weight:600">${lhCount}</dd>`;
       }
+      for (const [type, count] of Object.entries(counts).sort((a, b) => b[1] - a[1])) {
+        if (!type.toLowerCase().includes('lakehouse')) {
+          html += `<dt>${this._esc(type)}</dt><dd>${count}</dd>`;
+        }
+      }
+      html += `<dt style="font-weight:600;padding-top:var(--space-1)">Total</dt><dd style="font-weight:600;padding-top:var(--space-1)">${children.length}</dd>`;
       html += '</dl></div>';
+    } else if (this._expanded.has(ws.id)) {
+      html += '<div class="ws-insp-section">';
+      html += '<div class="ws-insp-title">Items</div>';
+      html += '<p style="font-size:var(--text-xs);color:var(--text-muted)">No items in this workspace</p>';
+      html += '</div>';
     }
 
     this._inspectorEl.innerHTML = html;
