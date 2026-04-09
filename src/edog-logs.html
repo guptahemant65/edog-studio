@@ -1036,10 +1036,15 @@ mark {
   padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md);
   background: var(--surface);
   transition: border-color var(--transition-fast);
+  position: relative; overflow: hidden;
 }
 .ws-mlv-card:hover { border-color: var(--border-bright); }
-.ws-mlv-card.succeeded { border-left-width: 3px; border-left-color: var(--status-succeeded); }
-.ws-mlv-card.failed { border-left-width: 3px; border-left-color: var(--status-failed); background: var(--row-error-tint); }
+.ws-mlv-card.succeeded::before, .ws-mlv-card.failed::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+}
+.ws-mlv-card.succeeded::before { background: var(--status-succeeded); }
+.ws-mlv-card.failed::before { background: var(--status-failed); }
+.ws-mlv-card.failed { background: var(--row-error-tint); }
 .ws-mlv-name { font-size: var(--text-sm); font-weight: 600; color: var(--text); font-family: var(--font-mono); margin-bottom: var(--space-1); }
 .ws-mlv-meta { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
 
