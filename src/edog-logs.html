@@ -1142,6 +1142,22 @@ mark {
 }
 .ws-fav-item:hover .ws-fav-deploy { opacity: 1; }
 
+/* Row action dots */
+.ws-row-dots {
+  opacity: 0; cursor: pointer; color: var(--text-muted); font-size: var(--text-lg);
+  padding: 0 var(--space-1); transition: opacity var(--transition-fast);
+  position: absolute; right: var(--space-2); top: 50%; transform: translateY(-50%);
+}
+.ws-table-row:hover .ws-row-dots { opacity: 1; }
+.ws-row-popover {
+  position: fixed; z-index: var(--z-dropdown);
+  background: var(--surface); border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md); padding: var(--space-1) 0;
+  box-shadow: var(--shadow-lg); min-width: 140px;
+  display: none; font-size: var(--text-sm);
+}
+.ws-row-popover.visible { display: block; }
+
     /* === css/filters.css === */
 .search-wrapper {
   position: relative;
@@ -8437,7 +8453,16 @@ class MockRenderer {
     this._renderTokenInspector();
     this._renderFileChangeBar();
     this._renderSessionHistory();
+    this._renderBatchRunner();
     this._bindInteractions();
+    // Post-render hooks
+    this._bindTableActionDots();
+    this._bindRestartButton();
+    this._bindExportBookmarks();
+    this._bindDagCompare();
+    this._bindNewEnvWizard();
+    this._bindCloneEnv();
+    this._checkStuckLock();
   }
 
   // ── Top Bar ──
@@ -9288,7 +9313,7 @@ class MockRenderer {
     const content = document.getElementById('env-content');
     if (!content) return;
 
-    if (this._activeEnvTab === 'flags') this._renderFeatureFlags(content);
+    if (this._activeEnvTab === 'flags') { this._renderFeatureFlags(content); this._bindNewFlagWizard(); }
     else if (this._activeEnvTab === 'lock') this._renderLockMonitor(content);
     else if (this._activeEnvTab === 'orphans') this._renderOrphanedResources(content);
   }
@@ -10061,6 +10086,257 @@ class MockRenderer {
       }
     };
     setTimeout(advance, 300);
+  }
+
+  // ── Table Action Dots (P2) ──
+  _bindTableActionDots() {
+    const content = document.getElementById('ws-content-body');
+    if (!content) return;
+    content.querySelectorAll('.ws-table-row').forEach(row => {
+      // Add dots cell on hover
+      const lastTd = row.querySelector('td:last-child');
+      if (!lastTd) return;
+      const dots = document.createElement('span');
+      dots.className = 'ws-row-dots';
+      dots.textContent = '\u22EF';
+      dots.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const name = row.querySelector('.ws-table-name')?.textContent || '';
+        // Show a mini popover
+        let pop = document.getElementById('ws-row-popover');
+        if (!pop) {
+          pop = document.createElement('div');
+          pop.id = 'ws-row-popover';
+          pop.className = 'ws-row-popover';
+          document.body.appendChild(pop);
+        }
+        pop.innerHTML = `<div class="ws-ctx-item" data-action="fabric">Open in Fabric</div><div class="ws-ctx-item" data-action="copy">Copy Name</div>`;
+        pop.classList.add('visible');
+        const rect = dots.getBoundingClientRect();
+        pop.style.left = (rect.left - 120) + 'px';
+        pop.style.top = (rect.bottom + 4) + 'px';
+        pop.querySelectorAll('.ws-ctx-item').forEach(item => {
+          item.addEventListener('click', () => {
+            pop.classList.remove('visible');
+            if (item.dataset.action === 'copy') { navigator.clipboard?.writeText(name); this._showToast('"' + name + '" copied'); }
+            else this._showToast('Opening in Fabric...');
+          });
+        });
+        setTimeout(() => document.addEventListener('click', () => pop.classList.remove('visible'), { once: true }), 10);
+      });
+      lastTd.style.position = 'relative';
+      lastTd.appendChild(dots);
+    });
+  }
+
+  // ── Restart Button (P2) ──
+  _bindRestartButton() {
+    const btn = document.getElementById('restart-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const statusEl = document.getElementById('service-status');
+      const statusText = document.getElementById('service-status-text');
+      if (statusEl) statusEl.className = 'service-status building';
+      if (statusText) statusText.textContent = 'Restarting\u2026';
+      btn.disabled = true;
+      btn.textContent = '\u22EF';
+      setTimeout(() => {
+        if (statusEl) statusEl.className = 'service-status running';
+        if (statusText) statusText.textContent = 'Running 0m01s';
+        btn.disabled = false;
+        btn.textContent = 'Restart';
+        this._showToast('Service restarted');
+      }, 3000);
+    });
+  }
+
+  // ── Stuck Lock Toast (P2) ──
+  _checkStuckLock() {
+    if (MockData.lockState.locked) {
+      setTimeout(() => {
+        this._showToast('\u26A0 Lock appears stuck (>5 min) \u2014 check Environment tab');
+      }, 4000);
+    }
+  }
+
+  // ── Export Bookmarks (P2) ──
+  _bindExportBookmarks() {
+    const drawer = document.getElementById('bookmarks-drawer');
+    if (!drawer) return;
+    const header = drawer.querySelector('.bm-header');
+    if (!header || header.querySelector('.bm-export')) return;
+    const btn = document.createElement('button');
+    btn.className = 'bm-export';
+    btn.textContent = 'Export';
+    btn.style.cssText = 'font-size:var(--text-xs);font-family:var(--font-body);background:none;border:1px solid var(--border-bright);color:var(--text-dim);padding:2px 8px;border-radius:var(--radius-sm);cursor:pointer;margin-left:auto;margin-right:var(--space-2)';
+    btn.addEventListener('click', () => {
+      const bookmarked = this._logEntries.filter(e => e.bookmarked);
+      const blob = new Blob([JSON.stringify(bookmarked, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'edog-bookmarks.json'; a.click();
+      URL.revokeObjectURL(url);
+      this._showToast('Bookmarks exported');
+    });
+    header.querySelector('.bm-close').before(btn);
+  }
+
+  // ── DAG Compare (P2) ──
+  _bindDagCompare() {
+    const body = document.getElementById('dag-history-body');
+    if (!body) return;
+    this._dagSelectedRuns = new Set();
+    body.querySelectorAll('tr').forEach((row, i) => {
+      row.addEventListener('click', () => {
+        row.classList.toggle('selected');
+        if (row.classList.contains('selected')) this._dagSelectedRuns.add(i);
+        else this._dagSelectedRuns.delete(i);
+        // If two selected, show compare
+        if (this._dagSelectedRuns.size === 2) {
+          const [a, b] = [...this._dagSelectedRuns];
+          const ra = MockData.dagHistory[a], rb = MockData.dagHistory[b];
+          this._showToast('Comparing ' + ra.iterationId + ' vs ' + rb.iterationId);
+          // Show inline diff
+          let diff = document.getElementById('dag-compare-panel');
+          if (!diff) {
+            diff = document.createElement('div');
+            diff.id = 'dag-compare-panel';
+            diff.style.cssText = 'padding:var(--space-3);border-top:1px solid var(--border);font-size:var(--text-xs);font-family:var(--font-mono)';
+            body.closest('.dag-history-section')?.appendChild(diff);
+          }
+          diff.innerHTML = `<div style="font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Comparison</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
+              <div style="padding:var(--space-2);background:var(--surface-2);border-radius:var(--radius-sm)">
+                <div style="color:var(--text-dim)">${ra.iterationId}</div>
+                <div>${ra.status} \u00B7 ${ra.duration} \u00B7 ${ra.completed}/${ra.total}</div>
+              </div>
+              <div style="padding:var(--space-2);background:var(--surface-2);border-radius:var(--radius-sm)">
+                <div style="color:var(--text-dim)">${rb.iterationId}</div>
+                <div>${rb.status} \u00B7 ${rb.duration} \u00B7 ${rb.completed}/${rb.total}</div>
+              </div>
+            </div>
+            <div style="margin-top:var(--space-2);color:var(--text-dim)">Duration \u0394: ${ra.status !== rb.status ? 'Status changed (' + ra.status + ' \u2192 ' + rb.status + ')' : 'Same status'}</div>`;
+        }
+      });
+    });
+  }
+
+  // ── New Test Environment Wizard (P3) ──
+  _bindNewEnvWizard() {
+    const link = document.querySelector('.ws-new-link');
+    if (!link) return;
+    link.removeEventListener('click', link._handler);
+    link._handler = () => {
+      const content = document.getElementById('ws-content-body');
+      if (!content) return;
+      const steps = ['Create Workspace', 'Assign Capacity', 'Create Lakehouse', 'Write MLV SQL', 'Run Notebook', 'Verify DAG'];
+      content.innerHTML = `<div class="ws-content-name">New Test Environment</div>
+        <div style="margin-top:var(--space-4)">${steps.map((s, i) => `<div class="deploy-step${i === 0 ? ' active' : ''}" id="env-wiz-step-${i}"><span class="deploy-step-num">${i + 1}</span><span class="deploy-step-label">${s}</span></div>`).join('')}</div>
+        <div id="env-wiz-done" style="display:none;margin-top:var(--space-4)"><div style="font-size:var(--text-lg);font-weight:600;color:var(--status-succeeded)">\u2713 Environment created</div><div style="font-size:var(--text-sm);color:var(--text-dim);margin-top:var(--space-2)">New-Workspace / New-Lakehouse ready</div></div>`;
+      let cur = 0;
+      const advance = () => {
+        if (cur > 0) { const p = document.getElementById('env-wiz-step-' + (cur - 1)); if (p) { p.classList.remove('active'); p.classList.add('done'); } }
+        if (cur < steps.length) { const s = document.getElementById('env-wiz-step-' + cur); if (s) s.classList.add('active'); cur++; setTimeout(advance, 1000 + Math.random() * 500); }
+        else { const l = document.getElementById('env-wiz-step-' + (steps.length - 1)); if (l) { l.classList.remove('active'); l.classList.add('done'); } const d = document.getElementById('env-wiz-done'); if (d) d.style.display = 'block'; }
+      };
+      setTimeout(advance, 300);
+    };
+    link.addEventListener('click', link._handler);
+  }
+
+  // ── New Flag Wizard (P3) ──
+  _bindNewFlagWizard() {
+    // Added when environment view renders — look for toolbar
+    const toolbar = document.querySelector('.ff-toolbar');
+    if (!toolbar || toolbar.querySelector('.ff-new-flag-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'ff-new-flag-btn';
+    btn.textContent = '+ New Flag';
+    btn.style.cssText = 'font-size:var(--text-xs);font-family:var(--font-body);background:var(--accent);color:#fff;border:none;padding:var(--space-1) var(--space-3);border-radius:var(--radius-sm);cursor:pointer;margin-left:var(--space-2)';
+    btn.addEventListener('click', () => {
+      const el = document.getElementById('env-content');
+      if (!el) return;
+      let form = document.getElementById('ff-new-form');
+      if (form) { form.remove(); return; }
+      form = document.createElement('div');
+      form.id = 'ff-new-form';
+      form.style.cssText = 'padding:var(--space-3);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:var(--space-3)';
+      form.innerHTML = `<div style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--space-2)">Create New Feature Flag</div>
+        <div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-bottom:var(--space-2)">
+          <input placeholder="FLT..." style="font-size:var(--text-sm);font-family:var(--font-mono);padding:var(--space-1) var(--space-2);border:1px solid var(--border-bright);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);width:200px"/>
+          <input placeholder="Description..." style="font-size:var(--text-sm);padding:var(--space-1) var(--space-2);border:1px solid var(--border-bright);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text);flex:1;min-width:200px"/>
+        </div>
+        <div style="display:flex;gap:var(--space-2);align-items:center">
+          <button class="ws-action-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="document.getElementById('ff-new-form')?.remove();document.getElementById('edog-toast')&&(document.getElementById('edog-toast').textContent='Flag created + PR opened (mock)',document.getElementById('edog-toast').classList.add('visible'),setTimeout(()=>document.getElementById('edog-toast').classList.remove('visible'),2000))">Create + Open PR</button>
+          <button class="ws-action-btn" onclick="document.getElementById('ff-new-form')?.remove()">Cancel</button>
+        </div>`;
+      el.prepend(form);
+    });
+    toolbar.appendChild(btn);
+  }
+
+  // ── API Batch Runner (P3) ──
+  _renderBatchRunner() {
+    const sidebar = document.querySelector('.api-sidebar');
+    if (!sidebar || sidebar.querySelector('.api-batch-section')) return;
+    const section = document.createElement('div');
+    section.className = 'api-sidebar-section api-batch-section';
+    section.innerHTML = `<div class="api-sidebar-title">Batch Runner</div>
+      <div class="api-batch-list" id="api-batch-list" style="font-size:var(--text-xs);color:var(--text-dim);margin-bottom:var(--space-2)">
+        <div class="api-batch-item" style="display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) 0"><span class="method-pill get" style="font-size:9px;padding:0 4px">GET</span><span>/v1/workspaces</span></div>
+        <div class="api-batch-item" style="display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) 0"><span class="method-pill post" style="font-size:9px;padding:0 4px">POST</span><span>/runDAG/abc123</span></div>
+        <div class="api-batch-item" style="display:flex;align-items:center;gap:var(--space-1);padding:var(--space-1) 0"><span class="method-pill get" style="font-size:9px;padding:0 4px">GET</span><span>/getDAGExecStatus/abc123</span></div>
+      </div>
+      <button id="api-batch-run" style="font-size:var(--text-xs);font-family:var(--font-body);background:var(--accent);color:#fff;border:none;padding:var(--space-1) var(--space-3);border-radius:var(--radius-sm);cursor:pointer;width:100%">Run All (3 requests)</button>
+      <div id="api-batch-status" style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--space-1)"></div>`;
+    sidebar.appendChild(section);
+
+    document.getElementById('api-batch-run')?.addEventListener('click', () => {
+      const items = section.querySelectorAll('.api-batch-item');
+      const status = document.getElementById('api-batch-status');
+      let i = 0;
+      const run = () => {
+        if (i < items.length) {
+          items[i].style.color = 'var(--accent)';
+          if (status) status.textContent = 'Running ' + (i + 1) + '/' + items.length + '...';
+          setTimeout(() => {
+            items[i].style.color = 'var(--status-succeeded)';
+            i++;
+            run();
+          }, 600 + Math.random() * 400);
+        } else {
+          if (status) status.textContent = '\u2713 All 3 requests completed';
+          status.style.color = 'var(--status-succeeded)';
+        }
+      };
+      run();
+    });
+  }
+
+  // ── Quick Environment Clone (P3) ──
+  _bindCloneEnv() {
+    // Add a "Clone" button in content actions if lakehouse is shown
+    const actions = document.querySelector('.ws-content-actions');
+    if (!actions || actions.querySelector('.ws-clone-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'ws-action-btn ws-clone-btn';
+    btn.textContent = 'Clone Environment';
+    btn.addEventListener('click', () => {
+      const content = document.getElementById('ws-content-body');
+      if (!content) return;
+      const steps = ['Create Workspace', 'Assign Capacity', 'Create Lakehouse', 'Copy MLV Definitions'];
+      content.innerHTML = `<div class="ws-content-name">Cloning Environment</div>
+        <div style="margin-top:var(--space-4)">${steps.map((s, i) => `<div class="deploy-step${i === 0 ? ' active' : ''}" id="clone-step-${i}"><span class="deploy-step-num">${i + 1}</span><span class="deploy-step-label">${s}</span></div>`).join('')}</div>
+        <div id="clone-done" style="display:none;margin-top:var(--space-4)"><div style="font-size:var(--text-lg);font-weight:600;color:var(--status-succeeded)">\u2713 Cloned successfully</div></div>`;
+      let cur = 0;
+      const advance = () => {
+        if (cur > 0) { const p = document.getElementById('clone-step-' + (cur - 1)); if (p) { p.classList.remove('active'); p.classList.add('done'); } }
+        if (cur < steps.length) { const s = document.getElementById('clone-step-' + cur); if (s) s.classList.add('active'); cur++; setTimeout(advance, 1200); }
+        else { const l = document.getElementById('clone-step-' + (steps.length - 1)); if (l) { l.classList.remove('active'); l.classList.add('done'); } const d = document.getElementById('clone-done'); if (d) d.style.display = 'block'; }
+      };
+      setTimeout(advance, 300);
+    });
+    actions.appendChild(btn);
   }
 
   // ── Helpers ──
