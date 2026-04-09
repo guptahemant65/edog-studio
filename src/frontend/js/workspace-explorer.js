@@ -34,6 +34,7 @@ class WorkspaceExplorer {
     this._loadFavorites();
     this._renderFavorites();
     this._bindRefresh();
+    this._bindTreeHeaderAdd();
     this._bindGlobalKeys();
     await this.loadWorkspaces();
   }
@@ -56,7 +57,7 @@ class WorkspaceExplorer {
   _toast(msg, type = 'info') {
     if (!this._toastEl) return;
     this._toastEl.textContent = msg;
-    this._toastEl.classList.remove('visible', 'error', 'success');
+    this._toastEl.classList.remove('visible', 'error', 'success', 'has-actions');
     if (type === 'error') this._toastEl.classList.add('error');
     else if (type === 'success') this._toastEl.classList.add('success');
     // Force reflow so transition plays even if already visible
@@ -66,6 +67,57 @@ class WorkspaceExplorer {
     this._toastTimer = setTimeout(() => {
       this._toastEl.classList.remove('visible');
     }, 2500);
+  }
+
+  /**
+   * Show a toast with Confirm / Cancel buttons. Returns a Promise<boolean>.
+   * Auto-cancels after timeoutMs (default 5000).
+   */
+  _toastConfirm(msg, timeoutMs = 5000) {
+    return new Promise((resolve) => {
+      if (!this._toastEl) { resolve(false); return; }
+      clearTimeout(this._toastTimer);
+      this._toastEl.classList.remove('visible', 'error', 'success', 'has-actions');
+
+      this._toastEl.innerHTML = '';
+      const msgSpan = document.createElement('span');
+      msgSpan.className = 'edog-toast-msg';
+      msgSpan.textContent = msg;
+      this._toastEl.appendChild(msgSpan);
+
+      const actions = document.createElement('span');
+      actions.className = 'edog-toast-actions';
+
+      const confirmBtn = document.createElement('button');
+      confirmBtn.className = 'edog-toast-btn confirm';
+      confirmBtn.textContent = 'Confirm';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'edog-toast-btn';
+      cancelBtn.textContent = 'Cancel';
+
+      actions.appendChild(confirmBtn);
+      actions.appendChild(cancelBtn);
+      this._toastEl.appendChild(actions);
+
+      this._toastEl.classList.add('has-actions');
+      void this._toastEl.offsetWidth;
+      this._toastEl.classList.add('visible');
+
+      let settled = false;
+      const dismiss = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(this._toastTimer);
+        this._toastEl.classList.remove('visible');
+        resolve(result);
+      };
+
+      confirmBtn.addEventListener('click', () => dismiss(true));
+      cancelBtn.addEventListener('click', () => dismiss(false));
+
+      this._toastTimer = setTimeout(() => dismiss(false), timeoutMs);
+    });
   }
 
   // ────────────────────────────────────────────
@@ -119,6 +171,8 @@ class WorkspaceExplorer {
       items.push({ sep: true });
       items.push({ label: 'Save as Favorite', action: () => this._ctxSaveFavorite() });
     } else if (nodeData.isWorkspace) {
+      items.push({ label: 'Create Lakehouse', action: () => this._ctxCreateLakehouse() });
+      items.push({ sep: true });
       items.push({ label: 'Rename', action: () => this._ctxRename() });
       items.push({ label: 'Delete', cls: 'danger', action: () => this._ctxDelete() });
       items.push({ sep: true });
@@ -126,6 +180,9 @@ class WorkspaceExplorer {
       items.push({ label: 'Copy ID', action: () => this._ctxCopyId() });
       items.push({ label: 'Copy Name', action: () => this._ctxCopyName() });
     } else {
+      items.push({ label: 'Rename', action: () => this._ctxRename() });
+      items.push({ label: 'Delete', cls: 'danger', action: () => this._ctxDelete() });
+      items.push({ sep: true });
       items.push({ label: 'Open in Fabric', action: () => this._ctxOpenInFabric() });
       items.push({ label: 'Copy ID', action: () => this._ctxCopyId() });
       items.push({ label: 'Copy Name', action: () => this._ctxCopyName() });
@@ -178,39 +235,98 @@ class WorkspaceExplorer {
     if (!t) return;
 
     const oldName = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
-    const newName = prompt(`Rename "${oldName}" to:`, oldName);
-    if (!newName || newName === oldName) return;
 
-    try {
-      if (t.isWorkspace) {
-        await this._api.renameWorkspace(t.workspace.id, newName);
-        t.workspace.displayName = newName;
-        this._toast(`Renamed workspace to "${newName}"`, 'success');
-      } else {
-        const isLH = this._isLakehouse(t.item);
-        if (isLH) {
-          await this._api.renameLakehouse(t.workspace.id, t.item.id, newName);
-        } else {
-          // Non-lakehouse items — Fabric API doesn't expose rename for all types.
-          // Attempt workspace-item rename via same lakehouse endpoint pattern;
-          // if not available the API will throw and we show the error.
-          await this._api.renameLakehouse(t.workspace.id, t.item.id, newName);
-        }
-        t.item.displayName = newName;
-        this._toast(`Renamed to "${newName}"`, 'success');
-      }
-      this._renderTree();
-      // Re-select if the renamed item was selected
-      if (this._selectedItem && this._selectedItem.id === (t.item?.id || t.workspace?.id)) {
-        if (t.isWorkspace) {
-          this._selectWorkspace(t.workspace);
-        } else {
-          this._selectItem(t.item, t.workspace);
-        }
-      }
-    } catch (err) {
-      this._toast(`Rename failed: ${err.message}`, 'error');
+    // Find the tree row for this item and start inline editing
+    const treeRow = this._findTreeRow(t);
+    if (!treeRow) {
+      this._toast('Could not locate tree node', 'error');
+      return;
     }
+
+    treeRow.classList.add('editing');
+    const input = document.createElement('input');
+    input.className = 'ws-inline-rename';
+    input.type = 'text';
+    input.value = oldName;
+    treeRow.appendChild(input);
+    input.focus();
+    input.select();
+
+    const commit = async () => {
+      const newName = input.value.trim();
+      cleanup();
+      if (!newName || newName === oldName) return;
+
+      try {
+        if (t.isWorkspace) {
+          await this._api.renameWorkspace(t.workspace.id, newName);
+          t.workspace.displayName = newName;
+          this._toast(`Renamed workspace to "${newName}"`, 'success');
+        } else {
+          const isLH = this._isLakehouse(t.item);
+          if (isLH) {
+            await this._api.renameLakehouse(t.workspace.id, t.item.id, newName);
+          } else {
+            await this._api.renameItem(t.workspace.id, t.item.id, newName);
+          }
+          t.item.displayName = newName;
+          this._toast(`Renamed to "${newName}"`, 'success');
+        }
+        this._renderTree();
+        if (this._selectedItem && this._selectedItem.id === (t.item?.id || t.workspace?.id)) {
+          if (t.isWorkspace) {
+            this._selectWorkspace(t.workspace);
+          } else {
+            this._selectItem(t.item, t.workspace);
+          }
+        }
+      } catch (err) {
+        this._toast(`Rename failed: ${err.message}`, 'error');
+        this._renderTree();
+      }
+    };
+
+    const cleanup = () => {
+      treeRow.classList.remove('editing');
+      if (input.parentNode) input.remove();
+      input.removeEventListener('keydown', onKey);
+      input.removeEventListener('blur', onBlur);
+    };
+
+    let committed = false;
+    const onKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        committed = true;
+        commit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        committed = true;
+        cleanup();
+      }
+    };
+    const onBlur = () => {
+      if (!committed) commit();
+    };
+
+    input.addEventListener('keydown', onKey);
+    input.addEventListener('blur', onBlur);
+  }
+
+  /**
+   * Locate the tree row DOM element for a given context-menu target.
+   * @param {object} t - Context target { workspace, item, isWorkspace }
+   * @returns {HTMLElement|null}
+   */
+  _findTreeRow(t) {
+    if (!this._treeEl) return null;
+    const name = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
+    const nodes = this._treeEl.querySelectorAll('.ws-tree-item');
+    for (const node of nodes) {
+      const nameEl = node.querySelector('.ws-tree-name');
+      if (nameEl && nameEl.textContent === name) return node;
+    }
+    return null;
   }
 
   async _ctxDelete() {
@@ -219,7 +335,7 @@ class WorkspaceExplorer {
 
     const name = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
     const kind = t.isWorkspace ? 'workspace' : (this._isLakehouse(t.item) ? 'lakehouse' : 'item');
-    const ok = confirm(`Delete ${kind} "${name}"?\n\nThis action cannot be undone.`);
+    const ok = await this._toastConfirm(`Delete ${kind} "${name}"?`);
     if (!ok) return;
 
     try {
@@ -233,7 +349,7 @@ class WorkspaceExplorer {
         if (this._isLakehouse(t.item)) {
           await this._api.deleteLakehouse(t.workspace.id, t.item.id);
         } else {
-          await this._api.deleteLakehouse(t.workspace.id, t.item.id);
+          await this._api.deleteItem(t.workspace.id, t.item.id);
         }
         const children = this._children[t.workspace.id];
         if (children) {
@@ -307,6 +423,195 @@ class WorkspaceExplorer {
   _bindRefresh() {
     const btn = document.querySelector('.ws-tree-refresh');
     if (btn) btn.addEventListener('click', () => this.loadWorkspaces());
+  }
+
+  /** Bind the "+" button in the tree header to create a new workspace. */
+  _bindTreeHeaderAdd() {
+    const header = document.querySelector('.ws-tree-header');
+    if (!header) return;
+    // Only add once
+    if (header.querySelector('.ws-tree-add')) return;
+    const addBtn = document.createElement('button');
+    addBtn.className = 'ws-tree-add';
+    addBtn.textContent = '+';
+    addBtn.title = 'Create workspace';
+    addBtn.setAttribute('aria-label', 'Create workspace');
+    addBtn.addEventListener('click', () => this._showCreateWorkspaceInput());
+    header.appendChild(addBtn);
+  }
+
+  /** Show inline input at top of tree for creating a new workspace. */
+  _showCreateWorkspaceInput() {
+    if (!this._treeEl) return;
+    // Avoid duplicates
+    if (this._treeEl.querySelector('.ws-create-row')) return;
+
+    const row = document.createElement('div');
+    row.className = 'ws-create-row';
+    row.style.paddingLeft = '12px';
+
+    const input = document.createElement('input');
+    input.className = 'ws-create-input';
+    input.type = 'text';
+    input.placeholder = 'New workspace name';
+    input.setAttribute('aria-label', 'New workspace name');
+    row.appendChild(input);
+
+    this._treeEl.insertBefore(row, this._treeEl.firstChild);
+    input.focus();
+
+    let committed = false;
+    const commit = async () => {
+      const name = input.value.trim();
+      cleanup();
+      if (!name) return;
+      try {
+        const result = await this._api.createWorkspace(name);
+        this._toast(`Created workspace "${name}"`, 'success');
+        await this.loadWorkspaces();
+        // Expand the new workspace
+        if (result && result.id) {
+          this._expanded.add(result.id);
+          this._renderTree();
+        }
+      } catch (err) {
+        this._toast(`Create failed: ${err.message}`, 'error');
+      }
+    };
+
+    const cleanup = () => {
+      if (row.parentNode) row.remove();
+      input.removeEventListener('keydown', onKey);
+      input.removeEventListener('blur', onBlur);
+    };
+
+    const onKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        committed = true;
+        commit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        committed = true;
+        cleanup();
+      }
+    };
+    const onBlur = () => {
+      if (!committed) {
+        committed = true;
+        commit();
+      }
+    };
+
+    input.addEventListener('keydown', onKey);
+    input.addEventListener('blur', onBlur);
+  }
+
+  /** Context menu action: create lakehouse inside selected workspace. */
+  async _ctxCreateLakehouse() {
+    const t = this._ctxTarget;
+    if (!t || !t.isWorkspace) return;
+
+    // Expand workspace so children are visible
+    if (!this._expanded.has(t.workspace.id)) {
+      await this._toggleWorkspace(t.workspace);
+    }
+
+    if (!this._treeEl) return;
+    // Find insertion point: after workspace's last child in tree
+    const allRows = Array.from(this._treeEl.querySelectorAll('.ws-tree-item'));
+    let insertAfter = null;
+    let foundWs = false;
+    for (const row of allRows) {
+      const nameEl = row.querySelector('.ws-tree-name');
+      if (nameEl && nameEl.textContent === t.workspace.displayName && !foundWs) {
+        foundWs = true;
+        insertAfter = row;
+        continue;
+      }
+      // Subsequent child rows (depth 1) belong to this workspace
+      if (foundWs) {
+        const pl = parseInt(row.style.paddingLeft, 10) || 0;
+        if (pl > 12) {
+          insertAfter = row;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Avoid duplicates
+    if (this._treeEl.querySelector('.ws-create-row')) return;
+
+    const row = document.createElement('div');
+    row.className = 'ws-create-row';
+    row.style.paddingLeft = '28px';
+
+    const dot = document.createElement('span');
+    dot.className = 'ws-tree-dot lakehouse';
+    row.appendChild(dot);
+
+    const input = document.createElement('input');
+    input.className = 'ws-create-input';
+    input.type = 'text';
+    input.placeholder = 'New lakehouse name';
+    input.setAttribute('aria-label', 'New lakehouse name');
+    row.appendChild(input);
+
+    if (insertAfter && insertAfter.nextSibling) {
+      this._treeEl.insertBefore(row, insertAfter.nextSibling);
+    } else {
+      this._treeEl.appendChild(row);
+    }
+    input.focus();
+
+    let committed = false;
+    const commit = async () => {
+      const name = input.value.trim();
+      cleanup();
+      if (!name) return;
+      try {
+        await this._api.createLakehouse(t.workspace.id, name);
+        this._toast(`Created lakehouse "${name}"`, 'success');
+        // Refresh children
+        delete this._children[t.workspace.id];
+        this._expanded.add(t.workspace.id);
+        await this._toggleWorkspace(t.workspace);
+        // toggleWorkspace collapsed it since it was expanded — expand again
+        if (!this._expanded.has(t.workspace.id)) {
+          await this._toggleWorkspace(t.workspace);
+        }
+      } catch (err) {
+        this._toast(`Create failed: ${err.message}`, 'error');
+      }
+    };
+
+    const cleanup = () => {
+      if (row.parentNode) row.remove();
+      input.removeEventListener('keydown', onKey);
+      input.removeEventListener('blur', onBlur);
+    };
+
+    const onKey = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        committed = true;
+        commit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        committed = true;
+        cleanup();
+      }
+    };
+    const onBlur = () => {
+      if (!committed) {
+        committed = true;
+        commit();
+      }
+    };
+
+    input.addEventListener('keydown', onKey);
+    input.addEventListener('blur', onBlur);
   }
 
   _bindGlobalKeys() {

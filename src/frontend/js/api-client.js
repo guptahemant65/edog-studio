@@ -133,6 +133,42 @@ class FabricApiClient {
     return this._fabricDelete(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}`);
   }
 
+  /**
+   * Rename a generic workspace item (Notebook, Pipeline, etc.).
+   * @param {string} workspaceId - Parent workspace GUID.
+   * @param {string} itemId - Item GUID.
+   * @param {string} newName - New display name.
+   */
+  async renameItem(workspaceId, itemId, newName) {
+    return this._fabricPatch(`/workspaces/${workspaceId}/items/${itemId}`, { displayName: newName });
+  }
+
+  /**
+   * Delete a generic workspace item (Notebook, Pipeline, etc.).
+   * @param {string} workspaceId - Parent workspace GUID.
+   * @param {string} itemId - Item GUID.
+   */
+  async deleteItem(workspaceId, itemId) {
+    return this._fabricDelete(`/workspaces/${workspaceId}/items/${itemId}`);
+  }
+
+  /**
+   * Create a new workspace.
+   * @param {string} name - Display name for the new workspace.
+   */
+  async createWorkspace(name) {
+    return this._fabricPost('/workspaces', { displayName: name });
+  }
+
+  /**
+   * Create a new lakehouse inside a workspace.
+   * @param {string} workspaceId - Parent workspace GUID.
+   * @param {string} name - Display name for the new lakehouse.
+   */
+  async createLakehouse(workspaceId, name) {
+    return this._fabricPost(`/workspaces/${workspaceId}/lakehouses`, { displayName: name });
+  }
+
   // --- FLT Service APIs (MWC token, connected mode) ---
 
   async getLatestDag() {

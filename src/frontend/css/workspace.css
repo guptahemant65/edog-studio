@@ -504,3 +504,99 @@
 .edog-toast.success {
   border-color: var(--status-succeeded);
 }
+
+/* Toast with action buttons (confirmation dialogs) */
+.edog-toast.has-actions {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.edog-toast-msg {
+  flex: 1;
+}
+.edog-toast-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.edog-toast-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: 1px solid var(--border-bright);
+  background: var(--surface-2);
+  color: var(--text);
+  transition: all var(--transition-fast);
+}
+.edog-toast-btn:hover {
+  background: var(--surface-3);
+}
+.edog-toast-btn.confirm {
+  background: var(--level-error);
+  border-color: var(--level-error);
+  color: var(--text-on-accent);
+}
+.edog-toast-btn.confirm:hover {
+  opacity: 0.88;
+}
+
+/* Inline rename input in tree */
+.ws-tree-item.editing .ws-tree-name {
+  display: none;
+}
+.ws-inline-rename {
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: inherit;
+  padding: var(--space-1) var(--space-1);
+  outline: none;
+  width: 160px;
+  height: 22px;
+  box-sizing: border-box;
+}
+
+/* Create-new inline input in tree */
+.ws-create-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-3);
+}
+.ws-create-input {
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-1);
+  outline: none;
+  flex: 1;
+  height: 22px;
+  box-sizing: border-box;
+}
+
+/* Add button in tree header */
+.ws-tree-add {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  line-height: 1;
+}
+.ws-tree-add:hover {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
