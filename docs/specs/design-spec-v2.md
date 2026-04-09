@@ -745,6 +745,11 @@ View the MLV SQL definitions that make up each DAG node, right in the UI.
 42. DAG Node Status Glyphs — SVG glyph system: spinning ring (executing), checkmark (success), X (failed), pause (locked), clock (scheduled). OKLCH colors. Micro-animations: success pulse, failure shake.
 43. Feature Flag Ring Visualization — 28 flags as concentric rings (onebox innermost → prod outermost). Filled ring = enabled. Single glance shows rollout state of everything. Color intensity maps to confidence.
 44. Capacity Health Thermometer — persistent 24px topbar widget. Cool blue (healthy) → warm amber (stressed) → hot red (throttling). Hover for utilization sparkline. Click to expand full capacity dashboard.
+45. Keyboard-First Interaction Design — full keyboard map for every feature. Every action reachable without mouse. Tab order for every panel. Shortcut cheatsheet overlay (Ctrl+/). Context-aware shortcuts per view. Must match VS Code muscle memory.
+46. Startup Config Validator — before anything renders: check edog-config.json (exists? valid? required fields?), bearer token (cached? expired?), FLT repo path (valid? patched?). Fail fast with actionable messages + fix buttons. Never show cryptic errors 30 seconds in.
+47. Multi-Monitor & Resizable Panels — usable at 1200px minimum (not just 1440px). All panel widths resizable via drag + persist across sessions. Pop-out panels to separate windows (DAG graph on monitor 2). Responsive layout with sensible breakpoints.
+48. Universal Data Export — right-click any table → export CSV. Any JSON response → copy formatted. DAG metrics → Excel-friendly. Log entries → filtered JSON. "Can you send me the DAG output?" = one click. Copy-as-cURL for any API call.
+49. System Files Explorer — runtime view of all FLT internal file operations on OneLake. Browse DagExecutionMetrics (dag.json, node metrics, index files), lock files with age, dagsettings.json, MLV execution definitions, sys_* metrics tables. Audited with timestamps: when created, what was written, by whom. Served via C# interceptor → WebSocket (same pattern as log capture). Connected mode only.
 
 ---
 
