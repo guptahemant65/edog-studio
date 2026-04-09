@@ -46,14 +46,12 @@ except ImportError:
 
 try:
     from pywinauto import Desktop
-    from pywinauto.findwindows import ElementNotFoundError
     PYWINAUTO_AVAILABLE = True
 except ImportError:
     print("Installing pywinauto...")
     import subprocess
     subprocess.run([sys.executable, "-m", "pip", "install", "pywinauto"], check=True)
     from pywinauto import Desktop
-    from pywinauto.findwindows import ElementNotFoundError
     PYWINAUTO_AVAILABLE = True
 
 # ============================================================================
@@ -554,61 +552,67 @@ PATTERNS = {
 # ============================================================================
 
 
-def handle_certificate_dialog(username):
-    """Background thread to handle the Windows certificate selection dialog."""
-    print("   🔍 Watching for certificate dialog...")
-    
-    # Derive cert subject from username
+def handle_certificate_dialog(username, timeout_secs=15):
+    """Background thread to auto-select cert in Windows Security dialog.
+
+    Watches for the certificate selection dialog and automatically clicks
+    the matching certificate based on the username-derived CN. Runs in a
+    tight loop with 0.3s polling for fast response.
+
+    Args:
+        username: The CBA username (e.g., Admin1CBA@FabricFMLV08PPE.ccsctp.net).
+        timeout_secs: Max seconds to watch for the dialog.
+
+    Returns:
+        True if the cert was selected and OK was clicked, False otherwise.
+    """
     cert_subject = username.replace("@", ".") if username else ""
-    
-    for attempt in range(30):  # Try for 30 seconds
-        time.sleep(1)
+    dialog_titles = ["Windows Security", "Select a certificate",
+                     "Choose a digital certificate"]
+
+    polls = int(timeout_secs / 0.3)
+    for _ in range(polls):
+        time.sleep(0.3)
         try:
             desktop = Desktop(backend="uia")
             dialog = None
-            for title in ["Windows Security", "Select a certificate", "Choose a digital certificate"]:
+            for title in dialog_titles:
                 try:
                     dialog = desktop.window(title_re=f".*{title}.*", visible_only=True)
                     if dialog.exists():
                         break
-                except:
+                    dialog = None
+                except Exception:
                     continue
-            
+
             if not dialog or not dialog.exists():
                 continue
-                
-            print(f"   ✅ Found certificate dialog!")
-            
+
+            # Select matching cert from list
             try:
                 list_ctrl = dialog.child_window(control_type="List")
                 if list_ctrl.exists():
-                    items = list_ctrl.children()
-                    for item in items:
+                    for item in list_ctrl.children():
                         item_text = item.window_text()
-                        # Match cert based on configured username
                         if cert_subject and cert_subject.lower() in item_text.lower():
-                            print(f"   ✅ Selecting certificate: {item_text[:50]}...")
                             item.click_input()
-                            time.sleep(0.5)
+                            time.sleep(0.3)
                             break
-            except Exception as e:
-                print(f"   ⚠️ Could not find cert in list: {e}")
-            
+            except Exception:
+                pass
+
+            # Click OK
             try:
                 ok_btn = dialog.child_window(title="OK", control_type="Button")
                 if ok_btn.exists():
-                    print("   ✅ Clicking OK...")
                     ok_btn.click_input()
                     return True
-            except Exception as e:
-                print(f"   ⚠️ Could not click OK: {e}")
-                
-        except ElementNotFoundError:
-            continue
+            except Exception:
+                pass
+
         except Exception:
             continue
-    
-    print("   ⏳ Certificate dialog not found (may have been handled already)")
+
     return False
 
 
@@ -1947,19 +1951,50 @@ def fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id):
 
 
 async def get_bearer_token(username):
-    """Launch Edge, capture Bearer token."""
-    
+    """Acquire a bearer token via Playwright with optimized cert handling.
+
+    Strategy:
+        1. Check disk cache first (sub-millisecond, no browser).
+        2. Launch Edge with ``--auto-select-certificate-for-urls`` to skip the
+           cert dialog when possible.
+        3. Spawn a parallel ``pywinauto`` thread to auto-dismiss the cert dialog
+           if the Chrome flag doesn't suppress it.
+        4. Capture the first ``Authorization: Bearer ey*`` header from any
+           network request after login.
+        5. Close browser immediately after capture.
+
+    Args:
+        username: CBA username, e.g. ``Admin1CBA@FabricFMLV08PPE.ccsctp.net``.
+
+    Returns:
+        Bearer token string, or None on failure.
+    """
     if not username:
-        print("❌ Username is required")
+        print("  Username is required")
         return None
-    
-    print("🚀 Starting browser...")
+
+    # --- 1. Try cache first ---
+    cached_token, cached_expiry = load_cached_bearer_token()
+    if cached_token:
+        remaining = (cached_expiry - datetime.now()).total_seconds() / 60
+        print(f"  Using cached bearer token (expires in {remaining:.0f} min)")
+        return cached_token
+
+    # --- 2. Browser auth ---
     bearer_token = None
-    
-    # Extract cert subject from username (e.g., Admin1CBA@domain.net -> Admin1CBA.domain.net)
     cert_subject = username.replace("@", ".")
     cert_policy = f'{{"pattern":"*","filter":{{"SUBJECT":{{"CN":"{cert_subject}"}}}}}}'
-    
+
+    # Start pywinauto cert handler in parallel BEFORE launching browser
+    cert_thread = None
+    if PYWINAUTO_AVAILABLE:
+        cert_thread = threading.Thread(
+            target=handle_certificate_dialog,
+            args=(username, 20),
+            daemon=True,
+        )
+        cert_thread.start()
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             channel="msedge",
@@ -1967,59 +2002,77 @@ async def get_bearer_token(username):
             args=[
                 f'--auto-select-certificate-for-urls={cert_policy}',
                 '--ignore-certificate-errors',
+                '--no-first-run',
+                '--no-default-browser-check',
+                '--disable-extensions',
+                '--window-size=800,600',
+                '--window-position=9999,9999',  # Off-screen
             ]
         )
-        
-        context = await browser.new_context()
+
+        context = await browser.new_context(
+            viewport={"width": 800, "height": 600},
+        )
         page = await context.new_page()
-        
+
         async def handle_request(request):
             nonlocal bearer_token
             auth = request.headers.get("authorization", "")
             if auth.startswith("Bearer ey") and not bearer_token:
                 bearer_token = auth.replace("Bearer ", "")
-                print(f"✅ Captured Bearer token (length: {len(bearer_token)})")
-        
+
         page.on("request", handle_request)
-        
-        print(f"📡 Navigating to {POWER_BI_URL}")
+
         try:
-            await page.goto(POWER_BI_URL, wait_until="domcontentloaded", timeout=60000)
-        except Exception as e:
-            print(f"⚠️  Navigation: {type(e).__name__}")
-        
-        print("🔐 Checking for login prompts...")
-        
-        try:
-            email_input = await page.wait_for_selector('input[type="email"], input[name="loginfmt"]', timeout=5000)
-            if email_input:
-                print(f"   Entering username: {username}")
-                await email_input.fill(username)
-                await page.keyboard.press("Enter")
-                await asyncio.sleep(3)
-        except:
-            print("   Already logged in or no username prompt")
-        
-        print("   ⚠️  If certificate dialog appears, please select it manually")
-        await asyncio.sleep(5)
-        
-        try:
-            yes_button = await page.wait_for_selector('#idSIButton9, input[value="Yes"]', timeout=5000)
-            if yes_button:
-                print("   Clicking 'Yes' on stay signed in...")
-                await yes_button.click()
-                await asyncio.sleep(2)
-        except:
-            pass
-        
-        print("⏳ Waiting for Bearer token...")
-        for _ in range(20):
+            await page.goto(POWER_BI_URL, wait_until="domcontentloaded", timeout=30000)
+        except Exception:
+            pass  # Timeout OK — token might already be captured from redirects
+
+        if not bearer_token:
+            # Fill login form if present
+            try:
+                email_input = await page.wait_for_selector(
+                    'input[type="email"], input[name="loginfmt"]', timeout=3000
+                )
+                if email_input:
+                    await email_input.fill(username)
+                    await page.keyboard.press("Enter")
+            except Exception:
+                pass  # Already logged in or no prompt
+
+            # Wait for cert dialog to be handled (pywinauto thread)
+            await asyncio.sleep(3)
+
+            # Handle "Stay signed in?" prompt
+            try:
+                yes_btn = await page.wait_for_selector(
+                    '#idSIButton9, input[value="Yes"]', timeout=3000
+                )
+                if yes_btn:
+                    await yes_btn.click()
+            except Exception:
+                pass
+
+        # Wait for token capture (tight loop, max 15 seconds)
+        for _ in range(30):
             if bearer_token:
                 break
-            await asyncio.sleep(1)
-        
+            await asyncio.sleep(0.5)
+
         await browser.close()
-        
+
+    if bearer_token:
+        print(f"  Bearer token acquired ({len(bearer_token)} chars)")
+        # Cache immediately
+        try:
+            payload = bearer_token.split(".")[1]
+            payload += "=" * (4 - len(payload) % 4)
+            claims = json.loads(base64.b64decode(payload).decode("utf-8", errors="replace"))
+            expiry_ts = float(claims.get("exp", time.time() + 3600))
+        except (ValueError, KeyError, IndexError, json.JSONDecodeError):
+            expiry_ts = time.time() + 3600
+        cache_bearer_token(bearer_token, expiry_ts)
+
     return bearer_token
 
 
@@ -2342,36 +2395,34 @@ def check_status(repo_root):
 
 
 def fetch_token_with_retry(username, workspace_id, artifact_id, capacity_id, max_retries=MAX_BROWSER_RETRIES):
-    """Fetch MWC token with retry logic."""
+    """Fetch MWC token, using cached bearer when available.
+
+    Flow:
+        1. Check bearer cache — if valid, skip browser entirely.
+        2. Otherwise launch optimized Playwright auth (auto-cert, auto-close).
+        3. Use bearer to fetch MWC token from redirect host.
+        4. Retry up to ``max_retries`` times on failure.
+    """
     for attempt in range(max_retries):
         if attempt > 0:
-            print(f"\n🔄 Retry {attempt + 1}/{max_retries}...")
-        
+            print(f"\n  Retry {attempt + 1}/{max_retries}...")
+
         bearer_token = asyncio.run(get_bearer_token(username))
         if not bearer_token:
-            print("❌ Failed to capture Bearer token")
+            print("  Failed to capture Bearer token")
             continue
 
-        # Cache bearer token for Phase 1 Fabric API calls (Workspace Explorer)
-        bearer_expiry = time.time() + 3600  # default 1hr
-        try:
-            payload = bearer_token.split(".")[1]
-            payload += "=" * (4 - len(payload) % 4)
-            claims = json.loads(base64.b64decode(payload).decode("utf-8", errors="replace"))
-            if "exp" in claims:
-                bearer_expiry = float(claims["exp"])
-        except (ValueError, KeyError, IndexError, json.JSONDecodeError):
-            pass  # Use default 1hr if JWT parsing fails
-        cache_bearer_token(bearer_token, bearer_expiry)
-
-        print("\n📡 Fetching MWC token...")
+        print("  Fetching MWC token...")
         mwc_token = fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id)
-        
+
         if mwc_token:
             return mwc_token
-        
-        print("❌ Failed to fetch MWC token")
-    
+
+        # MWC fetch failed — bearer might be stale, clear cache and retry
+        print("  MWC token fetch failed, clearing bearer cache...")
+        cache_path = get_bearer_cache_path()
+        cache_path.unlink(missing_ok=True)
+
     return None
 
 
