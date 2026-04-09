@@ -552,67 +552,118 @@ PATTERNS = {
 # ============================================================================
 
 
-def handle_certificate_dialog(username, timeout_secs=15):
+def handle_certificate_dialog(username, timeout_secs=30):
     """Background thread to auto-select cert in Windows Security dialog.
 
-    Watches for the certificate selection dialog and automatically clicks
-    the matching certificate based on the username-derived CN. Runs in a
-    tight loop with 0.3s polling for fast response.
+    The cert dialog is a system ``#32770`` dialog spawned by the browser
+    process. It may not appear as a top-level window with a recognizable
+    title, so we search by class name and content.
 
     Args:
-        username: The CBA username (e.g., Admin1CBA@FabricFMLV08PPE.ccsctp.net).
+        username: CBA username (e.g., Admin1CBA@FabricFMLV08PPE.ccsctp.net).
         timeout_secs: Max seconds to watch for the dialog.
 
     Returns:
-        True if the cert was selected and OK was clicked, False otherwise.
+        True if the cert was selected and OK clicked, False otherwise.
     """
     cert_subject = username.replace("@", ".") if username else ""
-    dialog_titles = ["Windows Security", "Select a certificate",
-                     "Choose a digital certificate"]
+    title_keywords = ["security", "certificate", "cert", "select a certificate",
+                      "choose a digital certificate", "client authentication"]
 
-    polls = int(timeout_secs / 0.3)
-    for _ in range(polls):
-        time.sleep(0.3)
+    polls = int(timeout_secs / 0.5)
+    for i in range(polls):
+        time.sleep(0.5)
         try:
-            desktop = Desktop(backend="uia")
-            dialog = None
-            for title in dialog_titles:
+            # Try both backends — the dialog might only be visible to one
+            for backend in ("uia", "win32"):
                 try:
-                    dialog = desktop.window(title_re=f".*{title}.*", visible_only=True)
-                    if dialog.exists():
-                        break
-                    dialog = None
+                    desktop = Desktop(backend=backend)
+                    for w in desktop.windows():
+                        try:
+                            title = w.window_text().lower()
+                            cls = ""
+                            if backend == "win32":
+                                cls = w.class_name()
+                            else:
+                                cls = getattr(w.element_info, "class_name", "")
+                        except Exception:
+                            continue
+
+                        # Match by title keywords or by #32770 dialog class with relevant content
+                        is_match = any(k in title for k in title_keywords)
+                        if not is_match and cls == "#32770":
+                            # Standard Windows dialog — check children for cert-related text
+                            try:
+                                all_text = w.window_text() + " "
+                                for child in w.children():
+                                    all_text += child.window_text() + " "
+                                all_text = all_text.lower()
+                                is_match = any(k in all_text for k in title_keywords)
+                            except Exception:
+                                pass
+
+                        if not is_match:
+                            continue
+
+                        print(f"  [cert-handler] Found dialog: '{w.window_text()[:60]}' (class={cls})")
+
+                        # Try to select the matching cert
+                        try:
+                            list_ctrl = w.child_window(control_type="List")
+                            if list_ctrl.exists():
+                                for item in list_ctrl.children():
+                                    item_text = item.window_text()
+                                    if cert_subject and cert_subject.lower() in item_text.lower():
+                                        print(f"  [cert-handler] Selecting: {item_text[:60]}")
+                                        item.click_input()
+                                        time.sleep(0.3)
+                                        break
+                        except Exception:
+                            pass
+
+                        # Also try ListView for win32 backend
+                        if backend == "win32":
+                            try:
+                                import pywinauto.controls.win32_controls as w32
+                                lv = w.child_window(class_name="SysListView32")
+                                if lv.exists():
+                                    for idx in range(lv.item_count()):
+                                        text = lv.get_item(idx).text()
+                                        if cert_subject and cert_subject.lower() in text.lower():
+                                            print(f"  [cert-handler] Selecting (lv): {text[:60]}")
+                                            lv.get_item(idx).click_input()
+                                            time.sleep(0.3)
+                                            break
+                            except Exception:
+                                pass
+
+                        # Click OK
+                        try:
+                            ok_btn = w.child_window(title="OK", control_type="Button")
+                            if ok_btn.exists():
+                                print("  [cert-handler] Clicking OK")
+                                ok_btn.click_input()
+                                return True
+                        except Exception:
+                            pass
+
+                        # Also try by class for win32
+                        try:
+                            ok_btn = w.child_window(title="OK", class_name="Button")
+                            if ok_btn.exists():
+                                print("  [cert-handler] Clicking OK (win32)")
+                                ok_btn.click_input()
+                                return True
+                        except Exception:
+                            pass
+
                 except Exception:
                     continue
-
-            if not dialog or not dialog.exists():
-                continue
-
-            # Select matching cert from list
-            try:
-                list_ctrl = dialog.child_window(control_type="List")
-                if list_ctrl.exists():
-                    for item in list_ctrl.children():
-                        item_text = item.window_text()
-                        if cert_subject and cert_subject.lower() in item_text.lower():
-                            item.click_input()
-                            time.sleep(0.3)
-                            break
-            except Exception:
-                pass
-
-            # Click OK
-            try:
-                ok_btn = dialog.child_window(title="OK", control_type="Button")
-                if ok_btn.exists():
-                    ok_btn.click_input()
-                    return True
-            except Exception:
-                pass
 
         except Exception:
             continue
 
+    print("  [cert-handler] No cert dialog found after timeout")
     return False
 
 
@@ -1985,15 +2036,8 @@ async def get_bearer_token(username):
     cert_subject = username.replace("@", ".")
     cert_policy = f'{{"pattern":"*","filter":{{"SUBJECT":{{"CN":"{cert_subject}"}}}}}}'
 
-    # Start pywinauto cert handler in parallel BEFORE launching browser
-    cert_thread = None
-    if PYWINAUTO_AVAILABLE:
-        cert_thread = threading.Thread(
-            target=handle_certificate_dialog,
-            args=(username, 20),
-            daemon=True,
-        )
-        cert_thread.start()
+    print("  Launching browser for certificate auth...")
+    print("  (Select your certificate if prompted, then wait)")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -2005,8 +2049,6 @@ async def get_bearer_token(username):
                 '--no-first-run',
                 '--no-default-browser-check',
                 '--disable-extensions',
-                '--window-size=800,600',
-                '--window-position=9999,9999',  # Off-screen
             ]
         )
 
@@ -2023,38 +2065,42 @@ async def get_bearer_token(username):
 
         page.on("request", handle_request)
 
+        print("  Navigating to Power BI (select cert if dialog appears)...")
         try:
-            await page.goto(POWER_BI_URL, wait_until="domcontentloaded", timeout=30000)
+            await page.goto(POWER_BI_URL, wait_until="domcontentloaded", timeout=60000)
         except Exception:
             pass  # Timeout OK — token might already be captured from redirects
 
-        if not bearer_token:
+        if bearer_token:
+            print("  Token captured during navigation")
+        else:
             # Fill login form if present
             try:
                 email_input = await page.wait_for_selector(
-                    'input[type="email"], input[name="loginfmt"]', timeout=3000
+                    'input[type="email"], input[name="loginfmt"]', timeout=8000
                 )
                 if email_input:
                     await email_input.fill(username)
                     await page.keyboard.press("Enter")
+                    print("  Entered username, waiting for cert + auth...")
             except Exception:
-                pass  # Already logged in or no prompt
+                pass
 
-            # Wait for cert dialog to be handled (pywinauto thread)
-            await asyncio.sleep(3)
+            # Wait for cert selection + auth redirect (user clicks cert here)
+            await asyncio.sleep(10)
 
             # Handle "Stay signed in?" prompt
             try:
                 yes_btn = await page.wait_for_selector(
-                    '#idSIButton9, input[value="Yes"]', timeout=3000
+                    '#idSIButton9, input[value="Yes"]', timeout=5000
                 )
                 if yes_btn:
                     await yes_btn.click()
             except Exception:
                 pass
 
-        # Wait for token capture (tight loop, max 15 seconds)
-        for _ in range(30):
+        # Wait for token capture (max 30 seconds)
+        for i in range(60):
             if bearer_token:
                 break
             await asyncio.sleep(0.5)
