@@ -1,0 +1,37 @@
+[
+  {
+    "label": "GET /metadata/artifacts/definitions (need query params?)",
+    "ok": true,
+    "response": "[{\"artifactTypeId\":7373,\"artifactType\":\"AnomalyDetector\",\"category\":\"Unknown\",\"workload\":\"AD\",\"permissions\":{\"artifactPermissions\":[],\"RoleDefinitions\":[{\"RoleName\":\"AdminInsightsUser\",\"Permissions\":5,\"ArtifactPermissions\":0},{\"RoleName\":\"Administrator\",\"Permissions\":71,\"ArtifactPermissions\":0},{\"RoleName\":\"Contributor\",\"Permissions\":67,\"ArtifactPermissions\":0},{\"RoleName\":\"Member\",\"Permissions\":71,\"ArtifactPermissions\":0},{\"RoleName\":\"Viewer\",\"Permissions\":1,\"ArtifactPermissions\":0}]},\"supporte"
+  },
+  {
+    "label": "GET /metadata/artifacts/{nbId}",
+    "ok": true,
+    "response": "{\"objectId\":\"e1952851-641f-4dc6-8fae-3ac5a67aa3e4\",\"artifactType\":\"SynapseNotebook\",\"displayName\":\"Notebook 1\",\"description\":\"New notebook\",\"folderObjectId\":\"1b20c810-b067-4b98-b418-935456c1256f\",\"provisionState\":\"Active\",\"lastUpdatedDate\":\"2026-04-09T06:59:07.9310482\",\"capacityObjectId\":\"19524206-8f8a-4e75-a89c-3df0de08cc7f\",\"workloadPayload\":\"{\\\"content\\\":\\\"{\\\\u0022nbformat\\\\u0022:4,\\\\u0022nbformat_minor\\\\u0022:5,\\\\u0022metadata\\\\u0022:{\\\\u0022language_info\\\\u0022:{\\\\u0022name\\\\u0022:\\\\u0022py"
+  },
+  {
+    "label": "POST /v1/.../items/{nbId}/getDefinition?format=ipynb",
+    "ok": true,
+    "response": "null"
+  },
+  {
+    "label": "POST .../sessions (create Spark session)",
+    "ok": false,
+    "error": "{\"code\":\"WorkloadEndpointNotFound\",\"subCode\":0,\"message\":\"Internal error WorkloadEndpointNotFoundException.Workload Notebook endpoint NotebookService.Https not found\",\"timeStamp\":\"2026-04-09T12:06:08."
+  },
+  {
+    "label": "GET onelake v1.0/workspaces/{id}/artifacts",
+    "ok": false,
+    "error": "{\"FailureResponseCode\":\"BadRequest\",\"FailureResponseMessage\":\"Required item type extension is missing in the item name. Expected format {itemname}.{itemtype} e.g. mylakehouse.lakehouse\",\"FailureSource"
+  },
+  {
+    "label": "GET /v1/.../items/{nbId}/shortcuts",
+    "ok": false,
+    "error": "<urlopen error [Errno 11001] getaddrinfo failed>"
+  },
+  {
+    "label": "POST /v1/.../items/{nbId}/jobs/instances (RunNotebook)",
+    "ok": true,
+    "response": ""
+  }
+]
