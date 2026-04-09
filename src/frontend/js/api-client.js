@@ -92,6 +92,48 @@ class FabricApiClient {
     return this._fabricGet(`/workspaces/${workspaceId}/lakehouses/${lakehouseId}/tables`);
   }
 
+  /**
+   * List tables via capacity host (schema-enabled lakehouses).
+   * Proxied through dev-server to avoid CORS and keep MWC tokens server-side.
+   */
+  async listTablesViaCapacity(workspaceId, lakehouseId, capacityId) {
+    const params = `wsId=${workspaceId}&lhId=${lakehouseId}&capId=${capacityId}`;
+    const resp = await fetch(`/api/mwc/tables?${params}`);
+    if (!resp.ok) {
+      const err = new Error(`MWC table listing failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Get detailed metadata for tables (columns, type, location) via batch LRO.
+   * @param {string} workspaceId
+   * @param {string} lakehouseId
+   * @param {string} capacityId
+   * @param {string[]} tableNames - Array of table names to get details for.
+   * @returns {Promise<object>} Result with per-table schema, type, location.
+   */
+  async getTableDetails(workspaceId, lakehouseId, capacityId, tableNames) {
+    const resp = await fetch('/api/mwc/table-details', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wsId: workspaceId,
+        lhId: lakehouseId,
+        capId: capacityId,
+        tables: tableNames,
+      }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Table details failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
   // --- Fabric CRUD APIs ---
 
   /**
@@ -266,7 +308,7 @@ class FabricApiClient {
       const url = this._fabricBaseUrl + path;
       const headers = {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this._mwcToken}`,
+        'Authorization': `MwcToken ${this._mwcToken}`,
       };
       const resp = await fetch(url, { ...options, headers });
       if (!resp.ok) {

@@ -11,8 +11,10 @@ import re
 import ssl
 import subprocess
 import time
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
@@ -22,6 +24,9 @@ BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
+
+# In-memory MWC token cache — keyed by "ws:lh:cap" composite
+_mwc_cache: dict = {}  # value: {"token": str, "host": str, "expiry": float}
 
 
 def _write_cache(path: Path, token: str, expiry: float):
@@ -88,6 +93,66 @@ def _normalize_workspaces(resp_body: bytes) -> bytes:
     return json.dumps({"value": normalized}).encode()
 
 
+def _get_mwc_token(bearer: str, ws_id: str, lh_id: str, cap_id: str) -> tuple:
+    """Generate or retrieve cached MWC token for a workspace/lakehouse/capacity tuple.
+
+    Args:
+        bearer: Bearer token for authentication.
+        ws_id: Workspace object ID.
+        lh_id: Lakehouse object ID.
+        cap_id: Capacity object ID.
+
+    Returns:
+        Tuple of (mwc_token, host_url).
+
+    Raises:
+        urllib.error.HTTPError: If the token endpoint returns an error.
+    """
+    cache_key = f"{ws_id}:{lh_id}:{cap_id}"
+    cached = _mwc_cache.get(cache_key)
+    if cached and time.time() < cached["expiry"] - 300:
+        print(f"  [MWC] Cache hit for {cache_key[:20]}...")
+        return cached["token"], cached["host"]
+
+    print(f"  [MWC] Generating token for ws={ws_id[:8]}... lh={lh_id[:8]}...")
+    body = json.dumps({
+        "type": "[Start] GetMWCToken",
+        "workloadType": "Lakehouse",
+        "workspaceObjectId": ws_id,
+        "artifactObjectIds": [lh_id],
+        "capacityObjectId": cap_id,
+    }).encode()
+
+    url = f"{REDIRECT_HOST}/metadata/v201606/generatemwctoken"
+    req = urllib.request.Request(url, data=body, headers={
+        "Authorization": f"Bearer {bearer}",
+        "Content-Type": "application/json",
+    }, method="POST")
+
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+        resp_data = json.loads(resp.read())
+
+    token = resp_data["Token"]
+    host = f"https://{resp_data['TargetUriHost']}"
+    # Handle 'Z' suffix for Python 3.8-3.10 compat with fromisoformat
+    expiry_str = resp_data["Expiration"].replace("Z", "+00:00")
+    expiry = datetime.fromisoformat(expiry_str).timestamp()
+
+    _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry}
+    remaining = int((expiry - time.time()) / 60)
+    print(f"  [MWC] Token cached, expires in {remaining} min")
+    return token, host
+
+
+def _capacity_base_path(cap_id: str, ws_id: str) -> str:
+    """Build the MWC API base path for a capacity/workspace pair."""
+    return (
+        f"/webapi/capacities/{cap_id}/workloads/Lakehouse"
+        f"/LakehouseService/automatic/v1/workspaces/{ws_id}"
+    )
+
+
 class EdogDevHandler(SimpleHTTPRequestHandler):
     """HTTP handler for EDOG development server."""
 
@@ -100,6 +165,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_certs()
         elif self.path == "/api/edog/health":
             self._serve_health()
+        elif self.path.startswith("/api/mwc/tables"):
+            self._serve_mwc_tables()
         elif self.path.startswith("/edog-logs.html") or self.path == "/":
             self._serve_html()
         else:
@@ -122,6 +189,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._proxy_fabric("POST")
         elif self.path == "/api/edog/auth":
             self._serve_auth()
+        elif self.path == "/api/edog/mwc-token":
+            self._serve_mwc_token()
+        elif self.path == "/api/mwc/table-details":
+            self._serve_mwc_table_details()
         else:
             self.send_error(404)
 
@@ -326,6 +397,193 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "tokenHelperBuilt": helper.exists(),
             "hasBearerToken": bearer is not None,
             "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,
+        })
+
+    def _serve_mwc_tables(self):
+        """GET /api/mwc/tables — list lakehouse tables via MWC token."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        lh_id = params.get("lhId", [None])[0]
+        cap_id = params.get("capId", [None])[0]
+
+        if not all([ws_id, lh_id, cap_id]):
+            self._json_response(400, {"error": "missing_params", "message": "wsId, lhId, and capId are required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        try:
+            token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "mwc_token_error", "message": body})
+            return
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
+            return
+
+        base = _capacity_base_path(cap_id, ws_id)
+        url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/dbo/tables"
+        print(f"  [MWC] GET tables → {url[:80]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"MwcToken {token}",
+                "x-ms-workload-resource-moniker": lh_id,
+                "Content-Type": "application/json",
+            }, method="GET")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp_body = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            resp_body = e.read()
+            self.send_response(e.code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_request_error", "message": str(e)})
+
+    def _serve_mwc_table_details(self):
+        """POST /api/mwc/table-details — batch get table details with polling."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("wsId")
+        lh_id = body.get("lhId")
+        cap_id = body.get("capId")
+        tables = body.get("tables", [])
+
+        if not all([ws_id, lh_id, cap_id, tables]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "wsId, lhId, capId, and tables are required",
+            })
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        try:
+            token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "mwc_token_error", "message": err_body})
+            return
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
+            return
+
+        base = _capacity_base_path(cap_id, ws_id)
+        url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/dbo/batchGetTableDetails"
+        mwc_headers = {
+            "Authorization": f"MwcToken {token}",
+            "x-ms-workload-resource-moniker": lh_id,
+            "Content-Type": "application/json",
+        }
+        print(f"  [MWC] POST batchGetTableDetails ({len(tables)} tables)")
+
+        try:
+            ctx = ssl.create_default_context()
+            req_body = json.dumps({"tables": tables}).encode()
+            req = urllib.request.Request(url, data=req_body, headers=mwc_headers, method="POST")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp_data = json.loads(resp.read())
+
+            operation_id = resp_data.get("operationId")
+            if not operation_id:
+                self._json_response(200, resp_data)
+                return
+
+            # Poll for async operation completion
+            poll_url = f"{url}/operationResults/{operation_id}"
+            print(f"  [MWC] Polling operation {operation_id[:8]}...")
+            for attempt in range(20):
+                time.sleep(1)
+                poll_req = urllib.request.Request(poll_url, headers=mwc_headers, method="GET")
+                with urllib.request.urlopen(poll_req, timeout=30, context=ctx) as poll_resp:
+                    poll_data = json.loads(poll_resp.read())
+
+                status = poll_data.get("status", "").lower()
+                if status in ("succeeded", "completed"):
+                    print(f"  [MWC] Operation completed after {attempt + 1}s")
+                    self._json_response(200, poll_data)
+                    return
+                if status in ("failed", "cancelled"):
+                    print(f"  [MWC] Operation {status} after {attempt + 1}s")
+                    self._json_response(500, {"error": "operation_failed", "detail": poll_data})
+                    return
+
+            self._json_response(504, {
+                "error": "poll_timeout",
+                "message": f"Operation {operation_id} did not complete in 20s",
+            })
+        except urllib.error.HTTPError as e:
+            resp_body = e.read()
+            self.send_response(e.code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_request_error", "message": str(e)})
+
+    def _serve_mwc_token(self):
+        """POST /api/edog/mwc-token — explicitly generate and return an MWC token."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("workspaceId")
+        lh_id = body.get("lakehouseId")
+        cap_id = body.get("capacityId")
+
+        if not all([ws_id, lh_id, cap_id]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "workspaceId, lakehouseId, and capacityId are required",
+            })
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        try:
+            token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "mwc_token_error", "message": err_body})
+            return
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
+            return
+
+        cache_key = f"{ws_id}:{lh_id}:{cap_id}"
+        cached = _mwc_cache.get(cache_key, {})
+        self._json_response(200, {
+            "token": token,
+            "host": host,
+            "expiry": cached.get("expiry", 0),
         })
 
     def _send_json(self, status, obj):

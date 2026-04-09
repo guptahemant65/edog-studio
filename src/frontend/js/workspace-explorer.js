@@ -651,12 +651,22 @@ class WorkspaceExplorer {
     return (data && data.value) || [];
   }
 
-  async _loadTables(wsId, lhId) {
+  async _loadTables(wsId, lhId, capId) {
     if (this._isMock && typeof MockData !== 'undefined') {
       return MockData.tablesForLakehouse || [];
     }
-    const data = await this._api.listTables(wsId, lhId);
-    return (data && (data.value || data.data)) || [];
+    // Try public API first (works for non-schema lakehouses)
+    try {
+      const data = await this._api.listTables(wsId, lhId);
+      return (data && (data.value || data.data)) || [];
+    } catch (e) {
+      // 400 = schema-enabled lakehouse → fall back to capacity host
+      if (e.status === 400 && capId) {
+        const data = await this._api.listTablesViaCapacity(wsId, lhId, capId);
+        return (data && (data.value || data.data)) || [];
+      }
+      throw e;
+    }
   }
 
   // ────────────────────────────────────────────
@@ -963,9 +973,18 @@ class WorkspaceExplorer {
     }
     this._bindContentActions(ws);
 
-    // Load tables
+    // Load tables — show shimmer while fetching
     try {
-      const tables = await this._loadTables(ws.id, lh.id);
+      const tablesEl = document.getElementById('ws-tables-list');
+      if (tablesEl) {
+        tablesEl.innerHTML =
+          '<div class="skel-wrap">' +
+          '<div class="skel-row"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line skel-line--md"></div><div class="skel-line skel-line--sm"></div></div></div>' +
+          '<div class="skel-row"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line skel-line--md"></div><div class="skel-line skel-line--sm"></div></div></div>' +
+          '<div class="skel-row"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line skel-line--lg"></div><div class="skel-line skel-line--sm"></div></div></div>' +
+          '</div>';
+      }
+      const tables = await this._loadTables(ws.id, lh.id, ws.capacityId);
       const tablesEl = document.getElementById('ws-tables-list');
       if (!tablesEl) return;
       if (tables.length === 0) {
@@ -998,7 +1017,7 @@ class WorkspaceExplorer {
     } catch (err) {
       const tablesEl = document.getElementById('ws-tables-list');
       if (tablesEl) tablesEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load tables</div>';
-      this._toast(`Failed to load tables: ${err.message}`, 'error');
+      this._toast(`Tables: ${err.message}`, 'error');
     }
   }
 
@@ -1050,13 +1069,64 @@ class WorkspaceExplorer {
       ['Name', table.name],
       ['Type', table.type || 'Table'],
       ['Format', table.format || 'Delta'],
-      ['Location', table.location || 'N/A'],
     ];
+    if (table.location) {
+      fields.push(['Location', table.location]);
+    }
+    if (table.schemaName) {
+      fields.push(['Schema', table.schemaName]);
+    }
     for (const [label, val] of fields) {
       html += `<dt>${this._esc(label)}</dt><dd>${this._esc(val || '')}</dd>`;
     }
     html += '</dl></div>';
+
+    // Show columns if available from batchGetTableDetails
+    if (table.schema && table.schema.length > 0) {
+      html += '<div class="ws-insp-section">';
+      html += `<div class="ws-insp-title">Columns <span class="ws-insp-count">${table.schema.length}</span></div>`;
+      html += '<table class="ws-insp-cols"><thead><tr><th>Name</th><th>Type</th><th>Null</th></tr></thead><tbody>';
+      for (const col of table.schema) {
+        html += '<tr>';
+        html += `<td class="ws-col-name">${this._esc(col.name)}</td>`;
+        html += `<td class="ws-col-type">${this._esc(col.type)}</td>`;
+        html += `<td>${col.nullable ? '\u2713' : ''}</td>`;
+        html += '</tr>';
+      }
+      html += '</tbody></table></div>';
+    } else if (this._selectedWorkspace && this._selectedWorkspace.capacityId) {
+      // Offer to fetch details
+      html += '<div class="ws-insp-section">';
+      html += '<button class="ws-action-btn ws-fetch-details-btn">Load column details</button>';
+      html += '</div>';
+    }
+
     this._inspectorEl.innerHTML = html;
+
+    // Bind "Load column details" button
+    const detailBtn = this._inspectorEl.querySelector('.ws-fetch-details-btn');
+    if (detailBtn) {
+      detailBtn.addEventListener('click', async () => {
+        detailBtn.textContent = 'Loading...';
+        detailBtn.disabled = true;
+        try {
+          const ws = this._selectedWorkspace;
+          const lh = this._selectedItem;
+          const result = await this._api.getTableDetails(ws.id, lh.id, ws.capacityId, [table.name]);
+          const details = result && result.value ? result.value.find(v => v.tableName === table.name) : null;
+          if (details && details.result) {
+            const enriched = { ...table, ...details.result, schemaName: details.schemaName };
+            this._showTableInspector(enriched);
+          } else {
+            this._toast('No details returned', 'error');
+          }
+        } catch (err) {
+          this._toast(`Details failed: ${err.message}`, 'error');
+          detailBtn.textContent = 'Retry';
+          detailBtn.disabled = false;
+        }
+      });
+    }
   }
 
   _showWorkspaceInspector(ws) {
