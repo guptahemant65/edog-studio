@@ -23,9 +23,33 @@ class Program
 
     static async Task Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "--list-certs")
+        {
+            using var store = new X509Store(StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadOnly);
+            var certs = new System.Collections.Generic.List<object>();
+            foreach (var c in store.Certificates)
+            {
+                if (c.Subject.Contains("CBA"))
+                {
+                    certs.Add(new
+                    {
+                        thumbprint = c.Thumbprint,
+                        subject = c.Subject,
+                        cn = c.GetNameInfo(X509NameType.SimpleName, false),
+                        notAfter = c.NotAfter.ToString("o"),
+                        notBefore = c.NotBefore.ToString("o"),
+                    });
+                }
+            }
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(certs));
+            return;
+        }
+
         if (args.Length < 2)
         {
             Console.Error.WriteLine("Usage: token-helper <thumbprint> <username> [clientId] [authority] [resource]");
+            Console.Error.WriteLine("       token-helper --list-certs");
             Console.Error.WriteLine("Example: token-helper 6921EC59... Admin1CBA@FabricFMLV08PPE.ccsctp.net");
             Environment.Exit(1);
         }

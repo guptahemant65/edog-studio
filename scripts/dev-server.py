@@ -9,6 +9,7 @@ import base64
 import json
 import re
 import ssl
+import subprocess
 import time
 import urllib.request
 import urllib.error
@@ -21,6 +22,12 @@ BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
+
+
+def _write_cache(path: Path, token: str, expiry: float):
+    """Write base64-encoded timestamp|token cache file."""
+    data = f"{expiry}|{token}"
+    path.write_text(base64.b64encode(data.encode()).decode(), encoding="utf-8")
 
 
 def _read_cache(path: Path) -> tuple:
@@ -89,6 +96,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_config()
         elif self.path.startswith("/api/fabric/"):
             self._proxy_fabric("GET")
+        elif self.path == "/api/edog/certs":
+            self._serve_certs()
+        elif self.path == "/api/edog/health":
+            self._serve_health()
         elif self.path.startswith("/edog-logs.html") or self.path == "/":
             self._serve_html()
         else:
@@ -109,6 +120,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path.startswith("/api/fabric/"):
             self._proxy_fabric("POST")
+        elif self.path == "/api/edog/auth":
+            self._serve_auth()
         else:
             self.send_error(404)
 
@@ -194,6 +207,126 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self.wfile.write(resp_body)
         except Exception as e:
             self._send_json(502, {"error": "proxy_error", "message": str(e)})
+
+    def _json_response(self, code, data):
+        body = json.dumps(data).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_certs(self):
+        """List CBA certs from Windows cert store."""
+        helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
+        if not helper.exists():
+            # Try net472 fallback
+            helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
+        if not helper.exists():
+            self._json_response(500, {"error": "token-helper not built"})
+            return
+        try:
+            result = subprocess.run(
+                [str(helper), "--list-certs"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0:
+                certs = json.loads(result.stdout)
+                self._json_response(200, certs)
+            else:
+                self._json_response(500, {"error": result.stderr.strip()[:200]})
+        except subprocess.TimeoutExpired:
+            self._json_response(500, {"error": "cert scan timed out"})
+        except Exception as e:
+            self._json_response(500, {"error": str(e)[:200]})
+
+    def _serve_auth(self):
+        """Authenticate via Silent CBA."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len)) if content_len else {}
+        username = body.get("username", "")
+        if not username:
+            self._json_response(400, {"error": "username required"})
+            return
+
+        # Find cert thumbprint from the certs list
+        cert_cn = username.replace("@", ".")
+        helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
+        if not helper.exists():
+            helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
+        if not helper.exists():
+            self._json_response(500, {"error": "token-helper not built"})
+            return
+
+        # Find thumbprint
+        try:
+            list_result = subprocess.run(
+                [str(helper), "--list-certs"],
+                capture_output=True, text=True, timeout=10,
+            )
+            thumbprint = None
+            if list_result.returncode == 0:
+                for c in json.loads(list_result.stdout):
+                    if cert_cn.lower() in c.get("cn", "").lower() or cert_cn.lower() in c.get("subject", "").lower():
+                        thumbprint = c["thumbprint"]
+                        break
+        except Exception:
+            thumbprint = None
+
+        if not thumbprint:
+            self._json_response(404, {
+                "error": f"No certificate found for {cert_cn}",
+                "help": "https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)"
+            })
+            return
+
+        # Run Silent CBA
+        try:
+            result = subprocess.run(
+                [str(helper), thumbprint, username],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                token = result.stdout.strip()
+                # Parse JWT expiry
+                try:
+                    payload_b64 = token.split(".")[1]
+                    payload_b64 += "=" * (4 - len(payload_b64) % 4)
+                    claims = json.loads(base64.b64decode(payload_b64).decode("utf-8", "replace"))
+                    expiry = float(claims.get("exp", time.time() + 3600))
+                    upn = claims.get("upn", username)
+                except Exception:
+                    expiry = time.time() + 3600
+                    upn = username
+
+                # Cache bearer
+                _write_cache(BEARER_CACHE, token, expiry)
+
+                self._json_response(200, {
+                    "token": token,
+                    "username": upn,
+                    "expiresIn": int(expiry - time.time()),
+                })
+            else:
+                self._json_response(401, {
+                    "error": "Authentication failed",
+                    "detail": result.stderr.strip()[:300]
+                })
+        except subprocess.TimeoutExpired:
+            self._json_response(504, {"error": "Authentication timed out (30s)"})
+
+    def _serve_health(self):
+        """Pre-flight health check."""
+        bearer, bearer_exp = _read_cache(BEARER_CACHE)
+        helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
+        if not helper.exists():
+            helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
+        self._json_response(200, {
+            "tokenHelperBuilt": helper.exists(),
+            "hasBearerToken": bearer is not None,
+            "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,
+        })
 
     def _send_json(self, status, obj):
         body = json.dumps(obj).encode()
