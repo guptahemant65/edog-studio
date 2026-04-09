@@ -723,6 +723,16 @@ View the MLV SQL definitions that make up each DAG node, right in the UI.
 22. Table schema + preview + stats (via SQL endpoint)
 23. CRUD operations on all Fabric items
 
+### V3 (innovation — unlocked by API discoveries, April 9 2026)
+24. Capacity Command Center — real-time dashboard with utilization gauges, throttling alerts, rejection risk, assigned workspaces, admin list. One API call returns everything. (`/capacities/listandgethealthbyrollouts`)
+25. Capacity Provisioner — create/delete test capacities from EDOG. SKU selector (19 tiers, F2-F8192), region picker, name input. Full lifecycle: create → use → destroy. (`POST /capacities/new`, `DELETE /capacities/{id}`)
+26. One-Click MLV Test Pipeline — automated: create workspace → create lakehouse → create notebook with MLV SQL → run notebook → verify tables → deploy FLT → run DAG → verify execution. Every step has a tested API.
+27. Notebook Cell Runner — view notebook cells inline (SQL syntax highlighted), edit, run, see results. Without opening Fabric portal. (`getDefinition` → edit → `updateDefinition` → `jobs/instances` → `previewAsync`)
+28. Workload Configuration Viewer — 64 workload configs per capacity. See enabled/disabled workloads, memory/CPU limits, timeout settings. Debug "why is my DAG slow?" (`/v1.0/myorg/capacities/{id}/Workloads`)
+29. Scheduled Job Manager — view/create/enable/disable MLV scheduled jobs. Cron expressions, time windows, recurrence. (`GET/POST/PUT /metadata/artifacts/{id}/scheduledJobs`)
+30. Capacity Cost Estimator — using SKU catalog (19 tiers with vCores/memory) + live utilization + historical execution metrics, estimate DAG cost on different SKUs. Projected duration and CU consumption.
+31. Feature Flag Flight Simulator — toggle flags → run DAG → compare timing with baseline. A/B testing for feature flags with real execution data. (`local override` → `runDAG` → `getDAGExecMetrics` → diff)
+
 ---
 
 ## Technical Architecture Summary

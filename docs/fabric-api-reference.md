@@ -788,3 +788,172 @@ Body: { "maxRows": 5 }
 | DELETE | `/v1/workspaces/{wsId}/lakehouses/{lhId}` | ✅ 200 | Tested via create→delete cycle |
 | DELETE | `/capacities/{capId}` | ✅ 204 | Deleted "aa" test capacity |
 | DELETE | `/v1/workspaces/{wsId}` | ⚠️ Not tested | Destructive — tested rename instead |
+
+---
+
+# NOTEBOOK CONTENT & EXECUTION
+
+> **Tested:** 2026-04-09 | Bearer token on redirect host | **ALL GAPS CLOSED**
+
+## Get Notebook Definition (content extraction)
+
+```
+POST /v1/workspaces/{wsId}/items/{nbId}/getDefinition?format=ipynb
+Authorization: Bearer {pbiToken}
+→ 202 Accepted
+  Location: /v1/operations/{operationId}
+  Retry-After: 20
+  x-ms-operation-id: {operationId}
+```
+
+**Poll status:** `GET /v1/operations/{operationId}` → `{ status: "Succeeded", percentComplete: 100 }`
+
+**Get result:** `GET /v1/operations/{operationId}/result`
+```json
+{
+  "definition": {
+    "parts": [
+      {
+        "path": "notebook-content.ipynb",
+        "payload": "base64-encoded-ipynb-json"
+      },
+      {
+        "path": ".platform",
+        "payload": "base64-encoded-platform-metadata"
+      }
+    ]
+  }
+}
+```
+
+**Decoded notebook:** base64 decode `payload` → JSON with `cells[]`:
+```json
+{
+  "cells": [{
+    "cell_type": "code",
+    "source": ["%%sql\nCREATE table dbo.numTen\nAS SELECT * FROM ...;\nCREATE MATERIALIZED VIEW ..."]
+  }]
+}
+```
+
+**Tested:** ✅ OK — extracted actual `CREATE MATERIALIZED VIEW` SQL from notebook cells.
+
+## Run Notebook
+
+```
+POST /v1/workspaces/{wsId}/items/{nbId}/jobs/instances?jobType=RunNotebook
+Authorization: Bearer {pbiToken}
+→ 202 Accepted (job created)
+```
+
+**Poll job status:** `GET /v1/workspaces/{wsId}/items/{nbId}/jobs/instances`
+```json
+{
+  "value": [
+    { "id": "guid", "jobType": "RunNotebook", "status": "NotStarted", "invokeType": "Manual" },
+    { "id": "guid", "jobType": "RunNotebookInteractive", "status": "Completed" }
+  ]
+}
+```
+
+**Tested:** ✅ OK — job created and visible in jobs list. Status transitions: NotStarted → InProgress → Completed.
+
+## Artifact Definitions (schema reference)
+
+```
+GET /metadata/artifacts/definitions
+→ 75 artifact type definitions (AnomalyDetector, Lakehouse, Notebook, etc.)
+```
+
+Each entry has `artifactTypeId`, `artifactType`, `category`, `workload`, `permissions`, `supportedFeatures`.
+
+---
+
+# ONELAKE DIRECT ACCESS
+
+> **Discovered:** 2026-04-09 from notebook editor network sniffing
+
+| Method | Host | Path | Purpose |
+|--------|------|------|---------|
+| GET | `onelake-int-edog.dfs.pbidedicated.windows-int.net` | `/v1.0/workspaces/{wsId}/artifacts` | List artifacts in OneLake |
+| GET | same | `/{wsId}/{lhId}/Tables/...` | Browse table files |
+| HEAD | same | `/{wsId}/{lhId}/Tables/dbo/{tableName}/_delta_log` | Check Delta table exists |
+
+**Auth:** Bearer token. **Status:** Discovered, needs testing.
+
+---
+
+# SPARK SESSION (from notebook editor)
+
+> **Discovered:** 2026-04-09 from network sniffing
+
+| Method | Path (capacity host) | Purpose |
+|--------|---------------------|---------|
+| POST | `/webapi/.../workloads/Notebook/Data/.../jupyterApi/versions/1/sessions` | Create Spark session |
+| GET | `/webapi/.../workloads/Spark/SparkCore/.../sessions` | List Spark sessions |
+
+**Create session body:**
+```json
+{
+  "kernel": {"id": null, "name": "synapse_pyspark"},
+  "name": "",
+  "path": "notebooks/{nbId}.ipynb",
+  "type": "notebook"
+}
+```
+
+**Auth:** MwcToken (Notebook workload). **Status:** Discovered, endpoint path needs adjustment.
+
+---
+
+# FABRIC COPILOT AI (from notebook editor)
+
+> **Discovered:** 2026-04-09 from network sniffing
+
+| Method | Path (capacity host) | Purpose |
+|--------|---------------------|---------|
+| POST | `/webapi/.../workloads/ML/MLService/.../openai` | AI completion/chat |
+| POST | `/webapi/.../workloads/ML/MLService/.../models` | List available models |
+
+**OpenAI request body:** `{ "artifactObjectId": "nbId", "openAIFeatureName": "NotebookInlineCompletion" }`
+**Models available:** `["gpt-4.1", "gpt-5"]`
+**Auth:** MwcToken V2 (ML workload) via `generatemwctokenv2`
+
+---
+
+# MWC TOKEN V2
+
+```
+POST /metadata/v201606/generatemwctokenv2
+Body: {
+  "type": "[Start] GetMWCTokenV2",
+  "openAIFeatureName": "NotebookInlineCompletion",
+  "workloadType": "ML",
+  "workspaceObjectId": "wsId",
+  ...
+}
+```
+
+Separate from V1 — used for ML/AI workload authentication.
+
+---
+
+# ENDPOINT COUNT SUMMARY (Updated)
+
+| Category | Count | Status |
+|----------|-------|--------|
+| Workspace/Item CRUD | 16 | ✅ All tested |
+| Tables (list + details + preview) | 6 | ✅ All tested |
+| Capacity (list + health + create + delete + workloads) | 15 | ✅ All tested |
+| Notebook (content + run + jobs) | 4 | ✅ All tested |
+| Scheduled Jobs | 2 | ✅ Tested |
+| Portal Metadata (recent, notifications, etc.) | 10 | ✅ Tested |
+| Rename Operations | 4 | ✅ Tested |
+| Token Generation (MWC v1 + v2) | 2 | ✅ Tested |
+| DAG Studio | 10 | ⚠️ Need FLT running |
+| Maintenance | 4 | ⚠️ Need FLT running |
+| OneLake Direct | 3 | 🔍 Discovered |
+| Spark Session | 2 | 🔍 Discovered |
+| Copilot AI | 2 | 🔍 Discovered |
+| Internal (we build) | 6 | 🔧 EdogLogServer |
+| **Total** | **~86** | |
