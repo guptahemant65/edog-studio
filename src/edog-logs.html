@@ -4432,6 +4432,604 @@ mark {
   color: var(--text-dim);
 }
 
+    /* === css/onboarding.css === */
+/* ============================================================================
+   ONBOARDING — Full-screen auth overlay
+   Independent design system (does not inherit from variables.css)
+
+   Cinematic split-panel auth screen: left form panel + right gradient blob.
+   Warm editorial aesthetic — cream backgrounds, near-black text, organic amber
+   gradient. Supports light/dark themes via [data-theme="dark"].
+
+   Mika Tanaka — CSS Systems
+   ============================================================================ */
+
+
+/* ---------------------------------------------------------------------------
+   1. SCOPED VARIABLES (Light)
+   Self-contained token set — no dependency on variables.css.
+   The only conceptual overlap is --font-mono which we redefine locally.
+   --------------------------------------------------------------------------- */
+.onboarding-overlay {
+    --onb-bg: oklch(0.97 0.005 80);            /* warm off-white / cream */
+    --onb-surface: oklch(0.95 0.006 75);
+    --onb-text: oklch(0.15 0.005 260);          /* near-black */
+    --onb-text-dim: oklch(0.47 0.01 260);
+    --onb-text-muted: oklch(0.66 0.01 260);
+    --onb-border: oklch(0.15 0.005 260 / 0.08);
+    --onb-accent-warm: oklch(0.72 0.16 55);     /* warm amber */
+    --onb-accent-warm-dim: oklch(0.72 0.16 55 / 0.08);
+    --onb-success: oklch(0.72 0.19 145);
+    --onb-error: oklch(0.65 0.22 25);
+    --onb-font-body: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --onb-font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+
+    /* 4px spacing grid — local tokens */
+    --onb-space-1: 4px;
+    --onb-space-2: 8px;
+    --onb-space-3: 12px;
+    --onb-space-4: 16px;
+    --onb-space-5: 20px;
+    --onb-space-6: 24px;
+    --onb-space-8: 32px;
+    --onb-space-10: 40px;
+    --onb-space-12: 48px;
+    --onb-space-16: 64px;
+    --onb-space-20: 80px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   2. DARK MODE OVERRIDES
+   Activated via [data-theme="dark"] on <body> or ancestor.
+   --------------------------------------------------------------------------- */
+[data-theme="dark"] .onboarding-overlay {
+    --onb-bg: oklch(0.12 0.01 50);
+    --onb-surface: oklch(0.15 0.01 50);
+    --onb-text: oklch(0.90 0.01 70);
+    --onb-text-dim: oklch(0.62 0.01 60);
+    --onb-text-muted: oklch(0.40 0.01 55);
+    --onb-border: oklch(0.95 0.005 70 / 0.06);
+}
+
+
+/* ---------------------------------------------------------------------------
+   3. OVERLAY BASE
+   Fixed full-screen layer above everything. z-index 9000 keeps it above
+   the dashboard (sidebar, topbar, panels) which live around 100-500.
+   --------------------------------------------------------------------------- */
+.onboarding-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;                              /* above all dashboard chrome */
+    display: grid;
+    grid-template-columns: 1fr 0.45fr;
+    grid-template-rows: auto 1fr;
+    background: var(--onb-bg);
+    font-family: var(--onb-font-body);
+    color: var(--onb-text);
+    transition: opacity 400ms ease-out;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.onboarding-overlay.fade-out {
+    opacity: 0;
+    pointer-events: none;
+}
+
+
+/* ---------------------------------------------------------------------------
+   4. TOP STATUS BAR
+   Spans full width (both panels). Monospaced uppercase system-status strip.
+   --------------------------------------------------------------------------- */
+.onboarding-status-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 36px;
+    padding: 0 var(--onb-space-8);
+    border-bottom: 1px solid var(--onb-border);
+    font-family: var(--onb-font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--onb-text-muted);
+    user-select: none;
+}
+
+
+/* ---------------------------------------------------------------------------
+   5. LEFT PANEL
+   Main content area — auth form, cert selector, progress steps.
+   --------------------------------------------------------------------------- */
+.onboarding-left {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 var(--onb-space-20);
+    max-width: 640px;
+    overflow-y: auto;
+}
+
+
+/* ---------------------------------------------------------------------------
+   6. VERTICAL WATERMARK
+   Rotated monospaced label on the far-left edge. Purely decorative.
+   --------------------------------------------------------------------------- */
+.onboarding-watermark {
+    position: absolute;
+    left: var(--onb-space-4);
+    bottom: 50%;
+    transform: rotate(-90deg);
+    transform-origin: left bottom;
+    font-family: var(--onb-font-mono);
+    font-size: 9px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--onb-text-muted);
+    opacity: 0.3;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+}
+
+
+/* ---------------------------------------------------------------------------
+   7. TYPOGRAPHY
+   Editorial hierarchy — category → title → subtitle.
+   --------------------------------------------------------------------------- */
+.onboarding-category {
+    font-family: var(--onb-font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--onb-text-muted);
+    margin-bottom: var(--onb-space-3);
+}
+
+.onboarding-title {
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.5px;
+    color: var(--onb-text);
+    margin-bottom: var(--onb-space-4);
+}
+
+.onboarding-subtitle {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--onb-text-dim);
+    margin-bottom: var(--onb-space-10);
+    max-width: 420px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   8. CERT SELECTOR
+   Horizontal-rule style list — label left, detail right, full-width underline
+   separators. Matches the reference's form-row layout.
+   --------------------------------------------------------------------------- */
+.cert-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 var(--onb-space-8) 0;
+}
+
+.cert-item {
+    display: grid;
+    grid-template-columns: var(--onb-space-5) 1fr;
+    gap: var(--onb-space-3);
+    align-items: start;
+    padding: var(--onb-space-4) 0;
+    border-bottom: 1px solid var(--onb-border);
+    cursor: pointer;
+    transition: background 120ms ease-out;
+}
+
+.cert-item:hover {
+    background: var(--onb-accent-warm-dim);
+}
+
+/* Radio indicator — CSS-drawn circle */
+.cert-item-radio {
+    width: var(--onb-space-4);
+    height: var(--onb-space-4);
+    border-radius: 50%;
+    border: 2px solid var(--onb-text-muted);
+    margin-top: 2px;
+    transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+    flex-shrink: 0;
+}
+
+.cert-item.selected .cert-item-radio {
+    border-color: var(--onb-text);
+    box-shadow: inset 0 0 0 4px var(--onb-text);
+}
+
+.cert-item-cn {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--onb-text);
+    line-height: 1.4;
+}
+
+.cert-item-expiry {
+    font-size: 12px;
+    color: var(--onb-text-muted);
+    margin-top: 2px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   9. AUTH PROGRESS STEPS
+   Vertical step list with icon states — pending, spinning, done, error.
+   --------------------------------------------------------------------------- */
+.auth-steps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--onb-space-5);
+    margin-bottom: var(--onb-space-8);
+}
+
+.auth-step {
+    display: grid;
+    grid-template-columns: var(--onb-space-6) 1fr;
+    gap: var(--onb-space-3);
+    align-items: start;
+    opacity: 0;
+    transform: translateY(var(--onb-space-2));
+    animation: onb-step-enter 300ms ease-out forwards;
+}
+
+/* Staggered entry — set via inline style: animation-delay: Nms */
+.auth-step:nth-child(1) { animation-delay: 0ms; }
+.auth-step:nth-child(2) { animation-delay: 80ms; }
+.auth-step:nth-child(3) { animation-delay: 160ms; }
+.auth-step:nth-child(4) { animation-delay: 240ms; }
+.auth-step:nth-child(5) { animation-delay: 320ms; }
+
+@keyframes onb-step-enter {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Step icon — shared base */
+.auth-step-icon {
+    width: var(--onb-space-6);
+    height: var(--onb-space-6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* Pending — hollow circle */
+.auth-step-icon.pending::before {
+    content: "\25CB";                           /* ○ */
+    color: var(--onb-text-muted);
+}
+
+/* Spinning — animated ring */
+.auth-step-icon.spinning {
+    border: 2px solid var(--onb-border);
+    border-top-color: var(--onb-text);
+    border-radius: 50%;
+    width: var(--onb-space-5);
+    height: var(--onb-space-5);
+    animation: onb-spin 700ms linear infinite;
+}
+
+.auth-step-icon.spinning::before {
+    content: none;
+}
+
+@keyframes onb-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Done — checkmark, green */
+.auth-step-icon.done::before {
+    content: "\2713";                           /* ✓ */
+    color: var(--onb-success);
+    font-weight: 700;
+}
+
+/* Error — cross, red */
+.auth-step-icon.error::before {
+    content: "\2715";                           /* ✕ */
+    color: var(--onb-error);
+    font-weight: 700;
+}
+
+.auth-step-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--onb-text);
+    line-height: 1.4;
+}
+
+.auth-step-detail {
+    font-size: 12px;
+    color: var(--onb-text-muted);
+    margin-top: 2px;
+    grid-column: 2;
+}
+
+
+/* ---------------------------------------------------------------------------
+   10. CTA BUTTON
+   Solid black (light) / off-white (dark) — inverted text. Almost-square
+   border-radius. Arrow character appended via ::after.
+   --------------------------------------------------------------------------- */
+.onboarding-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--onb-space-2);
+    background: var(--onb-text);
+    color: var(--onb-bg);
+    padding: 14px var(--onb-space-10);
+    border: none;
+    border-radius: var(--onb-space-1);
+    font-family: var(--onb-font-body);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    transition: opacity 120ms ease-out;
+    user-select: none;
+}
+
+.onboarding-cta::after {
+    content: "\2192";                           /* → */
+    font-size: 14px;
+}
+
+.onboarding-cta:hover {
+    opacity: 0.85;
+}
+
+.onboarding-cta:active {
+    opacity: 0.75;
+}
+
+.onboarding-cta:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.onboarding-cta:disabled:hover {
+    opacity: 0.3;
+}
+
+/* Focus ring — accessible keyboard indicator */
+.onboarding-cta:focus-visible {
+    outline: 2px solid var(--onb-accent-warm);
+    outline-offset: 2px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   11. MANUAL TENANT INPUT
+   Minimal input field — transparent bg, bottom-border only.
+   --------------------------------------------------------------------------- */
+.manual-tenant-link {
+    display: inline-block;
+    font-size: 12px;
+    color: var(--onb-text-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+    margin-top: var(--onb-space-4);
+    transition: color 120ms ease-out;
+}
+
+.manual-tenant-link:hover {
+    color: var(--onb-text-dim);
+}
+
+.manual-tenant-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--onb-border);
+    padding: var(--onb-space-3) 0;
+    font-family: var(--onb-font-mono);
+    font-size: 14px;
+    color: var(--onb-text);
+    transition: border-bottom-color 120ms ease-out;
+}
+
+.manual-tenant-input:focus {
+    border-bottom-color: var(--onb-text);
+    outline: none;
+}
+
+.manual-tenant-input::placeholder {
+    color: var(--onb-text-muted);
+}
+
+
+/* ---------------------------------------------------------------------------
+   12. RIGHT PANEL
+   Dark warm canvas with an organic animated gradient blob via ::before.
+   Bottom-anchored descriptive text with low-contrast white.
+   --------------------------------------------------------------------------- */
+.onboarding-right {
+    position: relative;
+    overflow: hidden;
+    background: oklch(0.20 0.02 50);
+    display: flex;
+    align-items: flex-end;
+}
+
+[data-theme="dark"] .onboarding-right {
+    background: oklch(0.10 0.02 50);
+}
+
+/* Gradient blob — warm amber organic light */
+.onboarding-right::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 130%;
+    height: 130%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(
+        ellipse at center,
+        oklch(0.70 0.18 55 / 0.6)  0%,
+        oklch(0.60 0.14 45 / 0.3)  40%,
+        oklch(0.35 0.06 35 / 0.1)  70%,
+        transparent                 100%
+    );
+    filter: blur(40px);
+    animation: onb-blob-drift 8s ease-in-out infinite alternate;
+}
+
+@keyframes onb-blob-drift {
+    0% {
+        transform: translate(-50%, -50%) scale(1) translate(0, 0);
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.06) translate(12px, -8px);
+    }
+}
+
+/* Bottom text area */
+.onboarding-right-footer {
+    position: relative;                         /* above the blob pseudo-element */
+    z-index: 1;
+    padding: var(--onb-space-8);
+}
+
+.onboarding-right-text {
+    font-size: 12px;
+    line-height: 1.6;
+    color: oklch(0.95 0.005 70 / 0.4);
+    max-width: 280px;
+}
+
+.onboarding-right-version {
+    font-family: var(--onb-font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: oklch(0.95 0.005 70 / 0.25);
+    margin-top: var(--onb-space-3);
+}
+
+
+/* ---------------------------------------------------------------------------
+   13. ERROR STATE
+   Left-border accent strip with tinted background.
+   --------------------------------------------------------------------------- */
+.auth-error {
+    padding: var(--onb-space-4);
+    background: oklch(0.65 0.22 25 / 0.06);
+    border-left: 3px solid var(--onb-error);
+    margin-top: var(--onb-space-6);
+    border-radius: 0 var(--onb-space-1) var(--onb-space-1) 0;
+}
+
+.auth-error-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--onb-error);
+    line-height: 1.4;
+}
+
+.auth-error-detail {
+    font-size: 12px;
+    color: var(--onb-text-dim);
+    margin-top: var(--onb-space-1);
+    line-height: 1.5;
+}
+
+.auth-error-help {
+    font-size: 12px;
+    margin-top: var(--onb-space-2);
+    line-height: 1.5;
+}
+
+.auth-error-help a {
+    color: var(--onb-accent-warm);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.auth-error-help a:hover {
+    opacity: 0.8;
+}
+
+
+/* ---------------------------------------------------------------------------
+   14. RESPONSIVE — Single column on narrow viewports
+   Right panel hides; left panel fills.
+   --------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .onboarding-overlay {
+        grid-template-columns: 1fr;
+    }
+
+    .onboarding-right {
+        display: none;
+    }
+
+    .onboarding-left {
+        padding: 0 var(--onb-space-8);
+        max-width: none;
+    }
+
+    .onboarding-watermark {
+        display: none;
+    }
+
+    .onboarding-title {
+        font-size: 28px;
+    }
+}
+
+
+/* ---------------------------------------------------------------------------
+   15. REDUCED MOTION — Disable all animations
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+    .onboarding-overlay,
+    .onboarding-overlay * {
+        animation-duration: 0ms;
+        animation-delay: 0ms;
+        transition-duration: 0ms;
+    }
+
+    .onboarding-right::before {
+        animation: none;
+    }
+
+    .auth-step {
+        opacity: 1;
+        transform: none;
+        animation: none;
+    }
+
+    .auth-step-icon.spinning {
+        animation: none;
+        border-top-color: var(--onb-text-muted);
+    }
+}
+
   </style>
 </head>
 <body>
@@ -5404,6 +6002,24 @@ class FabricApiClient {
   /** @returns {boolean} Whether a bearer token is available for Fabric APIs. */
   hasBearerToken() {
     return !!this._bearerToken;
+  }
+
+  /**
+   * Check auth state via the EDOG health endpoint.
+   * @returns {Promise<{authenticated: boolean, expiresIn: number}>}
+   */
+  async getAuthState() {
+    try {
+      const resp = await fetch('/api/edog/health');
+      if (!resp.ok) return { authenticated: false, expiresIn: 0 };
+      const data = await resp.json();
+      return {
+        authenticated: data.hasBearerToken && data.bearerExpiresIn > 300,
+        expiresIn: data.bearerExpiresIn,
+      };
+    } catch {
+      return { authenticated: false, expiresIn: 0 };
+    }
   }
 
   // --- Fabric Public APIs (bearer token) ---
@@ -11467,6 +12083,607 @@ class MockRenderer {
   }
 }
 
+// === js/onboarding.js ===
+/**
+ * OnboardingScreen — Full-screen auth overlay for first-time and expired-token flows.
+ *
+ * Lifecycle: check health → scan certs → auto-select or show picker →
+ * Silent CBA auth → verify workspace access → dismiss → dashboard.
+ *
+ * Zara Okonkwo — vanilla JS, class-based module.
+ */
+class OnboardingScreen {
+  constructor() {
+    this._overlay = null;
+    this._contentEl = null;
+    this._titleEl = null;
+    this._subtitleEl = null;
+    this._onComplete = null;
+    this._selectedCert = null;
+
+    this._PPE_WIKI_URL =
+      'https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)';
+  }
+
+  // --- Public API ---
+
+  /**
+   * Check whether onboarding is required (no valid bearer or < 5 min left).
+   * @returns {Promise<boolean>}
+   */
+  async isRequired() {
+    try {
+      const resp = await fetch('/api/edog/health');
+      if (!resp.ok) return true;
+      const data = await resp.json();
+      if (!data.hasBearerToken || !data.tokenHelperBuilt) return true;
+      const remainingSec = data.bearerExpiresIn ?? 0;
+      return remainingSec < 300;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Show the onboarding overlay and begin the auth flow.
+   * @param {function} onComplete - Called with {token, username} on success.
+   */
+  async show(onComplete) {
+    this._onComplete = onComplete || null;
+    this._createOverlay();
+    document.body.appendChild(this._overlay);
+
+    let certs = [];
+    try {
+      const resp = await fetch('/api/edog/certs');
+      if (resp.ok) certs = await resp.json();
+    } catch {
+      // Cert scan failed — fall through to no-certs path
+    }
+
+    if (!Array.isArray(certs) || certs.length === 0) {
+      this._renderNoCerts();
+    } else if (certs.length === 1) {
+      const username = this._deriveUsername(certs[0].cn);
+      this._runAuth(username);
+    } else {
+      this._renderCertPicker(certs);
+    }
+  }
+
+  /**
+   * Dismiss the overlay with a fade-out transition, then remove from DOM.
+   */
+  dismiss() {
+    if (!this._overlay) return;
+    this._overlay.classList.add('fade-out');
+    setTimeout(() => {
+      if (this._overlay && this._overlay.parentNode) {
+        this._overlay.parentNode.removeChild(this._overlay);
+      }
+      this._overlay = null;
+    }, 400);
+  }
+
+  // --- Private: DOM Construction ---
+
+  _createOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'onboarding-overlay';
+
+    // Status bar
+    const statusBar = document.createElement('div');
+    statusBar.className = 'onboarding-status-bar';
+    const statusLeft = document.createElement('span');
+    statusLeft.textContent = 'EDOG PLAYGROUND \u2014 v2.0';
+    const statusRight = document.createElement('span');
+    statusRight.textContent = 'SECURE CONNECTION';
+    statusBar.appendChild(statusLeft);
+    statusBar.appendChild(statusRight);
+
+    // Watermark
+    const watermark = document.createElement('div');
+    watermark.className = 'onboarding-watermark';
+    watermark.textContent = 'EDOG_PLAYGROUND_V2';
+
+    // Left panel
+    const left = document.createElement('div');
+    left.className = 'onboarding-left';
+
+    const category = document.createElement('div');
+    category.className = 'onboarding-category';
+    category.textContent = 'Authentication';
+
+    const title = document.createElement('div');
+    title.className = 'onboarding-title';
+    title.textContent = 'SELECT CERTIFICATE.';
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'onboarding-subtitle';
+    subtitle.textContent = 'Choose a certificate to authenticate with the Fabric service.';
+
+    const content = document.createElement('div');
+    content.id = 'onb-content';
+
+    left.appendChild(watermark);
+    left.appendChild(category);
+    left.appendChild(title);
+    left.appendChild(subtitle);
+    left.appendChild(content);
+
+    // Right panel
+    const right = document.createElement('div');
+    right.className = 'onboarding-right';
+
+    const rightFooter = document.createElement('div');
+    rightFooter.className = 'onboarding-right-footer';
+
+    const rightText = document.createElement('div');
+    rightText.className = 'onboarding-right-text';
+    rightText.textContent =
+      'Developer cockpit for FabricLiveTable. ' +
+      'Browse workspaces, manage feature flags, inspect DAGs, and debug live services.';
+
+    const rightVersion = document.createElement('div');
+    rightVersion.className = 'onboarding-right-version';
+    rightVersion.textContent = 'EDOG Studio v2.0';
+
+    rightFooter.appendChild(rightText);
+    rightFooter.appendChild(rightVersion);
+    right.appendChild(rightFooter);
+
+    overlay.appendChild(statusBar);
+    overlay.appendChild(left);
+    overlay.appendChild(right);
+
+    this._overlay = overlay;
+    this._contentEl = content;
+    this._titleEl = title;
+    this._subtitleEl = subtitle;
+  }
+
+  // --- Private: Cert Picker ---
+
+  _renderCertPicker(certs) {
+    // Sort by expiry descending (newest expiry first)
+    const sorted = certs.slice().sort(function (a, b) {
+      return new Date(b.notAfter) - new Date(a.notAfter);
+    });
+
+    this._titleEl.textContent = 'SELECT CERTIFICATE.';
+    this._subtitleEl.textContent =
+      'Multiple certificates were found on this machine. Choose one to authenticate.';
+
+    this._selectedCert = sorted[0];
+    this._contentEl.innerHTML = '';
+
+    const list = document.createElement('div');
+    list.className = 'cert-list';
+
+    const items = [];
+    sorted.forEach(function (cert, idx) {
+      const item = document.createElement('div');
+      item.className = 'cert-item' + (idx === 0 ? ' selected' : '');
+
+      const radio = document.createElement('div');
+      radio.className = 'cert-item-radio';
+
+      const info = document.createElement('div');
+
+      const cn = document.createElement('div');
+      cn.className = 'cert-item-cn';
+      cn.textContent = cert.cn || cert.subject || cert.thumbprint;
+
+      const expiry = document.createElement('div');
+      expiry.className = 'cert-item-expiry';
+      expiry.textContent = 'Expires ' + this._formatDate(cert.notAfter);
+
+      info.appendChild(cn);
+      info.appendChild(expiry);
+      item.appendChild(radio);
+      item.appendChild(info);
+
+      item.addEventListener('click', function () {
+        items.forEach(function (i) { i.classList.remove('selected'); });
+        item.classList.add('selected');
+        this._selectedCert = cert;
+      }.bind(this));
+
+      items.push(item);
+      list.appendChild(item);
+    }.bind(this));
+
+    const cta = document.createElement('button');
+    cta.className = 'onboarding-cta';
+    cta.textContent = 'CONTINUE';
+    cta.addEventListener('click', function () {
+      if (!this._selectedCert) return;
+      const username = this._deriveUsername(this._selectedCert.cn);
+      this._runAuth(username);
+    }.bind(this));
+
+    const manualLink = document.createElement('div');
+    manualLink.className = 'manual-tenant-link';
+    manualLink.textContent = 'Connect to a different tenant';
+    manualLink.addEventListener('click', function () {
+      this._renderManualEntry();
+    }.bind(this));
+
+    this._contentEl.appendChild(list);
+    this._contentEl.appendChild(cta);
+    this._contentEl.appendChild(manualLink);
+  }
+
+  // --- Private: No Certs ---
+
+  _renderNoCerts() {
+    this._titleEl.textContent = 'NO CERTIFICATE FOUND.';
+    this._subtitleEl.textContent =
+      'No client certificates were detected. Enter your CBA username manually to authenticate.';
+    this._contentEl.innerHTML = '';
+
+    const inputWrap = document.createElement('div');
+    inputWrap.style.marginBottom = 'var(--onb-space-6)';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'manual-tenant-input';
+    input.placeholder = 'Admin1CBA@FabricFMLV08PPE.ccsctp.net';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    inputWrap.appendChild(input);
+
+    const cta = document.createElement('button');
+    cta.className = 'onboarding-cta';
+    cta.textContent = 'CONNECT';
+    cta.disabled = true;
+
+    input.addEventListener('input', function () {
+      cta.disabled = !input.value.trim();
+    });
+
+    const submit = function () {
+      const val = input.value.trim();
+      if (!val) return;
+      this._runAuth(val);
+    }.bind(this);
+
+    cta.addEventListener('click', submit);
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submit();
+    });
+
+    const helpLink = document.createElement('a');
+    helpLink.className = 'manual-tenant-link';
+    helpLink.textContent = "Don\u2019t have a certificate?";
+    helpLink.href = this._PPE_WIKI_URL;
+    helpLink.target = '_blank';
+    helpLink.rel = 'noopener noreferrer';
+    helpLink.style.display = 'block';
+
+    this._contentEl.appendChild(inputWrap);
+    this._contentEl.appendChild(cta);
+    this._contentEl.appendChild(helpLink);
+
+    // Focus input after DOM paints
+    requestAnimationFrame(function () { input.focus(); });
+  }
+
+  // --- Private: Manual Entry ---
+
+  _renderManualEntry() {
+    this._titleEl.textContent = 'CONNECT MANUALLY.';
+    this._subtitleEl.textContent =
+      'Enter the full CBA username for the tenant you want to connect to.';
+    this._contentEl.innerHTML = '';
+
+    const inputWrap = document.createElement('div');
+    inputWrap.style.marginBottom = 'var(--onb-space-6)';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'manual-tenant-input';
+    input.placeholder = 'Admin1CBA@FabricFMLV08PPE.ccsctp.net';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    inputWrap.appendChild(input);
+
+    const cta = document.createElement('button');
+    cta.className = 'onboarding-cta';
+    cta.textContent = 'CONNECT';
+    cta.disabled = true;
+
+    input.addEventListener('input', function () {
+      cta.disabled = !input.value.trim();
+    });
+
+    const submit = function () {
+      const val = input.value.trim();
+      if (!val) return;
+      this._runAuth(val);
+    }.bind(this);
+
+    cta.addEventListener('click', submit);
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submit();
+    });
+
+    const helpLink = document.createElement('a');
+    helpLink.className = 'manual-tenant-link';
+    helpLink.textContent = "Don\u2019t have a certificate?";
+    helpLink.href = this._PPE_WIKI_URL;
+    helpLink.target = '_blank';
+    helpLink.rel = 'noopener noreferrer';
+    helpLink.style.display = 'block';
+
+    this._contentEl.appendChild(inputWrap);
+    this._contentEl.appendChild(cta);
+    this._contentEl.appendChild(helpLink);
+
+    requestAnimationFrame(function () { input.focus(); });
+  }
+
+  // --- Private: Auth Flow ---
+
+  async _runAuth(username) {
+    this._titleEl.textContent = 'AUTHENTICATING.';
+    this._subtitleEl.textContent = 'Establishing secure connection to Fabric services.';
+    this._contentEl.innerHTML = '';
+
+    const steps = document.createElement('div');
+    steps.className = 'auth-steps';
+    this._contentEl.appendChild(steps);
+
+    // Step 1 — Certificate found (instant done)
+    const certLabel = username.includes('@') ? username.split('@')[0] : username;
+    const step1 = this._addStep(steps, 'done', 'Certificate found', certLabel);
+
+    await this._delay(200);
+
+    // Step 2 — Acquiring bearer token
+    const step2 = this._addStep(steps, 'spinning', 'Acquiring bearer token', 'Authenticating via CBA\u2026');
+
+    let authResult;
+    try {
+      const resp = await fetch('/api/edog/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username }),
+      });
+
+      if (!resp.ok) {
+        let errData;
+        try {
+          errData = await resp.json();
+        } catch {
+          errData = { error: 'Authentication failed', detail: `Server returned ${resp.status}` };
+        }
+        this._updateStep(step2, 'error', 'Authentication failed', errData.detail || '');
+        this._showError(
+          errData.error || 'Authentication failed',
+          errData.detail || 'The server could not complete the authentication request.',
+          errData.help || null,
+          username
+        );
+        return;
+      }
+
+      authResult = await resp.json();
+      this._updateStep(
+        step2,
+        'done',
+        'Bearer token acquired',
+        `Expires in ${Math.round((authResult.expiresIn || 3600) / 60)} min`
+      );
+    } catch (e) {
+      this._updateStep(step2, 'error', 'Connection failed', e.message);
+      this._showError(
+        'Network error',
+        `Could not reach the EDOG auth server. Is it running on localhost?`,
+        null,
+        username
+      );
+      return;
+    }
+
+    await this._delay(200);
+
+    // Step 3 — Loading workspaces
+    const step3 = this._addStep(steps, 'spinning', 'Loading workspaces', 'Verifying Fabric access\u2026');
+
+    try {
+      const resp = await fetch('/api/fabric/workspaces');
+      if (!resp.ok) {
+        this._updateStep(step3, 'error', 'Workspace access failed', `HTTP ${resp.status}`);
+        this._showError(
+          'Workspace access failed',
+          'Bearer token was acquired but the Fabric workspace API returned an error. The token may lack sufficient permissions.',
+          null,
+          username
+        );
+        return;
+      }
+
+      const wsData = await resp.json();
+      const count = (wsData.value && wsData.value.length) || 0;
+      this._updateStep(step3, 'done', 'Workspaces loaded', `${count} workspace${count !== 1 ? 's' : ''} found`);
+    } catch (e) {
+      this._updateStep(step3, 'error', 'Connection failed', e.message);
+      this._showError(
+        'Network error',
+        'Could not reach the Fabric workspace API.',
+        null,
+        username
+      );
+      return;
+    }
+
+    // All steps passed — dismiss and callback
+    await this._delay(800);
+    this.dismiss();
+
+    if (this._onComplete) {
+      this._onComplete({
+        token: authResult.token,
+        username: authResult.username || username,
+      });
+    }
+  }
+
+  // --- Private: Step Management ---
+
+  /**
+   * Create an auth-step element and append it to the container.
+   * @param {HTMLElement} container - The .auth-steps wrapper.
+   * @param {'pending'|'spinning'|'done'|'error'} state - Initial state.
+   * @param {string} label - Step label text.
+   * @param {string} [detail] - Optional detail text.
+   * @returns {HTMLElement} The step element.
+   */
+  _addStep(container, state, label, detail) {
+    const step = document.createElement('div');
+    step.className = 'auth-step';
+
+    const icon = document.createElement('div');
+    icon.className = 'auth-step-icon ' + state;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'auth-step-label';
+    labelEl.textContent = label;
+
+    step.appendChild(icon);
+    step.appendChild(labelEl);
+
+    if (detail) {
+      const detailEl = document.createElement('div');
+      detailEl.className = 'auth-step-detail';
+      detailEl.textContent = detail;
+      step.appendChild(detailEl);
+    }
+
+    container.appendChild(step);
+    return step;
+  }
+
+  /**
+   * Update an existing step's icon state, label, and detail.
+   * @param {HTMLElement} el - The .auth-step element.
+   * @param {'pending'|'spinning'|'done'|'error'} state - New state.
+   * @param {string} label - New label text.
+   * @param {string} [detail] - New detail text.
+   */
+  _updateStep(el, state, label, detail) {
+    const icon = el.querySelector('.auth-step-icon');
+    if (icon) {
+      icon.className = 'auth-step-icon ' + state;
+    }
+
+    const labelEl = el.querySelector('.auth-step-label');
+    if (labelEl) labelEl.textContent = label;
+
+    let detailEl = el.querySelector('.auth-step-detail');
+    if (detail) {
+      if (!detailEl) {
+        detailEl = document.createElement('div');
+        detailEl.className = 'auth-step-detail';
+        el.appendChild(detailEl);
+      }
+      detailEl.textContent = detail;
+    } else if (detailEl) {
+      detailEl.textContent = '';
+    }
+  }
+
+  // --- Private: Error Display ---
+
+  /**
+   * Append an error block below the auth steps with a retry button.
+   * @param {string} title - Error title.
+   * @param {string} detail - Error description.
+   * @param {string|null} help - Optional help text from server.
+   * @param {string} username - Username to retry with.
+   */
+  _showError(title, detail, help, username) {
+    const block = document.createElement('div');
+    block.className = 'auth-error';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'auth-error-title';
+    titleEl.textContent = title;
+    block.appendChild(titleEl);
+
+    const detailEl = document.createElement('div');
+    detailEl.className = 'auth-error-detail';
+    detailEl.textContent = detail;
+    block.appendChild(detailEl);
+
+    if (help) {
+      const helpEl = document.createElement('div');
+      helpEl.className = 'auth-error-help';
+      helpEl.textContent = help;
+      block.appendChild(helpEl);
+    }
+
+    const retry = document.createElement('button');
+    retry.className = 'onboarding-cta';
+    retry.textContent = 'RETRY';
+    retry.style.marginTop = 'var(--onb-space-6)';
+    retry.addEventListener('click', function () {
+      this._runAuth(username);
+    }.bind(this));
+
+    this._contentEl.appendChild(block);
+    this._contentEl.appendChild(retry);
+  }
+
+  // --- Private: Utilities ---
+
+  /**
+   * Derive a CBA username from a certificate CN.
+   * Converts "Admin1CBA.FabricFMLV08PPE.ccsctp.net" → "Admin1CBA@FabricFMLV08PPE.ccsctp.net"
+   * by replacing the first '.' with '@'.
+   * @param {string} cn - Certificate common name.
+   * @returns {string} Username suitable for /api/edog/auth.
+   */
+  _deriveUsername(cn) {
+    if (!cn) return '';
+    // If already contains '@', return as-is
+    if (cn.indexOf('@') !== -1) return cn;
+    const dotIdx = cn.indexOf('.');
+    if (dotIdx === -1) return cn;
+    return cn.substring(0, dotIdx) + '@' + cn.substring(dotIdx + 1);
+  }
+
+  /**
+   * Format an ISO date string to a readable short form.
+   * @param {string} isoDate - ISO 8601 date string.
+   * @returns {string} Formatted date, e.g. "15 Mar 2026".
+   */
+  _formatDate(isoDate) {
+    if (!isoDate) return 'unknown';
+    try {
+      const d = new Date(isoDate);
+      if (isNaN(d.getTime())) return 'unknown';
+      const months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  /**
+   * Promise-based delay.
+   * @param {number} ms - Milliseconds to wait.
+   * @returns {Promise<void>}
+   */
+  _delay(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+}
+
 // === js/main.js ===
 /**
  * EDOG Studio — Main Application Orchestrator
@@ -12383,26 +13600,40 @@ class EdogLogViewer {
 // ===== INITIALIZATION =====
 
 // Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Load theme preference — light is default (no data-theme attribute needed)
   const savedTheme = localStorage.getItem('edog-theme');
   if (savedTheme === 'dark') {
     document.body.dataset.theme = 'dark';
   }
-  
-  // Start the application
-  new EdogLogViewer().init();
+
+  // Auth gate: check if we have a valid bearer token
+  const onboarding = new OnboardingScreen();
+  const needsAuth = await onboarding.isRequired();
+
+  if (needsAuth) {
+    // Show onboarding overlay, start app when auth completes
+    await onboarding.show(function onAuthComplete(result) {
+      startApp();
+    });
+  } else {
+    // Already authenticated — go straight to dashboard
+    startApp();
+  }
 
   // Initialize mock data rendering — only when ?mock=true is in the URL
   if (typeof MockRenderer !== 'undefined' && new URLSearchParams(window.location.search).get('mock') === 'true') {
     setTimeout(() => {
       const mock = new MockRenderer();
       mock.init();
-      // Re-apply mock topbar every 2s to prevent real polling from overwriting
       setInterval(() => mock._renderTopBar(), 2000);
     }, 500);
   }
 });
+
+function startApp() {
+  new EdogLogViewer().init();
+}
 
   </script>
 </body>

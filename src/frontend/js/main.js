@@ -913,23 +913,37 @@ class EdogLogViewer {
 // ===== INITIALIZATION =====
 
 // Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Load theme preference — light is default (no data-theme attribute needed)
   const savedTheme = localStorage.getItem('edog-theme');
   if (savedTheme === 'dark') {
     document.body.dataset.theme = 'dark';
   }
-  
-  // Start the application
-  new EdogLogViewer().init();
+
+  // Auth gate: check if we have a valid bearer token
+  const onboarding = new OnboardingScreen();
+  const needsAuth = await onboarding.isRequired();
+
+  if (needsAuth) {
+    // Show onboarding overlay, start app when auth completes
+    await onboarding.show(function onAuthComplete(result) {
+      startApp();
+    });
+  } else {
+    // Already authenticated — go straight to dashboard
+    startApp();
+  }
 
   // Initialize mock data rendering — only when ?mock=true is in the URL
   if (typeof MockRenderer !== 'undefined' && new URLSearchParams(window.location.search).get('mock') === 'true') {
     setTimeout(() => {
       const mock = new MockRenderer();
       mock.init();
-      // Re-apply mock topbar every 2s to prevent real polling from overwriting
       setInterval(() => mock._renderTopBar(), 2000);
     }, 500);
   }
 });
+
+function startApp() {
+  new EdogLogViewer().init();
+}

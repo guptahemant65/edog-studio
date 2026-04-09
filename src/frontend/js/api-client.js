@@ -56,6 +56,24 @@ class FabricApiClient {
     return !!this._bearerToken;
   }
 
+  /**
+   * Check auth state via the EDOG health endpoint.
+   * @returns {Promise<{authenticated: boolean, expiresIn: number}>}
+   */
+  async getAuthState() {
+    try {
+      const resp = await fetch('/api/edog/health');
+      if (!resp.ok) return { authenticated: false, expiresIn: 0 };
+      const data = await resp.json();
+      return {
+        authenticated: data.hasBearerToken && data.bearerExpiresIn > 300,
+        expiresIn: data.bearerExpiresIn,
+      };
+    } catch {
+      return { authenticated: false, expiresIn: 0 };
+    }
+  }
+
   // --- Fabric Public APIs (bearer token) ---
 
   async listWorkspaces() {

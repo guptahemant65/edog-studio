@@ -40,6 +40,7 @@ CSS_MODULES = [
     "css/environment.css",
     "css/token-inspector.css",
     "css/mock-components.css",
+    "css/onboarding.css",
 ]
 
 # JS modules — order matters (dependencies first, then features, then main)
@@ -62,6 +63,7 @@ JS_MODULES = [
     "js/workspace-explorer.js",
     "js/command-palette.js",
     "js/mock-renderer.js",
+    "js/onboarding.js",
     "js/main.js",
 ]
 
