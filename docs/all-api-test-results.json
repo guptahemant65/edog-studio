@@ -1,0 +1,140 @@
+[
+  {
+    "label": "List scheduled jobs (test LH)",
+    "ok": true,
+    "code": 200,
+    "summary": "[0 items]"
+  },
+  {
+    "label": "List scheduled jobs (FMLVWS TestLH)",
+    "ok": true,
+    "code": 200,
+    "summary": "[5 items]"
+  },
+  {
+    "label": "List capacities (/v1/capacities)",
+    "ok": true,
+    "code": 200,
+    "summary": "9 items"
+  },
+  {
+    "label": "Get capacity detail",
+    "ok": false,
+    "code": 400,
+    "error": "{\"requestId\":\"65d7a5dc-c139-4a01-bc70-15b832568d5a\",\"errorCode\":\"InvalidRequestU"
+  },
+  {
+    "label": "Create temp lakehouse",
+    "ok": true,
+    "code": 201,
+    "summary": "['id', 'type', 'displayName', 'description', 'workspaceId']"
+  },
+  {
+    "label": "DELETE temp lakehouse",
+    "ok": true,
+    "code": 200,
+    "summary": "[]"
+  },
+  {
+    "label": "List items (v1) for test WS",
+    "ok": true,
+    "code": 200,
+    "summary": "4 items"
+  },
+  {
+    "label": "Create notebook",
+    "ok": true,
+    "code": 201,
+    "summary": "['id', 'type', 'displayName', 'description', 'workspaceId']"
+  },
+  {
+    "label": "List tables (schema LH)",
+    "ok": true,
+    "code": 200,
+    "summary": "0 items"
+  },
+  {
+    "label": "getLatestDag (test env)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "DAG settings (test env)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "getLockedDAGExecution (test)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "listOrphanedIndexFolders (test)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "List tables (FMLVWS TestLH)",
+    "ok": true,
+    "code": 200,
+    "summary": "6 items"
+  },
+  {
+    "label": "getTableDetails (mvfrommv)",
+    "ok": true,
+    "code": 202,
+    "summary": "['operationId']"
+  },
+  {
+    "label": "batchGetTableDetails",
+    "ok": false,
+    "code": 400,
+    "error": "{\"code\":\"BadRequest\",\"subCode\":0,\"message\":\"An invalid request has been received"
+  },
+  {
+    "label": "previewAsync (mvfrommv)",
+    "ok": true,
+    "code": 202,
+    "summary": "['operationId']"
+  },
+  {
+    "label": "getLatestDag (FMLVWS)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "DAG settings (FMLVWS)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "listDAGExecutionIterationIds",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "mlvExecutionDefinitions",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "getLockedDAGExecution (FMLVWS)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  },
+  {
+    "label": "listOrphanedIndexFolders (FMLVWS)",
+    "ok": false,
+    "code": 404,
+    "error": ""
+  }
+]

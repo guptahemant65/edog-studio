@@ -1,0 +1,181 @@
+[
+  {
+    "l": "PATCH workspace (same name)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'displayName', 'description', 'type', 'capacityId']"
+  },
+  {
+    "l": "PATCH workspace (rename to temp)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'displayName', 'description', 'type', 'capacityId']"
+  },
+  {
+    "l": "PATCH workspace (rename back)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'displayName', 'description', 'type', 'capacityId']"
+  },
+  {
+    "l": "PATCH lakehouse (same name)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'type', 'displayName', 'description', 'workspaceId', 'properties']"
+  },
+  {
+    "l": "PATCH lakehouse (rename to temp)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'type', 'displayName', 'description', 'workspaceId', 'properties']"
+  },
+  {
+    "l": "PATCH lakehouse (rename back)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'type', 'displayName', 'description', 'workspaceId', 'properties']"
+  },
+  {
+    "l": "List items to find notebook",
+    "ok": true,
+    "code": 200,
+    "s": "5 value"
+  },
+  {
+    "l": "PATCH item (notebook rename)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'type', 'displayName', 'description', 'workspaceId']"
+  },
+  {
+    "l": "PATCH item (notebook rename back)",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'type', 'displayName', 'description', 'workspaceId']"
+  },
+  {
+    "l": "PATCH table (via v1 \u2014 expect 404/405)",
+    "ok": false,
+    "code": 404,
+    "err": "EntityNotFound"
+  },
+  {
+    "l": "GET /v1/capacities",
+    "ok": true,
+    "code": 200,
+    "s": "9 value"
+  },
+  {
+    "l": "GET /v1/capacities/{id}",
+    "ok": false,
+    "code": 400,
+    "err": "InvalidRequestUri"
+  },
+  {
+    "l": "GET /v1/capacities/{id-nodash}",
+    "ok": false,
+    "code": 400,
+    "err": "InvalidRequestUri"
+  },
+  {
+    "l": "GET /v1.0/myorg/capacities",
+    "ok": true,
+    "code": 200,
+    "s": "9 value"
+  },
+  {
+    "l": "GET /v1.0/myorg/groups (filter by cap)",
+    "ok": false,
+    "err": "URL can't contain control characters. \"/v1.0/myorg/groups?$filter=capacityId eq 'dd01a7f3-4198-4439-"
+  },
+  {
+    "l": "GET /v1/workspaces/{id} detail",
+    "ok": true,
+    "code": 200,
+    "s": "['id', 'displayName', 'description', 'type', 'capacityId', 'capacityRegion']"
+  },
+  {
+    "l": "POST assignToCapacity (same cap = no-op)",
+    "ok": true,
+    "code": 202,
+    "s": "[]"
+  },
+  {
+    "l": "POST v1.0 AssignToCapacity",
+    "ok": true,
+    "code": 200,
+    "s": "[]"
+  },
+  {
+    "l": "List tables (FMLVWS)",
+    "ok": true,
+    "code": 200,
+    "s": "6 data"
+  },
+  {
+    "l": "batch: {tableNames: [...]}",
+    "ok": false,
+    "code": 400,
+    "err": "{\"code\":\"BadRequest\",\"subCode\":0,\"message\":\"An invalid request has been received: 'An invalid reques"
+  },
+  {
+    "l": "batch: {tables: [...]}",
+    "ok": true,
+    "code": 202,
+    "s": "['operationId']"
+  },
+  {
+    "l": "batch: {tableNames, maxResults}",
+    "ok": false,
+    "code": 400,
+    "err": "{\"code\":\"BadRequest\",\"subCode\":0,\"message\":\"An invalid request has been received: 'An invalid reques"
+  },
+  {
+    "l": "batch: bare array",
+    "ok": false,
+    "code": 400,
+    "err": "{\"code\":\"BadRequest\",\"subCode\":0,\"message\":\"An invalid request has been received: 'An invalid reques"
+  },
+  {
+    "l": "batch: without schema path",
+    "ok": false,
+    "code": 400,
+    "err": "{\"code\":\"BadRequest\",\"subCode\":0,\"message\":\"An invalid request has been received: 'An invalid reques"
+  },
+  {
+    "l": "getTableDetails (single)",
+    "ok": true,
+    "code": 202,
+    "s": "['operationId']"
+  },
+  {
+    "l": "poll getTableDetails result",
+    "ok": true,
+    "code": 200,
+    "s": "['result', 'id', 'status', 'error']"
+  },
+  {
+    "l": "previewAsync",
+    "ok": true,
+    "code": 202,
+    "s": "['operationId']"
+  },
+  {
+    "l": "poll preview result",
+    "ok": true,
+    "code": 200,
+    "s": "['result', 'id', 'status', 'error']"
+  },
+  {
+    "l": "GET scheduledJobs (FMLVWS)",
+    "ok": true,
+    "code": 200,
+    "s": "[5 items]"
+  },
+  {
+    "l": "POST scheduledJobs (create)",
+    "ok": true,
+    "code": 200,
+    "s": "['jobDefinitionObjectId', 'artifactId', 'artifactObjectId', 'artifactJobType', 'artifactJobPermission', 'scheduleEnabled']"
+  }
+]
