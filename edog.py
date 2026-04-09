@@ -1954,16 +1954,46 @@ def _try_silent_cba(username: str) -> str | None:
     return None
 
 
+# Module-level cache: {cert_cn: thumbprint}
+_thumbprint_cache: dict[str, str] = {}
+
+
 def _find_cert_thumbprint(cert_cn: str) -> str | None:
     """Find certificate thumbprint from Windows cert store by CN.
 
-    Uses the token-helper itself with a ``--find-cert`` flag to avoid
-    PowerShell cert provider issues across different PS versions.
-    Falls back to a direct .NET snippet if needed.
+    Caches the result after first lookup — the thumbprint never changes
+    for a given CN during a session. Saves 2-8 seconds on subsequent calls.
     """
+    if cert_cn in _thumbprint_cache:
+        return _thumbprint_cache[cert_cn]
+
+    # Also check disk cache (survives restarts)
+    cache_file = Path(__file__).parent / ".edog-thumbprint-cache"
+    if cache_file.exists():
+        try:
+            for line in cache_file.read_text(encoding="utf-8").splitlines():
+                if line.startswith(cert_cn + "="):
+                    tp = line.split("=", 1)[1].strip()
+                    if len(tp) == 40:
+                        _thumbprint_cache[cert_cn] = tp
+                        return tp
+        except OSError:
+            pass
+
+    tp = _query_cert_store(cert_cn)
+    if tp:
+        _thumbprint_cache[cert_cn] = tp
+        # Persist to disk
+        try:
+            cache_file.write_text(f"{cert_cn}={tp}\n", encoding="utf-8")
+        except OSError:
+            pass
+    return tp
+
+
+def _query_cert_store(cert_cn: str) -> str | None:
+    """Query Windows cert store via PowerShell. Slow (~2-8s), called once."""
     try:
-        # Use a simple .NET one-liner via powershell
-        # Import-Module PKI first to ensure Cert: drive is available
         ps_cmd = (
             'Import-Module PKI -ErrorAction SilentlyContinue; '
             f'Get-ChildItem Cert:\\CurrentUser\\My | '
@@ -1978,7 +2008,6 @@ def _find_cert_thumbprint(cert_cn: str) -> str | None:
         if tp and len(tp) == 40:
             return tp
 
-        # Fallback: use .NET directly
         dotnet_cmd = (
             'Add-Type -AssemblyName System.Security; '
             '$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('

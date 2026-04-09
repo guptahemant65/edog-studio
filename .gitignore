@@ -41,3 +41,4 @@ src/frontend/edog-studio.html
 node_modules/
 scripts/token-helper/bin/
 scripts/token-helper/obj/
+.edog-thumbprint-cache
