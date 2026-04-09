@@ -24,6 +24,8 @@
 .dag-btn.primary { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
 .dag-btn.primary:hover { opacity: 0.9; }
 .dag-btn.danger { color: var(--level-error); border-color: var(--level-error); }
+.dag-toolbar-spacer { flex: 1; }
+.dag-toolbar-status { font-size: var(--text-xs); color: var(--text-muted); }
 
 .dag-body { display: flex; flex: 1; overflow: hidden; }
 

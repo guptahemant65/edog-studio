@@ -440,8 +440,8 @@ class MockRenderer {
         <button class="dag-btn primary">\u25B6 Run DAG</button>
         <button class="dag-btn danger">\u2718 Cancel</button>
         <button class="dag-btn">\u21BB Refresh DAG</button>
-        <div style="flex:1"></div>
-        <span style="font-size:var(--text-xs);color:var(--text-muted)">8 nodes \u00B7 Running \u00B7 5/8 completed</span>
+        <div class="dag-toolbar-spacer"></div>
+        <span class="dag-toolbar-status">8 nodes \u00B7 Running \u00B7 5/8 completed</span>
       </div>
       <div class="dag-body">
         <div class="dag-graph-panel" id="dag-graph-panel"></div>
@@ -668,27 +668,27 @@ class MockRenderer {
           <dt>Retries</dt><dd>${req.retries}</dd>
           <dt>Time</dt><dd>${req.timestamp}</dd>
         </dl>
-        ${req.body ? '<div style="margin-top:var(--space-3)"><div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:700;text-transform:uppercase;letter-spacing:0.08em">Request Body</div><div class="spark-code-block">' + this._escapeHtml(req.body) + '</div></div>' : ''}`;
+        ${req.body ? '<div class="log-detail-section"><div class="mock-section-label">Request Body</div><div class="spark-code-block">' + this._escapeHtml(req.body) + '</div></div>' : ''}`;
     } else if (tab === 'response') {
       body = `<dl class="spark-kv">
           <dt>Status</dt><dd><span class="status-code ${statusCls}">${req.status}</span></dd>
           <dt>Content-Type</dt><dd>application/json</dd>
           <dt>x-ms-request-id</dt><dd>${MockData.uuid().substring(0, 8)}</dd>
         </dl>
-        <div style="margin-top:var(--space-3)"><div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:700;text-transform:uppercase;letter-spacing:0.08em">Response Body</div><div class="spark-code-block">${this._escapeHtml(req.response)}</div></div>`;
+        <div class="log-detail-section"><div class="mock-section-label">Response Body</div><div class="spark-code-block">${this._escapeHtml(req.response)}</div></div>`;
     } else {
       const total = req.duration;
       const submit = Math.round(total * 0.15);
       const process = Math.round(total * 0.7);
       const response = total - submit - process;
-      body = `<div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Waterfall</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:60px;font-size:var(--text-xs);color:var(--text-dim)">Submit</span><div style="flex:1;height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(submit/total*100,5)}%;background:var(--level-message);border-radius:3px"></div></div><span style="width:50px;text-align:right;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted)">${submit}ms</span></div>
-          <div style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:60px;font-size:var(--text-xs);color:var(--text-dim)">Process</span><div style="flex:1;height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(process/total*100,5)}%;background:var(--status-succeeded);border-radius:3px"></div></div><span style="width:50px;text-align:right;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted)">${process}ms</span></div>
-          <div style="display:flex;align-items:center;gap:var(--space-2)"><span style="width:60px;font-size:var(--text-xs);color:var(--text-dim)">Response</span><div style="flex:1;height:14px;background:var(--surface-2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.max(response/total*100,5)}%;background:var(--accent);border-radius:3px"></div></div><span style="width:50px;text-align:right;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--text-muted)">${response}ms</span></div>
+      body = `<div class="mock-section-label">Waterfall</div>
+        <div class="spark-waterfall">
+          <div class="spark-wf-row"><span class="spark-wf-label">Submit</span><div class="spark-wf-track"><div class="spark-wf-bar" style="width:${Math.max(submit/total*100,5)}%;background:var(--level-message)"></div></div><span class="spark-wf-time">${submit}ms</span></div>
+          <div class="spark-wf-row"><span class="spark-wf-label">Process</span><div class="spark-wf-track"><div class="spark-wf-bar" style="width:${Math.max(process/total*100,5)}%;background:var(--status-succeeded)"></div></div><span class="spark-wf-time">${process}ms</span></div>
+          <div class="spark-wf-row"><span class="spark-wf-label">Response</span><div class="spark-wf-track"><div class="spark-wf-bar" style="width:${Math.max(response/total*100,5)}%;background:var(--accent)"></div></div><span class="spark-wf-time">${response}ms</span></div>
         </div>
-        <div style="margin-top:var(--space-3);font-size:var(--text-sm);color:var(--text-dim)">Total: ${total}ms</div>
-        ${req.retries > 0 ? '<div style="margin-top:var(--space-4);font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Retry Chain (' + req.retries + ' retries)</div><div style="display:flex;align-items:center;gap:var(--space-1);flex-wrap:wrap">' + Array.from({length: req.retries}, (_, i) => '<span style="padding:var(--space-1) var(--space-2);border:1px solid var(--level-error);border-radius:var(--radius-sm);font-size:var(--text-xs);font-family:var(--font-mono);color:var(--level-error)">Attempt ' + (i+1) + ' \u2717</span><span style="font-size:10px;color:var(--text-muted)">' + (i < req.retries - 1 ? '\u2192 2s delay \u2192' : '\u2192') + '</span>').join('') + '<span style="padding:var(--space-1) var(--space-2);border:1px solid var(--status-succeeded);border-radius:var(--radius-sm);font-size:var(--text-xs);font-family:var(--font-mono);color:var(--status-succeeded)">Final \u2713</span></div>' : ''}`;
+        <div class="spark-total">Total: ${total}ms</div>
+        ${req.retries > 0 ? '<div class="spark-retry-label">Retry Chain (' + req.retries + ' retries)</div><div class="spark-retry-chain">' + Array.from({length: req.retries}, (_, i) => '<span class="spark-retry-attempt">Attempt ' + (i+1) + ' \u2717</span><span class="spark-retry-delay">' + (i < req.retries - 1 ? '\u2192 2s delay \u2192' : '\u2192') + '</span>').join('') + '<span class="spark-retry-attempt ok">Final \u2713</span></div>' : ''}`;
     }
 
     detail.innerHTML = `
@@ -1198,19 +1198,19 @@ class MockRenderer {
     if (content) {
       const props = { Duration: '2.3s', NodeName: 'RefreshSalesData', ThreadId: 42, CorrelationId: MockData.uuid().substring(0, 8) };
       content.innerHTML = `
-        <div style="display:grid;grid-template-columns:90px 1fr;gap:var(--space-1) var(--space-3);font-size:var(--text-sm);padding:var(--space-3)">
-          <dt style="color:var(--text-muted);font-weight:500">Timestamp</dt><dd style="font-family:var(--font-mono)">${entry.timestamp}</dd>
-          <dt style="color:var(--text-muted);font-weight:500">Level</dt><dd><span class="log-level-badge" style="font-size:var(--text-xs)">${entry.level}</span></dd>
-          <dt style="color:var(--text-muted);font-weight:500">Component</dt><dd style="font-family:var(--font-mono)">${entry.component}</dd>
-          ${entry.rootActivityId ? '<dt style="color:var(--text-muted);font-weight:500">RAID</dt><dd style="font-family:var(--font-mono)">' + entry.rootActivityId + '</dd>' : ''}
+        <dl class="log-detail-kv">
+          <dt>Timestamp</dt><dd>${entry.timestamp}</dd>
+          <dt>Level</dt><dd><span class="log-level-badge">${entry.level}</span></dd>
+          <dt>Component</dt><dd>${entry.component}</dd>
+          ${entry.rootActivityId ? '<dt>RAID</dt><dd>' + entry.rootActivityId + '</dd>' : ''}
+        </dl>
+        <div class="log-detail-section">
+          <div class="mock-section-label">Message</div>
+          <div class="log-detail-message">${this._escapeHtml(entry.message)}</div>
         </div>
-        <div style="padding:0 var(--space-3) var(--space-3)">
-          <div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Message</div>
-          <div style="font-family:var(--font-mono);font-size:var(--text-sm);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);line-height:1.6">${this._escapeHtml(entry.message)}</div>
-        </div>
-        <div style="padding:0 var(--space-3) var(--space-3)">
-          <div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Properties</div>
-          <div style="font-family:var(--font-mono);font-size:var(--text-xs);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);white-space:pre;line-height:1.8">${this._escapeHtml(JSON.stringify(props, null, 2))}</div>
+        <div class="log-detail-section">
+          <div class="mock-section-label">Properties</div>
+          <div class="log-detail-props">${this._escapeHtml(JSON.stringify(props, null, 2))}</div>
         </div>`;
     }
 
@@ -1443,22 +1443,22 @@ class MockRenderer {
     }
 
     const kindBadge = node.kind === 'sql'
-      ? '<span class="status-pill" style="background:var(--comp-default-bg);color:var(--comp-default)">SQL</span>'
-      : '<span class="status-pill" style="background:var(--comp-dq-bg);color:var(--comp-dq)">PySpark</span>';
+      ? '<span class="status-pill muted">SQL</span>'
+      : '<span class="status-pill muted">PySpark</span>';
     const statusCls = node.status;
     const mockSql = 'CREATE OR REPLACE MATERIALIZED VIEW ' + node.name + ' AS\nSELECT region, SUM(amount) as total\nFROM sales_transactions\nWHERE date >= CURRENT_DATE - 30\nGROUP BY region';
 
     detail.innerHTML = `
-      <div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:var(--space-3)">
-        <span style="font-size:var(--text-lg);font-weight:600">${node.name}</span>
+      <div class="dag-detail-header">
+        <span class="dag-detail-name">${node.name}</span>
         ${kindBadge}
         <span class="status-pill ${statusCls}">${node.status}</span>
-        ${node.duration ? '<span style="font-size:var(--text-xs);color:var(--text-muted);font-family:var(--font-mono)">' + (node.duration / 1000).toFixed(1) + 's</span>' : ''}
-        <button style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:var(--text-lg)" onclick="document.getElementById('dag-node-detail').classList.remove('open')">\u2715</button>
+        ${node.duration ? '<span class="dag-detail-duration">' + (node.duration / 1000).toFixed(1) + 's</span>' : ''}
+        <button class="dag-detail-close" onclick="document.getElementById('dag-node-detail').classList.remove('open')">\u2715</button>
       </div>
-      ${node.errorMessage ? '<div style="padding:var(--space-2) var(--space-3);background:var(--row-error-tint);border:1px solid rgba(229,69,59,0.12);border-radius:var(--radius-md);font-size:var(--text-sm);color:var(--level-error);margin-bottom:var(--space-3)">' + this._escapeHtml(node.errorMessage) + '</div>' : ''}
-      <div style="font-size:var(--text-xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--space-2)">Definition</div>
-      <div style="font-family:var(--font-mono);font-size:var(--text-xs);padding:var(--space-3);background:var(--surface-2);border-radius:var(--radius-md);border:1px solid var(--border);white-space:pre;line-height:1.7;max-height:120px;overflow-y:auto">${this._escapeHtml(mockSql)}</div>`;
+      ${node.errorMessage ? '<div class="dag-detail-error">' + this._escapeHtml(node.errorMessage) + '</div>' : ''}
+      <div class="mock-section-label">Definition</div>
+      <div class="mock-code-block">${this._escapeHtml(mockSql)}</div>`;
 
     detail.classList.add('open');
   }
@@ -1619,15 +1619,15 @@ class MockRenderer {
     content.innerHTML = `
       <div class="deploy-progress">
         <div class="ws-content-name">Deploying to ${this._escapeHtml(lakehouseName)}</div>
-        <div style="margin-top:var(--space-4)">
+        <div class="deploy-steps">
           ${steps.map((s, i) => `<div class="deploy-step" id="deploy-step-${i}">
             <span class="deploy-step-num">${i + 1}</span>
             <span class="deploy-step-label">${s}</span>
           </div>`).join('')}
         </div>
-        <div id="deploy-done" style="display:none;margin-top:var(--space-6)">
-          <div style="font-size:var(--text-lg);font-weight:600;color:var(--status-succeeded);margin-bottom:var(--space-2)">\u2713 Deployed successfully</div>
-          <div style="font-size:var(--text-sm);color:var(--text-dim);margin-bottom:var(--space-4)">Service is running on localhost:5555</div>
+        <div id="deploy-done" class="deploy-done hidden">
+          <div class="deploy-done-title">\u2713 Deployed successfully</div>
+          <div class="deploy-done-sub">Service is running on localhost:5555</div>
           <button class="ws-deploy-btn" id="deploy-view-logs">\u2261 View Logs</button>
         </div>
       </div>`;
@@ -1648,7 +1648,7 @@ class MockRenderer {
         const last = document.getElementById('deploy-step-' + (steps.length - 1));
         if (last) { last.classList.remove('active'); last.classList.add('done'); }
         const done = document.getElementById('deploy-done');
-        if (done) done.style.display = 'block';
+        if (done) done.classList.remove('hidden');
         // Wire "View Logs" button
         const btn = document.getElementById('deploy-view-logs');
         if (btn) btn.addEventListener('click', () => {

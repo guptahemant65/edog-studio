@@ -39,6 +39,7 @@ CSS_MODULES = [
     "css/api-playground.css",
     "css/environment.css",
     "css/token-inspector.css",
+    "css/mock-components.css",
 ]
 
 # JS modules — order matters (dependencies first, then features, then main)
