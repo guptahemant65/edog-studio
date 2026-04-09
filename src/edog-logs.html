@@ -994,20 +994,18 @@ mark {
 .ws-section-count { color: var(--text-muted); font-weight: 400; margin-left: var(--space-1); }
 
 .ws-table {
-  width: 100%; border-collapse: separate; border-spacing: 0;
-  font-size: var(--text-sm); font-family: var(--font-mono);
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: hidden; box-shadow: var(--shadow-sm);
 }
 .ws-table th {
   text-align: left; padding: var(--space-2) var(--space-3);
-  color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-body);
+  color: var(--text-muted); font-size: var(--text-xs);
   font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
-.ws-table th.right { text-align: right; }
-.ws-table td { padding: var(--space-1) var(--space-3); border-bottom: 1px solid var(--border); line-height: 1.4; }
+.ws-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
 .ws-table tr:last-child td { border-bottom: none; }
 .ws-table .ws-table-row { cursor: pointer; transition: background var(--transition-fast); }
 .ws-table .ws-table-row:hover { background: var(--surface-2); }
@@ -1015,11 +1013,10 @@ mark {
 .ws-table-name { font-family: var(--font-mono); color: var(--text); font-weight: 500; }
 .ws-table-num { font-family: var(--font-mono); color: var(--text-muted); text-align: right; }
 .ws-type-badge {
-  display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-sm);
-  font-size: var(--text-xs); background: var(--surface-3); color: var(--text-dim);
-  font-weight: 600; font-family: var(--font-mono);
+  display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-full);
+  font-size: var(--text-xs); background: var(--surface-2); color: var(--text-dim);
+  font-weight: 500; letter-spacing: 0.02em;
 }
-.ws-type-badge.parquet { background: var(--row-warning-tint); color: var(--level-warning); }
 
 /* MLV cards */
 .ws-mlv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
@@ -9001,11 +8998,12 @@ class MockRenderer {
       <div class="ws-section">
         <div class="ws-section-title">TABLES <span class="ws-section-count">${tables.length}</span></div>
         <table class="ws-table">
-          <thead><tr><th>Name</th><th>Type</th><th class="right">Rows</th><th class="right">Size</th></tr></thead>
+          <thead><tr><th>Name</th><th>Type</th><th>Format</th><th>Rows</th><th>Size</th></tr></thead>
           <tbody>
             ${tables.map((t, ti) => `<tr class="ws-table-row${ti === 0 ? ' selected' : ''}" data-table-idx="${ti}">
               <td class="ws-table-name">${t.name}</td>
-              <td><span class="ws-type-badge${t.type === 'Parquet' ? ' parquet' : ''}">${t.type}</span></td>
+              <td><span class="ws-type-badge">${t.type}</span></td>
+              <td>${t.format}</td>
               <td class="ws-table-num">${this._formatNum(t.rowCount)}</td>
               <td class="ws-table-num">${this._formatBytes(t.sizeBytes)}</td>
             </tr>`).join('')}
