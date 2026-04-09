@@ -4,7 +4,7 @@
  * Lifecycle: check health → scan certs → auto-select or show picker →
  * Silent CBA auth → verify workspace access → dismiss → dashboard.
  *
- * DOM structure matches the Direction C (minimal) approved prototype.
+ * Right panel: auto-rotating feature showcase cards with crossfade.
  *
  * Zara Okonkwo — vanilla JS, class-based module.
  */
@@ -16,9 +16,54 @@ class OnboardingScreen {
     this._selectedCert = null;
     this._certs = [];
     this._stepCount = 0;
+    this._showcaseTimer = null;
+    this._showcaseIndex = 0;
 
     this._PPE_WIKI_URL =
       'https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)';
+
+    this._FEATURES = [
+      {
+        title: 'Workspace Explorer',
+        desc: 'Browse workspaces, lakehouses and tables with live Fabric data. Rename, delete, inspect \u2014 all without leaving your dev environment.',
+        icon: '<svg viewBox="0 0 24 24"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>',
+      },
+      {
+        title: 'Feature Flags',
+        desc: 'Toggle rollouts, test flag combinations and create PRs to the FeatureManagement repo \u2014 the entire flag lifecycle in one screen.',
+        icon: '<svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+      },
+      {
+        title: 'Runtime Inspector',
+        desc: 'Live logs, DAG execution graphs, Spark queries and telemetry. Streaming over WebSocket, zero context switches required.',
+        icon: '<svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+      },
+      {
+        title: 'One-Click Deploy',
+        desc: 'Select a lakehouse, hit deploy. Config patched, token acquired, service built and launched \u2014 all automated.',
+        icon: '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+      },
+      {
+        title: 'DAG Studio',
+        desc: 'Visualize materialization DAGs as interactive node graphs. Click any node to see metrics, timing and dependencies in real time.',
+        icon: '<svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="12" r="3"/><circle cx="6" cy="18" r="3"/><line x1="9" y1="6" x2="15" y2="12"/><line x1="9" y1="18" x2="15" y2="12"/></svg>',
+      },
+      {
+        title: 'Command Palette',
+        desc: 'Ctrl+K to find anything \u2014 workspaces, lakehouses, flags, actions, settings. Keyboard-first, instant results.',
+        icon: '<svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="10" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/><line x1="6" y1="16" x2="11" y2="16"/></svg>',
+      },
+      {
+        title: 'Capacity Dashboard',
+        desc: 'Monitor all 46 capacities at a glance \u2014 utilization, throttling, health scores and workload configurations.',
+        icon: '<svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>',
+      },
+      {
+        title: 'API Playground',
+        desc: 'Test any Fabric endpoint with auto-filled tokens. 86+ endpoints documented with live request/response preview.',
+        icon: '<svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>',
+      },
+    ];
   }
 
   // --- Public API ---
@@ -48,6 +93,10 @@ class OnboardingScreen {
     this._onComplete = onComplete || null;
     this._createOverlay();
     document.body.appendChild(this._overlay);
+    this._startShowcase();
+
+    // Show shimmer skeleton while certs load
+    this._renderSkeleton();
 
     let certs = [];
     try {
@@ -58,13 +107,22 @@ class OnboardingScreen {
     }
     this._certs = certs;
 
-    if (!Array.isArray(certs) || certs.length === 0) {
+    // Filter out expired certs
+    const now = new Date();
+    const validCerts = Array.isArray(certs)
+      ? certs.filter(c => !c.notAfter || new Date(c.notAfter) > now)
+      : [];
+
+    // Fade out skeleton, then show real content
+    await this._dismissSkeleton();
+
+    if (validCerts.length === 0) {
       this._renderNoCerts();
-    } else if (certs.length === 1) {
-      const username = this._deriveUsername(certs[0].cn);
+    } else if (validCerts.length === 1) {
+      const username = this._deriveUsername(validCerts[0].cn);
       this._runAuth(username);
     } else {
-      this._renderCertPicker(certs);
+      this._renderCertPicker(validCerts);
     }
   }
 
@@ -73,6 +131,7 @@ class OnboardingScreen {
    */
   dismiss() {
     if (!this._overlay) return;
+    this._stopShowcase();
     this._overlay.classList.add('fade-out');
     setTimeout(() => {
       if (this._overlay && this._overlay.parentNode) {
@@ -88,7 +147,6 @@ class OnboardingScreen {
     const overlay = document.createElement('div');
     overlay.className = 'onboarding-overlay';
 
-    // Layout — asymmetric two-column grid
     const layout = document.createElement('div');
     layout.className = 'onboarding-layout';
 
@@ -119,18 +177,11 @@ class OnboardingScreen {
     content.appendChild(authProgress);
     content.appendChild(spacer);
 
-    // Right — decorative pattern panel
-    const patternArea = document.createElement('div');
-    patternArea.className = 'pattern-area';
-    patternArea.setAttribute('aria-hidden', 'true');
-
-    const patternWatermark = document.createElement('div');
-    patternWatermark.className = 'pattern-watermark';
-    patternWatermark.textContent = 'EDOG';
-    patternArea.appendChild(patternWatermark);
+    // Right — feature showcase
+    const showcase = this._createShowcasePanel();
 
     layout.appendChild(content);
-    layout.appendChild(patternArea);
+    layout.appendChild(showcase);
 
     // Footer
     const footer = document.createElement('footer');
@@ -146,18 +197,173 @@ class OnboardingScreen {
     this._contentEl = selectPhase;
   }
 
+  _createShowcasePanel() {
+    const panel = document.createElement('div');
+    panel.className = 'showcase-panel';
+    panel.setAttribute('aria-hidden', 'true');
+
+    // Ambient gradient mesh blobs (Mika's idea — pure CSS animation)
+    const mesh = document.createElement('div');
+    mesh.className = 'showcase-mesh';
+    mesh.innerHTML =
+      '<div class="mesh-blob mesh-blob--1"></div>' +
+      '<div class="mesh-blob mesh-blob--2"></div>' +
+      '<div class="mesh-blob mesh-blob--3"></div>';
+
+    const watermark = document.createElement('div');
+    watermark.className = 'showcase-watermark';
+    watermark.textContent = 'playground';
+
+    const carousel = document.createElement('div');
+    carousel.className = 'showcase-carousel';
+
+    this._showcaseCards = [];
+    this._FEATURES.forEach((feature, idx) => {
+      const card = document.createElement('div');
+      card.className = 'showcase-card' + (idx === 0 ? ' active' : '');
+
+      const iconWrap = document.createElement('div');
+      iconWrap.className = 'showcase-card-icon';
+      iconWrap.innerHTML = feature.icon;
+
+      const title = document.createElement('div');
+      title.className = 'showcase-card-title';
+      title.textContent = feature.title;
+
+      const desc = document.createElement('div');
+      desc.className = 'showcase-card-desc';
+      desc.textContent = feature.desc;
+
+      card.appendChild(iconWrap);
+      card.appendChild(title);
+      card.appendChild(desc);
+      carousel.appendChild(card);
+      this._showcaseCards.push(card);
+    });
+
+    // Dot indicators
+    const dots = document.createElement('div');
+    dots.className = 'showcase-dots';
+    this._showcaseDots = [];
+    this._FEATURES.forEach((_, idx) => {
+      const dot = document.createElement('button');
+      dot.className = 'showcase-dot' + (idx === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Feature ' + (idx + 1));
+      dot.addEventListener('click', () => this._goToSlide(idx));
+      dots.appendChild(dot);
+      this._showcaseDots.push(dot);
+    });
+
+    panel.appendChild(mesh);
+    panel.appendChild(watermark);
+    panel.appendChild(carousel);
+    panel.appendChild(dots);
+
+    return panel;
+  }
+
+  // --- Private: Shimmer Skeleton ---
+
+  _renderSkeleton() {
+    this._contentEl.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'skel-header-line';
+    this._contentEl.appendChild(header);
+
+    const skelWrap = document.createElement('div');
+    skelWrap.className = 'skel-wrap';
+
+    for (let i = 0; i < 4; i++) {
+      const row = document.createElement('div');
+      row.className = 'skel-row';
+
+      const circle = document.createElement('div');
+      circle.className = 'skel-circle';
+
+      const lines = document.createElement('div');
+      lines.className = 'skel-lines';
+
+      const line1 = document.createElement('div');
+      line1.className = 'skel-line skel-line--md';
+      line1.style.animationDelay = (i * 80) + 'ms';
+
+      const line2 = document.createElement('div');
+      line2.className = 'skel-line skel-line--sm';
+      line2.style.animationDelay = (i * 80 + 40) + 'ms';
+
+      lines.appendChild(line1);
+      lines.appendChild(line2);
+      row.appendChild(circle);
+      row.appendChild(lines);
+      skelWrap.appendChild(row);
+    }
+
+    const skelBtn = document.createElement('div');
+    skelBtn.className = 'skel-rect skel-rect--btn';
+
+    this._contentEl.appendChild(skelWrap);
+    this._contentEl.appendChild(skelBtn);
+  }
+
+  _dismissSkeleton() {
+    return new Promise(resolve => {
+      this._contentEl.classList.add('skel-fade-out');
+      setTimeout(() => {
+        this._contentEl.innerHTML = '';
+        this._contentEl.classList.remove('skel-fade-out');
+        this._contentEl.classList.add('content-fade-in');
+        // Remove the animation class after it plays
+        setTimeout(() => this._contentEl.classList.remove('content-fade-in'), 350);
+        resolve();
+      }, 250);
+    });
+  }
+
+  // --- Private: Showcase Carousel ---
+
+  _startShowcase() {
+    this._showcaseIndex = 0;
+    this._showcaseTimer = setInterval(() => {
+      const next = (this._showcaseIndex + 1) % this._FEATURES.length;
+      this._goToSlide(next);
+    }, 4000);
+  }
+
+  _stopShowcase() {
+    if (this._showcaseTimer) {
+      clearInterval(this._showcaseTimer);
+      this._showcaseTimer = null;
+    }
+  }
+
+  _goToSlide(idx) {
+    if (!this._showcaseCards || !this._showcaseDots) return;
+
+    this._showcaseCards.forEach((card, i) => {
+      card.classList.toggle('active', i === idx);
+    });
+    this._showcaseDots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === idx);
+    });
+
+    this._showcaseIndex = idx;
+
+    // Reset the auto-advance timer so the new card gets a full 4s
+    this._stopShowcase();
+    this._showcaseTimer = setInterval(() => {
+      const next = (this._showcaseIndex + 1) % this._FEATURES.length;
+      this._goToSlide(next);
+    }, 4000);
+  }
+
   // --- Private: Cert Picker ---
 
   _renderCertPicker(certs) {
-    // Sort by expiry descending (newest expiry first)
-    const sorted = certs.slice().sort(function (a, b) {
-      return new Date(b.notAfter) - new Date(a.notAfter);
-    });
-
+    const sorted = certs.slice().sort((a, b) => new Date(b.notAfter) - new Date(a.notAfter));
     this._selectedCert = sorted[0];
     this._contentEl.innerHTML = '';
 
-    // Section header
     const header = document.createElement('div');
     header.className = 'section-header';
 
@@ -172,14 +378,13 @@ class OnboardingScreen {
     header.appendChild(sectionTitle);
     header.appendChild(sectionMeta);
 
-    // Cert list (radiogroup)
     const list = document.createElement('ul');
     list.className = 'cert-list';
     list.setAttribute('role', 'radiogroup');
     list.setAttribute('aria-label', 'Certificate selection');
 
     const items = [];
-    sorted.forEach(function (cert, idx) {
+    sorted.forEach((cert, idx) => {
       const item = document.createElement('li');
       item.className = 'cert-item';
       item.setAttribute('role', 'radio');
@@ -218,28 +423,27 @@ class OnboardingScreen {
       item.appendChild(radioOuter);
       item.appendChild(info);
 
-      item.addEventListener('click', function () {
-        items.forEach(function (i) {
+      item.addEventListener('click', () => {
+        items.forEach(i => {
           i.setAttribute('aria-selected', 'false');
           i.querySelector('.cert-hidden-input').checked = false;
         });
         item.setAttribute('aria-selected', 'true');
         item.querySelector('.cert-hidden-input').checked = true;
         this._selectedCert = cert;
-      }.bind(this));
+      });
 
-      item.addEventListener('keydown', function (e) {
+      item.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           item.click();
         }
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
-          var arr = items;
-          var i = arr.indexOf(item);
-          var next = e.key === 'ArrowDown'
-            ? arr[(i + 1) % arr.length]
-            : arr[(i - 1 + arr.length) % arr.length];
+          const i = items.indexOf(item);
+          const next = e.key === 'ArrowDown'
+            ? items[(i + 1) % items.length]
+            : items[(i - 1 + items.length) % items.length];
           next.focus();
           next.click();
         }
@@ -247,27 +451,25 @@ class OnboardingScreen {
 
       items.push(item);
       list.appendChild(item);
-    }.bind(this));
+    });
 
-    // CTA button
     const cta = document.createElement('button');
     cta.className = 'cta-btn';
     cta.innerHTML = 'Continue \u2192';
-    cta.addEventListener('click', function () {
+    cta.addEventListener('click', () => {
       if (!this._selectedCert) return;
       const username = this._deriveUsername(this._selectedCert.cn);
       this._runAuth(username);
-    }.bind(this));
+    });
 
-    // Tenant link
     const tenantLink = document.createElement('a');
     tenantLink.className = 'tenant-link';
     tenantLink.href = '#';
     tenantLink.textContent = 'Connect to a different tenant';
-    tenantLink.addEventListener('click', function (e) {
+    tenantLink.addEventListener('click', (e) => {
       e.preventDefault();
       this._renderManualEntry();
-    }.bind(this));
+    });
 
     this._contentEl.appendChild(header);
     this._contentEl.appendChild(list);
@@ -278,12 +480,13 @@ class OnboardingScreen {
   // --- Private: No Certs ---
 
   _renderNoCerts() {
-    // No certs found
-    // Manual entry mode
     this._contentEl.innerHTML = '';
 
-    const inputWrap = document.createElement('div');
-    inputWrap.style.marginBottom = '20px';
+    const header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = '<span class="section-title">Connect</span>' +
+      '<span class="section-meta">No certificates detected</span>';
+    this._contentEl.appendChild(header);
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -291,25 +494,24 @@ class OnboardingScreen {
     input.placeholder = 'Admin1CBA@FabricFMLV08PPE.ccsctp.net';
     input.autocomplete = 'off';
     input.spellcheck = false;
-    inputWrap.appendChild(input);
 
     const cta = document.createElement('button');
     cta.className = 'cta-btn';
     cta.textContent = 'Connect';
     cta.disabled = true;
 
-    input.addEventListener('input', function () {
+    input.addEventListener('input', () => {
       cta.disabled = !input.value.trim();
     });
 
-    const submit = function () {
+    const submit = () => {
       const val = input.value.trim();
       if (!val) return;
       this._runAuth(val);
-    }.bind(this);
+    };
 
     cta.addEventListener('click', submit);
-    input.addEventListener('keydown', function (e) {
+    input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') submit();
     });
 
@@ -319,14 +521,12 @@ class OnboardingScreen {
     helpLink.href = this._PPE_WIKI_URL;
     helpLink.target = '_blank';
     helpLink.rel = 'noopener noreferrer';
-    helpLink.style.display = 'block';
 
-    this._contentEl.appendChild(inputWrap);
+    this._contentEl.appendChild(input);
     this._contentEl.appendChild(cta);
     this._contentEl.appendChild(helpLink);
 
-    // Focus input after DOM paints
-    requestAnimationFrame(function () { input.focus(); });
+    requestAnimationFrame(() => input.focus());
   }
 
   // --- Private: Manual Entry ---
@@ -334,51 +534,50 @@ class OnboardingScreen {
   _renderManualEntry() {
     this._contentEl.innerHTML = '';
 
-    // Back navigation — top of content, before everything
     if (this._certs && this._certs.length > 0) {
-      var back = document.createElement('a');
+      const back = document.createElement('a');
       back.className = 'back-nav';
       back.href = '#';
-      back.innerHTML = '&#x2190; Certificate';
-      back.addEventListener('click', function (e) {
+      back.innerHTML = '\u2190 Certificates';
+      back.addEventListener('click', (e) => {
         e.preventDefault();
         this._renderCertPicker(this._certs);
-      }.bind(this));
+      });
       this._contentEl.appendChild(back);
     }
 
-    var header = document.createElement('div');
+    const header = document.createElement('div');
     header.className = 'section-header';
     header.innerHTML = '<span class="section-title">Manual Connection</span>';
 
-    var input = document.createElement('input');
+    const input = document.createElement('input');
     input.type = 'text';
     input.className = 'manual-tenant-input';
     input.placeholder = 'Admin1CBA@FabricFMLV08PPE.ccsctp.net';
     input.autocomplete = 'off';
     input.spellcheck = false;
 
-    var cta = document.createElement('button');
+    const cta = document.createElement('button');
     cta.className = 'cta-btn';
-    cta.innerHTML = 'Connect &#x2192;';
+    cta.innerHTML = 'Connect \u2192';
     cta.disabled = true;
 
-    input.addEventListener('input', function () {
+    input.addEventListener('input', () => {
       cta.disabled = !input.value.trim();
     });
 
-    var submit = function () {
-      var val = input.value.trim();
+    const submit = () => {
+      const val = input.value.trim();
       if (!val) return;
       this._runAuth(val);
-    }.bind(this);
+    };
 
     cta.addEventListener('click', submit);
-    input.addEventListener('keydown', function (e) {
+    input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') submit();
     });
 
-    var helpLink = document.createElement('a');
+    const helpLink = document.createElement('a');
     helpLink.className = 'tenant-link';
     helpLink.href = this._PPE_WIKI_URL;
     helpLink.target = '_blank';
@@ -390,7 +589,7 @@ class OnboardingScreen {
     this._contentEl.appendChild(cta);
     this._contentEl.appendChild(helpLink);
 
-    requestAnimationFrame(function () { input.focus(); });
+    requestAnimationFrame(() => input.focus());
   }
 
   // --- Private: Auth Flow ---
@@ -398,19 +597,19 @@ class OnboardingScreen {
   async _runAuth(username) {
     this._contentEl.innerHTML = '';
 
-    var header = document.createElement('div');
+    const header = document.createElement('div');
     header.className = 'section-header';
     header.innerHTML = '<span class="section-title">Authenticating</span>';
     this._contentEl.appendChild(header);
 
-    var stepsContainer = document.createElement('div');
+    const stepsContainer = document.createElement('div');
     stepsContainer.className = 'auth-progress active';
     this._contentEl.appendChild(stepsContainer);
     this._stepCount = 0;
 
     // Step 1 — Certificate verified (instant done)
     const certLabel = username.includes('@') ? username.split('@')[0] : username;
-    const step1 = this._addStep(stepsContainer, 'done', 'Certificate verified', certLabel);
+    this._addStep(stepsContainer, 'done', 'Certificate verified', certLabel);
 
     await this._delay(200);
 
@@ -422,7 +621,7 @@ class OnboardingScreen {
       const resp = await fetch('/api/edog/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username }),
+        body: JSON.stringify({ username }),
       });
 
       if (!resp.ok) {
@@ -453,7 +652,7 @@ class OnboardingScreen {
       this._updateStep(step2, 'error', 'Connection failed', e.message);
       this._showError(
         'Network error',
-        `Could not reach the EDOG auth server. Is it running on localhost?`,
+        'Could not reach the EDOG auth server. Is it running on localhost?',
         null,
         username
       );
@@ -506,14 +705,6 @@ class OnboardingScreen {
 
   // --- Private: Step Management ---
 
-  /**
-   * Create an auth step-row element and append it to the container.
-   * @param {HTMLElement} container - The .auth-progress wrapper.
-   * @param {'pending'|'running'|'done'|'error'} state - Initial state.
-   * @param {string} label - Step label text.
-   * @param {string} [detail] - Optional detail text.
-   * @returns {HTMLElement} The step-row element.
-   */
   _addStep(container, state, label, detail) {
     this._stepCount = (this._stepCount || 0) + 1;
 
@@ -545,23 +736,14 @@ class OnboardingScreen {
     row.appendChild(indicator);
     row.appendChild(textWrap);
 
-    if (state) {
-      row.classList.add(state);
-    }
+    if (state) row.classList.add(state);
 
     container.appendChild(row);
-    requestAnimationFrame(function () { row.classList.add('visible'); });
+    requestAnimationFrame(() => row.classList.add('visible'));
 
     return row;
   }
 
-  /**
-   * Update an existing step-row's state, label, and detail.
-   * @param {HTMLElement} el - The .step-row element.
-   * @param {'pending'|'running'|'done'|'error'} state - New state.
-   * @param {string} label - New label text.
-   * @param {string} [detail] - New detail text.
-   */
   _updateStep(el, state, label, detail) {
     el.classList.remove('pending', 'running', 'done', 'error');
     el.classList.add(state);
@@ -580,8 +762,7 @@ class OnboardingScreen {
       if (!detailEl) {
         detailEl = document.createElement('div');
         detailEl.className = 'step-detail';
-        // Append to the text wrapper (second child of the row)
-        var textWrap = el.children[1];
+        const textWrap = el.children[1];
         if (textWrap) textWrap.appendChild(detailEl);
       }
       detailEl.textContent = detail;
@@ -592,13 +773,6 @@ class OnboardingScreen {
 
   // --- Private: Error Display ---
 
-  /**
-   * Append an error block below the auth steps with a retry button.
-   * @param {string} title - Error title.
-   * @param {string} detail - Error description.
-   * @param {string|null} help - Optional help text from server.
-   * @param {string} username - Username to retry with.
-   */
   _showError(title, detail, help, username) {
     const block = document.createElement('div');
     block.className = 'auth-error';
@@ -621,12 +795,9 @@ class OnboardingScreen {
     }
 
     const retry = document.createElement('button');
-    retry.className = 'cta-btn';
+    retry.className = 'cta-btn cta-btn--retry';
     retry.textContent = 'Retry';
-    retry.style.marginTop = '20px';
-    retry.addEventListener('click', function () {
-      this._runAuth(username);
-    }.bind(this));
+    retry.addEventListener('click', () => this._runAuth(username));
 
     this._contentEl.appendChild(block);
     this._contentEl.appendChild(retry);
@@ -634,49 +805,28 @@ class OnboardingScreen {
 
   // --- Private: Utilities ---
 
-  /**
-   * Derive a CBA username from a certificate CN.
-   * Converts "Admin1CBA.FabricFMLV08PPE.ccsctp.net" → "Admin1CBA@FabricFMLV08PPE.ccsctp.net"
-   * by replacing the first '.' with '@'.
-   * @param {string} cn - Certificate common name.
-   * @returns {string} Username suitable for /api/edog/auth.
-   */
   _deriveUsername(cn) {
     if (!cn) return '';
-    // If already contains '@', return as-is
     if (cn.indexOf('@') !== -1) return cn;
     const dotIdx = cn.indexOf('.');
     if (dotIdx === -1) return cn;
     return cn.substring(0, dotIdx) + '@' + cn.substring(dotIdx + 1);
   }
 
-  /**
-   * Format an ISO date string to a readable short form.
-   * @param {string} isoDate - ISO 8601 date string.
-   * @returns {string} Formatted date, e.g. "15 Mar 2026".
-   */
   _formatDate(isoDate) {
     if (!isoDate) return 'unknown';
     try {
       const d = new Date(isoDate);
       if (isNaN(d.getTime())) return 'unknown';
-      const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-      ];
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
     } catch {
       return 'unknown';
     }
   }
 
-  /**
-   * Promise-based delay.
-   * @param {number} ms - Milliseconds to wait.
-   * @returns {Promise<void>}
-   */
   _delay(ms) {
-    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
 

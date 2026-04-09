@@ -1,0 +1,153 @@
+/* ============================================================================
+   SHIMMER — Reusable skeleton loading system
+   Design system component. Use for any loading state where the content shape
+   is known ahead of time (lists, cards, text blocks, buttons).
+
+   Usage:
+     <div class="skel-line skel-line--sm"></div>        // short text line
+     <div class="skel-line skel-line--md"></div>        // medium text line
+     <div class="skel-line skel-line--lg"></div>        // full-width line
+     <div class="skel-circle"></div>                    // avatar / radio
+     <div class="skel-circle skel-circle--lg"></div>    // larger avatar
+     <div class="skel-rect"></div>                      // button / card block
+     <div class="skel-rect skel-rect--btn"></div>       // button-shaped
+
+   Compose rows:
+     <div class="skel-row">
+       <div class="skel-circle"></div>
+       <div class="skel-lines">
+         <div class="skel-line skel-line--md"></div>
+         <div class="skel-line skel-line--sm"></div>
+       </div>
+     </div>
+
+   Transitions:
+     .skel-fade-out    → fade skeleton out (250ms)
+     .content-fade-in  → slide+fade real content in (300ms)
+
+   Mika Tanaka — CSS Systems
+   ============================================================================ */
+
+
+/* --- Keyframes --- */
+@keyframes shimmerSweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes contentSlideIn {
+  from { opacity: 0; transform: translateY(var(--space-1)); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* --- Base shimmer mixin via shared pseudo-element --- */
+.skel-line,
+.skel-rect,
+.skel-circle,
+.skel-header-line {
+  background: var(--skel-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.skel-line::after,
+.skel-rect::after,
+.skel-circle::after,
+.skel-header-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--skel-shine) 50%, transparent 100%);
+  animation: shimmerSweep var(--skel-speed) ease-in-out infinite;
+}
+
+
+/* --- Lines (text placeholders) --- */
+.skel-line {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.skel-line--sm  { width: 55%; }
+.skel-line--md  { width: 80%; }
+.skel-line--lg  { width: 100%; }
+.skel-line--xs  { width: 35%; }
+
+
+/* --- Header line --- */
+.skel-header-line {
+  width: 90px;
+  height: 8px;
+  border-radius: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+
+
+/* --- Circles (radio buttons, avatars) --- */
+.skel-circle {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.skel-circle--lg {
+  width: 32px;
+  height: 32px;
+}
+
+.skel-circle--xl {
+  width: 48px;
+  height: 48px;
+}
+
+
+/* --- Rectangles (buttons, cards) --- */
+.skel-rect {
+  border-radius: var(--skel-radius);
+}
+
+.skel-rect--btn {
+  height: 44px;
+  border-radius: var(--radius-lg);
+}
+
+.skel-rect--card {
+  height: 120px;
+  border-radius: var(--radius-lg);
+}
+
+
+/* --- Row composition (circle + lines) --- */
+.skel-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: var(--space-3) 14px;
+  border-radius: var(--radius-lg);
+}
+
+.skel-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skel-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+
+/* --- Transition states --- */
+.skel-fade-out {
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+.content-fade-in {
+  animation: contentSlideIn 300ms ease-out;
+}

@@ -922,7 +922,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Auth gate: check if we have a valid bearer token
   const onboarding = new OnboardingScreen();
-  const needsAuth = await onboarding.isRequired();
+  const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
+  const needsAuth = forceOnboarding || await onboarding.isRequired();
 
   if (needsAuth) {
     // Show onboarding overlay, start app when auth completes

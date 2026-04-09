@@ -1,8 +1,7 @@
 /* ============================================================================
    ONBOARDING — Full-screen auth overlay
-   Integrated from approved prototype (Direction C — minimal).
+   Direction C (branded minimal) with feature showcase right panel.
    Scoped under .onboarding-overlay to avoid global pollution.
-   Conflicting class names prefixed: layout, content-area, footer.
 
    Mika Tanaka — CSS Systems
    ============================================================================ */
@@ -20,23 +19,21 @@
 }
 
 .onboarding-overlay {
-  --bg: #fafbfc;
-  --bg-card: #ffffff;
-  --bg-hover: #f3f4f8;
-  --bg-selected: rgba(109, 92, 255, 0.05);
-  --border: #e4e6ec;
-  --border-accent: #6d5cff;
-  --text-primary: #0f1117;
-  --text-secondary: #5c6170;
-  --text-muted: #999dab;
-  --accent: #6d5cff;
-  --accent-hover: #5c4be6;
-  --accent-faint: rgba(109, 92, 255, 0.06);
-  --accent-wash: rgba(109, 92, 255, 0.03);
-  --green: #22a55b;
-  --error: #c53030;
-  --font: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
-  --speed: 120ms;
+  --ob-bg: #fafbfc;
+  --ob-bg-card: #ffffff;
+  --ob-bg-hover: #f3f4f8;
+  --ob-bg-selected: rgba(109, 92, 255, 0.05);
+  --ob-border: #e4e6ec;
+  --ob-text: #0f1117;
+  --ob-text-secondary: #5c6170;
+  --ob-text-muted: #999dab;
+  --ob-accent: #6d5cff;
+  --ob-accent-hover: #5c4be6;
+  --ob-green: #22a55b;
+  --ob-error: #c53030;
+  --ob-font: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --ob-radius: 10px;
+  --ob-speed: 120ms;
 }
 
 
@@ -46,13 +43,13 @@
 .onboarding-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: 9000; /* Topmost layer — above all dashboard content */
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  font-family: var(--font);
-  background: var(--bg);
-  color: var(--text-primary);
+  font-family: var(--ob-font);
+  background: var(--ob-bg);
+  color: var(--ob-text);
   opacity: 1;
   transition: opacity 0.4s ease;
 }
@@ -83,7 +80,7 @@
   z-index: 1;
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(340px, 480px) 1fr;
+  grid-template-columns: minmax(360px, 460px) 1fr;
   min-height: 0;
 }
 
@@ -98,6 +95,8 @@
   padding: 56px 48px 40px;
   display: flex;
   flex-direction: column;
+  border-right: 1px solid var(--ob-border);
+  overflow-y: auto;
 }
 
 
@@ -105,23 +104,24 @@
    5. WORDMARK + TAGLINE
    --------------------------------------------------------------------------- */
 .onboarding-overlay .wordmark {
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--text-primary);
+  letter-spacing: -0.04em;
+  color: var(--ob-text);
   line-height: 1;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .onboarding-overlay .wordmark-accent {
-  color: var(--accent);
+  color: var(--ob-accent);
 }
 
 .onboarding-overlay .tagline {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 40px;
+  color: var(--ob-text-muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 44px;
 }
 
 
@@ -132,21 +132,21 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .onboarding-overlay .section-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--ob-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .onboarding-overlay .section-meta {
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--ob-text-muted);
 }
 
 
@@ -157,8 +157,12 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   margin-bottom: 28px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ob-border) transparent;
 }
 
 .onboarding-overlay .cert-item {
@@ -166,19 +170,21 @@
   align-items: center;
   gap: 14px;
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--ob-radius);
   cursor: pointer;
   border: 1.5px solid transparent;
-  transition: background var(--speed) ease-out, border-color var(--speed) ease-out;
+  transition:
+    background var(--ob-speed) ease-out,
+    border-color var(--ob-speed) ease-out;
 }
 
 .onboarding-overlay .cert-item:hover {
-  background: var(--bg-hover);
+  background: var(--ob-bg-hover);
 }
 
 .onboarding-overlay .cert-item[aria-selected="true"] {
-  background: var(--bg-selected);
-  border-color: rgba(109, 92, 255, 0.2);
+  background: var(--ob-bg-selected);
+  border-color: rgba(124, 108, 255, 0.25);
 }
 
 /* Custom radio */
@@ -186,23 +192,23 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid var(--border);
+  border: 2px solid var(--ob-border);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color var(--speed) ease-out;
+  transition: border-color var(--ob-speed) ease-out;
 }
 
 .onboarding-overlay .cert-item[aria-selected="true"] .radio-outer {
-  border-color: var(--accent);
+  border-color: var(--ob-accent);
 }
 
 .onboarding-overlay .radio-inner {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--ob-accent);
   transform: scale(0);
   transition: transform 100ms ease-out;
 }
@@ -226,7 +232,7 @@
 .onboarding-overlay .cert-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--ob-text);
   word-break: break-all;
   line-height: 1.4;
 }
@@ -234,8 +240,8 @@
 .onboarding-overlay .cert-expiry {
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-muted);
-  margin-top: 1px;
+  color: var(--ob-text-muted);
+  margin-top: 2px;
 }
 
 
@@ -243,16 +249,18 @@
    8. CTA BUTTON
    --------------------------------------------------------------------------- */
 .onboarding-overlay .cta-btn {
-  font-family: var(--font);
+  font-family: var(--ob-font);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: #fff;
-  background: var(--accent);
+  background: var(--ob-accent);
   border: none;
   padding: 12px 24px;
-  border-radius: 10px;
+  border-radius: var(--ob-radius);
   cursor: pointer;
-  transition: background var(--speed) ease-out, transform 60ms ease-out;
+  transition:
+    background var(--ob-speed) ease-out,
+    transform 60ms ease-out;
   width: 100%;
   display: flex;
   align-items: center;
@@ -260,10 +268,11 @@
   gap: 8px;
 }
 
-.onboarding-overlay .cta-btn:hover { background: var(--accent-hover); }
+.onboarding-overlay .cta-btn:hover { background: var(--ob-accent-hover); }
 .onboarding-overlay .cta-btn:active { transform: scale(0.985); }
-.onboarding-overlay .cta-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
-.onboarding-overlay .cta-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.onboarding-overlay .cta-btn:disabled { opacity: 0.35; cursor: default; transform: none; }
+.onboarding-overlay .cta-btn:focus-visible { outline: 2px solid var(--ob-accent); outline-offset: 3px; }
+.onboarding-overlay .cta-btn--retry { margin-top: 20px; }
 
 
 /* ---------------------------------------------------------------------------
@@ -274,14 +283,14 @@
   text-align: center;
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--ob-text-muted);
   text-decoration: none;
-  margin-top: 12px;
+  margin-top: 14px;
   cursor: pointer;
-  transition: color var(--speed) ease-out;
+  transition: color var(--ob-speed) ease-out;
 }
 
-.onboarding-overlay .tenant-link:hover { color: var(--accent); }
+.onboarding-overlay .tenant-link:hover { color: var(--ob-accent); }
 
 
 /* ---------------------------------------------------------------------------
@@ -291,34 +300,265 @@
 
 
 /* ---------------------------------------------------------------------------
-   11. PATTERN AREA (right decorative panel)
+   11. SHOWCASE PANEL (right — feature cards + activity feed)
    --------------------------------------------------------------------------- */
-.onboarding-overlay .pattern-area {
+.onboarding-overlay .showcase-panel {
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 48px;
+  gap: 0;
   background: rgba(243, 244, 248, 0.15);
-  border-left: 1px solid var(--border);
 }
 
-.onboarding-overlay .pattern-area::before { display: none; }
-
-.onboarding-overlay .pattern-area::after {
-  content: '';
+/* --- Ambient gradient mesh (Mika) --- */
+.onboarding-overlay .showcase-mesh {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 60%, rgba(109,92,255,0.03) 0%, transparent 50%);
+  pointer-events: none;
+  overflow: hidden;
 }
 
-.onboarding-overlay .pattern-watermark {
+.onboarding-overlay .mesh-blob {
   position: absolute;
-  bottom: 48px;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  will-change: transform;
+}
+
+.onboarding-overlay .mesh-blob--1 {
+  width: 400px;
+  height: 400px;
+  background: rgba(109, 92, 255, 0.08);
+  top: -10%;
+  right: -5%;
+  animation: meshFloat1 12s ease-in-out infinite;
+}
+
+.onboarding-overlay .mesh-blob--2 {
+  width: 300px;
+  height: 300px;
+  background: rgba(99, 179, 237, 0.06);
+  bottom: 10%;
+  left: -5%;
+  animation: meshFloat2 15s ease-in-out infinite;
+}
+
+.onboarding-overlay .mesh-blob--3 {
+  width: 250px;
+  height: 250px;
+  background: rgba(159, 122, 234, 0.05);
+  top: 40%;
+  left: 40%;
+  animation: meshFloat3 18s ease-in-out infinite;
+}
+
+@keyframes meshFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-30px, 40px) scale(1.05); }
+  66% { transform: translate(20px, -20px) scale(0.95); }
+}
+
+@keyframes meshFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.08); }
+  66% { transform: translate(-20px, 20px) scale(0.92); }
+}
+
+@keyframes meshFloat3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-25px, 25px) scale(1.1); }
+}
+
+/* Large watermark behind everything */
+.onboarding-overlay .showcase-watermark {
+  position: absolute;
+  bottom: 40px;
   right: 48px;
-  font-size: 140px;
+  font-size: 100px;
   font-weight: 800;
-  color: rgba(109, 92, 255, 0.07);
+  color: rgba(109, 92, 255, 0.05);
   letter-spacing: -0.04em;
   line-height: 1;
   user-select: none;
+  pointer-events: none;
+}
+
+/* Card carousel container */
+.onboarding-overlay .showcase-carousel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  min-height: 320px;
+}
+
+/* Individual feature card */
+.onboarding-overlay .showcase-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 44px 40px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(228, 230, 236, 0.6);
+  border-radius: 16px;
+  backdrop-filter: blur(24px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  opacity: 0;
+  transform: translateY(12px) scale(0.97);
+  transition: opacity 500ms ease, transform 500ms ease;
+  pointer-events: none;
+}
+
+.onboarding-overlay .showcase-card.active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.onboarding-overlay .showcase-card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: rgba(109, 92, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
+  color: var(--ob-accent);
+}
+
+.onboarding-overlay .showcase-card-icon svg {
+  width: 26px;
+  height: 26px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.onboarding-overlay .showcase-card-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ob-text);
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+
+.onboarding-overlay .showcase-card-desc {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ob-text-secondary);
+  line-height: 1.65;
+  max-width: 380px;
+}
+
+/* Dot indicators below the card */
+.onboarding-overlay .showcase-dots {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.onboarding-overlay .showcase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ob-text-muted);
+  opacity: 0.3;
+  transition: opacity 300ms ease, background 300ms ease, transform 300ms ease;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+
+.onboarding-overlay .showcase-dot.active {
+  opacity: 1;
+  background: var(--ob-accent);
+  transform: scale(1.25);
+}
+
+
+/* ---------------------------------------------------------------------------
+   11b. ACTIVITY FEED (below carousel)
+   --------------------------------------------------------------------------- */
+.onboarding-overlay .showcase-feed {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  margin-top: 36px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(228, 230, 236, 0.5);
+  border-radius: 12px;
+  backdrop-filter: blur(16px);
+}
+
+.onboarding-overlay .feed-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ob-text-muted);
+  margin-bottom: 12px;
+}
+
+.onboarding-overlay .feed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  opacity: 0;
+  animation: feedSlideIn 300ms ease-out forwards;
+}
+
+.onboarding-overlay .feed-icon {
+  font-size: 8px;
+  color: var(--ob-text-muted);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.onboarding-overlay .feed-icon--accent {
+  color: var(--ob-accent);
+}
+
+.onboarding-overlay .feed-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ob-text-secondary);
+  flex-shrink: 0;
+}
+
+.onboarding-overlay .feed-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ob-text);
+  margin-left: auto;
+}
+
+@keyframes feedSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 
@@ -352,55 +592,58 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 2px solid var(--border);
+  border: 2px solid var(--ob-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  color: var(--text-muted);
+  color: var(--ob-text-muted);
   flex-shrink: 0;
   margin-top: 1px;
-  transition: border-color var(--speed) ease-out, background var(--speed) ease-out, color var(--speed) ease-out;
+  transition:
+    border-color var(--ob-speed) ease-out,
+    background var(--ob-speed) ease-out,
+    color var(--ob-speed) ease-out;
 }
 
 .onboarding-overlay .step-row.running .step-indicator {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--ob-accent);
+  color: var(--ob-accent);
 }
 
 .onboarding-overlay .step-row.done .step-indicator {
-  border-color: var(--green);
-  background: var(--green);
+  border-color: var(--ob-green);
+  background: var(--ob-green);
   color: #fff;
 }
 
 .onboarding-overlay .step-row.error .step-indicator {
-  border-color: var(--error);
-  background: var(--error);
+  border-color: var(--ob-error);
+  background: var(--ob-error);
   color: #fff;
 }
 
 .onboarding-overlay .step-label {
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-muted);
-  transition: color var(--speed) ease-out;
+  color: var(--ob-text-muted);
+  transition: color var(--ob-speed) ease-out;
 }
 
-.onboarding-overlay .step-row.running .step-label { color: var(--text-primary); }
-.onboarding-overlay .step-row.done .step-label { color: var(--text-primary); }
+.onboarding-overlay .step-row.running .step-label { color: var(--ob-text); }
+.onboarding-overlay .step-row.done .step-label { color: var(--ob-text); }
 
 .onboarding-overlay .step-detail {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--ob-text-muted);
   margin-top: 2px;
 }
 
 .onboarding-overlay .redirect-msg {
   font-size: 14px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--ob-accent);
   margin-top: 20px;
   opacity: 0;
   transition: opacity 300ms ease-out;
@@ -419,11 +662,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--ob-border);
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-muted);
-  font-family: var(--font);
+  color: var(--ob-text-muted);
+  font-family: var(--ob-font);
 }
 
 .onboarding-overlay .status-dot {
@@ -431,35 +674,35 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--ob-green);
   margin-right: 6px;
   vertical-align: middle;
 }
 
 
 /* ---------------------------------------------------------------------------
-   14. MANUAL TENANT INPUT (for no-certs / manual-entry flows)
+   14. MANUAL TENANT INPUT
    --------------------------------------------------------------------------- */
 .onboarding-overlay .manual-tenant-input {
   width: 100%;
   padding: 12px 14px;
-  background: var(--bg-card);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-family: var(--font);
+  background: var(--ob-bg-card);
+  border: 1.5px solid var(--ob-border);
+  border-radius: var(--ob-radius);
+  color: var(--ob-text);
+  font-family: var(--ob-font);
   font-size: 13px;
   margin-bottom: 20px;
   outline: none;
-  transition: border-color var(--speed) ease-out;
+  transition: border-color var(--ob-speed) ease-out;
 }
 
 .onboarding-overlay .manual-tenant-input::placeholder {
-  color: var(--text-muted);
+  color: var(--ob-text-muted);
 }
 
 .onboarding-overlay .manual-tenant-input:focus {
-  border-color: var(--accent);
+  border-color: var(--ob-accent);
 }
 
 
@@ -468,21 +711,21 @@
    --------------------------------------------------------------------------- */
 .onboarding-overlay .auth-error {
   padding: 16px 20px;
-  border-radius: 10px;
-  border: 1.5px solid rgba(197, 48, 48, 0.2);
-  background: rgba(197, 48, 48, 0.04);
+  border-radius: var(--ob-radius);
+  border: 1.5px solid rgba(248, 113, 113, 0.2);
+  background: rgba(248, 113, 113, 0.06);
   margin-top: 20px;
 }
 
 .onboarding-overlay .auth-error-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--error);
+  color: var(--ob-error);
 }
 
 .onboarding-overlay .auth-error-detail {
   font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--ob-text-secondary);
   margin-top: 4px;
   line-height: 1.5;
 }
@@ -490,37 +733,55 @@
 .onboarding-overlay .auth-error-help {
   margin-top: 10px;
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--ob-text-muted);
 }
 
 
 /* ---------------------------------------------------------------------------
-   16. RESPONSIVE — collapse to single column
+   16. BACK NAVIGATION
    --------------------------------------------------------------------------- */
-@media (max-width: 768px) {
+.onboarding-overlay .back-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ob-text-muted);
+  text-decoration: none;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: color var(--ob-speed) ease-out;
+}
+
+.onboarding-overlay .back-nav:hover { color: var(--ob-accent); }
+
+
+/* ---------------------------------------------------------------------------
+   16b. SHIMMER — onboarding uses shared shimmer.css, just map local vars
+   --------------------------------------------------------------------------- */
+.onboarding-overlay .skel-line,
+.onboarding-overlay .skel-rect,
+.onboarding-overlay .skel-circle,
+.onboarding-overlay .skel-header-line {
+  --skel-base: var(--ob-border);
+}
+
+.onboarding-overlay .skel-rect--btn {
+  margin-top: 20px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   17. RESPONSIVE — collapse to single column
+   --------------------------------------------------------------------------- */
+@media (max-width: 900px) {
   .onboarding-layout {
     grid-template-columns: 1fr;
   }
-  .onboarding-overlay .pattern-area { display: none; }
-  .onboarding-content {
-    padding: 32px 24px;
-  }
-  .onboarding-overlay .wordmark { font-size: 26px; }
+  .onboarding-overlay .showcase-panel { display: none; }
+  .onboarding-content { padding: 32px 24px; }
+  .onboarding-overlay .wordmark { font-size: 28px; }
   .onboarding-overlay .onboarding-footer { padding: 16px 24px; }
-}
-
-
-/* ---------------------------------------------------------------------------
-   17. REDUCED MOTION
-   --------------------------------------------------------------------------- */
-@media (prefers-reduced-motion: reduce) {
-  .onboarding-overlay,
-  .onboarding-overlay *,
-  .onboarding-overlay *::before,
-  .onboarding-overlay *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
 }
 
 
@@ -529,36 +790,38 @@
    --------------------------------------------------------------------------- */
 @media (prefers-color-scheme: dark) {
   .onboarding-overlay {
-    --bg: #0c0e14;
-    --bg-card: #181b23;
-    --bg-hover: #1e212b;
-    --bg-selected: rgba(109, 92, 255, 0.1);
-    --border: #272b36;
-    --text-primary: #e4e6eb;
-    --text-secondary: #8c919d;
-    --text-muted: #5e6371;
-    --accent-faint: rgba(109, 92, 255, 0.05);
-    --accent-wash: rgba(109, 92, 255, 0.02);
-    --error: #f87171;
+    --ob-bg: #0c0e14;
+    --ob-bg-card: #181b23;
+    --ob-bg-hover: #1e212b;
+    --ob-bg-selected: rgba(109, 92, 255, 0.1);
+    --ob-border: #272b36;
+    --ob-text: #e4e6eb;
+    --ob-text-secondary: #8c919d;
+    --ob-text-muted: #5e6371;
+    --ob-error: #f87171;
   }
-  .onboarding-overlay .pattern-watermark { color: rgba(109, 92, 255, 0.05); }
+  .onboarding-overlay .showcase-watermark { color: rgba(109, 92, 255, 0.05); }
   .onboarding-content { background: rgba(12, 14, 20, 0.7); }
+  .onboarding-overlay .showcase-card { background: rgba(22, 25, 33, 0.6); }
+  .onboarding-overlay .showcase-card { border-color: rgba(39, 43, 54, 0.6); }
+  .onboarding-overlay .showcase-feed { background: rgba(22, 25, 33, 0.4); border-color: rgba(39, 43, 54, 0.5); }
+  .onboarding-overlay .mesh-blob--1 { background: rgba(109, 92, 255, 0.12); }
+  .onboarding-overlay .mesh-blob--2 { background: rgba(99, 179, 237, 0.08); }
+  .onboarding-overlay .mesh-blob--3 { background: rgba(159, 122, 234, 0.07); }
   .onboarding-overlay .auth-error {
     border-color: rgba(248, 113, 113, 0.2);
     background: rgba(248, 113, 113, 0.06);
   }
 }
 
-/* Back navigation — top of content area, small arrow + label */
-.back-nav {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-decoration: none;
-  margin-bottom: 20px;
-  cursor: pointer;
-  transition: color 120ms ease-out;
+
+/* ---------------------------------------------------------------------------
+   19. REDUCED MOTION
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-overlay .showcase-card,
+  .onboarding-overlay .step-row {
+    transition-duration: 0.01ms;
+  }
 }
-.back-nav:hover { color: var(--accent); }
 

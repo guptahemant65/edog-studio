@@ -22,6 +22,7 @@ OUTPUT_FILE = os.path.join(PROJECT_DIR, "src", "edog-logs.html")
 # CSS modules — order matters (variables first, then layout, then components)
 CSS_MODULES = [
     "css/variables.css",
+    "css/shimmer.css",
     "css/layout.css",
     "css/topbar.css",
     "css/sidebar.css",
