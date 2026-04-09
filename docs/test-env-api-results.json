@@ -1,0 +1,131 @@
+[
+  {
+    "label": "List workspaces (metadata)",
+    "ok": true,
+    "code": 200,
+    "count": 14,
+    "keys": [
+      "folders"
+    ]
+  },
+  {
+    "label": "List workspaces (v1.0)",
+    "ok": true,
+    "code": 200,
+    "count": 13,
+    "keys": [
+      "@odata.context",
+      "@odata.count",
+      "value"
+    ]
+  },
+  {
+    "label": "List items in workspace (v1)",
+    "ok": true,
+    "code": 200,
+    "count": 2,
+    "keys": [
+      "value"
+    ]
+  },
+  {
+    "label": "Rename workspace (no-op)",
+    "ok": true,
+    "code": 200,
+    "count": 0,
+    "keys": [
+      "id",
+      "displayName",
+      "description",
+      "type",
+      "capacityId"
+    ]
+  },
+  {
+    "label": "List lakehouses (v1)",
+    "ok": true,
+    "code": 200,
+    "count": 1,
+    "keys": [
+      "value"
+    ]
+  },
+  {
+    "label": "Get lakehouse details (v1)",
+    "ok": true,
+    "code": 200,
+    "count": 0,
+    "keys": [
+      "id",
+      "type",
+      "displayName",
+      "description",
+      "workspaceId",
+      "properties"
+    ]
+  },
+  {
+    "label": "Rename lakehouse (no-op)",
+    "ok": true,
+    "code": 200,
+    "count": 0,
+    "keys": [
+      "id",
+      "type",
+      "displayName",
+      "description",
+      "workspaceId",
+      "properties"
+    ]
+  },
+  {
+    "label": "List tables (v1) \u2014 non-schema LH",
+    "ok": true,
+    "code": 200,
+    "count": 0,
+    "keys": [
+      "continuationToken",
+      "continuationUri",
+      "data"
+    ]
+  },
+  {
+    "label": "List artifacts (metadata)",
+    "ok": true,
+    "code": 200,
+    "count": 2,
+    "keys": [
+      "objectId",
+      "artifactType",
+      "displayName",
+      "description",
+      "folderObjectId"
+    ]
+  },
+  {
+    "label": "Get artifact by ID (metadata)",
+    "ok": true,
+    "code": 200,
+    "count": 0,
+    "keys": [
+      "objectId",
+      "artifactType",
+      "displayName",
+      "description",
+      "folderObjectId",
+      "provisionState"
+    ]
+  },
+  {
+    "label": "Generate MWC token",
+    "ok": true,
+    "code": 200,
+    "count": 0,
+    "keys": [
+      "Token",
+      "TargetUriHost",
+      "CapacityObjectId",
+      "Expiration"
+    ]
+  }
+]

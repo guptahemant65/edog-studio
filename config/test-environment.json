@@ -1,0 +1,10 @@
+{
+  "workspaceId": "65e22bd4-92a1-4de6-8bfc-af813eccff3e",
+  "workspaceName": "EDOG_Studio_TestEnv",
+  "lakehouseId": "8453bb5e-c2ae-474d-a8e3-983b28ead8ba",
+  "lakehouseName": "EDOG_Test_LH",
+  "capacityId": "dd01a7f3-4198-4439-aae3-4eaf902281bb",
+  "redirectHost": "https://biazure-int-edog-redirect.analysis-df.windows.net",
+  "createdAt": "2026-04-09T09:26:38Z",
+  "note": "Auto-provisioned by EDOG Studio. Safe to delete."
+}

@@ -351,7 +351,7 @@ class WorkspaceExplorer {
       return MockData.tablesForLakehouse || [];
     }
     const data = await this._api.listTables(wsId, lhId);
-    return (data && data.value) || [];
+    return (data && (data.value || data.data)) || [];
   }
 
   // ────────────────────────────────────────────

@@ -3,7 +3,9 @@
 > **Status:** 🟢 TESTED against live PPE environment (FabricFMLV08PPE tenant)
 > **Date:** 2026-04-09
 > **Token:** Bearer token (PBI audience: `analysis.windows-int.net/powerbi/api`)
-> **Last Tested By:** Elena Voronova + Dev Patel
+> **Test Environment:** EDOG_Studio_TestEnv workspace + EDOG_Test_LH lakehouse
+> **Sources:** design-spec-v2.md, FabricSparkCST POC (`users/guptahemant/devmodePOC`), live testing
+> **Last Updated By:** Dev Patel + Elena Voronova
 
 ---
 
@@ -158,10 +160,285 @@ Browser → /api/fabric/* → dev-server.py → https://biazure-int-edog-redirec
 
 ---
 
-## Action Items
+## Action Items (F01)
 
-- [ ] Switch proxy to forward v1 paths directly (no rewriting to metadata paths) — eliminates normalization bugs
-- [ ] Only use metadata path for workspace listing (for `capacityObjectId` and `lastUpdatedDate` not in v1)
-- [ ] Handle tables 400 gracefully — show "Tables not available (schemas enabled)" in UI
-- [ ] Test table listing with a non-schema lakehouse
+- [x] Switch proxy to forward v1 paths directly — **DONE** (dev-server.py rewritten)
+- [x] Only use metadata path for workspace listing — **DONE**
+- [x] Handle tables 400 gracefully — **DONE** (toast notification)
+- [x] Test table listing with a non-schema lakehouse — **DONE** (EDOG_Test_LH: 0 tables, endpoint returns 200)
 - [ ] Consider Fabric-audience token acquisition for full public API access
+
+---
+
+## Test Environment
+
+Auto-provisioned by `scripts/provision-test-env.py`. Safe to delete.
+
+```json
+{
+  "workspaceId": "65e22bd4-92a1-4de6-8bfc-af813eccff3e",
+  "workspaceName": "EDOG_Studio_TestEnv",
+  "lakehouseId": "8453bb5e-c2ae-474d-a8e3-983b28ead8ba",
+  "lakehouseName": "EDOG_Test_LH",
+  "capacityId": "dd01a7f3-4198-4439-aae3-4eaf902281bb",
+  "redirectHost": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+}
+```
+
+**All F01 endpoints tested OK (11/11)** against this environment. Tables endpoint returns `{ data: [], continuationToken, continuationUri }` for non-schema lakehouses.
+
+---
+
+# F02: LOGS VIEW — WebSocket + REST
+
+> **Phase:** Connected only (requires running FLT service)
+> **Token:** Bearer (WebSocket upgrade), internal (REST endpoints served by EdogLogServer)
+
+## WebSocket: Live Log Stream
+
+| Endpoint | Protocol | Path | Purpose |
+|----------|----------|------|---------|
+| Log stream | WebSocket | `ws://localhost:5555/ws/logs` | Real-time log entries from FLT service |
+
+**Message Types (JSON frames):**
+
+```jsonc
+// Log entry
+{ "type": "log", "timestamp": "ISO8601", "level": "Verbose|Message|Warning|Error",
+  "component": "string", "message": "string", "correlationId": "string",
+  "properties": {} }
+
+// Spark request capture (from EdogTelemetryInterceptor)
+{ "type": "spark_request", "method": "GET|POST", "url": "string",
+  "statusCode": 200, "duration": 150, "body": "SQL or PySpark",
+  "retry": { "count": 0, "delays": [] } }
+
+// File change notification (from Python watchdog)
+{ "type": "file_change", "files": [{ "path": "string", "action": "created|modified|deleted" }] }
+```
+
+**Batching:** 150ms batch window, up to 10K entries in ring buffer.
+
+## REST: Log History
+
+| Method | Path | Purpose | Tested |
+|--------|------|---------|--------|
+| GET | `/api/logs` | Fetch recent log entries | ⚠️ Phase 2 |
+| GET | `/api/telemetry` | Fetch SSR telemetry events | ⚠️ Phase 2 |
+| GET | `/api/stats` | Log/telemetry statistics | ⚠️ Phase 2 |
+| GET | `/api/spark-requests` | Query Spark request history with filters | ⚠️ Phase 2 |
+
+> These endpoints are served by EdogLogServer (C# Kestrel). They don't exist yet — implementing them is part of the Logs view feature.
+
+---
+
+# F03: DAG STUDIO — FLT Service APIs
+
+> **Phase:** Connected only
+> **Token:** MWC token
+> **Host:** `https://{capacityId}.pbidedicated.windows-int.net`
+> **Base path:** `/webapi/capacities/{capId}/workloads/LiveTable/LiveTableService/automatic/v1/workspaces/{wsId}/lakehouses/{lhId}`
+
+## Endpoints
+
+| Method | Path (relative to base) | Purpose | Response Shape | Tested |
+|--------|------------------------|---------|----------------|--------|
+| GET | `/liveTable/getLatestDag?showExtendedLineage=true` | Fetch current DAG definition | `{ nodes: [{ nodeId, name, kind, parents[], children[], status, errorCode }], edges: [] }` | ❌ DNS fail (no FLT running) |
+| GET | `/liveTable/listDAGExecutionIterationIds?historycount=10` | List recent DAG execution iterations | `[{ iterationId, displayName, status, startedAt }]` | ❌ DNS fail |
+| GET | `/liveTable/getDAGExecMetrics/{iterationId}` | Execution metrics per node | `{ dagExecutionMetrics: { status, startedAt, endedAt }, nodeExecutionMetrices: { nodeName: { status } } }` | ❌ DNS fail |
+| GET | `/liveTable/settings` | Get DAG settings | `{ refreshMode, parallelNodeLimit, environment: { environmentId, workspaceId } }` | ❌ DNS fail |
+| PATCH | `/liveTable/patchDagSettings` | Update DAG settings | Same as GET response | ❌ DNS fail |
+| GET | `/liveTable/mlvExecutionDefinitions` | List MLV execution definitions | `[{ id, name, ... }]` | ❌ DNS fail |
+| POST | `/liveTable/mlvExecutionDefinitions/{id}` | Execute MLV definition | `{ iterationId, status }` | ⚠️ Not tested |
+| POST | `/liveTableSchedule/runDAG/{iterationId}` | Trigger DAG execution | `{ iterationId, status }` | ⚠️ Not tested |
+| POST | `/liveTableSchedule/cancelDAG/{iterationId}` | Cancel running DAG | `{ status }` | ⚠️ Not tested |
+
+### DAG Settings Reset Payload (from POC)
+```json
+{
+  "refreshMode": "Optimal",
+  "parallelNodeLimit": 5,
+  "environment": {
+    "environmentId": "00000000-0000-0000-0000-000000000000",
+    "workspaceId": "00000000-0000-0000-0000-000000000000"
+  }
+}
+```
+
+### Error Handling
+- DAG settings lock errors (500): Retry with exponential backoff + jitter
+- Error messages: "Failed to acquire DAG settings lock", "Failed to attach DAG settings lock", "Failed to merge DAG settings"
+
+### Service Health
+
+| Method | Path | Purpose | Auth | Tested |
+|--------|------|---------|------|--------|
+| GET | `/webapi/capacities/{capId}/workloads/LiveTable/LiveTableService/automatic/publicUnprotected/ping` | Health check | None | ❌ DNS fail |
+
+**Expected response:** `"pong core live table"`
+**Important:** Must use capacity host directly, NOT redirect gateway.
+
+---
+
+# F04: SPARK INSPECTOR — EdogLogServer APIs
+
+> **Phase:** Connected only
+> **Token:** Internal (served by EdogLogServer)
+> **Host:** `localhost:5555`
+
+| Method | Path | Purpose | Tested |
+|--------|------|---------|--------|
+| GET | `/api/spark-requests` | Filtered Spark request history | ⚠️ Not implemented yet |
+
+Query params: `?method=GET&status=200&endpoint=/path&minDuration=100`
+
+> Spark requests are captured by `EdogTelemetryInterceptor.cs` and sent via WebSocket. The REST endpoint provides historical query. Implementation pending.
+
+---
+
+# F05: ENVIRONMENT VIEW — Maintenance + Feature Flags
+
+> **Phase:** Connected (maintenance) + Both (feature flags)
+
+## Maintenance APIs (MWC token, capacity host)
+
+| Method | Path (relative to base) | Purpose | Tested |
+|--------|------------------------|---------|--------|
+| GET | `/liveTableMaintenance/getLockedDAGExecutionIteration` | Check DAG execution lock state | ❌ DNS fail |
+| POST | `/liveTableMaintenance/forceUnlockDAGExecution` | Force unlock stuck DAG | ⚠️ Not tested |
+| GET | `/liveTableMaintenance/listOrphanedIndexFolders` | List orphaned OneLake folders | ⚠️ Not tested |
+| POST | `/liveTableMaintenance/deleteOrphanedIndexFolders` | Cleanup orphaned folders | ⚠️ Not tested |
+
+## Scheduled Jobs (Bearer token, redirect host)
+
+| Method | Path | Purpose | Tested |
+|--------|------|---------|--------|
+| GET | `/metadata/artifacts/{lhId}/scheduledJobs` | List scheduled jobs | ⚠️ Not tested |
+| POST | `/metadata/artifacts/{lhId}/scheduledJobs` | Create scheduled job | ⚠️ Not tested |
+| PUT | `/metadata/artifacts/{lhId}/scheduledJobs` | Update scheduled job | ⚠️ Not tested |
+| DELETE | `/metadata/artifacts/{lhId}/jobs/{jobInstanceId}` | Cancel running job | ⚠️ Not tested |
+
+### Schedule Job Request Body (from POC)
+```json
+{
+  "artifactJobType": "MaterializedLakeViews",
+  "artifactObjectId": "lakehouse-guid",
+  "jobDefinitionObjectId": null,
+  "scheduleEnabled": true,
+  "scheduleType": 2,
+  "cronPeriod": 3,
+  "scheduleStartTime": "2026-01-15T14:30:00.000Z",
+  "scheduleEndTime": "2026-01-15T15:30:00.000Z",
+  "scheduleHours": "[14:30]",
+  "localTimeZoneId": "India Standard Time",
+  "scheduleWeekIndex": 1,
+  "scheduleWeekdays": 127,
+  "parameters": [
+    { "name": "mlvExecutionDefinitionId", "type": "Guid", "value": "exec-def-guid" }
+  ]
+}
+```
+
+**Rules:** POST when `jobDefinitionObjectId` is null (create), PUT when it has a value (update).
+
+## Feature Flag APIs (EdogLogServer, localhost:5555)
+
+| Method | Path | Purpose | Tested |
+|--------|------|---------|--------|
+| GET | `/api/edog/feature-overrides` | Get current feature flag overrides | ⚠️ Not implemented |
+| POST | `/api/edog/feature-overrides` | Set feature flag overrides | ⚠️ Not implemented |
+
+---
+
+# F06: IPC / COMMAND CHANNEL
+
+> **Phase:** Both
+> **Architecture:** Browser → EdogLogServer → `.edog-command/` file → edog.py polls
+
+## Command Endpoints (EdogLogServer, localhost:5555)
+
+| Method | Path | Purpose | Tested |
+|--------|------|---------|--------|
+| POST | `/api/command/restart` | Restart FLT service | ⚠️ Not implemented |
+| POST | `/api/command/refresh-token` | Force token refresh | ⚠️ Not implemented |
+| POST | `/api/command/set-feature-overrides` | Set feature flags | ⚠️ Not implemented |
+
+## Alternative: edog.py Control Server (port 5556)
+
+| Method | Path | Purpose | Tested |
+|--------|------|---------|--------|
+| POST | `http://localhost:5556/command/restart` | Direct restart | ⚠️ Not implemented |
+| POST | `http://localhost:5556/command/refresh-token` | Direct token refresh | ⚠️ Not implemented |
+
+---
+
+# TOKEN GENERATION
+
+## MWC Token (from POC `LiveTableTestUtils.cs`)
+
+| Method | Path | Host | Purpose |
+|--------|------|------|---------|
+| POST | `/metadata/v201606/generatemwctoken` | redirect | Generate MWC token for capacity APIs |
+
+**Request:**
+```json
+{
+  "type": "[Start] GetMWCToken",
+  "workloadType": "Lakehouse",
+  "workspaceObjectId": "ws-guid",
+  "artifactObjectIds": ["lh-guid"],
+  "capacityObjectId": "cap-guid"
+}
+```
+
+**Response:**
+```json
+{
+  "Token": "jwt-string",
+  "TargetUriHost": "capId.pbidedicated.windows-int.net",
+  "CapacityObjectId": "cap-guid",
+  "Expiration": "ISO datetime"
+}
+```
+
+**Tested:** ✅ OK 200 — MWC token generated successfully for test environment.
+
+### Token Caching Strategy (from POC)
+- Cache with 5-minute refresh buffer before expiry
+- Fallback to 1-hour assumption if expiry can't be parsed from JWT
+- Concurrent request limiting to prevent null token responses
+- Max 3 consecutive failures before raising exception
+
+### Bearer Token from MWC JWT (from POC `ExtractBearerTokenFromDevmodeCache`)
+The MWC JWT contains the original bearer token in the `originalAuthorizationHeader` claim:
+```python
+# Parse MWC JWT → extract payload → get originalAuthorizationHeader → strip "Bearer "
+claims = decode_jwt(mwc_token)
+bearer = claims["originalAuthorizationHeader"].replace("Bearer ", "")
+```
+
+---
+
+# ADO/GIT — Feature Flag PR Creation
+
+| Method | Path | Purpose | Token |
+|--------|------|---------|-------|
+| POST | `dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}/pullrequests` | Create feature flag PR | ADO PAT |
+
+Alternative: `az repos pr create` CLI
+
+---
+
+# ENDPOINT COUNT BY FEATURE
+
+| Feature | Count | Bearer | MWC | Internal | Not Implemented |
+|---------|-------|--------|-----|----------|-----------------|
+| F01: Workspace Explorer | 14 | 14 | 0 | 0 | 0 |
+| F02: Logs | 5 | 0 | 0 | 5 | 4 |
+| F03: DAG Studio | 10 | 0 | 10 | 0 | 0 (need FLT running) |
+| F04: Spark Inspector | 1 | 0 | 0 | 1 | 1 |
+| F05: Environment | 10 | 4 | 4 | 2 | 6 |
+| F06: IPC/Commands | 5 | 0 | 0 | 5 | 5 |
+| Token/Auth | 1 | 1 | 0 | 0 | 0 |
+| ADO/Git | 1 | 0 | 0 | 0 | 0 |
+| **Total** | **~47** | **19** | **14** | **13** | **16** |
