@@ -732,6 +732,19 @@ View the MLV SQL definitions that make up each DAG node, right in the UI.
 29. Scheduled Job Manager — view/create/enable/disable MLV scheduled jobs. Cron expressions, time windows, recurrence. (`GET/POST/PUT /metadata/artifacts/{id}/scheduledJobs`)
 30. Capacity Cost Estimator — using SKU catalog (19 tiers with vCores/memory) + live utilization + historical execution metrics, estimate DAG cost on different SKUs. Projected duration and CU consumption.
 31. Feature Flag Flight Simulator — toggle flags → run DAG → compare timing with baseline. A/B testing for feature flags with real execution data. (`local override` → `runDAG` → `getDAGExecMetrics` → diff)
+32. Intelligent Alerting — combine signals: capacity throttle approaching + DAG running + node 3x slow → proactive alert "DAG likely to fail." Multi-dimensional early warning. (`capacity health` + `DAGExecMetrics` + historical baseline)
+33. Token Injection Debugger — capture every MWC token usage in FLT: which API, which audience, TTL at call time, success/fail. Detect "wrong token scope" instantly. (`MWC gen` + HTTP interception + token decode)
+34. API Response Validator — record "golden" API responses (schema, field presence). On subsequent calls, auto-validate: "Table details missing partitionColumns field that was present yesterday." Regression detector for API contracts.
+35. Feature Flag Impact Simulator — parse `IsEnabled()` calls in FLT code + cross-reference with DAG → "Enabling BatchMerge activates batch path in DagExecutor.cs, affects nodes 3, 7, 12." Static analysis + runtime correlation.
+36. Chaos Engineering Panel — inject failures from EDOG: force-expire tokens, simulate capacity throttling, kill Spark sessions, lock DAG. Test resilience without real failures. Each action has a "revert" button.
+37. Test Data Generator — use table schemas from `getTableDetails` + Copilot AI (gpt-5) to auto-generate semantically meaningful test data → write to OneLake. "Generate 10K rows for SalesRaw."
+38. Table Lineage Graph — notebook SQL + DAG topology + table schemas → full visual lineage: source tables → transformations → materialized views. Click any node to see SQL code. (`getDefinition` + `getLatestDag` + `getTableDetails`)
+39. Spatial Memory Layout — workspaces as a mind-map canvas instead of flat tree. Frequently used items closer to center (weighted by `/metadata/recent`). Build spatial memory — "the table with the issue is in the top-right cluster."
+40. Automated Regression Suite — define test cases: "Run DAG, expect tables >0 rows, node X < 5s." Run on schedule. Report pass/fail. CI for your lakehouse. (`RunNotebook` + `runDAG` + `previewAsync` + `getDAGExecMetrics`)
+41. Streaming Log Heatmap — minimap alongside log viewer (like VS Code scrollbar). Color-coded by level. Red clusters = error bursts. Click anywhere to jump. Scan 100K logs in 1 second. DAG execution boundary markers.
+42. DAG Node Status Glyphs — SVG glyph system: spinning ring (executing), checkmark (success), X (failed), pause (locked), clock (scheduled). OKLCH colors. Micro-animations: success pulse, failure shake.
+43. Feature Flag Ring Visualization — 28 flags as concentric rings (onebox innermost → prod outermost). Filled ring = enabled. Single glance shows rollout state of everything. Color intensity maps to confidence.
+44. Capacity Health Thermometer — persistent 24px topbar widget. Cool blue (healthy) → warm amber (stressed) → hot red (throttling). Hover for utilization sparkline. Click to expand full capacity dashboard.
 
 ---
 
