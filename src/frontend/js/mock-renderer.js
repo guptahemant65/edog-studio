@@ -263,12 +263,11 @@ class MockRenderer {
       <div class="ws-section">
         <div class="ws-section-title">TABLES <span class="ws-section-count">${tables.length}</span></div>
         <table class="ws-table">
-          <thead><tr><th>Name</th><th>Type</th><th>Format</th><th>Rows</th><th>Size</th></tr></thead>
+          <thead><tr><th>Name</th><th>Type</th><th class="right">Rows</th><th class="right">Size</th></tr></thead>
           <tbody>
             ${tables.map((t, ti) => `<tr class="ws-table-row${ti === 0 ? ' selected' : ''}" data-table-idx="${ti}">
               <td class="ws-table-name">${t.name}</td>
-              <td><span class="ws-type-badge">${t.type}</span></td>
-              <td>${t.format}</td>
+              <td><span class="ws-type-badge${t.type === 'Parquet' ? ' parquet' : ''}">${t.type}</span></td>
               <td class="ws-table-num">${this._formatNum(t.rowCount)}</td>
               <td class="ws-table-num">${this._formatBytes(t.sizeBytes)}</td>
             </tr>`).join('')}
