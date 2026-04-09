@@ -1,0 +1,182 @@
+[
+  {
+    "l": "List+Health+Rollouts",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['capacitiesMetadata', 'rolloutErrors', 'capacitiesHealth']"
+  },
+  {
+    "l": "Trial capacities",
+    "ok": true,
+    "code": 200,
+    "s": "[1 items] keys=['capacityId', 'capacityObjectId', 'trialExpirationDateTime', 'provisionState', 'sku']"
+  },
+  {
+    "l": "License eligibility",
+    "ok": false,
+    "code": 401,
+    "err": ""
+  },
+  {
+    "l": "Is modern commerce admin",
+    "ok": false,
+    "code": 401,
+    "err": ""
+  },
+  {
+    "l": "Tenant settings (selfserve)",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['newSettings']"
+  },
+  {
+    "l": "GET /capacities/{id}",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['metadata', 'access', 'copilotAccess', 'isCopilotAllowed']"
+  },
+  {
+    "l": "GET /capacities/{id}/settings",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/workloads",
+    "ok": false,
+    "code": 404,
+    "err": "{\"Message\":\"No HTTP resource was found that matches the request URI 'https://bia"
+  },
+  {
+    "l": "GET /capacities/{id}/workspaces",
+    "ok": true,
+    "code": 200,
+    "s": "[6 items] keys=['workspaceObjectId', 'workspaceDisplayName', 'workspaceType']"
+  },
+  {
+    "l": "GET /capacities/{id}/delegates",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/users",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/state",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/notifications",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/refresh",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/health",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "GET /capacities/{id}/metrics",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['metrics', 'data']"
+  },
+  {
+    "l": "GET /capacities/{id}/admins",
+    "ok": false,
+    "code": 405,
+    "err": "{\"Message\":\"The requested resource does not support http method 'GET'.\"}"
+  },
+  {
+    "l": "v1.0 capacities list",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['@odata.context', 'value']"
+  },
+  {
+    "l": "v1.0 capacity detail",
+    "ok": false,
+    "code": 404,
+    "err": "{\"Message\":\"No HTTP resource was found that matches the request URI 'https://bia"
+  },
+  {
+    "l": "v1.0 capacity workloads",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['@odata.context', 'value']"
+  },
+  {
+    "l": "v1.0 capacity refreshables",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['@odata.context', '@odata.count', 'value']"
+  },
+  {
+    "l": "v1.0 admin capacities",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['@odata.context', 'value']"
+  },
+  {
+    "l": "v1.0 all refreshables",
+    "ok": true,
+    "code": 200,
+    "s": "keys=['@odata.context', '@odata.count', 'value']"
+  },
+  {
+    "l": "Rename cap (aa \u2192 aa_renamed)",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "Rename cap back (aa_renamed \u2192 aa)",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "PATCH cap settings",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "Resize (to same SKU P3)",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "Suspend endpoint check",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "State of aa cap",
+    "ok": false,
+    "code": 404,
+    "err": ""
+  },
+  {
+    "l": "DELETE aa cap (CAREFUL)",
+    "ok": true,
+    "code": 204,
+    "s": "keys=[]"
+  }
+]

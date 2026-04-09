@@ -1,0 +1,851 @@
+{
+  "raw_calls": [
+    {
+      "method": "GET",
+      "path": "/",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/",
+      "timestamp": 1775734313.1890483,
+      "status": 302
+    },
+    {
+      "method": "GET",
+      "path": "https://login.windows-ppe.net/common/oauth2/authorize",
+      "full_url": "https://login.windows-ppe.net/common/oauth2/authorize?client_id=871c010f-5e61-4fb1-83ac-98610a7e9110&response_type=code%20id_token&scope=openid%20profile%20offline_access&state=OpenIdConnect.Authentic",
+      "timestamp": 1775734314.8215716,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/signinredirect",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/signinredirect",
+      "timestamp": 1775734321.027524,
+      "status": 302
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/",
+      "timestamp": 1775734322.337072,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/bootstrap/base",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/bootstrap/base",
+      "timestamp": 1775734323.1245184,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/app",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/app?preferReadOnlySession=true&cmd=home",
+      "timestamp": 1775734323.1245184,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/extensions/discover",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/extensions/discover",
+      "timestamp": 1775734325.1437614
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/",
+      "timestamp": 1775734325.1561124,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/artifactsEndorsement/workspace",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/artifactsEndorsement/workspace",
+      "timestamp": 1775734325.2285779
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/recent/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/recent/?limit=100",
+      "timestamp": 1775734325.229578
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/content/providers/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/content/providers/?category=Organizational,OrganizationalApp,OrganizationalTemplate,OrganizationalTemplateApp,PowerBIServiceApp&owned=",
+      "timestamp": 1775734325.229578
+    },
+    {
+      "method": "GET",
+      "path": "blob:https://powerbi-df.analysis-df.windows.net/22ae4c0d-2753-4658-ba94-bfc05bb8d3a4",
+      "full_url": "blob:https://powerbi-df.analysis-df.windows.net/22ae4c0d-2753-4658-ba94-bfc05bb8d3a4",
+      "timestamp": 1775734325.405697
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/bootstrap/base",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/bootstrap/base",
+      "timestamp": 1775734325.4348137,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/app",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/app?preferReadOnlySession=true&cmd=home",
+      "timestamp": 1775734325.4358156,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/trialcapacities",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/trialcapacities",
+      "timestamp": 1775734325.857644
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/extensions/discover",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/extensions/discover",
+      "timestamp": 1775734326.088228,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/messageBarSummary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/messageBarSummary",
+      "timestamp": 1775734326.089225
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/messageBarSummary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/messageBarSummary",
+      "timestamp": 1775734326.0902238
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/artifactsEndorsement/workspace",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/artifactsEndorsement/workspace",
+      "timestamp": 1775734326.0902238,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/messageBarSummary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/messageBarSummary",
+      "timestamp": 1775734326.0902238,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/recent/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/recent/?limit=100",
+      "timestamp": 1775734326.0927234,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/content/providers/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/content/providers/?category=Organizational,OrganizationalApp,OrganizationalTemplate,OrganizationalTemplateApp,PowerBIServiceApp&owned=",
+      "timestamp": 1775734326.0937257,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/trialcapacities",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/trialcapacities",
+      "timestamp": 1775734326.134128,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/notificationCenter/summary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/notificationCenter/summary",
+      "timestamp": 1775734326.2027357,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/people/userdetails",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/people/userdetails",
+      "timestamp": 1775734326.2027357,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/samples",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/samples",
+      "timestamp": 1775734326.6426356,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/recommendation",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/recommendation",
+      "timestamp": 1775734326.6436338,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/promoted",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/promoted",
+      "timestamp": 1775734326.644635,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/user/isModernCommerceAdmin",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/user/isModernCommerceAdmin",
+      "timestamp": 1775734327.326708,
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/powerbi/metadata/refreshusermetadata",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/metadata/refreshusermetadata",
+      "timestamp": 1775734327.3277202,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/artifactsEndorsement/list",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/artifactsEndorsement/list",
+      "timestamp": 1775734327.7975476,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/powerbi/refresh/subscribe",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/refresh/subscribe",
+      "timestamp": 1775734329.055375
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/snapshots",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/snapshots",
+      "timestamp": 1775734330.46759,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/licenseEligibility",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/licenseEligibility",
+      "timestamp": 1775734330.9181018,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/dataDomains",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/dataDomains",
+      "timestamp": 1775734330.9191015,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/dataDomains/folders",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/dataDomains/folders",
+      "timestamp": 1775734330.9191015,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/businessTags/applied/folders",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/businessTags/applied/folders",
+      "timestamp": 1775734330.9201014,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/groups/icons",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/groups/icons",
+      "timestamp": 1775734331.0258162,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/resource/userPhoto/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/resource/userPhoto/?huid=-1553756774",
+      "timestamp": 1775734331.2976134
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/dataDomains/defaultLabels",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/dataDomains/defaultLabels",
+      "timestamp": 1775734331.5792396,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734332.006506,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/notifications/summary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notifications/summary?take=100",
+      "timestamp": 1775734332.007558
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/snapshots",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/snapshots",
+      "timestamp": 1775734332.4611778,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/admin-portal/manageCapacities/gridView",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/admin-portal/manageCapacities/gridView?experience=power-bi",
+      "timestamp": 1775734332.5965552,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "blob:https://powerbi-df.analysis-df.windows.net/cadf36ed-caee-47ff-bb93-183d2a982fd5",
+      "full_url": "blob:https://powerbi-df.analysis-df.windows.net/cadf36ed-caee-47ff-bb93-183d2a982fd5",
+      "timestamp": 1775734332.8473966
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/bootstrap/base",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/bootstrap/base",
+      "timestamp": 1775734332.8968914,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/metadata/app",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/metadata/app?preferReadOnlySession=true",
+      "timestamp": 1775734332.8978937,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/trialcapacities",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/trialcapacities",
+      "timestamp": 1775734333.2028139,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/extensions/discover",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/extensions/discover",
+      "timestamp": 1775734333.9983358,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/messageBarSummary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/messageBarSummary",
+      "timestamp": 1775734333.9993339
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/messageBarSummary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/messageBarSummary",
+      "timestamp": 1775734333.9993339
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/artifactsEndorsement/workspace",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/artifactsEndorsement/workspace",
+      "timestamp": 1775734333.9993339,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/messageBarSummary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/messageBarSummary",
+      "timestamp": 1775734334.0003395,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/recent/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/recent/?limit=100",
+      "timestamp": 1775734334.0003395,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/gallery/SharedDatasets",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/gallery/SharedDatasets",
+      "timestamp": 1775734334.0013325,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/refresh/versions",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/refresh/versions",
+      "timestamp": 1775734334.0013325,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/content/providers/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/content/providers/?category=Organizational,OrganizationalApp,OrganizationalTemplate,OrganizationalTemplateApp,PowerBIServiceApp&owned=",
+      "timestamp": 1775734334.0020018,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/notificationInfo/notificationCenter/summary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notificationInfo/notificationCenter/summary",
+      "timestamp": 1775734334.0673585,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/metadata/people/userdetails",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/people/userdetails",
+      "timestamp": 1775734334.0673585,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/user/isModernCommerceAdmin",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/user/isModernCommerceAdmin",
+      "timestamp": 1775734334.6765087,
+      "status": 200
+    },
+    {
+      "method": "PUT",
+      "path": "/powerbi/metadata/refreshusermetadata",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/metadata/refreshusermetadata",
+      "timestamp": 1775734334.6775115,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/dataDomains",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/dataDomains",
+      "timestamp": 1775734337.0960343,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/dataDomains/folders",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/dataDomains/folders",
+      "timestamp": 1775734337.0970376,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/businessTags/applied/folders",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/businessTags/applied/folders",
+      "timestamp": 1775734337.0970376,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/tenantsettings/selfserve/new",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/tenantsettings/selfserve/new?locale=en-US",
+      "timestamp": 1775734337.1412606,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/capacities/listandgethealthbyrollouts",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/capacities/listandgethealthbyrollouts",
+      "timestamp": 1775734337.1972666,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/powerbi/refresh/subscribe",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/refresh/subscribe",
+      "timestamp": 1775734337.5469348
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/dataDomains/defaultLabels",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/dataDomains/defaultLabels",
+      "timestamp": 1775734337.5919902,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/groups/icons",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/groups/icons",
+      "timestamp": 1775734338.894203,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/resource/userPhoto/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/resource/userPhoto/?huid=-1553756774",
+      "timestamp": 1775734339.1612647,
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734339.9204254,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/notifications/summary",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/notifications/summary?take=100",
+      "timestamp": 1775734339.9204254,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734341.8572555,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734344.3648567,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734349.2747998,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/metadata/office365shell/",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/metadata/office365shell/?locale=en-US",
+      "timestamp": 1775734349.733101,
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734358.202293,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/iris",
+      "full_url": "https://powerbi-df.analysis-df.windows.net/iris",
+      "timestamp": 1775734374.716852,
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/powerbi/metadata/ping",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/metadata/ping",
+      "timestamp": 1775734393.1820626,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "https://pbilheedog.analysis-df.windows.net/",
+      "full_url": "https://pbilheedog.analysis-df.windows.net/?__iframeId=6d313521-8521-4a94-ac5f-b67aaaac44f2&__iframeType=worker&__environmentName=INT&__extensionName=lakehouse&__extensionHostOrigin=https%3A%2F%2Fpowe",
+      "timestamp": 1775734393.4113522,
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/powerbi/refresh/subscribe",
+      "full_url": "https://biazure-int-edog-redirect.analysis-df.windows.net/powerbi/refresh/subscribe",
+      "timestamp": 1775734397.5529525
+    },
+    {
+      "method": "GET",
+      "path": "https://pbilheedog.analysis-df.windows.net/",
+      "full_url": "https://pbilheedog.analysis-df.windows.net/?__iframeId=426a4098-86a6-4fc5-955e-7667fdbf77ba&__iframeType=page&__environmentName=INT&__extensionName=lakehouse&__extensionHostOrigin=https%3A%2F%2Fpowerb",
+      "timestamp": 1775734399.4458098,
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "https://pbilheedog.analysis-df.windows.net/",
+      "full_url": "https://pbilheedog.analysis-df.windows.net/?__iframeId=3e0f8365-08b6-4ce0-804e-71cf831029bb&__iframeType=dialog&__environmentName=INT&__extensionName=lakehouse&__extensionHostOrigin=https%3A%2F%2Fpowe",
+      "timestamp": 1775734405.0714602,
+      "status": 200
+    }
+  ],
+  "unique_patterns": [
+    {
+      "method": "GET",
+      "pattern": "/",
+      "example": "/",
+      "status": 302,
+      "count": 3
+    },
+    {
+      "method": "GET",
+      "pattern": "https://login.windows-ppe.net/common/oauth2/authorize",
+      "example": "https://login.windows-ppe.net/common/oauth2/authorize",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "pattern": "/signinredirect",
+      "example": "/signinredirect",
+      "status": 302,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/bootstrap/base",
+      "example": "/metadata/bootstrap/base",
+      "status": 200,
+      "count": 3
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/app",
+      "example": "/metadata/app",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "pattern": "/metadata/extensions/discover",
+      "example": "/metadata/extensions/discover",
+      "status": "?",
+      "count": 3
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/artifactsEndorsement/workspace",
+      "example": "/metadata/artifactsEndorsement/workspace",
+      "status": "?",
+      "count": 3
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/recent/",
+      "example": "/metadata/recent/",
+      "status": "?",
+      "count": 3
+    },
+    {
+      "method": "GET",
+      "pattern": "/powerbi/content/providers/",
+      "example": "/powerbi/content/providers/",
+      "status": "?",
+      "count": 3
+    },
+    {
+      "method": "GET",
+      "pattern": "blob:https://powerbi-df.analysis-df.windows.net/{guid}",
+      "example": "blob:https://powerbi-df.analysis-df.windows.net/22ae4c0d-2753-4658-ba94-bfc05bb8d3a4",
+      "status": "?",
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/trialcapacities",
+      "example": "/metadata/trialcapacities",
+      "status": "?",
+      "count": 3
+    },
+    {
+      "method": "POST",
+      "pattern": "/metadata/notificationInfo/messageBarSummary",
+      "example": "/metadata/notificationInfo/messageBarSummary",
+      "status": "?",
+      "count": 6
+    },
+    {
+      "method": "POST",
+      "pattern": "/metadata/notificationInfo/notificationCenter/summary",
+      "example": "/metadata/notificationInfo/notificationCenter/summary",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "pattern": "/metadata/people/userdetails",
+      "example": "/metadata/people/userdetails",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/samples",
+      "example": "/metadata/samples",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/recommendation",
+      "example": "/metadata/recommendation",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/promoted",
+      "example": "/metadata/promoted",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/user/isModernCommerceAdmin",
+      "example": "/metadata/user/isModernCommerceAdmin",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "PUT",
+      "pattern": "/powerbi/metadata/refreshusermetadata",
+      "example": "/powerbi/metadata/refreshusermetadata",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "POST",
+      "pattern": "/metadata/artifactsEndorsement/list",
+      "example": "/metadata/artifactsEndorsement/list",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "pattern": "/powerbi/refresh/subscribe",
+      "example": "/powerbi/refresh/subscribe",
+      "status": "?",
+      "count": 3
+    },
+    {
+      "method": "POST",
+      "pattern": "/metadata/snapshots",
+      "example": "/metadata/snapshots",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/licenseEligibility",
+      "example": "/metadata/licenseEligibility",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/dataDomains",
+      "example": "/metadata/dataDomains",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/dataDomains/folders",
+      "example": "/metadata/dataDomains/folders",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/businessTags/applied/folders",
+      "example": "/metadata/businessTags/applied/folders",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/groups/icons",
+      "example": "/metadata/groups/icons",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/powerbi/resource/userPhoto/",
+      "example": "/powerbi/resource/userPhoto/",
+      "status": "?",
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/dataDomains/defaultLabels",
+      "example": "/metadata/dataDomains/defaultLabels",
+      "status": 200,
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/iris",
+      "example": "/iris",
+      "status": 500,
+      "count": 7
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/notifications/summary",
+      "example": "/metadata/notifications/summary",
+      "status": "?",
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "pattern": "/admin-portal/manageCapacities/gridView",
+      "example": "/admin-portal/manageCapacities/gridView",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/powerbi/metadata/app",
+      "example": "/powerbi/metadata/app",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/gallery/SharedDatasets",
+      "example": "/metadata/gallery/SharedDatasets",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "POST",
+      "pattern": "/refresh/versions",
+      "example": "/refresh/versions",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/tenantsettings/selfserve/new",
+      "example": "/metadata/tenantsettings/selfserve/new",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/capacities/listandgethealthbyrollouts",
+      "example": "/capacities/listandgethealthbyrollouts",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/metadata/office365shell/",
+      "example": "/metadata/office365shell/",
+      "status": 401,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "/powerbi/metadata/ping",
+      "example": "/powerbi/metadata/ping",
+      "status": 200,
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "pattern": "https://pbilheedog.analysis-df.windows.net/",
+      "example": "https://pbilheedog.analysis-df.windows.net/",
+      "status": 200,
+      "count": 3
+    }
+  ]
+}
