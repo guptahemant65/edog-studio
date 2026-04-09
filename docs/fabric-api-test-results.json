@@ -1,0 +1,190 @@
+[
+  {
+    "label": "List workspaces",
+    "status": "OK",
+    "code": 200,
+    "shape": "{folders}",
+    "count": 13,
+    "path": "/metadata/workspaces",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List folders (workspace create)",
+    "status": "OK",
+    "code": 200,
+    "shape": "[13 items] keys=['id', 'displayName', 'objectId', 'parentFolderId', 'rootFolderId']",
+    "count": 13,
+    "path": "/metadata/folders",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List artifacts in workspace",
+    "status": "OK",
+    "code": 200,
+    "shape": "[13 items] keys=['objectId', 'artifactType', 'displayName', 'description', 'folderObjectId']",
+    "count": 13,
+    "path": "/metadata/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/artifacts",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Get artifact by ID",
+    "status": "OK",
+    "code": 200,
+    "shape": "{objectId, artifactType, displayName, description, folderObjectId, provisionState}",
+    "count": 0,
+    "path": "/metadata/artifacts/a96fdc44-a514-4abf-b73b-e691d3022500",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List tables (metadata path)",
+    "status": "FAIL",
+    "code": 404,
+    "error": "",
+    "path": "/metadata/artifacts/a96fdc44-a514-4abf-b73b-e691d3022500/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Workspace access/permissions",
+    "status": "FAIL",
+    "code": 404,
+    "error": "",
+    "path": "/metadata/access/folders/c40147b5-d369-407b-b5c0-7b080fb929bd",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List items in workspace (v1)",
+    "status": "OK",
+    "code": 200,
+    "shape": "{value}",
+    "count": 15,
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/items",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List lakehouses (v1)",
+    "status": "OK",
+    "code": 200,
+    "shape": "{value}",
+    "count": 3,
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Get lakehouse by ID (v1)",
+    "status": "OK",
+    "code": 200,
+    "shape": "{id, type, displayName, description, workspaceId, properties}",
+    "count": 0,
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses/a96fdc44-a514-4abf-b73b-e691d3022500",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List tables (v1)",
+    "status": "FAIL",
+    "code": 400,
+    "error": "{\"requestId\":\"d562976a-63a6-4b0f-a56b-20cb9a701f7b\",\"errorCode\":\"UnsupportedOperationForSchemasEnabledLakehouse\",\"message\":\"The operation is not supported for Lakehouse with schemas enabled.\",\"isRetri",
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses/a96fdc44-a514-4abf-b73b-e691d3022500/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Tables: TestLH",
+    "status": "FAIL",
+    "code": 400,
+    "error": "{\"requestId\":\"3f7fe6a0-cea9-4b4f-b5d0-5341132d3184\",\"errorCode\":\"UnsupportedOperationForSchemasEnabledLakehouse\",\"message\":\"The operation is not supported for Lakehouse with schemas enabled.\",\"isRetri",
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses/a96fdc44-a514-4abf-b73b-e691d3022500/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Tables: TestLH8",
+    "status": "FAIL",
+    "code": 400,
+    "error": "{\"requestId\":\"07f1dc95-13d0-4e4c-91d2-9f37c2dac735\",\"errorCode\":\"UnsupportedOperationForSchemasEnabledLakehouse\",\"message\":\"The operation is not supported for Lakehouse with schemas enabled.\",\"isRetri",
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses/3ba2bc59-d359-422a-968f-cc178f2fc7f5/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Tables: robinroy_lh",
+    "status": "FAIL",
+    "code": 400,
+    "error": "{\"requestId\":\"3b927b7e-7790-4fee-9540-4de779287144\",\"errorCode\":\"UnsupportedOperationForSchemasEnabledLakehouse\",\"message\":\"The operation is not supported for Lakehouse with schemas enabled.\",\"isRetri",
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses/ffa13f36-8a96-410f-8b12-fdb7ed7d7dae/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List workspaces (v1.0)",
+    "status": "OK",
+    "code": 200,
+    "shape": "{@odata.context, @odata.count, value}",
+    "count": 12,
+    "path": "/v1.0/myorg/groups",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Generate MWC token",
+    "status": "OK",
+    "code": 200,
+    "shape": "{Token, TargetUriHost, CapacityObjectId, Expiration}",
+    "count": 0,
+    "path": "/metadata/v201606/generatemwctoken",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Rename workspace (v1 PATCH)",
+    "status": "OK",
+    "code": 200,
+    "shape": "{id, displayName, description, type, capacityId}",
+    "count": 0,
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Rename lakehouse (v1 PATCH)",
+    "status": "OK",
+    "code": 200,
+    "shape": "{id, type, displayName, description, workspaceId, properties}",
+    "count": 0,
+    "path": "/v1/workspaces/c40147b5-d369-407b-b5c0-7b080fb929bd/lakehouses/a96fdc44-a514-4abf-b73b-e691d3022500",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "List workspaces (public)",
+    "status": "FAIL",
+    "code": 401,
+    "error": "{\"requestId\":\"eb81196a-d37e-4679-88d9-1cbea9b633c1\",\"errorCode\":\"InvalidToken\",\"message\":\"Access token is invalid\"}",
+    "path": "/v1/workspaces",
+    "host": "https://api.fabric.microsoft.com"
+  },
+  {
+    "label": "psai_FLT_1 items",
+    "status": "FAIL",
+    "code": 404,
+    "error": "{\"requestId\":\"73ac0b05-eb81-44bf-a9ec-40bfd59367a9\",\"errorCode\":\"EntityNotFound\",\"message\":\"The entity could not be found\",\"isRetriable\":false}",
+    "path": "/v1/workspaces/de3cc98a-fdd6-4a8e-965c-5b4b12af9d79/items",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "sravuri items",
+    "status": "OK",
+    "code": 200,
+    "shape": "{value}",
+    "count": 7,
+    "path": "/v1/workspaces/e6467272-8d9b-4145-84f0-1f238637a583/items",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Tables: lh (sravuri)",
+    "status": "FAIL",
+    "code": 400,
+    "error": "{\"requestId\":\"1e790af6-1d2f-4b86-99ed-a1204674f758\",\"errorCode\":\"UnsupportedOperationForSchemasEnabledLakehouse\",\"message\":\"The operation is not supported for Lakehouse with schemas enabled.\",\"isRetri",
+    "path": "/v1/workspaces/e6467272-8d9b-4145-84f0-1f238637a583/lakehouses/fb98a5e2-fcfd-4705-aacc-c3081368a83d/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  },
+  {
+    "label": "Tables: lhwithoutenv (sravuri)",
+    "status": "FAIL",
+    "code": 400,
+    "error": "{\"requestId\":\"ec749779-0221-4305-88f8-b2c75884e897\",\"errorCode\":\"UnsupportedOperationForSchemasEnabledLakehouse\",\"message\":\"The operation is not supported for Lakehouse with schemas enabled.\",\"isRetri",
+    "path": "/v1/workspaces/e6467272-8d9b-4145-84f0-1f238637a583/lakehouses/65e99f4f-a224-4ad5-b43b-82e07acbc939/tables",
+    "host": "https://biazure-int-edog-redirect.analysis-df.windows.net"
+  }
+]
