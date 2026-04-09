@@ -4,16 +4,18 @@
  * Lifecycle: check health → scan certs → auto-select or show picker →
  * Silent CBA auth → verify workspace access → dismiss → dashboard.
  *
+ * DOM structure matches the Direction C (minimal) approved prototype.
+ *
  * Zara Okonkwo — vanilla JS, class-based module.
  */
 class OnboardingScreen {
   constructor() {
     this._overlay = null;
     this._contentEl = null;
-    this._titleEl = null;
-    this._subtitleEl = null;
     this._onComplete = null;
     this._selectedCert = null;
+    this._certs = [];
+    this._stepCount = 0;
 
     this._PPE_WIKI_URL =
       'https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)';
@@ -54,6 +56,7 @@ class OnboardingScreen {
     } catch {
       // Cert scan failed — fall through to no-certs path
     }
+    this._certs = certs;
 
     if (!Array.isArray(certs) || certs.length === 0) {
       this._renderNoCerts();
@@ -85,75 +88,62 @@ class OnboardingScreen {
     const overlay = document.createElement('div');
     overlay.className = 'onboarding-overlay';
 
-    // Status bar
-    const statusBar = document.createElement('div');
-    statusBar.className = 'onboarding-status-bar';
-    const statusLeft = document.createElement('span');
-    statusLeft.textContent = 'EDOG PLAYGROUND \u2014 v2.0';
-    const statusRight = document.createElement('span');
-    statusRight.textContent = 'SECURE CONNECTION';
-    statusBar.appendChild(statusLeft);
-    statusBar.appendChild(statusRight);
+    // Layout — asymmetric two-column grid
+    const layout = document.createElement('div');
+    layout.className = 'onboarding-layout';
 
-    // Watermark
-    const watermark = document.createElement('div');
-    watermark.className = 'onboarding-watermark';
-    watermark.textContent = 'EDOG_PLAYGROUND_V2';
-
-    // Left panel
-    const left = document.createElement('div');
-    left.className = 'onboarding-left';
-
-    const category = document.createElement('div');
-    category.className = 'onboarding-category';
-    category.textContent = 'Authentication';
-
-    const title = document.createElement('div');
-    title.className = 'onboarding-title';
-    title.textContent = 'SELECT CERTIFICATE.';
-
-    const subtitle = document.createElement('div');
-    subtitle.className = 'onboarding-subtitle';
-    subtitle.textContent = 'Choose a certificate to authenticate with the Fabric service.';
-
+    // Left — content area
     const content = document.createElement('div');
-    content.id = 'onb-content';
+    content.className = 'onboarding-content';
 
-    left.appendChild(watermark);
-    left.appendChild(category);
-    left.appendChild(title);
-    left.appendChild(subtitle);
-    left.appendChild(content);
+    const wordmark = document.createElement('div');
+    wordmark.className = 'wordmark';
+    wordmark.innerHTML = 'EDOG<span class="wordmark-accent">.</span>';
 
-    // Right panel
-    const right = document.createElement('div');
-    right.className = 'onboarding-right';
+    const tagline = document.createElement('div');
+    tagline.className = 'tagline';
+    tagline.textContent = 'Playground v2.0';
 
-    const rightFooter = document.createElement('div');
-    rightFooter.className = 'onboarding-right-footer';
+    const selectPhase = document.createElement('div');
+    selectPhase.id = 'select-phase';
 
-    const rightText = document.createElement('div');
-    rightText.className = 'onboarding-right-text';
-    rightText.textContent =
-      'Developer cockpit for FabricLiveTable. ' +
-      'Browse workspaces, manage feature flags, inspect DAGs, and debug live services.';
+    const authProgress = document.createElement('div');
+    authProgress.className = 'auth-progress';
 
-    const rightVersion = document.createElement('div');
-    rightVersion.className = 'onboarding-right-version';
-    rightVersion.textContent = 'EDOG Studio v2.0';
+    const spacer = document.createElement('div');
+    spacer.className = 'spacer';
 
-    rightFooter.appendChild(rightText);
-    rightFooter.appendChild(rightVersion);
-    right.appendChild(rightFooter);
+    content.appendChild(wordmark);
+    content.appendChild(tagline);
+    content.appendChild(selectPhase);
+    content.appendChild(authProgress);
+    content.appendChild(spacer);
 
-    overlay.appendChild(statusBar);
-    overlay.appendChild(left);
-    overlay.appendChild(right);
+    // Right — decorative pattern panel
+    const patternArea = document.createElement('div');
+    patternArea.className = 'pattern-area';
+    patternArea.setAttribute('aria-hidden', 'true');
+
+    const patternWatermark = document.createElement('div');
+    patternWatermark.className = 'pattern-watermark';
+    patternWatermark.textContent = 'EDOG';
+    patternArea.appendChild(patternWatermark);
+
+    layout.appendChild(content);
+    layout.appendChild(patternArea);
+
+    // Footer
+    const footer = document.createElement('footer');
+    footer.className = 'onboarding-footer';
+    footer.innerHTML =
+      '<span>EDOG Playground v2.0</span>' +
+      '<span><span class="status-dot"></span>All systems operational</span>';
+
+    overlay.appendChild(layout);
+    overlay.appendChild(footer);
 
     this._overlay = overlay;
-    this._contentEl = content;
-    this._titleEl = title;
-    this._subtitleEl = subtitle;
+    this._contentEl = selectPhase;
   }
 
   // --- Private: Cert Picker ---
@@ -164,80 +154,136 @@ class OnboardingScreen {
       return new Date(b.notAfter) - new Date(a.notAfter);
     });
 
-    this._titleEl.textContent = 'SELECT CERTIFICATE.';
-    this._subtitleEl.textContent =
-      'Multiple certificates were found on this machine. Choose one to authenticate.';
-
     this._selectedCert = sorted[0];
     this._contentEl.innerHTML = '';
 
-    const list = document.createElement('div');
+    // Section header
+    const header = document.createElement('div');
+    header.className = 'section-header';
+
+    const sectionTitle = document.createElement('span');
+    sectionTitle.className = 'section-title';
+    sectionTitle.textContent = 'Certificate';
+
+    const sectionMeta = document.createElement('span');
+    sectionMeta.className = 'section-meta';
+    sectionMeta.textContent = sorted.length + ' detected';
+
+    header.appendChild(sectionTitle);
+    header.appendChild(sectionMeta);
+
+    // Cert list (radiogroup)
+    const list = document.createElement('ul');
     list.className = 'cert-list';
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', 'Certificate selection');
 
     const items = [];
     sorted.forEach(function (cert, idx) {
-      const item = document.createElement('div');
-      item.className = 'cert-item' + (idx === 0 ? ' selected' : '');
+      const item = document.createElement('li');
+      item.className = 'cert-item';
+      item.setAttribute('role', 'radio');
+      item.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('data-cert', String(idx));
 
-      const radio = document.createElement('div');
-      radio.className = 'cert-item-radio';
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'radio';
+      hiddenInput.className = 'cert-hidden-input';
+      hiddenInput.name = 'cert';
+      hiddenInput.value = String(idx);
+      if (idx === 0) hiddenInput.checked = true;
+
+      const radioOuter = document.createElement('div');
+      radioOuter.className = 'radio-outer';
+      const radioInner = document.createElement('div');
+      radioInner.className = 'radio-inner';
+      radioOuter.appendChild(radioInner);
 
       const info = document.createElement('div');
+      info.className = 'cert-info';
 
       const cn = document.createElement('div');
-      cn.className = 'cert-item-cn';
+      cn.className = 'cert-name';
       cn.textContent = cert.cn || cert.subject || cert.thumbprint;
 
       const expiry = document.createElement('div');
-      expiry.className = 'cert-item-expiry';
+      expiry.className = 'cert-expiry';
       expiry.textContent = 'Expires ' + this._formatDate(cert.notAfter);
 
       info.appendChild(cn);
       info.appendChild(expiry);
-      item.appendChild(radio);
+
+      item.appendChild(hiddenInput);
+      item.appendChild(radioOuter);
       item.appendChild(info);
 
       item.addEventListener('click', function () {
-        items.forEach(function (i) { i.classList.remove('selected'); });
-        item.classList.add('selected');
+        items.forEach(function (i) {
+          i.setAttribute('aria-selected', 'false');
+          i.querySelector('.cert-hidden-input').checked = false;
+        });
+        item.setAttribute('aria-selected', 'true');
+        item.querySelector('.cert-hidden-input').checked = true;
         this._selectedCert = cert;
       }.bind(this));
+
+      item.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          item.click();
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var arr = items;
+          var i = arr.indexOf(item);
+          var next = e.key === 'ArrowDown'
+            ? arr[(i + 1) % arr.length]
+            : arr[(i - 1 + arr.length) % arr.length];
+          next.focus();
+          next.click();
+        }
+      });
 
       items.push(item);
       list.appendChild(item);
     }.bind(this));
 
+    // CTA button
     const cta = document.createElement('button');
-    cta.className = 'onboarding-cta';
-    cta.textContent = 'CONTINUE';
+    cta.className = 'cta-btn';
+    cta.innerHTML = 'Continue \u2192';
     cta.addEventListener('click', function () {
       if (!this._selectedCert) return;
       const username = this._deriveUsername(this._selectedCert.cn);
       this._runAuth(username);
     }.bind(this));
 
-    const manualLink = document.createElement('div');
-    manualLink.className = 'manual-tenant-link';
-    manualLink.textContent = 'Connect to a different tenant';
-    manualLink.addEventListener('click', function () {
+    // Tenant link
+    const tenantLink = document.createElement('a');
+    tenantLink.className = 'tenant-link';
+    tenantLink.href = '#';
+    tenantLink.textContent = 'Connect to a different tenant';
+    tenantLink.addEventListener('click', function (e) {
+      e.preventDefault();
       this._renderManualEntry();
     }.bind(this));
 
+    this._contentEl.appendChild(header);
     this._contentEl.appendChild(list);
     this._contentEl.appendChild(cta);
-    this._contentEl.appendChild(manualLink);
+    this._contentEl.appendChild(tenantLink);
   }
 
   // --- Private: No Certs ---
 
   _renderNoCerts() {
-    this._titleEl.textContent = 'NO CERTIFICATE FOUND.';
-    this._subtitleEl.textContent =
-      'No client certificates were detected. Enter your CBA username manually to authenticate.';
+    // No certs found
+    // Manual entry mode
     this._contentEl.innerHTML = '';
 
     const inputWrap = document.createElement('div');
-    inputWrap.style.marginBottom = 'var(--onb-space-6)';
+    inputWrap.style.marginBottom = '20px';
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -248,8 +294,8 @@ class OnboardingScreen {
     inputWrap.appendChild(input);
 
     const cta = document.createElement('button');
-    cta.className = 'onboarding-cta';
-    cta.textContent = 'CONNECT';
+    cta.className = 'cta-btn';
+    cta.textContent = 'Connect';
     cta.disabled = true;
 
     input.addEventListener('input', function () {
@@ -268,7 +314,7 @@ class OnboardingScreen {
     });
 
     const helpLink = document.createElement('a');
-    helpLink.className = 'manual-tenant-link';
+    helpLink.className = 'tenant-link';
     helpLink.textContent = "Don\u2019t have a certificate?";
     helpLink.href = this._PPE_WIKI_URL;
     helpLink.target = '_blank';
@@ -286,33 +332,43 @@ class OnboardingScreen {
   // --- Private: Manual Entry ---
 
   _renderManualEntry() {
-    this._titleEl.textContent = 'CONNECT MANUALLY.';
-    this._subtitleEl.textContent =
-      'Enter the full CBA username for the tenant you want to connect to.';
     this._contentEl.innerHTML = '';
 
-    const inputWrap = document.createElement('div');
-    inputWrap.style.marginBottom = 'var(--onb-space-6)';
+    // Back navigation — top of content, before everything
+    if (this._certs && this._certs.length > 0) {
+      var back = document.createElement('a');
+      back.className = 'back-nav';
+      back.href = '#';
+      back.innerHTML = '&#x2190; Certificate';
+      back.addEventListener('click', function (e) {
+        e.preventDefault();
+        this._renderCertPicker(this._certs);
+      }.bind(this));
+      this._contentEl.appendChild(back);
+    }
 
-    const input = document.createElement('input');
+    var header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = '<span class="section-title">Manual Connection</span>';
+
+    var input = document.createElement('input');
     input.type = 'text';
     input.className = 'manual-tenant-input';
     input.placeholder = 'Admin1CBA@FabricFMLV08PPE.ccsctp.net';
     input.autocomplete = 'off';
     input.spellcheck = false;
-    inputWrap.appendChild(input);
 
-    const cta = document.createElement('button');
-    cta.className = 'onboarding-cta';
-    cta.textContent = 'CONNECT';
+    var cta = document.createElement('button');
+    cta.className = 'cta-btn';
+    cta.innerHTML = 'Connect &#x2192;';
     cta.disabled = true;
 
     input.addEventListener('input', function () {
       cta.disabled = !input.value.trim();
     });
 
-    const submit = function () {
-      const val = input.value.trim();
+    var submit = function () {
+      var val = input.value.trim();
       if (!val) return;
       this._runAuth(val);
     }.bind(this);
@@ -322,15 +378,15 @@ class OnboardingScreen {
       if (e.key === 'Enter') submit();
     });
 
-    const helpLink = document.createElement('a');
-    helpLink.className = 'manual-tenant-link';
-    helpLink.textContent = "Don\u2019t have a certificate?";
+    var helpLink = document.createElement('a');
+    helpLink.className = 'tenant-link';
     helpLink.href = this._PPE_WIKI_URL;
     helpLink.target = '_blank';
     helpLink.rel = 'noopener noreferrer';
-    helpLink.style.display = 'block';
+    helpLink.textContent = "Don\u2019t have a certificate?";
 
-    this._contentEl.appendChild(inputWrap);
+    this._contentEl.appendChild(header);
+    this._contentEl.appendChild(input);
     this._contentEl.appendChild(cta);
     this._contentEl.appendChild(helpLink);
 
@@ -340,22 +396,26 @@ class OnboardingScreen {
   // --- Private: Auth Flow ---
 
   async _runAuth(username) {
-    this._titleEl.textContent = 'AUTHENTICATING.';
-    this._subtitleEl.textContent = 'Establishing secure connection to Fabric services.';
     this._contentEl.innerHTML = '';
 
-    const steps = document.createElement('div');
-    steps.className = 'auth-steps';
-    this._contentEl.appendChild(steps);
+    var header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = '<span class="section-title">Authenticating</span>';
+    this._contentEl.appendChild(header);
 
-    // Step 1 — Certificate found (instant done)
+    var stepsContainer = document.createElement('div');
+    stepsContainer.className = 'auth-progress active';
+    this._contentEl.appendChild(stepsContainer);
+    this._stepCount = 0;
+
+    // Step 1 — Certificate verified (instant done)
     const certLabel = username.includes('@') ? username.split('@')[0] : username;
-    const step1 = this._addStep(steps, 'done', 'Certificate found', certLabel);
+    const step1 = this._addStep(stepsContainer, 'done', 'Certificate verified', certLabel);
 
     await this._delay(200);
 
     // Step 2 — Acquiring bearer token
-    const step2 = this._addStep(steps, 'spinning', 'Acquiring bearer token', 'Authenticating via CBA\u2026');
+    const step2 = this._addStep(stepsContainer, 'running', 'Acquiring bearer token', 'Authenticating via CBA\u2026');
 
     let authResult;
     try {
@@ -403,7 +463,7 @@ class OnboardingScreen {
     await this._delay(200);
 
     // Step 3 — Loading workspaces
-    const step3 = this._addStep(steps, 'spinning', 'Loading workspaces', 'Verifying Fabric access\u2026');
+    const step3 = this._addStep(stepsContainer, 'running', 'Loading workspaces', 'Verifying Fabric access\u2026');
 
     try {
       const resp = await fetch('/api/fabric/workspaces');
@@ -447,60 +507,82 @@ class OnboardingScreen {
   // --- Private: Step Management ---
 
   /**
-   * Create an auth-step element and append it to the container.
-   * @param {HTMLElement} container - The .auth-steps wrapper.
-   * @param {'pending'|'spinning'|'done'|'error'} state - Initial state.
+   * Create an auth step-row element and append it to the container.
+   * @param {HTMLElement} container - The .auth-progress wrapper.
+   * @param {'pending'|'running'|'done'|'error'} state - Initial state.
    * @param {string} label - Step label text.
    * @param {string} [detail] - Optional detail text.
-   * @returns {HTMLElement} The step element.
+   * @returns {HTMLElement} The step-row element.
    */
   _addStep(container, state, label, detail) {
-    const step = document.createElement('div');
-    step.className = 'auth-step';
+    this._stepCount = (this._stepCount || 0) + 1;
 
-    const icon = document.createElement('div');
-    icon.className = 'auth-step-icon ' + state;
+    const row = document.createElement('div');
+    row.className = 'step-row';
 
-    const labelEl = document.createElement('div');
-    labelEl.className = 'auth-step-label';
+    const indicator = document.createElement('div');
+    indicator.className = 'step-indicator';
+
+    const stepNum = document.createElement('span');
+    stepNum.className = 'step-num';
+    stepNum.textContent = state === 'done' ? '\u2713' : String(this._stepCount);
+    indicator.appendChild(stepNum);
+
+    const textWrap = document.createElement('div');
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'step-label';
     labelEl.textContent = label;
-
-    step.appendChild(icon);
-    step.appendChild(labelEl);
+    textWrap.appendChild(labelEl);
 
     if (detail) {
       const detailEl = document.createElement('div');
-      detailEl.className = 'auth-step-detail';
+      detailEl.className = 'step-detail';
       detailEl.textContent = detail;
-      step.appendChild(detailEl);
+      textWrap.appendChild(detailEl);
     }
 
-    container.appendChild(step);
-    return step;
+    row.appendChild(indicator);
+    row.appendChild(textWrap);
+
+    if (state) {
+      row.classList.add(state);
+    }
+
+    container.appendChild(row);
+    requestAnimationFrame(function () { row.classList.add('visible'); });
+
+    return row;
   }
 
   /**
-   * Update an existing step's icon state, label, and detail.
-   * @param {HTMLElement} el - The .auth-step element.
-   * @param {'pending'|'spinning'|'done'|'error'} state - New state.
+   * Update an existing step-row's state, label, and detail.
+   * @param {HTMLElement} el - The .step-row element.
+   * @param {'pending'|'running'|'done'|'error'} state - New state.
    * @param {string} label - New label text.
    * @param {string} [detail] - New detail text.
    */
   _updateStep(el, state, label, detail) {
-    const icon = el.querySelector('.auth-step-icon');
-    if (icon) {
-      icon.className = 'auth-step-icon ' + state;
+    el.classList.remove('pending', 'running', 'done', 'error');
+    el.classList.add(state);
+
+    const stepNum = el.querySelector('.step-num');
+    if (stepNum) {
+      if (state === 'done') stepNum.textContent = '\u2713';
+      else if (state === 'error') stepNum.textContent = '\u2717';
     }
 
-    const labelEl = el.querySelector('.auth-step-label');
+    const labelEl = el.querySelector('.step-label');
     if (labelEl) labelEl.textContent = label;
 
-    let detailEl = el.querySelector('.auth-step-detail');
+    let detailEl = el.querySelector('.step-detail');
     if (detail) {
       if (!detailEl) {
         detailEl = document.createElement('div');
-        detailEl.className = 'auth-step-detail';
-        el.appendChild(detailEl);
+        detailEl.className = 'step-detail';
+        // Append to the text wrapper (second child of the row)
+        var textWrap = el.children[1];
+        if (textWrap) textWrap.appendChild(detailEl);
       }
       detailEl.textContent = detail;
     } else if (detailEl) {
@@ -539,9 +621,9 @@ class OnboardingScreen {
     }
 
     const retry = document.createElement('button');
-    retry.className = 'onboarding-cta';
-    retry.textContent = 'RETRY';
-    retry.style.marginTop = 'var(--onb-space-6)';
+    retry.className = 'cta-btn';
+    retry.textContent = 'Retry';
+    retry.style.marginTop = '20px';
     retry.addEventListener('click', function () {
       this._runAuth(username);
     }.bind(this));
@@ -597,3 +679,4 @@ class OnboardingScreen {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 }
+

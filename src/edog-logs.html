@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EDOG Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     /* === css/variables.css === */
 /* Reset and Variables */
@@ -4435,600 +4437,568 @@ mark {
     /* === css/onboarding.css === */
 /* ============================================================================
    ONBOARDING — Full-screen auth overlay
-   Independent design system (does not inherit from variables.css)
-
-   Cinematic split-panel auth screen: left form panel + right gradient blob.
-   Warm editorial aesthetic — cream backgrounds, near-black text, organic amber
-   gradient. Supports light/dark themes via [data-theme="dark"].
+   Integrated from approved prototype (Direction C — minimal).
+   Scoped under .onboarding-overlay to avoid global pollution.
+   Conflicting class names prefixed: layout, content-area, footer.
 
    Mika Tanaka — CSS Systems
    ============================================================================ */
 
 
 /* ---------------------------------------------------------------------------
-   1. SCOPED VARIABLES (Light)
-   Self-contained token set — no dependency on variables.css.
-   The only conceptual overlap is --font-mono which we redefine locally.
+   1. SCOPED RESET + VARIABLES
    --------------------------------------------------------------------------- */
-.onboarding-overlay {
-    --onb-bg: oklch(0.97 0.005 80);            /* warm off-white / cream */
-    --onb-surface: oklch(0.95 0.006 75);
-    --onb-text: oklch(0.15 0.005 260);          /* near-black */
-    --onb-text-dim: oklch(0.47 0.01 260);
-    --onb-text-muted: oklch(0.66 0.01 260);
-    --onb-border: oklch(0.15 0.005 260 / 0.08);
-    --onb-accent-warm: oklch(0.72 0.16 55);     /* warm amber */
-    --onb-accent-warm-dim: oklch(0.72 0.16 55 / 0.08);
-    --onb-success: oklch(0.72 0.19 145);
-    --onb-error: oklch(0.65 0.22 25);
-    --onb-font-body: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-    --onb-font-mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+.onboarding-overlay *,
+.onboarding-overlay *::before,
+.onboarding-overlay *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
-    /* 4px spacing grid — local tokens */
-    --onb-space-1: 4px;
-    --onb-space-2: 8px;
-    --onb-space-3: 12px;
-    --onb-space-4: 16px;
-    --onb-space-5: 20px;
-    --onb-space-6: 24px;
-    --onb-space-8: 32px;
-    --onb-space-10: 40px;
-    --onb-space-12: 48px;
-    --onb-space-16: 64px;
-    --onb-space-20: 80px;
+.onboarding-overlay {
+  --bg: #fafbfc;
+  --bg-card: #ffffff;
+  --bg-hover: #f3f4f8;
+  --bg-selected: rgba(109, 92, 255, 0.05);
+  --border: #e4e6ec;
+  --border-accent: #6d5cff;
+  --text-primary: #0f1117;
+  --text-secondary: #5c6170;
+  --text-muted: #999dab;
+  --accent: #6d5cff;
+  --accent-hover: #5c4be6;
+  --accent-faint: rgba(109, 92, 255, 0.06);
+  --accent-wash: rgba(109, 92, 255, 0.03);
+  --green: #22a55b;
+  --error: #c53030;
+  --font: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --speed: 120ms;
 }
 
 
 /* ---------------------------------------------------------------------------
-   2. DARK MODE OVERRIDES
-   Activated via [data-theme="dark"] on <body> or ancestor.
-   --------------------------------------------------------------------------- */
-[data-theme="dark"] .onboarding-overlay {
-    --onb-bg: oklch(0.12 0.01 50);
-    --onb-surface: oklch(0.15 0.01 50);
-    --onb-text: oklch(0.90 0.01 70);
-    --onb-text-dim: oklch(0.62 0.01 60);
-    --onb-text-muted: oklch(0.40 0.01 55);
-    --onb-border: oklch(0.95 0.005 70 / 0.06);
-}
-
-
-/* ---------------------------------------------------------------------------
-   3. OVERLAY BASE
-   Fixed full-screen layer above everything. z-index 9000 keeps it above
-   the dashboard (sidebar, topbar, panels) which live around 100-500.
+   2. OVERLAY BASE
    --------------------------------------------------------------------------- */
 .onboarding-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9000;                              /* above all dashboard chrome */
-    display: grid;
-    grid-template-columns: 1fr 0.45fr;
-    grid-template-rows: auto 1fr;
-    background: var(--onb-bg);
-    font-family: var(--onb-font-body);
-    color: var(--onb-text);
-    transition: opacity 400ms ease-out;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  opacity: 1;
+  transition: opacity 0.4s ease;
 }
 
 .onboarding-overlay.fade-out {
-    opacity: 0;
-    pointer-events: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Scan-line grid texture */
+.onboarding-overlay::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.025) 3px, rgba(0,0,0,0.025) 4px),
+    repeating-linear-gradient(90deg, transparent, transparent 79px, rgba(0,0,0,0.03) 79px, rgba(0,0,0,0.03) 80px);
+  pointer-events: none;
+  z-index: 0;
 }
 
 
 /* ---------------------------------------------------------------------------
-   4. TOP STATUS BAR
-   Spans full width (both panels). Monospaced uppercase system-status strip.
+   3. LAYOUT — asymmetric two-column grid
    --------------------------------------------------------------------------- */
-.onboarding-status-bar {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 36px;
-    padding: 0 var(--onb-space-8);
-    border-bottom: 1px solid var(--onb-border);
-    font-family: var(--onb-font-mono);
-    font-size: 10px;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--onb-text-muted);
-    user-select: none;
+.onboarding-layout {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(340px, 480px) 1fr;
+  min-height: 0;
 }
 
 
 /* ---------------------------------------------------------------------------
-   5. LEFT PANEL
-   Main content area — auth form, cert selector, progress steps.
+   4. CONTENT AREA (left panel)
    --------------------------------------------------------------------------- */
-.onboarding-left {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 0 var(--onb-space-20);
-    max-width: 640px;
-    overflow-y: auto;
+.onboarding-content {
+  background: rgba(250, 251, 252, 0.7);
+  position: relative;
+  z-index: 2;
+  padding: 56px 48px 40px;
+  display: flex;
+  flex-direction: column;
 }
 
 
 /* ---------------------------------------------------------------------------
-   6. VERTICAL WATERMARK
-   Rotated monospaced label on the far-left edge. Purely decorative.
+   5. WORDMARK + TAGLINE
    --------------------------------------------------------------------------- */
-.onboarding-watermark {
-    position: absolute;
-    left: var(--onb-space-4);
-    bottom: 50%;
-    transform: rotate(-90deg);
-    transform-origin: left bottom;
-    font-family: var(--onb-font-mono);
-    font-size: 9px;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    color: var(--onb-text-muted);
-    opacity: 0.3;
-    white-space: nowrap;
-    pointer-events: none;
-    user-select: none;
+.onboarding-overlay .wordmark {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.onboarding-overlay .wordmark-accent {
+  color: var(--accent);
+}
+
+.onboarding-overlay .tagline {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 40px;
 }
 
 
 /* ---------------------------------------------------------------------------
-   7. TYPOGRAPHY
-   Editorial hierarchy — category → title → subtitle.
+   6. SECTION HEADER
    --------------------------------------------------------------------------- */
-.onboarding-category {
-    font-family: var(--onb-font-mono);
-    font-size: 11px;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--onb-text-muted);
-    margin-bottom: var(--onb-space-3);
+.onboarding-overlay .section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-.onboarding-title {
-    font-size: 40px;
-    font-weight: 700;
-    line-height: 1.1;
-    letter-spacing: -0.5px;
-    color: var(--onb-text);
-    margin-bottom: var(--onb-space-4);
+.onboarding-overlay .section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
-.onboarding-subtitle {
-    font-size: 14px;
-    line-height: 1.7;
-    color: var(--onb-text-dim);
-    margin-bottom: var(--onb-space-10);
-    max-width: 420px;
+.onboarding-overlay .section-meta {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 
 /* ---------------------------------------------------------------------------
-   8. CERT SELECTOR
-   Horizontal-rule style list — label left, detail right, full-width underline
-   separators. Matches the reference's form-row layout.
+   7. CERT LIST
    --------------------------------------------------------------------------- */
-.cert-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 var(--onb-space-8) 0;
+.onboarding-overlay .cert-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 28px;
 }
 
-.cert-item {
-    display: grid;
-    grid-template-columns: var(--onb-space-5) 1fr;
-    gap: var(--onb-space-3);
-    align-items: start;
-    padding: var(--onb-space-4) 0;
-    border-bottom: 1px solid var(--onb-border);
-    cursor: pointer;
-    transition: background 120ms ease-out;
+.onboarding-overlay .cert-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background var(--speed) ease-out, border-color var(--speed) ease-out;
 }
 
-.cert-item:hover {
-    background: var(--onb-accent-warm-dim);
+.onboarding-overlay .cert-item:hover {
+  background: var(--bg-hover);
 }
 
-/* Radio indicator — CSS-drawn circle */
-.cert-item-radio {
-    width: var(--onb-space-4);
-    height: var(--onb-space-4);
-    border-radius: 50%;
-    border: 2px solid var(--onb-text-muted);
-    margin-top: 2px;
-    transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
-    flex-shrink: 0;
+.onboarding-overlay .cert-item[aria-selected="true"] {
+  background: var(--bg-selected);
+  border-color: rgba(109, 92, 255, 0.2);
 }
 
-.cert-item.selected .cert-item-radio {
-    border-color: var(--onb-text);
-    box-shadow: inset 0 0 0 4px var(--onb-text);
+/* Custom radio */
+.onboarding-overlay .radio-outer {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color var(--speed) ease-out;
 }
 
-.cert-item-cn {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--onb-text);
-    line-height: 1.4;
+.onboarding-overlay .cert-item[aria-selected="true"] .radio-outer {
+  border-color: var(--accent);
 }
 
-.cert-item-expiry {
-    font-size: 12px;
-    color: var(--onb-text-muted);
-    margin-top: 2px;
+.onboarding-overlay .radio-inner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: scale(0);
+  transition: transform 100ms ease-out;
+}
+
+.onboarding-overlay .cert-item[aria-selected="true"] .radio-inner {
+  transform: scale(1);
+}
+
+.onboarding-overlay .cert-hidden-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.onboarding-overlay .cert-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-overlay .cert-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.onboarding-overlay .cert-expiry {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-top: 1px;
 }
 
 
 /* ---------------------------------------------------------------------------
-   9. AUTH PROGRESS STEPS
-   Vertical step list with icon states — pending, spinning, done, error.
+   8. CTA BUTTON
    --------------------------------------------------------------------------- */
-.auth-steps {
-    display: flex;
-    flex-direction: column;
-    gap: var(--onb-space-5);
-    margin-bottom: var(--onb-space-8);
+.onboarding-overlay .cta-btn {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background var(--speed) ease-out, transform 60ms ease-out;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-.auth-step {
-    display: grid;
-    grid-template-columns: var(--onb-space-6) 1fr;
-    gap: var(--onb-space-3);
-    align-items: start;
-    opacity: 0;
-    transform: translateY(var(--onb-space-2));
-    animation: onb-step-enter 300ms ease-out forwards;
-}
-
-/* Staggered entry — set via inline style: animation-delay: Nms */
-.auth-step:nth-child(1) { animation-delay: 0ms; }
-.auth-step:nth-child(2) { animation-delay: 80ms; }
-.auth-step:nth-child(3) { animation-delay: 160ms; }
-.auth-step:nth-child(4) { animation-delay: 240ms; }
-.auth-step:nth-child(5) { animation-delay: 320ms; }
-
-@keyframes onb-step-enter {
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Step icon — shared base */
-.auth-step-icon {
-    width: var(--onb-space-6);
-    height: var(--onb-space-6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    line-height: 1;
-    flex-shrink: 0;
-}
-
-/* Pending — hollow circle */
-.auth-step-icon.pending::before {
-    content: "\25CB";                           /* ○ */
-    color: var(--onb-text-muted);
-}
-
-/* Spinning — animated ring */
-.auth-step-icon.spinning {
-    border: 2px solid var(--onb-border);
-    border-top-color: var(--onb-text);
-    border-radius: 50%;
-    width: var(--onb-space-5);
-    height: var(--onb-space-5);
-    animation: onb-spin 700ms linear infinite;
-}
-
-.auth-step-icon.spinning::before {
-    content: none;
-}
-
-@keyframes onb-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* Done — checkmark, green */
-.auth-step-icon.done::before {
-    content: "\2713";                           /* ✓ */
-    color: var(--onb-success);
-    font-weight: 700;
-}
-
-/* Error — cross, red */
-.auth-step-icon.error::before {
-    content: "\2715";                           /* ✕ */
-    color: var(--onb-error);
-    font-weight: 700;
-}
-
-.auth-step-label {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--onb-text);
-    line-height: 1.4;
-}
-
-.auth-step-detail {
-    font-size: 12px;
-    color: var(--onb-text-muted);
-    margin-top: 2px;
-    grid-column: 2;
-}
+.onboarding-overlay .cta-btn:hover { background: var(--accent-hover); }
+.onboarding-overlay .cta-btn:active { transform: scale(0.985); }
+.onboarding-overlay .cta-btn:disabled { opacity: 0.45; cursor: default; transform: none; }
+.onboarding-overlay .cta-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 
 /* ---------------------------------------------------------------------------
-   10. CTA BUTTON
-   Solid black (light) / off-white (dark) — inverted text. Almost-square
-   border-radius. Arrow character appended via ::after.
+   9. TENANT LINK
    --------------------------------------------------------------------------- */
-.onboarding-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--onb-space-2);
-    background: var(--onb-text);
-    color: var(--onb-bg);
-    padding: 14px var(--onb-space-10);
-    border: none;
-    border-radius: var(--onb-space-1);
-    font-family: var(--onb-font-body);
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    cursor: pointer;
-    transition: opacity 120ms ease-out;
-    user-select: none;
+.onboarding-overlay .tenant-link {
+  display: block;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-top: 12px;
+  cursor: pointer;
+  transition: color var(--speed) ease-out;
 }
 
-.onboarding-cta::after {
-    content: "\2192";                           /* → */
-    font-size: 14px;
-}
-
-.onboarding-cta:hover {
-    opacity: 0.85;
-}
-
-.onboarding-cta:active {
-    opacity: 0.75;
-}
-
-.onboarding-cta:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-.onboarding-cta:disabled:hover {
-    opacity: 0.3;
-}
-
-/* Focus ring — accessible keyboard indicator */
-.onboarding-cta:focus-visible {
-    outline: 2px solid var(--onb-accent-warm);
-    outline-offset: 2px;
-}
+.onboarding-overlay .tenant-link:hover { color: var(--accent); }
 
 
 /* ---------------------------------------------------------------------------
-   11. MANUAL TENANT INPUT
-   Minimal input field — transparent bg, bottom-border only.
+   10. SPACER
    --------------------------------------------------------------------------- */
-.manual-tenant-link {
-    display: inline-block;
-    font-size: 12px;
-    color: var(--onb-text-muted);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    cursor: pointer;
-    margin-top: var(--onb-space-4);
-    transition: color 120ms ease-out;
-}
-
-.manual-tenant-link:hover {
-    color: var(--onb-text-dim);
-}
-
-.manual-tenant-input {
-    width: 100%;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--onb-border);
-    padding: var(--onb-space-3) 0;
-    font-family: var(--onb-font-mono);
-    font-size: 14px;
-    color: var(--onb-text);
-    transition: border-bottom-color 120ms ease-out;
-}
-
-.manual-tenant-input:focus {
-    border-bottom-color: var(--onb-text);
-    outline: none;
-}
-
-.manual-tenant-input::placeholder {
-    color: var(--onb-text-muted);
-}
+.onboarding-overlay .spacer { flex: 1; }
 
 
 /* ---------------------------------------------------------------------------
-   12. RIGHT PANEL
-   Dark warm canvas with an organic animated gradient blob via ::before.
-   Bottom-anchored descriptive text with low-contrast white.
+   11. PATTERN AREA (right decorative panel)
    --------------------------------------------------------------------------- */
-.onboarding-right {
-    position: relative;
-    overflow: hidden;
-    background: oklch(0.20 0.02 50);
-    display: flex;
-    align-items: flex-end;
+.onboarding-overlay .pattern-area {
+  position: relative;
+  overflow: hidden;
+  background: rgba(243, 244, 248, 0.15);
+  border-left: 1px solid var(--border);
 }
 
-[data-theme="dark"] .onboarding-right {
-    background: oklch(0.10 0.02 50);
+.onboarding-overlay .pattern-area::before { display: none; }
+
+.onboarding-overlay .pattern-area::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 60%, rgba(109,92,255,0.03) 0%, transparent 50%);
 }
 
-/* Gradient blob — warm amber organic light */
-.onboarding-right::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 130%;
-    height: 130%;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: radial-gradient(
-        ellipse at center,
-        oklch(0.70 0.18 55 / 0.6)  0%,
-        oklch(0.60 0.14 45 / 0.3)  40%,
-        oklch(0.35 0.06 35 / 0.1)  70%,
-        transparent                 100%
-    );
-    filter: blur(40px);
-    animation: onb-blob-drift 8s ease-in-out infinite alternate;
-}
-
-@keyframes onb-blob-drift {
-    0% {
-        transform: translate(-50%, -50%) scale(1) translate(0, 0);
-    }
-    100% {
-        transform: translate(-50%, -50%) scale(1.06) translate(12px, -8px);
-    }
-}
-
-/* Bottom text area */
-.onboarding-right-footer {
-    position: relative;                         /* above the blob pseudo-element */
-    z-index: 1;
-    padding: var(--onb-space-8);
-}
-
-.onboarding-right-text {
-    font-size: 12px;
-    line-height: 1.6;
-    color: oklch(0.95 0.005 70 / 0.4);
-    max-width: 280px;
-}
-
-.onboarding-right-version {
-    font-family: var(--onb-font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: oklch(0.95 0.005 70 / 0.25);
-    margin-top: var(--onb-space-3);
+.onboarding-overlay .pattern-watermark {
+  position: absolute;
+  bottom: 48px;
+  right: 48px;
+  font-size: 140px;
+  font-weight: 800;
+  color: rgba(109, 92, 255, 0.07);
+  letter-spacing: -0.04em;
+  line-height: 1;
+  user-select: none;
 }
 
 
 /* ---------------------------------------------------------------------------
-   13. ERROR STATE
-   Left-border accent strip with tinted background.
+   12. AUTH PROGRESS
    --------------------------------------------------------------------------- */
-.auth-error {
-    padding: var(--onb-space-4);
-    background: oklch(0.65 0.22 25 / 0.06);
-    border-left: 3px solid var(--onb-error);
-    margin-top: var(--onb-space-6);
-    border-radius: 0 var(--onb-space-1) var(--onb-space-1) 0;
+.onboarding-overlay .auth-progress {
+  display: none;
 }
 
-.auth-error-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--onb-error);
-    line-height: 1.4;
+.onboarding-overlay .auth-progress.active {
+  display: block;
 }
 
-.auth-error-detail {
-    font-size: 12px;
-    color: var(--onb-text-dim);
-    margin-top: var(--onb-space-1);
-    line-height: 1.5;
+.onboarding-overlay .step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 0;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
 }
 
-.auth-error-help {
-    font-size: 12px;
-    margin-top: var(--onb-space-2);
-    line-height: 1.5;
+.onboarding-overlay .step-row.visible {
+  opacity: 1;
+  transform: translateY(0);
 }
 
-.auth-error-help a {
-    color: var(--onb-accent-warm);
-    text-decoration: underline;
-    text-underline-offset: 2px;
+.onboarding-overlay .step-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: border-color var(--speed) ease-out, background var(--speed) ease-out, color var(--speed) ease-out;
 }
 
-.auth-error-help a:hover {
-    opacity: 0.8;
+.onboarding-overlay .step-row.running .step-indicator {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.onboarding-overlay .step-row.done .step-indicator {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.onboarding-overlay .step-row.error .step-indicator {
+  border-color: var(--error);
+  background: var(--error);
+  color: #fff;
+}
+
+.onboarding-overlay .step-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color var(--speed) ease-out;
+}
+
+.onboarding-overlay .step-row.running .step-label { color: var(--text-primary); }
+.onboarding-overlay .step-row.done .step-label { color: var(--text-primary); }
+
+.onboarding-overlay .step-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.onboarding-overlay .redirect-msg {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 20px;
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+
+.onboarding-overlay .redirect-msg.visible { opacity: 1; }
+
+
+/* ---------------------------------------------------------------------------
+   13. FOOTER
+   --------------------------------------------------------------------------- */
+.onboarding-overlay .onboarding-footer {
+  position: relative;
+  z-index: 1;
+  padding: 16px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-family: var(--font);
+}
+
+.onboarding-overlay .status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 
 /* ---------------------------------------------------------------------------
-   14. RESPONSIVE — Single column on narrow viewports
-   Right panel hides; left panel fills.
+   14. MANUAL TENANT INPUT (for no-certs / manual-entry flows)
+   --------------------------------------------------------------------------- */
+.onboarding-overlay .manual-tenant-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 13px;
+  margin-bottom: 20px;
+  outline: none;
+  transition: border-color var(--speed) ease-out;
+}
+
+.onboarding-overlay .manual-tenant-input::placeholder {
+  color: var(--text-muted);
+}
+
+.onboarding-overlay .manual-tenant-input:focus {
+  border-color: var(--accent);
+}
+
+
+/* ---------------------------------------------------------------------------
+   15. ERROR STATE
+   --------------------------------------------------------------------------- */
+.onboarding-overlay .auth-error {
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(197, 48, 48, 0.2);
+  background: rgba(197, 48, 48, 0.04);
+  margin-top: 20px;
+}
+
+.onboarding-overlay .auth-error-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.onboarding-overlay .auth-error-detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.onboarding-overlay .auth-error-help {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+
+/* ---------------------------------------------------------------------------
+   16. RESPONSIVE — collapse to single column
    --------------------------------------------------------------------------- */
 @media (max-width: 768px) {
-    .onboarding-overlay {
-        grid-template-columns: 1fr;
-    }
-
-    .onboarding-right {
-        display: none;
-    }
-
-    .onboarding-left {
-        padding: 0 var(--onb-space-8);
-        max-width: none;
-    }
-
-    .onboarding-watermark {
-        display: none;
-    }
-
-    .onboarding-title {
-        font-size: 28px;
-    }
+  .onboarding-layout {
+    grid-template-columns: 1fr;
+  }
+  .onboarding-overlay .pattern-area { display: none; }
+  .onboarding-content {
+    padding: 32px 24px;
+  }
+  .onboarding-overlay .wordmark { font-size: 26px; }
+  .onboarding-overlay .onboarding-footer { padding: 16px 24px; }
 }
 
 
 /* ---------------------------------------------------------------------------
-   15. REDUCED MOTION — Disable all animations
+   17. REDUCED MOTION
    --------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-    .onboarding-overlay,
-    .onboarding-overlay * {
-        animation-duration: 0ms;
-        animation-delay: 0ms;
-        transition-duration: 0ms;
-    }
-
-    .onboarding-right::before {
-        animation: none;
-    }
-
-    .auth-step {
-        opacity: 1;
-        transform: none;
-        animation: none;
-    }
-
-    .auth-step-icon.spinning {
-        animation: none;
-        border-top-color: var(--onb-text-muted);
-    }
+  .onboarding-overlay,
+  .onboarding-overlay *,
+  .onboarding-overlay *::before,
+  .onboarding-overlay *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
+
+
+/* ---------------------------------------------------------------------------
+   18. DARK MODE
+   --------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  .onboarding-overlay {
+    --bg: #0c0e14;
+    --bg-card: #181b23;
+    --bg-hover: #1e212b;
+    --bg-selected: rgba(109, 92, 255, 0.1);
+    --border: #272b36;
+    --text-primary: #e4e6eb;
+    --text-secondary: #8c919d;
+    --text-muted: #5e6371;
+    --accent-faint: rgba(109, 92, 255, 0.05);
+    --accent-wash: rgba(109, 92, 255, 0.02);
+    --error: #f87171;
+  }
+  .onboarding-overlay .pattern-watermark { color: rgba(109, 92, 255, 0.05); }
+  .onboarding-content { background: rgba(12, 14, 20, 0.7); }
+  .onboarding-overlay .auth-error {
+    border-color: rgba(248, 113, 113, 0.2);
+    background: rgba(248, 113, 113, 0.06);
+  }
+}
+
+/* Back navigation — top of content area, small arrow + label */
+.back-nav {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: color 120ms ease-out;
+}
+.back-nav:hover { color: var(--accent); }
+
 
   </style>
 </head>
@@ -12090,16 +12060,18 @@ class MockRenderer {
  * Lifecycle: check health → scan certs → auto-select or show picker →
  * Silent CBA auth → verify workspace access → dismiss → dashboard.
  *
+ * DOM structure matches the Direction C (minimal) approved prototype.
+ *
  * Zara Okonkwo — vanilla JS, class-based module.
  */
 class OnboardingScreen {
   constructor() {
     this._overlay = null;
     this._contentEl = null;
-    this._titleEl = null;
-    this._subtitleEl = null;
     this._onComplete = null;
     this._selectedCert = null;
+    this._certs = [];
+    this._stepCount = 0;
 
     this._PPE_WIKI_URL =
       'https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)';
@@ -12140,6 +12112,7 @@ class OnboardingScreen {
     } catch {
       // Cert scan failed — fall through to no-certs path
     }
+    this._certs = certs;
 
     if (!Array.isArray(certs) || certs.length === 0) {
       this._renderNoCerts();
@@ -12171,75 +12144,62 @@ class OnboardingScreen {
     const overlay = document.createElement('div');
     overlay.className = 'onboarding-overlay';
 
-    // Status bar
-    const statusBar = document.createElement('div');
-    statusBar.className = 'onboarding-status-bar';
-    const statusLeft = document.createElement('span');
-    statusLeft.textContent = 'EDOG PLAYGROUND \u2014 v2.0';
-    const statusRight = document.createElement('span');
-    statusRight.textContent = 'SECURE CONNECTION';
-    statusBar.appendChild(statusLeft);
-    statusBar.appendChild(statusRight);
+    // Layout — asymmetric two-column grid
+    const layout = document.createElement('div');
+    layout.className = 'onboarding-layout';
 
-    // Watermark
-    const watermark = document.createElement('div');
-    watermark.className = 'onboarding-watermark';
-    watermark.textContent = 'EDOG_PLAYGROUND_V2';
-
-    // Left panel
-    const left = document.createElement('div');
-    left.className = 'onboarding-left';
-
-    const category = document.createElement('div');
-    category.className = 'onboarding-category';
-    category.textContent = 'Authentication';
-
-    const title = document.createElement('div');
-    title.className = 'onboarding-title';
-    title.textContent = 'SELECT CERTIFICATE.';
-
-    const subtitle = document.createElement('div');
-    subtitle.className = 'onboarding-subtitle';
-    subtitle.textContent = 'Choose a certificate to authenticate with the Fabric service.';
-
+    // Left — content area
     const content = document.createElement('div');
-    content.id = 'onb-content';
+    content.className = 'onboarding-content';
 
-    left.appendChild(watermark);
-    left.appendChild(category);
-    left.appendChild(title);
-    left.appendChild(subtitle);
-    left.appendChild(content);
+    const wordmark = document.createElement('div');
+    wordmark.className = 'wordmark';
+    wordmark.innerHTML = 'EDOG<span class="wordmark-accent">.</span>';
 
-    // Right panel
-    const right = document.createElement('div');
-    right.className = 'onboarding-right';
+    const tagline = document.createElement('div');
+    tagline.className = 'tagline';
+    tagline.textContent = 'Playground v2.0';
 
-    const rightFooter = document.createElement('div');
-    rightFooter.className = 'onboarding-right-footer';
+    const selectPhase = document.createElement('div');
+    selectPhase.id = 'select-phase';
 
-    const rightText = document.createElement('div');
-    rightText.className = 'onboarding-right-text';
-    rightText.textContent =
-      'Developer cockpit for FabricLiveTable. ' +
-      'Browse workspaces, manage feature flags, inspect DAGs, and debug live services.';
+    const authProgress = document.createElement('div');
+    authProgress.className = 'auth-progress';
 
-    const rightVersion = document.createElement('div');
-    rightVersion.className = 'onboarding-right-version';
-    rightVersion.textContent = 'EDOG Studio v2.0';
+    const spacer = document.createElement('div');
+    spacer.className = 'spacer';
 
-    rightFooter.appendChild(rightText);
-    rightFooter.appendChild(rightVersion);
-    right.appendChild(rightFooter);
+    content.appendChild(wordmark);
+    content.appendChild(tagline);
+    content.appendChild(selectPhase);
+    content.appendChild(authProgress);
+    content.appendChild(spacer);
 
-    overlay.appendChild(statusBar);
-    overlay.appendChild(left);
-    overlay.appendChild(right);
+    // Right — decorative pattern panel
+    const patternArea = document.createElement('div');
+    patternArea.className = 'pattern-area';
+    patternArea.setAttribute('aria-hidden', 'true');
+
+    const patternWatermark = document.createElement('div');
+    patternWatermark.className = 'pattern-watermark';
+    patternWatermark.textContent = 'EDOG';
+    patternArea.appendChild(patternWatermark);
+
+    layout.appendChild(content);
+    layout.appendChild(patternArea);
+
+    // Footer
+    const footer = document.createElement('footer');
+    footer.className = 'onboarding-footer';
+    footer.innerHTML =
+      '<span>EDOG Playground v2.0</span>' +
+      '<span><span class="status-dot"></span>All systems operational</span>';
+
+    overlay.appendChild(layout);
+    overlay.appendChild(footer);
 
     this._overlay = overlay;
-    this._contentEl = content;
-    this._titleEl = title;
-    this._subtitleEl = subtitle;
+    this._contentEl = selectPhase;
   }
 
   // --- Private: Cert Picker ---
@@ -12250,80 +12210,136 @@ class OnboardingScreen {
       return new Date(b.notAfter) - new Date(a.notAfter);
     });
 
-    this._titleEl.textContent = 'SELECT CERTIFICATE.';
-    this._subtitleEl.textContent =
-      'Multiple certificates were found on this machine. Choose one to authenticate.';
-
     this._selectedCert = sorted[0];
     this._contentEl.innerHTML = '';
 
-    const list = document.createElement('div');
+    // Section header
+    const header = document.createElement('div');
+    header.className = 'section-header';
+
+    const sectionTitle = document.createElement('span');
+    sectionTitle.className = 'section-title';
+    sectionTitle.textContent = 'Certificate';
+
+    const sectionMeta = document.createElement('span');
+    sectionMeta.className = 'section-meta';
+    sectionMeta.textContent = sorted.length + ' detected';
+
+    header.appendChild(sectionTitle);
+    header.appendChild(sectionMeta);
+
+    // Cert list (radiogroup)
+    const list = document.createElement('ul');
     list.className = 'cert-list';
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', 'Certificate selection');
 
     const items = [];
     sorted.forEach(function (cert, idx) {
-      const item = document.createElement('div');
-      item.className = 'cert-item' + (idx === 0 ? ' selected' : '');
+      const item = document.createElement('li');
+      item.className = 'cert-item';
+      item.setAttribute('role', 'radio');
+      item.setAttribute('aria-selected', idx === 0 ? 'true' : 'false');
+      item.setAttribute('tabindex', '0');
+      item.setAttribute('data-cert', String(idx));
 
-      const radio = document.createElement('div');
-      radio.className = 'cert-item-radio';
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'radio';
+      hiddenInput.className = 'cert-hidden-input';
+      hiddenInput.name = 'cert';
+      hiddenInput.value = String(idx);
+      if (idx === 0) hiddenInput.checked = true;
+
+      const radioOuter = document.createElement('div');
+      radioOuter.className = 'radio-outer';
+      const radioInner = document.createElement('div');
+      radioInner.className = 'radio-inner';
+      radioOuter.appendChild(radioInner);
 
       const info = document.createElement('div');
+      info.className = 'cert-info';
 
       const cn = document.createElement('div');
-      cn.className = 'cert-item-cn';
+      cn.className = 'cert-name';
       cn.textContent = cert.cn || cert.subject || cert.thumbprint;
 
       const expiry = document.createElement('div');
-      expiry.className = 'cert-item-expiry';
+      expiry.className = 'cert-expiry';
       expiry.textContent = 'Expires ' + this._formatDate(cert.notAfter);
 
       info.appendChild(cn);
       info.appendChild(expiry);
-      item.appendChild(radio);
+
+      item.appendChild(hiddenInput);
+      item.appendChild(radioOuter);
       item.appendChild(info);
 
       item.addEventListener('click', function () {
-        items.forEach(function (i) { i.classList.remove('selected'); });
-        item.classList.add('selected');
+        items.forEach(function (i) {
+          i.setAttribute('aria-selected', 'false');
+          i.querySelector('.cert-hidden-input').checked = false;
+        });
+        item.setAttribute('aria-selected', 'true');
+        item.querySelector('.cert-hidden-input').checked = true;
         this._selectedCert = cert;
       }.bind(this));
+
+      item.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          item.click();
+        }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var arr = items;
+          var i = arr.indexOf(item);
+          var next = e.key === 'ArrowDown'
+            ? arr[(i + 1) % arr.length]
+            : arr[(i - 1 + arr.length) % arr.length];
+          next.focus();
+          next.click();
+        }
+      });
 
       items.push(item);
       list.appendChild(item);
     }.bind(this));
 
+    // CTA button
     const cta = document.createElement('button');
-    cta.className = 'onboarding-cta';
-    cta.textContent = 'CONTINUE';
+    cta.className = 'cta-btn';
+    cta.innerHTML = 'Continue \u2192';
     cta.addEventListener('click', function () {
       if (!this._selectedCert) return;
       const username = this._deriveUsername(this._selectedCert.cn);
       this._runAuth(username);
     }.bind(this));
 
-    const manualLink = document.createElement('div');
-    manualLink.className = 'manual-tenant-link';
-    manualLink.textContent = 'Connect to a different tenant';
-    manualLink.addEventListener('click', function () {
+    // Tenant link
+    const tenantLink = document.createElement('a');
+    tenantLink.className = 'tenant-link';
+    tenantLink.href = '#';
+    tenantLink.textContent = 'Connect to a different tenant';
+    tenantLink.addEventListener('click', function (e) {
+      e.preventDefault();
       this._renderManualEntry();
     }.bind(this));
 
+    this._contentEl.appendChild(header);
     this._contentEl.appendChild(list);
     this._contentEl.appendChild(cta);
-    this._contentEl.appendChild(manualLink);
+    this._contentEl.appendChild(tenantLink);
   }
 
   // --- Private: No Certs ---
 
   _renderNoCerts() {
-    this._titleEl.textContent = 'NO CERTIFICATE FOUND.';
-    this._subtitleEl.textContent =
-      'No client certificates were detected. Enter your CBA username manually to authenticate.';
+    // No certs found
+    // Manual entry mode
     this._contentEl.innerHTML = '';
 
     const inputWrap = document.createElement('div');
-    inputWrap.style.marginBottom = 'var(--onb-space-6)';
+    inputWrap.style.marginBottom = '20px';
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -12334,8 +12350,8 @@ class OnboardingScreen {
     inputWrap.appendChild(input);
 
     const cta = document.createElement('button');
-    cta.className = 'onboarding-cta';
-    cta.textContent = 'CONNECT';
+    cta.className = 'cta-btn';
+    cta.textContent = 'Connect';
     cta.disabled = true;
 
     input.addEventListener('input', function () {
@@ -12354,7 +12370,7 @@ class OnboardingScreen {
     });
 
     const helpLink = document.createElement('a');
-    helpLink.className = 'manual-tenant-link';
+    helpLink.className = 'tenant-link';
     helpLink.textContent = "Don\u2019t have a certificate?";
     helpLink.href = this._PPE_WIKI_URL;
     helpLink.target = '_blank';
@@ -12372,33 +12388,43 @@ class OnboardingScreen {
   // --- Private: Manual Entry ---
 
   _renderManualEntry() {
-    this._titleEl.textContent = 'CONNECT MANUALLY.';
-    this._subtitleEl.textContent =
-      'Enter the full CBA username for the tenant you want to connect to.';
     this._contentEl.innerHTML = '';
 
-    const inputWrap = document.createElement('div');
-    inputWrap.style.marginBottom = 'var(--onb-space-6)';
+    // Back navigation — top of content, before everything
+    if (this._certs && this._certs.length > 0) {
+      var back = document.createElement('a');
+      back.className = 'back-nav';
+      back.href = '#';
+      back.innerHTML = '&#x2190; Certificate';
+      back.addEventListener('click', function (e) {
+        e.preventDefault();
+        this._renderCertPicker(this._certs);
+      }.bind(this));
+      this._contentEl.appendChild(back);
+    }
 
-    const input = document.createElement('input');
+    var header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = '<span class="section-title">Manual Connection</span>';
+
+    var input = document.createElement('input');
     input.type = 'text';
     input.className = 'manual-tenant-input';
     input.placeholder = 'Admin1CBA@FabricFMLV08PPE.ccsctp.net';
     input.autocomplete = 'off';
     input.spellcheck = false;
-    inputWrap.appendChild(input);
 
-    const cta = document.createElement('button');
-    cta.className = 'onboarding-cta';
-    cta.textContent = 'CONNECT';
+    var cta = document.createElement('button');
+    cta.className = 'cta-btn';
+    cta.innerHTML = 'Connect &#x2192;';
     cta.disabled = true;
 
     input.addEventListener('input', function () {
       cta.disabled = !input.value.trim();
     });
 
-    const submit = function () {
-      const val = input.value.trim();
+    var submit = function () {
+      var val = input.value.trim();
       if (!val) return;
       this._runAuth(val);
     }.bind(this);
@@ -12408,15 +12434,15 @@ class OnboardingScreen {
       if (e.key === 'Enter') submit();
     });
 
-    const helpLink = document.createElement('a');
-    helpLink.className = 'manual-tenant-link';
-    helpLink.textContent = "Don\u2019t have a certificate?";
+    var helpLink = document.createElement('a');
+    helpLink.className = 'tenant-link';
     helpLink.href = this._PPE_WIKI_URL;
     helpLink.target = '_blank';
     helpLink.rel = 'noopener noreferrer';
-    helpLink.style.display = 'block';
+    helpLink.textContent = "Don\u2019t have a certificate?";
 
-    this._contentEl.appendChild(inputWrap);
+    this._contentEl.appendChild(header);
+    this._contentEl.appendChild(input);
     this._contentEl.appendChild(cta);
     this._contentEl.appendChild(helpLink);
 
@@ -12426,22 +12452,26 @@ class OnboardingScreen {
   // --- Private: Auth Flow ---
 
   async _runAuth(username) {
-    this._titleEl.textContent = 'AUTHENTICATING.';
-    this._subtitleEl.textContent = 'Establishing secure connection to Fabric services.';
     this._contentEl.innerHTML = '';
 
-    const steps = document.createElement('div');
-    steps.className = 'auth-steps';
-    this._contentEl.appendChild(steps);
+    var header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = '<span class="section-title">Authenticating</span>';
+    this._contentEl.appendChild(header);
 
-    // Step 1 — Certificate found (instant done)
+    var stepsContainer = document.createElement('div');
+    stepsContainer.className = 'auth-progress active';
+    this._contentEl.appendChild(stepsContainer);
+    this._stepCount = 0;
+
+    // Step 1 — Certificate verified (instant done)
     const certLabel = username.includes('@') ? username.split('@')[0] : username;
-    const step1 = this._addStep(steps, 'done', 'Certificate found', certLabel);
+    const step1 = this._addStep(stepsContainer, 'done', 'Certificate verified', certLabel);
 
     await this._delay(200);
 
     // Step 2 — Acquiring bearer token
-    const step2 = this._addStep(steps, 'spinning', 'Acquiring bearer token', 'Authenticating via CBA\u2026');
+    const step2 = this._addStep(stepsContainer, 'running', 'Acquiring bearer token', 'Authenticating via CBA\u2026');
 
     let authResult;
     try {
@@ -12489,7 +12519,7 @@ class OnboardingScreen {
     await this._delay(200);
 
     // Step 3 — Loading workspaces
-    const step3 = this._addStep(steps, 'spinning', 'Loading workspaces', 'Verifying Fabric access\u2026');
+    const step3 = this._addStep(stepsContainer, 'running', 'Loading workspaces', 'Verifying Fabric access\u2026');
 
     try {
       const resp = await fetch('/api/fabric/workspaces');
@@ -12533,60 +12563,82 @@ class OnboardingScreen {
   // --- Private: Step Management ---
 
   /**
-   * Create an auth-step element and append it to the container.
-   * @param {HTMLElement} container - The .auth-steps wrapper.
-   * @param {'pending'|'spinning'|'done'|'error'} state - Initial state.
+   * Create an auth step-row element and append it to the container.
+   * @param {HTMLElement} container - The .auth-progress wrapper.
+   * @param {'pending'|'running'|'done'|'error'} state - Initial state.
    * @param {string} label - Step label text.
    * @param {string} [detail] - Optional detail text.
-   * @returns {HTMLElement} The step element.
+   * @returns {HTMLElement} The step-row element.
    */
   _addStep(container, state, label, detail) {
-    const step = document.createElement('div');
-    step.className = 'auth-step';
+    this._stepCount = (this._stepCount || 0) + 1;
 
-    const icon = document.createElement('div');
-    icon.className = 'auth-step-icon ' + state;
+    const row = document.createElement('div');
+    row.className = 'step-row';
 
-    const labelEl = document.createElement('div');
-    labelEl.className = 'auth-step-label';
+    const indicator = document.createElement('div');
+    indicator.className = 'step-indicator';
+
+    const stepNum = document.createElement('span');
+    stepNum.className = 'step-num';
+    stepNum.textContent = state === 'done' ? '\u2713' : String(this._stepCount);
+    indicator.appendChild(stepNum);
+
+    const textWrap = document.createElement('div');
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'step-label';
     labelEl.textContent = label;
-
-    step.appendChild(icon);
-    step.appendChild(labelEl);
+    textWrap.appendChild(labelEl);
 
     if (detail) {
       const detailEl = document.createElement('div');
-      detailEl.className = 'auth-step-detail';
+      detailEl.className = 'step-detail';
       detailEl.textContent = detail;
-      step.appendChild(detailEl);
+      textWrap.appendChild(detailEl);
     }
 
-    container.appendChild(step);
-    return step;
+    row.appendChild(indicator);
+    row.appendChild(textWrap);
+
+    if (state) {
+      row.classList.add(state);
+    }
+
+    container.appendChild(row);
+    requestAnimationFrame(function () { row.classList.add('visible'); });
+
+    return row;
   }
 
   /**
-   * Update an existing step's icon state, label, and detail.
-   * @param {HTMLElement} el - The .auth-step element.
-   * @param {'pending'|'spinning'|'done'|'error'} state - New state.
+   * Update an existing step-row's state, label, and detail.
+   * @param {HTMLElement} el - The .step-row element.
+   * @param {'pending'|'running'|'done'|'error'} state - New state.
    * @param {string} label - New label text.
    * @param {string} [detail] - New detail text.
    */
   _updateStep(el, state, label, detail) {
-    const icon = el.querySelector('.auth-step-icon');
-    if (icon) {
-      icon.className = 'auth-step-icon ' + state;
+    el.classList.remove('pending', 'running', 'done', 'error');
+    el.classList.add(state);
+
+    const stepNum = el.querySelector('.step-num');
+    if (stepNum) {
+      if (state === 'done') stepNum.textContent = '\u2713';
+      else if (state === 'error') stepNum.textContent = '\u2717';
     }
 
-    const labelEl = el.querySelector('.auth-step-label');
+    const labelEl = el.querySelector('.step-label');
     if (labelEl) labelEl.textContent = label;
 
-    let detailEl = el.querySelector('.auth-step-detail');
+    let detailEl = el.querySelector('.step-detail');
     if (detail) {
       if (!detailEl) {
         detailEl = document.createElement('div');
-        detailEl.className = 'auth-step-detail';
-        el.appendChild(detailEl);
+        detailEl.className = 'step-detail';
+        // Append to the text wrapper (second child of the row)
+        var textWrap = el.children[1];
+        if (textWrap) textWrap.appendChild(detailEl);
       }
       detailEl.textContent = detail;
     } else if (detailEl) {
@@ -12625,9 +12677,9 @@ class OnboardingScreen {
     }
 
     const retry = document.createElement('button');
-    retry.className = 'onboarding-cta';
-    retry.textContent = 'RETRY';
-    retry.style.marginTop = 'var(--onb-space-6)';
+    retry.className = 'cta-btn';
+    retry.textContent = 'Retry';
+    retry.style.marginTop = '20px';
     retry.addEventListener('click', function () {
       this._runAuth(username);
     }.bind(this));
@@ -12683,6 +12735,7 @@ class OnboardingScreen {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 }
+
 
 // === js/main.js ===
 /**
