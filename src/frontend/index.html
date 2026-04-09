@@ -31,11 +31,14 @@
     </div>
   </header>
 
-  <!-- Smart Context + Alerts -->
-  <div id="smart-context-bar" class="smart-context-bar"></div>
-  <div id="api-toast" class="api-toast"></div>
-  <div id="error-alert" class="error-alert"></div>
-  <div id="anomaly-warning" class="anomaly-warning"></div>
+  <!-- Notification Zone (collapses when empty) -->
+  <div class="notification-zone">
+    <div id="file-change-bar" class="file-change-bar"></div>
+    <div id="smart-context-bar" class="smart-context-bar"></div>
+    <div id="api-toast" class="api-toast"></div>
+    <div id="error-alert" class="error-alert"></div>
+    <div id="anomaly-warning" class="anomaly-warning"></div>
+  </div>
 
   <!-- Main Layout: Sidebar + Content -->
   <div class="cockpit-body">
@@ -85,6 +88,8 @@
 
       <!-- View 2: Logs -->
       <div id="view-logs" class="view-panel" data-view="logs">
+        <!-- Breakpoints bar -->
+        <div id="breakpoints-bar" class="breakpoints-bar"></div>
         <!-- Logs toolbar (scoped to logs view) -->
         <div id="toolbar" class="logs-toolbar">
           <div class="time-filter">
@@ -212,6 +217,19 @@
       <button id="detail-close" class="icon-btn">&#10005;</button>
     </div>
     <div class="detail-content"></div>
+  </div>
+
+  <!-- Bookmarks Drawer (right) -->
+  <div id="bookmarks-drawer" class="bookmarks-drawer">
+    <div class="bm-header">
+      <span class="bm-title">&#9733; Bookmarks</span>
+      <button class="bm-close" onclick="document.getElementById('bookmarks-drawer').classList.remove('open')">&#10005;</button>
+    </div>
+    <div class="bm-list" id="bm-list">
+      <div class="bm-entry"><div class="bm-entry-meta"><span>14:22:08</span><span style="color:var(--level-error)">Error</span></div><div class="bm-entry-msg">MLV_SPARK_SESSION_ACQUISITION_FAILED: Cannot acquire Spark session</div></div>
+      <div class="bm-entry"><div class="bm-entry-meta"><span>14:21:45</span><span style="color:var(--level-warning)">Warning</span></div><div class="bm-entry-msg">Execution lock held for 4m30s — approaching stuck threshold</div></div>
+      <div class="bm-entry"><div class="bm-entry-meta"><span>14:20:12</span><span style="color:var(--level-error)">Error</span></div><div class="bm-entry-msg">Node "RefreshInventory" failed: NullReferenceException at OneLakeWriter</div></div>
+    </div>
   </div>
 
   <!-- Command Palette (Ctrl+K overlay) -->

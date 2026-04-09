@@ -34,10 +34,16 @@ CSS_MODULES = [
     "css/smart.css",
     "css/control.css",
     "css/command-palette.css",
+    "css/dag.css",
+    "css/spark.css",
+    "css/api-playground.css",
+    "css/environment.css",
+    "css/token-inspector.css",
 ]
 
 # JS modules — order matters (dependencies first, then features, then main)
 JS_MODULES = [
+    "js/mock-data.js",
     "js/state.js",
     "js/websocket.js",
     "js/api-client.js",
@@ -54,6 +60,7 @@ JS_MODULES = [
     "js/sidebar.js",
     "js/workspace-explorer.js",
     "js/command-palette.js",
+    "js/mock-renderer.js",
     "js/main.js",
 ]
 

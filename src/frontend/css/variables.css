@@ -7,19 +7,20 @@
 
 :root {
   /* ── Light Theme (Default) ── CEO decision: light-first */
-  --bg: #f8fafc;
+  --bg: #f4f5f7;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #e2e8f0;
-  --border: rgba(0,0,0,0.08);
-  --border-bright: rgba(0,0,0,0.15);
-  --text: #1e293b;
-  --text-dim: #64748b;
-  --text-muted: #94a3b8;
-  --accent: #7c3aed;
-  --accent-dim: rgba(124,58,237,0.08);
-  --accent-hover: rgba(124,58,237,0.05);
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
   /* Spacing — 4px grid */
@@ -35,15 +36,21 @@
   --space-16: 64px;
 
   /* Sizing */
-  --topbar-height: 32px;
-  --sidebar-width: 48px;
+  --topbar-height: 44px;
+  --sidebar-width: 52px;
   --tree-panel-width: 260px;
   --inspector-panel-width: 300px;
   --row-height: 28px;
 
   /* Transitions */
   --transition-fast: 80ms ease-out;
-  --transition-normal: 120ms ease-out;
+  --transition-normal: 150ms ease-out;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
 
   /* Z-index scale */
   --z-sidebar: 50;
@@ -61,73 +68,80 @@
   --text-lg: 15px;
   --text-xl: 18px;
 
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 100px;
+
   /* Semantic colors — light */
-  --level-verbose: #64748b;
-  --level-message: #0284c7;
-  --level-warning: #d97706;
-  --level-error: #dc2626;
-  --status-succeeded: #059669;
-  --status-failed: #dc2626;
-  --status-cancelled: #d97706;
-  --status-pending: #64748b;
+  --level-verbose: #8e95a5;
+  --level-message: #2d7ff9;
+  --level-warning: #e5940c;
+  --level-error: #e5453b;
+  --status-succeeded: #18a058;
+  --status-failed: #e5453b;
+  --status-cancelled: #e5940c;
+  --status-pending: #8e95a5;
   /* Component category colors — light */
-  --comp-controller: #2563eb;
-  --comp-controller-bg: rgba(37, 99, 235, 0.1);
-  --comp-dag: #059669;
-  --comp-dag-bg: rgba(5, 150, 105, 0.1);
+  --comp-controller: #2d7ff9;
+  --comp-controller-bg: rgba(45, 127, 249, 0.08);
+  --comp-dag: #18a058;
+  --comp-dag-bg: rgba(24, 160, 88, 0.08);
   --comp-onelake: #0d9488;
-  --comp-onelake-bg: rgba(13, 148, 136, 0.1);
-  --comp-dq: #7c3aed;
-  --comp-dq-bg: rgba(124, 58, 237, 0.1);
-  --comp-retry: #d97706;
-  --comp-retry-bg: rgba(217, 119, 6, 0.1);
-  --comp-default: #64748b;
-  --comp-default-bg: rgba(100, 116, 139, 0.08);
+  --comp-onelake-bg: rgba(13, 148, 136, 0.08);
+  --comp-dq: #6d5cff;
+  --comp-dq-bg: rgba(109, 92, 255, 0.08);
+  --comp-retry: #e5940c;
+  --comp-retry-bg: rgba(229, 148, 12, 0.08);
+  --comp-default: #8e95a5;
+  --comp-default-bg: rgba(142, 149, 165, 0.06);
   /* Row tints — light */
-  --row-error-tint: rgba(239, 68, 68, 0.05);
-  --row-warning-tint: rgba(245, 158, 11, 0.04);
-  --row-stripe: rgba(0, 0, 0, 0.018);
+  --row-error-tint: rgba(229, 69, 59, 0.04);
+  --row-warning-tint: rgba(229, 148, 12, 0.03);
+  --row-stripe: rgba(0, 0, 0, 0.015);
   /* Toolbar */
-  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --toolbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme="dark"] {
-  --bg: #0a0e1a;
-  --surface: #111827;
-  --surface-2: #1e293b;
-  --surface-3: #334155;
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface-2: #1c2029;
+  --surface-3: #282d3a;
   --border: rgba(255,255,255,0.06);
-  --border-bright: rgba(255,255,255,0.12);
-  --text: #e2e8f0;
-  --text-dim: #64748b;
-  --text-muted: #475569;
-  --accent: #8b5cf6;
-  --accent-dim: rgba(139,92,246,0.12);
-  --level-verbose: #64748b;
-  --level-message: #38bdf8;
-  --level-warning: #fbbf24;
-  --level-error: #f87171;
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-glow: rgba(133,119,255,0.20);
+  --level-verbose: #555d70;
+  --level-message: #5b9bff;
+  --level-warning: #f0b429;
+  --level-error: #ff6b6b;
   --status-succeeded: #34d399;
-  --status-failed: #f87171;
-  --status-cancelled: #fbbf24;
-  --status-pending: #64748b;
-  /* Component category colors — dark */
-  --comp-controller: #60a5fa;
-  --comp-controller-bg: rgba(96, 165, 250, 0.15);
+  --status-failed: #ff6b6b;
+  --status-cancelled: #f0b429;
+  --status-pending: #555d70;
+  --comp-controller: #5b9bff;
+  --comp-controller-bg: rgba(91, 155, 255, 0.12);
   --comp-dag: #34d399;
-  --comp-dag-bg: rgba(52, 211, 153, 0.15);
+  --comp-dag-bg: rgba(52, 211, 153, 0.12);
   --comp-onelake: #2dd4bf;
-  --comp-onelake-bg: rgba(45, 212, 191, 0.15);
+  --comp-onelake-bg: rgba(45, 212, 191, 0.12);
   --comp-dq: #a78bfa;
-  --comp-dq-bg: rgba(167, 139, 250, 0.15);
-  --comp-retry: #fbbf24;
-  --comp-retry-bg: rgba(251, 191, 36, 0.15);
-  --comp-default: #94a3b8;
-  --comp-default-bg: rgba(148, 163, 184, 0.12);
-  /* Row tints — dark */
-  --row-error-tint: rgba(248, 113, 113, 0.07);
-  --row-warning-tint: rgba(251, 191, 36, 0.05);
-  --row-stripe: rgba(255, 255, 255, 0.018);
-  /* Toolbar */
-  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --comp-dq-bg: rgba(167, 139, 250, 0.12);
+  --comp-retry: #f0b429;
+  --comp-retry-bg: rgba(240, 180, 41, 0.12);
+  --comp-default: #8a91a3;
+  --comp-default-bg: rgba(138, 145, 163, 0.08);
+  --row-error-tint: rgba(255, 107, 107, 0.06);
+  --row-warning-tint: rgba(240, 180, 41, 0.04);
+  --row-stripe: rgba(255, 255, 255, 0.015);
+  --toolbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.12);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.18);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.24);
 }

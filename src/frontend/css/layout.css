@@ -9,9 +9,19 @@ body {
   color: var(--text);
   height: 100vh;
   display: grid;
-  grid-template-rows: var(--topbar-height) 1fr;
+  grid-template-rows: var(--topbar-height) auto 1fr;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* Notification zone between topbar and body — collapses when empty */
+.notification-zone {
+  display: flex;
+  flex-direction: column;
+}
+.notification-zone > div:empty { display: none; }
+.smart-context-bar:empty, .api-toast:empty, .error-alert:empty, .anomaly-warning:empty { display: none; }
 
 .cockpit-body {
   display: grid;
@@ -222,17 +232,17 @@ mark {
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--surface);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--surface-3);
-  border-radius: 4px;
+  background: var(--border-bright);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

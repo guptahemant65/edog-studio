@@ -15,19 +15,20 @@
 
 :root {
   /* ── Light Theme (Default) ── CEO decision: light-first */
-  --bg: #f8fafc;
+  --bg: #f4f5f7;
   --surface: #ffffff;
-  --surface-2: #f1f5f9;
-  --surface-3: #e2e8f0;
-  --border: rgba(0,0,0,0.08);
-  --border-bright: rgba(0,0,0,0.15);
-  --text: #1e293b;
-  --text-dim: #64748b;
-  --text-muted: #94a3b8;
-  --accent: #7c3aed;
-  --accent-dim: rgba(124,58,237,0.08);
-  --accent-hover: rgba(124,58,237,0.05);
-  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
   /* Spacing — 4px grid */
@@ -43,15 +44,21 @@
   --space-16: 64px;
 
   /* Sizing */
-  --topbar-height: 32px;
-  --sidebar-width: 48px;
+  --topbar-height: 44px;
+  --sidebar-width: 52px;
   --tree-panel-width: 260px;
   --inspector-panel-width: 300px;
   --row-height: 28px;
 
   /* Transitions */
   --transition-fast: 80ms ease-out;
-  --transition-normal: 120ms ease-out;
+  --transition-normal: 150ms ease-out;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
 
   /* Z-index scale */
   --z-sidebar: 50;
@@ -69,75 +76,82 @@
   --text-lg: 15px;
   --text-xl: 18px;
 
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 100px;
+
   /* Semantic colors — light */
-  --level-verbose: #64748b;
-  --level-message: #0284c7;
-  --level-warning: #d97706;
-  --level-error: #dc2626;
-  --status-succeeded: #059669;
-  --status-failed: #dc2626;
-  --status-cancelled: #d97706;
-  --status-pending: #64748b;
+  --level-verbose: #8e95a5;
+  --level-message: #2d7ff9;
+  --level-warning: #e5940c;
+  --level-error: #e5453b;
+  --status-succeeded: #18a058;
+  --status-failed: #e5453b;
+  --status-cancelled: #e5940c;
+  --status-pending: #8e95a5;
   /* Component category colors — light */
-  --comp-controller: #2563eb;
-  --comp-controller-bg: rgba(37, 99, 235, 0.1);
-  --comp-dag: #059669;
-  --comp-dag-bg: rgba(5, 150, 105, 0.1);
+  --comp-controller: #2d7ff9;
+  --comp-controller-bg: rgba(45, 127, 249, 0.08);
+  --comp-dag: #18a058;
+  --comp-dag-bg: rgba(24, 160, 88, 0.08);
   --comp-onelake: #0d9488;
-  --comp-onelake-bg: rgba(13, 148, 136, 0.1);
-  --comp-dq: #7c3aed;
-  --comp-dq-bg: rgba(124, 58, 237, 0.1);
-  --comp-retry: #d97706;
-  --comp-retry-bg: rgba(217, 119, 6, 0.1);
-  --comp-default: #64748b;
-  --comp-default-bg: rgba(100, 116, 139, 0.08);
+  --comp-onelake-bg: rgba(13, 148, 136, 0.08);
+  --comp-dq: #6d5cff;
+  --comp-dq-bg: rgba(109, 92, 255, 0.08);
+  --comp-retry: #e5940c;
+  --comp-retry-bg: rgba(229, 148, 12, 0.08);
+  --comp-default: #8e95a5;
+  --comp-default-bg: rgba(142, 149, 165, 0.06);
   /* Row tints — light */
-  --row-error-tint: rgba(239, 68, 68, 0.05);
-  --row-warning-tint: rgba(245, 158, 11, 0.04);
-  --row-stripe: rgba(0, 0, 0, 0.018);
+  --row-error-tint: rgba(229, 69, 59, 0.04);
+  --row-warning-tint: rgba(229, 148, 12, 0.03);
+  --row-stripe: rgba(0, 0, 0, 0.015);
   /* Toolbar */
-  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --toolbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme="dark"] {
-  --bg: #0a0e1a;
-  --surface: #111827;
-  --surface-2: #1e293b;
-  --surface-3: #334155;
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface-2: #1c2029;
+  --surface-3: #282d3a;
   --border: rgba(255,255,255,0.06);
-  --border-bright: rgba(255,255,255,0.12);
-  --text: #e2e8f0;
-  --text-dim: #64748b;
-  --text-muted: #475569;
-  --accent: #8b5cf6;
-  --accent-dim: rgba(139,92,246,0.12);
-  --level-verbose: #64748b;
-  --level-message: #38bdf8;
-  --level-warning: #fbbf24;
-  --level-error: #f87171;
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-glow: rgba(133,119,255,0.20);
+  --level-verbose: #555d70;
+  --level-message: #5b9bff;
+  --level-warning: #f0b429;
+  --level-error: #ff6b6b;
   --status-succeeded: #34d399;
-  --status-failed: #f87171;
-  --status-cancelled: #fbbf24;
-  --status-pending: #64748b;
-  /* Component category colors — dark */
-  --comp-controller: #60a5fa;
-  --comp-controller-bg: rgba(96, 165, 250, 0.15);
+  --status-failed: #ff6b6b;
+  --status-cancelled: #f0b429;
+  --status-pending: #555d70;
+  --comp-controller: #5b9bff;
+  --comp-controller-bg: rgba(91, 155, 255, 0.12);
   --comp-dag: #34d399;
-  --comp-dag-bg: rgba(52, 211, 153, 0.15);
+  --comp-dag-bg: rgba(52, 211, 153, 0.12);
   --comp-onelake: #2dd4bf;
-  --comp-onelake-bg: rgba(45, 212, 191, 0.15);
+  --comp-onelake-bg: rgba(45, 212, 191, 0.12);
   --comp-dq: #a78bfa;
-  --comp-dq-bg: rgba(167, 139, 250, 0.15);
-  --comp-retry: #fbbf24;
-  --comp-retry-bg: rgba(251, 191, 36, 0.15);
-  --comp-default: #94a3b8;
-  --comp-default-bg: rgba(148, 163, 184, 0.12);
-  /* Row tints — dark */
-  --row-error-tint: rgba(248, 113, 113, 0.07);
-  --row-warning-tint: rgba(251, 191, 36, 0.05);
-  --row-stripe: rgba(255, 255, 255, 0.018);
-  /* Toolbar */
-  --toolbar-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --comp-dq-bg: rgba(167, 139, 250, 0.12);
+  --comp-retry: #f0b429;
+  --comp-retry-bg: rgba(240, 180, 41, 0.12);
+  --comp-default: #8a91a3;
+  --comp-default-bg: rgba(138, 145, 163, 0.08);
+  --row-error-tint: rgba(255, 107, 107, 0.06);
+  --row-warning-tint: rgba(240, 180, 41, 0.04);
+  --row-stripe: rgba(255, 255, 255, 0.015);
+  --toolbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.12);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.18);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.24);
 }
 
     /* === css/layout.css === */
@@ -152,9 +166,19 @@ body {
   color: var(--text);
   height: 100vh;
   display: grid;
-  grid-template-rows: var(--topbar-height) 1fr;
+  grid-template-rows: var(--topbar-height) auto 1fr;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* Notification zone between topbar and body — collapses when empty */
+.notification-zone {
+  display: flex;
+  flex-direction: column;
+}
+.notification-zone > div:empty { display: none; }
+.smart-context-bar:empty, .api-toast:empty, .error-alert:empty, .anomaly-warning:empty { display: none; }
 
 .cockpit-body {
   display: grid;
@@ -365,17 +389,17 @@ mark {
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--surface);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--surface-3);
-  border-radius: 4px;
+  background: var(--border-bright);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -474,15 +498,16 @@ mark {
 }
 
     /* === css/topbar.css === */
-/* Top Bar — 32px persistent header */
+/* Top Bar — 44px persistent header */
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: var(--topbar-height);
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   z-index: var(--z-topbar);
   font-size: var(--text-sm);
   flex-shrink: 0;
@@ -496,32 +521,35 @@ mark {
 
 .topbar-brand {
   font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: var(--text-md);
-  color: var(--text);
-  letter-spacing: 0.03em;
+  font-weight: 800;
+  font-size: var(--text-lg);
+  color: var(--accent);
+  letter-spacing: 0.06em;
 }
 
 .service-status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-muted);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
 }
 
 .service-status .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text-muted);
   flex-shrink: 0;
 }
 
-.service-status.running .status-dot { background: var(--status-succeeded); box-shadow: 0 0 4px var(--status-succeeded); }
+.service-status.running .status-dot { background: var(--status-succeeded); box-shadow: 0 0 6px var(--status-succeeded); }
 .service-status.running { color: var(--status-succeeded); }
-.service-status.building .status-dot { background: var(--status-cancelled); }
+.service-status.building .status-dot { background: var(--status-cancelled); animation: pulse 1.2s infinite; }
 .service-status.building { color: var(--status-cancelled); }
 .service-status.stopped .status-dot { background: var(--text-muted); }
 
@@ -530,27 +558,32 @@ mark {
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .token-health {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  font-weight: 600;
   cursor: pointer;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--space-1);
-  transition: background var(--transition-fast);
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-full);
+  transition: all var(--transition-normal);
+  background: var(--surface-2);
 }
-.token-health:hover { background: var(--accent-hover); }
-.token-health.green { color: var(--status-succeeded); }
-.token-health.amber { color: var(--status-cancelled); }
-.token-health.red { color: var(--status-failed); }
+.token-health:hover { box-shadow: var(--shadow-glow); }
+.token-health.green { color: var(--status-succeeded); background: rgba(24,160,88,0.06); }
+.token-health.amber { color: var(--status-cancelled); background: rgba(229,148,12,0.06); }
+.token-health.red { color: var(--status-failed); background: rgba(229,69,59,0.06); animation: pulse 2s infinite; }
 .token-health.none { color: var(--text-muted); }
 
 .topbar-meta {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-muted);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }
 
 .topbar-btn {
@@ -559,24 +592,25 @@ mark {
   color: var(--text-dim);
   font-family: var(--font-body);
   font-size: var(--text-xs);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--space-1);
+  font-weight: 500;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 .topbar-btn:hover { background: var(--surface-2); color: var(--text); }
-.topbar-btn.ghost { border: 1px solid var(--border); }
+.topbar-btn.ghost { border: 1px solid var(--border-bright); }
 
     /* === css/sidebar.css === */
-/* Sidebar — 48px icon-only navigation */
+/* Sidebar — 52px icon-only navigation */
 .sidebar {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: var(--sidebar-width);
-  background: var(--surface-2);
+  background: var(--surface);
   border-right: 1px solid var(--border);
-  padding-top: var(--space-2);
+  padding: var(--space-3) 0;
   gap: var(--space-1);
   z-index: var(--z-sidebar);
   flex-shrink: 0;
@@ -590,27 +624,38 @@ mark {
   height: 36px;
   border: none;
   background: transparent;
-  color: var(--text-dim);
-  font-size: 16px;
-  border-radius: 0 var(--space-2) var(--space-2) 0;
-  border-left: 3px solid transparent;
+  color: var(--text-muted);
+  font-size: 17px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
+  position: relative;
 }
 
 .sidebar-icon:hover {
-  background: var(--surface-3);
+  background: var(--surface-2);
   color: var(--text);
+  transform: scale(1.05);
 }
 
 .sidebar-icon.active {
   background: var(--accent-dim);
   color: var(--accent);
-  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-glow);
+}
+
+.sidebar-icon.active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
 }
 
 .sidebar-icon.disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: default;
   pointer-events: none;
 }
@@ -623,10 +668,11 @@ mark {
   border-radius: 50%;
   background: var(--text-muted);
   margin-bottom: var(--space-3);
+  transition: all var(--transition-normal);
 }
-.sidebar-token-dot.green { background: var(--status-succeeded); }
-.sidebar-token-dot.amber { background: var(--status-cancelled); }
-.sidebar-token-dot.red { background: var(--status-failed); }
+.sidebar-token-dot.green { background: var(--status-succeeded); box-shadow: 0 0 6px rgba(24,160,88,0.4); }
+.sidebar-token-dot.amber { background: var(--status-cancelled); box-shadow: 0 0 6px rgba(229,148,12,0.4); }
+.sidebar-token-dot.red { background: var(--status-failed); box-shadow: 0 0 6px rgba(229,69,59,0.4); }
 
     /* === css/workspace.css === */
 /* Workspace Explorer — Three-panel layout */
@@ -650,16 +696,16 @@ mark {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 
 .ws-tree-title {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 
 .ws-tree-refresh {
@@ -669,15 +715,15 @@ mark {
   cursor: pointer;
   font-size: 14px;
   padding: var(--space-1);
-  border-radius: var(--space-1);
+  border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
 }
-.ws-tree-refresh:hover { color: var(--text); background: var(--surface-2); }
+.ws-tree-refresh:hover { color: var(--accent); background: var(--accent-dim); }
 
 .ws-tree-content {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-1) 0;
+  padding: var(--space-2) 0;
 }
 
 /* Tree items */
@@ -685,21 +731,26 @@ mark {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: var(--row-height);
+  height: 30px;
   padding: 0 var(--space-3);
   cursor: pointer;
   font-size: var(--text-sm);
   color: var(--text);
-  transition: background var(--transition-fast);
+  transition: all var(--transition-fast);
   border-left: 3px solid transparent;
   user-select: none;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin: 0 var(--space-1) 0 0;
 }
 .ws-tree-item:hover { background: var(--surface-2); }
 .ws-tree-item.selected {
   background: var(--accent-dim);
   border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
 }
-.ws-tree-item.dimmed { opacity: 0.5; }
+.ws-tree-item.dimmed { opacity: 0.45; }
+.ws-tree-item.dimmed:hover { opacity: 0.7; }
 
 .ws-tree-toggle {
   font-size: var(--text-xs);
@@ -747,7 +798,7 @@ mark {
 }
 
 .ws-content-body {
-  padding: var(--space-4);
+  padding: var(--space-6) var(--space-6) var(--space-6) var(--space-5);
 }
 
 .ws-content-header {
@@ -771,19 +822,21 @@ mark {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  background: var(--accent-dim);
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  padding: var(--space-2) var(--space-5);
+  background: var(--accent);
+  border: none;
+  color: #fff;
   font-size: var(--text-md);
   font-weight: 600;
   font-family: var(--font-body);
-  border-radius: var(--space-2);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-normal);
   margin: var(--space-3) 0;
+  box-shadow: 0 2px 8px var(--accent-glow);
+  letter-spacing: 0.01em;
 }
-.ws-deploy-btn:hover { background: var(--accent); color: white; }
+.ws-deploy-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
 
 /* Deploy progress */
 .ws-deploy-progress {
@@ -804,11 +857,14 @@ mark {
 /* Tables section */
 .ws-section-title {
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: var(--space-4) 0 var(--space-2);
+  letter-spacing: 0.08em;
+  margin: var(--space-6) 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
 }
 
 .ws-table-row {
@@ -836,17 +892,17 @@ mark {
 }
 
 .ws-inspector-header {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   border-bottom: 1px solid var(--border);
 }
 
 .ws-inspector-content {
-  padding: var(--space-3);
+  padding: var(--space-4);
 }
 
 .ws-inspector-field {
@@ -894,6 +950,117 @@ mark {
   transition: all var(--transition-fast);
 }
 .view-empty-state .empty-action:hover { background: var(--accent); color: white; }
+
+/* ── Mock content styles ── */
+.ws-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ws-dot.lakehouse { background: var(--status-succeeded); }
+.ws-dot.other { background: var(--text-muted); }
+
+.ws-tree-type {
+  font-size: var(--text-xs); color: var(--text-muted); margin-left: auto;
+  opacity: 0.6;
+}
+
+.ws-content-name {
+  font-size: var(--text-lg); font-weight: 600; color: var(--text);
+  margin-bottom: var(--space-1);
+}
+
+.ws-content-meta {
+  display: flex; align-items: center; gap: var(--space-3);
+  font-size: var(--text-xs); color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.ws-meta-id { cursor: pointer; padding: 1px var(--space-2); background: var(--surface-2); border-radius: 2px; }
+.ws-meta-badge { padding: 1px var(--space-2); background: var(--accent-dim); color: var(--accent); border-radius: var(--space-2); font-size: 10px; }
+.ws-meta-modified { color: var(--text-muted); }
+
+.ws-content-actions {
+  display: flex; gap: var(--space-2); margin-top: var(--space-3);
+}
+.ws-action-btn {
+  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  font-size: var(--text-sm); border: 1px solid var(--border-bright);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  font-family: var(--font-body);
+}
+.ws-action-btn:hover { background: var(--surface-2); }
+
+.ws-section { margin-top: var(--space-4); }
+.ws-section-count { color: var(--text-muted); font-weight: 400; margin-left: var(--space-1); }
+
+.ws-table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-sm);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  overflow: hidden; box-shadow: var(--shadow-sm);
+}
+.ws-table th {
+  text-align: left; padding: var(--space-2) var(--space-3);
+  color: var(--text-muted); font-size: var(--text-xs);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.ws-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); }
+.ws-table tr:last-child td { border-bottom: none; }
+.ws-table .ws-table-row { cursor: pointer; transition: background var(--transition-fast); }
+.ws-table .ws-table-row:hover { background: var(--surface-2); }
+.ws-table .ws-table-row.selected { background: var(--accent-dim); }
+.ws-table-name { font-family: var(--font-mono); color: var(--text); }
+.ws-table-num { font-family: var(--font-mono); color: var(--text-dim); text-align: right; }
+.ws-type-badge {
+  display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-full);
+  font-size: var(--text-xs); background: var(--surface-2); color: var(--text-dim);
+  font-weight: 500; letter-spacing: 0.02em;
+}
+
+/* MLV cards */
+.ws-mlv-grid { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.ws-mlv-card {
+  padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); min-width: 200px; flex: 1;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+.ws-mlv-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.ws-mlv-name { font-size: var(--text-md); font-weight: 600; color: var(--text); font-family: var(--font-mono); margin-bottom: var(--space-1); }
+.ws-mlv-meta { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
+
+/* Inspector KV */
+.ws-insp-section { margin-bottom: var(--space-5); }
+.ws-insp-title {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+.ws-insp-kv { display: grid; grid-template-columns: 70px 1fr; gap: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+.ws-insp-kv dt { color: var(--text-muted); font-weight: 500; }
+.ws-insp-kv dd { color: var(--text); font-family: var(--font-mono); margin: 0; word-break: break-all; }
+
+.ws-schema-table, .ws-preview-table {
+  width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--text-xs);
+  border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden;
+}
+.ws-schema-table th, .ws-preview-table th {
+  text-align: left; padding: var(--space-1) var(--space-2);
+  color: var(--text-muted); font-weight: 600; background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.ws-schema-table td, .ws-preview-table td {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-dim); font-family: var(--font-mono); border-bottom: 1px solid var(--border);
+}
+.ws-schema-table tr:last-child td, .ws-preview-table tr:last-child td { border-bottom: none; }
+.ws-preview-note { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
+
+.ws-fav-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) 0; font-size: var(--text-xs);
+  color: var(--text); cursor: pointer;
+}
+.ws-fav-item:hover { color: var(--accent); }
+.ws-fav-detail { color: var(--text-muted); margin-left: auto; font-size: 10px; }
 
     /* === css/filters.css === */
 .search-wrapper {
@@ -1527,6 +1694,33 @@ mark {
 .log-row.error.new {
   animation: errorPulse 2s ease-in-out;
 }
+
+/* ── Mock log styles ── */
+.log-gutter {
+  width: 20px; flex-shrink: 0; text-align: center;
+}
+.log-bookmark-star {
+  cursor: pointer; font-size: 12px; color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+.log-bookmark-star:hover { color: var(--level-warning); }
+.log-row.bookmarked .log-bookmark-star { color: var(--level-warning); }
+.log-row.bookmarked { background: rgba(251,191,36,0.04); }
+
+.log-level-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 3px;
+  font-size: 10px; font-weight: 700; flex-shrink: 0;
+}
+.log-level-verbose .log-level-badge { background: rgba(100,116,139,0.15); color: var(--level-verbose); }
+.log-level-message .log-level-badge { background: rgba(56,189,248,0.18); color: var(--level-message); }
+.log-level-warning .log-level-badge { background: rgba(251,191,36,0.2); color: var(--level-warning); }
+.log-level-error .log-level-badge { background: rgba(248,113,113,0.22); color: var(--level-error); }
+
+.log-level-error { border-left: 3px solid var(--level-error); background: var(--row-error-tint); }
+.log-level-warning { border-left: 3px solid var(--level-warning); background: var(--row-warning-tint); }
+
+.log-scroll.has-entries .empty-state { display: none; }
 
     /* === css/telemetry.css === */
 /* Telemetry Container */
@@ -3075,6 +3269,631 @@ mark {
   font-size: var(--text-sm);
 }
 
+    /* === css/dag.css === */
+/* ── DAG Studio ── */
+.dag-studio { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+.dag-toolbar {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.dag-toolbar .dag-btn {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--space-1);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.dag-btn:hover { background: var(--surface-2); }
+.dag-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dag-btn.primary:hover { opacity: 0.9; }
+.dag-btn.danger { color: var(--level-error); border-color: var(--level-error); }
+
+.dag-body { display: flex; flex: 1; overflow: hidden; }
+
+.dag-graph-panel {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+.dag-graph-panel svg { width: 100%; height: 100%; }
+
+.dag-node {
+  cursor: pointer;
+  transition: filter var(--transition-fast);
+}
+.dag-node:hover { filter: brightness(1.1); }
+.dag-node rect {
+  rx: 4; ry: 4;
+  stroke-width: 2;
+}
+.dag-node.completed rect { fill: var(--surface); stroke: var(--status-succeeded); }
+.dag-node.failed rect { fill: var(--surface); stroke: var(--status-failed); }
+.dag-node.running rect { fill: var(--surface); stroke: var(--accent); stroke-dasharray: 6 3; animation: dag-pulse 1.5s infinite; }
+.dag-node.skipped rect { fill: var(--surface-2); stroke: var(--text-muted); stroke-dasharray: 4 4; }
+.dag-node.pending rect { fill: var(--surface-2); stroke: var(--border-bright); }
+
+@keyframes dag-pulse { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.4; } }
+
+.dag-node-label { font-family: var(--font-body); font-size: var(--text-sm); fill: var(--text); pointer-events: none; }
+.dag-node-badge { font-family: var(--font-mono); font-size: var(--text-xs); pointer-events: none; }
+.dag-edge { stroke: var(--text-muted); stroke-width: 1.5; fill: none; marker-end: url(#dag-arrow); }
+
+.dag-side-panel {
+  width: 340px; display: flex; flex-direction: column;
+  background: var(--surface); overflow-y: auto;
+}
+
+.dag-gantt-section, .dag-history-section {
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-3);
+}
+
+.dag-section-title {
+  font-size: var(--text-xs); font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-2);
+}
+
+/* Gantt bars */
+.gantt-chart { display: flex; flex-direction: column; gap: 2px; }
+.gantt-row { display: flex; align-items: center; height: 20px; gap: var(--space-2); }
+.gantt-label { width: 110px; font-size: var(--text-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.gantt-track { flex: 1; height: 14px; background: var(--surface-2); border-radius: 2px; position: relative; overflow: hidden; }
+.gantt-bar { position: absolute; height: 100%; border-radius: 2px; min-width: 4px; }
+.gantt-bar.completed { background: var(--status-succeeded); }
+.gantt-bar.failed { background: var(--status-failed); }
+.gantt-bar.running { background: var(--accent); animation: gantt-shimmer 1.5s infinite; }
+.gantt-bar.skipped { background: var(--text-muted); opacity: 0.3; }
+
+@keyframes gantt-shimmer { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* History table */
+.dag-history-table { width: 100%; font-size: var(--text-xs); border-collapse: collapse; }
+.dag-history-table th {
+  text-align: left; padding: var(--space-1) var(--space-2);
+  color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border);
+}
+.dag-history-table td {
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-dim); font-family: var(--font-mono);
+  border-bottom: 1px solid var(--border);
+}
+.dag-history-table tr:hover { background: var(--surface-2); cursor: pointer; }
+.dag-history-table .status-pill {
+  display: inline-block; padding: 1px var(--space-2); border-radius: var(--space-2);
+  font-size: var(--text-xs); font-weight: 500;
+}
+.status-pill.succeeded { background: rgba(24,160,88,0.08); color: var(--status-succeeded); }
+.status-pill.failed { background: rgba(229,69,59,0.08); color: var(--status-failed); }
+.status-pill.running { background: rgba(109,92,255,0.08); color: var(--accent); }
+.status-pill.cancelled { background: rgba(229,148,12,0.08); color: var(--status-cancelled); }
+
+    /* === css/spark.css === */
+/* ── Spark Inspector ── */
+.spark-inspector { display: flex; height: 100%; overflow: hidden; }
+
+.spark-list-panel {
+  width: 420px; display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.spark-list-header {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;
+}
+
+.spark-list-filters {
+  display: flex; gap: var(--space-1); padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.spark-filter-btn {
+  padding: 2px var(--space-2); border-radius: var(--space-2);
+  font-size: var(--text-xs); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim); cursor: pointer;
+  font-family: var(--font-body);
+}
+.spark-filter-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+.spark-list { flex: 1; overflow-y: auto; }
+
+.spark-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-size: var(--text-sm);
+}
+.spark-item:hover { background: var(--surface-2); }
+.spark-item.selected { background: var(--accent-dim); border-left: 2px solid var(--accent); }
+
+.method-pill {
+  display: inline-block; padding: 1px var(--space-2); border-radius: 2px;
+  font-size: var(--text-xs); font-weight: 600; font-family: var(--font-mono);
+  min-width: 40px; text-align: center;
+}
+.method-pill.get { background: rgba(5,150,105,0.12); color: var(--status-succeeded); }
+.method-pill.post { background: rgba(37,99,235,0.12); color: var(--comp-controller); }
+.method-pill.put { background: rgba(217,119,6,0.12); color: var(--level-warning); }
+.method-pill.delete { background: rgba(220,38,38,0.12); color: var(--level-error); }
+
+.spark-endpoint { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-xs); }
+
+.status-code {
+  padding: 1px var(--space-2); border-radius: 2px;
+  font-size: var(--text-xs); font-family: var(--font-mono); font-weight: 600;
+}
+.status-code.s2xx { color: var(--status-succeeded); }
+.status-code.s4xx { color: var(--level-warning); }
+.status-code.s5xx { color: var(--level-error); }
+
+.spark-duration { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); min-width: 48px; text-align: right; }
+.spark-retries { font-size: var(--text-xs); color: var(--level-warning); font-weight: 600; }
+
+/* Detail panel */
+.spark-detail-panel {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--bg);
+}
+
+.spark-detail-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.spark-detail-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm); color: var(--text-muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  background: none; border-top: none; border-left: none; border-right: none;
+  font-family: var(--font-body);
+}
+.spark-detail-tab:hover { color: var(--text); }
+.spark-detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.spark-detail-content {
+  flex: 1; overflow-y: auto; padding: var(--space-3);
+}
+
+.spark-code-block {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--space-1); padding: var(--space-3);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  line-height: 1.6; white-space: pre-wrap;
+  color: var(--text);
+  max-height: 240px; overflow-y: auto;
+}
+
+.spark-kv { display: grid; grid-template-columns: 130px 1fr; gap: var(--space-1) var(--space-3); font-size: var(--text-sm); }
+.spark-kv dt { color: var(--text-muted); }
+.spark-kv dd { color: var(--text); font-family: var(--font-mono); word-break: break-all; }
+
+.spark-empty-detail {
+  display: flex; align-items: center; justify-content: center;
+  height: 100%; color: var(--text-muted); font-size: var(--text-sm);
+}
+
+    /* === css/api-playground.css === */
+/* ── API Playground ── */
+.api-playground { display: flex; height: 100%; overflow: hidden; }
+
+.api-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.api-request-section {
+  padding: var(--space-3); border-bottom: 1px solid var(--border);
+  background: var(--surface); display: flex; flex-direction: column; gap: var(--space-2);
+}
+
+.api-url-row { display: flex; gap: var(--space-2); align-items: center; }
+
+.api-method-select {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--border-bright);
+  border-radius: var(--space-1); background: var(--surface-2);
+  color: var(--text); font-family: var(--font-mono); font-size: var(--text-sm);
+  font-weight: 600; min-width: 90px; cursor: pointer;
+}
+
+.api-url-input {
+  flex: 1; padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-bright); border-radius: var(--space-1);
+  background: var(--surface-2); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--text-sm);
+}
+.api-url-input:focus { outline: none; border-color: var(--accent); }
+
+.api-send-btn {
+  padding: var(--space-1) var(--space-4);
+  background: var(--accent); color: #fff; border: none; border-radius: var(--space-1);
+  font-family: var(--font-body); font-size: var(--text-sm); font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+}
+.api-send-btn:hover { opacity: 0.9; }
+
+.api-body-section { display: flex; flex-direction: column; gap: var(--space-1); }
+.api-body-label { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+.api-body-input {
+  width: 100%; min-height: 80px; padding: var(--space-2);
+  border: 1px solid var(--border); border-radius: var(--space-1);
+  background: var(--surface-2); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  resize: vertical;
+}
+
+.api-response-section {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; background: var(--bg);
+}
+
+.api-response-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.api-response-status {
+  padding: 2px var(--space-2); border-radius: 2px;
+  font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600;
+}
+.api-response-status.s2xx { background: rgba(5,150,105,0.12); color: var(--status-succeeded); }
+.api-response-status.s4xx { background: rgba(217,119,6,0.12); color: var(--level-warning); }
+.api-response-status.s5xx { background: rgba(220,38,38,0.12); color: var(--level-error); }
+
+.api-response-timing { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+
+.api-response-body {
+  flex: 1; overflow: auto; padding: var(--space-3);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  line-height: 1.6; white-space: pre-wrap; color: var(--text);
+}
+
+/* Sidebar: saved + history */
+.api-sidebar {
+  width: 280px; border-left: 1px solid var(--border);
+  background: var(--surface); display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+
+.api-sidebar-section { border-bottom: 1px solid var(--border); padding: var(--space-3); }
+.api-sidebar-title {
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-2);
+}
+.api-sidebar-group-label { font-size: var(--text-xs); color: var(--text-muted); margin: var(--space-2) 0 var(--space-1); font-weight: 500; }
+
+.api-saved-item, .api-history-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2); border-radius: var(--space-1);
+  cursor: pointer; font-size: var(--text-xs);
+  transition: background var(--transition-fast);
+}
+.api-saved-item:hover, .api-history-item:hover { background: var(--surface-2); }
+.api-saved-item .method-pill, .api-history-item .method-pill { font-size: 9px; padding: 0 var(--space-1); }
+.api-saved-item span, .api-history-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.api-history-status { font-family: var(--font-mono); min-width: 28px; text-align: right; }
+
+    /* === css/environment.css === */
+/* ── Environment View ── */
+.environment-view { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+.env-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.env-tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm); color: var(--text-muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  background: none; border-top: none; border-left: none; border-right: none;
+  font-family: var(--font-body);
+}
+.env-tab:hover { color: var(--text); }
+.env-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.env-content { flex: 1; overflow-y: auto; padding: var(--space-3); }
+
+/* Feature Flags */
+.ff-toolbar {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) 0; margin-bottom: var(--space-3);
+}
+.ff-search {
+  flex: 1; max-width: 320px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--space-1);
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-body); font-size: var(--text-sm);
+}
+.ff-search:focus { outline: none; border-color: var(--accent); }
+
+.ff-group-tabs { display: flex; gap: var(--space-1); }
+.ff-group-tab {
+  padding: 2px var(--space-2); border-radius: var(--space-2);
+  font-size: var(--text-xs); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-dim); cursor: pointer;
+  font-family: var(--font-body);
+}
+.ff-group-tab.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+.ff-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+.ff-table th {
+  text-align: center; padding: var(--space-1) var(--space-2);
+  color: var(--text-muted); font-weight: 500;
+  border-bottom: 2px solid var(--border);
+  position: sticky; top: 0; background: var(--bg);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.ff-table th:first-child, .ff-table th:nth-child(2) { text-align: left; }
+.ff-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  text-align: center; vertical-align: middle;
+}
+.ff-table td:first-child {
+  text-align: left; font-family: var(--font-mono); color: var(--text); font-weight: 500;
+  white-space: nowrap;
+}
+.ff-table td:nth-child(2) { text-align: left; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ff-table tr:hover { background: var(--surface-2); }
+
+.ff-cell-on { color: var(--status-succeeded); font-weight: 600; }
+.ff-cell-off { color: var(--text-muted); }
+.ff-cell-conditional { color: var(--level-warning); cursor: help; }
+
+/* Override toggle */
+.ff-override-toggle {
+  appearance: none; width: 28px; height: 16px; border-radius: 8px;
+  background: var(--surface-3); border: 1px solid var(--border-bright);
+  position: relative; cursor: pointer; vertical-align: middle;
+  transition: background var(--transition-fast);
+}
+.ff-override-toggle::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+.ff-override-toggle:checked { background: var(--accent); border-color: var(--accent); }
+.ff-override-toggle:checked::after { transform: translateX(12px); background: #fff; }
+
+.ff-override-indicator {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+/* Lock Monitor */
+.lock-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--space-2); padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  max-width: 480px;
+}
+.lock-status-row { display: flex; align-items: center; gap: var(--space-3); }
+.lock-indicator {
+  width: 12px; height: 12px; border-radius: 50%;
+}
+.lock-indicator.locked { background: var(--level-error); box-shadow: 0 0 8px rgba(220,38,38,0.3); }
+.lock-indicator.unlocked { background: var(--status-succeeded); }
+.lock-label { font-size: var(--text-lg); font-weight: 600; color: var(--text); }
+.lock-meta { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+.lock-actions { display: flex; gap: var(--space-2); }
+.lock-btn {
+  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  font-size: var(--text-sm); border: 1px solid var(--border-bright);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  font-family: var(--font-body);
+}
+.lock-btn.danger { color: var(--level-error); border-color: var(--level-error); }
+.lock-btn.danger:hover { background: rgba(220,38,38,0.08); }
+
+/* Orphaned Resources */
+.orphan-table { width: 100%; max-width: 640px; border-collapse: collapse; font-size: var(--text-sm); }
+.orphan-table th {
+  text-align: left; padding: var(--space-2);
+  color: var(--text-muted); font-weight: 500; font-size: var(--text-xs);
+  text-transform: uppercase; border-bottom: 2px solid var(--border);
+}
+.orphan-table td { padding: var(--space-2); border-bottom: 1px solid var(--border); color: var(--text-dim); }
+.orphan-table td:first-child { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text); }
+.orphan-total { font-size: var(--text-sm); color: var(--text-dim); margin: var(--space-2) 0; }
+
+.orphan-clean-btn {
+  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  font-size: var(--text-sm); border: 1px solid var(--level-error);
+  background: var(--surface); color: var(--level-error); cursor: pointer;
+  font-family: var(--font-body);
+}
+
+    /* === css/token-inspector.css === */
+/* ── Token Inspector Drawer ── */
+.token-inspector {
+  position: fixed; top: var(--topbar-height); right: 0;
+  width: 360px; height: calc(100vh - var(--topbar-height));
+  background: var(--surface); border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 120ms ease-out;
+  z-index: var(--z-detail); /* stacking: above content, below command palette */
+  display: flex; flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+.token-inspector.open { transform: translateX(0); }
+
+.ti-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ti-title { font-size: var(--text-md); font-weight: 600; color: var(--text); }
+.ti-close {
+  background: none; border: none; color: var(--text-muted); font-size: var(--text-lg);
+  cursor: pointer; padding: var(--space-1);
+}
+.ti-close:hover { color: var(--text); }
+
+.ti-body { flex: 1; overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+
+.ti-token-card {
+  border: 1px solid var(--border); border-radius: var(--space-2);
+  overflow: hidden;
+}
+.ti-token-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+}
+.ti-token-header .ti-type-badge {
+  font-size: var(--text-xs); padding: 1px var(--space-2); border-radius: var(--space-2);
+  background: var(--accent-dim); color: var(--accent);
+}
+
+.ti-expiry-bar {
+  height: 4px; background: var(--surface-3);
+}
+.ti-expiry-fill {
+  height: 100%; transition: width 1s linear;
+}
+.ti-expiry-fill.green { background: var(--status-succeeded); }
+.ti-expiry-fill.amber { background: var(--level-warning); }
+.ti-expiry-fill.red { background: var(--level-error); }
+
+.ti-token-body { padding: var(--space-3); }
+
+.ti-claims { display: grid; grid-template-columns: 80px 1fr; gap: var(--space-1); font-size: var(--text-xs); }
+.ti-claims dt { color: var(--text-muted); font-weight: 500; }
+.ti-claims dd { color: var(--text); font-family: var(--font-mono); word-break: break-all; margin: 0; }
+
+.ti-scopes { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
+.ti-scope-pill {
+  padding: 1px var(--space-2); border-radius: var(--space-2);
+  font-size: 10px; background: var(--surface-2); color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.ti-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.ti-btn {
+  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  font-size: var(--text-sm); border: 1px solid var(--border-bright);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  font-family: var(--font-body);
+}
+.ti-btn:hover { background: var(--surface-2); }
+.ti-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Log Bookmarks Drawer ── */
+.bookmarks-drawer {
+  position: fixed; top: var(--topbar-height); right: 0;
+  width: 320px; height: calc(100vh - var(--topbar-height));
+  background: var(--surface); border-left: 1px solid var(--border);
+  transform: translateX(100%);
+  transition: transform 120ms ease-out;
+  z-index: var(--z-detail);
+  display: flex; flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+}
+.bookmarks-drawer.open { transform: translateX(0); }
+
+.bm-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.bm-title { font-size: var(--text-md); font-weight: 600; color: var(--text); }
+.bm-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: var(--text-lg); }
+
+.bm-list { flex: 1; overflow-y: auto; }
+.bm-entry {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.bm-entry:hover { background: var(--surface-2); }
+.bm-entry-meta { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); display: flex; gap: var(--space-2); }
+.bm-entry-msg { font-size: var(--text-xs); color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Log Breakpoints Bar ── */
+.breakpoints-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  min-height: 28px; flex-shrink: 0;
+}
+.bp-label { font-size: var(--text-xs); color: var(--text-muted); white-space: nowrap; }
+.bp-pills { display: flex; gap: var(--space-1); flex-wrap: wrap; flex: 1; }
+.bp-pill {
+  display: flex; align-items: center; gap: var(--space-1);
+  padding: 1px var(--space-2); border-radius: var(--space-2);
+  font-size: var(--text-xs); font-family: var(--font-mono);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.bp-pill-color { width: 8px; height: 8px; border-radius: 50%; }
+.bp-pill-close { cursor: pointer; color: var(--text-muted); font-size: 10px; }
+.bp-add {
+  background: none; border: 1px dashed var(--border-bright); border-radius: var(--space-2);
+  padding: 1px var(--space-2); font-size: var(--text-xs); color: var(--text-muted);
+  cursor: pointer; font-family: var(--font-body);
+}
+.bp-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── File Change Notification ── */
+.file-change-bar {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: rgba(229,148,12,0.06); border-bottom: 1px solid rgba(229,148,12,0.15);
+  font-size: var(--text-sm); color: var(--text);
+}
+.file-change-bar:empty { display: none; }
+.file-change-bar .fc-files { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-dim); }
+.fc-btn {
+  padding: var(--space-1) var(--space-3); border-radius: var(--space-1);
+  font-size: var(--text-xs); border: 1px solid var(--border-bright);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  font-family: var(--font-body);
+}
+.fc-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Deploy Progress ── */
+.deploy-progress {
+  padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.deploy-step {
+  display: flex; align-items: center; gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+.deploy-step-num {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--text-xs); font-weight: 600;
+  border: 2px solid var(--border-bright); color: var(--text-muted);
+}
+.deploy-step.active .deploy-step-num { border-color: var(--accent); color: var(--accent); animation: dag-pulse 1.5s infinite; }
+.deploy-step.done .deploy-step-num { border-color: var(--status-succeeded); color: var(--status-succeeded); background: rgba(5,150,105,0.08); }
+.deploy-step-label { color: var(--text-dim); }
+.deploy-step.active .deploy-step-label { color: var(--text); font-weight: 500; }
+.deploy-step.done .deploy-step-label { color: var(--status-succeeded); }
+
   </style>
 </head>
 <body>
@@ -3100,11 +3919,14 @@ mark {
     </div>
   </header>
 
-  <!-- Smart Context + Alerts -->
-  <div id="smart-context-bar" class="smart-context-bar"></div>
-  <div id="api-toast" class="api-toast"></div>
-  <div id="error-alert" class="error-alert"></div>
-  <div id="anomaly-warning" class="anomaly-warning"></div>
+  <!-- Notification Zone (collapses when empty) -->
+  <div class="notification-zone">
+    <div id="file-change-bar" class="file-change-bar"></div>
+    <div id="smart-context-bar" class="smart-context-bar"></div>
+    <div id="api-toast" class="api-toast"></div>
+    <div id="error-alert" class="error-alert"></div>
+    <div id="anomaly-warning" class="anomaly-warning"></div>
+  </div>
 
   <!-- Main Layout: Sidebar + Content -->
   <div class="cockpit-body">
@@ -3154,6 +3976,8 @@ mark {
 
       <!-- View 2: Logs -->
       <div id="view-logs" class="view-panel" data-view="logs">
+        <!-- Breakpoints bar -->
+        <div id="breakpoints-bar" class="breakpoints-bar"></div>
         <!-- Logs toolbar (scoped to logs view) -->
         <div id="toolbar" class="logs-toolbar">
           <div class="time-filter">
@@ -3283,6 +4107,19 @@ mark {
     <div class="detail-content"></div>
   </div>
 
+  <!-- Bookmarks Drawer (right) -->
+  <div id="bookmarks-drawer" class="bookmarks-drawer">
+    <div class="bm-header">
+      <span class="bm-title">&#9733; Bookmarks</span>
+      <button class="bm-close" onclick="document.getElementById('bookmarks-drawer').classList.remove('open')">&#10005;</button>
+    </div>
+    <div class="bm-list" id="bm-list">
+      <div class="bm-entry"><div class="bm-entry-meta"><span>14:22:08</span><span style="color:var(--level-error)">Error</span></div><div class="bm-entry-msg">MLV_SPARK_SESSION_ACQUISITION_FAILED: Cannot acquire Spark session</div></div>
+      <div class="bm-entry"><div class="bm-entry-meta"><span>14:21:45</span><span style="color:var(--level-warning)">Warning</span></div><div class="bm-entry-msg">Execution lock held for 4m30s — approaching stuck threshold</div></div>
+      <div class="bm-entry"><div class="bm-entry-meta"><span>14:20:12</span><span style="color:var(--level-error)">Error</span></div><div class="bm-entry-msg">Node "RefreshInventory" failed: NullReferenceException at OneLakeWriter</div></div>
+    </div>
+  </div>
+
   <!-- Command Palette (Ctrl+K overlay) -->
   <div id="command-palette" class="command-palette hidden">
     <div class="cp-backdrop"></div>
@@ -3293,6 +4130,302 @@ mark {
   </div>
 
   <script>
+// === js/mock-data.js ===
+/**
+ * MockData — Comprehensive mock data for EDOG Studio prototype.
+ *
+ * Provides realistic data for all 6 views + overlays so the UI
+ * can be demonstrated without a live backend.
+ *
+ * Kael + Zara: This module loads first. Every view reads from here.
+ */
+const MockData = (() => {
+
+  // ── Helpers ──
+  const _uuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+
+  const _ts = (minutesAgo) => {
+    const d = new Date(Date.now() - minutesAgo * 60000);
+    return d.toISOString();
+  };
+
+  const _shortTime = (minutesAgo) => {
+    const d = new Date(Date.now() - minutesAgo * 60000);
+    return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  // ── Workspaces ──
+  const workspaces = [
+    { id: _uuid(), displayName: 'EDOG-Dev-Workspace', type: 'Workspace', capacityId: 'cap-ppe-01', state: 'Active', description: 'Primary FLT development workspace' },
+    { id: _uuid(), displayName: 'EDOG-Staging-Workspace', type: 'Workspace', capacityId: 'cap-ppe-02', state: 'Active', description: 'Staging environment for integration testing' },
+    { id: _uuid(), displayName: 'Team-SharedWorkspace', type: 'Workspace', capacityId: 'cap-ppe-01', state: 'Active', description: 'Shared workspace for cross-team collaboration' },
+    { id: _uuid(), displayName: 'Perf-Testing-WS', type: 'Workspace', capacityId: 'cap-ppe-03', state: 'Active', description: 'Performance and scale testing' },
+  ];
+
+  const _itemsForWorkspace = (wsIndex) => {
+    const items = [
+      [
+        { id: _uuid(), displayName: 'TestLakehouse-01', type: 'Lakehouse', status: 'Active', lastModified: _ts(30) },
+        { id: _uuid(), displayName: 'TestLakehouse-02', type: 'Lakehouse', status: 'Active', lastModified: _ts(120) },
+        { id: _uuid(), displayName: 'SalesData-LH', type: 'Lakehouse', status: 'Active', lastModified: _ts(240) },
+        { id: _uuid(), displayName: 'AnalysisNotebook', type: 'Notebook', status: 'Active', lastModified: _ts(360) },
+        { id: _uuid(), displayName: 'DataPipeline-Refresh', type: 'DataPipeline', status: 'Active', lastModified: _ts(480) },
+        { id: _uuid(), displayName: 'SalesReport-Q4', type: 'Report', status: 'Active', lastModified: _ts(600) },
+        { id: _uuid(), displayName: 'MLExperiment-v3', type: 'MLExperiment', status: 'Active', lastModified: _ts(720) },
+      ],
+      [
+        { id: _uuid(), displayName: 'Staging-Lakehouse', type: 'Lakehouse', status: 'Active', lastModified: _ts(60) },
+        { id: _uuid(), displayName: 'Integration-Tests-LH', type: 'Lakehouse', status: 'Active', lastModified: _ts(180) },
+        { id: _uuid(), displayName: 'Pipeline-Staging', type: 'DataPipeline', status: 'Active', lastModified: _ts(300) },
+      ],
+      [
+        { id: _uuid(), displayName: 'SharedData-LH', type: 'Lakehouse', status: 'Active', lastModified: _ts(90) },
+        { id: _uuid(), displayName: 'TeamNotebook-Shared', type: 'Notebook', status: 'Active', lastModified: _ts(200) },
+        { id: _uuid(), displayName: 'KQL-Analytics', type: 'KQLDatabase', status: 'Active', lastModified: _ts(500) },
+        { id: _uuid(), displayName: 'Warehouse-Main', type: 'Warehouse', status: 'Active', lastModified: _ts(800) },
+      ],
+      [
+        { id: _uuid(), displayName: 'Perf-Lakehouse-Large', type: 'Lakehouse', status: 'Active', lastModified: _ts(45) },
+        { id: _uuid(), displayName: 'LoadTest-Pipeline', type: 'DataPipeline', status: 'Active', lastModified: _ts(200) },
+      ],
+    ];
+    return items[wsIndex] || items[0];
+  };
+
+  const tablesForLakehouse = [
+    { name: 'sales_transactions', type: 'Delta', format: 'delta', location: 'Tables/sales_transactions', rowCount: 2847593, sizeBytes: 156000000 },
+    { name: 'customer_dim', type: 'Delta', format: 'delta', location: 'Tables/customer_dim', rowCount: 48210, sizeBytes: 8400000 },
+    { name: 'product_catalog', type: 'Delta', format: 'delta', location: 'Tables/product_catalog', rowCount: 12847, sizeBytes: 3200000 },
+    { name: 'inventory_snapshot', type: 'Delta', format: 'delta', location: 'Tables/inventory_snapshot', rowCount: 385024, sizeBytes: 67000000 },
+    { name: 'order_events', type: 'Delta', format: 'delta', location: 'Tables/order_events', rowCount: 9412837, sizeBytes: 412000000 },
+    { name: 'raw_clickstream', type: 'Parquet', format: 'parquet', location: 'Files/raw/clickstream', rowCount: 52000000, sizeBytes: 2100000000 },
+    { name: 'dq_metrics_history', type: 'Delta', format: 'delta', location: 'Tables/dq_metrics_history', rowCount: 156789, sizeBytes: 22000000 },
+  ];
+
+  const favorites = [
+    { name: 'My Dev Lakehouse', workspaceName: 'EDOG-Dev-Workspace', lakehouseName: 'TestLakehouse-01' },
+    { name: 'Team Staging', workspaceName: 'EDOG-Staging-Workspace', lakehouseName: 'Staging-Lakehouse' },
+  ];
+
+  // ── Log Entries ──
+  const _components = ['DagExecutionHandler', 'SparkClient', 'OneLakeCatalog', 'TokenManager', 'RefreshEngine', 'MetastoreClient', 'DqMetricsWriter', 'ScheduleController'];
+  const _logMessages = [
+    { level: 'Message', comp: 'DagExecutionHandler', msg: 'Starting DAG execution for iteration {raid}' },
+    { level: 'Message', comp: 'DagExecutionHandler', msg: 'Node "RefreshSalesData" completed successfully in 2.3s' },
+    { level: 'Message', comp: 'DagExecutionHandler', msg: 'Node "TransformCustomerDim" started (parallel group 2)' },
+    { level: 'Message', comp: 'DagExecutionHandler', msg: 'DAG execution completed: 8/8 nodes succeeded, 0 failed' },
+    { level: 'Message', comp: 'SparkClient', msg: 'Spark session acquired (sessionId: spark-{uuid})' },
+    { level: 'Message', comp: 'SparkClient', msg: 'Executing SQL: CREATE OR REPLACE MATERIALIZED VIEW sales_summary AS SELECT ...' },
+    { level: 'Message', comp: 'SparkClient', msg: 'SQL execution completed in 4.7s, rows affected: 28475' },
+    { level: 'Warning', comp: 'SparkClient', msg: 'Spark session approaching idle timeout (8min remaining)' },
+    { level: 'Warning', comp: 'TokenManager', msg: 'MWC token expires in 12 minutes, scheduling refresh' },
+    { level: 'Warning', comp: 'OneLakeCatalog', msg: 'Catalog listing returned partial results (timeout after 30s)' },
+    { level: 'Error', comp: 'SparkClient', msg: 'MLV_SPARK_SESSION_ACQUISITION_FAILED: Cannot acquire Spark session — capacity throttled (429)' },
+    { level: 'Error', comp: 'DagExecutionHandler', msg: 'Node "RefreshInventory" failed: NullReferenceException at OneLakeWriter.WriteAsync()' },
+    { level: 'Error', comp: 'OneLakeCatalog', msg: 'Failed to list tables: HTTP 403 Forbidden — token scope insufficient' },
+    { level: 'Verbose', comp: 'MetastoreClient', msg: 'Fetching table metadata for "sales_transactions" (cache miss)' },
+    { level: 'Verbose', comp: 'DqMetricsWriter', msg: 'Writing DQ metrics batch: 12 records, 3.2KB' },
+    { level: 'Verbose', comp: 'ScheduleController', msg: 'Schedule check: no pending executions' },
+    { level: 'Message', comp: 'RefreshEngine', msg: 'Refresh policy evaluated: 3 tables need refresh (stale > 1h)' },
+    { level: 'Message', comp: 'OneLakeCatalog', msg: 'Catalog listing completed: 7 tables, 2 shortcuts' },
+    { level: 'Warning', comp: 'DagExecutionHandler', msg: 'Execution lock held for 4m30s — approaching stuck threshold' },
+    { level: 'Error', comp: 'RefreshEngine', msg: 'MLV_DAG_NODE_EXECUTION_FAILED: Node "AggregateMetrics" — DeltaTableWriteException' },
+    { level: 'Message', comp: 'TokenManager', msg: 'MWC token refreshed successfully (expires in 55 minutes)' },
+    { level: 'Message', comp: 'SparkClient', msg: 'PUT /livyApi/versions/2024-04-18/sessions — 200 OK (1.2s)' },
+    { level: 'Verbose', comp: 'RefreshEngine', msg: 'Evaluating node dependencies: TransformCustomerDim depends on [RefreshSalesData, RefreshCustomerRaw]' },
+  ];
+
+  function generateLogEntries(count) {
+    const entries = [];
+    const raidId = _uuid().split('-')[0];
+    for (let i = 0; i < count; i++) {
+      const template = _logMessages[Math.floor(Math.random() * _logMessages.length)];
+      const minutesAgo = (count - i) * 0.15;
+      entries.push({
+        id: i + 1,
+        timestamp: _shortTime(minutesAgo),
+        isoTime: _ts(minutesAgo),
+        level: template.level,
+        component: template.comp,
+        message: template.msg.replace('{raid}', raidId).replace('{uuid}', _uuid().substring(0, 8)),
+        rootActivityId: i % 5 === 0 ? _uuid() : null,
+        bookmarked: false,
+      });
+    }
+    return entries;
+  }
+
+  // ── DAG Nodes ──
+  const dagNodes = [
+    { nodeId: 'n1', name: 'RefreshSalesData', kind: 'sql', parents: [], children: ['n3', 'n4'], status: 'completed', duration: 2300, errorMessage: null },
+    { nodeId: 'n2', name: 'RefreshCustomerRaw', kind: 'sql', parents: [], children: ['n3'], status: 'completed', duration: 1800, errorMessage: null },
+    { nodeId: 'n3', name: 'TransformCustomerDim', kind: 'sql', parents: ['n1', 'n2'], children: ['n5', 'n6'], status: 'completed', duration: 4700, errorMessage: null },
+    { nodeId: 'n4', name: 'AggregateMetrics', kind: 'pyspark', parents: ['n1'], children: ['n7'], status: 'failed', duration: 12400, errorMessage: 'DeltaTableWriteException: Concurrent write conflict' },
+    { nodeId: 'n5', name: 'BuildSalesSummary', kind: 'sql', parents: ['n3'], children: ['n8'], status: 'completed', duration: 3200, errorMessage: null },
+    { nodeId: 'n6', name: 'RefreshProductJoin', kind: 'sql', parents: ['n3'], children: ['n8'], status: 'completed', duration: 2100, errorMessage: null },
+    { nodeId: 'n7', name: 'WriteMetricsOutput', kind: 'pyspark', parents: ['n4'], children: [], status: 'skipped', duration: 0, errorMessage: 'Skipped: parent node failed' },
+    { nodeId: 'n8', name: 'FinalizeViews', kind: 'sql', parents: ['n5', 'n6'], children: [], status: 'running', duration: null, errorMessage: null },
+  ];
+
+  const dagEdges = [
+    { from: 'n1', to: 'n3' }, { from: 'n1', to: 'n4' },
+    { from: 'n2', to: 'n3' },
+    { from: 'n3', to: 'n5' }, { from: 'n3', to: 'n6' },
+    { from: 'n4', to: 'n7' },
+    { from: 'n5', to: 'n8' }, { from: 'n6', to: 'n8' },
+  ];
+
+  const dagHistory = [
+    { iterationId: _uuid().substring(0, 8), status: 'Running', duration: '1m 42s', total: 8, completed: 5, failed: 1, startTime: _shortTime(2) },
+    { iterationId: _uuid().substring(0, 8), status: 'Succeeded', duration: '3m 12s', total: 8, completed: 8, failed: 0, startTime: _shortTime(35) },
+    { iterationId: _uuid().substring(0, 8), status: 'Failed', duration: '2m 58s', total: 8, completed: 6, failed: 2, startTime: _shortTime(90) },
+    { iterationId: _uuid().substring(0, 8), status: 'Succeeded', duration: '2m 45s', total: 8, completed: 8, failed: 0, startTime: _shortTime(180) },
+    { iterationId: _uuid().substring(0, 8), status: 'Cancelled', duration: '0m 34s', total: 8, completed: 2, failed: 0, startTime: _shortTime(240) },
+  ];
+
+  // ── Spark Requests ──
+  const sparkRequests = [
+    { id: 1, method: 'PUT', endpoint: '/livyApi/versions/2024-04-18/sessions', status: 200, duration: 1247, retries: 0, timestamp: _shortTime(5), body: '{ "kind": "sql", "conf": { "spark.lakehouse.id": "..." } }', response: '{ "id": 42, "state": "idle" }' },
+    { id: 2, method: 'POST', endpoint: '/livyApi/versions/2024-04-18/sessions/42/statements', status: 200, duration: 4823, retries: 0, timestamp: _shortTime(4.5), body: 'CREATE OR REPLACE MATERIALIZED VIEW sales_summary AS\nSELECT region, SUM(amount) as total\nFROM sales_transactions\nGROUP BY region', response: '{ "id": 1, "state": "available", "output": { "status": "ok" } }' },
+    { id: 3, method: 'GET', endpoint: '/livyApi/versions/2024-04-18/sessions/42/statements/1', status: 200, duration: 89, retries: 0, timestamp: _shortTime(4), body: null, response: '{ "id": 1, "state": "available", "output": { "status": "ok", "data": { "rows_affected": 28475 } } }' },
+    { id: 4, method: 'POST', endpoint: '/livyApi/versions/2024-04-18/sessions/42/statements', status: 429, duration: 340, retries: 3, timestamp: _shortTime(3), body: 'CREATE OR REPLACE MATERIALIZED VIEW customer_360 AS ...', response: '{ "error": "TooManyRequests", "message": "Capacity throttled" }' },
+    { id: 5, method: 'PUT', endpoint: '/livyApi/versions/2024-04-18/sessions', status: 200, duration: 2100, retries: 1, timestamp: _shortTime(2.5), body: '{ "kind": "pyspark" }', response: '{ "id": 43, "state": "idle" }' },
+    { id: 6, method: 'DELETE', endpoint: '/livyApi/versions/2024-04-18/sessions/42', status: 200, duration: 312, retries: 0, timestamp: _shortTime(1), body: null, response: '{ "msg": "deleted" }' },
+    { id: 7, method: 'POST', endpoint: '/livyApi/versions/2024-04-18/sessions/43/statements', status: 500, duration: 15234, retries: 2, timestamp: _shortTime(0.5), body: 'spark.sql("SELECT * FROM nonexistent_table")', response: '{ "error": "InternalServerError", "message": "Table not found: nonexistent_table" }' },
+  ];
+
+  // ── Feature Flags ──
+  const featureFlags = [
+    { name: 'FLTDagExecutionHandlerV2', description: 'V2 DAG execution orchestration', rings: { onebox: true, test: true, daily: true, cst: true, dxt: true, msit: false, prod: false }, override: null },
+    { name: 'FLTParallelNodeLimit10', description: 'Set ParallelNodeLimit to 10', rings: { onebox: true, test: false, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTParallelNodeLimit15', description: 'Set ParallelNodeLimit to 15', rings: { onebox: false, test: false, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTArtifactBasedThrottling', description: 'Artifact-based throttling', rings: { onebox: true, test: true, daily: true, cst: true, dxt: true, msit: true, prod: 'conditional' }, override: null },
+    { name: 'FLTUserBasedThrottling', description: 'User-based throttling', rings: { onebox: true, test: false, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTIRDeletesDisabled', description: 'Disable IR deletes', rings: { onebox: true, test: true, daily: true, cst: false, dxt: false, msit: false, prod: false }, override: true },
+    { name: 'FLTDqMetricsBatchWrite', description: 'Batch write for DQ metrics', rings: { onebox: true, test: 'conditional', daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTInsightsMetrics', description: 'Insights metrics collection', rings: { onebox: false, test: false, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTUseOneLakeRegionalEndpoint', description: 'OneLake regional endpoint', rings: { onebox: true, test: true, daily: true, cst: true, dxt: true, msit: true, prod: true }, override: null },
+    { name: 'FLTResilientCatalogListing', description: 'Resilient catalog with shortcut skip', rings: { onebox: true, test: true, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: false },
+    { name: 'FLTListPathOptimization', description: 'Delta list-path optimization', rings: { onebox: true, test: true, daily: true, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTDagSettings', description: 'DagSettings API', rings: { onebox: true, test: true, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTMLVWarnings', description: 'RefreshPolicy/CDF warnings', rings: { onebox: true, test: true, daily: true, cst: true, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTEnableRefreshTriggers', description: 'Event-based refresh triggers', rings: { onebox: true, test: false, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+    { name: 'FLTPublicApiSupport', description: 'Public API support', rings: { onebox: true, test: true, daily: true, cst: true, dxt: true, msit: true, prod: 'conditional' }, override: null },
+    { name: 'FLTCapacityThrottlingAsUserError', description: 'Report capacity throttling as user error', rings: { onebox: true, test: true, daily: false, cst: false, dxt: false, msit: false, prod: false }, override: null },
+  ];
+
+  // ── API Playground Saved Requests ──
+  const savedRequests = [
+    { name: 'List Workspaces', method: 'GET', url: 'https://api.fabric.microsoft.com/v1/workspaces', group: 'Fabric' },
+    { name: 'List Lakehouses', method: 'GET', url: 'https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses', group: 'Fabric' },
+    { name: 'List Tables', method: 'GET', url: 'https://api.fabric.microsoft.com/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables', group: 'Fabric' },
+    { name: 'Get Latest DAG', method: 'GET', url: '/liveTable/getLatestDag?showExtendedLineage=true', group: 'FLT' },
+    { name: 'Run DAG', method: 'POST', url: '/liveTableSchedule/runDAG/{iterationId}', group: 'FLT' },
+    { name: 'Cancel DAG', method: 'POST', url: '/liveTableSchedule/cancelDAG/{iterationId}', group: 'FLT' },
+    { name: 'Get DAG Exec Status', method: 'GET', url: '/liveTableSchedule/getDAGExecStatus/{iterationId}', group: 'FLT' },
+    { name: 'Force Unlock', method: 'POST', url: '/liveTableMaintenance/forceUnlockDAGExecution', group: 'Maintenance' },
+    { name: 'List Orphaned Folders', method: 'GET', url: '/liveTableMaintenance/listOrphanedIndexFolders', group: 'Maintenance' },
+  ];
+
+  const apiHistory = [
+    { method: 'GET', url: '/v1/workspaces', status: 200, duration: 342, timestamp: _shortTime(10) },
+    { method: 'GET', url: '/v1/workspaces/.../lakehouses', status: 200, duration: 189, timestamp: _shortTime(9) },
+    { method: 'GET', url: '/liveTable/getLatestDag?showExtendedLineage=true', status: 200, duration: 567, timestamp: _shortTime(5) },
+    { method: 'POST', url: '/liveTableSchedule/runDAG/abc123', status: 202, duration: 234, timestamp: _shortTime(3) },
+    { method: 'GET', url: '/liveTableSchedule/getDAGExecStatus/abc123', status: 200, duration: 78, timestamp: _shortTime(2) },
+  ];
+
+  // ── Token Info ──
+  const tokenInfo = {
+    bearer: {
+      type: 'Bearer (AAD/Entra)',
+      expiresIn: 42,
+      issuedAt: _ts(18),
+      expiresAt: _ts(-42),
+      claims: {
+        sub: 'hemant.gupta@microsoft.com',
+        aud: 'https://api.fabric.microsoft.com',
+        iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+        name: 'Hemant Gupta',
+        oid: _uuid(),
+        tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+        scp: 'Workspace.Read.All Workspace.ReadWrite.All Lakehouse.Read.All Item.ReadWrite.All',
+      },
+      scopes: ['Workspace.Read.All', 'Workspace.ReadWrite.All', 'Lakehouse.Read.All', 'Item.ReadWrite.All'],
+    },
+    mwc: {
+      type: 'MWC (Workload)',
+      expiresIn: 38,
+      issuedAt: _ts(22),
+      expiresAt: _ts(-38),
+      claims: {
+        sub: 'workload-fabriclivetable',
+        aud: 'https://analysis.windows.net/powerbi/api',
+        iss: 'https://login.microsoftonline.com',
+        wl_tenantId: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+        wl_capacityId: _uuid(),
+        wl_workspaceId: _uuid(),
+        wl_artifactId: _uuid(),
+      },
+      scopes: ['Lakehouse.Execute', 'OneLake.ReadWrite', 'Notebook.Execute'],
+    },
+  };
+
+  // ── Lock Monitor ──
+  const lockState = {
+    locked: true,
+    holder: dagHistory[0].iterationId,
+    lockedSince: _ts(2),
+    age: '1m 42s',
+  };
+
+  // ── Orphaned Resources ──
+  const orphanedFolders = [
+    { path: 'Tables/.edog-index/sales_transactions/v12', size: '24.3 MB', age: '3 days' },
+    { path: 'Tables/.edog-index/customer_dim/v8', size: '8.1 MB', age: '5 days' },
+    { path: 'Tables/.edog-index/order_events/v3', size: '142.7 MB', age: '12 days' },
+  ];
+
+  // ── Config ──
+  const config = {
+    workspaceId: workspaces[0].id,
+    artifactId: 'TestLakehouse-01',
+    capacityId: 'cap-ppe-01',
+    tenantId: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+    fabricBaseUrl: 'https://api.fabric.microsoft.com/v1',
+    gitBranch: 'feature/dag-parallel-execution',
+    patchCount: 6,
+    uncommittedFiles: 3,
+    tokenExpiryMinutes: 42,
+    serviceStatus: 'running',
+    phase: 'connected',
+  };
+
+  // Public API
+  return {
+    workspaces,
+    getItemsForWorkspace: _itemsForWorkspace,
+    tablesForLakehouse,
+    favorites,
+    generateLogEntries,
+    dagNodes,
+    dagEdges,
+    dagHistory,
+    sparkRequests,
+    featureFlags,
+    savedRequests,
+    apiHistory,
+    tokenInfo,
+    lockState,
+    orphanedFolders,
+    config,
+    uuid: _uuid,
+  };
+})();
+
 // === js/state.js ===
 /**
  * EDOG Real-Time Log Viewer - State Management
@@ -7078,6 +8211,826 @@ class CommandPalette {
   }
 }
 
+// === js/mock-renderer.js ===
+/**
+ * MockRenderer — Populates all views with realistic mock data.
+ *
+ * Zara + Mika: This module renders mock content into every view
+ * so the full cockpit can be demonstrated without a backend.
+ */
+class MockRenderer {
+  constructor() {
+    this._logEntries = MockData.generateLogEntries(80);
+    this._selectedSparkId = null;
+    this._activeEnvTab = 'flags';
+    this._bookmarks = [];
+  }
+
+  init() {
+    this._renderTopBar();
+    this._renderWorkspaceTree();
+    this._renderLogs();
+    this._renderDagStudio();
+    this._renderSparkInspector();
+    this._renderApiPlayground();
+    this._renderEnvironment();
+    this._renderTokenInspector();
+    this._renderFileChangeBar();
+    this._bindInteractions();
+  }
+
+  // ── Top Bar ──
+  _renderTopBar() {
+    const cfg = MockData.config;
+    const statusEl = document.getElementById('service-status');
+    const statusText = document.getElementById('service-status-text');
+    const tokenEl = document.getElementById('token-countdown');
+    const tokenHealth = document.getElementById('token-health');
+    const branchEl = document.getElementById('git-branch-name');
+    const patchEl = document.getElementById('patch-count');
+    const sidebarDot = document.getElementById('sidebar-token-dot');
+
+    if (statusEl) statusEl.className = 'service-status running';
+    if (statusText) statusText.textContent = 'Running 14m22s';
+    if (tokenEl) tokenEl.textContent = 'Token 42:18';
+    if (tokenHealth) tokenHealth.className = 'token-health green';
+    if (branchEl) branchEl.textContent = cfg.gitBranch;
+    if (patchEl) patchEl.textContent = cfg.patchCount + ' patches';
+    if (sidebarDot) sidebarDot.className = 'sidebar-token-dot green';
+
+    // Enable all sidebar icons (connected mode)
+    document.querySelectorAll('.sidebar-icon').forEach(i => i.classList.remove('disabled'));
+  }
+
+  // ── Workspace Explorer ──
+  _renderWorkspaceTree() {
+    const tree = document.getElementById('ws-tree-content');
+    if (!tree) return;
+
+    let html = '';
+    MockData.workspaces.forEach((ws, wsIdx) => {
+      const isFirst = wsIdx === 0;
+      html += `<div class="ws-tree-item" data-ws-idx="${wsIdx}" style="padding-left:12px">
+        <span class="ws-tree-toggle">${isFirst ? '\u25BE' : '\u25B8'}</span>
+        <span class="ws-tree-label">${ws.displayName}</span>
+      </div>`;
+
+      if (isFirst) {
+        const items = MockData.getItemsForWorkspace(wsIdx);
+        items.forEach((item, itemIdx) => {
+          const isLH = item.type === 'Lakehouse';
+          const cls = isLH ? '' : ' dimmed';
+          const dot = isLH ? '<span class="ws-dot lakehouse"></span>' : '<span class="ws-dot other"></span>';
+          const selected = itemIdx === 0 ? ' selected' : '';
+          html += `<div class="ws-tree-item${cls}${selected}" data-ws-idx="${wsIdx}" data-item-idx="${itemIdx}" style="padding-left:28px">
+            ${dot}<span class="ws-tree-label">${item.displayName}</span>
+            <span class="ws-tree-type">${item.type}</span>
+          </div>`;
+        });
+      }
+    });
+
+    // Favorites
+    const favEl = document.getElementById('ws-favorites-list');
+    if (favEl) {
+      let favHtml = '';
+      MockData.favorites.forEach(f => {
+        favHtml += `<div class="ws-fav-item">\u25C6 ${f.name} <span class="ws-fav-detail">${f.workspaceName}</span></div>`;
+      });
+      favEl.innerHTML = favHtml;
+    }
+
+    tree.innerHTML = html;
+
+    // Populate content panel for first lakehouse
+    this._renderLakehouseContent(0, 0);
+    this._renderTableInspector(0);
+  }
+
+  _renderLakehouseContent(wsIdx, itemIdx) {
+    const content = document.getElementById('ws-content-body');
+    if (!content) return;
+
+    const ws = MockData.workspaces[wsIdx];
+    const items = MockData.getItemsForWorkspace(wsIdx);
+    const item = items[itemIdx];
+    const tables = MockData.tablesForLakehouse;
+
+    content.innerHTML = `
+      <div class="ws-content-header">
+        <div class="ws-content-name">${item.displayName}</div>
+        <div class="ws-content-meta">
+          <span class="ws-meta-id" title="Click to copy">${item.id.substring(0, 8)}...</span>
+          <span class="ws-meta-badge">F2 PPE ● West US 2</span>
+          <span class="ws-meta-modified">Modified ${this._relativeTime(item.lastModified)}</span>
+        </div>
+        <div class="ws-content-actions">
+          <button class="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>
+          <button class="ws-action-btn ghost">Open in Fabric</button>
+          <button class="ws-action-btn ghost">Rename</button>
+        </div>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">TABLES <span class="ws-section-count">${tables.length}</span></div>
+        <table class="ws-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Format</th><th>Rows</th><th>Size</th></tr></thead>
+          <tbody>
+            ${tables.map((t, ti) => `<tr class="ws-table-row${ti === 0 ? ' selected' : ''}" data-table-idx="${ti}">
+              <td class="ws-table-name">${t.name}</td>
+              <td><span class="ws-type-badge">${t.type}</span></td>
+              <td>${t.format}</td>
+              <td class="ws-table-num">${this._formatNum(t.rowCount)}</td>
+              <td class="ws-table-num">${this._formatBytes(t.sizeBytes)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div class="ws-section">
+        <div class="ws-section-title">MLV DEFINITIONS</div>
+        <div class="ws-mlv-grid">
+          <div class="ws-mlv-card">
+            <div class="ws-mlv-name">sales_summary</div>
+            <div class="ws-mlv-meta">SQL \u00B7 Auto Refresh \u00B7 Last run: 30m ago</div>
+            <span class="status-pill succeeded">Succeeded</span>
+          </div>
+          <div class="ws-mlv-card">
+            <div class="ws-mlv-name">customer_360</div>
+            <div class="ws-mlv-meta">SQL \u00B7 Auto Refresh \u00B7 Last run: 30m ago</div>
+            <span class="status-pill succeeded">Succeeded</span>
+          </div>
+          <div class="ws-mlv-card">
+            <div class="ws-mlv-name">inventory_metrics</div>
+            <div class="ws-mlv-meta">PySpark \u00B7 Manual \u00B7 Last run: 2h ago</div>
+            <span class="status-pill failed">Failed</span>
+          </div>
+        </div>
+      </div>`;
+
+    // Bind table row clicks
+    content.querySelectorAll('.ws-table-row').forEach(row => {
+      row.addEventListener('click', () => {
+        content.querySelectorAll('.ws-table-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        this._renderTableInspector(parseInt(row.dataset.tableIdx));
+      });
+    });
+  }
+
+  _renderTableInspector(tableIdx) {
+    const inspector = document.getElementById('ws-inspector-content');
+    if (!inspector) return;
+    const t = MockData.tablesForLakehouse[tableIdx];
+    inspector.innerHTML = `
+      <div class="ws-insp-section">
+        <div class="ws-insp-title">TABLE INFO</div>
+        <dl class="ws-insp-kv">
+          <dt>Name</dt><dd>${t.name}</dd>
+          <dt>Type</dt><dd>${t.type}</dd>
+          <dt>Format</dt><dd>${t.format}</dd>
+          <dt>Location</dt><dd>${t.location}</dd>
+          <dt>Rows</dt><dd>${this._formatNum(t.rowCount)}</dd>
+          <dt>Size</dt><dd>${this._formatBytes(t.sizeBytes)}</dd>
+        </dl>
+      </div>
+      <div class="ws-insp-section">
+        <div class="ws-insp-title">SCHEMA</div>
+        <table class="ws-schema-table">
+          <thead><tr><th>Column</th><th>Type</th><th>Null</th></tr></thead>
+          <tbody>
+            <tr><td>id</td><td>BIGINT</td><td>\u2717</td></tr>
+            <tr><td>region</td><td>STRING</td><td>\u2713</td></tr>
+            <tr><td>amount</td><td>DECIMAL(18,2)</td><td>\u2717</td></tr>
+            <tr><td>quantity</td><td>INT</td><td>\u2713</td></tr>
+            <tr><td>transaction_date</td><td>TIMESTAMP</td><td>\u2717</td></tr>
+            <tr><td>customer_id</td><td>BIGINT</td><td>\u2713</td></tr>
+            <tr><td>product_sku</td><td>STRING</td><td>\u2713</td></tr>
+            <tr><td>store_code</td><td>STRING</td><td>\u2713</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="ws-insp-section">
+        <div class="ws-insp-title">PREVIEW</div>
+        <div class="ws-preview-note">First 3 rows</div>
+        <table class="ws-preview-table">
+          <thead><tr><th>id</th><th>region</th><th>amount</th><th>quantity</th></tr></thead>
+          <tbody>
+            <tr><td>1001</td><td>West US</td><td>249.99</td><td>3</td></tr>
+            <tr><td>1002</td><td>East US</td><td>89.50</td><td>1</td></tr>
+            <tr><td>1003</td><td>EU West</td><td>1,247.00</td><td>12</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Logs ──
+  _renderLogs() {
+    const container = document.getElementById('logs-container');
+    if (!container) return;
+
+    // Replace empty state with log entries
+    let html = '';
+    this._logEntries.forEach((entry, i) => {
+      const levelCls = entry.level.toLowerCase();
+      const bookmark = entry.bookmarked ? ' bookmarked' : '';
+      html += `<div class="log-row log-level-${levelCls}${bookmark}" data-log-idx="${i}">
+        <span class="log-gutter">
+          <span class="log-bookmark-star" data-idx="${i}">${entry.bookmarked ? '\u2605' : '\u2606'}</span>
+        </span>
+        <span class="log-time">${entry.timestamp}</span>
+        <span class="log-level-badge">${entry.level.charAt(0)}</span>
+        <span class="log-component">${entry.component}</span>
+        <span class="log-message">${entry.message}</span>
+      </div>`;
+    });
+    container.innerHTML = html;
+    container.classList.add('has-entries');
+
+    // Update stats
+    const errors = this._logEntries.filter(e => e.level === 'Error').length;
+    const warnings = this._logEntries.filter(e => e.level === 'Warning').length;
+    this._setTextSafe('stat-logs', String(this._logEntries.length));
+    this._setTextSafe('stat-ssr', '24');
+    this._setTextSafe('stat-errors', String(errors));
+    this._setTextSafe('visible-count', String(this._logEntries.length));
+    this._setTextSafe('total-count', String(this._logEntries.length));
+
+    // Bind bookmark clicks
+    container.querySelectorAll('.log-bookmark-star').forEach(star => {
+      star.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(star.dataset.idx);
+        this._logEntries[idx].bookmarked = !this._logEntries[idx].bookmarked;
+        star.textContent = this._logEntries[idx].bookmarked ? '\u2605' : '\u2606';
+        star.closest('.log-row').classList.toggle('bookmarked');
+      });
+    });
+
+    // Render breakpoints bar
+    const bpBar = document.getElementById('breakpoints-bar');
+    if (bpBar) {
+      bpBar.innerHTML = `
+        <span class="bp-label">Breakpoints</span>
+        <div class="bp-pills">
+          <span class="bp-pill"><span class="bp-pill-color" style="background:var(--level-error)"></span> NullReference <span class="bp-pill-close">\u2715</span></span>
+          <span class="bp-pill"><span class="bp-pill-color" style="background:var(--level-warning)"></span> throttl.* <span class="bp-pill-close">\u2715</span></span>
+        </div>
+        <button class="bp-add">+ Add</button>
+        <button class="bp-add" id="open-bookmarks-btn">\u2606 Bookmarks</button>`;
+    }
+  }
+
+  // ── DAG Studio ──
+  _renderDagStudio() {
+    const dagContent = document.getElementById('dag-studio-content');
+    if (!dagContent) return;
+
+    dagContent.innerHTML = `
+      <div class="dag-toolbar">
+        <button class="dag-btn primary">\u25B6 Run DAG</button>
+        <button class="dag-btn danger">\u2718 Cancel</button>
+        <button class="dag-btn">\u21BB Refresh DAG</button>
+        <div style="flex:1"></div>
+        <span style="font-size:var(--text-xs);color:var(--text-muted)">8 nodes \u00B7 Running \u00B7 5/8 completed</span>
+      </div>
+      <div class="dag-body">
+        <div class="dag-graph-panel" id="dag-graph-panel"></div>
+        <div class="dag-side-panel">
+          <div class="dag-gantt-section">
+            <div class="dag-section-title">Execution Timeline</div>
+            <div class="gantt-chart" id="dag-gantt"></div>
+          </div>
+          <div class="dag-history-section">
+            <div class="dag-section-title">History</div>
+            <table class="dag-history-table">
+              <thead><tr><th>ID</th><th>Status</th><th>Duration</th><th>Nodes</th><th>Time</th></tr></thead>
+              <tbody id="dag-history-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+
+    this._renderDagGraph();
+    this._renderGantt();
+    this._renderDagHistory();
+  }
+
+  _renderDagGraph() {
+    const panel = document.getElementById('dag-graph-panel');
+    if (!panel) return;
+
+    const nodes = MockData.dagNodes;
+    // Simple layered layout
+    const layers = this._computeDagLayers(nodes);
+    const nodeWidth = 150, nodeHeight = 44, layerGap = 100, nodeGap = 60;
+    const svgWidth = (layers.length) * (nodeWidth + layerGap) + 80;
+    const maxPerLayer = Math.max(...layers.map(l => l.length));
+    const svgHeight = maxPerLayer * (nodeHeight + nodeGap) + 40;
+
+    const positions = {};
+    layers.forEach((layer, li) => {
+      const x = 40 + li * (nodeWidth + layerGap);
+      const totalH = layer.length * nodeHeight + (layer.length - 1) * nodeGap;
+      const startY = (svgHeight - totalH) / 2;
+      layer.forEach((node, ni) => {
+        positions[node.nodeId] = { x, y: startY + ni * (nodeHeight + nodeGap) };
+      });
+    });
+
+    let svg = `<svg viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="dag-arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--text-muted)" />
+        </marker>
+      </defs>`;
+
+    // Edges
+    MockData.dagEdges.forEach(e => {
+      const from = positions[e.from];
+      const to = positions[e.to];
+      if (from && to) {
+        svg += `<line class="dag-edge" x1="${from.x + nodeWidth}" y1="${from.y + nodeHeight/2}" x2="${to.x}" y2="${to.y + nodeHeight/2}" />`;
+      }
+    });
+
+    // Nodes
+    nodes.forEach(n => {
+      const pos = positions[n.nodeId];
+      if (!pos) return;
+      const badge = n.kind === 'sql' ? 'SQL' : 'PY';
+      svg += `<g class="dag-node ${n.status}" transform="translate(${pos.x},${pos.y})">
+        <rect width="${nodeWidth}" height="${nodeHeight}" />
+        <text class="dag-node-label" x="10" y="18">${n.name.length > 16 ? n.name.substring(0,16) + '..' : n.name}</text>
+        <text class="dag-node-badge" x="10" y="34" fill="var(--text-muted)">${badge} \u00B7 ${n.duration ? (n.duration/1000).toFixed(1) + 's' : n.status}</text>
+      </g>`;
+    });
+
+    svg += '</svg>';
+    panel.innerHTML = svg;
+  }
+
+  _computeDagLayers(nodes) {
+    const nodeMap = {};
+    nodes.forEach(n => nodeMap[n.nodeId] = n);
+
+    const levels = {};
+    const computeLevel = (nodeId) => {
+      if (levels[nodeId] !== undefined) return levels[nodeId];
+      const node = nodeMap[nodeId];
+      if (node.parents.length === 0) { levels[nodeId] = 0; return 0; }
+      const parentLevels = node.parents.map(p => computeLevel(p));
+      levels[nodeId] = Math.max(...parentLevels) + 1;
+      return levels[nodeId];
+    };
+    nodes.forEach(n => computeLevel(n.nodeId));
+
+    const maxLevel = Math.max(...Object.values(levels));
+    const layers = [];
+    for (let i = 0; i <= maxLevel; i++) {
+      layers.push(nodes.filter(n => levels[n.nodeId] === i));
+    }
+    return layers;
+  }
+
+  _renderGantt() {
+    const gantt = document.getElementById('dag-gantt');
+    if (!gantt) return;
+
+    const nodes = MockData.dagNodes;
+    const maxDuration = Math.max(...nodes.filter(n => n.duration).map(n => n.duration), 1);
+    let html = '';
+    nodes.forEach(n => {
+      const pct = n.duration ? Math.max((n.duration / maxDuration) * 100, 5) : (n.status === 'running' ? 60 : 2);
+      const left = n.parents.length === 0 ? 0 : 10 + Math.random() * 20;
+      html += `<div class="gantt-row">
+        <span class="gantt-label">${n.name.length > 14 ? n.name.substring(0,14) + '..' : n.name}</span>
+        <div class="gantt-track"><div class="gantt-bar ${n.status}" style="left:${left}%;width:${pct - left}%"></div></div>
+      </div>`;
+    });
+    gantt.innerHTML = html;
+  }
+
+  _renderDagHistory() {
+    const body = document.getElementById('dag-history-body');
+    if (!body) return;
+    let html = '';
+    MockData.dagHistory.forEach(h => {
+      const cls = h.status.toLowerCase();
+      html += `<tr>
+        <td>${h.iterationId}</td>
+        <td><span class="status-pill ${cls}">${h.status}</span></td>
+        <td>${h.duration}</td>
+        <td>${h.completed}/${h.total}${h.failed ? ' \u00B7 ' + h.failed + ' failed' : ''}</td>
+        <td>${h.startTime}</td>
+      </tr>`;
+    });
+    body.innerHTML = html;
+  }
+
+  // ── Spark Inspector ──
+  _renderSparkInspector() {
+    const panel = document.getElementById('view-spark');
+    if (!panel) return;
+
+    panel.innerHTML = `<div class="spark-inspector">
+      <div class="spark-list-panel">
+        <div class="spark-list-header">Spark Requests <span style="margin-left:auto;color:var(--text-dim)">${MockData.sparkRequests.length}</span></div>
+        <div class="spark-list-filters">
+          <button class="spark-filter-btn active">All</button>
+          <button class="spark-filter-btn">2xx</button>
+          <button class="spark-filter-btn">4xx</button>
+          <button class="spark-filter-btn">5xx</button>
+        </div>
+        <div class="spark-list" id="spark-list"></div>
+      </div>
+      <div class="spark-detail-panel" id="spark-detail">
+        <div class="spark-empty-detail">Select a request to view details</div>
+      </div>
+    </div>`;
+
+    const list = document.getElementById('spark-list');
+    MockData.sparkRequests.forEach((req, i) => {
+      const methodCls = req.method.toLowerCase();
+      const statusCls = req.status < 300 ? 's2xx' : req.status < 500 ? 's4xx' : 's5xx';
+      const retryBadge = req.retries > 0 ? `<span class="spark-retries">\u00D7${req.retries}</span>` : '';
+      const el = document.createElement('div');
+      el.className = 'spark-item' + (i === 0 ? ' selected' : '');
+      el.dataset.idx = i;
+      el.innerHTML = `<span class="method-pill ${methodCls}">${req.method}</span>
+        <span class="spark-endpoint">${req.endpoint}</span>
+        <span class="status-code ${statusCls}">${req.status}</span>
+        <span class="spark-duration">${req.duration}ms</span>
+        ${retryBadge}`;
+      el.addEventListener('click', () => {
+        list.querySelectorAll('.spark-item').forEach(s => s.classList.remove('selected'));
+        el.classList.add('selected');
+        this._renderSparkDetail(i);
+      });
+      list.appendChild(el);
+    });
+
+    this._renderSparkDetail(0);
+  }
+
+  _renderSparkDetail(idx) {
+    const detail = document.getElementById('spark-detail');
+    if (!detail) return;
+    const req = MockData.sparkRequests[idx];
+    const methodCls = req.method.toLowerCase();
+    const statusCls = req.status < 300 ? 's2xx' : req.status < 500 ? 's4xx' : 's5xx';
+
+    detail.innerHTML = `
+      <div class="spark-detail-tabs">
+        <button class="spark-detail-tab active">Request</button>
+        <button class="spark-detail-tab">Response</button>
+        <button class="spark-detail-tab">Timing</button>
+      </div>
+      <div class="spark-detail-content">
+        <dl class="spark-kv">
+          <dt>Method</dt><dd><span class="method-pill ${methodCls}">${req.method}</span></dd>
+          <dt>Endpoint</dt><dd>${req.endpoint}</dd>
+          <dt>Status</dt><dd><span class="status-code ${statusCls}">${req.status}</span></dd>
+          <dt>Duration</dt><dd>${req.duration}ms</dd>
+          <dt>Retries</dt><dd>${req.retries}</dd>
+          <dt>Time</dt><dd>${req.timestamp}</dd>
+        </dl>
+        ${req.body ? `<div style="margin-top:var(--space-3)">
+          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:600">REQUEST BODY</div>
+          <div class="spark-code-block">${this._escapeHtml(req.body)}</div>
+        </div>` : ''}
+        <div style="margin-top:var(--space-3)">
+          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:var(--space-1);font-weight:600">RESPONSE</div>
+          <div class="spark-code-block">${this._escapeHtml(req.response)}</div>
+        </div>
+      </div>`;
+  }
+
+  // ── API Playground ──
+  _renderApiPlayground() {
+    const panel = document.getElementById('view-api');
+    if (!panel) return;
+
+    panel.innerHTML = `<div class="api-playground">
+      <div class="api-main">
+        <div class="api-request-section">
+          <div class="api-url-row">
+            <select class="api-method-select"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select>
+            <input class="api-url-input" value="https://api.fabric.microsoft.com/v1/workspaces" placeholder="Enter URL..." />
+            <button class="api-send-btn">Send</button>
+          </div>
+          <div class="api-body-section">
+            <span class="api-body-label">Headers</span>
+            <div style="font-size:var(--text-xs);color:var(--text-dim);font-family:var(--font-mono);padding:var(--space-1) 0">Authorization: Bearer eyJ0eX...  (auto-filled)</div>
+          </div>
+        </div>
+        <div class="api-response-section">
+          <div class="api-response-header">
+            <span class="api-response-status s2xx">200 OK</span>
+            <span class="api-response-timing">342ms</span>
+            <span style="margin-left:auto;font-size:var(--text-xs);color:var(--text-muted)">application/json; charset=utf-8</span>
+          </div>
+          <div class="api-response-body">${this._escapeHtml(JSON.stringify({
+            value: MockData.workspaces.map(ws => ({ id: ws.id, displayName: ws.displayName, type: ws.type, state: ws.state })),
+            continuationToken: null,
+            continuationUri: null,
+          }, null, 2))}</div>
+        </div>
+      </div>
+      <div class="api-sidebar">
+        <div class="api-sidebar-section">
+          <div class="api-sidebar-title">Saved Requests</div>
+          ${this._renderApiSaved()}
+        </div>
+        <div class="api-sidebar-section">
+          <div class="api-sidebar-title">History</div>
+          ${this._renderApiHistory()}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  _renderApiSaved() {
+    let html = '';
+    let lastGroup = '';
+    MockData.savedRequests.forEach(req => {
+      if (req.group !== lastGroup) {
+        html += `<div class="api-sidebar-group-label">${req.group}</div>`;
+        lastGroup = req.group;
+      }
+      const cls = req.method.toLowerCase();
+      html += `<div class="api-saved-item"><span class="method-pill ${cls}">${req.method}</span><span>${req.name}</span></div>`;
+    });
+    return html;
+  }
+
+  _renderApiHistory() {
+    return MockData.apiHistory.map(h => {
+      const cls = h.method.toLowerCase();
+      const sCls = h.status < 300 ? 's2xx' : h.status < 500 ? 's4xx' : 's5xx';
+      return `<div class="api-history-item">
+        <span class="method-pill ${cls}">${h.method}</span>
+        <span>${h.url.length > 30 ? h.url.substring(0, 30) + '...' : h.url}</span>
+        <span class="api-history-status status-code ${sCls}">${h.status}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Environment ──
+  _renderEnvironment() {
+    const panel = document.getElementById('view-environment');
+    if (!panel) return;
+
+    panel.innerHTML = `<div class="environment-view">
+      <div class="env-tabs">
+        <button class="env-tab active" data-tab="flags">Feature Flags</button>
+        <button class="env-tab" data-tab="lock">Lock Monitor</button>
+        <button class="env-tab" data-tab="orphans">Orphaned Resources</button>
+      </div>
+      <div class="env-content" id="env-content"></div>
+    </div>`;
+
+    // Bind tab clicks
+    panel.querySelectorAll('.env-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        panel.querySelectorAll('.env-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this._activeEnvTab = tab.dataset.tab;
+        this._renderEnvContent();
+      });
+    });
+
+    this._renderEnvContent();
+  }
+
+  _renderEnvContent() {
+    const content = document.getElementById('env-content');
+    if (!content) return;
+
+    if (this._activeEnvTab === 'flags') this._renderFeatureFlags(content);
+    else if (this._activeEnvTab === 'lock') this._renderLockMonitor(content);
+    else if (this._activeEnvTab === 'orphans') this._renderOrphanedResources(content);
+  }
+
+  _renderFeatureFlags(el) {
+    const rings = ['onebox', 'test', 'daily', 'cst', 'dxt', 'msit', 'prod'];
+    el.innerHTML = `
+      <div class="ff-toolbar">
+        <input class="ff-search" placeholder="Search flags..." />
+        <div class="ff-group-tabs">
+          <button class="ff-group-tab active">All (${MockData.featureFlags.length})</button>
+          <button class="ff-group-tab">Enabled</button>
+          <button class="ff-group-tab">Partial</button>
+          <button class="ff-group-tab">Disabled</button>
+        </div>
+      </div>
+      <table class="ff-table">
+        <thead><tr>
+          <th>Flag Name</th>
+          <th>Description</th>
+          ${rings.map(r => `<th>${r}</th>`).join('')}
+          <th>Override</th>
+        </tr></thead>
+        <tbody>
+          ${MockData.featureFlags.map(f => `<tr>
+            <td>${f.name}</td>
+            <td>${f.description}</td>
+            ${rings.map(r => {
+              const v = f.rings[r];
+              if (v === true) return '<td class="ff-cell-on">\u2713</td>';
+              if (v === 'conditional') return '<td class="ff-cell-conditional" title="Conditional: Requires WorkspaceObjectId">\u25D0</td>';
+              return '<td class="ff-cell-off">\u2717</td>';
+            }).join('')}
+            <td>
+              <input type="checkbox" class="ff-override-toggle" ${f.override === true ? 'checked' : ''} ${f.override === false ? 'data-forced-off="true"' : ''}>
+              ${f.override !== null ? '<span class="ff-override-indicator"></span>' : ''}
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  _renderLockMonitor(el) {
+    const lock = MockData.lockState;
+    el.innerHTML = `
+      <div class="lock-card">
+        <div class="lock-status-row">
+          <span class="lock-indicator ${lock.locked ? 'locked' : 'unlocked'}"></span>
+          <span class="lock-label">${lock.locked ? 'Locked' : 'Unlocked'}</span>
+        </div>
+        ${lock.locked ? `
+        <div class="lock-meta">
+          Holder: <strong>${lock.holder}</strong><br>
+          Locked since: ${lock.age} ago
+        </div>` : ''}
+        <div class="lock-actions">
+          <button class="lock-btn danger">Force Unlock</button>
+          <button class="lock-btn">Refresh</button>
+        </div>
+      </div>
+      <div style="margin-top:var(--space-4)">
+        <div class="dag-section-title">Recent Lock Events</div>
+        <table class="dag-history-table" style="max-width:480px">
+          <thead><tr><th>Event</th><th>Iteration</th><th>Time</th></tr></thead>
+          <tbody>
+            <tr><td>Locked</td><td>${lock.holder}</td><td>2 min ago</td></tr>
+            <tr><td>Unlocked</td><td>${MockData.dagHistory[1].iterationId}</td><td>35 min ago</td></tr>
+            <tr><td>Locked</td><td>${MockData.dagHistory[1].iterationId}</td><td>38 min ago</td></tr>
+            <tr><td>Force Unlock</td><td>${MockData.dagHistory[2].iterationId}</td><td>1h 32m ago</td></tr>
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  _renderOrphanedResources(el) {
+    const folders = MockData.orphanedFolders;
+    const totalSize = '175.1 MB';
+    el.innerHTML = `
+      <div style="margin-bottom:var(--space-3)">
+        <span class="orphan-total">${folders.length} orphaned folders \u00B7 ${totalSize} total</span>
+        <button class="orphan-clean-btn" style="margin-left:var(--space-3)">Clean All</button>
+      </div>
+      <table class="orphan-table">
+        <thead><tr><th>Path</th><th>Size</th><th>Age</th><th></th></tr></thead>
+        <tbody>
+          ${folders.map(f => `<tr>
+            <td>${f.path}</td>
+            <td>${f.size}</td>
+            <td>${f.age}</td>
+            <td><button class="lock-btn" style="font-size:var(--text-xs);padding:1px 8px">Delete</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // ── Token Inspector ──
+  _renderTokenInspector() {
+    const existing = document.getElementById('token-inspector');
+    if (existing) return;
+
+    const drawer = document.createElement('div');
+    drawer.id = 'token-inspector';
+    drawer.className = 'token-inspector';
+    drawer.innerHTML = `
+      <div class="ti-header">
+        <span class="ti-title">Token Inspector</span>
+        <button class="ti-close" id="ti-close-btn">\u2715</button>
+      </div>
+      <div class="ti-body">
+        ${this._renderTokenCard(MockData.tokenInfo.bearer)}
+        ${this._renderTokenCard(MockData.tokenInfo.mwc)}
+        <div class="ti-actions">
+          <button class="ti-btn primary">Refresh Token</button>
+          <button class="ti-btn">Copy Bearer</button>
+          <button class="ti-btn">Copy MWC</button>
+        </div>
+      </div>`;
+    document.body.appendChild(drawer);
+  }
+
+  _renderTokenCard(token) {
+    const pct = Math.min((token.expiresIn / 60) * 100, 100);
+    const color = token.expiresIn > 10 ? 'green' : token.expiresIn > 5 ? 'amber' : 'red';
+    return `<div class="ti-token-card">
+      <div class="ti-token-header">
+        <span>${token.type}</span>
+        <span class="ti-type-badge">${token.expiresIn}m remaining</span>
+      </div>
+      <div class="ti-expiry-bar"><div class="ti-expiry-fill ${color}" style="width:${pct}%"></div></div>
+      <div class="ti-token-body">
+        <dl class="ti-claims">
+          ${Object.entries(token.claims).map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}
+        </dl>
+        <div class="ti-scopes">
+          ${token.scopes.map(s => `<span class="ti-scope-pill">${s}</span>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── File Change Notification ──
+  _renderFileChangeBar() {
+    const bar = document.getElementById('file-change-bar');
+    if (!bar) return;
+    bar.innerHTML = `Files changed: <span class="fc-files">GTSBasedSparkClient.cs, WorkloadApp.cs</span>
+      <div style="margin-left:auto;display:flex;gap:var(--space-2)">
+        <button class="fc-btn primary">Re-deploy</button>
+        <button class="fc-btn" id="fc-dismiss">Dismiss</button>
+      </div>`;
+  }
+
+  // ── Interactions ──
+  _bindInteractions() {
+    // Token inspector toggle
+    const tokenEl = document.getElementById('token-health');
+    if (tokenEl) {
+      tokenEl.style.cursor = 'pointer';
+      tokenEl.addEventListener('click', () => {
+        const drawer = document.getElementById('token-inspector');
+        if (drawer) drawer.classList.toggle('open');
+      });
+    }
+    const tiClose = document.getElementById('ti-close-btn');
+    if (tiClose) tiClose.addEventListener('click', () => {
+      const drawer = document.getElementById('token-inspector');
+      if (drawer) drawer.classList.remove('open');
+    });
+
+    // File change dismiss
+    const fcDismiss = document.getElementById('fc-dismiss');
+    if (fcDismiss) fcDismiss.addEventListener('click', () => {
+      const bar = document.getElementById('file-change-bar');
+      if (bar) bar.style.display = 'none';
+    });
+
+    // Bookmarks drawer toggle
+    const bmBtn = document.getElementById('open-bookmarks-btn');
+    if (bmBtn) bmBtn.addEventListener('click', () => {
+      const drawer = document.getElementById('bookmarks-drawer');
+      if (drawer) drawer.classList.toggle('open');
+    });
+
+    // Workspace tree clicks
+    const tree = document.getElementById('ws-tree-content');
+    if (tree) {
+      tree.querySelectorAll('.ws-tree-item').forEach(item => {
+        item.addEventListener('click', () => {
+          tree.querySelectorAll('.ws-tree-item').forEach(i => i.classList.remove('selected'));
+          item.classList.add('selected');
+        });
+      });
+    }
+  }
+
+  // ── Helpers ──
+  _setTextSafe(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  }
+
+  _formatNum(n) {
+    return n.toLocaleString();
+  }
+
+  _formatBytes(bytes) {
+    if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
+    if (bytes >= 1e6) return (bytes / 1e6).toFixed(0) + ' MB';
+    if (bytes >= 1e3) return (bytes / 1e3).toFixed(0) + ' KB';
+    return bytes + ' B';
+  }
+
+  _relativeTime(isoStr) {
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return mins + 'm ago';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h ago';
+    return Math.floor(hours / 24) + 'd ago';
+  }
+
+  _escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+}
+
 // === js/main.js ===
 /**
  * EDOG Studio — Main Application Orchestrator
@@ -8003,6 +9956,17 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Start the application
   new EdogLogViewer().init();
+
+  // Initialize mock data rendering for prototype — run after real components
+  // settle, then override their failed API results with mock data
+  if (typeof MockRenderer !== 'undefined') {
+    setTimeout(() => {
+      const mock = new MockRenderer();
+      mock.init();
+      // Re-apply mock topbar every 2s to prevent real polling from overwriting
+      setInterval(() => mock._renderTopBar(), 2000);
+    }, 500);
+  }
 });
 
   </script>

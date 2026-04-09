@@ -922,4 +922,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Start the application
   new EdogLogViewer().init();
+
+  // Initialize mock data rendering for prototype — run after real components
+  // settle, then override their failed API results with mock data
+  if (typeof MockRenderer !== 'undefined') {
+    setTimeout(() => {
+      const mock = new MockRenderer();
+      mock.init();
+      // Re-apply mock topbar every 2s to prevent real polling from overwriting
+      setInterval(() => mock._renderTopBar(), 2000);
+    }, 500);
+  }
 });

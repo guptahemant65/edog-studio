@@ -1,0 +1,97 @@
+/* ── API Playground ── */
+.api-playground { display: flex; height: 100%; overflow: hidden; }
+
+.api-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.api-request-section {
+  padding: var(--space-3); border-bottom: 1px solid var(--border);
+  background: var(--surface); display: flex; flex-direction: column; gap: var(--space-2);
+}
+
+.api-url-row { display: flex; gap: var(--space-2); align-items: center; }
+
+.api-method-select {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--border-bright);
+  border-radius: var(--space-1); background: var(--surface-2);
+  color: var(--text); font-family: var(--font-mono); font-size: var(--text-sm);
+  font-weight: 600; min-width: 90px; cursor: pointer;
+}
+
+.api-url-input {
+  flex: 1; padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-bright); border-radius: var(--space-1);
+  background: var(--surface-2); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--text-sm);
+}
+.api-url-input:focus { outline: none; border-color: var(--accent); }
+
+.api-send-btn {
+  padding: var(--space-1) var(--space-4);
+  background: var(--accent); color: #fff; border: none; border-radius: var(--space-1);
+  font-family: var(--font-body); font-size: var(--text-sm); font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+}
+.api-send-btn:hover { opacity: 0.9; }
+
+.api-body-section { display: flex; flex-direction: column; gap: var(--space-1); }
+.api-body-label { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+.api-body-input {
+  width: 100%; min-height: 80px; padding: var(--space-2);
+  border: 1px solid var(--border); border-radius: var(--space-1);
+  background: var(--surface-2); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  resize: vertical;
+}
+
+.api-response-section {
+  flex: 1; display: flex; flex-direction: column;
+  overflow: hidden; background: var(--bg);
+}
+
+.api-response-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.api-response-status {
+  padding: 2px var(--space-2); border-radius: 2px;
+  font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600;
+}
+.api-response-status.s2xx { background: rgba(5,150,105,0.12); color: var(--status-succeeded); }
+.api-response-status.s4xx { background: rgba(217,119,6,0.12); color: var(--level-warning); }
+.api-response-status.s5xx { background: rgba(220,38,38,0.12); color: var(--level-error); }
+
+.api-response-timing { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-mono); }
+
+.api-response-body {
+  flex: 1; overflow: auto; padding: var(--space-3);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  line-height: 1.6; white-space: pre-wrap; color: var(--text);
+}
+
+/* Sidebar: saved + history */
+.api-sidebar {
+  width: 280px; border-left: 1px solid var(--border);
+  background: var(--surface); display: flex; flex-direction: column;
+  overflow-y: auto;
+}
+
+.api-sidebar-section { border-bottom: 1px solid var(--border); padding: var(--space-3); }
+.api-sidebar-title {
+  font-size: var(--text-xs); font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: var(--space-2);
+}
+.api-sidebar-group-label { font-size: var(--text-xs); color: var(--text-muted); margin: var(--space-2) 0 var(--space-1); font-weight: 500; }
+
+.api-saved-item, .api-history-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2); border-radius: var(--space-1);
+  cursor: pointer; font-size: var(--text-xs);
+  transition: background var(--transition-fast);
+}
+.api-saved-item:hover, .api-history-item:hover { background: var(--surface-2); }
+.api-saved-item .method-pill, .api-history-item .method-pill { font-size: 9px; padding: 0 var(--space-1); }
+.api-saved-item span, .api-history-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.api-history-status { font-family: var(--font-mono); min-width: 28px; text-align: right; }
