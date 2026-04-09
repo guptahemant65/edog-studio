@@ -702,14 +702,15 @@ View the MLV SQL definitions that make up each DAG node, right in the UI.
 5. Top bar with token health, service status, git info
 6. Sidebar navigation with phase-aware enabling/disabling
 7. Command Palette (Ctrl+K)
+8. Token Inspector — ALL tokens in one panel: Bearer (AAD), MWC (per workspace/lakehouse/capacity, multiple cached), MWC (Notebook), MWC (ML), OBO/S2S (captured from FLT runtime via interceptor). Each token shows: type, audience, TTL with color (green >10m, amber 5-10m, red <5m), decoded JWT claims on click, copy button. Token history timeline: every token event (captured, refreshed, expired) with timestamps. Auto-refresh 5 min before expiry. "Wrong token scope" detection when API calls fail.
+9. System Files Explorer — runtime view of all FLT internal file operations on OneLake: DagExecutionMetrics (dag.json, node metrics, index files), lock files with age/holder, dagsettings.json, environment.json, MLV execution definitions, sys_* metrics tables with marker files. Audited: when created, what was written, by whom. Served via C# interceptor → WebSocket (same pattern as log capture). Connected mode only.
 
 ### V1.1 (next — completes the cockpit)
-8. DAG Studio (graph + Gantt + controls + history)
-9. API Playground
-10. Token Inspector drawer
-11. Environment panel (feature flags + lock monitor + orphaned resources)
-12. Error Code Decoder
-13. File change detection + re-deploy prompt
+10. DAG Studio (graph + Gantt + controls + history)
+11. API Playground
+12. Environment panel (feature flags + lock monitor + orphaned resources)
+13. Error Code Decoder
+14. File change detection + re-deploy prompt
 
 ### V2 (future — advanced features)
 14. Spark Inspector (requires new C# interceptor)
