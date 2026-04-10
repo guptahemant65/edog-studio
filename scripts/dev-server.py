@@ -633,4 +633,8 @@ if __name__ == "__main__":
     print(f"  HTML:    {HTML_PATH}")
     print(f"  Proxy:   /api/fabric/* → {REDIRECT_HOST}/v1/*")
     print("  Open:    http://127.0.0.1:5555/edog-logs.html")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nServer stopped.")
+        server.server_close()
