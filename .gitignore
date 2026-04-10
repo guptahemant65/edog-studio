@@ -27,6 +27,8 @@ Thumbs.db
 .edog-token-cache
 .edog-bearer-cache
 .edog-session.json
+.edog-jscheck-tmp.js
+.edog-jscheck-runner.js
 .edog-changes.patch
 .edog-command/
 edog-feature-overrides.json

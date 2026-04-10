@@ -5551,6 +5551,17 @@ mark {
   </style>
 </head>
 <body>
+<script>
+/* Global error overlay — makes silent JS death impossible */
+window.onerror = function(msg, src, line, col, err) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c53030;color:#fff;padding:10px 16px;font:13px/1.5 monospace;white-space:pre-wrap;cursor:pointer';
+  d.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
+  d.title = 'Click to dismiss';
+  d.onclick = function() { d.remove(); };
+  document.body.prepend(d);
+};
+</script>
 
   <!-- Top Bar (32px) -->
   <header id="topbar" class="topbar">

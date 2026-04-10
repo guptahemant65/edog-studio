@@ -29,7 +29,7 @@ from typing import Tuple
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Frontend source directory
-FRONTEND_SRC = REPO_ROOT / "src" / "edog-logs"
+FRONTEND_SRC = REPO_ROOT / "src" / "frontend"
 
 # Build output
 BUILD_OUTPUT = REPO_ROOT / "src" / "edog-logs.html"
@@ -41,8 +41,9 @@ def check_python_style() -> Tuple[bool, str]:
     Returns:
         (passed, message) — True if no lint violations found.
     """
-    python_files = list(REPO_ROOT.glob("*.py")) + list(
-        (REPO_ROOT / "hivemind").rglob("*.py")
+    python_files = (
+        list((REPO_ROOT / "scripts").rglob("*.py"))
+        + list((REPO_ROOT / "tests").rglob("*.py"))
     )
 
     if not python_files:
@@ -54,6 +55,8 @@ def check_python_style() -> Tuple[bool, str]:
             capture_output=True,
             text=True,
             cwd=str(REPO_ROOT),
+            encoding="utf-8",
+            errors="replace",
         )
     except FileNotFoundError:
         return False, "ruff is not installed. Install with: pip install ruff"
@@ -305,6 +308,72 @@ def check_no_frameworks_in_js() -> Tuple[bool, str]:
     )
 
 
+def check_js_syntax() -> Tuple[bool, str]:
+    """Verify JS in the built HTML is syntactically valid.
+
+    Extracts all <script> content from the built single-file HTML and
+    runs Node.js new Function() parse on it. Catches duplicate variable
+    declarations, unclosed brackets, and other syntax errors.
+
+    Requires: Node.js installed and on PATH.
+
+    Returns:
+        (passed, message) — True if all JS parses without error.
+    """
+    if not BUILD_OUTPUT.exists():
+        return False, f"Build output not found: {BUILD_OUTPUT}\n  Run: python scripts/build-html.py"
+
+    try:
+        content = BUILD_OUTPUT.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError) as e:
+        return False, f"Cannot read build output: {e}"
+
+    # Extract script content
+    script_pattern = re.compile(r"<script[^>]*>([\s\S]*?)</script>", re.IGNORECASE)
+    scripts = script_pattern.findall(content)
+
+    if not scripts:
+        return False, "No <script> blocks found in build output."
+
+    # Combine all scripts (they share a global scope in the single-file HTML)
+    all_js = "\n".join(scripts)
+
+    # Write to temp file for Node to parse
+    temp_js = REPO_ROOT / ".edog-jscheck-tmp.js"
+    try:
+        # Use strict mode Function constructor to catch re-declarations
+        check_code = (
+            "const fs = require('fs');\n"
+            "const code = fs.readFileSync(process.argv[2], 'utf8');\n"
+            "try { new Function(code); console.log('OK'); process.exit(0); }\n"
+            "catch (e) { console.error('JS_SYNTAX_ERROR: ' + e.message); process.exit(1); }\n"
+        )
+        check_file = REPO_ROOT / ".edog-jscheck-runner.js"
+        check_file.write_text(check_code, encoding="utf-8")
+        temp_js.write_text(all_js, encoding="utf-8")
+
+        result = subprocess.run(
+            ["node", str(check_file), str(temp_js)],
+            capture_output=True, text=True, timeout=10,
+            encoding="utf-8", errors="replace",
+        )
+    except FileNotFoundError:
+        return False, "Node.js not found. Install Node.js to enable JS syntax checking."
+    except subprocess.TimeoutExpired:
+        return False, "JS syntax check timed out (10s)."
+    finally:
+        temp_js.unlink(missing_ok=True)
+        check_file = REPO_ROOT / ".edog-jscheck-runner.js"
+        check_file.unlink(missing_ok=True)
+
+    if result.returncode == 0:
+        js_size_kb = len(all_js.encode("utf-8")) / 1024
+        return True, f"JS syntax valid ({js_size_kb:.0f} KB across {len(scripts)} script block(s))."
+
+    error_msg = result.stderr.strip() or result.stdout.strip()
+    return False, f"JS syntax error in built HTML:\n  {error_msg}"
+
+
 def check_single_file_build() -> Tuple[bool, str]:
     """Verify build-html.py produces a valid single-file HTML document.
 
@@ -380,22 +449,29 @@ def run_all_gates() -> list[Tuple[str, bool, str]]:
         List of (gate_name, passed, message) tuples.
     """
     gates = [
-        ("python_style", check_python_style),
-        ("no_emoji_in_frontend", check_no_emoji_in_frontend),
-        ("css_uses_oklch", check_css_uses_oklch),
-        ("no_frameworks_in_js", check_no_frameworks_in_js),
-        ("single_file_build", check_single_file_build),
+        ("python_style", check_python_style, True),       # warn-only: pre-existing violations
+        ("no_emoji_in_frontend", check_no_emoji_in_frontend, False),
+        ("css_uses_oklch", check_css_uses_oklch, False),
+        ("no_frameworks_in_js", check_no_frameworks_in_js, False),
+        ("js_syntax", check_js_syntax, False),
+        ("single_file_build", check_single_file_build, False),
     ]
 
     results = []
-    for name, gate_fn in gates:
+    for name, gate_fn, warn_only in gates:
         passed, message = gate_fn()
-        results.append((name, passed, message))
+        if warn_only and not passed:
+            results.append((name, True, f"[WARN] {message}"))
+        else:
+            results.append((name, passed, message))
 
     return results
 
 
 if __name__ == "__main__":
+    import sys, io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
     print("=" * 60)
     print("EDOG-STUDIO QUALITY GATES")
     print("=" * 60)

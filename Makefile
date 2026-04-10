@@ -8,7 +8,7 @@
 PYTHON       ?= python
 PIP          ?= pip
 
-.PHONY: help install lint format test build clean all
+.PHONY: help install lint format test build clean all verify
 
 help: ## Show available targets
 	@echo.
@@ -19,6 +19,7 @@ help: ## Show available targets
 	@echo  format   - Auto-format code with ruff
 	@echo  test     - Run pytest with coverage
 	@echo  build    - Build HTML from templates
+	@echo  verify   - Run ALL quality gates (build + jscheck + lint + test + gates)
 	@echo  clean    - Remove generated / cached files
 	@echo  all      - lint + test + build
 	@echo.
@@ -46,3 +47,6 @@ clean: ## Remove caches and build artifacts
 	@echo Cleaned.
 
 all: lint test build ## Run full pipeline: lint → test → build
+
+verify: ## Run ALL quality gates — MANDATORY before every commit
+	$(PYTHON) scripts/pre-commit.py
