@@ -975,7 +975,7 @@ class WorkspaceExplorer {
 
     // Load tables — show shimmer while fetching
     try {
-      const tablesEl = document.getElementById('ws-tables-list');
+      let tablesEl = document.getElementById('ws-tables-list');
       if (tablesEl) {
         tablesEl.innerHTML =
           '<div class="skel-wrap">' +
@@ -985,7 +985,7 @@ class WorkspaceExplorer {
           '</div>';
       }
       const tables = await this._loadTables(ws.id, lh.id, ws.capacityId);
-      const tablesEl = document.getElementById('ws-tables-list');
+      tablesEl = document.getElementById('ws-tables-list');
       if (!tablesEl) return;
       if (tables.length === 0) {
         tablesEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">No tables found</div>';
@@ -1015,8 +1015,8 @@ class WorkspaceExplorer {
         });
       });
     } catch (err) {
-      const tablesEl = document.getElementById('ws-tables-list');
-      if (tablesEl) tablesEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load tables</div>';
+      const errEl = document.getElementById('ws-tables-list');
+      if (errEl) errEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load tables</div>';
       this._toast(`Tables: ${err.message}`, 'error');
     }
   }
