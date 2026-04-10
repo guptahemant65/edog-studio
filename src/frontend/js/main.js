@@ -925,8 +925,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
   const needsAuth = forceOnboarding || await onboarding.isRequired();
 
-  if (needsAuth) {
-    // Show onboarding overlay, start app when auth completes
+  if (needsAuth && !forceOnboarding) {
+    // Try silent re-auth with last known user before showing onboarding
+    const silentOk = await onboarding.trySilentReauth();
+    if (silentOk) {
+      startApp();
+    } else {
+      await onboarding.show(function onAuthComplete(result) {
+        startApp();
+      });
+    }
+  } else if (needsAuth) {
     await onboarding.show(function onAuthComplete(result) {
       startApp();
     });

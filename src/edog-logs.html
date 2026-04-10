@@ -13073,6 +13073,7 @@ class OnboardingScreen {
     this._selectedCert = null;
     this._certs = [];
     this._stepCount = 0;
+    this._healthData = null;
     this._showcaseTimer = null;
     this._showcaseIndex = 0;
 
@@ -13133,12 +13134,37 @@ class OnboardingScreen {
     try {
       const resp = await fetch('/api/edog/health');
       if (!resp.ok) return true;
-      const data = await resp.json();
-      if (!data.hasBearerToken || !data.tokenHelperBuilt) return true;
-      const remainingSec = data.bearerExpiresIn ?? 0;
+      this._healthData = await resp.json();
+      if (!this._healthData.hasBearerToken || !this._healthData.tokenHelperBuilt) return true;
+      const remainingSec = this._healthData.bearerExpiresIn ?? 0;
       return remainingSec < 300;
     } catch {
       return true;
+    }
+  }
+
+  /**
+   * Attempt silent re-authentication using the last known username.
+   * No UI shown — just calls /api/edog/auth in the background.
+   * @returns {Promise<boolean>} true if re-auth succeeded.
+   */
+  async trySilentReauth() {
+    const lastUser = this._healthData && this._healthData.lastUsername;
+    if (!lastUser) return false;
+
+    try {
+      console.log(`[onboarding] Silent re-auth for ${lastUser}...`);
+      const resp = await fetch('/api/edog/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: lastUser }),
+      });
+      if (!resp.ok) return false;
+      const result = await resp.json();
+      console.log(`[onboarding] Silent re-auth OK — token expires in ${Math.round((result.expiresIn || 0) / 60)} min`);
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -14816,8 +14842,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
   const needsAuth = forceOnboarding || await onboarding.isRequired();
 
-  if (needsAuth) {
-    // Show onboarding overlay, start app when auth completes
+  if (needsAuth && !forceOnboarding) {
+    // Try silent re-auth with last known user before showing onboarding
+    const silentOk = await onboarding.trySilentReauth();
+    if (silentOk) {
+      startApp();
+    } else {
+      await onboarding.show(function onAuthComplete(result) {
+        startApp();
+      });
+    }
+  } else if (needsAuth) {
     await onboarding.show(function onAuthComplete(result) {
       startApp();
     });

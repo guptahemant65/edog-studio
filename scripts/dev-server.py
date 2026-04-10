@@ -22,6 +22,7 @@ PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
 BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
+SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 
@@ -49,6 +50,23 @@ def _read_cache(path: Path) -> tuple:
         return token, expiry
     except Exception:
         return None, None
+
+
+def _save_session(data: dict):
+    """Merge data into the session file."""
+    existing = _load_session()
+    existing.update(data)
+    SESSION_FILE.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+
+
+def _load_session() -> dict:
+    """Load session file or return empty dict."""
+    if not SESSION_FILE.exists():
+        return {}
+    try:
+        return json.loads(SESSION_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
 def _map_path(fabric_path: str) -> str:
@@ -374,6 +392,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 # Cache bearer
                 _write_cache(BEARER_CACHE, token, expiry)
 
+                # Save last authenticated user for auto-reauth
+                _save_session({"lastUsername": upn, "lastAuth": time.time()})
+
                 self._json_response(200, {
                     "token": token,
                     "username": upn,
@@ -390,6 +411,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def _serve_health(self):
         """Pre-flight health check."""
         bearer, bearer_exp = _read_cache(BEARER_CACHE)
+        session = _load_session()
         helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
         if not helper.exists():
             helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
@@ -397,6 +419,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "tokenHelperBuilt": helper.exists(),
             "hasBearerToken": bearer is not None,
             "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,
+            "lastUsername": session.get("lastUsername", ""),
         })
 
     def _serve_mwc_tables(self):
