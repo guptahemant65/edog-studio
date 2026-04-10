@@ -1,10 +1,9 @@
 """Extract and test notebook execution APIs from captured network data."""
-import json
-import urllib.request
-import ssl
 import base64
+import json
+import ssl
+import urllib.request
 import uuid
-import time
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent

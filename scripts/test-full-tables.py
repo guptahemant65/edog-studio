@@ -1,8 +1,8 @@
 """Full MWC table listing test across multiple workspaces/lakehouses."""
-import urllib.request
+import base64
 import json
 import ssl
-import base64
+import urllib.request
 import uuid
 from pathlib import Path
 

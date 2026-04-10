@@ -1,6 +1,6 @@
 """Quick e2e test of the proxy pipeline."""
-import urllib.request
 import json
+import urllib.request
 
 BASE = "http://127.0.0.1:5555"
 

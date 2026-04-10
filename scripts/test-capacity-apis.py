@@ -1,8 +1,8 @@
 """Test ALL capacity-related APIs."""
-import urllib.request
+import base64
 import json
 import ssl
-import base64
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -107,8 +107,9 @@ t("POST /v1.0/myorg/capacities", "POST", "/v1.0/myorg/capacities",
 
 # ── WORKSPACE CAPACITY INFO ──
 print("\n── Workspace → Capacity Info ──")
+_test_env = json.loads(Path(PROJECT_DIR / "config/test-environment.json").read_text())
 ws = t("GET /v1/workspaces/{id} (capacity info)", "GET",
-    f"/v1/workspaces/{Path(PROJECT_DIR / 'config/test-environment.json').read_text().split('workspaceId')[1].split('\"')[2]}")
+    f"/v1/workspaces/{_test_env['workspaceId']}")
 
 # Get all workspaces and show their capacity assignments
 print("\n── All Workspaces + Capacity Mapping ──")

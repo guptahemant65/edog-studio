@@ -1,8 +1,9 @@
 """Test ALL internal capacity management endpoints with fresh token."""
-import urllib.request
+import base64
+import contextlib
 import json
 import ssl
-import base64
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -46,10 +47,8 @@ def t(label, method, path, body=None, skip_admin=False):
     except urllib.error.HTTPError as e:
         err = e.read().decode()[:150]
         ec = ""
-        try:
+        with contextlib.suppress(Exception):
             ec = json.loads(err).get("errorCode", json.loads(err).get("code", json.loads(err).get("error", {}).get("code", "")))
-        except Exception:
-            pass
         print(f"  FAIL {e.code:>3} | {label:<55} | {ec or err[:80]}")
         results.append({"l": label, "ok": False, "code": e.code, "err": ec or err[:80]})
         return None
@@ -83,7 +82,7 @@ t("GET /capacities/{id}/metrics", "GET", f"/capacities/{CAPID}/metrics")
 t("GET /capacities/{id}/admins", "GET", f"/capacities/{CAPID}/admins")
 
 # ── v1.0 ENDPOINTS ──
-print(f"\n── v1.0 Capacity Endpoints ──")
+print("\n── v1.0 Capacity Endpoints ──")
 t("v1.0 capacities list", "GET", "/v1.0/myorg/capacities")
 cap_detail = t("v1.0 capacity detail", "GET", f"/v1.0/myorg/capacities/{CAPID}")
 t("v1.0 capacity workloads", "GET", f"/v1.0/myorg/capacities/{CAPID}/Workloads")
@@ -101,7 +100,7 @@ t("PATCH cap settings", "PATCH", f"/capacities/{CAP_AA}/settings",
   {"displayName": "aa"})
 
 # ── RESIZE / SUSPEND / RESUME (read current state first) ──
-print(f"\n── Resize/Suspend/Resume Endpoints ──")
+print("\n── Resize/Suspend/Resume Endpoints ──")
 t("Resize (to same SKU P3)", "POST", f"/capacities/{CAP_AA}/resize", {"sku": "P3"})
 # Suspend/resume are destructive — just test that endpoint exists
 t("Suspend endpoint check", "POST", f"/capacities/{CAP_AA}/suspend")
@@ -109,7 +108,7 @@ t("Suspend endpoint check", "POST", f"/capacities/{CAP_AA}/suspend")
 cap_state = t("State of aa cap", "GET", f"/capacities/{CAP_AA}/state")
 
 # ── DELETE (DON'T actually delete FMLVCapacity!) ──
-print(f"\n── Delete Endpoint (check existence only) ──")
+print("\n── Delete Endpoint (check existence only) ──")
 # We could delete "aa" but let's just verify the endpoint pattern
 t("DELETE aa cap (CAREFUL)", "DELETE", f"/capacities/{CAP_AA}")
 

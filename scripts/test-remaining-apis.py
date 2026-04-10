@@ -7,12 +7,13 @@ Covers:
 4. Schedule CRUD
 5. getTableDetails + preview result polling
 """
-import urllib.request
+import base64
+import contextlib
 import json
 import ssl
-import base64
-import uuid
 import time
+import urllib.request
+import uuid
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -92,10 +93,8 @@ def t(label, fn):
     except urllib.error.HTTPError as e:
         body = e.read().decode()[:200]
         code = ""
-        try:
+        with contextlib.suppress(Exception):
             code = json.loads(body).get("errorCode", json.loads(body).get("code", ""))
-        except Exception:
-            pass
         print(f"  FAIL {e.code:>3} | {label:<60} | {code or body[:100]}")
         results.append({"l": label, "ok": False, "code": e.code, "err": code or body[:100]})
         return None
@@ -143,10 +142,10 @@ if items_resp:
         nb = notebooks[0]
         nb_name = nb["displayName"]
         print(f"  Found notebook: {nb_name} ({nb['id'][:12]})")
-        t(f"PATCH item (notebook rename)", lambda: bearer("PATCH",
+        t("PATCH item (notebook rename)", lambda: bearer("PATCH",
             f"/v1/workspaces/{TEST_WSID}/items/{nb['id']}",
             {"displayName": nb_name + "_renamed"}))
-        t(f"PATCH item (notebook rename back)", lambda: bearer("PATCH",
+        t("PATCH item (notebook rename back)", lambda: bearer("PATCH",
             f"/v1/workspaces/{TEST_WSID}/items/{nb['id']}",
             {"displayName": nb_name}))
 
@@ -166,7 +165,7 @@ if caps:
     cap_list = caps.get("value", [])
     print(f"  Found {len(cap_list)} capacities")
     for c in cap_list[:5]:
-        print(f"    - {str(c.get('displayName') or '?'):30s}  id={str(c.get('id') or '?')[:12]}  sku={c.get('sku', '?')}  region={c.get('region', '?')}")
+        print(f"    - {c.get('displayName') or '?'!s:30s}  id={str(c.get('id') or '?')[:12]}  sku={c.get('sku', '?')}  region={c.get('region', '?')}")
     if len(cap_list) > 5:
         print(f"    ... and {len(cap_list) - 5} more")
 

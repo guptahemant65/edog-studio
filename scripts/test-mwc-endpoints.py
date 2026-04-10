@@ -1,8 +1,8 @@
 """Test MWC token generation + schema-enabled table listing + DAG endpoints."""
-import urllib.request
+import base64
 import json
 import ssl
-import base64
+import urllib.request
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -68,7 +68,7 @@ def test_cap(label, path, token=mwc):
 
 
 # Step 2: Schema-enabled table listing
-print(f"\n=== 2. Table Listing (capacity host, MWC token) ===")
+print("\n=== 2. Table Listing (capacity host, MWC token) ===")
 print(f"  Capacity host: {cap_host}")
 test_cap("Schema LH tables (DataArtifact/dbo)", f"{base}/artifacts/DataArtifact/{SCHEMA_LHID}/schemas/dbo/tables")
 test_cap("Non-schema LH tables (Lakehouse)", f"{base}/artifacts/Lakehouse/{LHID}/tables")
@@ -77,7 +77,7 @@ test_cap("Non-schema LH tables (Lakehouse)", f"{base}/artifacts/Lakehouse/{LHID}
 test_cap("Schema LH via public path (expect 400)", f"{base}/lakehouses/{SCHEMA_LHID}/tables")
 
 # Step 3: DAG endpoints
-print(f"\n=== 3. DAG Endpoints (capacity host, MWC token) ===")
+print("\n=== 3. DAG Endpoints (capacity host, MWC token) ===")
 lt_base = f"{base}/lakehouses/{SCHEMA_LHID}/liveTable"
 test_cap("Get latest DAG", f"{lt_base}/getLatestDag?showExtendedLineage=true")
 test_cap("DAG settings", f"{lt_base}/settings")
@@ -85,13 +85,13 @@ test_cap("List iteration IDs", f"{lt_base}/listDAGExecutionIterationIds")
 test_cap("MLV execution definitions", f"{lt_base}/mlvExecutionDefinitions")
 
 # Step 4: Maintenance endpoints
-print(f"\n=== 4. Maintenance Endpoints (capacity host, MWC token) ===")
+print("\n=== 4. Maintenance Endpoints (capacity host, MWC token) ===")
 maint_base = lt_base.replace("/liveTable", "/liveTableMaintenance")
 test_cap("Get locked DAG execution", f"{maint_base}/getLockedDAGExecutionIteration")
 test_cap("List orphaned folders", f"{maint_base}/listOrphanedIndexFolders")
 
 # Step 5: Ping (no auth)
-print(f"\n=== 5. Service Health ===")
+print("\n=== 5. Service Health ===")
 ping_path = f"/webapi/capacities/{CAPID}/workloads/LiveTable/LiveTableService/automatic/publicUnprotected/ping"
 try:
     r = urllib.request.Request(cap_host + ping_path)

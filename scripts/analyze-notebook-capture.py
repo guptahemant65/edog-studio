@@ -31,6 +31,6 @@ for ep in sorted(unique, key=lambda x: x["pattern"]):
 for cat, lines in cats.items():
     if lines:
         print(f"=== {cat} ({len(lines)}) ===")
-        for l in lines:
-            print(f"  {l}")
+        for line in lines:
+            print(f"  {line}")
         print()

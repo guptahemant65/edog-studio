@@ -8,8 +8,8 @@ import json
 import ssl
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -65,7 +65,7 @@ def main():
     # Check if we already have a test environment
     if ENV_FILE.exists():
         env = json.loads(ENV_FILE.read_text())
-        print(f"Existing test environment found:")
+        print("Existing test environment found:")
         print(f"  Workspace: {env.get('workspaceName')} ({env.get('workspaceId', '')[:12]}...)")
         print(f"  Lakehouse: {env.get('lakehouseName')} ({env.get('lakehouseId', '')[:12]}...)")
         resp = input("Re-use existing? [Y/n] ").strip().lower()
@@ -143,7 +143,7 @@ def main():
             err = json.loads(e.read().decode() if hasattr(e, 'read') else '{}')
             ec = err.get("errorCode", "?")
             if "Schemas" in ec:
-                print(f"  Tables endpoint returned 400 (schemas enabled) — this lakehouse has schemas.")
+                print("  Tables endpoint returned 400 (schemas enabled) — this lakehouse has schemas.")
                 print("  This is a known issue. Tables listing works only for non-schema lakehouses.")
             else:
                 print(f"  Tables endpoint returned 400: {ec}")

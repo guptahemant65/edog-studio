@@ -1,10 +1,10 @@
 """Poll LRO results from notebook getDefinition and RunNotebook."""
-import urllib.request
+import base64
 import json
 import ssl
-import base64
-import uuid
 import time
+import urllib.request
+import uuid
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent

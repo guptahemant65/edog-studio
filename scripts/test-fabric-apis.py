@@ -1,10 +1,12 @@
 """Comprehensive Fabric API endpoint test — maps what works, what doesn't."""
-import urllib.request
+import base64
+import contextlib
 import json
 import ssl
-import base64
+import urllib.request
+from pathlib import Path
 
-raw = open(".edog-bearer-cache").read().strip()
+raw = Path(".edog-bearer-cache").read_text().strip()
 _, bearer = base64.b64decode(raw.encode()).decode().split("|", 1)
 ctx = ssl.create_default_context()
 META = "https://biazure-int-edog-redirect.analysis-df.windows.net"
@@ -37,10 +39,8 @@ def test(host, path, method="GET", body=None, label=""):
         return parsed
     except urllib.error.HTTPError as e:
         body_text = ""
-        try:
+        with contextlib.suppress(Exception):
             body_text = e.read().decode()[:200]
-        except Exception:
-            pass
         print(f"  FAIL {e.code:>3} | {label:<45} | {body_text[:100]}")
         results.append({"label": label, "status": "FAIL", "code": e.code, "error": body_text[:200], "path": path, "host": host})
         return None

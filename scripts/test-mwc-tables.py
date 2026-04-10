@@ -1,8 +1,8 @@
 """Test real table listing with MwcToken auth on FMLVWS TestLH."""
-import urllib.request
+import base64
 import json
 import ssl
-import base64
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -35,7 +35,7 @@ host = f"https://{target}"
 base = f"/webapi/capacities/{CAPID}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{WSID}"
 
 print(f"Host: {host}")
-print(f"Auth: MwcToken (not Bearer)")
+print("Auth: MwcToken (not Bearer)")
 print()
 
 # Schema-enabled table listing

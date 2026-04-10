@@ -6,12 +6,13 @@ Tests against:
 
 Run: python scripts/test-all-apis.py
 """
-import urllib.request
+import base64
+import contextlib
 import json
 import ssl
-import base64
-import uuid
 import time
+import urllib.request
+import uuid
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -98,10 +99,8 @@ def test(label, fn):
     except urllib.error.HTTPError as e:
         err_body = e.read().decode()[:150]
         err_code = ""
-        try:
+        with contextlib.suppress(Exception):
             err_code = json.loads(err_body).get("errorCode", json.loads(err_body).get("code", ""))
-        except Exception:
-            pass
         print(f"  FAIL {e.code:>3} | {label:<55} | {err_code or err_body[:80]}")
         results.append({"label": label, "ok": False, "code": e.code, "error": err_code or err_body[:80]})
         return None
@@ -264,9 +263,9 @@ try:
                 print(f"  DAG response keys: {list(dag_g.keys())[:10]}")
                 print(f"  First 300 chars: {json.dumps(dag_g)[:300]}")
 
-        test(f"DAG settings (gapatws)", lambda: mwc_req("GET", host_g,
+        test("DAG settings (gapatws)", lambda: mwc_req("GET", host_g,
             f"{lt_g}/settings", mwc_g, GAPAT_LHID))
-        test(f"iterations (gapatws)", lambda: mwc_req("GET", host_g,
+        test("iterations (gapatws)", lambda: mwc_req("GET", host_g,
             f"{lt_g}/listDAGExecutionIterationIds", mwc_g, GAPAT_LHID))
 except Exception as e:
     print(f"  gapatws test failed: {e}")

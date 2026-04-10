@@ -1,8 +1,8 @@
 """Parse capacity health + rollout data."""
-import urllib.request
+import base64
 import json
 import ssl
-import base64
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -45,7 +45,7 @@ for c in caps:
     print(f"  {name:35s}  sku={sku:6s}  state={state}  vcores={vcores}  mem={mem}GB  mode={mode}  region={region}  id={cid}")
 
 # Full keys of first capacity
-print(f"\nFull keys of first capacity:")
+print("\nFull keys of first capacity:")
 if caps:
     print(f"  top: {list(caps[0].keys())}")
     print(f"  configuration: {list(caps[0].get('configuration', {}).keys())}")
@@ -64,7 +64,7 @@ if health:
         cu_usage = h_entry.get("cuUsagePercent", h_entry.get("cuUsage", "?"))
         print(f"  cap={cid}  throttled={throttled}  health={health_score}  cu={cu_usage}")
     # Full dump of first
-    print(f"\n  First health entry (full):")
+    print("\n  First health entry (full):")
     print(f"  {json.dumps(health[0], indent=2)[:600]}")
 
 # Rollout errors

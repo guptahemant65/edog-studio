@@ -8,6 +8,7 @@ Uses Playwright (same as edog.py auth) to:
 Run: python scripts/capture-capacity-network.py
 """
 import asyncio
+import contextlib
 import json
 import re
 import time
@@ -86,10 +87,8 @@ async def main():
 
         # Login flow
         print("Navigating to Power BI portal...")
-        try:
+        with contextlib.suppress(Exception):
             await page.goto("https://powerbi-df.analysis-df.windows.net/", wait_until="domcontentloaded", timeout=60000)
-        except Exception:
-            pass
 
         print("Handling login...")
         try:
@@ -115,10 +114,8 @@ async def main():
 
         # Navigate to capacity management
         print(f"\nNavigating to: {PORTAL_URL}")
-        try:
+        with contextlib.suppress(Exception):
             await page.goto(PORTAL_URL, wait_until="domcontentloaded", timeout=60000)
-        except Exception:
-            pass
 
         print("Waiting for capacity page to load (15s)...")
         await asyncio.sleep(15)

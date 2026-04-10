@@ -4,6 +4,7 @@ Navigates to a specific notebook, captures API calls, then clicks
 around to discover content/execution/definition endpoints.
 """
 import asyncio
+import contextlib
 import json
 import re
 import time
@@ -51,10 +52,8 @@ async def main():
                 # Capture request body for POST/PUT/PATCH
                 post_data = None
                 if method in ("POST", "PUT", "PATCH"):
-                    try:
+                    with contextlib.suppress(Exception):
                         post_data = request.post_data[:500] if request.post_data else None
-                    except Exception:
-                        pass
                 captured.append({
                     "method": method,
                     "path": path,
@@ -68,10 +67,8 @@ async def main():
 
         # Login
         print("Navigating to Power BI portal for login...")
-        try:
+        with contextlib.suppress(Exception):
             await page.goto("https://powerbi-df.analysis-df.windows.net/", wait_until="domcontentloaded", timeout=60000)
-        except Exception:
-            pass
 
         try:
             email = await page.wait_for_selector('input[type="email"], input[name="loginfmt"]', timeout=5000)
@@ -95,10 +92,8 @@ async def main():
 
         # Navigate to notebook
         print(f"\nNavigating to notebook: {NOTEBOOK_URL}")
-        try:
+        with contextlib.suppress(Exception):
             await page.goto(NOTEBOOK_URL, wait_until="domcontentloaded", timeout=60000)
-        except Exception:
-            pass
 
         print("Waiting for notebook to load (20s)...")
         await asyncio.sleep(20)
@@ -195,8 +190,8 @@ async def main():
     for cat, lines in categories.items():
         if lines:
             print(f"\n--- {cat} ({len(lines)}) ---")
-            for l in lines:
-                print(l)
+            for line in lines:
+                print(line)
 
     # Save
     out = PROJECT_DIR / "docs" / "notebook-editor-network-calls.json"

@@ -75,7 +75,7 @@ def read_file(path):
     if not os.path.exists(full_path):
         print(f"  WARNING: Missing module: {path}")
         return f"/* MODULE NOT FOUND: {path} */\n"
-    with open(full_path, "r", encoding="utf-8") as f:
+    with open(full_path, encoding="utf-8") as f:
         return f.read()
 
 

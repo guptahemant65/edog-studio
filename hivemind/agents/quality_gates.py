@@ -18,12 +18,9 @@ Gates:
     check_single_file_build     — build-html.py produces valid HTML
 """
 
-import os
 import re
 import subprocess
 from pathlib import Path
-from typing import Tuple
-
 
 # Root of the edog-studio repository
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -35,7 +32,7 @@ FRONTEND_SRC = REPO_ROOT / "src" / "frontend"
 BUILD_OUTPUT = REPO_ROOT / "src" / "edog-logs.html"
 
 
-def check_python_style() -> Tuple[bool, str]:
+def check_python_style() -> tuple[bool, str]:
     """Verify ruff passes on all Python files.
 
     Returns:
@@ -68,7 +65,7 @@ def check_python_style() -> Tuple[bool, str]:
     return False, f"ruff found {violation_count} violation(s):\n{result.stdout.strip()}"
 
 
-def check_no_emoji_in_frontend() -> Tuple[bool, str]:
+def check_no_emoji_in_frontend() -> tuple[bool, str]:
     """Scan JS/CSS/HTML source files for emoji characters.
 
     edog-studio uses Unicode symbols or inline SVG — never emoji.
@@ -123,7 +120,7 @@ def check_no_emoji_in_frontend() -> Tuple[bool, str]:
     )
 
 
-def check_css_uses_oklch() -> Tuple[bool, str]:
+def check_css_uses_oklch() -> tuple[bool, str]:
     """Verify no hex, rgb(), or hsl() colors appear in CSS files.
 
     All colors must use oklch(). Only CSS custom property definitions
@@ -176,7 +173,7 @@ def check_css_uses_oklch() -> Tuple[bool, str]:
     )
 
 
-def check_conventional_commit(msg: str) -> Tuple[bool, str]:
+def check_conventional_commit(msg: str) -> tuple[bool, str]:
     """Verify a commit message follows conventional commit format.
 
     Expected format: <type>(<scope>): <subject>
@@ -241,7 +238,7 @@ def check_conventional_commit(msg: str) -> Tuple[bool, str]:
     return True, f"Valid conventional commit: {first_line}"
 
 
-def check_no_frameworks_in_js() -> Tuple[bool, str]:
+def check_no_frameworks_in_js() -> tuple[bool, str]:
     """Scan JS files for React, Vue, Angular, or other framework imports.
 
     edog-studio is vanilla JS only. No frameworks, no libraries, no CDN.
@@ -308,7 +305,7 @@ def check_no_frameworks_in_js() -> Tuple[bool, str]:
     )
 
 
-def check_js_syntax() -> Tuple[bool, str]:
+def check_js_syntax() -> tuple[bool, str]:
     """Verify JS in the built HTML is syntactically valid.
 
     Extracts all <script> content from the built single-file HTML and
@@ -374,7 +371,7 @@ def check_js_syntax() -> Tuple[bool, str]:
     return False, f"JS syntax error in built HTML:\n  {error_msg}"
 
 
-def check_single_file_build() -> Tuple[bool, str]:
+def check_single_file_build() -> tuple[bool, str]:
     """Verify build-html.py produces a valid single-file HTML document.
 
     Checks:
@@ -430,7 +427,7 @@ def check_single_file_build() -> Tuple[bool, str]:
 
     if issues:
         return False, (
-            f"Build output validation failed:\n"
+            "Build output validation failed:\n"
             + "\n".join(f"  - {issue}" for issue in issues)
         )
 
@@ -442,7 +439,7 @@ def check_single_file_build() -> Tuple[bool, str]:
 # RUNNER
 # =============================================================================
 
-def run_all_gates() -> list[Tuple[str, bool, str]]:
+def run_all_gates() -> list[tuple[str, bool, str]]:
     """Run all quality gates and return results.
 
     Returns:
@@ -469,7 +466,8 @@ def run_all_gates() -> list[Tuple[str, bool, str]]:
 
 
 if __name__ == "__main__":
-    import sys, io
+    import io
+    import sys
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
     print("=" * 60)

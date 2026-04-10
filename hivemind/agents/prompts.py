@@ -18,10 +18,8 @@ Usage:
     prompt = AGENT_PROMPTS["sana-reeves-001"]
 """
 
-from typing import Dict
 
-
-AGENT_PROMPTS: Dict[str, str] = {
+AGENT_PROMPTS: dict[str, str] = {
 
     # =========================================================================
     # SANA REEVES — Tech Lead / Principal Engineer
@@ -505,7 +503,7 @@ def get_prompt_by_name(name: str) -> str:
 
     available_names = [
         " ".join(aid.split("-")[:2]).title()
-        for aid in AGENT_PROMPTS.keys()
+        for aid in AGENT_PROMPTS
     ]
     raise KeyError(
         f"Agent '{name}' not found. Available: {', '.join(available_names)}"

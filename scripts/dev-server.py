@@ -7,7 +7,6 @@ Proxy strategy (per docs/fabric-api-reference.md):
 """
 import base64
 import json
-import re
 import ssl
 import subprocess
 import time

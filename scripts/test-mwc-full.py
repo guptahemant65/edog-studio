@@ -1,5 +1,10 @@
 """Test MWC table APIs on real fmlv-poc workspace with actual tables."""
-import urllib.request, json, ssl, base64, uuid, time
+import base64
+import json
+import ssl
+import time
+import urllib.request
+import uuid
 from pathlib import Path
 
 raw = Path(".edog-bearer-cache").read_text().strip()
@@ -20,8 +25,10 @@ def call(method, url, headers, body=None):
         return resp.status, json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         txt = e.read().decode()[:500]
-        try: return e.code, json.loads(txt)
-        except: return e.code, {"raw": txt}
+        try:
+            return e.code, json.loads(txt)
+        except Exception:
+            return e.code, {"raw": txt}
 
 # Step 1: List lakehouses
 print("=== Step 1: List lakehouses in fmlv-poc ===")

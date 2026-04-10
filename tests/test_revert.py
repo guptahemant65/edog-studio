@@ -1,12 +1,16 @@
 """Test: revert_all_changes works via direct revert functions (no patch dependency)."""
-import tempfile, os, subprocess, re, sys
+import os
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 # Import edog module
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
 
-import importlib.util
+import importlib.util  # noqa: E402 — must be after sys.path.insert
+
 spec = importlib.util.spec_from_file_location('edog', os.path.join(script_dir, 'edog.py'))
 edog = importlib.util.module_from_spec(spec)
 os.chdir(script_dir)
@@ -49,23 +53,23 @@ def apply_edog_changes(repo_root):
     fp = repo_root / files['ParametersManifest']
     c = fp.read_text(encoding='utf-8')
     fp.write_text(c.replace('"DisableFLTAuth": false', '"DisableFLTAuth": true'), encoding='utf-8')
-    
+
     # TestRollout
     fp = repo_root / files['TestRollout']
     c = fp.read_text(encoding='utf-8')
-    new_c, status = edog.apply_disable_flt_auth_test_json(c)
+    new_c, _status = edog.apply_disable_flt_auth_test_json(c)
     fp.write_text(new_c, encoding='utf-8')
-    
+
     # Program.cs
     fp = repo_root / files['Program']
     c = fp.read_text(encoding='utf-8')
-    new_c, status = edog.apply_log_viewer_registration_program_cs(c)
+    new_c, _status = edog.apply_log_viewer_registration_program_cs(c)
     fp.write_text(new_c, encoding='utf-8')
-    
+
     # WorkloadApp.cs
     fp = repo_root / files['WorkloadApp']
     c = fp.read_text(encoding='utf-8')
-    new_c, status = edog.apply_log_viewer_registration_workloadapp_cs(c)
+    new_c, _status = edog.apply_log_viewer_registration_workloadapp_cs(c)
     fp.write_text(new_c, encoding='utf-8')
 
 def check_clean(repo_root, label):

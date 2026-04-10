@@ -8,7 +8,6 @@ Each agent is a specialist. No generalists.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
 
 
 @dataclass
@@ -19,12 +18,12 @@ class AgentPersona:
     level: str
     tier: int  # 1 = always-on, 2 = on-demand
     background: str
-    skills: List[str]
-    personality: Dict[str, str]
+    skills: list[str]
+    personality: dict[str, str]
     timezone: str
     reports_to: str
     team: str
-    relationships: Dict[str, str] = field(default_factory=dict)
+    relationships: dict[str, str] = field(default_factory=dict)
     instantiation_date: datetime = field(default_factory=datetime.now)
 
 

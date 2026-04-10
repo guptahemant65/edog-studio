@@ -1,10 +1,10 @@
 """Test all Fabric API endpoints against EDOG_Studio_TestEnv."""
 import base64
+import contextlib
 import json
 import ssl
-import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -49,10 +49,8 @@ def test(method, path, body=None, label=""):
     except urllib.error.HTTPError as e:
         body_text = e.read().decode()[:200]
         err_code = ""
-        try:
+        with contextlib.suppress(Exception):
             err_code = json.loads(body_text).get("errorCode", "")
-        except Exception:
-            pass
         print(f"  FAIL {e.code:>3} | {label:<55} | {err_code or body_text[:80]}")
         results.append({"label": label, "ok": False, "code": e.code, "error": err_code or body_text[:80]})
         return None
