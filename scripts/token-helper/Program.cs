@@ -224,20 +224,32 @@ class RobustSilentCba : ICustomWebUi
         if (loginResp.StatusCode == HttpStatusCode.Found)
         {
             var location = loginResp.Headers.Location;
-            // Auth code is in the fragment: #code=xxx&...
-            string fragment = location.Fragment.TrimStart('#');
-            if (string.IsNullOrEmpty(fragment))
-                fragment = location.Query.TrimStart('?');
+            Console.Error.WriteLine($"  Redirect: {location}");
 
-            foreach (var part in fragment.Split('&'))
+            // The redirect URL already contains code + state in fragment or query
+            // MSAL needs the full URL to validate state — pass it through as-is
+            string raw = location.ToString();
+
+            // If code is in fragment (#code=...), convert to query (?code=...) for MSAL
+            if (raw.Contains("#code="))
             {
-                if (part.StartsWith("code="))
-                {
-                    string code = Uri.UnescapeDataString(part.Substring(5));
-                    return new Uri(redirectUri + "?code=" + Uri.EscapeDataString(code));
-                }
+                raw = raw.Replace("#", "?");
             }
-            throw new Exception($"Auth code not found in redirect: {location}");
+
+            // Ensure it starts with the expected redirect URI base
+            if (!raw.StartsWith(redirectUri.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                // Rewrite to use the expected redirectUri but keep all params
+                string paramsStr = "";
+                int qIdx = raw.IndexOf('?');
+                int fIdx = raw.IndexOf('#');
+                int paramStart = qIdx >= 0 ? qIdx : fIdx;
+                if (paramStart >= 0)
+                    paramsStr = raw.Substring(paramStart);
+                raw = redirectUri.ToString().TrimEnd('/') + paramsStr;
+            }
+
+            return new Uri(raw);
         }
 
         var loginBody = await loginResp.Content.ReadAsStringAsync();
