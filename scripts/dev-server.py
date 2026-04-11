@@ -660,18 +660,26 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if not helper.exists():
             helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
 
-        # Git info from project directory
+        # Git info from the FLT repo (workload-fabriclivetable), not edog-studio
         git_branch = ""
         git_dirty = 0
+        flt_repo = ""
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            flt_repo = cfg.get("flt_repo_path", "")
+        except Exception:
+            pass
+        git_cwd = flt_repo if flt_repo and Path(flt_repo).is_dir() else str(PROJECT_DIR)
         try:
             git_branch = subprocess.check_output(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=str(PROJECT_DIR), timeout=3, stderr=subprocess.DEVNULL,
+                cwd=git_cwd, timeout=3, stderr=subprocess.DEVNULL,
             ).decode().strip()
-            git_dirty = len(subprocess.check_output(
-                ["git", "diff", "--name-only"],
-                cwd=str(PROJECT_DIR), timeout=3, stderr=subprocess.DEVNULL,
-            ).decode().strip().splitlines())
+            porcelain = subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                cwd=git_cwd, timeout=3, stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            git_dirty = len(porcelain.splitlines()) if porcelain else 0
         except Exception:
             pass
 
