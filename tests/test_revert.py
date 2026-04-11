@@ -11,7 +11,7 @@ sys.path.insert(0, script_dir)
 
 import importlib.util  # noqa: E402 — must be after sys.path.insert
 
-spec = importlib.util.spec_from_file_location('edog', os.path.join(script_dir, 'edog.py'))
+spec = importlib.util.spec_from_file_location('edog', os.path.join(script_dir, '..', 'edog.py'))
 edog = importlib.util.module_from_spec(spec)
 os.chdir(script_dir)
 spec.loader.exec_module(edog)

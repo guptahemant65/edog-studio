@@ -10,6 +10,7 @@ import json
 import ssl
 import subprocess
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -150,11 +151,21 @@ def _get_mwc_token(bearer: str, ws_id: str, lh_id: str, cap_id: str) -> tuple:
     with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
         resp_data = json.loads(resp.read())
 
+    if not resp_data.get("Token"):
+        raise ValueError(f"MWC response missing Token. Keys: {list(resp_data.keys())}")
+
     token = resp_data["Token"]
-    host = f"https://{resp_data['TargetUriHost']}"
-    # Handle 'Z' suffix for Python 3.8-3.10 compat with fromisoformat
-    expiry_str = resp_data["Expiration"].replace("Z", "+00:00")
-    expiry = datetime.fromisoformat(expiry_str).timestamp()
+    host_raw = resp_data.get("TargetUriHost")
+    if not host_raw:
+        raise ValueError(f"MWC response missing TargetUriHost. Keys: {list(resp_data.keys())}")
+    host = f"https://{host_raw}"
+    # Expiration may be None in some PPE responses — default to 1hr
+    exp_raw = resp_data.get("Expiration")
+    if exp_raw:
+        expiry_str = exp_raw.replace("Z", "+00:00")
+        expiry = datetime.fromisoformat(expiry_str).timestamp()
+    else:
+        expiry = time.time() + 3600  # fallback: 1 hour
 
     _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry}
     remaining = int((expiry - time.time()) / 60)
@@ -446,6 +457,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(e.code, {"error": "mwc_token_error", "message": body})
             return
         except Exception as e:
+            traceback.print_exc()
             self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
             return
 
