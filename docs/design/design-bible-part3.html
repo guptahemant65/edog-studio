@@ -724,27 +724,128 @@ body {
 .timeline-desc { font-size: 12px; color: var(--text-2); margin-top: 4px; }
 
 /* --- 18c: Lock Status --- */
-.lock-status {
-  display: inline-flex;
+@keyframes lock-border-pulse {
+  0%, 100% { border-color: color-mix(in srgb, var(--red) 40%, transparent); }
+  50% { border-color: color-mix(in srgb, var(--red) 90%, transparent); }
+}
+@keyframes lock-shake {
+  0%, 100% { transform: rotate(0); }
+  15% { transform: rotate(-10deg); }
+  30% { transform: rotate(8deg); }
+  45% { transform: rotate(-6deg); }
+  60% { transform: rotate(4deg); }
+  75% { transform: rotate(-2deg); }
+}
+@keyframes lock-spring-open {
+  0% { transform: rotate(0) scale(1); }
+  30% { transform: rotate(-15deg) scale(1.15); }
+  50% { transform: rotate(5deg) scale(1.05); }
+  70% { transform: rotate(-2deg) scale(1.02); }
+  100% { transform: rotate(0) scale(1); }
+}
+.lock-card {
+  border-radius: var(--r10);
+  padding: 24px;
+  max-width: 400px;
+  transition: background 300ms ease, border-color 300ms ease, box-shadow 300ms ease;
+}
+.lock-card.locked {
+  background: color-mix(in srgb, var(--red) 8%, var(--bg));
+  border: 2px solid color-mix(in srgb, var(--red) 50%, transparent);
+  animation: lock-border-pulse 2s ease-in-out infinite;
+}
+.lock-card.unlocked {
+  background: color-mix(in srgb, var(--green) 8%, var(--bg));
+  border: 2px solid color-mix(in srgb, var(--green) 25%, transparent);
+  animation: none;
+}
+.lock-card-header {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--r6);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.lock-icon-lg {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+.lock-card.locked .lock-icon-lg {
+  color: var(--red);
+  animation: lock-shake 0.6s ease-in-out 1;
+}
+.lock-card.unlocked .lock-icon-lg {
+  color: var(--green);
+  animation: lock-spring-open 0.5s ease-out 1;
+}
+.lock-heading {
+  font-size: 16px;
+  font-weight: 700;
+}
+.lock-card.locked .lock-heading { color: var(--red); }
+.lock-card.unlocked .lock-heading { color: var(--green); }
+.lock-detail {
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+.lock-warning {
   font-size: 12px;
   font-weight: 600;
+  color: var(--red);
+  margin: 8px 0;
+}
+.lock-btn-force {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--r6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--red);
+  color: #fff;
   transition: all var(--transition);
+  margin-top: 8px;
 }
-.lock-status.locked {
-  background: color-mix(in srgb, var(--amber) 10%, var(--bg));
-  color: var(--amber);
-  border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
+.lock-btn-force:hover { filter: brightness(1.1); }
+.lock-btn-force.confirming {
+  background: color-mix(in srgb, var(--red) 80%, #000);
+  cursor: not-allowed;
 }
-.lock-status.unlocked {
-  background: color-mix(in srgb, var(--green) 10%, var(--bg));
-  color: var(--green);
-  border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
+.lock-btn-force.confirming.ready {
+  cursor: pointer;
+  animation: lock-border-pulse 0.8s ease-in-out infinite;
 }
-.lock-icon { width: 14px; height: 14px; }
+.lock-info {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-top: 8px;
+  font-style: italic;
+}
+.lock-success-flash {
+  position: fixed;
+  top: 72px;
+  right: 24px;
+  padding: 12px 20px;
+  background: var(--green);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--r6);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateX(40px);
+  transition: all 300ms ease;
+  z-index: 200;
+  pointer-events: none;
+}
+.lock-success-flash.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
 
 /* --- 18d: Capacity Gauge --- */
 .gauge-container { display: flex; align-items: center; gap: 16px; }
@@ -853,40 +954,6 @@ body {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
-}
-
-/* --- 19b: Truncation Patterns --- */
-.trunc-line {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 240px;
-  font-size: 13px;
-  color: var(--text);
-}
-.trunc-multi {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: 13px;
-  color: var(--text-2);
-  line-height: 1.5;
-  max-width: 300px;
-}
-.trunc-mono {
-  font-family: var(--mono);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-  color: var(--text);
-  padding: 4px 8px;
-  background: var(--bg-3);
-  border-radius: var(--r4);
-  direction: rtl;
-  text-align: left;
 }
 
 /* --- 19c: Error Boundary --- */
@@ -1534,12 +1601,19 @@ body {
     <!-- 18c: Lock Status -->
     <div class="demo-card">
       <div class="sub-label">18c. Lock Status</div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
-        <div class="lock-status locked" id="lockDemo" onclick="toggleLock()">
-          <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="lockIcon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span id="lockText">Locked by devpatel</span>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">
+        <div class="lock-card locked" id="lockDemo">
+          <div class="lock-card-header">
+            <svg class="lock-icon-lg" id="lockIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span class="lock-heading" id="lockHeading">DAG LOCKED</span>
+          </div>
+          <div class="lock-detail" id="lockHolder">Held by Admin1CBA@FabricFMLV08PPE</div>
+          <div class="lock-detail" id="lockTimer">Locked 14 minutes ago</div>
+          <div class="lock-warning" id="lockWarning">All DAG operations are blocked</div>
+          <button class="lock-btn-force" id="lockForceBtn" onclick="handleForceUnlock()">Force Unlock</button>
+          <div class="lock-info" id="lockInfo">Force unlocking may cause data corruption if a DAG is mid-execution</div>
         </div>
-        <span style="font-size:12px;color:var(--text-3);">Click to toggle</span>
+        <div class="lock-success-flash" id="lockFlash">&#x2713; Unlocked successfully</div>
       </div>
     </div>
 
@@ -1659,7 +1733,7 @@ body {
       <div class="section-num">19</div>
       <div class="section-meta">
         <h2>Layout & Overflow</h2>
-        <p>Glass morphism cards, text truncation strategies, error boundaries, and loading composition patterns for graceful degradation.</p>
+        <p>Glass morphism cards, error boundaries, and loading composition patterns for graceful degradation.</p>
       </div>
     </div>
 
@@ -1681,25 +1755,6 @@ body {
           <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">Latency</div>
           <div style="font-size:28px;font-weight:700;color:var(--text);">24<span style="font-size:14px;color:var(--text-3);"> ms</span></div>
           <div style="font-size:12px;color:var(--green);margin-top:4px;">&#x25BC; 12% from last hour</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 19b: Truncation Patterns -->
-    <div class="demo-card">
-      <div class="sub-label">19b. Truncation Patterns</div>
-      <div style="display:flex;flex-direction:column;gap:20px;">
-        <div>
-          <div class="demo-label">Single-line ellipsis</div>
-          <div class="trunc-line">abfss://container@storageaccount.dfs.core.windows.net/Tables/SalesRevenueAggregate/part-00001.parquet</div>
-        </div>
-        <div>
-          <div class="demo-label">Multi-line clamp (3 lines)</div>
-          <div class="trunc-multi">The DAG execution engine processes each node in topological order, respecting data dependencies between transformations. When a node fails, the engine checks if a retry policy is configured and attempts re-execution with exponential backoff. Partial results from successfully completed upstream nodes are cached in memory to avoid redundant computation during retries.</div>
-        </div>
-        <div>
-          <div class="demo-label">RTL path truncation (show filename)</div>
-          <div class="trunc-mono">&#x200E;abfss://container@storage.dfs.core.windows.net/Tables/SalesRevenue/part-00042-c3f9a.snappy.parquet</div>
         </div>
       </div>
     </div>
@@ -2185,22 +2240,86 @@ function resetWs() {
   initWsBars();
 }
 
-/* === 18c: Lock Status Toggle === */
-function toggleLock() {
-  const el = document.getElementById('lockDemo');
-  const text = document.getElementById('lockText');
-  const icon = document.getElementById('lockIcon');
-  if (el.classList.contains('locked')) {
-    el.classList.remove('locked');
-    el.classList.add('unlocked');
-    text.textContent = 'Unlocked';
-    icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
-  } else {
-    el.classList.remove('unlocked');
-    el.classList.add('locked');
-    text.textContent = 'Locked by devpatel';
-    icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+/* === 18c: Lock Status (Redesigned) === */
+(function initLockDemo() {
+  const lockStartTime = Date.now() - 14 * 60 * 1000;
+  const timerEl = document.getElementById('lockTimer');
+  let lockTimerInterval = null;
+
+  function updateLockTimer() {
+    if (!timerEl) return;
+    const card = document.getElementById('lockDemo');
+    if (!card || !card.classList.contains('locked')) return;
+    const elapsed = Math.floor((Date.now() - lockStartTime) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    timerEl.textContent = 'Locked ' + mins + 'm ' + secs + 's ago';
   }
+
+  if (timerEl) {
+    lockTimerInterval = setInterval(updateLockTimer, 1000);
+    updateLockTimer();
+  }
+
+  window._lockTimerInterval = lockTimerInterval;
+  window._lockStartTime = lockStartTime;
+})();
+
+let _forceUnlockCountdown = null;
+
+function handleForceUnlock() {
+  const btn = document.getElementById('lockForceBtn');
+  if (!btn) return;
+
+  if (btn.classList.contains('confirming')) {
+    if (btn.classList.contains('ready')) {
+      executeUnlock();
+    }
+    return;
+  }
+
+  btn.classList.add('confirming');
+  let remaining = 3;
+  btn.textContent = 'Confirm Force Unlock (' + remaining + 's)';
+
+  _forceUnlockCountdown = setInterval(function() {
+    remaining--;
+    if (remaining > 0) {
+      btn.textContent = 'Confirm Force Unlock (' + remaining + 's)';
+    } else {
+      clearInterval(_forceUnlockCountdown);
+      btn.textContent = 'Confirm Force Unlock (irreversible)';
+      btn.classList.add('ready');
+    }
+  }, 1000);
+}
+
+function executeUnlock() {
+  const card = document.getElementById('lockDemo');
+  const icon = document.getElementById('lockIcon');
+  const heading = document.getElementById('lockHeading');
+  const holder = document.getElementById('lockHolder');
+  const timer = document.getElementById('lockTimer');
+  const warning = document.getElementById('lockWarning');
+  const btn = document.getElementById('lockForceBtn');
+  const info = document.getElementById('lockInfo');
+  const flash = document.getElementById('lockFlash');
+
+  if (_forceUnlockCountdown) clearInterval(_forceUnlockCountdown);
+  if (window._lockTimerInterval) clearInterval(window._lockTimerInterval);
+
+  card.classList.remove('locked');
+  card.classList.add('unlocked');
+  icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
+  heading.textContent = 'DAG Available';
+  holder.textContent = 'Last locked by Admin1CBA, 45 min ago';
+  timer.textContent = '';
+  warning.textContent = '';
+  btn.style.display = 'none';
+  info.style.display = 'none';
+
+  flash.classList.add('visible');
+  setTimeout(function() { flash.classList.remove('visible'); }, 2500);
 }
 
 /* === 18e: Number Animation === */
