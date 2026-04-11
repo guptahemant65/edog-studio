@@ -29,6 +29,20 @@ class WebSocketManager {
     this.onSummary = null;
 
     this.url = 'ws://localhost:5555/ws/logs';
+    this._port = 5555;
+  }
+
+  /** Set the WebSocket target port (call when FLT starts on a different port). */
+  setPort(port) {
+    if (port && port !== this._port) {
+      this._port = port;
+      this.url = 'ws://localhost:' + port + '/ws/logs';
+      // Reconnect if currently connected to old port
+      if (this.ws && this.ws.readyState <= 1) {
+        this.ws.close();
+      }
+      this.connect();
+    }
   }
 
   connect = () => {

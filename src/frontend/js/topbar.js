@@ -87,13 +87,16 @@ class TopBar {
       // T8: Show git/patch meta only when real data exists
       this._updateGitVisibility(health || {});
 
-      // Sync sidebar phase from studio state
+      // Sync sidebar phase and WebSocket port from studio state
       if (window.edogSidebar) {
         if (config.studioPhase === 'running') {
           window.edogSidebar.setPhase('connected');
         } else if (config.studioPhase === 'idle' || config.studioPhase === 'stopped') {
           window.edogSidebar.setPhase('disconnected');
         }
+      }
+      if (config.fltPort && config.studioPhase === 'running' && window.edogWs) {
+        window.edogWs.setPort(config.fltPort);
       }
 
       // Refresh inspector if open

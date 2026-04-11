@@ -158,6 +158,7 @@ class EdogLogViewer {
     // Expose globals for deploy phase sync
     window.edogTopBar = this.topbar;
     window.edogSidebar = this.sidebar;
+    window.edogWs = this.ws;
 
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
@@ -205,6 +206,8 @@ class EdogLogViewer {
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
         this.topbar.setDeployStatus('connected');
+        // Connect WebSocket to FLT port
+        if (state.fltPort) this.ws.setPort(state.fltPort);
       } else if (state.phase === 'crashed') {
         this.topbar.setDeployStatus('crashed');
       }

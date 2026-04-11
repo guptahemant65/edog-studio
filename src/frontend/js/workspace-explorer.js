@@ -2098,6 +2098,8 @@ class WorkspaceExplorer {
     } else if (state.status === 'running') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
       if (window.edogSidebar) window.edogSidebar.setPhase('connected');
+      // Connect WebSocket to FLT port for live logs
+      if (state.fltPort && window.edogWs) window.edogWs.setPort(state.fltPort);
       this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
       // Show undeploy button
       this._showUndeployButton(lh);
