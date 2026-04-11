@@ -8,6 +8,7 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Diagnostics;
     using System.IO;
     using System.Text;
     using System.Text.Json;
@@ -201,6 +202,127 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] Failed to read bearer token: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Health endpoint returning bearer token status and git info from the FLT repo.
+        /// The git branch and dirty file count come from workload-fabriclivetable,
+        /// NOT edog-studio — engineers care about the repo they are developing in.
+        /// </summary>
+        public async Task HandleHealth(HttpContext context)
+        {
+            context.Response.ContentType = "application/json";
+            try
+            {
+                var bearerInfo = ReadBearerToken();
+                bool hasBearerToken = bearerInfo != null;
+                double bearerExpiresIn = 0;
+                if (hasBearerToken)
+                {
+                    bearerExpiresIn = Math.Max(0, (bearerInfo.Value.ExpiryUtc - DateTime.UtcNow).TotalSeconds);
+                }
+
+                string lastUsername = null;
+                try
+                {
+                    var configPath = Path.Combine(configDir, "edog-config.json");
+                    var json = await File.ReadAllTextAsync(configPath);
+                    var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("username", out var userProp))
+                    {
+                        lastUsername = userProp.GetString();
+                    }
+                }
+                catch
+                {
+                    // Config read failure is non-fatal for health
+                }
+
+                // Git info from the FLT repo (workload-fabriclivetable)
+                string gitBranch = "";
+                int gitDirtyFiles = 0;
+                var fltRepoPath = ReadFltRepoPath();
+                if (fltRepoPath != null)
+                {
+                    gitBranch = RunGit("rev-parse --abbrev-ref HEAD", fltRepoPath) ?? "";
+                    var porcelain = RunGit("status --porcelain", fltRepoPath);
+                    if (porcelain != null)
+                    {
+                        gitDirtyFiles = porcelain.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+                    }
+                }
+
+                await context.Response.WriteAsync(JsonSerializer.Serialize(new
+                {
+                    hasBearerToken,
+                    bearerExpiresIn = (int)bearerExpiresIn,
+                    lastUsername,
+                    gitBranch,
+                    gitDirtyFiles
+                }, JsonOpts));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] HandleHealth error: {ex}");
+                await WriteError(context, 500, "internal_error", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Reads flt_repo_path from edog-config.json. Returns null if not configured.
+        /// </summary>
+        private string ReadFltRepoPath()
+        {
+            try
+            {
+                var path = Path.Combine(configDir, "edog-config.json");
+                var json = File.ReadAllText(path);
+                var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("flt_repo_path", out var prop))
+                {
+                    var repoPath = prop.GetString();
+                    if (!string.IsNullOrEmpty(repoPath) && Directory.Exists(repoPath))
+                    {
+                        return repoPath;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] Failed to read flt_repo_path: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Runs a git command in the specified directory and returns trimmed stdout, or null on failure.
+        /// </summary>
+        private static string RunGit(string arguments, string workingDirectory)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo("git", arguments)
+                {
+                    WorkingDirectory = workingDirectory,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var proc = Process.Start(psi);
+                if (proc == null) return null;
+
+                var output = proc.StandardOutput.ReadToEnd();
+                proc.WaitForExit(5000);
+
+                return proc.ExitCode == 0 ? output.Trim() : null;
+            }
+            catch
+            {
                 return null;
             }
         }

@@ -499,6 +499,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         if (apiProxy != null)
         {
             app.MapGet("/api/flt/config", apiProxy.HandleConfig);
+            app.MapGet("/api/edog/health", apiProxy.HandleHealth);
         }
 
         // WebSocket endpoint
