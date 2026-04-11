@@ -1623,12 +1623,15 @@ def check_tracer_console_output(repo_root):
 
 def apply_log_viewer_files(repo_root):
     """Deploy EDOG web log viewer files to FLT repo and build output."""
-    src_dir = Path(__file__).parent / "src"
+    src_dir = Path(__file__).parent / "src" / "backend" / "DevMode"
+    src_dir_fallback = Path(__file__).parent / "src"
     created_files = []
     
     for name, rel_path in DEVMODE_FILES.items():
         target = repo_root / rel_path
         src_file = src_dir / target.name
+        if not src_file.exists():
+            src_file = src_dir_fallback / target.name
         
         if not src_file.exists():
             print(f"   ⚠️  Source file not found: {src_file}")
@@ -2065,8 +2068,8 @@ def apply_all_changes(token, repo_root):
             changes_made.append(f"✅ GTSBasedSparkClient token bypass")
         elif status == "token_updated":
             # Token changed — compute pre-EDOG original for patch
-            reverted = revert_gts_spark_client_change(content, repo_root)
-            if reverted and reverted != content:
+            reverted, did_revert = revert_gts_spark_client_change(content, repo_root)
+            if did_revert and reverted != content:
                 original_contents[rel_path] = reverted
             else:
                 original_contents[rel_path] = content
@@ -2074,8 +2077,8 @@ def apply_all_changes(token, repo_root):
             modified_contents[rel_path] = new_content
             changes_made.append(f"✅ GTSBasedSparkClient token bypass (updated)")
         elif status == "already_applied":
-            reverted = revert_gts_spark_client_change(content, repo_root)
-            if reverted and reverted != content:
+            reverted, did_revert = revert_gts_spark_client_change(content, repo_root)
+            if did_revert and reverted != content:
                 original_contents[rel_path] = reverted
                 modified_contents[rel_path] = content
             changes_made.append(f"⏭️  GTSBasedSparkClient token bypass (already)")
