@@ -2069,44 +2069,44 @@ class WorkspaceExplorer {
   }
 
   // ────────────────────────────────────────────
-  // Deploy flow (simulated)
+  // Deploy flow (SSE-backed via DeployFlow)
   // ────────────────────────────────────────────
 
   async _deployToLakehouse(lh, ws) {
     const progressEl = document.getElementById('ws-deploy-progress');
     const btnEl = document.getElementById('ws-deploy-btn');
     if (!progressEl) return;
+
     if (btnEl) btnEl.style.display = 'none';
     progressEl.style.display = 'block';
 
-    const steps = [
-      'Fetching MWC token...',
-      'Updating config...',
-      'Patching code...',
-      'Building service...',
-      'Launching service...',
-    ];
-
-    for (let i = 0; i < steps.length; i++) {
-      let html = '';
-      for (let idx = 0; idx < steps.length; idx++) {
-        let cls = 'ws-deploy-step';
-        let icon = '\u25CB'; // ○ pending
-        if (idx < i) { cls += ' done'; icon = '\u2713'; } // ✓ done
-        else if (idx === i) { cls += ' active'; icon = '\u25CF'; } // ● active
-        html += `<div class="${cls}"><span>${icon}</span> ${idx + 1}/${steps.length} ${this._esc(steps[idx])}</div>`;
-      }
-      progressEl.innerHTML = html;
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 400));
+    if (!this._deployFlow) {
+      this._deployFlow = new DeployFlow(progressEl);
+      this._deployFlow.onUpdate = (state) => this._onDeployUpdate(state, lh, ws);
     }
 
-    // All done
-    let finalHtml = '';
-    for (let idx = 0; idx < steps.length; idx++) {
-      finalHtml += `<div class="ws-deploy-step done"><span>\u2713</span> ${idx + 1}/${steps.length} ${this._esc(steps[idx])}</div>`;
+    const capacityId = ws.capacityId || '';
+    this._deployFlow.startDeploy(ws.id, lh.id, capacityId, lh.displayName || '');
+  }
+
+  _onDeployUpdate(state, lh, ws) {
+    if (state.status === 'deploying') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('deploying');
+    } else if (state.status === 'running') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
+      if (window.edogSidebar) window.edogSidebar.setPhase('connected');
+      this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
+    } else if (state.status === 'stopped' && state.error) {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('failed');
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (btnEl) btnEl.style.display = '';
+    } else if (state.status === 'stopped') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (btnEl) btnEl.style.display = '';
+    } else if (state.status === 'crashed') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('crashed');
     }
-    progressEl.innerHTML = finalHtml;
-    this._toast('Deploy complete', 'success');
   }
 
   // ────────────────────────────────────────────
