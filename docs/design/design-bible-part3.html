@@ -1,0 +1,2308 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Design Bible Part 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* === DESIGN TOKENS === */
+:root {
+  --accent:   #6d5cff;
+  --green:    #18a058;
+  --amber:    #e5940c;
+  --red:      #e5453b;
+  --blue:     #2d7ff9;
+  --purple:   #a855f7;
+  --teal:     #0d9488;
+
+  --bg:       #fff;
+  --bg-2:     #f8f9fb;
+  --bg-3:     #f4f5f7;
+  --bg-4:     #ebedf0;
+
+  --text:     #1a1d23;
+  --text-2:   #5a6070;
+  --text-3:   #8e95a5;
+
+  --border:        rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --font:  'Inter', system-ui, sans-serif;
+  --mono:  'Cascadia Code', 'Consolas', monospace;
+
+  --r4:   4px;
+  --r6:   6px;
+  --r10:  10px;
+  --r16:  16px;
+  --r100: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+  --bg:       #0f1117;
+  --bg-2:     #161923;
+  --bg-3:     #1e2230;
+  --bg-4:     #252a38;
+
+  --text:     #e8eaf0;
+  --text-2:   #9aa0b2;
+  --text-3:   #5f6578;
+
+  --border:        rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* === RESET + BASE === */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* === PAGE LAYOUT === */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+.page-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.page-wordmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+.page-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover { background: var(--bg-4); color: var(--text); }
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.page-intro { padding: 40px 0 0; }
+
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.page-title span {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-subtitle {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--text-2);
+  max-width: 600px;
+}
+
+.toc {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toc-item {
+  padding: 6px 14px;
+  border-radius: var(--r100);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toc-item:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* === SECTION WRAPPER === */
+.section { scroll-margin-top: 80px; }
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-num {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r6);
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.section-meta h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.section-meta p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.demo-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.demo-card + .demo-card { margin-top: 12px; }
+
+.demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+.sub-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* === BUTTONS === */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r6);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
+.btn-secondary { background: var(--bg-3); color: var(--text-2); border-color: var(--border-bright); }
+.btn-secondary:hover { background: var(--bg-4); color: var(--text); }
+.btn-danger { background: color-mix(in srgb, var(--red) 10%, var(--bg)); color: var(--red); border-color: color-mix(in srgb, var(--red) 25%, transparent); }
+.btn-danger:hover { background: var(--red); color: #fff; }
+.btn-ghost { background: transparent; color: var(--text-2); }
+.btn-ghost:hover { background: var(--bg-3); color: var(--text); }
+
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* === BADGES === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: all var(--transition);
+  cursor: default;
+  user-select: none;
+}
+.badge:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.badge.success  { background: color-mix(in srgb, var(--green) 12%, var(--bg)); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 25%, transparent); }
+.badge.warn     { background: color-mix(in srgb, var(--amber) 12%, var(--bg)); color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); }
+.badge.error    { background: color-mix(in srgb, var(--red) 12%, var(--bg)); color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 25%, transparent); }
+.badge.info     { background: color-mix(in srgb, var(--blue) 12%, var(--bg)); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 25%, transparent); }
+.badge.muted    { background: var(--bg-3); color: var(--text-3); border: 1px solid var(--border); }
+.badge.accent   { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.badge.purple   { background: color-mix(in srgb, var(--purple) 12%, var(--bg)); color: var(--purple); border: 1px solid color-mix(in srgb, var(--purple) 25%, transparent); }
+.badge.success .badge-dot { background: var(--green); }
+.badge.warn    .badge-dot { background: var(--amber); }
+.badge.error   .badge-dot { background: var(--red); }
+.badge.info    .badge-dot { background: var(--blue); }
+.badge.muted   .badge-dot { background: var(--text-3); }
+.badge.accent  .badge-dot { background: var(--accent); }
+
+.badge.pulse .badge-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { box-shadow: 0 0 0 0px currentColor; }
+  50% { box-shadow: 0 0 0 3px transparent; }
+}
+
+/* === SPINNER === */
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--bg-4); border-top-color: var(--accent);
+  animation: spin 700ms linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* === SKELETON SHIMMER === */
+.sk {
+  border-radius: var(--r4);
+  background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-4) 50%, var(--bg-3) 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes sk-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.sk-circle { border-radius: 50%; flex-shrink: 0; }
+
+/* === FOOTER === */
+.page-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 32px;
+  padding-top: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+/* ==============================================
+   SECTION 17: DATA-HEAVY COMPONENTS
+   ============================================== */
+
+/* --- 17a: Context Menu --- */
+.ctx-menu {
+  position: absolute;
+  min-width: 180px;
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r10);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 50;
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+  pointer-events: none;
+}
+.ctx-menu.open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: var(--r6);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 80ms ease-out;
+  user-select: none;
+}
+.ctx-item:hover { background: var(--bg-3); }
+.ctx-item.danger { color: var(--red); }
+.ctx-item.danger:hover { background: color-mix(in srgb, var(--red) 8%, var(--bg)); }
+.ctx-item .ctx-icon { width: 14px; height: 14px; color: var(--text-3); flex-shrink: 0; }
+.ctx-item.danger .ctx-icon { color: var(--red); }
+.ctx-item .ctx-shortcut { margin-left: auto; font-size: 11px; color: var(--text-3); font-family: var(--mono); }
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+.ctx-trigger-area {
+  width: 100%;
+  height: 120px;
+  border: 2px dashed var(--border-bright);
+  border-radius: var(--r10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 13px;
+  position: relative;
+  cursor: context-menu;
+  transition: border-color var(--transition);
+}
+.ctx-trigger-area:hover { border-color: var(--accent); }
+
+/* --- 17b: Breadcrumbs --- */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.breadcrumb-item {
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: var(--r4);
+  transition: all 80ms ease-out;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.breadcrumb-item:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.breadcrumb-item.active { color: var(--text); font-weight: 600; cursor: default; }
+.breadcrumb-item.active:hover { background: transparent; color: var(--text); }
+.breadcrumb-sep { color: var(--text-3); font-size: 11px; opacity: 0.5; user-select: none; }
+
+/* --- 17c: Filter Bar --- */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--r100);
+  border: 1px solid var(--border-bright);
+  background: var(--bg);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: default;
+  transition: all var(--transition);
+}
+.filter-chip:hover { border-color: var(--accent); color: var(--accent); }
+.filter-chip .chip-x {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-3);
+  transition: all 80ms ease-out;
+}
+.filter-chip .chip-x:hover { background: var(--bg-4); color: var(--red); }
+.filter-chip.active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+.filter-input {
+  padding: 5px 10px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r100);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  min-width: 120px;
+  transition: all var(--transition);
+}
+.filter-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+.filter-input::placeholder { color: var(--text-3); }
+
+/* --- 17d: Expandable Row --- */
+.expand-table { width: 100%; border-collapse: collapse; }
+.expand-row {
+  cursor: pointer;
+  transition: background 80ms ease-out;
+  border-bottom: 1px solid var(--border);
+}
+.expand-row:hover { background: var(--bg-3); }
+.expand-row td {
+  padding: 10px 12px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.expand-row .expand-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-3);
+  transition: transform 160ms ease-out;
+  flex-shrink: 0;
+}
+.expand-row.expanded .expand-chevron { transform: rotate(90deg); }
+.expand-detail {
+  display: none;
+  border-bottom: 1px solid var(--border);
+}
+.expand-detail.open { display: table-row; }
+.expand-detail td {
+  padding: 16px 12px 16px 44px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--bg-3);
+}
+
+/* --- 17e: Multi-Select --- */
+.multi-select {
+  position: relative;
+  display: inline-block;
+  min-width: 220px;
+}
+.multi-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  background: var(--bg);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: all var(--transition);
+  min-height: 36px;
+  flex-wrap: wrap;
+}
+.multi-select-trigger:hover { border-color: var(--accent); }
+.multi-select-trigger.focused { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+.multi-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--r4);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.multi-tag .tag-x { cursor: pointer; font-size: 10px; opacity: 0.6; transition: opacity 80ms; }
+.multi-tag .tag-x:hover { opacity: 1; }
+.multi-select-placeholder { color: var(--text-3); font-size: 12px; }
+.multi-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r10);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 40;
+  max-height: 200px;
+  overflow-y: auto;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease-out, transform 120ms ease-out;
+  pointer-events: none;
+}
+.multi-dropdown.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.multi-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--r6);
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 80ms ease-out;
+}
+.multi-option:hover { background: var(--bg-3); }
+.multi-option.selected { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); color: var(--accent); font-weight: 600; }
+.multi-check {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--border-bright);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 80ms ease-out;
+}
+.multi-option.selected .multi-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* --- 17f: Time-Range Selector --- */
+.time-range {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  padding: 3px;
+}
+.time-btn {
+  padding: 5px 12px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: all 80ms ease-out;
+}
+.time-btn:hover { color: var(--text); }
+.time-btn.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow-sm); }
+
+/* ==============================================
+   SECTION 18: REAL-TIME & STATUS
+   ============================================== */
+
+/* --- 18a: WebSocket Throughput --- */
+.ws-throughput {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 60px;
+  padding: 0;
+}
+.ws-bar {
+  flex: 1;
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 2px 2px 0 0;
+  min-width: 4px;
+  transition: height 200ms ease-out;
+}
+.ws-bar:hover { background: var(--accent); }
+.ws-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 12px;
+}
+.ws-stat-val { font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.ws-stat-label { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+
+/* --- 18b: Status Timeline --- */
+.status-timeline { display: flex; flex-direction: column; gap: 0; position: relative; padding-left: 20px; }
+.timeline-line {
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--border-bright);
+}
+.timeline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  position: relative;
+}
+.timeline-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  flex-shrink: 0;
+  position: absolute;
+  left: -20px;
+  top: 10px;
+  z-index: 1;
+}
+.timeline-dot.green { background: var(--green); }
+.timeline-dot.amber { background: var(--amber); }
+.timeline-dot.red { background: var(--red); }
+.timeline-dot.muted { background: var(--text-3); }
+.timeline-dot.accent { background: var(--accent); }
+.timeline-content { flex: 1; }
+.timeline-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.timeline-time { font-size: 11px; color: var(--text-3); margin-top: 2px; font-family: var(--mono); }
+.timeline-desc { font-size: 12px; color: var(--text-2); margin-top: 4px; }
+
+/* --- 18c: Lock Status --- */
+.lock-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--r6);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all var(--transition);
+}
+.lock-status.locked {
+  background: color-mix(in srgb, var(--amber) 10%, var(--bg));
+  color: var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent);
+}
+.lock-status.unlocked {
+  background: color-mix(in srgb, var(--green) 10%, var(--bg));
+  color: var(--green);
+  border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
+}
+.lock-icon { width: 14px; height: 14px; }
+
+/* --- 18d: Capacity Gauge --- */
+.gauge-container { display: flex; align-items: center; gap: 16px; }
+.gauge-ring {
+  position: relative;
+  width: 80px;
+  height: 80px;
+}
+.gauge-ring svg { transform: rotate(-90deg); }
+.gauge-ring circle {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.gauge-track { stroke: var(--bg-4); }
+.gauge-fill { transition: stroke-dashoffset 600ms ease-out; }
+.gauge-fill.green { stroke: var(--green); }
+.gauge-fill.amber { stroke: var(--amber); }
+.gauge-fill.red { stroke: var(--red); }
+.gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.gauge-percent { font-size: 18px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.gauge-label { font-size: 10px; color: var(--text-3); }
+.gauge-info { font-size: 13px; color: var(--text-2); }
+.gauge-info strong { color: var(--text); font-weight: 600; }
+
+/* --- 18e: Number Animation --- */
+.num-anim {
+  font-size: 32px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  letter-spacing: -0.03em;
+  transition: color var(--transition);
+}
+.num-anim.up { color: var(--green); }
+.num-anim.down { color: var(--red); }
+.num-unit { font-size: 14px; font-weight: 600; color: var(--text-3); margin-left: 4px; }
+
+/* --- 18f: Feature Flag Row --- */
+.ff-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  transition: all var(--transition);
+}
+.ff-row:hover { border-color: var(--border-bright); background: var(--bg-3); }
+.ff-row + .ff-row { margin-top: 8px; }
+.ff-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; font-family: var(--mono); }
+.ff-desc { font-size: 11px; color: var(--text-3); flex: 1; }
+.ff-toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-4);
+  border: 1px solid var(--border-bright);
+  cursor: pointer;
+  position: relative;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.ff-toggle::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform var(--transition);
+}
+.ff-toggle.on { background: var(--green); border-color: var(--green); }
+.ff-toggle.on::after { transform: translateX(16px); }
+
+/* ==============================================
+   SECTION 19: LAYOUT & OVERFLOW
+   ============================================== */
+
+/* --- 19a: Glass / Frosted Card --- */
+.glass-card {
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid color-mix(in srgb, var(--border-bright) 60%, transparent);
+  border-radius: var(--r16);
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition);
+}
+.glass-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+.glass-bg {
+  background: linear-gradient(135deg, var(--accent), var(--purple), var(--teal));
+  border-radius: var(--r16);
+  padding: 48px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* --- 19b: Truncation Patterns --- */
+.trunc-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+  font-size: 13px;
+  color: var(--text);
+}
+.trunc-multi {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.5;
+  max-width: 300px;
+}
+.trunc-mono {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  color: var(--text);
+  padding: 4px 8px;
+  background: var(--bg-3);
+  border-radius: var(--r4);
+  direction: rtl;
+  text-align: left;
+}
+
+/* --- 19c: Error Boundary --- */
+.error-boundary {
+  border: 2px dashed color-mix(in srgb, var(--red) 40%, var(--bg));
+  border-radius: var(--r10);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  background: color-mix(in srgb, var(--red) 4%, var(--bg));
+}
+.error-icon { width: 40px; height: 40px; color: var(--red); opacity: 0.6; }
+.error-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.error-msg { font-size: 12px; color: var(--text-2); max-width: 360px; }
+.error-stack {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 6%, var(--bg));
+  padding: 12px;
+  border-radius: var(--r6);
+  text-align: left;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.5;
+}
+
+/* --- 19d: Loading Composition --- */
+.loading-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.loading-header-row { display: flex; align-items: center; gap: 12px; }
+.loading-lines { display: flex; flex-direction: column; gap: 8px; }
+
+/* ==============================================
+   SECTION 20: DOMAIN-SPECIFIC
+   ============================================== */
+
+/* --- 20a: Error Code Card --- */
+.err-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+  transition: all var(--transition);
+}
+.err-card:hover { border-color: var(--border-bright); box-shadow: var(--shadow-sm); }
+.err-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--red) 6%, var(--bg));
+  border-bottom: 1px solid var(--border);
+}
+.err-code {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--red);
+}
+.err-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.err-card-body { padding: 16px; }
+.err-desc { font-size: 12px; color: var(--text-2); line-height: 1.6; }
+.err-fix {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--green) 6%, var(--bg));
+  border-radius: var(--r6);
+  font-size: 12px;
+  color: var(--green);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.err-fix-icon { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+
+/* --- 20b: Notebook Cell --- */
+.nb-cell {
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+  transition: all var(--transition);
+}
+.nb-cell:hover { border-color: var(--accent); }
+.nb-cell + .nb-cell { margin-top: 8px; }
+.nb-cell-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.nb-cell-num {
+  font-family: var(--mono);
+  color: var(--text-3);
+  font-size: 11px;
+  min-width: 32px;
+}
+.nb-cell-lang { color: var(--accent); }
+.nb-cell-status { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.nb-cell-time { font-family: var(--mono); font-size: 10px; color: var(--text-3); }
+.nb-code {
+  padding: 12px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg-2);
+  overflow-x: auto;
+  white-space: pre;
+}
+.nb-output {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  background: var(--bg);
+}
+.nb-run-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 80ms ease-out;
+}
+.nb-run-btn:hover { background: var(--bg-4); color: var(--green); }
+
+/* --- 20c: Command Palette --- */
+.cmd-palette-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 120px;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  pointer-events: none;
+}
+.cmd-palette-overlay.open { opacity: 1; pointer-events: auto; }
+.cmd-palette {
+  width: 520px;
+  max-height: 400px;
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r16);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  transform: scale(0.96) translateY(-8px);
+  transition: transform 120ms ease-out;
+}
+.cmd-palette-overlay.open .cmd-palette { transform: scale(1) translateY(0); }
+.cmd-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.cmd-search-icon { width: 16px; height: 16px; color: var(--text-3); flex-shrink: 0; }
+.cmd-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+}
+.cmd-input::placeholder { color: var(--text-3); }
+.cmd-hint { font-size: 11px; color: var(--text-3); font-family: var(--mono); white-space: nowrap; }
+.cmd-results {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.cmd-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 8px 12px 4px;
+}
+.cmd-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--r6);
+  cursor: pointer;
+  transition: background 80ms ease-out;
+}
+.cmd-result:hover, .cmd-result.active { background: var(--bg-3); }
+.cmd-result-icon { width: 16px; height: 16px; color: var(--text-3); flex-shrink: 0; }
+.cmd-result.active .cmd-result-icon { color: var(--accent); }
+.cmd-result-text { flex: 1; font-size: 13px; color: var(--text); }
+.cmd-result.active .cmd-result-text { color: var(--accent); font-weight: 600; }
+.cmd-result-shortcut {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 2px 6px;
+  background: var(--bg-4);
+  border-radius: var(--r4);
+}
+.cmd-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-3);
+}
+.cmd-footer kbd {
+  padding: 2px 5px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+/* --- 20d: Diff View --- */
+.diff-container {
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.diff-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.diff-header .diff-path { flex: 1; color: var(--text-2); font-weight: 400; }
+.diff-table { width: 100%; border-collapse: collapse; }
+.diff-line { font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+.diff-line td { padding: 0 12px; white-space: pre; vertical-align: top; }
+.diff-line-num {
+  width: 40px;
+  min-width: 40px;
+  text-align: right;
+  padding-right: 8px;
+  color: var(--text-3);
+  user-select: none;
+  font-size: 11px;
+}
+.diff-line.added { background: color-mix(in srgb, var(--green) 8%, var(--bg)); }
+.diff-line.added .diff-line-num { color: var(--green); }
+.diff-line.added .diff-content { color: var(--green); }
+.diff-line.removed { background: color-mix(in srgb, var(--red) 8%, var(--bg)); }
+.diff-line.removed .diff-line-num { color: var(--red); }
+.diff-line.removed .diff-content { color: var(--red); }
+.diff-line.context .diff-content { color: var(--text-2); }
+.diff-hunk {
+  background: color-mix(in srgb, var(--blue) 8%, var(--bg));
+  color: var(--blue);
+  font-size: 11px;
+  padding: 4px 12px;
+}
+
+/* === INLINE DEMO POSITION FIX === */
+.demo-inline { position: relative; }
+</style>
+</head>
+<body>
+
+<!-- ===== PAGE HEADER ===== -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <div class="page-wordmark">
+      <div class="page-wordmark-dot"></div>
+      EDOG Design Bible
+    </div>
+    <div class="page-meta">
+      <span>Part 3 of 3</span>
+      <span>Sections 17 – 20</span>
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+        <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg class="moon-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+
+  <!-- Page Intro -->
+  <div class="page-intro">
+    <h1 class="page-title">Design Bible <span>Part 3</span></h1>
+    <p class="page-subtitle">Data-heavy components, real-time status indicators, layout patterns, and domain-specific UI for the EDOG Playground cockpit.</p>
+    <div class="toc">
+      <a class="toc-item" href="#s17">17. Data-Heavy Components</a>
+      <a class="toc-item" href="#s18">18. Real-Time & Status</a>
+      <a class="toc-item" href="#s19">19. Layout & Overflow</a>
+      <a class="toc-item" href="#s20">20. Domain-Specific</a>
+    </div>
+  </div>
+
+  <!-- ============================================
+       SECTION 17: DATA-HEAVY COMPONENTS
+       ============================================ -->
+  <section class="section" id="s17">
+    <div class="section-header">
+      <div class="section-num">17</div>
+      <div class="section-meta">
+        <h2>Data-Heavy Components</h2>
+        <p>Interactive widgets for complex data presentation — context menus, breadcrumbs, filter bars, expandable rows, multi-select, and time-range selectors.</p>
+      </div>
+    </div>
+
+    <!-- 17a: Context Menu -->
+    <div class="demo-card">
+      <div class="sub-label">17a. Context Menu</div>
+      <div class="ctx-trigger-area demo-inline" id="ctxTrigger">
+        Right-click or click to open context menu
+        <div class="ctx-menu" id="ctxMenu">
+          <div class="ctx-item" onclick="closeCtx()">
+            <svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Rename
+            <span class="ctx-shortcut">F2</span>
+          </div>
+          <div class="ctx-item" onclick="closeCtx()">
+            <svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Duplicate
+            <span class="ctx-shortcut">Ctrl+D</span>
+          </div>
+          <div class="ctx-item" onclick="closeCtx()">
+            <svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+            Move to...
+          </div>
+          <div class="ctx-sep"></div>
+          <div class="ctx-item" onclick="closeCtx()">
+            <svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Inspect
+            <span class="ctx-shortcut">Ctrl+I</span>
+          </div>
+          <div class="ctx-sep"></div>
+          <div class="ctx-item danger" onclick="closeCtx()">
+            <svg class="ctx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete
+            <span class="ctx-shortcut">Del</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 17b: Breadcrumbs -->
+    <div class="demo-card">
+      <div class="sub-label">17b. Breadcrumbs</div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="breadcrumb">
+          <a class="breadcrumb-item">Workspaces</a>
+          <span class="breadcrumb-sep">&#x25B8;</span>
+          <a class="breadcrumb-item">Production</a>
+          <span class="breadcrumb-sep">&#x25B8;</span>
+          <a class="breadcrumb-item">SalesLakehouse</a>
+          <span class="breadcrumb-sep">&#x25B8;</span>
+          <span class="breadcrumb-item active">Orders Table</span>
+        </div>
+        <div class="breadcrumb">
+          <a class="breadcrumb-item">Settings</a>
+          <span class="breadcrumb-sep">&#x25B8;</span>
+          <a class="breadcrumb-item">Feature Flags</a>
+          <span class="breadcrumb-sep">&#x25B8;</span>
+          <span class="breadcrumb-item active">EnableDAGv2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 17c: Filter Bar -->
+    <div class="demo-card">
+      <div class="sub-label">17c. Filter Bar</div>
+      <div class="filter-bar" id="filterBar">
+        <div class="filter-chip active">
+          Level: Error
+          <span class="chip-x" onclick="removeChip(this)">&#x2715;</span>
+        </div>
+        <div class="filter-chip active">
+          Source: DAGEngine
+          <span class="chip-x" onclick="removeChip(this)">&#x2715;</span>
+        </div>
+        <div class="filter-chip">
+          Last 1 hour
+          <span class="chip-x" onclick="removeChip(this)">&#x2715;</span>
+        </div>
+        <input class="filter-input" placeholder="Add filter..." />
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:var(--text-3);">
+        <span id="filterCount">3</span> active filters &#183; <a style="color:var(--accent);cursor:pointer;" onclick="clearFilters()">Clear all</a>
+      </div>
+    </div>
+
+    <!-- 17d: Expandable Row -->
+    <div class="demo-card">
+      <div class="sub-label">17d. Expandable Row</div>
+      <table class="expand-table">
+        <tr class="expand-row" onclick="toggleRow(this)">
+          <td style="width:24px;">
+            <svg class="expand-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </td>
+          <td><strong>DAG_Node_Transform_Sales</strong></td>
+          <td><span class="badge success"><span class="badge-dot"></span> Completed</span></td>
+          <td style="color:var(--text-3);font-family:var(--mono);font-size:12px;">2.4s</td>
+        </tr>
+        <tr class="expand-detail">
+          <td colspan="4">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div><strong>Input:</strong> raw_sales (1,240,000 rows)</div>
+              <div><strong>Output:</strong> transformed_sales (1,238,412 rows)</div>
+              <div><strong>Dropped:</strong> 1,588 rows (null key filter)</div>
+              <div style="margin-top:4px;"><span class="badge info">Spark Job #1402</span> <span class="badge muted">3 stages</span></div>
+            </div>
+          </td>
+        </tr>
+        <tr class="expand-row" onclick="toggleRow(this)">
+          <td style="width:24px;">
+            <svg class="expand-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </td>
+          <td><strong>DAG_Node_Aggregate_Revenue</strong></td>
+          <td><span class="badge warn"><span class="badge-dot"></span> Running</span></td>
+          <td style="color:var(--text-3);font-family:var(--mono);font-size:12px;">1.1s</td>
+        </tr>
+        <tr class="expand-detail">
+          <td colspan="4">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div><strong>Input:</strong> transformed_sales</div>
+              <div><strong>Status:</strong> Processing partition 3 of 8</div>
+              <div style="margin-top:4px;"><span class="badge info">Spark Job #1403</span> <span class="badge accent pulse"><span class="badge-dot"></span> Active</span></div>
+            </div>
+          </td>
+        </tr>
+        <tr class="expand-row" onclick="toggleRow(this)">
+          <td style="width:24px;">
+            <svg class="expand-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </td>
+          <td><strong>DAG_Node_Write_Delta</strong></td>
+          <td><span class="badge muted"><span class="badge-dot"></span> Pending</span></td>
+          <td style="color:var(--text-3);font-family:var(--mono);font-size:12px;">—</td>
+        </tr>
+        <tr class="expand-detail">
+          <td colspan="4">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div><strong>Target:</strong> lakehouse://sales/revenue_agg</div>
+              <div><strong>Mode:</strong> Overwrite</div>
+              <div><strong>Waiting on:</strong> DAG_Node_Aggregate_Revenue</div>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- 17e: Multi-Select -->
+    <div class="demo-card">
+      <div class="sub-label">17e. Multi-Select</div>
+      <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+        <div class="multi-select" id="multiSelect1">
+          <div class="multi-select-trigger" onclick="toggleMultiDrop('multiSelect1')">
+            <span class="multi-tag">DAGEngine <span class="tag-x" onclick="event.stopPropagation();removeTag(this)">&#x2715;</span></span>
+            <span class="multi-tag">SparkClient <span class="tag-x" onclick="event.stopPropagation();removeTag(this)">&#x2715;</span></span>
+          </div>
+          <div class="multi-dropdown">
+            <div class="multi-option selected" onclick="toggleMultiOpt(this)">
+              <div class="multi-check">&#x2713;</div>
+              DAGEngine
+            </div>
+            <div class="multi-option selected" onclick="toggleMultiOpt(this)">
+              <div class="multi-check">&#x2713;</div>
+              SparkClient
+            </div>
+            <div class="multi-option" onclick="toggleMultiOpt(this)">
+              <div class="multi-check"></div>
+              CatalogService
+            </div>
+            <div class="multi-option" onclick="toggleMultiOpt(this)">
+              <div class="multi-check"></div>
+              TokenProvider
+            </div>
+            <div class="multi-option" onclick="toggleMultiOpt(this)">
+              <div class="multi-check"></div>
+              FeatureFlighter
+            </div>
+          </div>
+        </div>
+
+        <div class="multi-select" id="multiSelect2">
+          <div class="multi-select-trigger" onclick="toggleMultiDrop('multiSelect2')">
+            <span class="multi-select-placeholder">Select log sources...</span>
+          </div>
+          <div class="multi-dropdown">
+            <div class="multi-option" onclick="toggleMultiOpt(this)">
+              <div class="multi-check"></div>
+              Error
+            </div>
+            <div class="multi-option" onclick="toggleMultiOpt(this)">
+              <div class="multi-check"></div>
+              Warning
+            </div>
+            <div class="multi-option" onclick="toggleMultiOpt(this)">
+              <div class="multi-check"></div>
+              Info
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 17f: Time-Range Selector -->
+    <div class="demo-card">
+      <div class="sub-label">17f. Time-Range Selector</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="time-range" id="timeRange1">
+          <button class="time-btn" onclick="setTimeRange(this)">5m</button>
+          <button class="time-btn" onclick="setTimeRange(this)">15m</button>
+          <button class="time-btn active" onclick="setTimeRange(this)">1h</button>
+          <button class="time-btn" onclick="setTimeRange(this)">6h</button>
+          <button class="time-btn" onclick="setTimeRange(this)">24h</button>
+          <button class="time-btn" onclick="setTimeRange(this)">7d</button>
+        </div>
+        <div style="font-size:12px;color:var(--text-3);">
+          Showing logs from <strong style="color:var(--text);">14:30</strong> to <strong style="color:var(--text);">15:30</strong> (1 hour)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       SECTION 18: REAL-TIME & STATUS
+       ============================================ -->
+  <section class="section" id="s18">
+    <div class="section-header">
+      <div class="section-num">18</div>
+      <div class="section-meta">
+        <h2>Real-Time & Status</h2>
+        <p>Live data visualizations, status indicators, and dynamic gauges for monitoring service health, capacity, and feature flags.</p>
+      </div>
+    </div>
+
+    <!-- 18a: WebSocket Throughput -->
+    <div class="demo-card">
+      <div class="sub-label">18a. WebSocket Throughput</div>
+      <div class="ws-throughput" id="wsThroughput"></div>
+      <div class="ws-stats">
+        <div>
+          <div class="ws-stat-val" id="wsRate">0</div>
+          <div class="ws-stat-label">msg/sec</div>
+        </div>
+        <div>
+          <div class="ws-stat-val" id="wsTotal">0</div>
+          <div class="ws-stat-label">total received</div>
+        </div>
+        <div>
+          <div class="ws-stat-val" id="wsLatency">0</div>
+          <div class="ws-stat-label">avg latency (ms)</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-secondary" onclick="resetWs()">Reset</button>
+        <span class="badge success pulse"><span class="badge-dot"></span> Connected</span>
+      </div>
+    </div>
+
+    <!-- 18b: Status Timeline -->
+    <div class="demo-card">
+      <div class="sub-label">18b. Status Timeline</div>
+      <div class="status-timeline">
+        <div class="timeline-line"></div>
+        <div class="timeline-item">
+          <div class="timeline-dot green"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">Deployment succeeded</div>
+            <div class="timeline-time">15:32:14.002</div>
+            <div class="timeline-desc">All 12 nodes healthy. DAG engine initialized.</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot amber"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">Token refresh warning</div>
+            <div class="timeline-time">15:28:47.551</div>
+            <div class="timeline-desc">MWC token expires in 5 minutes. Auto-refresh scheduled.</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot green"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">WebSocket connected</div>
+            <div class="timeline-time">15:25:01.330</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot red"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">Spark job failed</div>
+            <div class="timeline-time">15:22:58.714</div>
+            <div class="timeline-desc">Job #1398 — OutOfMemoryError in executor 3. Retried with 2x memory.</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot accent"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">Session started</div>
+            <div class="timeline-time">15:20:00.000</div>
+            <div class="timeline-desc">EDOG Studio v0.4.2 connected to workspace "Production"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 18c: Lock Status -->
+    <div class="demo-card">
+      <div class="sub-label">18c. Lock Status</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">
+        <div class="lock-status locked" id="lockDemo" onclick="toggleLock()">
+          <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="lockIcon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span id="lockText">Locked by devpatel</span>
+        </div>
+        <span style="font-size:12px;color:var(--text-3);">Click to toggle</span>
+      </div>
+    </div>
+
+    <!-- 18d: Capacity Gauge -->
+    <div class="demo-card">
+      <div class="sub-label">18d. Capacity Gauge</div>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;">
+        <div class="gauge-container">
+          <div class="gauge-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle class="gauge-track" cx="40" cy="40" r="34" />
+              <circle class="gauge-fill green" cx="40" cy="40" r="34" stroke-dasharray="213.6" stroke-dashoffset="64" />
+            </svg>
+            <div class="gauge-center">
+              <span class="gauge-percent">70%</span>
+              <span class="gauge-label">CPU</span>
+            </div>
+          </div>
+          <div class="gauge-info">
+            <div><strong>4 / 8</strong> vCPUs active</div>
+            <div style="margin-top:4px;font-size:12px;color:var(--text-3);">Cluster: spark-prod-01</div>
+          </div>
+        </div>
+        <div class="gauge-container">
+          <div class="gauge-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle class="gauge-track" cx="40" cy="40" r="34" />
+              <circle class="gauge-fill amber" cx="40" cy="40" r="34" stroke-dasharray="213.6" stroke-dashoffset="32" />
+            </svg>
+            <div class="gauge-center">
+              <span class="gauge-percent">85%</span>
+              <span class="gauge-label">MEM</span>
+            </div>
+          </div>
+          <div class="gauge-info">
+            <div><strong>13.6 / 16</strong> GB used</div>
+            <div style="margin-top:4px;font-size:12px;color:var(--text-3);">Warning threshold: 80%</div>
+          </div>
+        </div>
+        <div class="gauge-container">
+          <div class="gauge-ring">
+            <svg width="80" height="80" viewBox="0 0 80 80">
+              <circle class="gauge-track" cx="40" cy="40" r="34" />
+              <circle class="gauge-fill red" cx="40" cy="40" r="34" stroke-dasharray="213.6" stroke-dashoffset="11" />
+            </svg>
+            <div class="gauge-center">
+              <span class="gauge-percent">95%</span>
+              <span class="gauge-label">DISK</span>
+            </div>
+          </div>
+          <div class="gauge-info">
+            <div><strong>47.5 / 50</strong> GB used</div>
+            <div style="margin-top:4px;font-size:12px;color:var(--red);">Critical — expand storage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 18e: Number Animation -->
+    <div class="demo-card">
+      <div class="sub-label">18e. Number Animation</div>
+      <div style="display:flex;gap:48px;flex-wrap:wrap;">
+        <div>
+          <div class="demo-label">Rows Processed</div>
+          <div><span class="num-anim" id="numRows">0</span><span class="num-unit">rows</span></div>
+        </div>
+        <div>
+          <div class="demo-label">Throughput</div>
+          <div><span class="num-anim" id="numThroughput">0</span><span class="num-unit">MB/s</span></div>
+        </div>
+        <div>
+          <div class="demo-label">Error Rate</div>
+          <div><span class="num-anim" id="numErrors">0.00</span><span class="num-unit">%</span></div>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn btn-primary" onclick="animateNumbers()">Animate Values</button>
+        <button class="btn btn-secondary" onclick="resetNumbers()">Reset</button>
+      </div>
+    </div>
+
+    <!-- 18f: Feature Flag Row -->
+    <div class="demo-card">
+      <div class="sub-label">18f. Feature Flag Row</div>
+      <div class="ff-row">
+        <div class="ff-toggle on" onclick="this.classList.toggle('on')"></div>
+        <div class="ff-name">EnableDAGv2Engine</div>
+        <div class="ff-desc">Enables the v2 DAG execution engine with parallel node scheduling</div>
+        <span class="badge success">Rolled out 100%</span>
+      </div>
+      <div class="ff-row">
+        <div class="ff-toggle" onclick="this.classList.toggle('on')"></div>
+        <div class="ff-name">EnableSparkAdaptiveQuery</div>
+        <div class="ff-desc">Adaptive query execution for Spark SQL joins and aggregates</div>
+        <span class="badge warn">Rollout 45%</span>
+      </div>
+      <div class="ff-row">
+        <div class="ff-toggle" onclick="this.classList.toggle('on')"></div>
+        <div class="ff-name">EnableDeltaV2Write</div>
+        <div class="ff-desc">Delta Lake v2 write protocol with deletion vectors</div>
+        <span class="badge muted">Internal only</span>
+      </div>
+      <div class="ff-row">
+        <div class="ff-toggle on" onclick="this.classList.toggle('on')"></div>
+        <div class="ff-name">EnableLiveTableMetrics</div>
+        <div class="ff-desc">Real-time metrics collection for materialized views</div>
+        <span class="badge info">Preview</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       SECTION 19: LAYOUT & OVERFLOW
+       ============================================ -->
+  <section class="section" id="s19">
+    <div class="section-header">
+      <div class="section-num">19</div>
+      <div class="section-meta">
+        <h2>Layout & Overflow</h2>
+        <p>Glass morphism cards, text truncation strategies, error boundaries, and loading composition patterns for graceful degradation.</p>
+      </div>
+    </div>
+
+    <!-- 19a: Glass / Frosted Card -->
+    <div class="demo-card">
+      <div class="sub-label">19a. Glass / Frosted Card</div>
+      <div class="glass-bg">
+        <div class="glass-card" style="flex:1;min-width:200px;">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">Service Health</div>
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:12px;">All systems operational</div>
+          <span class="badge success"><span class="badge-dot"></span> Healthy</span>
+        </div>
+        <div class="glass-card" style="flex:1;min-width:200px;">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">Active Jobs</div>
+          <div style="font-size:28px;font-weight:700;color:var(--text);">12</div>
+          <div style="font-size:12px;color:var(--text-2);margin-top:4px;">3 queued, 2 completing</div>
+        </div>
+        <div class="glass-card" style="flex:1;min-width:200px;">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;">Latency</div>
+          <div style="font-size:28px;font-weight:700;color:var(--text);">24<span style="font-size:14px;color:var(--text-3);"> ms</span></div>
+          <div style="font-size:12px;color:var(--green);margin-top:4px;">&#x25BC; 12% from last hour</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 19b: Truncation Patterns -->
+    <div class="demo-card">
+      <div class="sub-label">19b. Truncation Patterns</div>
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div>
+          <div class="demo-label">Single-line ellipsis</div>
+          <div class="trunc-line">abfss://container@storageaccount.dfs.core.windows.net/Tables/SalesRevenueAggregate/part-00001.parquet</div>
+        </div>
+        <div>
+          <div class="demo-label">Multi-line clamp (3 lines)</div>
+          <div class="trunc-multi">The DAG execution engine processes each node in topological order, respecting data dependencies between transformations. When a node fails, the engine checks if a retry policy is configured and attempts re-execution with exponential backoff. Partial results from successfully completed upstream nodes are cached in memory to avoid redundant computation during retries.</div>
+        </div>
+        <div>
+          <div class="demo-label">RTL path truncation (show filename)</div>
+          <div class="trunc-mono">&#x200E;abfss://container@storage.dfs.core.windows.net/Tables/SalesRevenue/part-00042-c3f9a.snappy.parquet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 19c: Error Boundary -->
+    <div class="demo-card">
+      <div class="sub-label">19c. Error Boundary</div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="error-boundary">
+          <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div class="error-title">Component Failed to Render</div>
+          <div class="error-msg">The DAG visualization module encountered an unexpected error while processing node dependencies. This view has been safely isolated.</div>
+          <div class="error-stack">TypeError: Cannot read properties of undefined (reading 'edges')
+    at DAGRenderer.calculateLayout (dag-renderer.js:142)
+    at DAGRenderer.render (dag-renderer.js:78)
+    at ViewManager.activateView (view-manager.js:203)</div>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn btn-primary">Retry</button>
+            <button class="btn btn-secondary">Copy Stack Trace</button>
+            <button class="btn btn-ghost">Dismiss</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 19d: Loading Composition -->
+    <div class="demo-card">
+      <div class="sub-label">19d. Loading Composition</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div class="loading-compose" style="flex:1;min-width:260px;">
+          <div class="demo-label">Table skeleton</div>
+          <div class="loading-header-row">
+            <div class="sk sk-circle" style="width:28px;height:28px;"></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:4px;">
+              <div class="sk" style="width:60%;height:12px;"></div>
+              <div class="sk" style="width:40%;height:10px;"></div>
+            </div>
+          </div>
+          <div class="loading-lines">
+            <div class="sk" style="width:100%;height:36px;border-radius:var(--r6);"></div>
+            <div class="sk" style="width:100%;height:36px;border-radius:var(--r6);"></div>
+            <div class="sk" style="width:100%;height:36px;border-radius:var(--r6);"></div>
+            <div class="sk" style="width:80%;height:36px;border-radius:var(--r6);"></div>
+          </div>
+        </div>
+        <div class="loading-compose" style="flex:1;min-width:260px;">
+          <div class="demo-label">Card skeleton</div>
+          <div style="padding:20px;border:1px solid var(--border);border-radius:var(--r10);">
+            <div class="sk" style="width:50%;height:14px;margin-bottom:12px;"></div>
+            <div class="sk" style="width:100%;height:80px;border-radius:var(--r6);margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;">
+              <div class="sk" style="width:80px;height:28px;border-radius:var(--r100);"></div>
+              <div class="sk" style="width:60px;height:28px;border-radius:var(--r100);"></div>
+            </div>
+          </div>
+        </div>
+        <div class="loading-compose" style="flex:1;min-width:260px;">
+          <div class="demo-label">Inline spinner</div>
+          <div style="display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--border);border-radius:var(--r10);">
+            <div class="spinner"></div>
+            <span style="font-size:13px;color:var(--text-2);">Loading workspace data...</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:16px;border:1px solid var(--border);border-radius:var(--r10);margin-top:8px;">
+            <div class="spinner" style="border-top-color:var(--green);"></div>
+            <span style="font-size:13px;color:var(--text-2);">Deploying to lakehouse...</span>
+            <span class="badge accent pulse" style="margin-left:auto;"><span class="badge-dot"></span> In Progress</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================
+       SECTION 20: DOMAIN-SPECIFIC
+       ============================================ -->
+  <section class="section" id="s20">
+    <div class="section-header">
+      <div class="section-num">20</div>
+      <div class="section-meta">
+        <h2>Domain-Specific</h2>
+        <p>Specialized components for the FabricLiveTable developer workflow — error code cards, notebook cells, command palette, and unified diff view.</p>
+      </div>
+    </div>
+
+    <!-- 20a: Error Code Card -->
+    <div class="demo-card">
+      <div class="sub-label">20a. Error Code Card</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="err-card">
+          <div class="err-card-header">
+            <span class="err-code">FLT-4012</span>
+            <span class="err-label">Delta Table Schema Mismatch</span>
+            <span class="badge error" style="margin-left:auto;">Fatal</span>
+          </div>
+          <div class="err-card-body">
+            <div class="err-desc">The schema of the source DataFrame does not match the target Delta table. Column "revenue_amount" expected type DECIMAL(18,2) but received DOUBLE. This error occurs during the write phase when schema enforcement is enabled.</div>
+            <div class="err-fix">
+              <svg class="err-fix-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <div><strong>Fix:</strong> Add <code style="font-family:var(--mono);background:color-mix(in srgb, var(--green) 10%, var(--bg));padding:1px 4px;border-radius:3px;">.option("mergeSchema", "true")</code> to your write operation, or cast the column before writing.</div>
+            </div>
+          </div>
+        </div>
+        <div class="err-card">
+          <div class="err-card-header">
+            <span class="err-code">FLT-2001</span>
+            <span class="err-label">Token Refresh Timeout</span>
+            <span class="badge warn" style="margin-left:auto;">Retriable</span>
+          </div>
+          <div class="err-card-body">
+            <div class="err-desc">MWC token refresh exceeded the 30-second timeout. The service will retry automatically in 5 seconds. If this persists, verify your AAD configuration and network connectivity.</div>
+            <div class="err-fix">
+              <svg class="err-fix-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <div><strong>Fix:</strong> Check <code style="font-family:var(--mono);background:color-mix(in srgb, var(--green) 10%, var(--bg));padding:1px 4px;border-radius:3px;">edog-config.json</code> for correct tenantId and clientId values. Run <code style="font-family:var(--mono);background:color-mix(in srgb, var(--green) 10%, var(--bg));padding:1px 4px;border-radius:3px;">edog token refresh</code> to force a new token.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 20b: Notebook Cell -->
+    <div class="demo-card">
+      <div class="sub-label">20b. Notebook Cell</div>
+      <div class="nb-cell">
+        <div class="nb-cell-header">
+          <span class="nb-cell-num">In [1]:</span>
+          <span class="nb-cell-lang">Python</span>
+          <div class="nb-cell-status">
+            <span class="badge success" style="font-size:10px;padding:2px 6px;"><span class="badge-dot"></span> Done</span>
+            <span class="nb-cell-time">0.42s</span>
+          </div>
+          <button class="nb-run-btn" title="Run cell">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+        </div>
+        <div class="nb-code">df = spark.read.format("delta").load("abfss://sales@storage.dfs.core.windows.net/Tables/Revenue")
+df_filtered = df.filter(df.amount > 1000).groupBy("region").agg({"amount": "sum"})
+df_filtered.show(5)</div>
+        <div class="nb-output">+--------+-----------+
+| region | sum(amount)|
++--------+-----------+
+|   APAC |  2847103.50|
+|   EMEA |  1923847.25|
+|   AMER |  3291456.75|
++--------+-----------+
+only showing top 3 rows</div>
+      </div>
+      <div class="nb-cell">
+        <div class="nb-cell-header">
+          <span class="nb-cell-num">In [2]:</span>
+          <span class="nb-cell-lang">SQL</span>
+          <div class="nb-cell-status">
+            <div class="spinner" style="width:12px;height:12px;border-width:1.5px;"></div>
+            <span class="nb-cell-time">Running...</span>
+          </div>
+          <button class="nb-run-btn" title="Stop cell">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+          </button>
+        </div>
+        <div class="nb-code">SELECT table_name, num_rows, size_bytes / 1024 / 1024 AS size_mb
+FROM system.information_schema.tables
+WHERE schema_name = 'sales'
+ORDER BY num_rows DESC;</div>
+      </div>
+    </div>
+
+    <!-- 20c: Command Palette -->
+    <div class="demo-card">
+      <div class="sub-label">20c. Command Palette</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary" onclick="openCmdPalette()">Open Command Palette</button>
+        <span style="font-size:12px;color:var(--text-3);">or press <kbd style="padding:2px 5px;background:var(--bg-3);border:1px solid var(--border);border-radius:3px;font-family:var(--mono);font-size:11px;">Ctrl+K</kbd></span>
+      </div>
+    </div>
+
+    <!-- Command palette overlay (absolute/fixed positioned) -->
+    <div class="cmd-palette-overlay" id="cmdOverlay" onclick="closeCmdPalette(event)">
+      <div class="cmd-palette" onclick="event.stopPropagation()">
+        <div class="cmd-input-wrap">
+          <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="cmd-input" id="cmdInput" placeholder="Type a command..." autofocus />
+          <span class="cmd-hint">ESC</span>
+        </div>
+        <div class="cmd-results">
+          <div class="cmd-group-label">Navigation</div>
+          <div class="cmd-result active">
+            <svg class="cmd-result-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span class="cmd-result-text">Workspace Explorer</span>
+            <span class="cmd-result-shortcut">Ctrl+1</span>
+          </div>
+          <div class="cmd-result">
+            <svg class="cmd-result-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <span class="cmd-result-text">DAG Studio</span>
+            <span class="cmd-result-shortcut">Ctrl+2</span>
+          </div>
+          <div class="cmd-result">
+            <svg class="cmd-result-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span class="cmd-result-text">Log Viewer</span>
+            <span class="cmd-result-shortcut">Ctrl+3</span>
+          </div>
+          <div class="cmd-group-label">Actions</div>
+          <div class="cmd-result">
+            <svg class="cmd-result-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span class="cmd-result-text">Deploy to Lakehouse</span>
+          </div>
+          <div class="cmd-result">
+            <svg class="cmd-result-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            <span class="cmd-result-text">Refresh Token</span>
+          </div>
+          <div class="cmd-result">
+            <svg class="cmd-result-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="cmd-result-text">Settings</span>
+            <span class="cmd-result-shortcut">Ctrl+,</span>
+          </div>
+        </div>
+        <div class="cmd-footer">
+          <span><kbd>&#x2191;</kbd><kbd>&#x2193;</kbd> navigate</span>
+          <span><kbd>&#x21B5;</kbd> select</span>
+          <span><kbd>esc</kbd> close</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 20d: Diff View -->
+    <div class="demo-card">
+      <div class="sub-label">20d. Diff View</div>
+      <div class="diff-container">
+        <div class="diff-header">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="diff-path">src/backend/DevMode/EdogLogServer.cs</span>
+          <span class="badge info" style="font-size:10px;padding:2px 6px;">+12 -4</span>
+        </div>
+        <table class="diff-table">
+          <tr class="diff-line context">
+            <td class="diff-line-num">142</td>
+            <td class="diff-line-num">142</td>
+            <td class="diff-content">        private async Task HandleWebSocketAsync(WebSocket ws)</td>
+          </tr>
+          <tr class="diff-line context">
+            <td class="diff-line-num">143</td>
+            <td class="diff-line-num">143</td>
+            <td class="diff-content">        {</td>
+          </tr>
+          <tr class="diff-line removed">
+            <td class="diff-line-num">144</td>
+            <td class="diff-line-num"></td>
+            <td class="diff-content">-            var buffer = new byte[4096];</td>
+          </tr>
+          <tr class="diff-line removed">
+            <td class="diff-line-num">145</td>
+            <td class="diff-line-num"></td>
+            <td class="diff-content">-            while (ws.State == WebSocketState.Open)</td>
+          </tr>
+          <tr class="diff-line added">
+            <td class="diff-line-num"></td>
+            <td class="diff-line-num">144</td>
+            <td class="diff-content">+            var buffer = new byte[8192];</td>
+          </tr>
+          <tr class="diff-line added">
+            <td class="diff-line-num"></td>
+            <td class="diff-line-num">145</td>
+            <td class="diff-content">+            var cts = CancellationTokenSource.CreateLinkedTokenSource(_shutdownToken);</td>
+          </tr>
+          <tr class="diff-line added">
+            <td class="diff-line-num"></td>
+            <td class="diff-line-num">146</td>
+            <td class="diff-content">+            try</td>
+          </tr>
+          <tr class="diff-line context">
+            <td class="diff-line-num">146</td>
+            <td class="diff-line-num">147</td>
+            <td class="diff-content">            {</td>
+          </tr>
+          <tr class="diff-line added">
+            <td class="diff-line-num"></td>
+            <td class="diff-line-num">148</td>
+            <td class="diff-content">+                while (ws.State == WebSocketState.Open)</td>
+          </tr>
+          <tr class="diff-line added">
+            <td class="diff-line-num"></td>
+            <td class="diff-line-num">149</td>
+            <td class="diff-content">+                {</td>
+          </tr>
+          <tr class="diff-line context">
+            <td class="diff-line-num">147</td>
+            <td class="diff-line-num">150</td>
+            <td class="diff-content">                    var result = await ws.ReceiveAsync(</td>
+          </tr>
+          <tr class="diff-line removed">
+            <td class="diff-line-num">148</td>
+            <td class="diff-line-num"></td>
+            <td class="diff-content">-                        new ArraySegment&lt;byte&gt;(buffer), CancellationToken.None);</td>
+          </tr>
+          <tr class="diff-line added">
+            <td class="diff-line-num"></td>
+            <td class="diff-line-num">151</td>
+            <td class="diff-content">+                        new ArraySegment&lt;byte&gt;(buffer), cts.Token);</td>
+          </tr>
+          <tr class="diff-line context">
+            <td class="diff-line-num">149</td>
+            <td class="diff-line-num">152</td>
+            <td class="diff-content">                    if (result.MessageType == WebSocketMessageType.Close)</td>
+          </tr>
+          <tr class="diff-line context">
+            <td class="diff-line-num">150</td>
+            <td class="diff-line-num">153</td>
+            <td class="diff-content">                        break;</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer class="page-footer">
+    <div>EDOG Playground Design Bible &mdash; Part 3</div>
+    <div>Sections 17 &ndash; 20 &bull; Generated for the Hivemind</div>
+  </footer>
+
+</div><!-- /.main -->
+
+<script>
+/* === Theme Toggle === */
+function setTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  const sun = document.querySelector('.sun-icon');
+  const moon = document.querySelector('.moon-icon');
+  if (sun && moon) {
+    sun.style.display = dark ? 'none' : 'block';
+    moon.style.display = dark ? 'block' : 'none';
+  }
+  try { localStorage.setItem('edog-theme', dark ? 'dark' : 'light'); } catch(e) {}
+}
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  setTheme(!isDark);
+});
+
+(function() {
+  try {
+    const saved = localStorage.getItem('edog-theme');
+    if (saved === 'dark') setTheme(true);
+  } catch(e) {}
+})();
+
+/* === 17a: Context Menu === */
+const ctxTrigger = document.getElementById('ctxTrigger');
+const ctxMenu = document.getElementById('ctxMenu');
+
+ctxTrigger.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  showCtx(e.offsetX, e.offsetY);
+});
+ctxTrigger.addEventListener('click', (e) => {
+  if (!ctxMenu.classList.contains('open')) {
+    showCtx(e.offsetX, e.offsetY);
+  } else {
+    closeCtx();
+  }
+});
+
+function showCtx(x, y) {
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top = y + 'px';
+  ctxMenu.classList.add('open');
+}
+function closeCtx() {
+  ctxMenu.classList.remove('open');
+}
+document.addEventListener('click', (e) => {
+  if (!ctxTrigger.contains(e.target)) closeCtx();
+});
+
+/* === 17c: Filter Bar === */
+function removeChip(el) {
+  const chip = el.parentElement;
+  chip.style.transition = 'opacity 120ms, transform 120ms';
+  chip.style.opacity = '0';
+  chip.style.transform = 'scale(0.9)';
+  setTimeout(() => chip.remove(), 120);
+  updateFilterCount();
+}
+function clearFilters() {
+  const chips = document.querySelectorAll('#filterBar .filter-chip');
+  chips.forEach((c, i) => {
+    setTimeout(() => {
+      c.style.transition = 'opacity 120ms, transform 120ms';
+      c.style.opacity = '0';
+      c.style.transform = 'scale(0.9)';
+      setTimeout(() => c.remove(), 120);
+    }, i * 60);
+  });
+  setTimeout(updateFilterCount, chips.length * 60 + 140);
+}
+function updateFilterCount() {
+  const count = document.querySelectorAll('#filterBar .filter-chip').length;
+  const el = document.getElementById('filterCount');
+  if (el) el.textContent = count;
+}
+
+/* === 17d: Expandable Row === */
+function toggleRow(row) {
+  const detail = row.nextElementSibling;
+  const isExpanded = row.classList.contains('expanded');
+  row.classList.toggle('expanded');
+  detail.classList.toggle('open');
+}
+
+/* === 17e: Multi-Select === */
+function toggleMultiDrop(id) {
+  const el = document.getElementById(id);
+  const dd = el.querySelector('.multi-dropdown');
+  const trigger = el.querySelector('.multi-select-trigger');
+  dd.classList.toggle('open');
+  trigger.classList.toggle('focused', dd.classList.contains('open'));
+}
+function toggleMultiOpt(opt) {
+  opt.classList.toggle('selected');
+}
+function removeTag(tagX) {
+  tagX.parentElement.remove();
+}
+document.addEventListener('click', (e) => {
+  document.querySelectorAll('.multi-select').forEach(ms => {
+    if (!ms.contains(e.target)) {
+      const dd = ms.querySelector('.multi-dropdown');
+      const tr = ms.querySelector('.multi-select-trigger');
+      if (dd) dd.classList.remove('open');
+      if (tr) tr.classList.remove('focused');
+    }
+  });
+});
+
+/* === 17f: Time-Range Selector === */
+function setTimeRange(btn) {
+  const parent = btn.parentElement;
+  parent.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+/* === 18a: WebSocket Throughput === */
+const wsContainer = document.getElementById('wsThroughput');
+let wsData = [];
+const WS_BAR_COUNT = 40;
+
+function initWsBars() {
+  wsContainer.innerHTML = '';
+  wsData = [];
+  for (let i = 0; i < WS_BAR_COUNT; i++) {
+    wsData.push(Math.random() * 0.3);
+    const bar = document.createElement('div');
+    bar.className = 'ws-bar';
+    bar.style.height = (wsData[i] * 100) + '%';
+    wsContainer.appendChild(bar);
+  }
+}
+initWsBars();
+
+let wsInterval = setInterval(() => {
+  wsData.shift();
+  wsData.push(0.2 + Math.random() * 0.8);
+  const bars = wsContainer.querySelectorAll('.ws-bar');
+  bars.forEach((bar, i) => {
+    bar.style.height = (wsData[i] * 100) + '%';
+  });
+
+  const rate = Math.floor(80 + Math.random() * 60);
+  const total = parseInt(document.getElementById('wsTotal').textContent.replace(/,/g, '')) + rate;
+  const latency = Math.floor(5 + Math.random() * 15);
+  document.getElementById('wsRate').textContent = rate;
+  document.getElementById('wsTotal').textContent = total.toLocaleString();
+  document.getElementById('wsLatency').textContent = latency;
+}, 1000);
+
+function resetWs() {
+  document.getElementById('wsTotal').textContent = '0';
+  document.getElementById('wsRate').textContent = '0';
+  document.getElementById('wsLatency').textContent = '0';
+  initWsBars();
+}
+
+/* === 18c: Lock Status Toggle === */
+function toggleLock() {
+  const el = document.getElementById('lockDemo');
+  const text = document.getElementById('lockText');
+  const icon = document.getElementById('lockIcon');
+  if (el.classList.contains('locked')) {
+    el.classList.remove('locked');
+    el.classList.add('unlocked');
+    text.textContent = 'Unlocked';
+    icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>';
+  } else {
+    el.classList.remove('unlocked');
+    el.classList.add('locked');
+    text.textContent = 'Locked by devpatel';
+    icon.innerHTML = '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>';
+  }
+}
+
+/* === 18e: Number Animation === */
+function animateNumber(el, target, decimals, duration) {
+  const start = parseFloat(el.textContent.replace(/,/g, '')) || 0;
+  const startTime = performance.now();
+
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (target - start) * eased;
+
+    if (decimals > 0) {
+      el.textContent = current.toFixed(decimals);
+    } else {
+      el.textContent = Math.floor(current).toLocaleString();
+    }
+
+    if (current > start) {
+      el.classList.add('up');
+      el.classList.remove('down');
+    } else if (current < start) {
+      el.classList.add('down');
+      el.classList.remove('up');
+    }
+
+    if (progress < 1) requestAnimationFrame(update);
+    else {
+      setTimeout(() => {
+        el.classList.remove('up', 'down');
+      }, 600);
+    }
+  }
+  requestAnimationFrame(update);
+}
+
+function animateNumbers() {
+  animateNumber(document.getElementById('numRows'), 1238412 + Math.floor(Math.random() * 50000), 0, 1200);
+  animateNumber(document.getElementById('numThroughput'), 24 + Math.random() * 16, 0, 800);
+  animateNumber(document.getElementById('numErrors'), Math.random() * 2.5, 2, 1000);
+}
+
+function resetNumbers() {
+  ['numRows','numThroughput','numErrors'].forEach(id => {
+    const el = document.getElementById(id);
+    el.textContent = id === 'numErrors' ? '0.00' : '0';
+    el.classList.remove('up','down');
+  });
+}
+
+/* === 20c: Command Palette === */
+function openCmdPalette() {
+  const overlay = document.getElementById('cmdOverlay');
+  overlay.classList.add('open');
+  setTimeout(() => {
+    document.getElementById('cmdInput').focus();
+  }, 50);
+}
+
+function closeCmdPalette(e) {
+  if (e && e.target !== document.getElementById('cmdOverlay')) return;
+  document.getElementById('cmdOverlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const overlay = document.getElementById('cmdOverlay');
+    if (overlay.classList.contains('open')) {
+      overlay.classList.remove('open');
+    } else {
+      openCmdPalette();
+    }
+  }
+  if (e.key === 'Escape') {
+    document.getElementById('cmdOverlay').classList.remove('open');
+  }
+});
+
+/* Command palette keyboard navigation */
+document.getElementById('cmdInput').addEventListener('keydown', (e) => {
+  const results = Array.from(document.querySelectorAll('.cmd-result'));
+  const active = results.findIndex(r => r.classList.contains('active'));
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    results.forEach(r => r.classList.remove('active'));
+    const next = (active + 1) % results.length;
+    results[next].classList.add('active');
+    results[next].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    results.forEach(r => r.classList.remove('active'));
+    const prev = active <= 0 ? results.length - 1 : active - 1;
+    results[prev].classList.add('active');
+    results[prev].scrollIntoView({ block: 'nearest' });
+  }
+});
+
+/* Run initial number animation on load */
+setTimeout(animateNumbers, 500);
+</script>
+</body>
+</html>
