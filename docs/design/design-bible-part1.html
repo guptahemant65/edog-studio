@@ -906,32 +906,55 @@ body {
 
 .tree-item.renaming .tree-item-actions { opacity: 0; pointer-events: none; }
 
-.inline-create {
+/* ─── CREATE PATTERNS (5b) ───────────────────────────────────────────────── */
+.create-demo-tree {
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.create-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.create-tree-header-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.create-ws-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  border-radius: var(--r4);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.create-ws-btn:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+
+.create-ws-input-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  padding-left: 32px;
-  border-radius: var(--r6);
-  cursor: pointer;
-  transition: all var(--transition);
-  margin-top: 2px;
-  color: var(--text-3);
-  font-size: 12px;
-  font-weight: 500;
+  background: color-mix(in srgb, var(--accent) 3%, var(--bg));
+  animation: create-row-appear 150ms ease-out;
 }
 
-.inline-create:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, var(--bg)); }
-.inline-create:active { transform: scale(0.98); }
-
-.inline-create.active {
-  padding-left: 32px;
-  background: var(--bg);
-}
-
-.inline-create svg { flex-shrink: 0; }
-
-.inline-create-input {
+.create-input {
   flex: 1;
   font: inherit;
   font-size: 13px;
@@ -943,14 +966,72 @@ body {
   padding: 2px 0;
   border-bottom: 1.5px solid var(--accent);
 }
+.create-input::placeholder { color: var(--text-3); font-weight: 400; }
 
-.inline-create-input::placeholder { color: var(--text-3); font-weight: 400; }
-
-.inline-create-hint {
+.create-hint {
   font-size: 10px;
   color: var(--text-3);
   margin-left: auto;
   white-space: nowrap;
+}
+
+.create-tree-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.create-tree-children {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.create-tree-children.collapsed { display: none; }
+
+.create-lh-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 32px;
+  cursor: pointer;
+  transition: all var(--transition);
+  color: var(--text-3);
+  font-size: 13px;
+  border-left: 3px solid transparent;
+}
+.create-lh-row:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+.create-lh-row.active { cursor: default; }
+.create-lh-row.active:hover { background: color-mix(in srgb, var(--accent) 3%, var(--bg)); }
+
+.create-lh-icon {
+  font-size: 14px;
+  font-weight: 300;
+  width: 8px;
+  text-align: center;
+  line-height: 1;
+}
+
+.create-lh-label { font-weight: 400; }
+
+.create-no-items {
+  padding: 6px 12px 6px 35px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-style: italic;
+  border-left: 3px solid transparent;
+}
+
+@keyframes create-slide-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.create-slide-in {
+  animation: create-slide-in 200ms ease-out;
+}
+
+@keyframes create-row-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /* toasts */
@@ -2045,15 +2126,75 @@ body {
 
       </div>
 
-      <!-- 5b inline create -->
-      <div class="inline-create" id="inlineCreate" onclick="activateInlineCreate()">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M8 2v12M2 8h12"/>
-        </svg>
-        <span class="inline-create-label">Add item</span>
-        <input class="inline-create-input" id="inlineInput" placeholder="Enter name…" style="display:none"
-          onkeydown="handleInlineCreate(event)" onblur="deactivateInlineCreate()">
-        <span class="inline-create-hint" id="inlineHint" style="display:none">Enter ↵ · Esc ✕</span>
+    </div>
+
+    <!-- 5b create patterns -->
+    <div class="demo-card">
+      <div class="sub-label">5b · Create Workspace & Lakehouse</div>
+
+      <div class="create-demo-tree" id="createDemoTree">
+        <!-- Header: WORKSPACES + [+] button -->
+        <div class="create-tree-header">
+          <span class="create-tree-header-label">WORKSPACES</span>
+          <button class="create-ws-btn" id="createWsBtn" title="Create workspace" onclick="activateWsCreate()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="9" stroke-width="1.5"/>
+              <path d="M12 8v8M8 12h8"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Workspace create input (hidden until [+] clicked) -->
+        <div class="create-ws-input-row" id="wsInputRow" style="display:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <input class="create-input" id="wsCreateInput" placeholder="Workspace name…"
+            onkeydown="handleWsCreate(event)" onblur="setTimeout(deactivateWsCreate, 150)">
+          <span class="create-hint">Enter to create · Esc to cancel</span>
+        </div>
+
+        <!-- Tree body -->
+        <div class="create-tree-body" id="createTreeBody">
+          <!-- Workspace: FMLVWS (expanded, shows lakehouse create) -->
+          <div class="tree-item" data-depth="0">
+            <span class="tree-toggle expanded" onclick="toggleCreateGroup(event, this)">▸</span>
+            <svg class="tree-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="tree-item-label">FMLVWS</span>
+          </div>
+          <div class="create-tree-children" id="fmlvwsCreateChildren">
+            <div class="tree-item" data-depth="1">
+              <span class="tree-dot green"></span>
+              <span class="tree-item-label">SalesData-LH</span>
+              <span class="tree-type-badge">LH</span>
+            </div>
+            <div class="tree-item" data-depth="1">
+              <span class="tree-dot green"></span>
+              <span class="tree-item-label">TestLakehouse-01</span>
+              <span class="tree-type-badge">LH</span>
+            </div>
+            <!-- Pattern 2: contextual lakehouse create -->
+            <div class="create-lh-row" id="lhCreateRow" onclick="activateLhCreate()">
+              <span class="create-lh-icon">+</span>
+              <span class="create-lh-label" id="lhCreateLabel">New lakehouse</span>
+              <input class="create-input" id="lhCreateInput" placeholder="Lakehouse name…" style="display:none"
+                onkeydown="handleLhCreate(event)" onblur="setTimeout(deactivateLhCreate, 150)">
+              <span class="create-hint" id="lhCreateHint" style="display:none">Enter to create · Esc to cancel</span>
+            </div>
+          </div>
+
+          <!-- Workspace: Perf-Testing-WS (collapsed) -->
+          <div class="tree-item" data-depth="0">
+            <span class="tree-toggle" onclick="toggleCreateGroup(event, this)">▸</span>
+            <svg class="tree-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="tree-item-label">Perf-Testing-WS</span>
+          </div>
+          <div class="create-tree-children collapsed">
+            <div class="create-no-items">No items</div>
+            <div class="create-lh-row" onclick="activateLhCreate(this)">
+              <span class="create-lh-icon">+</span>
+              <span class="create-lh-label">New lakehouse</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2609,56 +2750,138 @@ function treeSelect(item) {
   item.classList.add('selected');
 }
 
-/* ─── INLINE CREATE ──────────────────────────────────────────────────────── */
-function activateInlineCreate() {
-  const wrap = document.getElementById('inlineCreate');
-  const input = document.getElementById('inlineInput');
-  const label = wrap.querySelector('.inline-create-label');
-  const hint = document.getElementById('inlineHint');
-  wrap.classList.add('active');
-  if (label) label.style.display = 'none';
-  input.style.display = '';
-  if (hint) hint.style.display = '';
-  input.focus();
+/* ─── CREATE PATTERNS (5b) ───────────────────────────────────────────────── */
+function toggleCreateGroup(e, toggleEl) {
+  e.stopPropagation();
+  const wsItem = toggleEl.closest('.tree-item');
+  const children = wsItem.nextElementSibling;
+  if (!children || !children.classList.contains('create-tree-children')) return;
+  const isExpanded = toggleEl.classList.contains('expanded');
+  if (isExpanded) {
+    toggleEl.classList.remove('expanded');
+    children.classList.add('collapsed');
+  } else {
+    toggleEl.classList.add('expanded');
+    children.classList.remove('collapsed');
+  }
 }
 
-function handleInlineCreate(e) {
+/* Pattern 1: Create Workspace */
+function activateWsCreate() {
+  const row = document.getElementById('wsInputRow');
+  const input = document.getElementById('wsCreateInput');
+  row.style.display = '';
+  requestAnimationFrame(() => input.focus());
+}
+
+function handleWsCreate(e) {
   if (e.key === 'Enter' && e.target.value.trim()) {
     const name = e.target.value.trim();
-    const tree = document.getElementById('treeList');
-    const item = document.createElement('div');
-    item.className = 'tree-item success-glow';
-    item.dataset.name = name;
-    item.dataset.depth = '1';
-    item.dataset.type = 'lakehouse';
-    item.setAttribute('onclick', 'treeSelect(this)');
-    item.innerHTML = `<span class="tree-dot green"></span>
-      <span class="tree-item-label">${name}</span>
-      <span class="tree-type-badge">LH</span>
-      <div class="tree-item-actions">
-        <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
-        <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, '${name}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
-        <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+    const body = document.getElementById('createTreeBody');
+
+    /* Create expanded workspace with "No items" placeholder + lakehouse create row */
+    const wsHtml = `<div class="tree-item create-slide-in success-glow" data-depth="0">
+        <span class="tree-toggle expanded" onclick="toggleCreateGroup(event, this)">▸</span>
+        <svg class="tree-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span class="tree-item-label">${name}</span>
+      </div>
+      <div class="create-tree-children">
+        <div class="create-no-items">No items</div>
+        <div class="create-lh-row" onclick="activateLhCreate(this)">
+          <span class="create-lh-icon">+</span>
+          <span class="create-lh-label">New lakehouse</span>
+        </div>
       </div>`;
-    tree.appendChild(item);
-    setTimeout(() => item.classList.remove('success-glow'), 2100);
+
+    const frag = document.createRange().createContextualFragment(wsHtml);
+    body.insertBefore(frag, body.firstChild);
+    const newItem = body.querySelector('.success-glow');
+    setTimeout(() => { if (newItem) newItem.classList.remove('success-glow'); }, 2100);
+
     e.target.value = '';
-    deactivateInlineCreate();
+    deactivateWsCreate();
   }
-  if (e.key === 'Escape') deactivateInlineCreate();
+  if (e.key === 'Escape') deactivateWsCreate();
 }
 
-function deactivateInlineCreate() {
-  const wrap = document.getElementById('inlineCreate');
-  const input = document.getElementById('inlineInput');
-  const label = wrap.querySelector('.inline-create-label');
-  const hint = document.getElementById('inlineHint');
-  wrap.classList.remove('active');
-  if (label) label.style.display = '';
-  input.style.display = 'none';
-  if (hint) hint.style.display = 'none';
+function deactivateWsCreate() {
+  const row = document.getElementById('wsInputRow');
+  const input = document.getElementById('wsCreateInput');
+  row.style.display = 'none';
   input.value = '';
   input.blur();
+}
+
+/* Pattern 2: Create Lakehouse (contextual) */
+function activateLhCreate(rowEl) {
+  const row = rowEl || document.getElementById('lhCreateRow');
+  const label = row.querySelector('.create-lh-label');
+  let input = row.querySelector('.create-input');
+  let hint = row.querySelector('.create-hint');
+
+  /* If this row doesn't have its own input (e.g. Perf-Testing-WS clone), inject one */
+  if (!input) {
+    input = document.createElement('input');
+    input.className = 'create-input';
+    input.placeholder = 'Lakehouse name…';
+    input.setAttribute('onkeydown', 'handleLhCreate(event)');
+    input.setAttribute('onblur', 'setTimeout(function(){ deactivateLhCreate(this.closest(".create-lh-row")); }.bind(this), 150)');
+    row.appendChild(input);
+    hint = document.createElement('span');
+    hint.className = 'create-hint';
+    hint.textContent = 'Enter to create · Esc to cancel';
+    hint.style.display = 'none';
+    row.appendChild(hint);
+    /* Store reference so blur handler works */
+    input.onblur = function() { setTimeout(() => deactivateLhCreate(row), 150); };
+    input.onkeydown = function(e) { handleLhCreate(e, row); };
+  }
+
+  row.classList.add('active');
+  if (label) label.style.display = 'none';
+  row.querySelector('.create-lh-icon').style.display = 'none';
+  input.style.display = '';
+  if (hint) hint.style.display = '';
+  requestAnimationFrame(() => input.focus());
+}
+
+function handleLhCreate(e, rowEl) {
+  const row = rowEl || document.getElementById('lhCreateRow');
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    const name = e.target.value.trim();
+    const container = row.parentElement;
+
+    const item = document.createElement('div');
+    item.className = 'tree-item create-slide-in success-glow';
+    item.dataset.depth = '1';
+    item.innerHTML = `<span class="tree-dot green"></span>
+      <span class="tree-item-label">${name}</span>
+      <span class="tree-type-badge">LH</span>`;
+    container.insertBefore(item, row);
+
+    /* Remove "No items" placeholder if present */
+    const noItems = container.querySelector('.create-no-items');
+    if (noItems) noItems.remove();
+
+    setTimeout(() => item.classList.remove('success-glow'), 2100);
+    e.target.value = '';
+    deactivateLhCreate(row);
+  }
+  if (e.key === 'Escape') deactivateLhCreate(row);
+}
+
+function deactivateLhCreate(rowEl) {
+  const row = rowEl || document.getElementById('lhCreateRow');
+  if (!row) return;
+  const label = row.querySelector('.create-lh-label');
+  const icon = row.querySelector('.create-lh-icon');
+  const input = row.querySelector('.create-input');
+  const hint = row.querySelector('.create-hint');
+  row.classList.remove('active');
+  if (label) label.style.display = '';
+  if (icon) icon.style.display = '';
+  if (input) { input.style.display = 'none'; input.value = ''; input.blur(); }
+  if (hint) hint.style.display = 'none';
 }
 
 /* ─── DELETE CONFIRMATION ────────────────────────────────────────────────── */
