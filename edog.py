@@ -1692,7 +1692,7 @@ def apply_log_viewer_registration_program_cs(content):
     
     registration_code = (
         "            // EDOG DevMode - Start log viewer server and intercept Tracer\n"
-        "            var edogServer = new Microsoft.LiveTable.Service.DevMode.EdogLogServer(5555);\n"
+        "            var edogServer = new Microsoft.LiveTable.Service.DevMode.EdogLogServer();\n"
         "\n"
         "            // Load the full log viewer UI from DevMode directory\n"
         "            var edogHtmlCandidates = new[]\n"
@@ -2603,6 +2603,102 @@ def handle_devmode_account_picker(username, timeout=30):
     return False
 
 
+def headless_deploy(repo_root):
+    """Headless deploy mode for Studio: patch code + build. JSON lines on stdout.
+
+    Called by dev-server.py via subprocess. Does NOT launch FLT —
+    dev-server.py owns that process. Stdout is protocol-only JSON.
+    Human-readable output goes to stderr.
+    """
+    def emit(step, message, level="info"):
+        """Write a JSON progress line to stdout."""
+        obj = {"step": step, "message": message, "level": level,
+               "ts": datetime.now().strftime("%H:%M:%S")}
+        sys.stdout.write(json.dumps(obj) + "\n")
+        sys.stdout.flush()
+
+    def log(msg):
+        """Human-readable output to stderr (not protocol)."""
+        print(msg, file=sys.stderr)
+
+    config = load_config()
+    workspace_id = config.get("workspace_id", "")
+    artifact_id = config.get("artifact_id", "")
+    capacity_id = config.get("capacity_id", "")
+
+    # Step 2: Patch code
+    emit(2, "Patching FLT source code...")
+    log(f"Patching FLT source at {repo_root}")
+
+    # Get token for GTSBasedSparkClient bypass
+    mwc_token = None
+    cached_token, _ = load_cached_token()
+    if cached_token:
+        mwc_token = cached_token
+        emit(2, "Using cached MWC token for patching", "info")
+    else:
+        bearer_token, _ = load_cached_bearer_token()
+        if bearer_token:
+            emit(2, "Fetching MWC token for patching...", "info")
+            mwc_token = fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id)
+
+    if not mwc_token:
+        emit(2, "No MWC token available for patching — GTSBasedSparkClient bypass will be skipped", "warn")
+        mwc_token = "PLACEHOLDER_TOKEN"
+
+    try:
+        apply_all_changes(mwc_token, repo_root)
+        emit(2, "Code patches applied successfully", "success")
+    except Exception as e:
+        emit(2, f"Patching failed: {e}", "error")
+        return 1
+
+    # Step 3: Build
+    emit(3, "Building FLT service...")
+    entrypoint = get_entrypoint_path(repo_root)
+    log(f"Building: {entrypoint}")
+
+    try:
+        build_proc = subprocess.run(
+            ["dotnet", "build", str(entrypoint), "--no-incremental"],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            timeout=300,
+        )
+
+        for line in (build_proc.stdout or "").splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            lvl = "info"
+            if "warning" in stripped.lower():
+                lvl = "warn"
+            elif "error" in stripped.lower():
+                lvl = "error"
+            emit(3, stripped, lvl)
+
+        if build_proc.returncode != 0:
+            emit(3, f"Build failed (exit code {build_proc.returncode})", "error")
+            for line in (build_proc.stderr or "").splitlines()[-15:]:
+                if line.strip():
+                    emit(3, line.strip(), "error")
+            return build_proc.returncode
+
+        emit(3, "Build succeeded", "success")
+        return 0
+
+    except subprocess.TimeoutExpired:
+        emit(3, "Build timed out after 300 seconds", "error")
+        return 1
+    except FileNotFoundError:
+        emit(3, "dotnet not found — ensure .NET SDK is installed", "error")
+        return 1
+    except Exception as e:
+        emit(3, f"Build error: {e}", "error")
+        return 1
+
+
 def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, launch_service=True):
     """Main daemon loop - fetch token, apply changes, optionally launch service, monitor and refresh."""
     
@@ -2791,6 +2887,8 @@ Examples:
     parser.add_argument("--install-hook", action="store_true", help="Install git pre-commit hook")
     parser.add_argument("--uninstall-hook", action="store_true", help="Remove git pre-commit hook")
     parser.add_argument("--no-launch", action="store_true", help="Don't auto-launch FLT service (token management only)")
+    parser.add_argument("--headless-deploy", action="store_true",
+                        help="Studio mode: patch + build, JSON progress on stdout")
     parser.add_argument("--logs", action="store_true", help="Open log viewer in browser")
     parser.add_argument("-u", "--username", help="Username/Email for login")
     parser.add_argument("-w", "--workspace", help="Workspace ID")
@@ -2822,6 +2920,12 @@ Examples:
         print("   Make sure FLT service is running with EDOG changes applied.")
         sys.exit(0)
     
+    if args.headless_deploy:
+        repo_root = get_repo_root()
+        if not repo_root:
+            sys.exit(1)
+        sys.exit(headless_deploy(repo_root))
+
     # All other commands need repo_root
     repo_root = get_repo_root()
     if not repo_root:

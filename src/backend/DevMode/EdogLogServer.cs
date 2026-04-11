@@ -67,7 +67,8 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <param name="port">Port number for the HTTP server (default: 5555).</param>
     public EdogLogServer(int port = 5555)
     {
-        this.port = port;
+        var envPort = Environment.GetEnvironmentVariable("EDOG_STUDIO_PORT");
+        this.port = envPort != null && int.TryParse(envPort, out var p) ? p : port;
     }
 
     /// <summary>
@@ -342,17 +343,23 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         app!.UseWebSockets();
 
-        // Root HTML endpoint
+        // Root endpoint — studio mode returns JSON health, standalone serves HTML
         app.MapGet("/", async context =>
         {
             try
             {
+                if (Environment.GetEnvironmentVariable("EDOG_STUDIO_PORT") != null)
+                {
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync("{\"status\":\"ok\",\"mode\":\"studio\"}");
+                    return;
+                }
                 context.Response.ContentType = "text/html";
                 await context.Response.WriteAsync(htmlContent);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error serving HTML: {ex}");
+                Console.WriteLine($"Error serving root: {ex}");
                 context.Response.StatusCode = 500;
             }
         });
@@ -508,6 +515,15 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (!context.WebSockets.IsWebSocketRequest)
             {
                 context.Response.StatusCode = 400;
+                return;
+            }
+
+            var origin = context.Request.Headers["Origin"].ToString();
+            if (!string.IsNullOrEmpty(origin)
+                && !origin.Contains("localhost", StringComparison.OrdinalIgnoreCase)
+                && !origin.Contains("127.0.0.1"))
+            {
+                context.Response.StatusCode = 403;
                 return;
             }
 
