@@ -155,9 +155,16 @@ class EdogLogViewer {
     this.sidebar.init();
     this.commandPalette.init();
 
+    // Expose globals for deploy phase sync
+    window.edogTopBar = this.topbar;
+    window.edogSidebar = this.sidebar;
+
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
     this.sidebar.setPhase(phase);
+
+    // Check for active/completed deploy (page refresh recovery)
+    this._checkDeployResume();
 
     // Wire sidebar view switching
     this.sidebar.onViewChange = (viewId) => this._onViewChange(viewId);
@@ -168,6 +175,42 @@ class EdogLogViewer {
     this.bindEventListeners();
     await this.loadInitialData();
     this.ws.connect();
+  }
+
+  /** Check for active/completed deploy on page load (refresh recovery). */
+  async _checkDeployResume() {
+    try {
+      const resp = await fetch('/api/studio/status');
+      if (!resp.ok) return;
+      const state = await resp.json();
+
+      if (state.phase === 'deploying') {
+        // Deploy in progress — resume the stepper
+        const progressEl = document.getElementById('ws-deploy-progress');
+        if (progressEl) {
+          progressEl.style.display = 'block';
+          const btnEl = document.getElementById('ws-deploy-btn');
+          if (btnEl) btnEl.style.display = 'none';
+          const flow = new DeployFlow(progressEl);
+          flow.onUpdate = (s) => {
+            if (s.status === 'running') {
+              this.topbar.setDeployStatus('connected');
+              this.sidebar.setPhase('connected');
+            } else if (s.status === 'stopped' && s.error) {
+              this.topbar.setDeployStatus('failed');
+            }
+          };
+          flow.resume(state);
+        }
+      } else if (state.phase === 'running') {
+        this.sidebar.setPhase('connected');
+        this.topbar.setDeployStatus('connected');
+      } else if (state.phase === 'crashed') {
+        this.topbar.setDeployStatus('crashed');
+      }
+    } catch {
+      // Studio status not available — normal in standalone mode
+    }
   }
   
   bindEventListeners = () => {

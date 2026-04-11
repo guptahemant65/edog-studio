@@ -333,6 +333,36 @@ class TopBar {
     '</div>';
   }
 
+  /** Update top bar for deploy lifecycle states. */
+  setDeployStatus(status) {
+    if (!this._statusEl || !this._statusTextEl) return;
+    switch (status) {
+      case 'deploying':
+        this._statusEl.className = 'service-status building';
+        this._statusTextEl.textContent = 'Deploying\u2026';
+        this._uptimeStart = null;
+        break;
+      case 'connected':
+        this._statusEl.className = 'service-status running';
+        this._uptimeStart = Date.now();
+        this._statusTextEl.textContent = 'Connected 0m00s';
+        break;
+      case 'failed':
+        this._statusEl.className = 'service-status stopped';
+        this._statusTextEl.textContent = 'Deploy Failed';
+        break;
+      case 'crashed':
+        this._statusEl.className = 'service-status stopped';
+        this._statusTextEl.textContent = 'Service Crashed';
+        break;
+      case 'stopped':
+        this._statusEl.className = 'service-status stopped';
+        this._statusTextEl.textContent = 'Browsing';
+        this._uptimeStart = null;
+        break;
+    }
+  }
+
   destroy() {
     if (this._tokenTimer) clearInterval(this._tokenTimer);
     if (this._uptimeTimer) clearInterval(this._uptimeTimer);

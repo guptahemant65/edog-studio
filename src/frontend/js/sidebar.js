@@ -104,16 +104,32 @@ class Sidebar {
 
   setPhase(phase) {
     this._phase = phase;
+    const connectedSlots = [];
+
     this._slots.forEach(slot => {
       const btn = slot.querySelector('.sidebar-icon');
       if (!btn) return;
       const iconPhase = btn.dataset.phase;
-      if (iconPhase === 'connected' && phase === 'disconnected') {
-        slot.classList.add('disabled');
+      if (iconPhase === 'connected') {
+        connectedSlots.push(slot);
+        if (phase === 'disconnected') {
+          slot.classList.add('disabled');
+        }
       } else {
         slot.classList.remove('disabled');
       }
     });
+
+    // Cascade-enable connected views with staggered animation
+    if (phase === 'connected') {
+      connectedSlots.forEach((slot, i) => {
+        setTimeout(() => {
+          slot.classList.remove('disabled');
+          slot.classList.add('cascade-in');
+          setTimeout(() => slot.classList.remove('cascade-in'), 400);
+        }, i * 150);
+      });
+    }
 
     if (this._phaseEl) {
       if (phase === 'connected') {
