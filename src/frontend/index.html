@@ -27,18 +27,26 @@ window.onerror = function(msg, src, line, col, err) {
   <header id="topbar" class="topbar">
     <div class="topbar-left">
       <span class="topbar-brand">EDOG</span>
+      <div id="tenant-chip" class="tenant-chip">
+        <span id="tenant-name" class="tenant-name">&#x2014;</span>
+        <span id="tenant-env" class="tenant-env">&#x2014;</span>
+      </div>
       <span id="service-status" class="service-status stopped">
         <span class="status-dot"></span>
-        <span id="service-status-text">Stopped</span>
+        <span id="service-status-text">Phase 1</span>
       </span>
     </div>
-    <div class="topbar-center"></div>
+    <div class="topbar-center">
+      <div class="topbar-cmdk" title="Command Palette">
+        <kbd>Ctrl</kbd><span>+</span><kbd>K</kbd>
+      </div>
+    </div>
     <div class="topbar-right">
       <span id="token-health" class="token-health none" title="Click for Token Inspector">
         <span id="token-countdown">No token</span>
       </span>
-      <span class="topbar-meta"><span id="git-branch-name">--</span></span>
-      <span class="topbar-meta"><span id="patch-count">0 patches</span></span>
+      <span id="git-meta" class="topbar-meta" style="display:none"><span id="git-branch-name">--</span></span>
+      <span id="patch-meta" class="topbar-meta" style="display:none"><span id="patch-count">0 patches</span></span>
       <button id="restart-btn" class="topbar-btn ghost" title="Restart service">Restart</button>
       <button id="theme-btn" class="topbar-btn ghost" title="Toggle theme">&#9790;</button>
     </div>
@@ -55,15 +63,16 @@ window.onerror = function(msg, src, line, col, err) {
 
   <!-- Main Layout: Sidebar + Content -->
   <div class="cockpit-body">
-    <!-- Sidebar (48px, icon-only) -->
+    <!-- Sidebar (52px icon-only, hover-expands to 200px) -->
     <nav id="sidebar" class="sidebar">
-      <button class="sidebar-icon active" data-view="workspace" data-phase="both" title="Workspace Explorer (1)">&#9638;</button>
-      <button class="sidebar-icon" data-view="logs" data-phase="connected" title="Logs (2)">&#8801;</button>
-      <button class="sidebar-icon" data-view="dag" data-phase="connected" title="DAG Studio (3)">&#9671;</button>
-      <button class="sidebar-icon" data-view="spark" data-phase="connected" title="Spark Inspector (4)">&#9889;</button>
-      <button class="sidebar-icon" data-view="api" data-phase="both" title="API Playground (5)">&#9657;</button>
-      <button class="sidebar-icon" data-view="environment" data-phase="both" title="Environment (6)">&#9881;</button>
+      <button class="sidebar-icon active" data-view="workspace" data-phase="both" data-label="Workspace Explorer" data-shortcut="1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+      <button class="sidebar-icon" data-view="logs" data-phase="connected" data-label="Logs" data-shortcut="2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+      <button class="sidebar-icon" data-view="dag" data-phase="connected" data-label="DAG Studio" data-shortcut="3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></button>
+      <button class="sidebar-icon" data-view="spark" data-phase="connected" data-label="Spark Inspector" data-shortcut="4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
+      <button class="sidebar-icon" data-view="api" data-phase="both" data-label="API Playground" data-shortcut="5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
+      <button class="sidebar-icon" data-view="environment" data-phase="both" data-label="Environment" data-shortcut="6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <div class="sidebar-spacer"></div>
+      <div id="sidebar-phase" class="sidebar-phase" title="Phase 1 · Disconnected">P1</div>
       <span id="sidebar-token-dot" class="sidebar-token-dot" title="Token status"></span>
     </nav>
 

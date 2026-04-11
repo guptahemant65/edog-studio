@@ -426,11 +426,29 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
         if not helper.exists():
             helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
+
+        # Git info from project directory
+        git_branch = ""
+        git_dirty = 0
+        try:
+            git_branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=str(PROJECT_DIR), timeout=3, stderr=subprocess.DEVNULL,
+            ).decode().strip()
+            git_dirty = len(subprocess.check_output(
+                ["git", "diff", "--name-only"],
+                cwd=str(PROJECT_DIR), timeout=3, stderr=subprocess.DEVNULL,
+            ).decode().strip().splitlines())
+        except Exception:
+            pass
+
         self._json_response(200, {
             "tokenHelperBuilt": helper.exists(),
             "hasBearerToken": bearer is not None,
             "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,
             "lastUsername": session.get("lastUsername", ""),
+            "gitBranch": git_branch,
+            "gitDirtyFiles": git_dirty,
         })
 
     def _serve_mwc_tables(self):

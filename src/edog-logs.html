@@ -731,6 +731,55 @@ mark {
 
 .topbar-center { flex: 1; }
 
+.tenant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: 1px solid transparent;
+}
+.tenant-chip:hover { border-color: var(--border-bright); background: var(--surface); }
+.tenant-name {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text);
+}
+.tenant-env {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px 6px;
+  border-radius: 100px;
+}
+
+.topbar-cmdk {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+  justify-content: center;
+}
+.topbar-cmdk:hover { opacity: 0.8; }
+.topbar-cmdk kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+.topbar-cmdk span { color: var(--text-muted); font-size: 10px; }
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -778,11 +827,11 @@ mark {
 .topbar-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-bright); }
 
     /* === css/sidebar.css === */
-/* Sidebar — 52px icon-only navigation */
+/* Sidebar — 52px icon-only, hover-expands to 200px */
 .sidebar {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   width: var(--sidebar-width);
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -790,6 +839,28 @@ mark {
   gap: var(--space-1);
   z-index: var(--z-sidebar);
   flex-shrink: 0;
+  overflow: hidden;
+  transition: width 200ms ease-out;
+  position: relative;
+}
+
+.sidebar:hover {
+  width: 200px;
+}
+
+/* Active indicator bar — slides vertically on the sidebar */
+.sidebar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  transition: transform 200ms ease-out;
+  transform: translateY(var(--active-bar-y, 20px));
+  pointer-events: none;
 }
 
 .sidebar-icon {
@@ -797,6 +868,7 @@ mark {
   align-items: center;
   justify-content: center;
   width: 36px;
+  min-width: 36px;
   height: 36px;
   border: none;
   background: transparent;
@@ -804,8 +876,22 @@ mark {
   font-size: 17px;
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: background var(--transition-normal), color var(--transition-normal);
   position: relative;
+  margin-left: var(--space-2);
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* Expand icon row on sidebar hover */
+.sidebar:hover .sidebar-icon {
+  width: calc(200px - var(--space-4));
+  justify-content: flex-start;
+  padding: 0 var(--space-3);
+}
+
+.sidebar-icon svg {
+  flex-shrink: 0;
 }
 
 .sidebar-icon:hover {
@@ -818,35 +904,112 @@ mark {
   color: var(--accent);
 }
 
-.sidebar-icon.active::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  width: 3px;
-  height: 20px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
-}
-
 .sidebar-icon.disabled {
   opacity: 0.3;
   cursor: default;
   pointer-events: none;
 }
 
+/* Label — hidden collapsed, visible expanded */
+.sidebar-label {
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  color: inherit;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sidebar:hover .sidebar-label {
+  opacity: 1;
+}
+
+/* Staggered label fade-in */
+.sidebar:hover .sidebar-icon:nth-child(1) .sidebar-label { transition-delay: 30ms; }
+.sidebar:hover .sidebar-icon:nth-child(2) .sidebar-label { transition-delay: 50ms; }
+.sidebar:hover .sidebar-icon:nth-child(3) .sidebar-label { transition-delay: 70ms; }
+.sidebar:hover .sidebar-icon:nth-child(4) .sidebar-label { transition-delay: 90ms; }
+.sidebar:hover .sidebar-icon:nth-child(5) .sidebar-label { transition-delay: 110ms; }
+.sidebar:hover .sidebar-icon:nth-child(6) .sidebar-label { transition-delay: 130ms; }
+
+/* Shortcut badge — pushed right */
+.sidebar-shortcut {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  line-height: 18px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  flex-shrink: 0;
+}
+
+.sidebar:hover .sidebar-shortcut {
+  opacity: 1;
+}
+
 .sidebar-spacer { flex: 1; }
 
+/* Phase badge */
+.sidebar-phase {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-2);
+  line-height: 16px;
+  margin: 0 auto var(--space-2);
+  text-align: center;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-phase.connected {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Token dot */
 .sidebar-token-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--text-muted);
-  margin-bottom: var(--space-3);
+  margin: 0 auto var(--space-3);
   transition: all var(--transition-normal);
 }
 .sidebar-token-dot.green { background: var(--status-succeeded); box-shadow: 0 0 6px rgba(24,160,88,0.4); }
 .sidebar-token-dot.amber { background: var(--status-cancelled); box-shadow: 0 0 6px rgba(229,148,12,0.4); }
 .sidebar-token-dot.red { background: var(--status-failed); box-shadow: 0 0 6px rgba(229,69,59,0.4); }
+
+/* Tooltip — positioned right of sidebar */
+.sidebar-tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  z-index: calc(var(--z-sidebar) + 1);
+  box-shadow: var(--shadow-md);
+}
+
+.sidebar-tooltip.visible {
+  opacity: 1;
+}
 
     /* === css/workspace.css === */
 /* Workspace Explorer — Three-panel layout */
@@ -5898,18 +6061,26 @@ window.onerror = function(msg, src, line, col, err) {
   <header id="topbar" class="topbar">
     <div class="topbar-left">
       <span class="topbar-brand">EDOG</span>
+      <div id="tenant-chip" class="tenant-chip">
+        <span id="tenant-name" class="tenant-name">&#x2014;</span>
+        <span id="tenant-env" class="tenant-env">&#x2014;</span>
+      </div>
       <span id="service-status" class="service-status stopped">
         <span class="status-dot"></span>
-        <span id="service-status-text">Stopped</span>
+        <span id="service-status-text">Phase 1</span>
       </span>
     </div>
-    <div class="topbar-center"></div>
+    <div class="topbar-center">
+      <div class="topbar-cmdk" title="Command Palette">
+        <kbd>Ctrl</kbd><span>+</span><kbd>K</kbd>
+      </div>
+    </div>
     <div class="topbar-right">
       <span id="token-health" class="token-health none" title="Click for Token Inspector">
         <span id="token-countdown">No token</span>
       </span>
-      <span class="topbar-meta"><span id="git-branch-name">--</span></span>
-      <span class="topbar-meta"><span id="patch-count">0 patches</span></span>
+      <span id="git-meta" class="topbar-meta" style="display:none"><span id="git-branch-name">--</span></span>
+      <span id="patch-meta" class="topbar-meta" style="display:none"><span id="patch-count">0 patches</span></span>
       <button id="restart-btn" class="topbar-btn ghost" title="Restart service">Restart</button>
       <button id="theme-btn" class="topbar-btn ghost" title="Toggle theme">&#9790;</button>
     </div>
@@ -5926,15 +6097,16 @@ window.onerror = function(msg, src, line, col, err) {
 
   <!-- Main Layout: Sidebar + Content -->
   <div class="cockpit-body">
-    <!-- Sidebar (48px, icon-only) -->
+    <!-- Sidebar (52px icon-only, hover-expands to 200px) -->
     <nav id="sidebar" class="sidebar">
-      <button class="sidebar-icon active" data-view="workspace" data-phase="both" title="Workspace Explorer (1)">&#9638;</button>
-      <button class="sidebar-icon" data-view="logs" data-phase="connected" title="Logs (2)">&#8801;</button>
-      <button class="sidebar-icon" data-view="dag" data-phase="connected" title="DAG Studio (3)">&#9671;</button>
-      <button class="sidebar-icon" data-view="spark" data-phase="connected" title="Spark Inspector (4)">&#9889;</button>
-      <button class="sidebar-icon" data-view="api" data-phase="both" title="API Playground (5)">&#9657;</button>
-      <button class="sidebar-icon" data-view="environment" data-phase="both" title="Environment (6)">&#9881;</button>
+      <button class="sidebar-icon active" data-view="workspace" data-phase="both" data-label="Workspace Explorer" data-shortcut="1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
+      <button class="sidebar-icon" data-view="logs" data-phase="connected" data-label="Logs" data-shortcut="2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+      <button class="sidebar-icon" data-view="dag" data-phase="connected" data-label="DAG Studio" data-shortcut="3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></button>
+      <button class="sidebar-icon" data-view="spark" data-phase="connected" data-label="Spark Inspector" data-shortcut="4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button>
+      <button class="sidebar-icon" data-view="api" data-phase="both" data-label="API Playground" data-shortcut="5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
+      <button class="sidebar-icon" data-view="environment" data-phase="both" data-label="Environment" data-shortcut="6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button>
       <div class="sidebar-spacer"></div>
+      <div id="sidebar-phase" class="sidebar-phase" title="Phase 1 · Disconnected">P1</div>
       <span id="sidebar-token-dot" class="sidebar-token-dot" title="Token status"></span>
     </nav>
 
@@ -9801,8 +9973,8 @@ class ControlPanel {
 
 // === js/topbar.js ===
 /**
- * TopBar — 32px persistent status bar.
- * Shows service status, token health, git info.
+ * TopBar — 44px persistent status bar.
+ * Shows tenant chip, phase indicator, token health, git info, Ctrl+K hint.
  */
 class TopBar {
   constructor() {
@@ -9812,33 +9984,68 @@ class TopBar {
     this._tokenHealthEl = document.getElementById('token-health');
     this._branchEl = document.getElementById('git-branch-name');
     this._patchEl = document.getElementById('patch-count');
+    this._gitMeta = document.getElementById('git-meta');
+    this._patchMeta = document.getElementById('patch-meta');
+    this._tenantNameEl = document.getElementById('tenant-name');
+    this._tenantEnvEl = document.getElementById('tenant-env');
     this._sidebarDot = document.getElementById('sidebar-token-dot');
     this._tokenTimer = null;
     this._uptimeTimer = null;
+    this._countdownTimer = null;
     this._uptimeStart = null;
-    this._tokenExpiryMinutes = null;
+    this._bearerExpiresAt = null;
   }
 
   init() {
     this._startConfigPolling();
   }
 
+  /**
+   * Fetch both /api/flt/config and /api/edog/health in parallel.
+   * Uses bearer token seconds from health endpoint for accurate countdown.
+   */
   async fetchConfig() {
     try {
-      const resp = await fetch('/api/flt/config');
-      if (!resp.ok) {
+      const [configResp, healthResp] = await Promise.all([
+        fetch('/api/flt/config'),
+        fetch('/api/edog/health').catch(() => null)
+      ]);
+
+      if (!configResp.ok) {
         this._updateServiceStatus('stopped');
         this._updateTokenDisplay(null);
         return null;
       }
-      const config = await resp.json();
-      this._updateTokenDisplay(config.tokenExpiryMinutes);
+
+      const config = await configResp.json();
+      const health = healthResp && healthResp.ok ? await healthResp.json() : null;
+
+      // T5: Update tenant chip from health data
+      if (health && health.lastUsername) {
+        this._updateTenantChip(health.lastUsername);
+      }
+
+      // T7: Use bearerExpiresIn (seconds) from health endpoint
+      if (health && health.hasBearerToken && typeof health.bearerExpiresIn === 'number') {
+        this._bearerExpiresAt = Date.now() + (health.bearerExpiresIn * 1000);
+        this._updateTokenCountdown();
+      } else {
+        this._bearerExpiresAt = null;
+        this._updateTokenDisplay(null);
+      }
+
+      // T6: Phase indicator based on fabricBaseUrl
       if (config.fabricBaseUrl) {
         this._updateServiceStatus('running');
         if (!this._uptimeStart) this._uptimeStart = Date.now();
       } else {
         this._updateServiceStatus('stopped');
+        this._uptimeStart = null;
       }
+
+      // T8: Show git/patch meta only when real data exists
+      this._updateGitVisibility(health || {});
+
       return config;
     } catch {
       this._updateServiceStatus('stopped');
@@ -9850,13 +10057,28 @@ class TopBar {
   _startConfigPolling() {
     this.fetchConfig();
     this._tokenTimer = setInterval(() => this.fetchConfig(), 30000);
-    this._uptimeTimer = setInterval(() => this._updateUptime(), 1000);
+    this._uptimeTimer = setInterval(() => this._tickCountdown(), 1000);
   }
 
+  /** T5: Parse username into tenant name + environment label. */
+  _updateTenantChip(username) {
+    if (!this._tenantNameEl || !this._tenantEnvEl) return;
+    const parts = username.split('@');
+    const name = parts[0] || username;
+    let env = '\u2014';
+    if (parts[1]) {
+      const domain = parts[1].split('.')[0] || '';
+      env = domain.replace(/^Fabric/i, '');
+    }
+    this._tenantNameEl.textContent = name;
+    this._tenantEnvEl.textContent = env;
+  }
+
+  /** T6: Update phase/connection indicator. */
   _updateServiceStatus(status) {
     if (!this._statusEl) return;
     this._statusEl.className = 'service-status ' + status;
-    const labels = { running: 'Running', stopped: 'Stopped', building: 'Building...' };
+    const labels = { running: 'Connected', stopped: 'Phase 1', building: 'Deploying...' };
     if (this._statusTextEl) {
       let label = labels[status] || status;
       if (status === 'running' && this._uptimeStart) {
@@ -9866,11 +10088,16 @@ class TopBar {
     }
   }
 
-  _updateUptime() {
+  /** T7: Tick the bearer token countdown every second. */
+  _tickCountdown() {
+    if (this._bearerExpiresAt) {
+      this._updateTokenCountdown();
+    }
+    // Also update uptime display for connected state
     if (this._uptimeStart && this._statusEl?.classList.contains('running')) {
       const secs = Math.floor((Date.now() - this._uptimeStart) / 1000);
       if (this._statusTextEl) {
-        this._statusTextEl.textContent = 'Running ' + this._formatUptime(secs);
+        this._statusTextEl.textContent = 'Connected ' + this._formatUptime(secs);
       }
     }
   }
@@ -9881,6 +10108,34 @@ class TopBar {
     return m + 'm' + String(s).padStart(2, '0') + 's';
   }
 
+  /** T7: Compute remaining seconds and update token display. */
+  _updateTokenCountdown() {
+    if (!this._bearerExpiresAt) {
+      this._updateTokenDisplay(null);
+      return;
+    }
+    const remainingSec = Math.max(0, Math.floor((this._bearerExpiresAt - Date.now()) / 1000));
+    if (remainingSec <= 0) {
+      this._bearerExpiresAt = null;
+      this._updateTokenDisplay(null);
+      return;
+    }
+    this._updateTokenDisplaySeconds(remainingSec);
+  }
+
+  /** T7: Render bearer token countdown from seconds. */
+  _updateTokenDisplaySeconds(totalSeconds) {
+    if (!this._tokenCountdownEl || !this._tokenHealthEl) return;
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    this._tokenCountdownEl.textContent = 'Token ' + mins + ':' + String(secs).padStart(2, '0');
+    let color = 'green';
+    if (totalSeconds <= 300) color = 'red';
+    else if (totalSeconds <= 600) color = 'amber';
+    this._tokenHealthEl.className = 'token-health ' + color;
+    this._updateSidebarDot(color);
+  }
+
   _updateTokenDisplay(minutes) {
     if (!this._tokenCountdownEl || !this._tokenHealthEl) return;
     if (minutes === null || minutes === undefined) {
@@ -9889,13 +10144,24 @@ class TopBar {
       this._updateSidebarDot('');
       return;
     }
-    const rounded = Math.floor(minutes);
-    this._tokenCountdownEl.textContent = 'Token ' + rounded + ':' + String(Math.floor((minutes - rounded) * 60)).padStart(2, '0');
-    let color = 'green';
-    if (minutes <= 5) color = 'red';
-    else if (minutes <= 10) color = 'amber';
-    this._tokenHealthEl.className = 'token-health ' + color;
-    this._updateSidebarDot(color);
+    const totalSeconds = Math.floor(minutes * 60);
+    this._updateTokenDisplaySeconds(totalSeconds);
+  }
+
+  /** T8: Show git/patch meta from health API response. */
+  _updateGitVisibility(health) {
+    if (this._gitMeta) {
+      const branch = health.gitBranch || '';
+      const hasGit = branch.length > 0;
+      this._gitMeta.style.display = hasGit ? '' : 'none';
+      if (hasGit && this._branchEl) this._branchEl.textContent = branch;
+    }
+    if (this._patchMeta) {
+      const dirty = health.gitDirtyFiles || 0;
+      const hasDirty = dirty > 0;
+      this._patchMeta.style.display = hasDirty ? '' : 'none';
+      if (hasDirty && this._patchEl) this._patchEl.textContent = '+' + dirty + ' dirty';
+    }
   }
 
   _updateSidebarDot(color) {
@@ -9911,7 +10177,8 @@ class TopBar {
 
 // === js/sidebar.js ===
 /**
- * Sidebar — 48px icon-only navigation with phase-aware view switching.
+ * Sidebar — 52px icon-only navigation with hover-expand, phase-aware
+ * view switching, animated active bar, and tooltip system.
  */
 class Sidebar {
   constructor() {
@@ -9919,18 +10186,26 @@ class Sidebar {
     this._icons = [];
     this._activeView = 'workspace';
     this._phase = 'disconnected';
+    this._tooltip = null;
+    this._tooltipTimer = null;
+    this._phaseEl = null;
     this.onViewChange = null;
   }
 
   init() {
     if (!this._el) return;
     this._icons = Array.from(this._el.querySelectorAll('.sidebar-icon'));
+    this._phaseEl = document.getElementById('sidebar-phase');
+
+    this._injectLabels();
+    this._createTooltip();
+    this._bindTooltips();
 
     this._icons.forEach(icon => {
+      icon.removeAttribute('title');
       icon.addEventListener('click', () => {
-        const view = icon.dataset.view;
         if (icon.classList.contains('disabled')) return;
-        this.switchView(view);
+        this.switchView(icon.dataset.view);
       });
     });
 
@@ -9940,6 +10215,78 @@ class Sidebar {
     if (saved && this._getIcon(saved) && !this._getIcon(saved).classList.contains('disabled')) {
       this.switchView(saved);
     }
+
+    this._updateActiveBar();
+  }
+
+  /** Inject label + shortcut spans into each icon button */
+  _injectLabels() {
+    this._icons.forEach(icon => {
+      const label = icon.dataset.label;
+      const shortcut = icon.dataset.shortcut;
+      if (label) {
+        const span = document.createElement('span');
+        span.className = 'sidebar-label';
+        span.textContent = label;
+        icon.appendChild(span);
+      }
+      if (shortcut) {
+        const badge = document.createElement('span');
+        badge.className = 'sidebar-shortcut';
+        badge.textContent = shortcut;
+        icon.appendChild(badge);
+      }
+    });
+  }
+
+  /** Create the shared tooltip element */
+  _createTooltip() {
+    this._tooltip = document.createElement('div');
+    this._tooltip.className = 'sidebar-tooltip';
+    document.body.appendChild(this._tooltip);
+  }
+
+  /** Bind hover events for tooltip on each icon (only when sidebar collapsed) */
+  _bindTooltips() {
+    this._icons.forEach(icon => {
+      icon.addEventListener('mouseenter', () => {
+        if (this._el.matches(':hover') && this._el.offsetWidth > 100) return;
+        this._tooltipTimer = setTimeout(() => this._showTooltip(icon), 400);
+      });
+      icon.addEventListener('mouseleave', () => this._hideTooltip());
+    });
+
+    this._el.addEventListener('mouseenter', () => this._hideTooltip());
+  }
+
+  _showTooltip(icon) {
+    const rect = icon.getBoundingClientRect();
+    const label = icon.dataset.label || '';
+    const shortcut = icon.dataset.shortcut || '';
+    const disabled = icon.classList.contains('disabled');
+
+    this._tooltip.textContent = disabled
+      ? 'Deploy to enable'
+      : label + (shortcut ? ' \u00B7 ' + shortcut : '');
+
+    this._tooltip.style.left = (rect.right + 8) + 'px';
+    this._tooltip.style.top = (rect.top + rect.height / 2 - 12) + 'px';
+    this._tooltip.classList.add('visible');
+  }
+
+  _hideTooltip() {
+    clearTimeout(this._tooltipTimer);
+    if (this._tooltip) this._tooltip.classList.remove('visible');
+  }
+
+  /** Move the active bar (::after on sidebar) to the active icon position */
+  _updateActiveBar() {
+    const icon = this._getIcon(this._activeView);
+    if (!icon || !this._el) return;
+    const sidebarRect = this._el.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    const y = iconRect.top - sidebarRect.top + (iconRect.height - 20) / 2;
+    this._el.style.setProperty('--active-bar-y', y + 'px');
   }
 
   switchView(viewId) {
@@ -9956,6 +10303,7 @@ class Sidebar {
 
     this._activeView = viewId;
     localStorage.setItem('edog-active-view', viewId);
+    this._updateActiveBar();
 
     if (this.onViewChange) this.onViewChange(viewId);
   }
@@ -9970,6 +10318,18 @@ class Sidebar {
         icon.classList.remove('disabled');
       }
     });
+
+    if (this._phaseEl) {
+      if (phase === 'connected') {
+        this._phaseEl.textContent = 'P2';
+        this._phaseEl.title = 'Phase 2 \u00B7 Connected';
+        this._phaseEl.classList.add('connected');
+      } else {
+        this._phaseEl.textContent = 'P1';
+        this._phaseEl.title = 'Phase 1 \u00B7 Disconnected';
+        this._phaseEl.classList.remove('connected');
+      }
+    }
 
     if (this._getIcon(this._activeView)?.classList.contains('disabled')) {
       this.switchView('workspace');
