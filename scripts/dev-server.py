@@ -7,8 +7,10 @@ Proxy strategy (per docs/fabric-api-reference.md):
 """
 import base64
 import json
+import os
 import ssl
 import subprocess
+import sys
 import threading
 import time
 import traceback
@@ -36,6 +38,47 @@ _mwc_lock = threading.Lock()
 # In-memory Jupyter session cache — keyed by "ws:nb:cap" composite
 _jupyter_sessions: dict = {}  # value: {"kernelId": str, "sessionId": str, "capHost": str}
 _jupyter_lock = threading.Lock()
+
+
+def _atomic_write(path: Path, data: str):
+    """Write data atomically: write to temp file, then rename."""
+    import tempfile as _tf
+    fd, tmp = _tf.mkstemp(dir=str(path.parent), suffix='.tmp')
+    try:
+        os.write(fd, data.encode('utf-8'))
+        os.close(fd)
+        os.replace(tmp, str(path))
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+# ── Studio State ──────────────────────────────────────────────────────────
+FLT_INTERNAL_PORT = 5557
+
+_studio_state = {
+    "phase": "idle",       # idle | deploying | running | crashed | stopped
+    "deployId": None,
+    "fltPort": None,
+    "fltPid": None,
+    "deployStep": 0,
+    "deployTotal": 5,
+    "deployMessage": "",
+    "deployError": None,
+    "deployLogs": [],
+    "deployTarget": None,
+    "deployStartTime": None,
+}
+_studio_lock = threading.Lock()
+_flt_process = None
+_deploy_cancel = threading.Event()
 
 
 def _write_cache(path: Path, token: str, expiry: float):
@@ -394,6 +437,256 @@ async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, 
     }
 
 
+# ── Deploy Helpers ────────────────────────────────────────────────────────
+
+def _ts():
+    return datetime.now().strftime("%H:%M:%S")
+
+
+def _deploy_log(msg, level="info"):
+    with _studio_lock:
+        _studio_state["deployLogs"].append({"ts": _ts(), "msg": msg, "level": level})
+
+
+def _deploy_step(step, message, deploy_id):
+    with _studio_lock:
+        if _studio_state.get("deployId") != deploy_id:
+            return False
+        if _deploy_cancel.is_set():
+            _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
+            return False
+        _studio_state["deployStep"] = step
+        _studio_state["deployMessage"] = message
+    _deploy_log(message)
+    return True
+
+
+def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
+    """Real deploy pipeline. Runs on background thread."""
+    global _flt_process
+
+    try:
+        # Step 0: Fetch MWC token
+        if not _deploy_step(0, "Fetching MWC token...", deploy_id):
+            return
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            _deploy_log("No bearer token — authenticate first", "error")
+            with _studio_lock:
+                _studio_state.update({
+                    "phase": "stopped",
+                    "deployError": "No bearer token. Run authentication first.",
+                })
+            return
+        try:
+            token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
+            _deploy_log("MWC token acquired", "success")
+        except Exception as e:
+            _deploy_log(f"Token fetch failed: {e}", "error")
+            with _studio_lock:
+                _studio_state.update({"phase": "stopped", "deployError": f"Token fetch failed: {e}"})
+            return
+
+        # Step 1: Update config (atomic write)
+        if not _deploy_step(1, "Updating config...", deploy_id):
+            return
+        try:
+            config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            config["workspace_id"] = ws_id
+            config["artifact_id"] = lh_id
+            config["capacity_id"] = cap_id
+            _atomic_write(CONFIG_PATH, json.dumps(config, indent=2))
+            _deploy_log("edog-config.json updated", "success")
+        except Exception as e:
+            _deploy_log(f"Config update failed: {e}", "error")
+            with _studio_lock:
+                _studio_state.update({"phase": "stopped", "deployError": str(e)})
+            return
+
+        # Step 2: Patch + Build (via edog.py --headless-deploy)
+        if not _deploy_step(2, "Patching and building...", deploy_id):
+            return
+        try:
+            config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            flt_repo = config.get("flt_repo_path", "")
+            if not flt_repo or not Path(flt_repo).is_dir():
+                raise FileNotFoundError(f"FLT repo not found: {flt_repo}")
+
+            env = dict(os.environ)
+            env["EDOG_STUDIO_PORT"] = str(FLT_INTERNAL_PORT)
+
+            proc = subprocess.Popen(
+                [sys.executable, str(PROJECT_DIR / "edog.py"), "--headless-deploy"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1, env=env,
+            )
+            for line in proc.stdout:
+                line = line.rstrip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                    msg = evt.get("message", line)
+                    lvl = evt.get("level", "info")
+                    if evt.get("step") is not None:
+                        with _studio_lock:
+                            if _studio_state.get("deployId") == deploy_id:
+                                _studio_state["deployStep"] = evt["step"]
+                                _studio_state["deployMessage"] = msg
+                    _deploy_log(msg, lvl)
+                except json.JSONDecodeError:
+                    _deploy_log(line, "info")
+
+                if _deploy_cancel.is_set():
+                    proc.terminate()
+                    with _studio_lock:
+                        _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
+                    return
+
+            proc.wait()
+            if proc.returncode != 0:
+                _deploy_log(f"Patch/build failed (exit {proc.returncode})", "error")
+                with _studio_lock:
+                    _studio_state.update({
+                        "phase": "stopped",
+                        "deployError": f"Patch/build failed (exit {proc.returncode})",
+                    })
+                return
+            _deploy_log("Patch and build succeeded", "success")
+
+        except Exception as e:
+            _deploy_log(f"Patch/build error: {e}", "error")
+            with _studio_lock:
+                _studio_state.update({"phase": "stopped", "deployError": str(e)})
+            return
+
+        # Step 3: Launch FLT (dev-server owns the process)
+        if not _deploy_step(3, "Launching service...", deploy_id):
+            return
+        try:
+            if _flt_process and _flt_process.poll() is None:
+                _deploy_log("Stopping previous FLT service...", "warn")
+                _flt_process.terminate()
+                try:
+                    _flt_process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    _flt_process.kill()
+
+            config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            flt_repo = config.get("flt_repo_path", "")
+            entrypoint = Path(flt_repo) / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
+            env = dict(os.environ)
+            env["EDOG_STUDIO_PORT"] = str(FLT_INTERNAL_PORT)
+
+            _flt_process = subprocess.Popen(
+                ["dotnet", "run", "--no-build"],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1, cwd=str(entrypoint), env=env,
+            )
+            _deploy_log(f"FLT started (PID: {_flt_process.pid})", "success")
+
+            with _studio_lock:
+                _studio_state["fltPid"] = _flt_process.pid
+                _studio_state["fltPort"] = FLT_INTERNAL_PORT
+
+        except Exception as e:
+            _deploy_log(f"Launch failed: {e}", "error")
+            with _studio_lock:
+                _studio_state.update({"phase": "stopped", "deployError": str(e)})
+            return
+
+        # Step 4: Health check
+        if not _deploy_step(4, "Waiting for service ready...", deploy_id):
+            return
+        healthy = False
+        for attempt in range(60):
+            if _deploy_cancel.is_set():
+                _flt_process.terminate()
+                with _studio_lock:
+                    _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
+                return
+            try:
+                url = f"http://localhost:{FLT_INTERNAL_PORT}/api/stats"
+                req = urllib.request.Request(url)
+                with urllib.request.urlopen(req, timeout=2) as resp:
+                    if resp.status == 200:
+                        healthy = True
+                        break
+            except Exception:
+                pass
+            if attempt % 5 == 0:
+                _deploy_log(f"Ping attempt {attempt + 1}/60...", "info")
+            time.sleep(1)
+
+        if not healthy:
+            _deploy_log("Health check timed out after 60s", "error")
+            with _studio_lock:
+                _studio_state.update({
+                    "phase": "stopped",
+                    "deployError": "Service did not become healthy in 60s",
+                })
+            return
+
+        _deploy_log("Service healthy!", "success")
+
+        # Done
+        with _studio_lock:
+            _studio_state.update({
+                "phase": "running",
+                "deployStep": 5,
+                "deployMessage": "Deploy complete",
+            })
+        _deploy_log("Deploy complete!", "success")
+
+        # Start monitor thread
+        monitor = threading.Thread(target=_monitor_flt, args=(deploy_id,), daemon=True)
+        monitor.start()
+
+        # Start token refresh thread
+        refresher = threading.Thread(
+            target=_token_refresh_loop, args=(ws_id, lh_id, cap_id), daemon=True,
+        )
+        refresher.start()
+
+    except Exception as e:
+        _deploy_log(f"Unexpected error: {e}", "error")
+        with _studio_lock:
+            _studio_state.update({"phase": "stopped", "deployError": str(e)})
+
+
+def _monitor_flt(deploy_id):
+    """Monitor FLT process for crashes."""
+    global _flt_process
+    while _flt_process and _flt_process.poll() is None:
+        time.sleep(2)
+    if _flt_process:
+        code = _flt_process.returncode
+        with _studio_lock:
+            if _studio_state.get("deployId") == deploy_id and _studio_state["phase"] == "running":
+                _studio_state.update({
+                    "phase": "crashed",
+                    "deployError": f"FLT exited with code {code}",
+                    "deployMessage": f"Service crashed (exit code {code})",
+                })
+        _deploy_log(f"FLT process exited with code {code}", "error")
+
+
+def _token_refresh_loop(ws_id, lh_id, cap_id):
+    """Refresh MWC token every 50 minutes."""
+    while True:
+        time.sleep(50 * 60)
+        with _studio_lock:
+            if _studio_state["phase"] != "running":
+                return
+        try:
+            bearer, _ = _read_cache(BEARER_CACHE)
+            if bearer:
+                _get_mwc_token(bearer, ws_id, lh_id, cap_id)
+                _deploy_log("MWC token refreshed", "success")
+        except Exception as e:
+            _deploy_log(f"Token refresh failed: {e}", "warn")
+
+
 class EdogDevHandler(SimpleHTTPRequestHandler):
     """HTTP handler for EDOG development server."""
 
@@ -418,6 +711,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_notebook_run_status()
         elif self.path.startswith("/edog-logs.html") or self.path == "/":
             self._serve_html()
+        elif self.path == "/api/studio/status":
+            self._serve_studio_status()
+        elif self.path == "/api/command/deploy-stream":
+            self._serve_deploy_stream()
+        elif self.path.startswith("/api/logs") or self.path.startswith("/api/telemetry") \
+                or self.path.startswith("/api/stats") or self.path.startswith("/api/executions"):
+            self._proxy_to_flt("GET")
         else:
             self.send_error(404)
 
@@ -454,6 +754,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_jupyter_execute_cell()
         elif self.path == "/api/notebook/close-session":
             self._serve_jupyter_close_session()
+        elif self.path == "/api/command/deploy":
+            self._serve_deploy_start()
+        elif self.path == "/api/command/deploy-cancel":
+            self._serve_deploy_cancel()
         else:
             self.send_error(404)
 
@@ -475,6 +779,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "fabricBaseUrl": None,
             "bearerToken": bearer,
             "phase": "connected" if mwc else "disconnected",
+            "fltPort": _studio_state.get("fltPort"),
+            "studioPhase": _studio_state.get("phase", "idle"),
         }
 
         body = json.dumps(resp).encode()
@@ -549,6 +855,161 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    # ── Studio Supervisor Endpoints ───────────────────────────────────────
+
+    def _serve_studio_status(self):
+        """GET /api/studio/status — authoritative studio phase."""
+        with _studio_lock:
+            state = dict(_studio_state)
+            state["deployLogs"] = list(_studio_state["deployLogs"][-200:])
+        self._json_response(200, state)
+
+    def _serve_deploy_start(self):
+        """POST /api/command/deploy — start deploy pipeline."""
+        with _studio_lock:
+            if _studio_state["phase"] == "deploying":
+                self._json_response(409, {"error": "deploy_in_progress"})
+                return
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(content_len)) if content_len else {}
+        ws_id = body.get("workspaceId", "")
+        lh_id = body.get("artifactId", "")
+        cap_id = body.get("capacityId", "")
+        lh_name = body.get("lakehouseName", "")
+
+        if not all([ws_id, lh_id]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "workspaceId and artifactId required",
+            })
+            return
+
+        deploy_id = str(int(time.time() * 1000))
+        _deploy_cancel.clear()
+
+        with _studio_lock:
+            _studio_state.update({
+                "phase": "deploying", "deployId": deploy_id,
+                "deployStep": 0, "deployTotal": 5,
+                "deployMessage": "Starting deploy...", "deployError": None,
+                "deployLogs": [],
+                "deployTarget": {
+                    "workspaceId": ws_id, "artifactId": lh_id,
+                    "capacityId": cap_id, "lakehouseName": lh_name,
+                },
+                "deployStartTime": time.time(),
+                "fltPort": None, "fltPid": None,
+            })
+
+        t = threading.Thread(
+            target=_run_deploy_pipeline,
+            args=(deploy_id, ws_id, lh_id, cap_id), daemon=True,
+        )
+        t.start()
+        self._json_response(200, {"ok": True, "deployId": deploy_id})
+
+    def _serve_deploy_cancel(self):
+        """POST /api/command/deploy-cancel."""
+        _deploy_cancel.set()
+        self._json_response(200, {"ok": True})
+
+    def _serve_deploy_stream(self):
+        """GET /api/command/deploy-stream — SSE stream."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+
+        last_idx = 0
+        last_event_id = self.headers.get("Last-Event-ID")
+        if last_event_id:
+            try:
+                last_idx = int(last_event_id)
+            except ValueError:
+                pass
+
+        while True:
+            with _studio_lock:
+                phase = _studio_state["phase"]
+                logs = _studio_state["deployLogs"][last_idx:]
+                step = _studio_state["deployStep"]
+                total = _studio_state["deployTotal"]
+                msg = _studio_state["deployMessage"]
+                err = _studio_state["deployError"]
+                flt_port = _studio_state["fltPort"]
+
+            for i, log_entry in enumerate(logs):
+                event_id = last_idx + i
+                data = json.dumps({
+                    "step": step, "total": total, "status": phase,
+                    "message": msg, "error": err, "log": log_entry,
+                    "fltPort": flt_port,
+                })
+                try:
+                    self.wfile.write(f"id: {event_id}\ndata: {data}\n\n".encode())
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    return
+            last_idx += len(logs)
+
+            if phase in ("running", "crashed", "stopped", "idle"):
+                final = json.dumps({
+                    "step": step, "total": total, "status": phase,
+                    "message": msg, "error": err, "fltPort": flt_port,
+                })
+                try:
+                    self.wfile.write(f"event: complete\ndata: {final}\n\n".encode())
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
+
+            try:
+                self.wfile.write(b": heartbeat\n\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                return
+
+            time.sleep(0.5)
+
+    def _proxy_to_flt(self, method="GET"):
+        """Proxy REST request to EdogLogServer on internal port."""
+        with _studio_lock:
+            port = _studio_state.get("fltPort")
+        if not port:
+            self._json_response(503, {
+                "error": "flt_not_running",
+                "message": "FLT service not running",
+            })
+            return
+
+        target_url = f"http://localhost:{port}{self.path}"
+        try:
+            body = None
+            if method in ("POST", "PUT", "PATCH"):
+                cl = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(cl) if cl else None
+
+            req = urllib.request.Request(target_url, data=body, method=method)
+            ct = self.headers.get("Content-Type")
+            if ct:
+                req.add_header("Content-Type", ct)
+
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                resp_body = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type",
+                                 resp.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e)})
+        except Exception as e:
+            self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
 
     def _serve_certs(self):
         """List CBA certs from Windows cert store."""
