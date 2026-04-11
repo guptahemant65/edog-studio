@@ -310,39 +310,71 @@ class DeployFlow {
     if (this.onUpdate) this.onUpdate(this._state);
   }
 
-  /** Show inline confirmation when switching deploy target. */
+  /** Show centered confirmation dialog for switching deploy target (design bible §27b). */
   _showSwitchConfirm(currentTarget, newTarget) {
     this._stopElapsedTimer();
     this._active = false;
     const curName = currentTarget.lakehouseName || currentTarget.artifactId || 'current';
     const newName = newTarget.lakehouseName || newTarget.artifactId || 'new';
 
-    this._el.innerHTML =
-      '<div class="deploy-stepper">' +
-        '<div class="deploy-error" style="border-left-color:var(--accent)">' +
-          '<div class="deploy-error-title" style="color:var(--accent)">Switch deployment target?</div>' +
-          '<div class="deploy-error-detail">' +
-            'Currently deployed to <strong>' + this._esc(curName) + '</strong>. ' +
-            'Switching to <strong>' + this._esc(newName) + '</strong> will stop the current service.' +
+    // Remove any existing dialog
+    const old = document.getElementById('deploy-switch-dialog');
+    if (old) old.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'deploy-switch-dialog';
+    backdrop.className = 'deploy-dialog-backdrop';
+    backdrop.setAttribute('data-open', 'true');
+
+    backdrop.innerHTML =
+      '<div class="deploy-dialog-card">' +
+        '<div class="deploy-dialog-icon">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>' +
+        '</div>' +
+        '<div class="deploy-dialog-title">Switch deployment?</div>' +
+        '<div class="deploy-dialog-body">' +
+          'The current service will be stopped and redeployed to a new lakehouse.' +
+        '</div>' +
+        '<div class="deploy-dialog-compare">' +
+          '<div class="deploy-dialog-target from">' +
+            '<span class="deploy-dialog-label">Current</span>' +
+            '<span class="deploy-dialog-name">' + this._esc(curName) + '</span>' +
+            '<span class="deploy-dialog-id">' + this._esc(currentTarget.capacityId || '') + '</span>' +
           '</div>' +
-          '<div style="display:flex;gap:var(--space-2);margin-top:var(--space-3)">' +
-            '<button class="deploy-retry-btn" id="deploy-switch-confirm">Switch</button>' +
-            '<button class="deploy-cancel-btn" id="deploy-switch-cancel">Cancel</button>' +
+          '<div class="deploy-dialog-arrow">\u2192</div>' +
+          '<div class="deploy-dialog-target to">' +
+            '<span class="deploy-dialog-label">New</span>' +
+            '<span class="deploy-dialog-name">' + this._esc(newName) + '</span>' +
+            '<span class="deploy-dialog-id">' + this._esc(newTarget.capacityId || '') + '</span>' +
           '</div>' +
+        '</div>' +
+        '<div class="deploy-dialog-actions">' +
+          '<button class="deploy-dialog-btn ghost" id="deploy-switch-cancel">Cancel</button>' +
+          '<button class="deploy-dialog-btn primary" id="deploy-switch-confirm">Switch \u0026 Deploy</button>' +
         '</div>' +
       '</div>';
 
+    document.body.appendChild(backdrop);
+
     document.getElementById('deploy-switch-confirm')?.addEventListener('click', () => {
+      backdrop.remove();
       const t = this._pendingTarget;
       if (t) this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName, true);
     });
-    document.getElementById('deploy-switch-cancel')?.addEventListener('click', () => {
+
+    const dismiss = () => {
+      backdrop.remove();
       this._el.innerHTML = '';
       this._el.style.display = 'none';
       const btn = document.getElementById('ws-deploy-btn');
       if (btn) btn.style.display = '';
       if (this.onUpdate) this.onUpdate({ status: 'stopped' });
-    });
+    };
+
+    document.getElementById('deploy-switch-cancel')?.addEventListener('click', dismiss);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) dismiss(); });
+    const onKey = (e) => { if (e.key === 'Escape') { dismiss(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
   }
 
   /** Undeploy — stop the service and return to Phase 1. */

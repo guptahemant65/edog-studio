@@ -306,3 +306,148 @@
   60%  { transform: scale(1.15); }
   100% { transform: scale(1); }
 }
+
+/* ── Switch Confirmation Dialog (design bible §27b) ── */
+
+.deploy-dialog-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: oklch(0.10 0 0 / 0.55);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  animation: deploy-dialog-fade 160ms ease-out;
+}
+
+.deploy-dialog-backdrop[data-open="true"] { display: flex; }
+
+@keyframes deploy-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.deploy-dialog-card {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: 16px;
+  padding: 28px 32px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08);
+  animation: deploy-dialog-scale 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes deploy-dialog-scale {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.deploy-dialog-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--accent-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+.deploy-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.deploy-dialog-body {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+/* Side-by-side comparison */
+.deploy-dialog-compare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.deploy-dialog-target {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.deploy-dialog-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.deploy-dialog-target.from .deploy-dialog-label { color: var(--status-failed); }
+.deploy-dialog-target.to .deploy-dialog-label { color: var(--status-succeeded); }
+
+.deploy-dialog-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-dialog-id {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-dialog-arrow {
+  font-size: 20px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.deploy-dialog-actions {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.deploy-dialog-btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: 1px solid var(--border-bright);
+  transition: all var(--transition-fast);
+}
+
+.deploy-dialog-btn.ghost {
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.deploy-dialog-btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+
+.deploy-dialog-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.deploy-dialog-btn.primary:hover { opacity: 0.88; }
