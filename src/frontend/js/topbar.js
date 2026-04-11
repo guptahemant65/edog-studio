@@ -28,6 +28,7 @@ class TopBar {
 
   init() {
     this._createTokenInspector();
+    this._createDeployTooltip();
     this._bindTokenClick();
     this._startConfigPolling();
   }
@@ -361,6 +362,7 @@ class TopBar {
         this._statusEl.className = 'service-status running';
         this._uptimeStart = Date.now();
         this._statusTextEl.textContent = 'Connected 0m00s';
+        this._refreshDeployTooltip();
         break;
       case 'failed':
         this._statusEl.className = 'service-status stopped';
@@ -377,6 +379,61 @@ class TopBar {
         break;
     }
   }
+
+  // ─── Deploy Info Tooltip (rich hover card on service status) ───
+
+  _createDeployTooltip() {
+    if (!this._statusEl) return;
+    const tip = document.createElement('div');
+    tip.className = 'deploy-tooltip';
+    tip.id = 'deploy-tooltip';
+    this._statusEl.style.position = 'relative';
+    this._statusEl.appendChild(tip);
+    this._deployTip = tip;
+
+    this._statusEl.addEventListener('mouseenter', () => {
+      this._refreshDeployTooltip();
+      if (this._deployTip.innerHTML) this._deployTip.classList.add('visible');
+    });
+    this._statusEl.addEventListener('mouseleave', () => {
+      this._deployTip.classList.remove('visible');
+    });
+  }
+
+  async _refreshDeployTooltip() {
+    if (!this._deployTip) return;
+    try {
+      const resp = await fetch('/api/studio/status');
+      if (!resp.ok) return;
+      const s = await resp.json();
+      if (!s.deployTarget || s.phase === 'idle') {
+        this._deployTip.innerHTML = '';
+        return;
+      }
+      const t = s.deployTarget;
+      const phase = s.phase;
+      const dotColor = phase === 'running' ? 'var(--status-succeeded)'
+        : phase === 'crashed' ? 'var(--status-failed)'
+        : phase === 'deploying' ? 'var(--accent)' : 'var(--text-muted)';
+
+      this._deployTip.innerHTML =
+        '<div class="dt-header">' +
+          '<span class="dt-dot" style="background:' + dotColor + '"></span>' +
+          '<span class="dt-phase">' + this._escTip(phase.charAt(0).toUpperCase() + phase.slice(1)) + '</span>' +
+        '</div>' +
+        '<dl class="dt-info">' +
+          '<dt>Lakehouse</dt><dd>' + this._escTip(t.lakehouseName || t.artifactId) + '</dd>' +
+          '<dt>Workspace</dt><dd class="dt-mono">' + this._escTip(t.workspaceId || '\u2014') + '</dd>' +
+          '<dt>Capacity</dt><dd class="dt-mono">' + this._escTip(t.capacityId || '\u2014') + '</dd>' +
+          (s.fltPid ? '<dt>PID</dt><dd class="dt-mono">' + s.fltPid + '</dd>' : '') +
+          (s.fltPort ? '<dt>Port</dt><dd class="dt-mono">:' + s.fltPort + '</dd>' : '') +
+        '</dl>';
+    } catch {
+      // Silent fail
+    }
+  }
+
+  _escTip(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
   destroy() {
     if (this._tokenTimer) clearInterval(this._tokenTimer);
