@@ -675,22 +675,61 @@ body {
 .tree-item:hover .tree-item-actions { display: flex; }
 
 .tree-action-btn {
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r4);
-  border: none;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: var(--r6);
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-3);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
   transition: all var(--transition);
 }
 
-.tree-action-btn:hover { background: var(--bg-4); color: var(--text); }
-.tree-action-btn.danger:hover { background: color-mix(in srgb, var(--red) 15%, var(--bg)); color: var(--red); }
+.tree-action-btn:hover { background: var(--bg-4); color: var(--text); border-color: var(--border); }
+.tree-action-btn.danger { color: var(--text-3); }
+.tree-action-btn.danger:hover { background: color-mix(in srgb, var(--red) 12%, var(--bg)); color: var(--red); border-color: color-mix(in srgb, var(--red) 30%, transparent); }
+.tree-action-btn.menu { font-size: 16px; letter-spacing: -1px; }
+.tree-action-btn.menu:hover { background: var(--bg-4); color: var(--text); border-color: var(--border); }
+
+/* context menu from ⋯ button */
+.ctx-menu {
+  position: absolute;
+  right: 8px;
+  top: calc(100% + 4px);
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r8);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  z-index: 50;
+  min-width: 150px;
+  animation: ctx-pop 120ms cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes ctx-pop { from { opacity:0; transform: translateY(-4px) scale(0.97); } to { opacity:1; transform: translateY(0) scale(1); } }
+
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r4);
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+.ctx-menu-item:hover { background: var(--bg-3); color: var(--text); }
+.ctx-menu-item.danger { color: var(--red); }
+.ctx-menu-item.danger:hover { background: color-mix(in srgb, var(--red) 10%, var(--bg)); }
+.ctx-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
 
 .tree-item-label { font-size: 13px; color: var(--text); flex: 1; }
 
@@ -700,14 +739,44 @@ body {
   flex: 1;
   font: inherit;
   font-size: 13px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
   border: 1.5px solid var(--accent);
-  border-radius: var(--r4);
-  padding: 2px 8px;
+  border-radius: var(--r6);
+  padding: 4px 10px;
   color: var(--text);
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent),
+              inset 0 1px 2px color-mix(in srgb, var(--accent) 8%, transparent);
 }
+
+.rename-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.rename-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: color var(--transition);
+  user-select: none;
+  white-space: nowrap;
+}
+.rename-hint:hover { color: var(--text); }
+.rename-hint.save { color: var(--accent); font-weight: 600; }
+.rename-hint.save:hover { color: var(--text); }
+
+.rename-charcount {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.rename-charcount.warn { color: var(--amber); }
+.rename-charcount.over { color: var(--red); font-weight: 600; }
 
 .tree-item.renaming .tree-item-actions { display: none; }
 
@@ -851,7 +920,7 @@ body {
   color: var(--accent);
 }
 
-/* saving state */
+/* saving state — skeleton pulse on the row */
 .saving-state {
   display: flex;
   align-items: center;
@@ -860,6 +929,83 @@ body {
   border-radius: var(--r6);
   background: var(--bg-3);
   border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.saving-state::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--accent) 8%, transparent) 40%,
+    color-mix(in srgb, var(--accent) 14%, transparent) 60%,
+    transparent 100%
+  );
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* delete danger-zone: red tint + shake before confirm */
+.tree-item.danger-zone {
+  background: color-mix(in srgb, var(--red) 8%, var(--bg)) !important;
+  animation: danger-shake 400ms cubic-bezier(0.36,0.07,0.19,0.97);
+}
+
+@keyframes danger-shake {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-4px); }
+  30%      { transform: translateX(4px); }
+  45%      { transform: translateX(-3px); }
+  60%      { transform: translateX(2px); }
+  75%      { transform: translateX(-1px); }
+}
+
+/* delete toast countdown ring */
+.delete-countdown {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.delete-ring-svg { transform: rotate(-90deg); }
+.delete-ring-track { fill: none; stroke: var(--bg-4); stroke-width: 3; }
+.delete-ring-fill {
+  fill: none;
+  stroke: var(--red);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 82;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 200ms linear;
+}
+
+.delete-countdown-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+/* success glow after rename/create */
+.tree-item.success-glow {
+  animation: success-highlight 2s ease-out forwards;
+}
+
+@keyframes success-highlight {
+  0%   { background: color-mix(in srgb, var(--green) 18%, var(--bg)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 30%, transparent); }
+  100% { background: transparent; box-shadow: inset 0 0 0 1px transparent; }
 }
 
 .spinner {
@@ -1224,13 +1370,13 @@ body {
   font-weight: 500;
   color: var(--text-3);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: background-color 200ms ease-out, color 200ms ease-out, box-shadow 200ms ease-out, transform 200ms ease-out, font-weight 0ms;
   white-space: nowrap;
   user-select: none;
 }
 
 .tab-pill:hover { color: var(--text); }
-.tab-pill.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow-sm); font-weight: 600; }
+.tab-pill.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow-sm); font-weight: 600; transform: scale(1.02); }
 
 /* breadcrumbs */
 .breadcrumbs {
@@ -1625,6 +1771,7 @@ body {
           <div class="tree-item-actions">
             <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
             <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'sales_transactions')">✕</button>
+            <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
           </div>
         </div>
         <div class="tree-item" data-name="customer_dim">
@@ -1633,6 +1780,7 @@ body {
           <div class="tree-item-actions">
             <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
             <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'customer_dim')">✕</button>
+            <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
           </div>
         </div>
         <div class="tree-item" data-name="product_catalog">
@@ -1641,6 +1789,7 @@ body {
           <div class="tree-item-actions">
             <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
             <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'product_catalog')">✕</button>
+            <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
           </div>
         </div>
       </div>
@@ -1666,13 +1815,11 @@ body {
 
     <!-- 5d saving state -->
     <div class="demo-card">
-      <div class="sub-label">5d · Saving State</div>
-      <div class="saving-state" id="savingState" style="display:none">
+      <div class="sub-label">5d · Saving State (Skeleton Pulse)</div>
+      <div class="tree-item saving-state" id="savingState" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        <span style="font-size:13px;font-weight:500;color:var(--text-3);flex:1">Renaming to "transactions_v2"…</span>
         <div class="spinner"></div>
-        <span style="font-size:13px;font-weight:500;color:var(--text-2)">Renaming to "transactions_v2"…</span>
-      </div>
-      <div class="progress-bar-wrap" id="savingBar" style="margin-top:8px;display:none">
-        <div class="progress-bar-fill indeterminate" style="width:40%!important"></div>
       </div>
       <button class="btn btn-secondary" onclick="showSaving()" style="margin-top:12px;" id="savingBtn">
         Simulate Rename
@@ -2130,28 +2277,56 @@ function startRename(btn) {
   const existing = item.querySelector('.rename-input');
   if (existing) return;
 
+  const MAX_LEN = 64;
   item.classList.add('renaming');
 
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'rename-input';
   input.value = label.textContent;
+  input.maxLength = MAX_LEN;
   item.insertBefore(input, item.querySelector('.tree-item-actions'));
+
+  /* save/cancel links + char count */
+  const controls = document.createElement('div');
+  controls.className = 'rename-controls';
+  controls.innerHTML = `<span class="rename-charcount">${input.value.length}/${MAX_LEN}</span><span class="rename-hint save">Save</span><span class="rename-hint">Cancel</span>`;
+  item.insertBefore(controls, item.querySelector('.tree-item-actions'));
+
   input.focus();
   input.select();
 
+  const charCount = controls.querySelector('.rename-charcount');
+  input.addEventListener('input', () => {
+    const len = input.value.length;
+    charCount.textContent = `${len}/${MAX_LEN}`;
+    charCount.className = 'rename-charcount' + (len >= MAX_LEN ? ' over' : len >= MAX_LEN - 10 ? ' warn' : '');
+  });
+
   function finish(accept) {
     item.classList.remove('renaming');
-    if (accept && input.value.trim()) label.textContent = input.value.trim();
+    if (accept && input.value.trim()) {
+      label.textContent = input.value.trim();
+      item.dataset.name = input.value.trim();
+      item.classList.add('success-glow');
+      setTimeout(() => item.classList.remove('success-glow'), 2100);
+    }
     input.remove();
+    controls.remove();
   }
+
+  controls.querySelector('.rename-hint.save').addEventListener('click', (e) => { e.stopPropagation(); finish(true); });
+  controls.querySelector('.rename-hint:last-child').addEventListener('click', (e) => { e.stopPropagation(); finish(false); });
 
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') finish(true);
     if (e.key === 'Escape') finish(false);
     e.stopPropagation();
   });
-  input.addEventListener('blur', () => finish(false));
+  input.addEventListener('blur', (e) => {
+    /* delay so save/cancel click registers first */
+    setTimeout(() => { if (item.classList.contains('renaming')) finish(false); }, 120);
+  });
 }
 
 /* ─── INLINE CREATE ──────────────────────────────────────────────────────── */
@@ -2166,15 +2341,17 @@ function handleInlineCreate(e) {
     const name = e.target.value.trim();
     const tree = document.getElementById('treeList');
     const item = document.createElement('div');
-    item.className = 'tree-item';
+    item.className = 'tree-item success-glow';
     item.dataset.name = name;
     item.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
       <span class="tree-item-label">${name}</span>
       <div class="tree-item-actions">
         <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
         <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, '${name}')">✕</button>
+        <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
       </div>`;
     tree.appendChild(item);
+    setTimeout(() => item.classList.remove('success-glow'), 2100);
     e.target.value = '';
     deactivateInlineCreate();
   }
@@ -2190,41 +2367,102 @@ function deactivateInlineCreate() {
 /* ─── DELETE CONFIRMATION ────────────────────────────────────────────────── */
 function confirmDelete(btn, name) {
   const area = document.getElementById('deleteToastArea');
-  area.innerHTML = '';
-  const t = document.createElement('div');
-  t.className = 'toast warn';
-  t.innerHTML = `<div class="toast-icon">⚠</div>
-    <div class="toast-body">
-      <strong>Delete "${name}"?</strong>
-      <p>This action cannot be undone.</p>
-      <div class="toast-actions">
-        <button class="toast-btn danger" onclick="doDelete(this, '${name}')">Delete</button>
-        <button class="toast-btn" onclick="this.closest('.toast').remove()">Cancel</button>
+  const item = btn ? btn.closest('.tree-item') : null;
+
+  /* danger-zone: red tint + shake on the row */
+  if (item) {
+    item.classList.add('danger-zone');
+    item.addEventListener('animationend', () => {}, { once: true });
+  }
+
+  setTimeout(() => {
+    area.innerHTML = '';
+    const TOTAL = 82;
+    let rem = 5;
+    let interval;
+    const t = document.createElement('div');
+    t.className = 'toast warn';
+    t.innerHTML = `<div class="delete-countdown">
+        <svg class="delete-ring-svg" width="32" height="32" viewBox="0 0 32 32">
+          <circle class="delete-ring-track" cx="16" cy="16" r="13"/>
+          <circle class="delete-ring-fill" cx="16" cy="16" r="13"/>
+        </svg>
+        <div class="delete-countdown-num">5</div>
       </div>
-    </div>`;
-  area.appendChild(t);
-  area.scrollIntoView({behavior:'smooth', block:'nearest'});
+      <div class="toast-body">
+        <strong>Delete "${name}"?</strong>
+        <p>This action cannot be undone.</p>
+        <div class="toast-actions">
+          <button class="toast-btn danger" onclick="doDelete(this, '${name}')">Delete</button>
+          <button class="toast-btn" onclick="cancelDeleteToast(this)">Cancel</button>
+        </div>
+      </div>`;
+    area.appendChild(t);
+    area.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    const fill = t.querySelector('.delete-ring-fill');
+    const num  = t.querySelector('.delete-countdown-num');
+    interval = setInterval(() => {
+      rem--;
+      if (!fill || !t.parentNode) { clearInterval(interval); return; }
+      fill.style.strokeDashoffset = TOTAL - (TOTAL * rem / 5);
+      num.textContent = rem;
+      if (rem <= 0) { clearInterval(interval); t.remove(); if (item) item.classList.remove('danger-zone'); }
+    }, 1000);
+
+    t._deleteInterval = interval;
+    t._sourceItem = item;
+  }, 450); /* wait for shake animation to finish */
+}
+
+function cancelDeleteToast(btn) {
+  const toast = btn.closest('.toast');
+  if (toast._deleteInterval) clearInterval(toast._deleteInterval);
+  if (toast._sourceItem) toast._sourceItem.classList.remove('danger-zone');
+  toast.remove();
 }
 
 function showDeleteToast(name) { confirmDelete(null, name); }
 
 function doDelete(btn, name) {
-  btn.closest('.toast').remove();
+  const toast = btn.closest('.toast');
+  if (toast._deleteInterval) clearInterval(toast._deleteInterval);
+  toast.remove();
   const items = document.querySelectorAll('#treeList .tree-item');
   items.forEach(i => { if (i.dataset.name === name) i.remove(); });
+}
+
+/* ─── CONTEXT MENU (⋯) ──────────────────────────────────────────────────── */
+function showCtxMenu(e, btn) {
+  e.stopPropagation();
+  closeCtxMenu();
+  const item = btn.closest('.tree-item');
+  const name = item.dataset.name;
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+  menu.id = 'activeCtxMenu';
+  menu.innerHTML = `<div class="ctx-menu-item" onclick="startRename(this.closest('.tree-item').querySelector('.tree-action-btn'));closeCtxMenu();">✎ Rename</div>
+    <div class="ctx-menu-item" onclick="closeCtxMenu()">⬍ Move to…</div>
+    <div class="ctx-menu-item" onclick="closeCtxMenu()">◇ Duplicate</div>
+    <div class="ctx-menu-sep"></div>
+    <div class="ctx-menu-item danger" onclick="confirmDelete(this.closest('.tree-item').querySelector('.tree-action-btn.danger'), '${name}');closeCtxMenu();">✕ Delete</div>`;
+  item.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', closeCtxMenu, { once: true }), 0);
+}
+
+function closeCtxMenu() {
+  const m = document.getElementById('activeCtxMenu');
+  if (m) m.remove();
 }
 
 /* ─── SAVING STATE ───────────────────────────────────────────────────────── */
 function showSaving() {
   const el   = document.getElementById('savingState');
-  const bar  = document.getElementById('savingBar');
   const btn  = document.getElementById('savingBtn');
   el.style.display = 'flex';
-  bar.style.display = 'block';
   btn.disabled = true;
   setTimeout(() => {
     el.style.display = 'none';
-    bar.style.display = 'none';
     btn.disabled = false;
   }, 2200);
 }
