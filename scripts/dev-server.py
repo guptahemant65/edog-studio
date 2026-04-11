@@ -518,7 +518,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             proc = subprocess.Popen(
                 [sys.executable, str(PROJECT_DIR / "edog.py"), "--headless-deploy"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, env=env,
+                text=True, bufsize=1, env=env, encoding="utf-8", errors="replace",
             )
             for line in proc.stdout:
                 line = line.rstrip()
@@ -582,6 +582,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 ["dotnet", "run", "--no-build"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, bufsize=1, cwd=str(entrypoint), env=env,
+                encoding="utf-8", errors="replace",
             )
             _deploy_log(f"FLT started (PID: {_flt_process.pid})", "success")
 

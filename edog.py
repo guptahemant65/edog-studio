@@ -2665,6 +2665,8 @@ def headless_deploy(repo_root):
             text=True,
             cwd=str(repo_root),
             timeout=300,
+            encoding="utf-8",
+            errors="replace",
         )
 
         for line in (build_proc.stdout or "").splitlines():
