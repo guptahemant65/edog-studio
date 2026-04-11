@@ -1,0 +1,1301 @@
+﻿<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Design Bible Part 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* === DESIGN TOKENS (mirrored from Part 1) ================================ */
+:root {
+  --accent:   #6d5cff;
+  --green:    #18a058;
+  --amber:    #e5940c;
+  --red:      #e5453b;
+  --blue:     #2d7ff9;
+  --purple:   #a855f7;
+  --teal:     #0d9488;
+
+  --bg:       #fff;
+  --bg-2:     #f8f9fb;
+  --bg-3:     #f4f5f7;
+  --bg-4:     #ebedf0;
+
+  --text:     #1a1d23;
+  --text-2:   #5a6070;
+  --text-3:   #8e95a5;
+
+  --border:        rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --font: 'Inter', system-ui, sans-serif;
+  --mono: 'Cascadia Code', 'Consolas', monospace;
+
+  --r4:   4px;  --r6:   6px;  --r10:  10px;
+  --r16:  16px; --r100: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+[data-theme="dark"] {
+  --bg:       #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text:     #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border:        rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+/* === RESET + BASE ======================================================== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh;transition:background var(--transition),color var(--transition)}
+/* === PAGE LAYOUT ========================================================= */
+.page-header{position:sticky;top:0;z-index:200;background:color-mix(in srgb,var(--bg) 85%,transparent);border-bottom:1px solid var(--border);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.page-header-inner{max-width:1200px;margin:0 auto;padding:0 32px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.page-wordmark{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;letter-spacing:-0.02em}
+.page-wordmark-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:breathe 3s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.7)}}
+.page-meta{display:flex;align-items:center;gap:20px;color:var(--text-3);font-size:12px}
+.theme-toggle{width:36px;height:36px;border-radius:var(--r6);border:1px solid var(--border-bright);background:var(--bg-3);color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--transition)}
+.theme-toggle:hover{background:var(--bg-4);color:var(--text)}
+.main{max-width:1200px;margin:0 auto;padding:48px 32px 96px;display:flex;flex-direction:column;gap:64px}
+/* === INTRO =============================================================== */
+.page-intro{padding:40px 0 0}
+.page-title{font-size:36px;font-weight:700;letter-spacing:-0.04em;color:var(--text);line-height:1.2}
+.page-title span{background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-subtitle{margin-top:8px;font-size:16px;color:var(--text-2);max-width:600px}
+.toc{margin-top:28px;display:flex;flex-wrap:wrap;gap:8px}
+.toc-item{padding:6px 14px;border-radius:var(--r100);background:var(--bg-3);border:1px solid var(--border);font-size:12px;font-weight:500;color:var(--text-2);text-decoration:none;cursor:pointer;transition:all var(--transition)}
+.toc-item:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* === SECTION ============================================================= */
+.section{scroll-margin-top:80px}
+.section-header{display:flex;align-items:flex-start;gap:16px;margin-bottom:24px}
+.section-num{width:32px;height:32px;border-radius:var(--r6);background:var(--accent);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.section-meta h2{font-size:22px;font-weight:700;letter-spacing:-0.03em;color:var(--text)}
+.section-meta p{margin-top:4px;font-size:13px;color:var(--text-3)}
+.demo-card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r10);padding:28px;box-shadow:var(--shadow-sm)}
+.demo-card+.demo-card{margin-top:12px}
+.demo-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:16px}
+/* === UTILITIES =========================================================== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r6);border:1px solid transparent;font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition);user-select:none;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:color-mix(in srgb,var(--accent) 85%,#000)}
+.btn-secondary{background:var(--bg-3);color:var(--text-2);border-color:var(--border-bright)}
+.btn-secondary:hover{background:var(--bg-4);color:var(--text)}
+.btn-danger{background:color-mix(in srgb,var(--red) 10%,var(--bg));color:var(--red);border-color:color-mix(in srgb,var(--red) 25%,transparent)}
+.btn-danger:hover{background:var(--red);color:#fff}
+.btn-ghost{background:transparent;color:var(--text-2)}
+.btn-ghost:hover{background:var(--bg-3);color:var(--text)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.kbd{padding:2px 5px;border-radius:var(--r4);background:var(--bg-3);border:1px solid var(--border-bright);font-size:10px;font-weight:600;color:var(--text-3);font-family:var(--mono)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--r100);font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap;cursor:default;user-select:none}
+.badge.success{background:color-mix(in srgb,var(--green) 12%,var(--bg));color:var(--green);border:1px solid color-mix(in srgb,var(--green) 25%,transparent)}
+.badge.error  {background:color-mix(in srgb,var(--red) 12%,var(--bg));color:var(--red);border:1px solid color-mix(in srgb,var(--red) 25%,transparent)}
+.badge.info   {background:color-mix(in srgb,var(--blue) 12%,var(--bg));color:var(--blue);border:1px solid color-mix(in srgb,var(--blue) 25%,transparent)}
+.badge.warn   {background:color-mix(in srgb,var(--amber) 12%,var(--bg));color:var(--amber);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent)}
+.badge.accent {background:color-mix(in srgb,var(--accent) 12%,var(--bg));color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)}
+.badge.purple {background:color-mix(in srgb,var(--purple) 12%,var(--bg));color:var(--purple);border:1px solid color-mix(in srgb,var(--purple) 25%,transparent)}
+.badge.muted  {background:var(--bg-3);color:var(--text-3);border:1px solid var(--border)}
+.divider{height:1px;background:var(--border);margin:20px 0}
+.sub-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.sub-label::after{content:'';flex:1;height:1px;background:var(--border)}
+/* === § 9 PANELS & DRAWERS ================================================ */
+/* 9a - Right drawer */
+.drawer-trigger-area{position:relative;height:340px;background:var(--bg-3);border-radius:var(--r10);overflow:hidden;border:1px solid var(--border)}
+.drawer-mock-app{padding:24px;height:100%}
+.drawer-mock-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px}
+.drawer-mock-lines{display:flex;flex-direction:column;gap:6px}
+.mock-line{height:10px;border-radius:var(--r4);background:var(--bg-4)}
+.mock-line.w60{width:60%} .mock-line.w80{width:80%} .mock-line.w45{width:45%} .mock-line.w70{width:70%}
+.drawer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0);transition:background 250ms;pointer-events:none;z-index:10}
+.drawer-backdrop.open{background:rgba(0,0,0,.35);pointer-events:auto}
+.right-drawer{position:absolute;top:0;right:0;bottom:0;width:320px;background:var(--bg);border-left:1px solid var(--border-bright);box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform 280ms cubic-bezier(0.4,0,0.2,1);z-index:20;display:flex;flex-direction:column}
+.right-drawer.open{transform:translateX(0)}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
+.drawer-title{font-size:14px;font-weight:700;color:var(--text)}
+.drawer-close{width:28px;height:28px;border-radius:var(--r4);border:none;background:var(--bg-3);color:var(--text-3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all var(--transition)}
+.drawer-close:hover{background:var(--bg-4);color:var(--text)}
+.drawer-body{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.token-field{display:flex;flex-direction:column;gap:4px}
+.token-field-label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
+.token-field-value{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r4);padding:6px 10px;word-break:break-all;line-height:1.5}
+.token-field-value.green{color:var(--green)} .token-field-value.amber{color:var(--amber)} .token-field-value.red{color:var(--red)}
+.drawer-open-btn{position:absolute;top:16px;right:16px;z-index:5}
+/* 9b - Split pane */
+.split-pane-wrap{display:flex;height:240px;border-radius:var(--r10);overflow:hidden;border:1px solid var(--border);background:var(--bg)}
+.split-pane-left,.split-pane-right{overflow:hidden;display:flex;flex-direction:column;min-width:200px}
+.split-pane-left{flex:1}
+.split-pane-right{flex:1}
+.split-panel-header{padding:10px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--bg-3);flex-shrink:0}
+.split-panel-content{flex:1;padding:14px;font-size:12px;color:var(--text-2);overflow-y:auto;font-family:var(--mono);line-height:1.8}
+.split-handle{width:6px;background:var(--bg-3);border-left:1px solid var(--border);border-right:1px solid var(--border);cursor:col-resize;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--transition);user-select:none}
+.split-handle:hover,.split-handle.dragging{background:color-mix(in srgb,var(--accent) 15%,var(--bg-3))}
+.split-handle-dots{display:flex;flex-direction:column;gap:3px}
+.split-handle-dot{width:3px;height:3px;border-radius:50%;background:var(--text-3)}
+.split-handle:hover .split-handle-dot,.split-handle.dragging .split-handle-dot{background:var(--accent)}
+/* 9c - Resizable vertical panel */
+.vert-panel-demo{display:flex;flex-direction:column;height:240px;border:1px solid var(--border);border-radius:var(--r10);overflow:hidden;background:var(--bg)}
+.vert-panel-top{background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+.vert-panel-bottom{flex:1;background:var(--bg-3);display:flex;flex-direction:column;overflow:hidden}
+.vert-handle{height:6px;background:var(--bg-4);border-top:1px solid var(--border);border-bottom:1px solid var(--border);cursor:row-resize;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--transition);position:relative}
+.vert-ghost{position:absolute;left:0;right:0;height:2px;background:var(--accent);opacity:0;top:50%;transform:translateY(-50%);pointer-events:none;transition:opacity 150ms}
+.vert-handle:hover .vert-ghost,.vert-handle.dragging .vert-ghost{opacity:1}
+.vert-handle:hover,.vert-handle.dragging{background:color-mix(in srgb,var(--accent) 12%,var(--bg-4));cursor:row-resize}
+.vert-panel-header{padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--bg-3);flex-shrink:0}
+.vert-panel-content{flex:1;padding:12px 14px;font-size:12px;color:var(--text-2);overflow-y:auto}
+/* === § 10 CODE & JSON ==================================================== */
+.code-block{position:relative;background:#1e1e2e;border-radius:var(--r10);overflow:hidden;border:1px solid rgba(255,255,255,0.06)}
+.code-block-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.06)}
+.code-lang-badge{font-size:11px;font-weight:600;color:#7c8db8;letter-spacing:.04em;text-transform:uppercase;font-family:var(--mono)}
+.code-copy-btn{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r4);border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#7c8db8;font:inherit;font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition)}
+.code-copy-btn:hover{background:rgba(255,255,255,0.1);color:#cdd6f4}
+.code-copy-btn.copied{color:#a6e3a1;border-color:rgba(166,227,161,0.3)}
+.code-pre{margin:0;padding:18px 20px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.8;color:#cdd6f4}
+.tok-kw{color:#89b4fa} .tok-fn{color:#89dceb} .tok-str{color:#a6e3a1} .tok-num{color:#fab387} .tok-cmt{color:#6c7086;font-style:italic} .tok-op{color:#89b4fa} .tok-key{color:#cba6f7} .tok-bool{color:#89b4fa} .tok-null{color:#6c7086} .tok-punc{color:#cdd6f4}
+/* JSON tree */
+.json-tree{font-family:var(--mono);font-size:13px;line-height:1.8;padding:4px 0}
+.jt-node{position:relative}
+.jt-row{display:flex;align-items:baseline;gap:4px;cursor:pointer;padding:1px 4px;border-radius:var(--r4);transition:background var(--transition)}
+.jt-row:hover{background:color-mix(in srgb,var(--accent) 8%,var(--bg))}
+.jt-toggle{width:14px;flex-shrink:0;color:var(--accent);font-size:11px;transition:transform var(--transition);display:inline-block}
+.jt-key{color:var(--purple)} .jt-str{color:var(--green)} .jt-num{color:var(--amber)} .jt-bool{color:var(--blue)} .jt-null{color:var(--text-3);font-style:italic}
+.jt-children{padding-left:22px;overflow:hidden;transition:max-height 250ms cubic-bezier(0.4,0,0.2,1)}
+.jt-children.collapsed{max-height:0!important;overflow:hidden}
+.jt-ellipsis{color:var(--text-3);font-size:11px}
+/* Diff view */
+.diff-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#1e1e2e;border-bottom:1px solid rgba(255,255,255,0.06);font-family:var(--mono);font-size:12px;color:#7c8db8}
+.diff-stat{display:flex;gap:10px}
+.diff-add{color:#a6e3a1} .diff-del{color:#f38ba8}
+.diff-body{display:grid;grid-template-columns:1fr 1fr;background:#1e1e2e}
+.diff-col{font-family:var(--mono);font-size:12px;line-height:1.9;overflow-x:auto}
+.diff-col-header{padding:8px 14px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7c8db8;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06)}
+.diff-col+.diff-col{border-left:1px solid rgba(255,255,255,0.06)}
+.diff-line{display:flex;align-items:baseline;gap:8px;padding:0 14px;transition:background 80ms}
+.diff-line:hover{background:rgba(255,255,255,0.03)}
+.diff-gutter{width:28px;text-align:right;font-size:11px;color:#45475a;flex-shrink:0;user-select:none}
+.diff-text{color:#cdd6f4;white-space:pre}
+.diff-line.added{background:rgba(166,227,161,0.12)} .diff-line.added .diff-gutter{color:#a6e3a1} .diff-line.added .diff-text{color:#a6e3a1}
+.diff-line.removed{background:rgba(243,139,168,0.12)} .diff-line.removed .diff-gutter{color:#f38ba8} .diff-line.removed .diff-text{color:#f38ba8;text-decoration:line-through;opacity:.7}
+.diff-line.empty .diff-text{color:transparent;user-select:none}
+/* === § 11 GRAPH COMPONENTS =============================================== */
+/* DAG nodes */
+.dag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.dag-node{border:2px solid var(--border-bright);border-radius:var(--r10);padding:16px;background:var(--bg);position:relative;transition:all var(--transition)}
+.dag-node:hover{box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.dag-node.pending{border-color:var(--border-bright)}
+.dag-node.running{border-color:var(--accent)}
+.dag-node.running::before{content:'';position:absolute;inset:-4px;border-radius:14px;border:2px solid var(--accent);opacity:.4;animation:dag-pulse 1.6s ease-in-out infinite}
+@keyframes dag-pulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:0;transform:scale(1.04)}}
+.dag-node.completed{border-color:var(--green)}
+.dag-node.failed{border-color:var(--red)}
+.dag-node-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.dag-node-name{font-size:13px;font-weight:600;color:var(--text)}
+.dag-node-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.dag-node.pending .dag-node-icon{background:var(--bg-3);color:var(--text-3)}
+.dag-node.running .dag-node-icon{background:color-mix(in srgb,var(--accent) 15%,var(--bg));color:var(--accent)}
+.dag-node.completed .dag-node-icon{background:color-mix(in srgb,var(--green) 15%,var(--bg));color:var(--green)}
+.dag-node.failed .dag-node-icon{background:color-mix(in srgb,var(--red) 15%,var(--bg));color:var(--red)}
+.dag-node-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dag-node-duration{font-size:11px;font-family:var(--mono);color:var(--text-3)}
+/* Gantt */
+.gantt-wrap{overflow-x:auto;padding-bottom:8px}
+.gantt-inner{min-width:500px}
+.gantt-axis{display:flex;padding:0 0 6px 80px;position:relative}
+.gantt-tick{flex:1;text-align:center;font-size:10px;font-weight:600;color:var(--text-3);letter-spacing:.03em;font-family:var(--mono)}
+.gantt-grid{display:flex;flex-direction:column;gap:8px}
+.gantt-row{display:flex;align-items:center;gap:8px;height:36px}
+.gantt-row-label{width:80px;flex-shrink:0;font-size:12px;font-weight:500;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;padding-right:8px}
+.gantt-row-track{flex:1;background:var(--bg-4);border-radius:var(--r4);height:28px;position:relative;overflow:hidden}
+.gantt-bar{position:absolute;top:0;height:100%;border-radius:var(--r4);display:flex;align-items:center;padding:0 10px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;transition:opacity var(--transition)}
+.gantt-bar:hover{opacity:.85}
+/* Sparkline */
+.sparkline-wrap{display:inline-flex;align-items:center;gap:8px}
+.sparkline-label{font-size:12px;color:var(--text-2)}
+.sparkline-val{font-size:12px;font-family:var(--mono);font-weight:700;color:var(--accent)}
+/* === § 12 EMPTY STATES =================================================== */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;gap:12px}
+.empty-icon{width:48px;height:48px;display:flex;align-items:center;justify-content:center;border-radius:var(--r10);margin-bottom:4px}
+.empty-icon.muted{background:var(--bg-3)}
+.empty-icon.lock{background:color-mix(in srgb,var(--blue) 10%,var(--bg))}
+.empty-icon.err{background:color-mix(in srgb,var(--red) 10%,var(--bg))}
+.empty-icon.welcome{background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+.empty-title{font-size:15px;font-weight:700;color:var(--text)}
+.empty-desc{font-size:13px;color:var(--text-3);max-width:260px;line-height:1.5}
+.empty-detail{font-family:var(--mono);font-size:11px;color:var(--red);background:color-mix(in srgb,var(--red) 8%,var(--bg));padding:6px 12px;border-radius:var(--r4);border:1px solid color-mix(in srgb,var(--red) 20%,transparent);max-width:320px}
+.empty-arrow{font-size:18px;color:var(--accent);animation:arrow-point 1.2s ease-in-out infinite}
+@keyframes arrow-point{0%,100%{transform:translateX(0)}50%{transform:translateX(-5px)}}
+.empty-states-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.empty-states-grid .demo-card{margin-top:0}
+/* === § 13 TOOLTIPS ======================================================= */
+.tooltip-demo-area{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;padding-top:8px}
+.tooltip-anchor{position:relative;display:inline-block}
+.tooltip-target{padding:8px 16px;border-radius:var(--r6);background:var(--bg-3);border:1px solid var(--border-bright);font-size:12px;font-weight:500;color:var(--text-2);cursor:default;transition:all var(--transition);user-select:none}
+.tooltip-target:hover{border-color:var(--accent);color:var(--text)}
+.tooltip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#1a1d23;color:#e8eaf0;font-size:12px;font-weight:500;padding:6px 12px;border-radius:var(--r6);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 140ms,transform 140ms;transform:translateX(-50%) translateY(4px);box-shadow:var(--shadow-md);z-index:100}
+.tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1d23}
+.tooltip-anchor:hover .tooltip{opacity:1;transform:translateX(-50%) translateY(0)}
+.rich-tooltip{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);background:var(--bg);border:1px solid var(--border-bright);border-radius:var(--r10);padding:14px 16px;width:260px;pointer-events:none;opacity:0;transition:opacity 150ms,transform 150ms;transform:translateX(-50%) translateY(4px);box-shadow:var(--shadow-lg);z-index:100}
+.rich-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--border-bright)}
+.tooltip-anchor:hover .rich-tooltip{opacity:1;transform:translateX(-50%) translateY(0)}
+.rich-tooltip-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.rich-tooltip-icon{width:28px;height:28px;border-radius:var(--r6);background:color-mix(in srgb,var(--red) 12%,var(--bg));color:var(--red);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.rich-tooltip-title{font-size:13px;font-weight:700;color:var(--text)}
+.rich-tooltip-code{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--red)}
+.rich-tooltip-desc{font-size:12px;color:var(--text-2);line-height:1.5;margin-bottom:8px}
+.rich-tooltip-link{font-size:11px;font-weight:600;color:var(--accent);display:flex;align-items:center;gap:4px}
+/* === § 14 NOTIFICATIONS & ALERTS ======================================== */
+.alert{border-radius:var(--r10);padding:14px 16px;display:flex;align-items:flex-start;gap:12px;border:1px solid transparent}
+.alert+.alert{margin-top:10px}
+.alert-bar{width:4px;border-radius:var(--r100);flex-shrink:0;align-self:stretch;min-height:20px}
+.alert-body{flex:1;min-width:0}
+.alert-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.alert-title .filename{font-family:var(--mono);font-size:12px;font-weight:600}
+.alert-desc{font-size:12px;color:var(--text-2);line-height:1.5}
+.alert-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.alert-btn{padding:4px 12px;border-radius:var(--r4);font-size:11px;font-weight:700;cursor:pointer;border:1px solid;transition:all var(--transition)}
+.alert.amber-alert{background:color-mix(in srgb,var(--amber) 8%,var(--bg));border-color:color-mix(in srgb,var(--amber) 20%,transparent)}
+.alert.amber-alert .alert-bar{background:var(--amber)}
+.alert.amber-alert .alert-btn-primary{background:var(--amber);color:#fff;border-color:var(--amber)}
+.alert.amber-alert .alert-btn-ghost{background:transparent;color:var(--text-3);border-color:var(--border-bright)}
+.alert.amber-alert .alert-btn-ghost:hover{background:var(--bg-3)}
+.alert.red-alert{background:color-mix(in srgb,var(--red) 8%,var(--bg));border-color:color-mix(in srgb,var(--red) 20%,transparent);animation:token-pulse-border 2s ease-in-out infinite}
+@keyframes token-pulse-border{0%,100%{border-color:color-mix(in srgb,var(--red) 20%,transparent)}50%{border-color:color-mix(in srgb,var(--red) 50%,transparent)}}
+.alert.red-alert .alert-bar{background:var(--red)}
+.alert.red-alert .alert-btn-primary{background:var(--red);color:#fff;border-color:var(--red)}
+.alert.green-alert{background:color-mix(in srgb,var(--green) 8%,var(--bg));border-color:color-mix(in srgb,var(--green) 20%,transparent)}
+.alert.green-alert .alert-bar{background:var(--green)}
+/* === § 15 ANIMATION LIBRARY ============================================= */
+.anim-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.anim-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r10);padding:20px 16px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;cursor:pointer;transition:border-color var(--transition)}
+.anim-card:hover{border-color:var(--accent)}
+.anim-box{width:48px;height:48px;border-radius:var(--r10);background:color-mix(in srgb,var(--accent) 15%,var(--bg));display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:20px;position:relative;overflow:visible}
+.anim-card-name{font-size:12px;font-weight:600;color:var(--text)}
+.anim-card-replay{padding:4px 10px;border-radius:var(--r4);background:var(--bg-3);border:1px solid var(--border);font-size:11px;font-weight:600;color:var(--text-3);cursor:pointer;transition:all var(--transition)}
+.anim-card-replay:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* animation definitions */
+@keyframes anim-slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes anim-slideInLeft{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:translateX(0)}}
+@keyframes anim-fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes anim-scaleIn{0%{opacity:0;transform:scale(.6)}70%{transform:scale(1.12)}100%{opacity:1;transform:scale(1)}}
+@keyframes anim-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes anim-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.2);opacity:.7}}
+@keyframes anim-shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-7px)}30%{transform:translateX(7px)}45%{transform:translateX(-5px)}60%{transform:translateX(5px)}75%{transform:translateX(-3px)}90%{transform:translateX(3px)}}
+@keyframes anim-successPop{0%{transform:scale(0) rotate(-30deg);opacity:0}60%{transform:scale(1.3) rotate(6deg);opacity:1}80%{transform:scale(0.9) rotate(-2deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes anim-spinIn{from{opacity:0;transform:rotate(-180deg) scale(.4)}to{opacity:1;transform:rotate(0) scale(1)}}
+@keyframes anim-countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.playing-slideUp .anim-box{animation:anim-slideUp 450ms cubic-bezier(0.4,0,0.2,1) both}
+.playing-slideInLeft .anim-box{animation:anim-slideInLeft 450ms cubic-bezier(0.4,0,0.2,1) both}
+.playing-fadeIn .anim-box{animation:anim-fadeIn 500ms ease both}
+.playing-scaleIn .anim-box{animation:anim-scaleIn 400ms cubic-bezier(0.4,0,0.2,1) both}
+.playing-shimmer .anim-box{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 15%,var(--bg)) 25%,color-mix(in srgb,var(--accent) 35%,var(--bg)) 50%,color-mix(in srgb,var(--accent) 15%,var(--bg)) 75%);background-size:200% 100%;animation:anim-shimmer 1.2s ease-in-out 3}
+.playing-pulse .anim-box{animation:anim-pulse 600ms ease-in-out 3}
+.playing-shake .anim-box{animation:anim-shake 500ms cubic-bezier(0.4,0,0.2,1)}
+.playing-successPop .anim-box{animation:anim-successPop 500ms cubic-bezier(0.4,0,0.2,1) both}
+.playing-spinIn .anim-box{animation:anim-spinIn 500ms cubic-bezier(0.4,0,0.2,1) both}
+.playing-countUp .anim-box{animation:anim-countUp 350ms cubic-bezier(0.4,0,0.2,1) both}
+/* === § 16 KEYBOARD SHORTCUTS ============================================= */
+.shortcuts-card{background:var(--bg);border:1px solid var(--border-bright);border-radius:var(--r16);overflow:hidden;box-shadow:var(--shadow-md)}
+.shortcuts-card-header{padding:16px 20px;background:var(--bg-3);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.shortcuts-card-title{font-size:14px;font-weight:700;color:var(--text)}
+.shortcuts-card-hint{font-size:12px;color:var(--text-3);margin-left:auto}
+.shortcuts-grid{display:grid;grid-template-columns:repeat(3,1fr)}
+.shortcuts-col{padding:18px 20px}
+.shortcuts-col+.shortcuts-col{border-left:1px solid var(--border)}
+.shortcuts-col-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.shortcuts-col-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.shortcut-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);transition:background var(--transition)}
+.shortcut-row:last-child{border-bottom:none}
+.shortcut-row:hover{background:color-mix(in srgb,var(--accent) 4%,var(--bg));margin:0 -8px;padding:6px 8px;border-radius:var(--r4)}
+.shortcut-desc{font-size:12px;color:var(--text-2)}
+.shortcut-keys{display:flex;align-items:center;gap:3px;flex-shrink:0}
+.shortcut-keys .kbd{font-size:11px}
+/* === FOOTER ============================================================== */
+.page-footer{border-top:1px solid var(--border);margin-top:32px;padding-top:32px;display:flex;align-items:center;justify-content:space-between;color:var(--text-3);font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- PAGE HEADER -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <div class="page-wordmark">
+      <div class="page-wordmark-dot"></div>
+      EDOG Studio · Design Bible
+    </div>
+    <div class="page-meta">
+      <span>Part 2 · Sections 9–16</span>
+      <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path id="theme-icon-sun" d="M8 11A3 3 0 1 0 8 5a3 3 0 0 0 0 6zm0 1.5V14m0-12V1.5m4.95 1.55-1.06 1.06M3.11 12.89l-1.06 1.06M14 8h-1.5M3.5 8H2m10.45 4.95-1.06-1.06M4.11 4.11 3.05 3.05" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path id="theme-icon-moon" d="M13.5 9.5A5.5 5.5 0 0 1 5.5 2.5a5.5 5.5 0 1 0 8 7z" fill="currentColor" style="display:none"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- INTRO -->
+  <div class="page-intro">
+    <div class="page-title">EDOG Playground<br><span>Design Bible — Part 2</span></div>
+    <p class="page-subtitle">Panels, code, graph components, empty states, tooltips, alerts, animations, and keyboard shortcuts. Sections 9–16.</p>
+    <nav class="toc">
+      <a class="toc-item" href="#s9">9 · Panels</a>
+      <a class="toc-item" href="#s10">10 · Code &amp; JSON</a>
+      <a class="toc-item" href="#s11">11 · Graph</a>
+      <a class="toc-item" href="#s12">12 · Empty States</a>
+      <a class="toc-item" href="#s13">13 · Tooltips</a>
+      <a class="toc-item" href="#s14">14 · Alerts</a>
+      <a class="toc-item" href="#s15">15 · Animations</a>
+      <a class="toc-item" href="#s16">16 · Shortcuts</a>
+    </nav>
+  </div>
+
+  <!-- ================================================================
+       § 9 · PANELS & DRAWERS
+  ================================================================ -->
+  <section class="section" id="s9">
+    <div class="section-header">
+      <div class="section-num">9</div>
+      <div class="section-meta">
+        <h2>Panels &amp; Drawers</h2>
+        <p>Right drawer with backdrop, horizontal split pane with drag handle, and vertical resizable panel.</p>
+      </div>
+    </div>
+
+    <!-- 9a: Right drawer -->
+    <div class="demo-card">
+      <div class="demo-label">9a — Right drawer (320px, slides from right)</div>
+      <div class="drawer-trigger-area" id="drawerArea">
+        <div class="drawer-mock-app">
+          <div class="drawer-mock-title">Workspace Explorer</div>
+          <div class="drawer-mock-lines">
+            <div class="mock-line w80"></div>
+            <div class="mock-line w60"></div>
+            <div class="mock-line w70"></div>
+            <div class="mock-line w45"></div>
+            <div class="mock-line w60"></div>
+            <div class="mock-line w80"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary drawer-open-btn" onclick="openDrawer()">Open Token Inspector</button>
+        <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+        <div class="right-drawer" id="rightDrawer">
+          <div class="drawer-header">
+            <span class="drawer-title">Token Inspector</span>
+            <button class="drawer-close" onclick="closeDrawer()">✕</button>
+          </div>
+          <div class="drawer-body">
+            <div class="token-field">
+              <span class="token-field-label">Token Type</span>
+              <span class="token-field-value">MSAL · Bearer</span>
+            </div>
+            <div class="token-field">
+              <span class="token-field-label">Issued At</span>
+              <span class="token-field-value">2024-12-15T09:14:33Z</span>
+            </div>
+            <div class="token-field">
+              <span class="token-field-label">Expires</span>
+              <span class="token-field-value amber">2024-12-15T10:14:33Z · 38 min</span>
+            </div>
+            <div class="token-field">
+              <span class="token-field-label">Scopes</span>
+              <span class="token-field-value">https://storage.azure.com/.default</span>
+            </div>
+            <div class="token-field">
+              <span class="token-field-label">Tenant</span>
+              <span class="token-field-value green">72f988bf-86f1-41af-91ab-2d7cd011db47</span>
+            </div>
+            <div class="token-field">
+              <span class="token-field-label">Status</span>
+              <span class="token-field-value green">Valid</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9b: Split pane -->
+    <div class="demo-card">
+      <div class="demo-label">9b — Horizontal split pane (drag handle, min 200px each)</div>
+      <div class="split-pane-wrap" id="splitPane">
+        <div class="split-pane-left" id="splitLeft" style="flex:0 0 50%">
+          <div class="split-panel-header">Query Editor</div>
+          <div class="split-panel-content">SELECT table_name,<br>&nbsp;&nbsp;row_count,<br>&nbsp;&nbsp;size_bytes<br>FROM information_schema.tables<br>WHERE schema = 'default'<br>ORDER BY row_count DESC<br>LIMIT 20;</div>
+        </div>
+        <div class="split-handle" id="splitHandle">
+          <div class="split-handle-dots">
+            <div class="split-handle-dot"></div>
+            <div class="split-handle-dot"></div>
+            <div class="split-handle-dot"></div>
+          </div>
+        </div>
+        <div class="split-pane-right" id="splitRight">
+          <div class="split-panel-header">Results (12 rows)</div>
+          <div class="split-panel-content">orders_delta · 4.2M rows<br>customers · 980K rows<br>products_v2 · 340K rows<br>inventory · 210K rows<br>sessions_log · 88K rows</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 9c: Resizable vertical panel -->
+    <div class="demo-card">
+      <div class="demo-label">9c — Resizable vertical panel (drag border, cursor row-resize)</div>
+      <div class="vert-panel-demo" id="vertPanel">
+        <div class="vert-panel-top" id="vertTop" style="height:120px">
+          <div class="vert-panel-header">DAG Graph</div>
+          <div class="vert-panel-content" style="color:var(--text-3);font-size:12px">Drag the handle below to resize the panels. The ghost line previews the new boundary.</div>
+        </div>
+        <div class="vert-handle" id="vertHandle">
+          <div class="vert-ghost"></div>
+        </div>
+        <div class="vert-panel-bottom" id="vertBottom">
+          <div class="vert-panel-header">Execution Log</div>
+          <div class="vert-panel-content" style="font-family:var(--mono);font-size:11px;color:var(--text-3)">
+            [09:14:33] Node aggregation_step started<br>
+            [09:14:34] Allocating Spark session...<br>
+            [09:14:35] Reading orders_delta (4.2M rows)<br>
+            [09:14:37] Shuffle write: 2.1 GB<br>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 10 · CODE & JSON
+  ================================================================ -->
+  <section class="section" id="s10">
+    <div class="section-header">
+      <div class="section-num">10</div>
+      <div class="section-meta">
+        <h2>Code &amp; JSON</h2>
+        <p>Dark code blocks with syntax highlighting, interactive JSON tree, and side-by-side diff view.</p>
+      </div>
+    </div>
+
+    <!-- 10a: Code block -->
+    <div class="demo-card">
+      <div class="demo-label">10a — Code block with syntax coloring and copy button</div>
+      <div class="code-block" style="margin-bottom:12px">
+        <div class="code-block-header">
+          <span class="code-lang-badge">SQL</span>
+          <button class="code-copy-btn" onclick="copyCode(this,'sqlCode')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/></svg>
+            Copy
+          </button>
+        </div>
+        <pre class="code-pre" id="sqlCode"><span class="tok-kw">SELECT</span>
+  t.<span class="tok-fn">table_name</span><span class="tok-punc">,</span>
+  t.<span class="tok-fn">row_count</span><span class="tok-punc">,</span>
+  <span class="tok-fn">ROUND</span><span class="tok-punc">(</span>t.<span class="tok-fn">size_bytes</span> <span class="tok-op">/</span> <span class="tok-num">1073741824</span><span class="tok-punc">,</span> <span class="tok-num">2</span><span class="tok-punc">)</span> <span class="tok-kw">AS</span> size_gb<span class="tok-punc">,</span>
+  t.<span class="tok-fn">last_modified</span>
+<span class="tok-kw">FROM</span> fabric_catalog<span class="tok-punc">.</span>tables t
+<span class="tok-kw">WHERE</span> t.<span class="tok-fn">schema_name</span> <span class="tok-op">=</span> <span class="tok-str">'default'</span>
+  <span class="tok-kw">AND</span> t.<span class="tok-fn">row_count</span> <span class="tok-op">&gt;</span> <span class="tok-num">0</span>
+<span class="tok-kw">ORDER BY</span> t.<span class="tok-fn">size_bytes</span> <span class="tok-kw">DESC</span>
+<span class="tok-kw">LIMIT</span> <span class="tok-num">20</span><span class="tok-punc">;</span></pre>
+      </div>
+      <div class="code-block">
+        <div class="code-block-header">
+          <span class="code-lang-badge">JSON</span>
+          <button class="code-copy-btn" onclick="copyCode(this,'jsonCodeRaw')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/></svg>
+            Copy
+          </button>
+        </div>
+        <pre class="code-pre" id="jsonCodeRaw"><span class="tok-punc">{</span>
+  <span class="tok-key">"workspaceId"</span><span class="tok-punc">:</span> <span class="tok-str">"a3f7c2e1-84b0-4d9f-9e56-1c2d3f4a5b6c"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"capacity"</span><span class="tok-punc">:</span> <span class="tok-str">"F64"</span><span class="tok-punc">,</span>
+  <span class="tok-key">"maxConcurrency"</span><span class="tok-punc">:</span> <span class="tok-num">8</span><span class="tok-punc">,</span>
+  <span class="tok-key">"featureFlags"</span><span class="tok-punc">:</span> <span class="tok-punc">{</span>
+    <span class="tok-key">"liveTableV2"</span><span class="tok-punc">:</span> <span class="tok-bool">true</span><span class="tok-punc">,</span>
+    <span class="tok-key">"sparkV3"</span><span class="tok-punc">:</span> <span class="tok-bool">false</span><span class="tok-punc">,</span>
+    <span class="tok-key">"experimentalDiff"</span><span class="tok-punc">:</span> <span class="tok-null">null</span>
+  <span class="tok-punc">}</span>
+<span class="tok-punc">}</span></pre>
+      </div>
+    </div>
+
+    <!-- 10b: JSON tree -->
+    <div class="demo-card">
+      <div class="demo-label">10b — JSON tree (click ▸/▾ to expand/collapse)</div>
+      <div class="json-tree" id="jsonTree"></div>
+    </div>
+
+    <!-- 10c: Diff view -->
+    <div class="demo-card" style="padding:0;overflow:hidden">
+      <div class="demo-label" style="padding:20px 28px 0">10c — Diff view (side-by-side)</div>
+      <div style="margin-top:16px">
+        <div class="diff-header">
+          <span>edog-config.json</span>
+          <div class="diff-stat">
+            <span class="diff-add">+3 additions</span>
+            <span class="diff-del">-1 deletion</span>
+          </div>
+        </div>
+        <div class="diff-body" id="diffBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 11 · GRAPH COMPONENTS
+  ================================================================ -->
+  <section class="section" id="s11">
+    <div class="section-header">
+      <div class="section-num">11</div>
+      <div class="section-meta">
+        <h2>Graph Components</h2>
+        <p>DAG node cards (4 states), Gantt timeline bars, and sparkline for inline metrics.</p>
+      </div>
+    </div>
+
+    <!-- 11a: DAG nodes -->
+    <div class="demo-card">
+      <div class="demo-label">11a — DAG node cards (pending · running · completed · failed)</div>
+      <div class="dag-grid">
+        <div class="dag-node pending">
+          <div class="dag-node-top">
+            <span class="dag-node-name">load_raw_events</span>
+            <div class="dag-node-icon">◌</div>
+          </div>
+          <div class="dag-node-meta">
+            <span class="badge muted">PySpark</span>
+            <span class="dag-node-duration">—</span>
+          </div>
+        </div>
+        <div class="dag-node running">
+          <div class="dag-node-top">
+            <span class="dag-node-name">aggregation_step</span>
+            <div class="dag-node-icon">▸</div>
+          </div>
+          <div class="dag-node-meta">
+            <span class="badge accent">SQL</span>
+            <span class="dag-node-duration">0:34 elapsed</span>
+          </div>
+        </div>
+        <div class="dag-node completed">
+          <div class="dag-node-top">
+            <span class="dag-node-name">write_delta_table</span>
+            <div class="dag-node-icon">✓</div>
+          </div>
+          <div class="dag-node-meta">
+            <span class="badge success">SQL</span>
+            <span class="dag-node-duration">1:22</span>
+          </div>
+        </div>
+        <div class="dag-node failed">
+          <div class="dag-node-top">
+            <span class="dag-node-name">schema_validation</span>
+            <div class="dag-node-icon">✕</div>
+          </div>
+          <div class="dag-node-meta">
+            <span class="badge purple">PySpark</span>
+            <span class="dag-node-duration">0:07</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11b: Gantt -->
+    <div class="demo-card">
+      <div class="demo-label">11b — Gantt bars on time axis</div>
+      <div class="gantt-wrap">
+        <div class="gantt-inner">
+          <div class="gantt-axis">
+            <div class="gantt-tick">0s</div>
+            <div class="gantt-tick">30s</div>
+            <div class="gantt-tick">60s</div>
+            <div class="gantt-tick">90s</div>
+            <div class="gantt-tick">120s</div>
+          </div>
+          <div class="gantt-grid">
+            <div class="gantt-row">
+              <span class="gantt-row-label">load_raw</span>
+              <div class="gantt-row-track">
+                <div class="gantt-bar" style="left:0%;width:28%;background:var(--green)">28.0s</div>
+              </div>
+            </div>
+            <div class="gantt-row">
+              <span class="gantt-row-label">aggregate</span>
+              <div class="gantt-row-track">
+                <div class="gantt-bar" style="left:28%;width:48%;background:var(--accent)">57.6s</div>
+              </div>
+            </div>
+            <div class="gantt-row">
+              <span class="gantt-row-label">write_delta</span>
+              <div class="gantt-row-track">
+                <div class="gantt-bar" style="left:76%;width:22%;background:var(--teal)">26.4s</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 11c: Sparklines -->
+    <div class="demo-card">
+      <div class="demo-label">11c — Sparklines (inline capacity utilization)</div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r6)">
+          <span style="font-size:13px;font-weight:500;color:var(--text)">Capacity F64</span>
+          <div class="sparkline-wrap">
+            <svg id="spark1" width="80" height="24" viewBox="0 0 80 24"></svg>
+            <span class="sparkline-val" id="spark1val">72%</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r6)">
+          <span style="font-size:13px;font-weight:500;color:var(--text)">Memory Pressure</span>
+          <div class="sparkline-wrap">
+            <svg id="spark2" width="80" height="24" viewBox="0 0 80 24"></svg>
+            <span class="sparkline-val" id="spark2val" style="color:var(--amber)">85%</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r6)">
+          <span style="font-size:13px;font-weight:500;color:var(--text)">Shuffle I/O</span>
+          <div class="sparkline-wrap">
+            <svg id="spark3" width="80" height="24" viewBox="0 0 80 24"></svg>
+            <span class="sparkline-val" id="spark3val" style="color:var(--green)">34%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 12 · EMPTY STATES
+  ================================================================ -->
+  <section class="section" id="s12">
+    <div class="section-header">
+      <div class="section-num">12</div>
+      <div class="section-meta">
+        <h2>Empty States</h2>
+        <p>Four distinct empty state patterns for no-data, disconnected, error, and first-run.</p>
+      </div>
+    </div>
+    <div class="empty-states-grid">
+      <!-- 12a: No data -->
+      <div class="demo-card">
+        <div class="demo-label">12a — No data</div>
+        <div class="empty-state">
+          <div class="empty-icon muted">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div class="empty-title">No workspaces found</div>
+          <div class="empty-desc">You don't have access to any Fabric workspaces, or none match your filter.</div>
+          <button class="btn btn-primary" style="margin-top:4px">Create Workspace</button>
+        </div>
+      </div>
+      <!-- 12b: Disconnected -->
+      <div class="demo-card">
+        <div class="demo-label">12b — Disconnected</div>
+        <div class="empty-state">
+          <div class="empty-icon lock">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div class="empty-title">Deploy to enable this feature</div>
+          <div class="empty-desc">DAG Studio requires a running FabricLiveTable service. Deploy to a lakehouse first.</div>
+          <button class="btn btn-primary" style="margin-top:4px">Deploy</button>
+        </div>
+      </div>
+      <!-- 12c: Error -->
+      <div class="demo-card">
+        <div class="demo-label">12c — Error state</div>
+        <div class="empty-state">
+          <div class="empty-icon err">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </div>
+          <div class="empty-title">Could not load tables</div>
+          <div class="empty-desc">The Fabric API returned an error while fetching table metadata.</div>
+          <div class="empty-detail">HTTP 503 · Service temporarily unavailable</div>
+          <button class="btn btn-secondary" style="margin-top:4px">Retry</button>
+        </div>
+      </div>
+      <!-- 12d: First run -->
+      <div class="demo-card">
+        <div class="demo-label">12d — First run</div>
+        <div class="empty-state">
+          <div class="empty-icon welcome">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          </div>
+          <div class="empty-title">Get started by selecting a workspace</div>
+          <div class="empty-desc">Choose a workspace from the explorer on the left to browse lakehouses and tables.</div>
+          <div class="empty-arrow">← </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 13 · TOOLTIPS
+  ================================================================ -->
+  <section class="section" id="s13">
+    <div class="section-header">
+      <div class="section-num">13</div>
+      <div class="section-meta">
+        <h2>Tooltips</h2>
+        <p>Simple dark-bg tooltip and rich card tooltip. Hover each element to see them.</p>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-label">13a — Simple tooltip (dark, arrow, above element)</div>
+      <div class="tooltip-demo-area">
+        <div class="tooltip-anchor">
+          <div class="tooltip-target">Hover me</div>
+          <div class="tooltip">Copy to clipboard</div>
+        </div>
+        <div class="tooltip-anchor">
+          <div class="tooltip-target">workspace_id</div>
+          <div class="tooltip">a3f7c2e1-84b0-4d9f</div>
+        </div>
+        <div class="tooltip-anchor">
+          <div class="tooltip-target">Delete</div>
+          <div class="tooltip" style="background:#c0392b">This action cannot be undone</div>
+        </div>
+        <div class="tooltip-anchor">
+          <div class="tooltip-target">Ctrl+K</div>
+          <div class="tooltip">Open command palette</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="demo-label">13b — Rich tooltip (icon + title + description). Hover the error code.</div>
+      <div class="tooltip-demo-area">
+        <div class="tooltip-anchor">
+          <div class="tooltip-target" style="font-family:var(--mono);color:var(--red)">ERR_TOKEN_EXPIRED</div>
+          <div class="rich-tooltip">
+            <div class="rich-tooltip-header">
+              <div class="rich-tooltip-icon">!</div>
+              <div>
+                <div class="rich-tooltip-title">Token Expired</div>
+                <div class="rich-tooltip-code">ERR_TOKEN_EXPIRED</div>
+              </div>
+            </div>
+            <div class="rich-tooltip-desc">The MSAL bearer token has exceeded its 1-hour lifetime. Re-authenticate or refresh via the token panel.</div>
+            <div class="rich-tooltip-link">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/><path d="M10 1h5v5"/><line x1="15" y1="1" x2="7" y2="9"/></svg>
+              Open token docs
+            </div>
+          </div>
+        </div>
+        <div class="tooltip-anchor">
+          <div class="tooltip-target" style="font-family:var(--mono);color:var(--amber)">WARN_CAPACITY_85</div>
+          <div class="rich-tooltip">
+            <div class="rich-tooltip-header">
+              <div class="rich-tooltip-icon" style="background:color-mix(in srgb,var(--amber) 12%,var(--bg));color:var(--amber)">⚠</div>
+              <div>
+                <div class="rich-tooltip-title">Capacity Warning</div>
+                <div class="rich-tooltip-code" style="color:var(--amber)">WARN_CAPACITY_85</div>
+              </div>
+            </div>
+            <div class="rich-tooltip-desc">The F64 capacity is at 85% utilization. Consider scaling up or reducing concurrent jobs.</div>
+            <div class="rich-tooltip-link" style="color:var(--amber)">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 3H3a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4"/><path d="M10 1h5v5"/><line x1="15" y1="1" x2="7" y2="9"/></svg>
+              Capacity settings
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 14 · NOTIFICATIONS & ALERTS
+  ================================================================ -->
+  <section class="section" id="s14">
+    <div class="section-header">
+      <div class="section-num">14</div>
+      <div class="section-meta">
+        <h2>Notifications &amp; Alerts</h2>
+        <p>File change banner, token expiry alert, capacity warning, and success notification.</p>
+      </div>
+    </div>
+    <div class="demo-card">
+      <!-- 14a: File change banner -->
+      <div class="alert amber-alert" id="alert14a">
+        <div class="alert-bar"></div>
+        <div class="alert-body">
+          <div class="alert-title">
+            File changes detected —
+            <span class="filename">edog-config.json</span>
+            <span class="filename">featureflags.json</span>
+          </div>
+          <div class="alert-desc">The configuration files have changed since last deploy. Re-deploy to apply changes.</div>
+          <div class="alert-actions">
+            <button class="btn btn-primary alert-btn" style="font-size:11px;padding:5px 12px" onclick="dismissAlert('alert14a')">Re-deploy</button>
+            <button class="btn btn-ghost alert-btn" style="font-size:11px;padding:5px 12px" onclick="dismissAlert('alert14a')">Dismiss</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 14b: Token expiry -->
+      <div class="alert red-alert" id="alert14b" style="margin-top:10px">
+        <div class="alert-bar"></div>
+        <div class="alert-body">
+          <div class="alert-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Token expired
+          </div>
+          <div class="alert-desc">Your MSAL bearer token expired 2 minutes ago. API calls will fail until refreshed.</div>
+          <div class="alert-actions">
+            <button class="btn alert-btn" style="background:var(--red);color:#fff;border-color:var(--red);font-size:11px;padding:5px 12px" onclick="dismissAlert('alert14b')">Refresh Now</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 14c: Capacity warning -->
+      <div class="alert amber-alert" id="alert14c" style="margin-top:10px">
+        <div class="alert-bar"></div>
+        <div class="alert-body">
+          <div class="alert-title">Capacity at 85% utilization</div>
+          <div class="alert-desc">F64 is approaching its limit. Running additional jobs may cause throttling.</div>
+        </div>
+      </div>
+
+      <!-- 14d: Success -->
+      <div class="alert green-alert" id="alert14d" style="margin-top:10px">
+        <div class="alert-bar"></div>
+        <div class="alert-body">
+          <div class="alert-title" style="color:var(--green)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Deployed successfully to TestLH
+          </div>
+          <div class="alert-desc">FabricLiveTable is running. DevTools are now available.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 15 · ANIMATION LIBRARY
+  ================================================================ -->
+  <section class="section" id="s15">
+    <div class="section-header">
+      <div class="section-num">15</div>
+      <div class="section-meta">
+        <h2>Animation Library</h2>
+        <p>10 reusable animations. Click [Replay] or the card to re-trigger each animation.</p>
+      </div>
+    </div>
+    <div class="demo-card">
+      <div class="anim-grid" id="animGrid"></div>
+    </div>
+  </section>
+
+  <!-- ================================================================
+       § 16 · KEYBOARD SHORTCUTS
+  ================================================================ -->
+  <section class="section" id="s16">
+    <div class="section-header">
+      <div class="section-num">16</div>
+      <div class="section-meta">
+        <h2>Keyboard Shortcuts</h2>
+        <p>Cheatsheet card. Keyboard-first UX is a core EDOG Studio design principle.</p>
+      </div>
+    </div>
+    <div class="shortcuts-card">
+      <div class="shortcuts-card-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8M6 10h.01"/></svg>
+        <span class="shortcuts-card-title">Keyboard Shortcuts</span>
+        <span class="shortcuts-card-hint">Ctrl+/ to toggle this overlay</span>
+      </div>
+      <div class="shortcuts-grid">
+        <div class="shortcuts-col">
+          <div class="shortcuts-col-title">Navigation</div>
+          <div class="shortcut-row"><span class="shortcut-desc">Workspace Explorer</span><div class="shortcut-keys"><span class="kbd">1</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">DAG Studio</span><div class="shortcut-keys"><span class="kbd">2</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Spark Inspector</span><div class="shortcut-keys"><span class="kbd">3</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Log Viewer</span><div class="shortcut-keys"><span class="kbd">4</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">API Playground</span><div class="shortcut-keys"><span class="kbd">5</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Feature Flags</span><div class="shortcut-keys"><span class="kbd">6</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Command palette</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">K</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Shortcuts overlay</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">/</span></div></div>
+        </div>
+        <div class="shortcuts-col">
+          <div class="shortcuts-col-title">Actions</div>
+          <div class="shortcut-row"><span class="shortcut-desc">Rename item</span><div class="shortcut-keys"><span class="kbd">F2</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Delete item</span><div class="shortcut-keys"><span class="kbd">Del</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Copy GUID</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">C</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Confirm action</span><div class="shortcut-keys"><span class="kbd">Enter</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Cancel / close</span><div class="shortcut-keys"><span class="kbd">Esc</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Deploy to lakehouse</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">D</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Refresh token</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">R</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Toggle dark mode</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">Shift</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">T</span></div></div>
+        </div>
+        <div class="shortcuts-col">
+          <div class="shortcuts-col-title">View-Specific</div>
+          <div class="shortcut-row"><span class="shortcut-desc">Jump to logs</span><div class="shortcut-keys"><span class="kbd">L</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Open DAG view</span><div class="shortcut-keys"><span class="kbd">D</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Spark details</span><div class="shortcut-keys"><span class="kbd">S</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Toggle log breakpoint</span><div class="shortcut-keys"><span class="kbd">B</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Bookmark log line</span><div class="shortcut-keys"><span class="kbd">M</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Clear log buffer</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">L</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Expand all nodes</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">E</span></div></div>
+          <div class="shortcut-row"><span class="shortcut-desc">Run selected query</span><div class="shortcut-keys"><span class="kbd">Ctrl</span><span style="color:var(--text-3);font-size:10px">+</span><span class="kbd">Enter</span></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <div class="page-footer">
+    <span>EDOG Studio · Design Bible Part 2 · Sections 9–16</span>
+    <span>← <a href="design-bible-part1.html" style="color:var(--accent);text-decoration:none">Part 1 (Sections 1–8)</a></span>
+  </div>
+
+</main>
+
+<script>
+/* === THEME TOGGLE ======================================================== */
+const html = document.documentElement;
+const themeToggle = document.getElementById('themeToggle');
+const sunIcon  = document.getElementById('theme-icon-sun');
+const moonIcon = document.getElementById('theme-icon-moon');
+
+themeToggle.addEventListener('click', () => {
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  sunIcon.style.display  = isDark ? '' : 'none';
+  moonIcon.style.display = isDark ? 'none' : '';
+});
+
+/* === § 9A DRAWER ======================================================== */
+function openDrawer() {
+  document.getElementById('rightDrawer').classList.add('open');
+  document.getElementById('drawerBackdrop').classList.add('open');
+}
+function closeDrawer() {
+  document.getElementById('rightDrawer').classList.remove('open');
+  document.getElementById('drawerBackdrop').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+/* === § 9B SPLIT PANE ==================================================== */
+(function() {
+  const pane = document.getElementById('splitPane');
+  const left = document.getElementById('splitLeft');
+  const handle = document.getElementById('splitHandle');
+  let dragging = false, startX = 0, startW = 0;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX;
+    startW = left.getBoundingClientRect().width;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const total = pane.getBoundingClientRect().width - 6;
+    const delta = e.clientX - startX;
+    const newW = Math.max(200, Math.min(total - 200, startW + delta));
+    left.style.flex = 'none';
+    left.style.width = newW + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+/* === § 9C VERTICAL PANEL ================================================ */
+(function() {
+  const vertPanel = document.getElementById('vertPanel');
+  const top = document.getElementById('vertTop');
+  const handle = document.getElementById('vertHandle');
+  let dragging = false, startY = 0, startH = 0;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY;
+    startH = top.getBoundingClientRect().height;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const total = vertPanel.getBoundingClientRect().height - 6;
+    const delta = e.clientY - startY;
+    const newH = Math.max(60, Math.min(total - 60, startH + delta));
+    top.style.height = newH + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+/* === § 10A COPY CODE ==================================================== */
+function copyCode(btn, id) {
+  const el = document.getElementById(id);
+  const text = el ? el.innerText : '';
+  navigator.clipboard.writeText(text).catch(() => {});
+  btn.classList.add('copied');
+  btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+  setTimeout(() => {
+    btn.classList.remove('copied');
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/></svg> Copy';
+  }, 2000);
+}
+
+/* === § 10B JSON TREE ==================================================== */
+const treeData = {
+  workspaceId: "a3f7c2e1-84b0-4d9f-9e56-1c2d3f4a5b6c",
+  displayName: "FLT Dev Workspace",
+  capacitySku: "F64",
+  tables: [
+    { name: "orders_delta", rowCount: 4200000, format: "delta" },
+    { name: "customers", rowCount: 980000, format: "parquet" }
+  ],
+  settings: {
+    liveTableEnabled: true,
+    maxConcurrentJobs: 8,
+    tokenRefreshMinutes: 55,
+    debugMode: null
+  }
+};
+
+function renderJsonTree(data, container) {
+  const node = createJtNode(data, null);
+  container.appendChild(node);
+}
+
+function getType(val) {
+  if (val === null) return 'null';
+  if (typeof val === 'boolean') return 'bool';
+  if (typeof val === 'number') return 'num';
+  if (typeof val === 'string') return 'str';
+  if (Array.isArray(val)) return 'array';
+  return 'obj';
+}
+
+function createJtNode(data, key) {
+  const div = document.createElement('div');
+  div.className = 'jt-node';
+  const type = getType(data);
+  const isComplex = type === 'obj' || type === 'array';
+
+  const row = document.createElement('div');
+  row.className = 'jt-row';
+
+  const toggle = document.createElement('span');
+  toggle.className = 'jt-toggle';
+  toggle.textContent = isComplex ? '▾' : ' ';
+
+  const label = document.createElement('span');
+
+  if (key !== null) {
+    const k = document.createElement('span');
+    k.className = 'jt-key';
+    k.textContent = JSON.stringify(key) + ': ';
+    label.appendChild(k);
+  }
+
+  if (isComplex) {
+    const bracket = document.createElement('span');
+    bracket.style.color = 'var(--text-3)';
+    bracket.textContent = type === 'array' ? '[' : '{';
+    label.appendChild(bracket);
+    const ellipsis = document.createElement('span');
+    ellipsis.className = 'jt-ellipsis';
+    ellipsis.textContent = '  ' + (type === 'array' ? data.length + ' items' : Object.keys(data).length + ' keys');
+    ellipsis.style.display = 'none';
+    label.appendChild(ellipsis);
+    row.appendChild(toggle);
+    row.appendChild(label);
+    div.appendChild(row);
+
+    const children = document.createElement('div');
+    children.className = 'jt-children';
+    const entries = type === 'array' ? data.map((v,i) => [i,v]) : Object.entries(data);
+    entries.forEach(([k, v]) => children.appendChild(createJtNode(v, k)));
+
+    const closingRow = document.createElement('div');
+    closingRow.className = 'jt-row';
+    const cl = document.createElement('span');
+    cl.style.color = 'var(--text-3)';
+    cl.textContent = type === 'array' ? ']' : '}';
+    closingRow.appendChild(document.createElement('span'));
+    closingRow.appendChild(cl);
+    children.appendChild(closingRow);
+    div.appendChild(children);
+
+    const maxH = children.scrollHeight + 'px';
+    children.style.maxHeight = maxH;
+
+    row.addEventListener('click', e => {
+      e.stopPropagation();
+      const collapsed = children.classList.toggle('collapsed');
+      toggle.textContent = collapsed ? '▸' : '▾';
+      ellipsis.style.display = collapsed ? 'inline' : 'none';
+      if (!collapsed) children.style.maxHeight = children.scrollHeight + 'px';
+    });
+  } else {
+    toggle.textContent = ' ';
+    row.appendChild(toggle);
+
+    let valSpan;
+    if (type === 'str')  { valSpan = document.createElement('span'); valSpan.className = 'jt-str'; valSpan.textContent = JSON.stringify(data); }
+    else if (type === 'num')  { valSpan = document.createElement('span'); valSpan.className = 'jt-num'; valSpan.textContent = data; }
+    else if (type === 'bool') { valSpan = document.createElement('span'); valSpan.className = 'jt-bool'; valSpan.textContent = String(data); }
+    else { valSpan = document.createElement('span'); valSpan.className = 'jt-null'; valSpan.textContent = 'null'; }
+
+    label.appendChild(valSpan);
+    row.appendChild(label);
+    div.appendChild(row);
+  }
+  return div;
+}
+
+renderJsonTree(treeData, document.getElementById('jsonTree'));
+
+/* === § 10C DIFF VIEW ==================================================== */
+(function() {
+  const leftLines = [
+    { n: 1, t: '{', cls: '' },
+    { n: 2, t: '  "lakehouse": "TestLH",', cls: '' },
+    { n: 3, t: '  "capacity": "F32",', cls: 'removed' },
+    { n: 4, t: '  "region": "westus2"', cls: '' },
+    { n: 5, t: '}', cls: '' },
+    { n: '',  t: '', cls: 'empty' },
+    { n: '',  t: '', cls: 'empty' },
+    { n: '',  t: '', cls: 'empty' },
+  ];
+  const rightLines = [
+    { n: 1, t: '{', cls: '' },
+    { n: 2, t: '  "lakehouse": "TestLH",', cls: '' },
+    { n: 3, t: '  "capacity": "F64",', cls: 'added' },
+    { n: 4, t: '  "region": "westus2",', cls: 'added' },
+    { n: 5, t: '  "maxConcurrency": 8,', cls: 'added' },
+    { n: 6, t: '  "debugMode": null', cls: 'added' },
+    { n: 7, t: '}', cls: '' },
+    { n: '',  t: '', cls: 'empty' },
+  ];
+
+  const container = document.getElementById('diffBody');
+  const leftCol = document.createElement('div'); leftCol.className = 'diff-col';
+  const rightCol = document.createElement('div'); rightCol.className = 'diff-col';
+
+  const lh = document.createElement('div'); lh.className = 'diff-col-header'; lh.textContent = 'Before'; leftCol.appendChild(lh);
+  const rh = document.createElement('div'); rh.className = 'diff-col-header'; rh.textContent = 'After'; rightCol.appendChild(rh);
+
+  function renderLines(lines, col) {
+    lines.forEach(l => {
+      const row = document.createElement('div');
+      row.className = 'diff-line' + (l.cls ? ' ' + l.cls : '');
+      const gutter = document.createElement('span'); gutter.className = 'diff-gutter'; gutter.textContent = l.n;
+      const text = document.createElement('span'); text.className = 'diff-text'; text.textContent = l.t || ' ';
+      row.appendChild(gutter); row.appendChild(text); col.appendChild(row);
+    });
+  }
+  renderLines(leftLines, leftCol);
+  renderLines(rightLines, rightCol);
+  container.appendChild(leftCol);
+  container.appendChild(rightCol);
+})();
+
+/* === § 11C SPARKLINES =================================================== */
+function drawSparkline(id, data, color) {
+  const svg = document.getElementById(id);
+  const w = 80, h = 24, pad = 2;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (w - 2 * pad);
+    const y = h - pad - ((v - min) / range) * (h - 2 * pad);
+    return x + ',' + y;
+  }).join(' ');
+
+  svg.innerHTML = `
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${pts.split(' ').pop().split(',')[0]}" cy="${pts.split(' ').pop().split(',')[1]}" r="2.5" fill="${color}"/>
+  `;
+}
+
+drawSparkline('spark1', [55,62,58,70,68,72,69,73,70,72], 'var(--accent)');
+drawSparkline('spark2', [70,74,78,80,82,85,83,86,84,85], 'var(--amber)');
+drawSparkline('spark3', [40,35,30,28,32,34,30,33,35,34], 'var(--green)');
+
+/* === § 14 ALERTS ======================================================== */
+function dismissAlert(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.transition = 'opacity 250ms, transform 250ms';
+  el.style.opacity = '0';
+  el.style.transform = 'translateX(12px)';
+  setTimeout(() => { el.style.display = 'none'; }, 260);
+}
+
+/* === § 15 ANIMATION LIBRARY ============================================= */
+const animations = [
+  { id: 'slideUp',     label: 'slideUp',    icon: '↑', desc: '450ms ease-in-out' },
+  { id: 'slideInLeft', label: 'slideInLeft', icon: '→', desc: '450ms ease-in-out' },
+  { id: 'fadeIn',      label: 'fadeIn',      icon: '◎', desc: '500ms ease' },
+  { id: 'scaleIn',     label: 'scaleIn',     icon: '◆', desc: 'overshoot spring' },
+  { id: 'shimmer',     label: 'shimmer',     icon: '✦', desc: '1.2s × 3 loops' },
+  { id: 'pulse',       label: 'pulse',       icon: '●', desc: '600ms × 3 loops' },
+  { id: 'shake',       label: 'shake',       icon: '↔', desc: '500ms cubic' },
+  { id: 'successPop',  label: 'successPop',  icon: '✓', desc: '500ms spring' },
+  { id: 'spinIn',      label: 'spinIn',      icon: '⟳', desc: '500ms cubic' },
+  { id: 'countUp',     label: 'countUp',     icon: '42', desc: '350ms ease-out' },
+];
+
+const animGrid = document.getElementById('animGrid');
+animations.forEach(anim => {
+  const card = document.createElement('div');
+  card.className = 'anim-card';
+  card.dataset.animId = anim.id;
+  card.innerHTML = `
+    <div class="anim-box" id="animBox_${anim.id}">${anim.icon}</div>
+    <div class="anim-card-name">${anim.label}</div>
+    <button class="anim-card-replay" data-anim="${anim.id}">Replay</button>
+  `;
+  animGrid.appendChild(card);
+
+  function playAnim() {
+    const box = document.getElementById('animBox_' + anim.id);
+    const cls = 'playing-' + anim.id;
+    card.classList.remove(cls);
+    void card.offsetWidth;
+    card.classList.add(cls);
+    const dur = anim.id === 'shimmer' || anim.id === 'pulse' ? 3700 : 600;
+    setTimeout(() => card.classList.remove(cls), dur);
+  }
+
+  card.querySelector('.anim-card-replay').addEventListener('click', e => { e.stopPropagation(); playAnim(); });
+  card.addEventListener('click', playAnim);
+
+  setTimeout(playAnim, 300 + animations.indexOf(anim) * 80);
+});
+
+/* === KEYBOARD SHORTCUT DEMO ============================================= */
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === '/') {
+    document.getElementById('s16').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    e.preventDefault();
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === 'T') {
+    themeToggle.click();
+    e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>
