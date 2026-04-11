@@ -9,6 +9,7 @@ import base64
 import json
 import ssl
 import subprocess
+import threading
 import time
 import traceback
 import urllib.error
@@ -17,6 +18,7 @@ import urllib.request
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+from socketserver import ThreadingMixIn
 
 PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
@@ -24,10 +26,12 @@ BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
+
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 
 # In-memory MWC token cache — keyed by "ws:lh:cap" composite
 _mwc_cache: dict = {}  # value: {"token": str, "host": str, "expiry": float}
+_mwc_lock = threading.Lock()
 
 
 def _write_cache(path: Path, token: str, expiry: float):
@@ -127,10 +131,11 @@ def _get_mwc_token(bearer: str, ws_id: str, lh_id: str, cap_id: str) -> tuple:
         urllib.error.HTTPError: If the token endpoint returns an error.
     """
     cache_key = f"{ws_id}:{lh_id}:{cap_id}"
-    cached = _mwc_cache.get(cache_key)
-    if cached and time.time() < cached["expiry"] - 300:
-        print(f"  [MWC] Cache hit for {cache_key[:20]}...")
-        return cached["token"], cached["host"]
+    with _mwc_lock:
+        cached = _mwc_cache.get(cache_key)
+        if cached and time.time() < cached["expiry"] - 300:
+            print(f"  [MWC] Cache hit for {cache_key[:20]}...")
+            return cached["token"], cached["host"]
 
     print(f"  [MWC] Generating token for ws={ws_id[:8]}... lh={lh_id[:8]}...")
     body = json.dumps({
@@ -167,7 +172,8 @@ def _get_mwc_token(bearer: str, ws_id: str, lh_id: str, cap_id: str) -> tuple:
     else:
         expiry = time.time() + 3600  # fallback: 1 hour
 
-    _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry}
+    with _mwc_lock:
+        _mwc_cache[cache_key] = {"token": token, "host": host, "expiry": expiry}
     remaining = int((expiry - time.time()) / 60)
     print(f"  [MWC] Token cached, expires in {remaining} min")
     return token, host
@@ -655,7 +661,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("127.0.0.1", 5555), EdogDevHandler)
+
+    class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+        """Handle each request in a new thread to avoid blocking on slow MWC calls."""
+        daemon_threads = True
+
+    server = ThreadedHTTPServer(("127.0.0.1", 5555), EdogDevHandler)
     print("EDOG Dev Server running at http://127.0.0.1:5555/")
     print(f"  Config:  {CONFIG_PATH}")
     print(f"  Bearer:  {BEARER_CACHE} (exists={BEARER_CACHE.exists()})")

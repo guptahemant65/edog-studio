@@ -1261,19 +1261,25 @@ class WorkspaceExplorer {
       tableHtml += '<th class="sortable num" data-col="size">Size <span class="sort-icon">\u25B2\u25BC</span></th>';
       tableHtml += '</tr></thead><tbody>';
       for (const t of tables) {
+        const tType = t.tableType || t.type || '';
+        const tFormat = t.tableFormat || t.format || 'delta';
         tableHtml += `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}">`;
         tableHtml += `<td class="ws-table-name">${this._esc(t.name)}</td>`;
-        tableHtml += `<td><span class="ws-type-badge">${this._esc(t.type || 'Delta')}</span></td>`;
-        tableHtml += `<td>${this._esc(t.format || 'delta')}</td>`;
-        tableHtml += '<td class="num skel-cell"><div class="skel-line skel-line--sm"></div></td>';
-        tableHtml += '<td class="num skel-cell"><div class="skel-line skel-line--xs"></div></td>';
+        tableHtml += `<td><span class="ws-type-badge">${this._esc(this._tableTypeBadge(tType))}</span></td>`;
+        tableHtml += `<td>${this._esc(tFormat)}</td>`;
+        tableHtml += '<td class="num">\u2014</td>';
+        tableHtml += '<td class="num">\u2014</td>';
         tableHtml += '</tr>';
       }
       tableHtml += '</tbody></table></div>';
       tablesEl.innerHTML = tableHtml;
 
-      // Store tables for enrichment merging
-      this._currentTables = tables;
+      // Store tables for enrichment merging — normalize field names
+      this._currentTables = tables.map(t => ({
+        ...t,
+        type: t.tableType || t.type || '',
+        format: t.tableFormat || t.format || 'delta',
+      }));
 
       // Insert table filter bar above the table container
       this._insertTableFilter(tablesEl);
@@ -1283,13 +1289,13 @@ class WorkspaceExplorer {
         th.addEventListener('click', () => this._sortTable(th.dataset.col, tablesEl));
       });
 
-      // Bind table row clicks → inspector
+      // Bind table row clicks → inspector (use this._currentTables for enriched data)
       tablesEl.querySelectorAll('.ws-table-row[data-table-name]').forEach(row => {
         row.addEventListener('click', () => {
-          // Deselect other rows
           tablesEl.querySelectorAll('.ws-table-row').forEach(r => r.classList.remove('selected'));
           row.classList.add('selected');
-          const tbl = tables.find(x => x.name === row.dataset.tableName);
+          const src = this._currentTables || tables;
+          const tbl = src.find(x => x.name === row.dataset.tableName);
           if (tbl) this._showTableInspector(tbl);
         });
       });
@@ -1455,7 +1461,8 @@ class WorkspaceExplorer {
    * @param {object} result - Response from getTableDetails API
    */
   _enrichTableRows(result) {
-    const items = (result && result.value) || [];
+    // API response: { result: { value: [...] }, id, status }
+    const items = result?.result?.value || result?.value || [];
     const detailMap = new Map();
     for (const item of items) {
       if (item.tableName) detailMap.set(item.tableName, item);
@@ -1517,6 +1524,16 @@ class WorkspaceExplorer {
         if (sizeCell) { sizeCell.className = 'num'; sizeCell.textContent = '\u2014'; }
       }
     });
+
+    // If inspector is showing a table that just got enriched, refresh it
+    const inspNameEl = this._inspectorEl?.querySelector('.ws-insp-kv dd');
+    if (inspNameEl && this._currentTables) {
+      const inspName = inspNameEl.textContent;
+      const enrichedTable = this._currentTables.find(t => t.name === inspName);
+      if (enrichedTable && enrichedTable.schema && enrichedTable.schema.length > 0) {
+        this._showTableInspector(enrichedTable);
+      }
+    }
   }
 
   /**
@@ -1582,8 +1599,8 @@ class WorkspaceExplorer {
     html += '<dl class="ws-insp-kv">';
     const fields = [
       ['Name', table.name],
-      ['Type', table.type || 'Table'],
-      ['Format', table.format || 'Delta'],
+      ['Type', this._tableTypeBadge(table.tableType || table.type || table._enrichedType || '')],
+      ['Format', table.tableFormat || table.format || 'delta'],
     ];
     if (table.location) {
       fields.push(['Location', table.location]);
@@ -1733,9 +1750,9 @@ class WorkspaceExplorer {
 
     try {
       const result = await this._api.getTableDetails(ws.id, lh.id, ws.capacityId, [table.name]);
-      const details = result && result.value
-        ? result.value.find(v => v.tableName === table.name)
-        : null;
+      // API response: { result: { value: [...] }, id, status }
+      const allDetails = result?.result?.value || result?.value || [];
+      const details = allDetails.find(v => v.tableName === table.name) || null;
 
       if (details && details.result) {
         // Merge enrichment onto the stored table object
