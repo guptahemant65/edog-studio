@@ -1223,7 +1223,7 @@ class WorkspaceExplorer {
     html += `<span class="ws-badge ws-badge-health" style="color:${health.color}">● ${this._esc(health.status)}</span>`;
     html += '</div></div>';
 
-    html += '<div class="ws-content-actions">';
+    html += '<div class="ws-content-actions" id="ws-content-actions">';
     html += '<button class="ws-deploy-btn" id="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>';
     html += '<button class="ws-action-btn" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
     html += '<button class="ws-action-btn" data-action="rename-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
@@ -1235,6 +1235,9 @@ class WorkspaceExplorer {
     html += '<div id="ws-tables-list">Loading tables...</div></div>';
 
     this._contentEl.innerHTML = html;
+
+    // Sync deploy button state from studio status
+    this._syncDeployButtons(lh, ws);
 
     // Bind actions
     const deployBtn = document.getElementById('ws-deploy-btn');
@@ -2112,6 +2115,48 @@ class WorkspaceExplorer {
       if (undeployBtn) undeployBtn.remove();
     } else if (state.status === 'crashed') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('crashed');
+    }
+  }
+
+  /**
+   * Sync deploy/undeploy buttons to match server-side deploy state.
+   * Called every time a lakehouse content panel is rendered.
+   */
+  async _syncDeployButtons(lh, ws) {
+    try {
+      const resp = await fetch('/api/studio/status');
+      if (!resp.ok) return;
+      const state = await resp.json();
+
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (!btnEl) return;
+
+      const isDeployed = state.phase === 'running' || state.phase === 'crashed';
+      const deployedToThis = isDeployed && state.deployTarget &&
+        state.deployTarget.artifactId === lh.id;
+      const deployedToOther = isDeployed && state.deployTarget &&
+        state.deployTarget.artifactId !== lh.id;
+
+      if (deployedToThis) {
+        // This lakehouse is currently deployed — show re-deploy + stop
+        this._showUndeployButton(lh);
+        // Also attach DeployFlow for undeploy capability
+        if (!this._deployFlow) {
+          const progressEl = document.getElementById('ws-deploy-progress');
+          if (progressEl) {
+            this._deployFlow = new DeployFlow(progressEl);
+            this._deployFlow.onUpdate = (s) => this._onDeployUpdate(s, lh, ws);
+          }
+        }
+      } else if (deployedToOther) {
+        // Different lakehouse is deployed — show "Deploy (switch from X)"
+        const otherName = state.deployTarget.lakehouseName || state.deployTarget.artifactId || '';
+        btnEl.textContent = '\u25B6 Deploy (switch from ' + otherName + ')';
+        btnEl.title = 'Currently deployed to ' + otherName + '. Click to switch.';
+      }
+      // else: nothing deployed — default "Deploy to this Lakehouse" button is fine
+    } catch {
+      // Studio status not available — keep default button
     }
   }
 
