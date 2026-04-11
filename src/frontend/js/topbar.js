@@ -1,6 +1,7 @@
 /**
  * TopBar — 44px persistent status bar.
  * Shows tenant chip, phase indicator, token health, git info, Ctrl+K hint.
+ * Owns the Token Inspector drawer (slide-in from right on click).
  */
 class TopBar {
   constructor() {
@@ -20,9 +21,14 @@ class TopBar {
     this._countdownTimer = null;
     this._uptimeStart = null;
     this._bearerExpiresAt = null;
+    this._lastConfig = null;
+    this._lastHealth = null;
+    this._inspectorEl = null;
   }
 
   init() {
+    this._createTokenInspector();
+    this._bindTokenClick();
     this._startConfigPolling();
   }
 
@@ -45,6 +51,8 @@ class TopBar {
 
       const config = await configResp.json();
       const health = healthResp && healthResp.ok ? await healthResp.json() : null;
+      this._lastConfig = config;
+      this._lastHealth = health;
 
       // T5: Update tenant chip from health data
       if (health && health.lastUsername) {
@@ -71,6 +79,11 @@ class TopBar {
 
       // T8: Show git/patch meta only when real data exists
       this._updateGitVisibility(health || {});
+
+      // Refresh inspector if open
+      if (this._inspectorEl && this._inspectorEl.classList.contains('open')) {
+        this._populateInspector();
+      }
 
       return config;
     } catch {
@@ -119,7 +132,6 @@ class TopBar {
     if (this._bearerExpiresAt) {
       this._updateTokenCountdown();
     }
-    // Also update uptime display for connected state
     if (this._uptimeStart && this._statusEl?.classList.contains('running')) {
       const secs = Math.floor((Date.now() - this._uptimeStart) / 1000);
       if (this._statusTextEl) {
@@ -193,6 +205,112 @@ class TopBar {
   _updateSidebarDot(color) {
     if (!this._sidebarDot) return;
     this._sidebarDot.className = 'sidebar-token-dot' + (color ? ' ' + color : '');
+  }
+
+  // ─── Token Inspector ───
+
+  _createTokenInspector() {
+    if (document.getElementById('token-inspector')) return;
+    const el = document.createElement('div');
+    el.id = 'token-inspector';
+    el.className = 'token-inspector';
+    el.innerHTML =
+      '<div class="ti-header">' +
+        '<span class="ti-title">Token Inspector</span>' +
+        '<button class="ti-close" id="ti-close-btn">\u2715</button>' +
+      '</div>' +
+      '<div class="ti-body" id="ti-body"></div>';
+    document.body.appendChild(el);
+    this._inspectorEl = el;
+
+    el.querySelector('#ti-close-btn').addEventListener('click', () => {
+      el.classList.remove('open');
+    });
+  }
+
+  _bindTokenClick() {
+    if (this._tokenHealthEl) {
+      this._tokenHealthEl.addEventListener('click', () => {
+        if (!this._inspectorEl) return;
+        this._populateInspector();
+        this._inspectorEl.classList.toggle('open');
+      });
+    }
+  }
+
+  _populateInspector() {
+    const body = document.getElementById('ti-body');
+    if (!body) return;
+    const config = this._lastConfig || {};
+    const health = this._lastHealth || {};
+
+    const bearerSec = this._bearerExpiresAt
+      ? Math.max(0, Math.floor((this._bearerExpiresAt - Date.now()) / 1000))
+      : 0;
+    const bearerMin = Math.floor(bearerSec / 60);
+    const hasMwc = !!config.mwcToken;
+    const mwcMin = config.tokenExpiryMinutes || 0;
+
+    body.innerHTML =
+      this._renderCard('Bearer (AAD/Entra)', bearerMin, health.hasBearerToken, [
+        ['User', health.lastUsername || '\u2014'],
+        ['Phase', config.phase || 'disconnected'],
+        ['Workspace', config.workspaceId || '\u2014'],
+      ]) +
+      this._renderCard('MWC (Capacity)', mwcMin, hasMwc, [
+        ['Artifact', config.artifactId || '\u2014'],
+        ['Capacity', config.capacityId || '\u2014'],
+        ['Expired', config.tokenExpired ? 'Yes' : 'No'],
+      ]) +
+      '<div class="ti-actions">' +
+        '<button class="ti-btn primary" id="ti-refresh-btn">Refresh Token</button>' +
+        '<button class="ti-btn" id="ti-copy-bearer">Copy Bearer</button>' +
+      '</div>';
+
+    // Wire copy button
+    const copyBtn = document.getElementById('ti-copy-bearer');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const token = config.bearerToken;
+        if (token && navigator.clipboard) {
+          navigator.clipboard.writeText(token);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy Bearer'; }, 1500);
+        }
+      });
+    }
+
+    // Wire refresh button
+    const refreshBtn = document.getElementById('ti-refresh-btn');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        refreshBtn.textContent = 'Refreshing\u2026';
+        refreshBtn.disabled = true;
+        this.fetchConfig().then(() => {
+          this._populateInspector();
+        });
+      });
+    }
+  }
+
+  _renderCard(title, minutes, hasToken, claims) {
+    const pct = hasToken ? Math.min((minutes / 60) * 100, 100) : 0;
+    const color = !hasToken ? 'red' : minutes > 10 ? 'green' : minutes > 5 ? 'amber' : 'red';
+    const badge = hasToken ? minutes + 'm remaining' : 'Not available';
+    const claimsHtml = claims.map(([k, v]) =>
+      '<dt>' + k + '</dt><dd>' + v + '</dd>'
+    ).join('');
+
+    return '<div class="ti-token-card">' +
+      '<div class="ti-token-header">' +
+        '<span>' + title + '</span>' +
+        '<span class="ti-type-badge">' + badge + '</span>' +
+      '</div>' +
+      '<div class="ti-expiry-bar"><div class="ti-expiry-fill ' + color + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="ti-token-body">' +
+        '<dl class="ti-claims">' + claimsHtml + '</dl>' +
+      '</div>' +
+    '</div>';
   }
 
   destroy() {
