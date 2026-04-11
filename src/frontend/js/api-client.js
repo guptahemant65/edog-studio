@@ -219,6 +219,181 @@ class FabricApiClient {
     return this._fabricPost(`/workspaces/${workspaceId}/lakehouses`, { displayName: name });
   }
 
+  // --- Notebook APIs (server-side LRO handling) ---
+
+  /**
+   * List notebooks in a workspace with properties.
+   * @param {string} workspaceId
+   * @returns {Promise<{value: Array}>}
+   */
+  async listNotebooks(workspaceId) {
+    return this._fabricGet(`/workspaces/${workspaceId}/notebooks`);
+  }
+
+  /**
+   * Fetch notebook cell content via server-side LRO handler.
+   * Returns decoded notebook-content.sql text and .platform metadata.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @returns {Promise<{content: string, platform: string}>}
+   */
+  async getNotebookContent(workspaceId, notebookId) {
+    const params = `wsId=${workspaceId}&nbId=${notebookId}`;
+    const resp = await fetch(`/api/notebook/content?${params}`);
+    if (!resp.ok) {
+      const err = new Error(`Notebook content fetch failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Save notebook cell content via server-side handler.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} content - Raw notebook-content.sql text.
+   * @param {string} [platform] - Optional .platform JSON string.
+   */
+  async saveNotebookContent(workspaceId, notebookId, content, platform = '') {
+    const resp = await fetch('/api/notebook/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, content, platform }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Notebook save failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Start notebook execution via Job Scheduler.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @returns {Promise<{location: string, status: string}>}
+   */
+  async runNotebook(workspaceId, notebookId) {
+    const resp = await fetch('/api/notebook/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Notebook run failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Poll notebook run status.
+   * @param {string} locationUrl - Job status URL from runNotebook response.
+   * @returns {Promise<{status: string, failureReason?: string, startTimeUtc?: string, endTimeUtc?: string}>}
+   */
+  async getNotebookRunStatus(locationUrl) {
+    const resp = await fetch(`/api/notebook/run-status?location=${encodeURIComponent(locationUrl)}`);
+    if (!resp.ok) return { status: 'Unknown' };
+    return resp.json();
+  }
+
+  /**
+   * Cancel a running notebook job.
+   * @param {string} locationUrl - Job status URL.
+   */
+  async cancelNotebookRun(locationUrl) {
+    const resp = await fetch('/api/notebook/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: locationUrl }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Cancel failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  // --- Notebook Jupyter Cell Execution APIs ---
+
+  /**
+   * Create a Jupyter session for per-cell execution. Requires MWC token + capacity host.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} capacityId
+   * @returns {Promise<{kernelId: string, sessionId: string, wsUrl?: string, mwcToken?: string}>}
+   */
+  async createJupyterSession(workspaceId, notebookId, capacityId) {
+    const resp = await fetch('/api/notebook/create-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Jupyter session creation failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Execute a cell via Jupyter (server-side or returns WebSocket info for client).
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} capacityId
+   * @param {string} code - Cell code to execute.
+   * @param {string} [language] - Cell language (pyspark, sparksql).
+   * @returns {Promise<object>} Execution result or WebSocket connection info.
+   */
+  async executeCell(workspaceId, notebookId, capacityId, code, language = 'sparksql') {
+    const resp = await fetch('/api/notebook/execute-cell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId, code, language }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Cell execution failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Close a Jupyter session.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} capacityId
+   * @param {string} sessionId
+   */
+  async closeJupyterSession(workspaceId, notebookId, capacityId, sessionId) {
+    const resp = await fetch('/api/notebook/close-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId, sessionId }),
+    });
+    if (!resp.ok) {
+      console.warn('Failed to close Jupyter session:', resp.status);
+    }
+    return resp.ok;
+  }
+
+  // --- Environment APIs ---
+
+  /**
+   * List environments in a workspace with publish details.
+   * @param {string} workspaceId
+   * @returns {Promise<{value: Array}>}
+   */
+  async listEnvironments(workspaceId) {
+    return this._fabricGet(`/workspaces/${workspaceId}/environments`);
+  }
+
   // --- FLT Service APIs (MWC token, connected mode) ---
 
   async getLatestDag() {

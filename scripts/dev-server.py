@@ -33,6 +33,10 @@ REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 _mwc_cache: dict = {}  # value: {"token": str, "host": str, "expiry": float}
 _mwc_lock = threading.Lock()
 
+# In-memory Jupyter session cache — keyed by "ws:nb:cap" composite
+_jupyter_sessions: dict = {}  # value: {"kernelId": str, "sessionId": str, "capHost": str}
+_jupyter_lock = threading.Lock()
+
 
 def _write_cache(path: Path, token: str, expiry: float):
     """Write base64-encoded timestamp|token cache file."""
@@ -187,6 +191,29 @@ def _capacity_base_path(cap_id: str, ws_id: str) -> str:
     )
 
 
+def _jupyter_api_path(cap_id: str, ws_id: str, nb_id: str) -> str:
+    """Build the Jupyter API base path for a capacity/workspace/notebook tuple."""
+    return (
+        f"/webapi/capacities/{cap_id}/workloads/Notebook/Data/Automatic"
+        f"/api/workspaces/{ws_id}/artifacts/{nb_id}"
+        f"/jupyterApi/versions/1/api"
+    )
+
+
+def _resolve_mwc_for_jupyter(cap_id: str):
+    """Resolve MWC token for Jupyter operations.
+
+    Tries in-memory MWC cache (matching cap_id), then file cache.
+    Returns the token string or None.
+    """
+    with _mwc_lock:
+        for key, entry in _mwc_cache.items():
+            if key.endswith(f":{cap_id}") and time.time() < entry["expiry"] - 300:
+                return entry["token"]
+    token, _ = _read_cache(MWC_CACHE)
+    return token
+
+
 class EdogDevHandler(SimpleHTTPRequestHandler):
     """HTTP handler for EDOG development server."""
 
@@ -203,6 +230,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_mwc_tables()
         elif self.path.startswith("/api/mwc/table-stats"):
             self._serve_table_stats()
+        elif self.path.startswith("/api/notebook/content"):
+            self._serve_notebook_content()
+        elif self.path.startswith("/api/notebook/kernel-specs"):
+            self._serve_jupyter_kernel_specs()
+        elif self.path.startswith("/api/notebook/run-status"):
+            self._serve_notebook_run_status()
         elif self.path.startswith("/edog-logs.html") or self.path == "/":
             self._serve_html()
         else:
@@ -229,6 +262,18 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_mwc_token()
         elif self.path == "/api/mwc/table-details":
             self._serve_mwc_table_details()
+        elif self.path == "/api/notebook/save":
+            self._serve_notebook_save()
+        elif self.path == "/api/notebook/run":
+            self._serve_notebook_run()
+        elif self.path == "/api/notebook/cancel":
+            self._serve_notebook_cancel()
+        elif self.path == "/api/notebook/create-session":
+            self._serve_jupyter_create_session()
+        elif self.path == "/api/notebook/execute-cell":
+            self._serve_jupyter_execute_cell()
+        elif self.path == "/api/notebook/close-session":
+            self._serve_jupyter_close_session()
         else:
             self.send_error(404)
 
@@ -695,6 +740,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(e.code, {"error": "onelake_error", "message": body})
         except Exception as e:
             self._json_response(502, {"error": "stats_error", "message": str(e)})
+
+    def _serve_mwc_token(self):
         """POST /api/edog/mwc-token — explicitly generate and return an MWC token."""
         content_len = int(self.headers.get("Content-Length", 0))
         if content_len == 0:
@@ -736,6 +783,627 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "expiry": cached.get("expiry", 0),
         })
 
+    # ── Notebook LRO Endpoints ────────────────────────────────────────
+
+    def _serve_notebook_content(self):
+        """GET /api/notebook/content?wsId=X&nbId=Y — fetch notebook definition via LRO."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        nb_id = params.get("nbId", [None])[0]
+
+        if not all([ws_id, nb_id]):
+            self._json_response(400, {"error": "missing_params", "message": "wsId and nbId are required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        ctx = ssl.create_default_context()
+        headers = {
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+        }
+
+        # Step 1: POST getDefinition → expect 202 with Location header
+        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/getDefinition"
+        print(f"  [NOTEBOOK] POST getDefinition ws={ws_id[:8]}... nb={nb_id[:8]}...")
+
+        try:
+            req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                    # Synchronous 200 — definition returned directly
+                    resp_data = json.loads(resp.read())
+            except urllib.error.HTTPError as e:
+                if e.code != 202:
+                    body = e.read().decode("utf-8", "replace")[:500]
+                    self._json_response(e.code, {"error": "getDefinition_error", "message": body})
+                    return
+                # 202 Accepted — extract Location and Retry-After
+                location = e.headers.get("Location", "")
+                retry_after = int(e.headers.get("Retry-After", "2"))
+                e.read()  # drain the body
+                if not location:
+                    self._json_response(502, {"error": "no_location", "message": "202 without Location header"})
+                    return
+
+                # Step 2: Poll Location URL until Succeeded (max 60s)
+                print(f"  [NOTEBOOK] Polling LRO: {location[:80]}...")
+                resp_data = None
+                for attempt in range(30):
+                    time.sleep(retry_after if attempt == 0 else 2)
+                    poll_req = urllib.request.Request(location, headers=headers, method="GET")
+                    with urllib.request.urlopen(poll_req, timeout=30, context=ctx) as poll_resp:
+                        poll_data = json.loads(poll_resp.read())
+
+                    status = poll_data.get("status", "").lower()
+                    if status == "succeeded":
+                        print(f"  [NOTEBOOK] LRO succeeded after {(attempt + 1) * 2}s")
+                        resp_data = poll_data
+                        break
+                    if status in ("failed", "cancelled"):
+                        self._json_response(500, {"error": "lro_failed", "status": status, "detail": poll_data})
+                        return
+
+                if resp_data is None:
+                    self._json_response(504, {
+                        "error": "lro_timeout",
+                        "message": "getDefinition did not complete in 60s",
+                    })
+                    return
+
+            # Step 3: GET the result URL
+            result_url = location + "/result" if location else None
+            if result_url:
+                result_req = urllib.request.Request(result_url, headers=headers, method="GET")
+                with urllib.request.urlopen(result_req, timeout=30, context=ctx) as result_resp:
+                    resp_data = json.loads(result_resp.read())
+
+            # Step 4: Decode base64 parts from the definition
+            parts = resp_data.get("definition", {}).get("parts", [])
+            all_parts = []
+            content_text = ""
+            platform_text = ""
+            for part in parts:
+                path = part.get("path", "")
+                payload = part.get("payload", "")
+                try:
+                    decoded = base64.b64decode(payload).decode("utf-8", "replace")
+                except Exception:
+                    decoded = payload
+                all_parts.append({"path": path, "decoded": decoded})
+                if path == "notebook-content.sql":
+                    content_text = decoded
+                elif path == ".platform":
+                    platform_text = decoded
+
+            self._json_response(200, {
+                "content": content_text,
+                "platform": platform_text,
+                "allParts": all_parts,
+            })
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "notebook_content_error", "message": body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "notebook_content_error", "message": str(e)})
+
+    def _serve_notebook_save(self):
+        """POST /api/notebook/save — update notebook definition."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("wsId")
+        nb_id = body.get("nbId")
+        content = body.get("content", "")
+
+        if not all([ws_id, nb_id]):
+            self._json_response(400, {"error": "missing_params", "message": "wsId and nbId are required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        # Build definition parts with base64-encoded payloads
+        parts = [
+            {
+                "path": "notebook-content.sql",
+                "payload": base64.b64encode(content.encode("utf-8")).decode(),
+                "payloadType": "InlineBase64",
+            },
+        ]
+        platform = body.get("platform")
+        if platform:
+            parts.append({
+                "path": ".platform",
+                "payload": base64.b64encode(platform.encode("utf-8")).decode(),
+                "payloadType": "InlineBase64",
+            })
+
+        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/updateDefinition"
+        req_body = json.dumps({"definition": {"parts": parts}}).encode()
+        print(f"  [NOTEBOOK] POST updateDefinition ws={ws_id[:8]}... nb={nb_id[:8]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, data=req_body, headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
+            }, method="POST")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp.read()  # drain
+            self._json_response(200, {"status": "saved"})
+        except urllib.error.HTTPError as e:
+            # 202 Accepted is also a success for updateDefinition
+            if e.code == 202:
+                e.read()
+                self._json_response(200, {"status": "saved"})
+            else:
+                err_body = e.read().decode("utf-8", "replace")[:500]
+                self._json_response(e.code, {"error": "save_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "save_error", "message": str(e)})
+
+    def _serve_notebook_run(self):
+        """POST /api/notebook/run — start a notebook job execution."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("wsId")
+        nb_id = body.get("nbId")
+
+        if not all([ws_id, nb_id]):
+            self._json_response(400, {"error": "missing_params", "message": "wsId and nbId are required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        url = (
+            f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/items/{nb_id}"
+            f"/jobs/instances?jobType=RunNotebook"
+        )
+        print(f"  [NOTEBOOK] POST run ws={ws_id[:8]}... nb={nb_id[:8]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, data=b"{}", headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
+            }, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                    # Unexpected 200 — return whatever we got
+                    resp_data = json.loads(resp.read())
+                    self._json_response(200, {"status": "started", "detail": resp_data})
+            except urllib.error.HTTPError as e:
+                if e.code == 202:
+                    location = e.headers.get("Location", "")
+                    e.read()  # drain
+                    self._json_response(200, {"location": location, "status": "started"})
+                else:
+                    err_body = e.read().decode("utf-8", "replace")[:500]
+                    self._json_response(e.code, {"error": "run_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "run_error", "message": str(e)})
+
+    def _serve_notebook_run_status(self):
+        """GET /api/notebook/run-status?location=URL — poll notebook job status."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        location = params.get("location", [None])[0]
+
+        if not location:
+            self._json_response(400, {"error": "missing_params", "message": "location query param is required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        print(f"  [NOTEBOOK] GET run-status → {location[:80]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(location, headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
+            }, method="GET")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp_data = json.loads(resp.read())
+            self._json_response(200, resp_data)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "run_status_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "run_status_error", "message": str(e)})
+
+    def _serve_notebook_cancel(self):
+        """POST /api/notebook/cancel — cancel a running notebook job."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        location = body.get("location")
+
+        if not location:
+            self._json_response(400, {"error": "missing_params", "message": "location is required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        cancel_url = f"{location}/cancel"
+        print(f"  [NOTEBOOK] POST cancel → {cancel_url[:80]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(cancel_url, data=b"{}", headers={
+                "Authorization": f"Bearer {bearer}",
+                "Content-Type": "application/json",
+            }, method="POST")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp.read()  # drain
+            self._json_response(200, {"status": "cancelled"})
+        except urllib.error.HTTPError as e:
+            # 202 is also success for cancel
+            if e.code == 202:
+                e.read()
+                self._json_response(200, {"status": "cancelled"})
+            else:
+                err_body = e.read().decode("utf-8", "replace")[:500]
+                self._json_response(e.code, {"error": "cancel_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "cancel_error", "message": str(e)})
+
+    # ── Jupyter Cell Execution Endpoints ──────────────────────────────
+
+    def _serve_jupyter_create_session(self):
+        """POST /api/notebook/create-session — create a Jupyter kernel session."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("wsId")
+        nb_id = body.get("nbId")
+        cap_id = body.get("capId")
+
+        if not all([ws_id, nb_id, cap_id]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "wsId, nbId, and capId are required",
+            })
+            return
+
+        token = _resolve_mwc_for_jupyter(cap_id)
+        if not token:
+            self._json_response(400, {
+                "error": "no_mwc_token",
+                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+            })
+            return
+
+        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
+        base = _jupyter_api_path(cap_id, ws_id, nb_id)
+        url = f"{cap_host}{base}/sessions"
+
+        session_body = json.dumps({
+            "kernel": {"id": None, "name": "synapse_pyspark"},
+            "name": "",
+            "path": f"notebooks/{nb_id}.ipynb",
+            "type": "notebook",
+        }).encode()
+
+        print(f"  [JUPYTER] POST create-session ws={ws_id[:8]}... nb={nb_id[:8]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, data=session_body, headers={
+                "Authorization": f"MwcToken {token}",
+                "Content-Type": "application/json",
+            }, method="POST")
+            with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+                resp_data = json.loads(resp.read())
+
+            kernel_id = resp_data.get("kernel", {}).get("id", "")
+            session_id = resp_data.get("id", "")
+            exec_state = resp_data.get("kernel", {}).get("execution_state", "unknown")
+
+            cache_key = f"{ws_id}:{nb_id}:{cap_id}"
+            with _jupyter_lock:
+                _jupyter_sessions[cache_key] = {
+                    "kernelId": kernel_id,
+                    "sessionId": session_id,
+                    "capHost": cap_host,
+                }
+
+            print(f"  [JUPYTER] Session created kernel={kernel_id[:8]}... state={exec_state}")
+            self._json_response(200, {
+                "kernelId": kernel_id,
+                "sessionId": session_id,
+                "executionState": exec_state,
+                "capHost": cap_host,
+            })
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", "replace")[:500]
+            print(f"  [JUPYTER] Session creation failed: {e.code}")
+            self._json_response(e.code, {"error": "jupyter_session_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "jupyter_session_error", "message": str(e)})
+
+    def _serve_jupyter_kernel_specs(self):
+        """GET /api/notebook/kernel-specs — list available Jupyter kernels."""
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        nb_id = params.get("nbId", [None])[0]
+        cap_id = params.get("capId", [None])[0]
+
+        if not all([ws_id, nb_id, cap_id]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "wsId, nbId, and capId are required",
+            })
+            return
+
+        token = _resolve_mwc_for_jupyter(cap_id)
+        if not token:
+            self._json_response(400, {
+                "error": "no_mwc_token",
+                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+            })
+            return
+
+        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
+        base = _jupyter_api_path(cap_id, ws_id, nb_id)
+        url = f"{cap_host}{base}/kernelspecs"
+
+        print(f"  [JUPYTER] GET kernel-specs ws={ws_id[:8]}... nb={nb_id[:8]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"MwcToken {token}",
+                "Content-Type": "application/json",
+            }, method="GET")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp_body = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(e.code, {"error": "kernel_specs_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "kernel_specs_error", "message": str(e)})
+
+    def _serve_jupyter_execute_cell(self):
+        """POST /api/notebook/execute-cell — execute a single notebook cell.
+
+        Tries REST kernel execute endpoint first. If the capacity host does not
+        support REST execute (404/405), returns WebSocket connection info so the
+        browser client can connect directly using the Jupyter wire protocol.
+        """
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("wsId")
+        nb_id = body.get("nbId")
+        cap_id = body.get("capId")
+        code = body.get("code", "")
+        language = body.get("language", "python")
+
+        if not all([ws_id, nb_id, cap_id]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "wsId, nbId, capId, and code are required",
+            })
+            return
+        if not code.strip():
+            self._json_response(400, {"error": "empty_code", "message": "code must not be empty"})
+            return
+
+        token = _resolve_mwc_for_jupyter(cap_id)
+        if not token:
+            self._json_response(400, {
+                "error": "no_mwc_token",
+                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+            })
+            return
+
+        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
+
+        # Reuse cached session or create a new one
+        cache_key = f"{ws_id}:{nb_id}:{cap_id}"
+        with _jupyter_lock:
+            cached = _jupyter_sessions.get(cache_key)
+
+        kernel_id = None
+        session_id = None
+
+        if cached:
+            kernel_id = cached["kernelId"]
+            session_id = cached["sessionId"]
+            print(f"  [JUPYTER] Reusing session kernel={kernel_id[:8]}...")
+        else:
+            base = _jupyter_api_path(cap_id, ws_id, nb_id)
+            url = f"{cap_host}{base}/sessions"
+            session_body = json.dumps({
+                "kernel": {"id": None, "name": "synapse_pyspark"},
+                "name": "",
+                "path": f"notebooks/{nb_id}.ipynb",
+                "type": "notebook",
+            }).encode()
+
+            print("  [JUPYTER] Auto-creating session for execute-cell...")
+            try:
+                ctx = ssl.create_default_context()
+                req = urllib.request.Request(url, data=session_body, headers={
+                    "Authorization": f"MwcToken {token}",
+                    "Content-Type": "application/json",
+                }, method="POST")
+                with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+                    resp_data = json.loads(resp.read())
+                kernel_id = resp_data.get("kernel", {}).get("id", "")
+                session_id = resp_data.get("id", "")
+                with _jupyter_lock:
+                    _jupyter_sessions[cache_key] = {
+                        "kernelId": kernel_id,
+                        "sessionId": session_id,
+                        "capHost": cap_host,
+                    }
+                print(f"  [JUPYTER] Session auto-created kernel={kernel_id[:8]}...")
+            except urllib.error.HTTPError as e:
+                err_body = e.read().decode("utf-8", "replace")[:500]
+                self._json_response(e.code, {"error": "jupyter_session_error", "message": err_body})
+                return
+            except Exception as e:
+                traceback.print_exc()
+                self._json_response(502, {"error": "jupyter_session_error", "message": str(e)})
+                return
+
+        # Try REST execute on the kernel
+        base = _jupyter_api_path(cap_id, ws_id, nb_id)
+        execute_url = f"{cap_host}{base}/kernels/{kernel_id}/execute"
+        print(f"  [JUPYTER] POST execute-cell kernel={kernel_id[:8]}... lang={language}")
+
+        try:
+            ctx = ssl.create_default_context()
+            execute_body = json.dumps({"code": code}).encode()
+            req = urllib.request.Request(execute_url, data=execute_body, headers={
+                "Authorization": f"MwcToken {token}",
+                "Content-Type": "application/json",
+            }, method="POST")
+            with urllib.request.urlopen(req, timeout=120, context=ctx) as resp:
+                resp_data = json.loads(resp.read())
+            print("  [JUPYTER] REST execute succeeded")
+            self._json_response(200, {"status": "executed", "result": resp_data})
+        except urllib.error.HTTPError as e:
+            if e.code in (404, 405):
+                # REST execute not available — return WebSocket fallback info
+                e.read()  # drain
+                ws_path = (
+                    f"/webapi/capacities/{cap_id}/workloads/Notebook"
+                    f"/AzNBProxy/Automatic/workspaces/{ws_id}"
+                    f"/api/proxy/ws/tinymgr/lobby"
+                )
+                ws_url = f"wss://{cap_id}.pbidedicated.windows-int.net{ws_path}"
+                print("  [JUPYTER] REST execute unavailable, returning WebSocket info")
+                # Security: Do NOT send MWC token to browser.
+                # Return connection metadata only — client must use Run All instead.
+                self._json_response(200, {
+                    "status": "websocket_required",
+                    "message": (
+                        "Per-cell execution requires a Jupyter WebSocket session. "
+                        "Use Run All for batch execution, or deploy with "
+                        "EDOG DevMode for full cell-by-cell support."
+                    ),
+                    "wsUrl": ws_url,
+                    "kernelId": kernel_id,
+                    "sessionId": session_id,
+                    "protocol": "jupyter",
+                })
+            else:
+                err_body = e.read().decode("utf-8", "replace")[:500]
+                self._json_response(e.code, {"error": "execute_error", "message": err_body})
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "execute_error", "message": str(e)})
+
+    def _serve_jupyter_close_session(self):
+        """POST /api/notebook/close-session — close a Jupyter kernel session."""
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len == 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+
+        body = json.loads(self.rfile.read(content_len))
+        ws_id = body.get("wsId")
+        nb_id = body.get("nbId")
+        cap_id = body.get("capId")
+        session_id = body.get("sessionId")
+
+        if not all([ws_id, nb_id, cap_id, session_id]):
+            self._json_response(400, {
+                "error": "missing_params",
+                "message": "wsId, nbId, capId, and sessionId are required",
+            })
+            return
+
+        token = _resolve_mwc_for_jupyter(cap_id)
+        if not token:
+            self._json_response(400, {
+                "error": "no_mwc_token",
+                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+            })
+            return
+
+        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
+        base = _jupyter_api_path(cap_id, ws_id, nb_id)
+        url = f"{cap_host}{base}/sessions/{session_id}"
+
+        print(f"  [JUPYTER] DELETE session={session_id[:8]}...")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, headers={
+                "Authorization": f"MwcToken {token}",
+                "Content-Type": "application/json",
+            }, method="DELETE")
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp.read()  # drain
+        except urllib.error.HTTPError as e:
+            if e.code in (204, 404):
+                e.read()  # 204=success, 404=already deleted
+            else:
+                err_body = e.read().decode("utf-8", "replace")[:500]
+                self._json_response(e.code, {"error": "close_session_error", "message": err_body})
+                return
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "close_session_error", "message": str(e)})
+            return
+
+        cache_key = f"{ws_id}:{nb_id}:{cap_id}"
+        with _jupyter_lock:
+            _jupyter_sessions.pop(cache_key, None)
+
+        print("  [JUPYTER] Session closed")
+        self._json_response(200, {"status": "closed"})
+
     def _send_json(self, status, obj):
         body = json.dumps(obj).encode()
         self.send_response(status)
@@ -746,7 +1414,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         msg = str(args)
-        if "/api/flt/config" in msg or "/ws/logs" in msg or "/api/logs" in msg or "/api/telemetry" in msg or "/api/stats" in msg:
+        quiet_paths = (
+            "/api/flt/config", "/ws/logs", "/api/logs",
+            "/api/telemetry", "/api/stats",
+        )
+        if any(p in msg for p in quiet_paths):
             return
         super().log_message(format, *args)
 

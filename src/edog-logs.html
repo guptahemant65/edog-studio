@@ -1992,6 +1992,166 @@ mark {
   white-space: nowrap;
 }
 
+/* ── Action Bar — Accent variant ── */
+.ws-action-btn.accent {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.ws-action-btn.accent:hover { opacity: 0.88; }
+
+/* ── Linked Item Cards ── */
+.ws-linked-cards {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: var(--space-4) 0;
+}
+.ws-linked-card {
+  flex: 0 1 220px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--surface);
+}
+.ws-linked-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.ws-linked-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.ws-linked-card-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ws-linked-card-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.ws-linked-card-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-1);
+}
+.ws-linked-card-id {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ── Environment Publish Status ── */
+.ws-env-publish {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin: var(--space-4) 0;
+}
+.ws-env-publish-header {
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ws-env-publish-body {
+  padding: var(--space-3) var(--space-4);
+}
+.ws-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+.ws-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ws-status-dot.success { background: var(--status-succeeded); }
+.ws-status-dot.running { background: var(--level-warning); animation: ws-status-pulse 1.5s ease-in-out infinite; }
+.ws-status-dot.failed { background: var(--status-failed); }
+@keyframes ws-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.ws-status-label {
+  color: var(--text-dim);
+  min-width: 120px;
+}
+.ws-status-value {
+  color: var(--text);
+  font-weight: 500;
+}
+.ws-status-value.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+/* ── Generic Item Info Card ── */
+.ws-item-info {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin: var(--space-4) 0;
+  overflow: hidden;
+}
+.ws-item-info-header {
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ws-item-info-body {
+  padding: var(--space-3) var(--space-4);
+}
+.ws-item-info-row {
+  display: flex;
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--border);
+}
+.ws-item-info-row:last-child { border-bottom: none; }
+.ws-item-info-key {
+  width: 140px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.ws-item-info-val {
+  color: var(--text);
+  flex: 1;
+  word-break: break-all;
+}
+.ws-fabric-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-3);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+.ws-fabric-link:hover { color: var(--accent); }
+
     /* === css/filters.css === */
 .search-wrapper {
   position: relative;
@@ -4569,6 +4729,782 @@ mark {
   cursor: pointer; padding: var(--space-1) 0; font-family: var(--font-body);
 }
 .api-header-add:hover { text-decoration: underline; }
+
+    /* === css/notebook.css === */
+/* ── Notebook IDE ──────────────────────────────────────────────
+   Mini IDE for browsing/editing Fabric notebooks.
+   Extends design bible §20b base (.nb-cell, .nb-code, etc.)
+   ─────────────────────────────────────────────────────────── */
+
+/* ── Container ── */
+
+.nb-ide {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.nb-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--bg);
+}
+
+/* ── Toolbar ── */
+
+.nb-toolbar {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nb-toolbar-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nb-title {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text);
+  cursor: text;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: border-color var(--transition-normal);
+  background: transparent;
+  font-family: var(--font-body);
+  line-height: 1.3;
+}
+
+.nb-title:hover { border-color: var(--border-bright); }
+.nb-title:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+
+.nb-dirty-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--level-warning);
+  flex-shrink: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.nb-dirty-dot.hidden { opacity: 0; }
+
+.nb-type-badge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  background: var(--accent-dim);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.nb-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.nb-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.nb-action-btn:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.nb-action-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+.nb-action-btn.primary:hover { opacity: 0.9; }
+.nb-action-btn.saving { color: var(--text-muted); pointer-events: none; }
+.nb-action-btn.saved { color: var(--status-succeeded); border-color: var(--status-succeeded); }
+
+.nb-action-btn .btn-icon {
+  font-size: var(--text-xs);
+  line-height: 1;
+}
+
+/* Toolbar context row */
+
+.nb-context {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.nb-context-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.nb-context-chip:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.nb-context-chip .chip-label { color: var(--text-muted); }
+.nb-context-sep { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* ── Cells — base extensions ── */
+/* §20b base defines .nb-cell, .nb-cell-header, .nb-code, .nb-output, etc.
+   Below we EXTEND those without redeclaring. */
+
+/* ── Cell states ── */
+
+.nb-cell.selected {
+  border-left: var(--space-1) solid var(--accent);
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.nb-cell.running .nb-cell-header {
+  animation: nb-header-pulse 1.5s ease-in-out infinite;
+}
+
+.nb-cell.success .nb-cell-status::before {
+  content: "";
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--status-succeeded);
+  flex-shrink: 0;
+}
+
+.nb-cell.error .nb-cell-status::before {
+  content: "";
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--status-failed);
+  flex-shrink: 0;
+}
+
+.nb-cell.error .nb-output {
+  background: var(--row-error-tint);
+  color: var(--status-failed);
+}
+
+.nb-cell.editing .nb-code {
+  padding: 0;
+}
+
+/* ── Language badges ── */
+
+.nb-lang-sql {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--level-warning);
+  background: var(--level-warning-tint);
+}
+
+.nb-lang-python {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--status-succeeded);
+  background: var(--comp-dag-bg);
+}
+
+.nb-lang-pyspark {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--status-succeeded);
+  background: var(--comp-dag-bg);
+}
+
+.nb-lang-markdown {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--comp-controller);
+  background: var(--comp-controller-bg);
+}
+
+/* ── Code area ── */
+
+.nb-code-area {
+  display: flex;
+  width: 100%;
+  background: var(--surface-2);
+}
+
+.nb-line-numbers {
+  min-width: var(--space-8);
+  padding: var(--space-3) var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text-muted);
+  text-align: right;
+  user-select: none;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.nb-code-textarea {
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-x: auto;
+  white-space: pre;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  width: 100%;
+}
+
+.nb-code-textarea::placeholder { color: var(--text-muted); }
+
+/* ── Output variants ── */
+
+.nb-output-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.nb-output-table th {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-bright);
+  font-size: var(--text-xs);
+}
+
+.nb-output-table td {
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.nb-output-table tr:nth-child(even) td { background: var(--surface-2); }
+.nb-output-table tr:hover td { background: var(--accent-dim); }
+
+.nb-output-error {
+  background: var(--row-error-tint);
+  color: var(--status-failed);
+}
+
+.nb-output-error .error-type { font-weight: 600; }
+.nb-output-error .error-msg { color: var(--text); }
+.nb-output-error .error-trace { color: var(--text-muted); }
+
+.nb-output-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
+
+.nb-output-truncated {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.nb-output-truncated .nb-show-more {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.nb-output-truncated .nb-show-more:hover { background: var(--accent-dim); }
+
+/* ── Between-cell ── */
+
+.nb-between-cell {
+  height: var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.nb-add-cell-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  opacity: 0;
+}
+
+.nb-between-cell:hover .nb-add-cell-btn { opacity: 1; }
+
+.nb-add-cell-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.nb-add-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  /* dropdown layer */
+  z-index: var(--z-dropdown);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  min-width: calc(var(--space-10) * 4);
+  display: none;
+}
+
+.nb-add-dropdown.open { display: block; }
+
+.nb-add-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+}
+
+.nb-add-dropdown-option:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ── Cell menu ── */
+
+.nb-cell-menu-btn {
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-md);
+  transition: all var(--transition-fast);
+}
+
+.nb-cell-menu-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.nb-cell-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  /* dropdown layer */
+  z-index: var(--z-dropdown);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  min-width: calc(var(--space-10) * 4 + var(--space-5));
+  display: none;
+}
+
+.nb-cell-menu.open { display: block; }
+
+.nb-cell-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-body);
+}
+
+.nb-cell-menu-item:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.nb-cell-menu-item.danger:hover {
+  background: var(--row-error-tint);
+  color: var(--status-failed);
+}
+
+.nb-cell-menu-item .menu-key {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.nb-cell-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: var(--space-1) 0;
+}
+
+/* ── Status bar ── */
+
+.nb-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.nb-status-bar .nb-status-icon {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.nb-status-bar.not-started .nb-status-icon { background: var(--text-muted); }
+.nb-status-bar.running .nb-status-icon {
+  background: var(--level-warning);
+  animation: nb-status-pulse 1.5s ease-in-out infinite;
+}
+.nb-status-bar.success .nb-status-icon { background: var(--status-succeeded); }
+.nb-status-bar.failed .nb-status-icon { background: var(--status-failed); }
+.nb-status-bar.cancelled .nb-status-icon { background: var(--status-cancelled); }
+
+.nb-status-bar .nb-status-msg { flex: 1; }
+
+.nb-status-bar .nb-status-time {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.nb-status-bar .nb-status-action {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+  font-family: var(--font-body);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.nb-status-bar .nb-status-action:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+/* ── Markdown ── */
+
+.nb-md-rendered {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-md);
+  line-height: 1.7;
+  color: var(--text);
+  border-left: var(--space-1) solid var(--accent-dim);
+}
+
+.nb-md-rendered h1 { font-size: var(--text-xl); font-weight: 700; margin-bottom: var(--space-2); }
+.nb-md-rendered h2 { font-size: var(--text-lg); font-weight: 700; margin-bottom: var(--space-2); }
+.nb-md-rendered h3 { font-size: var(--text-md); font-weight: 700; margin-bottom: var(--space-1); }
+.nb-md-rendered p { margin-top: var(--space-1); color: var(--text-dim); }
+.nb-md-rendered ul,
+.nb-md-rendered ol { padding-left: var(--space-5); margin-top: var(--space-1); color: var(--text-dim); }
+.nb-md-rendered li { margin-top: var(--space-1); }
+.nb-md-rendered code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  background: var(--surface-3);
+  padding: 1px var(--space-1);
+  border-radius: var(--space-1);
+}
+.nb-md-rendered pre {
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  margin-top: var(--space-2);
+}
+.nb-md-rendered pre code { background: transparent; padding: 0; }
+.nb-md-rendered blockquote {
+  padding-left: var(--space-3);
+  border-left: var(--space-1) solid var(--border-bright);
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: var(--space-2);
+}
+
+.nb-md-edit {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--surface-2);
+  border: none;
+  outline: none;
+  resize: none;
+  min-height: calc(var(--space-10) * 2);
+}
+
+.nb-md-toggle {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+}
+
+.nb-md-toggle button {
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.nb-md-toggle button:hover { color: var(--text); border-color: var(--border-bright); }
+.nb-md-toggle button.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
+/* ── Spinner ── */
+
+.nb-spinner {
+  width: var(--space-3);
+  height: var(--space-3);
+  border: 2px solid var(--border-bright);
+  border-top-color: var(--level-warning);
+  border-radius: var(--radius-full);
+  animation: nb-spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Stop button ── */
+
+.nb-stop-btn {
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--status-failed);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--text-xs) - 1px);
+  transition: all var(--transition-fast);
+}
+
+.nb-stop-btn:hover { background: var(--row-error-tint); }
+
+/* ── Syntax tokens (minimal) ── */
+
+.nb-code .kw { color: var(--accent); }
+.nb-code .str { color: var(--status-succeeded); }
+.nb-code .num { color: var(--level-warning); }
+.nb-code .fn { color: var(--comp-controller); }
+.nb-code .cm { color: var(--text-muted); font-style: italic; }
+.nb-code .op { color: var(--text-dim); }
+
+/* ── Animations ── */
+
+@keyframes nb-header-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes nb-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes nb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Inline-style replacements (moved from JS) ── */
+
+.nb-dropdown-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.nb-code-readonly {
+  margin: 0;
+  flex: 1;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre;
+  overflow-x: auto;
+  cursor: text;
+}
+
+.nb-output-pre {
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.nb-md-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.nb-shimmer-bar {
+  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  animation: nb-header-pulse 1.5s ease-in-out infinite;
+}
+
+.nb-shimmer-cell {
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  animation: nb-header-pulse 1.5s ease-in-out infinite;
+}
+
+.nb-shimmer-cells {
+  flex: 1;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.nb-error-state {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.nb-error-title {
+  font-size: var(--text-lg);
+  color: var(--status-failed);
+  font-weight: 600;
+}
+
+.nb-error-message {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 400px;
+  text-align: center;
+}
 
     /* === css/environment.css === */
 /* ── Environment View ── */
@@ -7219,6 +8155,181 @@ class FabricApiClient {
     return this._fabricPost(`/workspaces/${workspaceId}/lakehouses`, { displayName: name });
   }
 
+  // --- Notebook APIs (server-side LRO handling) ---
+
+  /**
+   * List notebooks in a workspace with properties.
+   * @param {string} workspaceId
+   * @returns {Promise<{value: Array}>}
+   */
+  async listNotebooks(workspaceId) {
+    return this._fabricGet(`/workspaces/${workspaceId}/notebooks`);
+  }
+
+  /**
+   * Fetch notebook cell content via server-side LRO handler.
+   * Returns decoded notebook-content.sql text and .platform metadata.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @returns {Promise<{content: string, platform: string}>}
+   */
+  async getNotebookContent(workspaceId, notebookId) {
+    const params = `wsId=${workspaceId}&nbId=${notebookId}`;
+    const resp = await fetch(`/api/notebook/content?${params}`);
+    if (!resp.ok) {
+      const err = new Error(`Notebook content fetch failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Save notebook cell content via server-side handler.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} content - Raw notebook-content.sql text.
+   * @param {string} [platform] - Optional .platform JSON string.
+   */
+  async saveNotebookContent(workspaceId, notebookId, content, platform = '') {
+    const resp = await fetch('/api/notebook/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, content, platform }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Notebook save failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Start notebook execution via Job Scheduler.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @returns {Promise<{location: string, status: string}>}
+   */
+  async runNotebook(workspaceId, notebookId) {
+    const resp = await fetch('/api/notebook/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Notebook run failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Poll notebook run status.
+   * @param {string} locationUrl - Job status URL from runNotebook response.
+   * @returns {Promise<{status: string, failureReason?: string, startTimeUtc?: string, endTimeUtc?: string}>}
+   */
+  async getNotebookRunStatus(locationUrl) {
+    const resp = await fetch(`/api/notebook/run-status?location=${encodeURIComponent(locationUrl)}`);
+    if (!resp.ok) return { status: 'Unknown' };
+    return resp.json();
+  }
+
+  /**
+   * Cancel a running notebook job.
+   * @param {string} locationUrl - Job status URL.
+   */
+  async cancelNotebookRun(locationUrl) {
+    const resp = await fetch('/api/notebook/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: locationUrl }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Cancel failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  // --- Notebook Jupyter Cell Execution APIs ---
+
+  /**
+   * Create a Jupyter session for per-cell execution. Requires MWC token + capacity host.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} capacityId
+   * @returns {Promise<{kernelId: string, sessionId: string, wsUrl?: string, mwcToken?: string}>}
+   */
+  async createJupyterSession(workspaceId, notebookId, capacityId) {
+    const resp = await fetch('/api/notebook/create-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Jupyter session creation failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Execute a cell via Jupyter (server-side or returns WebSocket info for client).
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} capacityId
+   * @param {string} code - Cell code to execute.
+   * @param {string} [language] - Cell language (pyspark, sparksql).
+   * @returns {Promise<object>} Execution result or WebSocket connection info.
+   */
+  async executeCell(workspaceId, notebookId, capacityId, code, language = 'sparksql') {
+    const resp = await fetch('/api/notebook/execute-cell', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId, code, language }),
+    });
+    if (!resp.ok) {
+      const err = new Error(`Cell execution failed: ${resp.status}`);
+      err.status = resp.status;
+      throw err;
+    }
+    return resp.json();
+  }
+
+  /**
+   * Close a Jupyter session.
+   * @param {string} workspaceId
+   * @param {string} notebookId
+   * @param {string} capacityId
+   * @param {string} sessionId
+   */
+  async closeJupyterSession(workspaceId, notebookId, capacityId, sessionId) {
+    const resp = await fetch('/api/notebook/close-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId, sessionId }),
+    });
+    if (!resp.ok) {
+      console.warn('Failed to close Jupyter session:', resp.status);
+    }
+    return resp.ok;
+  }
+
+  // --- Environment APIs ---
+
+  /**
+   * List environments in a workspace with publish details.
+   * @param {string} workspaceId
+   * @returns {Promise<{value: Array}>}
+   */
+  async listEnvironments(workspaceId) {
+    return this._fabricGet(`/workspaces/${workspaceId}/environments`);
+  }
+
   // --- FLT Service APIs (MWC token, connected mode) ---
 
   async getLatestDag() {
@@ -7329,6 +8440,1638 @@ class FabricApiClient {
       console.warn('FLT API fetch failed:', path, e.message);
       return null;
     }
+  }
+}
+
+// === js/notebook-parser.js ===
+/**
+ * NotebookParser — Parse and serialize Fabric notebook-content.sql format.
+ *
+ * Fabric notebooks stored via updateDefinition use a custom SQL-comment-based
+ * format with METADATA, MARKDOWN, and CELL boundaries. This class provides
+ * lossless round-trip parsing and serialization for that format.
+ *
+ * Usage:
+ *   const nb = NotebookParser.parse(raw);
+ *   const raw2 = NotebookParser.serialize(nb);
+ */
+class NotebookParser {
+  /**
+   * Parse a raw notebook-content.sql string into a structured notebook object.
+   *
+   * @param {string} raw — Raw notebook-content.sql text.
+   * @returns {{ notebookMeta: object, cells: Array<{type: string, language: string, content: string, meta: object}> }}
+   */
+  static parse(raw) {
+    if (!raw || typeof raw !== 'string') {
+      return { notebookMeta: {}, cells: [] };
+    }
+
+    const lines = raw.split('\n');
+    const notebookMeta = {};
+    const cells = [];
+
+    let state = 'header'; // 'header' | 'markdown' | 'code' | 'cell_meta'
+    let currentCell = null;
+    let contentLines = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Detect boundary markers
+      if (NotebookParser._isMetadataBoundary(line)) {
+        // If we have an open cell, finalize it before handling metadata
+        if (currentCell) {
+          currentCell.content = NotebookParser._trimTrailingEmpty(contentLines).join('\n');
+          contentLines = [];
+        }
+
+        // Collect META lines following this boundary
+        const meta = NotebookParser._collectMeta(lines, i + 1);
+        i += meta.linesConsumed;
+
+        if (state === 'header' && cells.length === 0 && !currentCell) {
+          // Notebook-level metadata (before any CELL or MARKDOWN)
+          Object.assign(notebookMeta, meta.data);
+        } else if (currentCell) {
+          // Cell-level metadata (applies to the preceding cell)
+          currentCell.meta = meta.data;
+          cells.push(currentCell);
+          currentCell = null;
+          state = 'cell_meta';
+        }
+        continue;
+      }
+
+      if (NotebookParser._isMarkdownBoundary(line)) {
+        // Finalize any open cell that lacks trailing metadata
+        if (currentCell) {
+          currentCell.content = NotebookParser._trimTrailingEmpty(contentLines).join('\n');
+          cells.push(currentCell);
+        }
+        currentCell = { type: 'markdown', language: 'markdown', content: '', meta: {} };
+        contentLines = [];
+        state = 'markdown';
+        continue;
+      }
+
+      if (NotebookParser._isCellBoundary(line)) {
+        // Finalize any open cell that lacks trailing metadata
+        if (currentCell) {
+          currentCell.content = NotebookParser._trimTrailingEmpty(contentLines).join('\n');
+          cells.push(currentCell);
+        }
+        currentCell = { type: 'code', language: 'sparksql', content: '', meta: {} };
+        contentLines = [];
+        state = 'code';
+        continue;
+      }
+
+      // Content accumulation based on state
+      if (state === 'header') {
+        // Skip header lines (e.g., "-- Fabric notebook source", blank lines)
+        continue;
+      }
+
+      if (state === 'markdown') {
+        // Markdown lines are prefixed with "-- "
+        if (line.startsWith('-- ')) {
+          contentLines.push(line.slice(3));
+        } else if (line === '--') {
+          contentLines.push('');
+        } else if (line.trim() === '') {
+          contentLines.push('');
+        } else {
+          contentLines.push(line);
+        }
+        continue;
+      }
+
+      if (state === 'code') {
+        // First non-empty content line may set a MAGIC language override
+        if (contentLines.length === 0 && line.trim() === '') {
+          contentLines.push('');
+          continue;
+        }
+
+        const magicLang = NotebookParser._parseMagicLanguage(line);
+        if (magicLang && contentLines.every(l => l.trim() === '')) {
+          // Language override on first substantive line
+          currentCell.language = magicLang;
+          currentCell._hasMagic = true;
+          contentLines = [];
+          continue;
+        }
+
+        if (currentCell._hasMagic && line.startsWith('-- MAGIC ')) {
+          contentLines.push(line.slice(9));
+        } else if (currentCell._hasMagic && line === '-- MAGIC') {
+          contentLines.push('');
+        } else {
+          contentLines.push(line);
+        }
+        continue;
+      }
+
+      // state === 'cell_meta': between a cell's metadata and the next boundary
+      // skip blank lines and stray content
+    }
+
+    // Finalize any trailing cell without metadata
+    if (currentCell) {
+      currentCell.content = NotebookParser._trimTrailingEmpty(contentLines).join('\n');
+      cells.push(currentCell);
+    }
+
+    // Clean up internal flags
+    for (const cell of cells) {
+      delete cell._hasMagic;
+    }
+
+    return { notebookMeta, cells };
+  }
+
+  /**
+   * Serialize a structured notebook object back to notebook-content.sql format.
+   *
+   * @param {{ notebookMeta: object, cells: Array<{type: string, language: string, content: string, meta: object}> }} notebook
+   * @returns {string} Raw notebook-content.sql text.
+   */
+  static serialize(notebook) {
+    if (!notebook) return '';
+
+    const parts = [];
+    const meta = notebook.notebookMeta || {};
+    const cells = notebook.cells || [];
+
+    // Header
+    parts.push('-- Fabric notebook source');
+
+    // Notebook-level metadata
+    if (Object.keys(meta).length > 0) {
+      parts.push('-- METADATA ********************');
+      parts.push(`-- META ${JSON.stringify(meta)}`);
+    }
+
+    for (const cell of cells) {
+      parts.push('');
+
+      if (cell.type === 'markdown') {
+        parts.push('-- MARKDOWN ********************');
+        const contentLines = (cell.content || '').split('\n');
+        for (const line of contentLines) {
+          parts.push(line === '' ? '--' : `-- ${line}`);
+        }
+      } else {
+        // Code cell
+        parts.push('-- CELL ********************');
+        const isMagicLang = NotebookParser._isMagicLanguage(cell.language);
+
+        if (isMagicLang) {
+          const magicTag = NotebookParser._languageToMagicTag(cell.language);
+          parts.push(`-- MAGIC %%${magicTag}`);
+          const contentLines = (cell.content || '').split('\n');
+          for (const line of contentLines) {
+            parts.push(line === '' ? '-- MAGIC' : `-- MAGIC ${line}`);
+          }
+        } else {
+          // Default SQL — raw lines
+          const contentLines = (cell.content || '').split('\n');
+          for (const line of contentLines) {
+            parts.push(line);
+          }
+        }
+      }
+
+      // Cell-level metadata
+      const cellMeta = cell.meta || {};
+      if (Object.keys(cellMeta).length > 0) {
+        parts.push('');
+        parts.push('-- METADATA ********************');
+        parts.push(`-- META ${JSON.stringify(cellMeta)}`);
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  // ── Private helpers ────────────────────────────────────────────
+
+  /** @returns {boolean} True if line is a METADATA boundary. */
+  static _isMetadataBoundary(line) {
+    return line.startsWith('-- METADATA **');
+  }
+
+  /** @returns {boolean} True if line is a MARKDOWN boundary. */
+  static _isMarkdownBoundary(line) {
+    return line.startsWith('-- MARKDOWN **');
+  }
+
+  /** @returns {boolean} True if line is a CELL boundary. */
+  static _isCellBoundary(line) {
+    return line.startsWith('-- CELL **');
+  }
+
+  /**
+   * Collect META JSON lines following a METADATA boundary.
+   * @param {string[]} lines — All lines of the file.
+   * @param {number} startIdx — Index to begin scanning.
+   * @returns {{ data: object, linesConsumed: number }}
+   */
+  static _collectMeta(lines, startIdx) {
+    let data = {};
+    let consumed = 0;
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith('-- META ')) {
+        const jsonStr = line.slice(8);
+        try {
+          data = Object.assign(data, JSON.parse(jsonStr));
+        } catch {
+          // Malformed JSON — skip silently
+        }
+        consumed = i - startIdx + 1;
+      } else if (line.trim() === '' || line === '--') {
+        consumed = i - startIdx + 1;
+      } else {
+        break;
+      }
+    }
+
+    return { data, linesConsumed: consumed };
+  }
+
+  /**
+   * Parse a MAGIC language tag from a cell's first line.
+   * @param {string} line
+   * @returns {string|null} Language name, or null if not a magic line.
+   */
+  static _parseMagicLanguage(line) {
+    const match = line.match(/^-- MAGIC %%(\w+)/);
+    return match ? match[1] : null;
+  }
+
+  /**
+   * Whether a language requires MAGIC prefix serialization.
+   * SQL/sparksql are written as raw lines; everything else uses MAGIC.
+   */
+  static _isMagicLanguage(language) {
+    const raw = (language || '').toLowerCase();
+    return raw !== 'sparksql' && raw !== 'sql';
+  }
+
+  /**
+   * Map a parsed language name to its MAGIC %% tag.
+   * @param {string} language
+   * @returns {string}
+   */
+  static _languageToMagicTag(language) {
+    const map = {
+      pyspark: 'pyspark',
+      python: 'pyspark',
+      scala: 'scala',
+      r: 'sparkr',
+      sparkr: 'sparkr',
+      csharp: 'csharp',
+    };
+    const key = (language || '').toLowerCase();
+    return map[key] || key;
+  }
+
+  /**
+   * Trim trailing empty strings from an array of lines.
+   * @param {string[]} lines
+   * @returns {string[]}
+   */
+  static _trimTrailingEmpty(lines) {
+    const copy = [...lines];
+    while (copy.length > 0 && copy[copy.length - 1].trim() === '') {
+      copy.pop();
+    }
+    return copy;
+  }
+}
+
+// === js/notebook-view.js ===
+/**
+ * NotebookView — Embedded notebook IDE for the workspace explorer.
+ *
+ * Renders notebook cells with editing, save, run-all, and per-cell execution.
+ * Replaces the content+inspector panels when a notebook is opened.
+ *
+ * Dependencies:
+ *   - NotebookParser  (notebook-parser.js) — parse / serialize notebook-content.sql
+ *   - FabricApiClient  (api-client.js) — Fabric REST + notebook endpoints
+ *
+ * @author Zara Okonkwo — EDOG Studio hivemind
+ */
+class NotebookView {
+  /**
+   * @param {HTMLElement} containerEl — DOM element to render into.
+   * @param {FabricApiClient} apiClient — Initialized API client instance.
+   * @param {string} workspaceId — Current workspace GUID.
+   * @param {{ id: string, displayName: string, type: string, properties?: object }} notebook
+   */
+  constructor(containerEl, apiClient, workspaceId, notebook) {
+    this._container = containerEl;
+    this._api = apiClient;
+    this._wsId = workspaceId;
+    this._notebook = notebook;
+    this._cells = [];
+    this._notebookMeta = {};
+    this._platform = '';
+    this._isDirty = false;
+    this._isRunning = false;
+    this._runLocation = null;
+    this._runPollTimer = null;
+    this._jupyterSession = null;
+    this._selectedCellIndex = -1;
+    this._editingCellIndex = -1;
+    this._destroyed = false;
+
+    // Snapshot for dirty comparison
+    this._originalCellsJSON = '';
+
+    // Bound handler refs for cleanup
+    this._onKeyDown = this._handleKeyDown.bind(this);
+    this._onContainerClick = this._handleContainerClick.bind(this);
+    this._onDocClick = this._handleDocumentClick.bind(this);
+  }
+
+  // ── Public API ────────────────────────────────────────────────
+
+  /**
+   * Load notebook content from the API and render the IDE.
+   * @returns {Promise<void>}
+   */
+  async load() {
+    this._container.innerHTML = this._shimmerHTML();
+    try {
+      const response = await this._api.getNotebookContent(this._wsId, this._notebook.id);
+      if (this._destroyed) return;
+
+      const parsed = NotebookParser.parse(response.content);
+      this._cells = parsed.cells;
+      this._notebookMeta = parsed.notebookMeta;
+      this._platform = response.platform || '';
+      this._originalCellsJSON = JSON.stringify(this._cells);
+
+      this._render();
+      this._bindEvents();
+    } catch (err) {
+      if (this._destroyed) return;
+      this._container.innerHTML = this._errorHTML(err.message || 'Failed to load notebook');
+    }
+  }
+
+  /** Tear down the view: timers, sessions, listeners. */
+  destroy() {
+    this._destroyed = true;
+    if (this._runPollTimer) {
+      clearInterval(this._runPollTimer);
+      this._runPollTimer = null;
+    }
+    if (this._jupyterSession) {
+      const s = this._jupyterSession;
+      this._api.closeJupyterSession(this._wsId, this._notebook.id, s.capacityId, s.sessionId)
+        .catch(() => { /* best-effort cleanup */ });
+      this._jupyterSession = null;
+    }
+    document.removeEventListener('keydown', this._onKeyDown);
+    document.removeEventListener('click', this._onDocClick);
+    this._container.innerHTML = '';
+  }
+
+  // ── Render ────────────────────────────────────────────────────
+
+  _render() {
+    const name = this._esc(this._notebook.displayName);
+    const contextChips = this._buildContextChips();
+
+    this._container.innerHTML = `
+      <div class="nb-ide">
+        <div class="nb-toolbar">
+          <div class="nb-toolbar-top">
+            <span class="nb-title">${name}</span>
+            <span class="nb-dirty-dot hidden"></span>
+            <span class="nb-type-badge">NB</span>
+            <div class="nb-actions">
+              <button class="nb-action-btn primary" data-action="run-all">
+                <span class="btn-icon">▶</span> Run All
+              </button>
+              <button class="nb-action-btn" data-action="save">Save</button>
+              <button class="nb-action-btn" data-action="add-cell">+ Cell</button>
+              <button class="nb-action-btn" data-action="refresh">⟲</button>
+              <button class="nb-action-btn" data-action="close">✕ Close</button>
+            </div>
+          </div>
+          <div class="nb-context">${contextChips}</div>
+        </div>
+        <div class="nb-content">
+          <div class="nb-cells">${this._renderAllCells()}</div>
+        </div>
+        <div class="nb-status-bar not-started">
+          <span class="nb-status-icon"></span>
+          <span class="nb-status-msg">Ready</span>
+          <span class="nb-status-time"></span>
+        </div>
+      </div>`;
+  }
+
+  _buildContextChips() {
+    const chips = [];
+    const props = this._notebook.properties || {};
+    const meta = this._notebookMeta || {};
+    const deps = meta.dependencies || {};
+
+    // Default lakehouse
+    const lh = deps.lakehouse;
+    if (lh && lh.default_lakehouse_name) {
+      chips.push(`<span class="nb-context-chip" data-type="lakehouse">
+        <span class="chip-label">LH:</span> ${this._esc(lh.default_lakehouse_name)}
+      </span>`);
+    }
+
+    // Environment
+    const env = deps.environment;
+    if (env && env.environmentId) {
+      const envName = env.workspaceId ? 'Attached Env' : env.environmentId.slice(0, 8);
+      chips.push(`<span class="nb-context-chip" data-type="environment">
+        <span class="chip-label">Env:</span> ${this._esc(envName)}
+      </span>`);
+    }
+
+    // Kernel
+    const kernel = meta.kernel_spec || {};
+    if (kernel.name) {
+      chips.push(`<span class="nb-context-chip" data-type="kernel">
+        <span class="chip-label">Kernel:</span> ${this._esc(kernel.name)}
+      </span>`);
+    }
+
+    return chips.join('<span class="nb-context-sep">·</span>');
+  }
+
+  _renderAllCells() {
+    if (this._cells.length === 0) {
+      return `<div class="nb-between-cell" data-index="0">
+        <button class="nb-add-cell-btn">+ Add Cell</button>
+        <div class="nb-add-dropdown" data-index="0">
+          ${this._addCellOptions()}
+        </div>
+      </div>`;
+    }
+
+    const parts = [];
+    // Top between-cell
+    parts.push(this._betweenCellHTML(0));
+    for (let i = 0; i < this._cells.length; i++) {
+      parts.push(this._renderCell(i));
+      parts.push(this._betweenCellHTML(i + 1));
+    }
+    return parts.join('');
+  }
+
+  _betweenCellHTML(index) {
+    return `<div class="nb-between-cell" data-index="${index}">
+      <button class="nb-add-cell-btn">+</button>
+      <div class="nb-add-dropdown" data-index="${index}">
+        ${this._addCellOptions()}
+      </div>
+    </div>`;
+  }
+
+  _addCellOptions() {
+    return `<button class="nb-add-dropdown-option" data-cell-type="sparksql">SQL Cell</button>
+      <button class="nb-add-dropdown-option" data-cell-type="pyspark">Python Cell</button>
+      <button class="nb-add-dropdown-option" data-cell-type="markdown">Markdown Cell</button>`;
+  }
+
+  _renderCell(index) {
+    const cell = this._cells[index];
+    const selected = index === this._selectedCellIndex ? ' selected' : '';
+
+    if (cell.type === 'markdown') {
+      return this._renderMarkdownCell(index, cell, selected);
+    }
+    return this._renderCodeCell(index, cell, selected);
+  }
+
+  _renderCodeCell(index, cell, selectedClass) {
+    const langClass = this._langBadgeClass(cell.language);
+    const langLabel = this._langLabel(cell.language);
+    const lines = (cell.content || '').split('\n');
+    const lineNums = lines.map((_, i) => i + 1).join('\n');
+    const codeContent = this._esc(cell.content || '');
+    const executionNum = cell.meta && cell.meta.nteract && cell.meta.nteract.transient
+      ? cell.meta.nteract.transient.deleting : null;
+    const cellNum = `In [${index + 1}]:`;
+
+    return `<div class="nb-cell${selectedClass}" data-index="${index}" data-type="code">
+      <div class="nb-cell-header">
+        <span class="nb-cell-num">${cellNum}</span>
+        <span class="${langClass}">${langLabel}</span>
+        <div class="nb-cell-status"></div>
+        <button class="nb-run-btn" title="Run cell" data-index="${index}">▶</button>
+        <div class="nb-dropdown-wrap">
+          <button class="nb-cell-menu-btn" data-index="${index}">⋯</button>
+          <div class="nb-cell-menu" data-index="${index}">
+            <button class="nb-cell-menu-item" data-action="copy" data-index="${index}">Copy</button>
+            <button class="nb-cell-menu-item" data-action="move-up" data-index="${index}">Move Up</button>
+            <button class="nb-cell-menu-item" data-action="move-down" data-index="${index}">Move Down</button>
+            <div class="nb-cell-menu-sep"></div>
+            <button class="nb-cell-menu-item" data-action="lang-sparksql" data-index="${index}">Change to SQL</button>
+            <button class="nb-cell-menu-item" data-action="lang-pyspark" data-index="${index}">Change to Python</button>
+            <div class="nb-cell-menu-sep"></div>
+            <button class="nb-cell-menu-item danger" data-action="delete" data-index="${index}">Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="nb-code" data-index="${index}">
+        <div class="nb-code-area">
+          <div class="nb-line-numbers">${lineNums}</div>
+          <pre class="nb-code-readonly">${codeContent}</pre>
+        </div>
+      </div>
+      <div class="nb-output nb-output-empty">Click ▶ Run to execute</div>
+    </div>`;
+  }
+
+  _renderMarkdownCell(index, cell, selectedClass) {
+    const rendered = this._renderMarkdown(cell.content || '');
+
+    return `<div class="nb-cell${selectedClass}" data-index="${index}" data-type="markdown">
+      <div class="nb-cell-header">
+        <span class="nb-cell-num">Md</span>
+        <span class="nb-lang-markdown">Markdown</span>
+        <div class="nb-cell-status"></div>
+        <div class="nb-md-toggle">
+          <button class="active" data-action="md-preview" data-index="${index}">Preview</button>
+          <button data-action="md-edit" data-index="${index}">Edit</button>
+        </div>
+        <div class="nb-dropdown-wrap" style="margin-left:auto">
+          <button class="nb-cell-menu-btn" data-index="${index}">⋯</button>
+          <div class="nb-cell-menu" data-index="${index}">
+            <button class="nb-cell-menu-item" data-action="copy" data-index="${index}">Copy</button>
+            <button class="nb-cell-menu-item" data-action="move-up" data-index="${index}">Move Up</button>
+            <button class="nb-cell-menu-item" data-action="move-down" data-index="${index}">Move Down</button>
+            <div class="nb-cell-menu-sep"></div>
+            <button class="nb-cell-menu-item danger" data-action="delete" data-index="${index}">Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="nb-md-rendered" data-index="${index}">${rendered}</div>
+    </div>`;
+  }
+
+  // ── Event Binding ─────────────────────────────────────────────
+
+  _bindEvents() {
+    this._container.addEventListener('click', this._onContainerClick);
+    document.addEventListener('keydown', this._onKeyDown);
+    document.addEventListener('click', this._onDocClick);
+  }
+
+  /** Close any open dropdowns when clicking outside */
+  _handleDocumentClick(e) {
+    if (this._destroyed) return;
+    // Close cell menus
+    const openMenus = this._container.querySelectorAll('.nb-cell-menu.open');
+    for (const menu of openMenus) {
+      if (!menu.contains(e.target) && !e.target.classList.contains('nb-cell-menu-btn')) {
+        menu.classList.remove('open');
+      }
+    }
+    // Close add-cell dropdowns
+    const openDropdowns = this._container.querySelectorAll('.nb-add-dropdown.open');
+    for (const dd of openDropdowns) {
+      if (!dd.contains(e.target) && !e.target.classList.contains('nb-add-cell-btn')) {
+        dd.classList.remove('open');
+      }
+    }
+  }
+
+  _handleContainerClick(e) {
+    if (this._destroyed) return;
+    const target = e.target;
+
+    // Toolbar actions
+    const actionBtn = target.closest('[data-action]');
+    if (actionBtn) {
+      const action = actionBtn.dataset.action;
+      const index = actionBtn.dataset.index !== undefined ? parseInt(actionBtn.dataset.index, 10) : -1;
+      this._handleAction(action, index, e);
+      return;
+    }
+
+    // Run button
+    if (target.closest('.nb-run-btn')) {
+      const idx = parseInt(target.closest('.nb-run-btn').dataset.index, 10);
+      this._runCell(idx);
+      return;
+    }
+
+    // Cell menu toggle
+    if (target.closest('.nb-cell-menu-btn')) {
+      const btn = target.closest('.nb-cell-menu-btn');
+      const menu = btn.parentElement.querySelector('.nb-cell-menu');
+      if (menu) {
+        this._closeAllMenus();
+        menu.classList.toggle('open');
+        e.stopPropagation();
+      }
+      return;
+    }
+
+    // Add-cell button
+    if (target.closest('.nb-add-cell-btn')) {
+      const btn = target.closest('.nb-add-cell-btn');
+      const dropdown = btn.parentElement.querySelector('.nb-add-dropdown');
+      if (dropdown) {
+        this._closeAllMenus();
+        dropdown.classList.toggle('open');
+        e.stopPropagation();
+      }
+      return;
+    }
+
+    // Add-cell dropdown option
+    if (target.closest('.nb-add-dropdown-option')) {
+      this._handleAddCellOptionClick(target.closest('.nb-add-dropdown-option'));
+      return;
+    }
+
+    // Click on code area to edit
+    const codeEl = target.closest('.nb-code[data-index]');
+    if (codeEl) {
+      const idx = parseInt(codeEl.dataset.index, 10);
+      this._enterEditMode(idx);
+      return;
+    }
+
+    // Environment chip click
+    const envChip = target.closest('.nb-context-chip[data-type="environment"]');
+    if (envChip) {
+      this._showEnvironmentPicker({ target: envChip });
+      return;
+    }
+
+    // Click on markdown rendered to select
+    const mdEl = target.closest('.nb-md-rendered[data-index]');
+    if (mdEl) {
+      const idx = parseInt(mdEl.dataset.index, 10);
+      this._selectCell(idx);
+      return;
+    }
+
+    // Click on a cell to select it
+    const cellEl = target.closest('.nb-cell[data-index]');
+    if (cellEl) {
+      const idx = parseInt(cellEl.dataset.index, 10);
+      this._selectCell(idx);
+    }
+
+    // Retry button
+    if (target.closest('[data-action="retry"]')) {
+      this.load();
+    }
+  }
+
+  _handleAction(action, index, e) {
+    switch (action) {
+      case 'run-all': this._runAll(); break;
+      case 'save': this._save(); break;
+      case 'add-cell': this._showToolbarAddCell(e); break;
+      case 'refresh': this._refresh(); break;
+      case 'close': this._close(); break;
+      case 'cancel-run': this._cancelRun(); break;
+
+      // Cell menu actions
+      case 'copy': this._copyCell(index); break;
+      case 'delete': this._deleteCell(index); break;
+      case 'move-up': this._moveCell(index, -1); break;
+      case 'move-down': this._moveCell(index, 1); break;
+      case 'lang-sparksql': this._changeCellLanguage(index, 'sparksql'); break;
+      case 'lang-pyspark': this._changeCellLanguage(index, 'pyspark'); break;
+
+      // Markdown toggle
+      case 'md-preview': this._setMarkdownMode(index, 'preview'); break;
+      case 'md-edit': this._setMarkdownMode(index, 'edit'); break;
+
+      // Add cell from dropdown
+      case 'add-sparksql':
+      case 'add-pyspark':
+      case 'add-markdown':
+        // Handled in _handleAddCellOption
+        break;
+
+      // Environment chip
+      case 'env-select': this._showEnvironmentPicker(e); break;
+
+      default: break;
+    }
+    this._closeAllMenus();
+  }
+
+  _handleKeyDown(e) {
+    if (this._destroyed) return;
+    // Ctrl+S — Save
+    if (e.ctrlKey && e.key === 's') {
+      e.preventDefault();
+      this._save();
+      return;
+    }
+    // Ctrl+Enter — Run All or run selected cell
+    if (e.ctrlKey && e.key === 'Enter') {
+      e.preventDefault();
+      if (this._jupyterSession && this._selectedCellIndex >= 0) {
+        this._runCell(this._selectedCellIndex);
+      } else {
+        this._runAll();
+      }
+      return;
+    }
+    // Escape — Exit editing
+    if (e.key === 'Escape') {
+      if (this._editingCellIndex >= 0) {
+        this._exitEditMode();
+      }
+      return;
+    }
+    // Ctrl+Shift+Delete — Delete selected cell
+    if (e.ctrlKey && e.shiftKey && e.key === 'Delete') {
+      e.preventDefault();
+      if (this._selectedCellIndex >= 0) {
+        this._deleteCell(this._selectedCellIndex);
+      }
+    }
+  }
+
+  // ── Cell Editing ──────────────────────────────────────────────
+
+  _enterEditMode(index) {
+    if (this._editingCellIndex === index) return;
+    if (this._editingCellIndex >= 0) {
+      this._exitEditMode();
+    }
+
+    const cell = this._cells[index];
+    if (!cell || cell.type !== 'code') return;
+
+    this._editingCellIndex = index;
+    this._selectCell(index);
+
+    const cellEl = this._container.querySelector(`.nb-cell[data-index="${index}"]`);
+    if (!cellEl) return;
+    cellEl.classList.add('editing');
+
+    const codeEl = cellEl.querySelector('.nb-code');
+    if (!codeEl) return;
+
+    const lines = (cell.content || '').split('\n');
+    const lineNums = lines.map((_, i) => i + 1).join('\n');
+    const rows = Math.max(lines.length, 3);
+
+    codeEl.innerHTML = `<div class="nb-code-area">
+      <div class="nb-line-numbers">${lineNums}</div>
+      <textarea class="nb-code-textarea" rows="${rows}" spellcheck="false"
+        data-index="${index}">${this._esc(cell.content || '')}</textarea>
+    </div>`;
+
+    const textarea = codeEl.querySelector('textarea');
+    if (textarea) {
+      textarea.focus();
+      textarea.addEventListener('keydown', this._handleTextareaKey.bind(this));
+      textarea.addEventListener('input', () => this._onTextareaInput(textarea, index));
+      textarea.addEventListener('blur', () => {
+        // Short delay so click events on buttons fire before blur handling
+        setTimeout(() => this._exitEditMode(), 150);
+      });
+    }
+  }
+
+  _handleTextareaKey(e) {
+    // Tab inserts 2 spaces
+    if (e.key === 'Tab' && !e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      const ta = e.target;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+      ta.selectionStart = ta.selectionEnd = start + 2;
+      const idx = parseInt(ta.dataset.index, 10);
+      this._onTextareaInput(ta, idx);
+    }
+  }
+
+  _onTextareaInput(textarea, index) {
+    // Update line numbers
+    const lineNumEl = textarea.parentElement.querySelector('.nb-line-numbers');
+    if (lineNumEl) {
+      const lines = textarea.value.split('\n');
+      lineNumEl.textContent = lines.map((_, i) => i + 1).join('\n');
+    }
+    // Update cell content
+    this._cells[index].content = textarea.value;
+    this._checkDirty();
+  }
+
+  _exitEditMode() {
+    if (this._editingCellIndex < 0) return;
+    const index = this._editingCellIndex;
+    this._editingCellIndex = -1;
+
+    const cellEl = this._container.querySelector(`.nb-cell[data-index="${index}"]`);
+    if (!cellEl) return;
+    cellEl.classList.remove('editing');
+
+    const cell = this._cells[index];
+    if (!cell || cell.type !== 'code') return;
+
+    // Re-render code display
+    const codeEl = cellEl.querySelector('.nb-code');
+    if (!codeEl) return;
+
+    const lines = (cell.content || '').split('\n');
+    const lineNums = lines.map((_, i) => i + 1).join('\n');
+    codeEl.innerHTML = `<div class="nb-code-area">
+      <div class="nb-line-numbers">${lineNums}</div>
+      <pre class="nb-code-readonly">${this._esc(cell.content || '')}</pre>
+    </div>`;
+  }
+
+  _selectCell(index) {
+    // Remove previous selection
+    const prev = this._container.querySelector('.nb-cell.selected');
+    if (prev) prev.classList.remove('selected');
+
+    this._selectedCellIndex = index;
+    const cellEl = this._container.querySelector(`.nb-cell[data-index="${index}"]`);
+    if (cellEl) cellEl.classList.add('selected');
+  }
+
+  // ── Markdown Editing ──────────────────────────────────────────
+
+  _setMarkdownMode(index, mode) {
+    const cell = this._cells[index];
+    if (!cell || cell.type !== 'markdown') return;
+
+    const cellEl = this._container.querySelector(`.nb-cell[data-index="${index}"]`);
+    if (!cellEl) return;
+
+    // Update toggle buttons
+    const toggleBtns = cellEl.querySelectorAll('.nb-md-toggle button');
+    for (const btn of toggleBtns) {
+      btn.classList.toggle('active', btn.dataset.action === `md-${mode}`);
+    }
+
+    if (mode === 'edit') {
+      const rendered = cellEl.querySelector('.nb-md-rendered');
+      if (rendered) {
+        const rows = Math.max((cell.content || '').split('\n').length, 4);
+        rendered.outerHTML = `<textarea class="nb-md-edit" rows="${rows}"
+          data-index="${index}" spellcheck="false">${this._esc(cell.content || '')}</textarea>`;
+        const ta = cellEl.querySelector('.nb-md-edit');
+        if (ta) {
+          ta.focus();
+          ta.addEventListener('input', () => {
+            this._cells[index].content = ta.value;
+            this._checkDirty();
+          });
+          ta.addEventListener('blur', () => {
+            // Delay to allow button clicks
+            setTimeout(() => this._setMarkdownMode(index, 'preview'), 150);
+          });
+        }
+      }
+    } else {
+      const editArea = cellEl.querySelector('.nb-md-edit');
+      if (editArea) {
+        editArea.outerHTML = `<div class="nb-md-rendered" data-index="${index}">
+          ${this._renderMarkdown(cell.content || '')}
+        </div>`;
+      }
+    }
+  }
+
+  // ── Dirty Tracking ────────────────────────────────────────────
+
+  _checkDirty() {
+    const current = JSON.stringify(this._cells);
+    const dirty = current !== this._originalCellsJSON;
+    if (dirty !== this._isDirty) {
+      this._isDirty = dirty;
+      const dot = this._container.querySelector('.nb-dirty-dot');
+      if (dot) dot.classList.toggle('hidden', !dirty);
+    }
+  }
+
+  _markClean() {
+    this._originalCellsJSON = JSON.stringify(this._cells);
+    this._isDirty = false;
+    const dot = this._container.querySelector('.nb-dirty-dot');
+    if (dot) dot.classList.add('hidden');
+  }
+
+  // ── Run All ───────────────────────────────────────────────────
+
+  async _runAll() {
+    if (this._isRunning) return;
+
+    // Prompt to save if dirty
+    if (this._isDirty) {
+      const ok = confirm('Save changes before running?');
+      if (!ok) return;
+      await this._save();
+    }
+
+    try {
+      this._isRunning = true;
+      this._setStatusBar('running', 'Running...', '');
+      this._setRunAllButton(true);
+
+      const result = await this._api.runNotebook(this._wsId, this._notebook.id);
+      if (this._destroyed) return;
+
+      this._runLocation = result.location || result.url || null;
+      if (!this._runLocation) {
+        this._setStatusBar('failed', 'No run location returned', '');
+        this._isRunning = false;
+        this._setRunAllButton(false);
+        return;
+      }
+
+      this._startRunPolling();
+    } catch (err) {
+      if (this._destroyed) return;
+      this._setStatusBar('failed', `Run failed: ${err.message}`, '');
+      this._isRunning = false;
+      this._setRunAllButton(false);
+    }
+  }
+
+  _startRunPolling() {
+    const startTime = Date.now();
+    this._runPollTimer = setInterval(async () => {
+      if (this._destroyed || !this._runLocation) {
+        this._stopRunPolling();
+        return;
+      }
+      try {
+        const status = await this._api.getNotebookRunStatus(this._runLocation);
+        const st = (status.status || '').toLowerCase();
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const timeStr = `${elapsed}s`;
+
+        if (st === 'completed' || st === 'succeeded') {
+          this._setStatusBar('success', 'Completed', timeStr);
+          this._stopRunPolling();
+        } else if (st === 'failed') {
+          const reason = status.failureReason || status.error || 'Unknown error';
+          this._setStatusBar('failed', `Failed: ${reason}`, timeStr);
+          this._stopRunPolling();
+        } else if (st === 'cancelled' || st === 'canceled') {
+          this._setStatusBar('cancelled', 'Cancelled', timeStr);
+          this._stopRunPolling();
+        } else {
+          // Still running — update elapsed time
+          this._setStatusBar('running', 'Running...', timeStr);
+        }
+      } catch {
+        // Poll error — keep trying
+      }
+    }, 5000);
+  }
+
+  _stopRunPolling() {
+    if (this._runPollTimer) {
+      clearInterval(this._runPollTimer);
+      this._runPollTimer = null;
+    }
+    this._isRunning = false;
+    this._runLocation = null;
+    this._setRunAllButton(false);
+  }
+
+  async _cancelRun() {
+    if (!this._runLocation) return;
+    try {
+      await this._api.cancelNotebookRun(this._runLocation);
+      this._setStatusBar('cancelled', 'Cancelling...', '');
+    } catch (err) {
+      this._setStatusBar('failed', `Cancel failed: ${err.message}`, '');
+    }
+  }
+
+  _setRunAllButton(running) {
+    const actionsEl = this._container.querySelector('.nb-actions');
+    if (!actionsEl) return;
+
+    const runBtn = actionsEl.querySelector('[data-action="run-all"]');
+    if (running) {
+      if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.style.opacity = '0.5';
+      }
+      // Add cancel button if not present
+      if (!actionsEl.querySelector('[data-action="cancel-run"]')) {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'nb-action-btn';
+        cancelBtn.dataset.action = 'cancel-run';
+        cancelBtn.innerHTML = '<span class="btn-icon">■</span> Cancel';
+        actionsEl.insertBefore(cancelBtn, actionsEl.firstChild.nextSibling);
+      }
+    } else {
+      if (runBtn) {
+        runBtn.disabled = false;
+        runBtn.style.opacity = '';
+      }
+      const cancelBtn = actionsEl.querySelector('[data-action="cancel-run"]');
+      if (cancelBtn) cancelBtn.remove();
+    }
+  }
+
+  _setStatusBar(state, msg, time) {
+    const bar = this._container.querySelector('.nb-status-bar');
+    if (!bar) return;
+    bar.className = `nb-status-bar ${state}`;
+    const msgEl = bar.querySelector('.nb-status-msg');
+    const timeEl = bar.querySelector('.nb-status-time');
+    if (msgEl) msgEl.textContent = msg;
+    if (timeEl) timeEl.textContent = time;
+  }
+
+  // ── Per-Cell Execution ────────────────────────────────────────
+
+  async _runCell(index) {
+    const cell = this._cells[index];
+    if (!cell || cell.type !== 'code') return;
+
+    const cellEl = this._container.querySelector(`.nb-cell[data-index="${index}"]`);
+    if (!cellEl) return;
+
+    // Check for capacity ID
+    const capId = this._getCapacityId();
+    if (!capId) {
+      this._setCellOutput(cellEl, 'empty',
+        'Deploy to a lakehouse to enable per-cell execution. Use "Run All" instead.');
+      return;
+    }
+
+    // Create Jupyter session if needed
+    if (!this._jupyterSession) {
+      this._setCellStatus(cellEl, 'spinner');
+      try {
+        const session = await this._api.createJupyterSession(
+          this._wsId, this._notebook.id, capId
+        );
+        this._jupyterSession = {
+          sessionId: session.sessionId || session.id,
+          kernelId: session.kernelId,
+          capacityId: capId,
+        };
+      } catch (err) {
+        this._setCellStatus(cellEl, 'error');
+        this._setCellOutput(cellEl, 'error', `Session creation failed: ${err.message}`);
+        return;
+      }
+    }
+
+    // Execute cell
+    cellEl.classList.add('running');
+    cellEl.classList.remove('success', 'error');
+    this._setCellStatus(cellEl, 'spinner');
+
+    try {
+      const result = await this._api.executeCell(
+        this._wsId, this._notebook.id, capId,
+        cell.content, cell.language
+      );
+
+      if (this._destroyed) return;
+      cellEl.classList.remove('running');
+
+      if (result.status === 'websocket_required') {
+        cellEl.classList.add('error');
+        this._setCellStatus(cellEl, 'error');
+        this._setCellOutput(cellEl, 'empty',
+          'WebSocket connection required. Per-cell execution unavailable — use "Run All" instead.');
+        return;
+      }
+
+      cellEl.classList.add('success');
+      this._setCellStatus(cellEl, 'success');
+      this._setCellOutput(cellEl, 'result', result);
+    } catch (err) {
+      if (this._destroyed) return;
+      cellEl.classList.remove('running');
+      cellEl.classList.add('error');
+      this._setCellStatus(cellEl, 'error');
+      this._setCellOutput(cellEl, 'error', err.message);
+    }
+  }
+
+  _setCellStatus(cellEl, type) {
+    const statusEl = cellEl.querySelector('.nb-cell-status');
+    if (!statusEl) return;
+
+    if (type === 'spinner') {
+      statusEl.innerHTML = '<div class="nb-spinner"></div>';
+    } else if (type === 'success') {
+      statusEl.innerHTML = '';
+    } else if (type === 'error') {
+      statusEl.innerHTML = '';
+    } else {
+      statusEl.innerHTML = '';
+    }
+  }
+
+  _setCellOutput(cellEl, type, data) {
+    const outputEl = cellEl.querySelector('.nb-output');
+    if (!outputEl) return;
+
+    outputEl.className = 'nb-output';
+
+    if (type === 'empty') {
+      outputEl.className = 'nb-output nb-output-empty';
+      outputEl.textContent = typeof data === 'string' ? data : 'Click ▶ Run to execute';
+      return;
+    }
+
+    if (type === 'error') {
+      outputEl.className = 'nb-output nb-output-error';
+      outputEl.innerHTML = `<span class="error-type">Error</span>
+        <span class="error-msg">${this._esc(String(data))}</span>`;
+      return;
+    }
+
+    if (type === 'result' && data) {
+      // Render output based on shape
+      if (data.data && Array.isArray(data.data)) {
+        outputEl.innerHTML = this._renderTableOutput(data.data);
+      } else if (data.output || data.text) {
+        outputEl.innerHTML = `<pre class="nb-output-pre">${this._esc(data.output || data.text || JSON.stringify(data))}</pre>`;
+      } else {
+        outputEl.innerHTML = `<pre class="nb-output-pre">${this._esc(JSON.stringify(data, null, 2))}</pre>`;
+      }
+      return;
+    }
+
+    outputEl.className = 'nb-output nb-output-empty';
+    outputEl.textContent = 'No output';
+  }
+
+  _renderTableOutput(rows) {
+    if (!rows.length) return '<div class="nb-output-empty">Empty result set</div>';
+    const cols = Object.keys(rows[0]);
+    const maxRows = 50;
+    const truncated = rows.length > maxRows;
+    const display = truncated ? rows.slice(0, maxRows) : rows;
+
+    let html = '<table class="nb-output-table"><thead><tr>';
+    for (const col of cols) {
+      html += `<th>${this._esc(col)}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+    for (const row of display) {
+      html += '<tr>';
+      for (const col of cols) {
+        html += `<td>${this._esc(String(row[col] ?? ''))}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+
+    if (truncated) {
+      html += `<div class="nb-output-truncated">
+        <button class="nb-show-more">Showing ${maxRows} of ${rows.length} rows</button>
+      </div>`;
+    }
+    return html;
+  }
+
+  _getCapacityId() {
+    const meta = this._notebookMeta || {};
+    if (meta.trident && meta.trident.capacityId) return meta.trident.capacityId;
+    const props = this._notebook.properties || {};
+    if (props.capacityId) return props.capacityId;
+    const config = this._api.getConfig && this._api.getConfig();
+    if (config && config.capacityId) return config.capacityId;
+    return null;
+  }
+
+  // ── Save ──────────────────────────────────────────────────────
+
+  async _save() {
+    const saveBtn = this._container.querySelector('[data-action="save"]');
+    if (saveBtn) {
+      saveBtn.classList.add('saving');
+      saveBtn.textContent = 'Saving...';
+    }
+
+    try {
+      if (this._editingCellIndex >= 0) {
+        this._exitEditMode();
+      }
+
+      const serialized = NotebookParser.serialize({
+        notebookMeta: this._notebookMeta,
+        cells: this._cells,
+      });
+
+      await this._api.saveNotebookContent(
+        this._wsId, this._notebook.id, serialized, this._platform
+      );
+
+      if (this._destroyed) return;
+      this._markClean();
+
+      if (saveBtn) {
+        saveBtn.classList.remove('saving');
+        saveBtn.classList.add('saved');
+        saveBtn.textContent = 'Saved';
+        setTimeout(() => {
+          if (!this._destroyed && saveBtn) {
+            saveBtn.classList.remove('saved');
+            saveBtn.textContent = 'Save';
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      if (this._destroyed) return;
+      if (saveBtn) {
+        saveBtn.classList.remove('saving');
+        saveBtn.textContent = 'Save';
+      }
+      this._showToast(`Save failed: ${err.message}`, 'error');
+    }
+  }
+
+  // ── Refresh ───────────────────────────────────────────────────
+
+  async _refresh() {
+    if (this._isDirty) {
+      const ok = confirm('Discard unsaved changes and refresh?');
+      if (!ok) return;
+    }
+    this._editingCellIndex = -1;
+    this._selectedCellIndex = -1;
+    await this.load();
+  }
+
+  // ── Close ─────────────────────────────────────────────────────
+
+  _close() {
+    if (this._isDirty) {
+      const ok = confirm('Discard unsaved changes?');
+      if (!ok) return;
+    }
+    this.destroy();
+    // Dispatch a custom event so the workspace explorer can restore its panels
+    this._container.dispatchEvent(new CustomEvent('notebook-close', { bubbles: true }));
+  }
+
+  // ── Cell Operations ───────────────────────────────────────────
+
+  _addCell(index, type) {
+    const langMap = { sparksql: 'sparksql', pyspark: 'pyspark', markdown: 'markdown' };
+    const language = langMap[type] || 'sparksql';
+    const cellType = type === 'markdown' ? 'markdown' : 'code';
+
+    const newCell = { type: cellType, language, content: '', meta: {} };
+    this._cells.splice(index, 0, newCell);
+    this._checkDirty();
+    this._rerenderCells();
+    this._selectCell(index);
+  }
+
+  _deleteCell(index) {
+    if (index < 0 || index >= this._cells.length) return;
+    if (this._cells.length <= 1) {
+      this._showToast('Cannot delete the last cell', 'warning');
+      return;
+    }
+
+    this._cells.splice(index, 1);
+    if (this._selectedCellIndex >= this._cells.length) {
+      this._selectedCellIndex = this._cells.length - 1;
+    }
+    if (this._editingCellIndex === index) {
+      this._editingCellIndex = -1;
+    }
+    this._checkDirty();
+    this._rerenderCells();
+  }
+
+  _moveCell(index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= this._cells.length) return;
+
+    const temp = this._cells[index];
+    this._cells[index] = this._cells[newIndex];
+    this._cells[newIndex] = temp;
+
+    this._selectedCellIndex = newIndex;
+    this._checkDirty();
+    this._rerenderCells();
+  }
+
+  _copyCell(index) {
+    const cell = this._cells[index];
+    if (!cell) return;
+    const text = cell.content || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        this._showToast('Copied to clipboard', 'success');
+      }).catch(() => {
+        this._showToast('Copy failed', 'error');
+      });
+    } else {
+      this._showToast('Clipboard not available', 'warning');
+    }
+  }
+
+  _changeCellLanguage(index, language) {
+    const cell = this._cells[index];
+    if (!cell || cell.type !== 'code') return;
+    cell.language = language;
+    this._checkDirty();
+    this._rerenderCells();
+  }
+
+  _rerenderCells() {
+    const cellsContainer = this._container.querySelector('.nb-cells');
+    if (cellsContainer) {
+      cellsContainer.innerHTML = this._renderAllCells();
+    }
+  }
+
+  // ── Toolbar "Add Cell" ────────────────────────────────────────
+
+  _showToolbarAddCell(e) {
+    // Insert at end
+    const index = this._cells.length;
+    this._addCell(index, 'sparksql');
+  }
+
+  // ── Environment Picker ────────────────────────────────────────
+
+  async _showEnvironmentPicker(e) {
+    const chip = e.target.closest('.nb-context-chip[data-type="environment"]');
+    if (!chip) return;
+
+    // Already showing picker
+    if (chip.querySelector('.nb-add-dropdown.open')) return;
+
+    let envs = [];
+    try {
+      const resp = await this._api.listEnvironments(this._wsId);
+      envs = resp.value || resp || [];
+    } catch {
+      this._showToast('Failed to load environments', 'error');
+      return;
+    }
+
+    if (!envs.length) {
+      this._showToast('No environments found in this workspace', 'warning');
+      return;
+    }
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'nb-add-dropdown open';
+    dropdown.style.cssText = 'position:absolute;top:100%;left:0;z-index:var(--z-dropdown)';
+
+    for (const env of envs) {
+      const btn = document.createElement('button');
+      btn.className = 'nb-add-dropdown-option';
+      btn.textContent = env.displayName || env.name || env.id;
+      btn.addEventListener('click', () => {
+        if (!this._notebookMeta.dependencies) this._notebookMeta.dependencies = {};
+        if (!this._notebookMeta.dependencies.environment) this._notebookMeta.dependencies.environment = {};
+        this._notebookMeta.dependencies.environment.environmentId = env.id;
+        this._notebookMeta.dependencies.environment.workspaceId = this._wsId;
+        this._checkDirty();
+        dropdown.remove();
+        this._showToast(`Environment changed to ${env.displayName || env.id}. Save to apply.`, 'info');
+        // Update chip label
+        chip.innerHTML = `<span class="chip-label">Env:</span> ${this._esc(env.displayName || env.id)}`;
+      });
+      dropdown.appendChild(btn);
+    }
+
+    chip.style.position = 'relative';
+    chip.appendChild(dropdown);
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────
+
+  _showToast(message, type = 'info') {
+    // Reuse existing toast or create one
+    let toast = this._container.querySelector('.nb-toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.className = 'nb-toast';
+      toast.style.cssText = `
+        position:fixed;bottom:var(--space-8);right:var(--space-8);
+        padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);
+        font-size:var(--text-sm);font-family:var(--font-body);
+        box-shadow:var(--shadow-md);z-index:9999;
+        transition:opacity var(--transition-normal);
+        max-width:400px;
+      `;
+      document.body.appendChild(toast);
+    }
+
+    const colors = {
+      success: 'background:var(--comp-dag-bg);color:var(--status-succeeded);border:1px solid var(--status-succeeded)',
+      error: 'background:var(--row-error-tint);color:var(--status-failed);border:1px solid var(--status-failed)',
+      warning: 'background:var(--level-warning-tint);color:var(--level-warning);border:1px solid var(--level-warning)',
+      info: 'background:var(--surface);color:var(--text-dim);border:1px solid var(--border-bright)',
+    };
+
+    toast.style.cssText += colors[type] || colors.info;
+    toast.textContent = message;
+    toast.style.opacity = '1';
+
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+
+  _closeAllMenus() {
+    const menus = this._container.querySelectorAll('.nb-cell-menu.open, .nb-add-dropdown.open');
+    for (const m of menus) m.classList.remove('open');
+  }
+
+  _esc(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  _langBadgeClass(language) {
+    const lang = (language || '').toLowerCase();
+    if (lang === 'sparksql' || lang === 'sql') return 'nb-lang-sql';
+    if (lang === 'python' || lang === 'pyspark') return 'nb-lang-python';
+    if (lang === 'markdown') return 'nb-lang-markdown';
+    return 'nb-lang-sql';
+  }
+
+  _langLabel(language) {
+    const lang = (language || '').toLowerCase();
+    if (lang === 'sparksql' || lang === 'sql') return 'SparkSQL';
+    if (lang === 'python' || lang === 'pyspark') return 'PySpark';
+    if (lang === 'markdown') return 'Markdown';
+    return language || 'SQL';
+  }
+
+  /**
+   * Render basic markdown to HTML.
+   * Supports headings, bold, italic, inline code, code blocks, lists,
+   * blockquotes, and paragraphs.
+   * @param {string} text — Raw markdown text.
+   * @returns {string} HTML string.
+   */
+  _renderMarkdown(text) {
+    if (!text) return '<p class="nb-md-empty">Empty markdown cell</p>';
+
+    const lines = text.split('\n');
+    const out = [];
+    let inList = false;
+    let inCodeBlock = false;
+    let codeLines = [];
+
+    for (const line of lines) {
+      // Fenced code blocks
+      if (line.trim().startsWith('```')) {
+        if (inCodeBlock) {
+          out.push(`<pre><code>${this._esc(codeLines.join('\n'))}</code></pre>`);
+          codeLines = [];
+          inCodeBlock = false;
+        } else {
+          if (inList) { out.push('</ul>'); inList = false; }
+          inCodeBlock = true;
+        }
+        continue;
+      }
+      if (inCodeBlock) {
+        codeLines.push(line);
+        continue;
+      }
+
+      // Headings
+      if (line.startsWith('### ')) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<h3>${this._inlineMarkdown(line.slice(4))}</h3>`);
+        continue;
+      }
+      if (line.startsWith('## ')) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<h2>${this._inlineMarkdown(line.slice(3))}</h2>`);
+        continue;
+      }
+      if (line.startsWith('# ')) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<h1>${this._inlineMarkdown(line.slice(2))}</h1>`);
+        continue;
+      }
+
+      // Blockquotes
+      if (line.startsWith('> ')) {
+        if (inList) { out.push('</ul>'); inList = false; }
+        out.push(`<blockquote>${this._inlineMarkdown(line.slice(2))}</blockquote>`);
+        continue;
+      }
+
+      // Unordered list items
+      if (/^[-*] /.test(line.trim())) {
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${this._inlineMarkdown(line.trim().slice(2))}</li>`);
+        continue;
+      }
+
+      // Ordered list items
+      if (/^\d+\.\s/.test(line.trim())) {
+        if (!inList) { out.push('<ol>'); inList = true; }
+        const content = line.trim().replace(/^\d+\.\s/, '');
+        out.push(`<li>${this._inlineMarkdown(content)}</li>`);
+        continue;
+      }
+
+      // Close list if not a list item
+      if (inList) { out.push('</ul>'); inList = false; }
+
+      // Blank lines
+      if (line.trim() === '') continue;
+
+      // Paragraphs
+      out.push(`<p>${this._inlineMarkdown(line)}</p>`);
+    }
+
+    if (inList) out.push('</ul>');
+    if (inCodeBlock) {
+      out.push(`<pre><code>${this._esc(codeLines.join('\n'))}</code></pre>`);
+    }
+
+    return out.join('');
+  }
+
+  /** Inline markdown: bold, italic, code, links */
+  _inlineMarkdown(text) {
+    let s = this._esc(text);
+    // Code spans (must be first to prevent inner replacements)
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Bold
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Italic
+    s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return s;
+  }
+
+  _shimmerHTML() {
+    return `<div class="nb-ide">
+      <div class="nb-toolbar">
+        <div class="nb-shimmer-bar" style="height:20px;width:200px"></div>
+      </div>
+      <div class="nb-shimmer-cells">
+        <div class="nb-shimmer-cell" style="height:120px"></div>
+        <div class="nb-shimmer-cell" style="height:80px"></div>
+        <div class="nb-shimmer-cell" style="height:100px"></div>
+      </div>
+    </div>`;
+  }
+
+  _errorHTML(message) {
+    return `<div class="nb-ide nb-error-state">
+      <div class="nb-error-title">Failed to load notebook</div>
+      <div class="nb-error-message">${this._esc(message)}</div>
+      <button class="nb-action-btn" data-action="retry">Retry</button>
+    </div>`;
+  }
+
+  // ── Add-cell dropdown handler ─────────────────────────────────
+
+  /**
+   * Handles clicks on nb-add-dropdown-option buttons via delegation.
+   * Called from the container click handler.
+   */
+  _handleAddCellOptionClick(target) {
+    const cellType = target.dataset.cellType;
+    if (!cellType) return;
+
+    const dropdown = target.closest('.nb-add-dropdown');
+    const insertIndex = dropdown ? parseInt(dropdown.dataset.index, 10) : this._cells.length;
+
+    this._addCell(insertIndex, cellType);
+    this._closeAllMenus();
   }
 }
 
@@ -10440,6 +13183,13 @@ class WorkspaceExplorer {
 
     /** @type {Intl.NumberFormat} Shared formatter for row counts */
     this._numFmt = new Intl.NumberFormat('en-IN');
+
+    /** @type {Object<string, object[]>} Notebook properties per workspace */
+    this._notebookCache = {};
+    /** @type {Object<string, object[]>} Environment properties per workspace */
+    this._environmentCache = {};
+    /** @type {NotebookView|null} Active notebook IDE instance */
+    this._activeNotebookView = null;
   }
 
   async init() {
@@ -11450,17 +14200,19 @@ class WorkspaceExplorer {
   }
 
   _selectItem(item, workspace) {
+    // Clean up active notebook IDE if navigating away
+    if (this._activeNotebookView) {
+      this._activeNotebookView.destroy();
+      this._activeNotebookView = null;
+      const inspectorPanel = document.getElementById('ws-inspector-panel');
+      if (inspectorPanel) inspectorPanel.style.display = '';
+    }
+
     this._selectedItem = { ...item, workspaceId: workspace.id, workspaceName: workspace.displayName };
     this._selectedWorkspace = workspace;
 
-    const isLH = this._isLakehouse(item);
-    if (isLH) {
-      this._showLakehouseContent(item, workspace);
-      this._clearInspector();
-    } else {
-      this._showItemContent(item, workspace);
-      this._clearInspector();
-    }
+    this._showItemContent(item, workspace);
+    this._clearInspector();
     this._renderTree();
   }
 
@@ -11561,6 +14313,20 @@ class WorkspaceExplorer {
           window.open(`https://app.fabric.microsoft.com/groups/${ws.id}`, '_blank');
         } else if (action === 'clone-env') {
           this._toast('Clone Environment — coming soon');
+        } else if (action === 'open-notebook-ide') {
+          this._openNotebookIDE(this._selectedItem, this._selectedWorkspace);
+        } else if (action === 'rename-item') {
+          const itm = this._selectedItem;
+          if (itm) {
+            this._ctxTarget = { workspace: ws, item: itm, isWorkspace: false, isLakehouse: false };
+            this._ctxRename();
+          }
+        } else if (action === 'delete-item') {
+          const itm = this._selectedItem;
+          if (itm) {
+            this._ctxTarget = { workspace: ws, item: itm, isWorkspace: false, isLakehouse: false };
+            this._ctxDelete();
+          }
         }
       });
     });
@@ -11977,25 +14743,161 @@ class WorkspaceExplorer {
   }
 
   // ────────────────────────────────────────────
-  // Content panel: Non-lakehouse item
+  // Content panel: Type dispatcher
   // ────────────────────────────────────────────
 
   _showItemContent(item, ws) {
     if (!this._contentEl) return;
-    let html = '<div class="ws-content-header">';
-    html += `<div class="ws-content-name">${this._esc(item.displayName)}</div>`;
-    html += '<div class="ws-content-meta">';
-    html += `<span class="ws-type-badge">${this._esc(item.type || 'Item')}</span>`;
-    html += ` <span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(item.id)}">${this._esc(item.id)}</span>`;
-    html += '</div></div>';
+    const type = (item.type || '').toLowerCase();
 
+    if (type === 'lakehouse') {
+      this._showLakehouseContent(item, ws);
+    } else if (type === 'notebook') {
+      this._showNotebookContent(item, ws);
+    } else if (type === 'environment') {
+      this._showEnvironmentContent(item, ws);
+    } else {
+      this._showGenericItemContent(item, ws);
+    }
+  }
+
+  // ──── Type-Specific Content Views ────
+
+  async _showNotebookContent(item, ws) {
+    // Fetch notebook properties (cached per workspace)
+    if (!this._notebookCache[ws.id]) {
+      try {
+        const resp = await this._api.listNotebooks(ws.id);
+        this._notebookCache[ws.id] = resp.value || [];
+      } catch (e) {
+        this._notebookCache[ws.id] = [];
+      }
+    }
+    const nbData = this._notebookCache[ws.id].find(n => n.id === item.id);
+    const props = nbData?.properties || {};
+    const defaultLH = props.defaultLakehouse;
+    const attachedEnv = props.attachedEnvironment;
+
+    let html = this._buildRichHeader(item, ws);
+
+    // Action bar
     html += '<div class="ws-content-actions">';
-    html += `<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>`;
+    html += '<button class="ws-action-btn accent" data-action="open-notebook-ide" title="Open notebook cell editor">&#9654; Open Notebook IDE</button>';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh" title="Open in Fabric portal">Open in Fabric</button>';
+    html += `<button class="ws-action-btn" data-action="rename-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}" title="Rename notebook">Rename</button>`;
+    html += `<button class="ws-action-btn danger" data-action="delete-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}" title="Delete notebook">Delete</button>`;
     html += '</div>';
+
+    // Linked item cards
+    if (defaultLH || attachedEnv) {
+      html += '<div class="ws-linked-cards">';
+      if (defaultLH) {
+        const lhName = this._resolveItemName(ws.id, defaultLH.itemId) || defaultLH.itemId;
+        html += this._buildLinkedCard(lhName, 'Default Lakehouse', 'LH', defaultLH.itemId, 'var(--status-succeeded)');
+      }
+      if (attachedEnv) {
+        const envName = this._resolveItemName(ws.id, attachedEnv.itemId) || attachedEnv.itemId;
+        html += this._buildLinkedCard(envName, 'Attached Environment', 'ENV', attachedEnv.itemId, 'var(--comp-onelake)');
+      }
+      html += '</div>';
+    }
+
+    // Notebook info card
+    html += '<div class="ws-item-info"><div class="ws-item-info-header">Notebook Info</div><div class="ws-item-info-body">';
+    html += this._infoRow('Default Lakehouse', defaultLH ? (this._resolveItemName(ws.id, defaultLH.itemId) || defaultLH.itemId) : '\u2014');
+    html += this._infoRow('Attached Environment', attachedEnv ? (this._resolveItemName(ws.id, attachedEnv.itemId) || attachedEnv.itemId) : '\u2014');
+    html += this._infoRow('Description', item.description || '\u2014');
+    html += '</div></div>';
 
     this._contentEl.innerHTML = html;
     this._bindContentActions(ws);
-    this._clearInspector();
+    this._bindLinkedCardClicks(ws);
+    this._showItemInspector(item, ws, { defaultLH, attachedEnv });
+  }
+
+  async _showEnvironmentContent(item, ws) {
+    if (!this._environmentCache[ws.id]) {
+      try {
+        const resp = await this._api.listEnvironments(ws.id);
+        this._environmentCache[ws.id] = resp.value || [];
+      } catch (e) {
+        this._environmentCache[ws.id] = [];
+      }
+    }
+    const envData = this._environmentCache[ws.id].find(e => e.id === item.id);
+    const props = envData?.properties || {};
+    const publish = props.publishDetails || {};
+    const state = publish.state || 'Unknown';
+
+    let html = this._buildRichHeader(item, ws);
+
+    html += '<div class="ws-content-actions">';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>';
+    html += `<button class="ws-action-btn" data-action="rename-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Rename</button>`;
+    html += `<button class="ws-action-btn danger" data-action="delete-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Delete</button>`;
+    html += '</div>';
+
+    // Publish status card
+    const stateClass = state === 'Success' ? 'success' : state === 'Running' ? 'running' : state === 'Failed' ? 'failed' : '';
+    html += '<div class="ws-env-publish"><div class="ws-env-publish-header">Publish Status</div><div class="ws-env-publish-body">';
+    html += `<div class="ws-status-row"><span class="ws-status-dot ${stateClass}"></span><span class="ws-status-label">State</span><span class="ws-status-value">${this._esc(state)}</span></div>`;
+
+    if (publish.targetVersion) {
+      html += `<div class="ws-status-row"><span class="ws-status-label" style="margin-left:var(--space-4)">Version</span><span class="ws-status-value mono">${this._esc(publish.targetVersion)}</span></div>`;
+    }
+    if (publish.startTime) {
+      const start = new Date(publish.startTime);
+      const end = publish.endTime ? new Date(publish.endTime) : null;
+      const duration = end ? ((end - start) / 1000).toFixed(1) + 's' : 'In progress';
+      html += `<div class="ws-status-row"><span class="ws-status-label" style="margin-left:var(--space-4)">Published</span><span class="ws-status-value">${start.toLocaleString()}</span></div>`;
+      html += `<div class="ws-status-row"><span class="ws-status-label" style="margin-left:var(--space-4)">Duration</span><span class="ws-status-value">${this._esc(duration)}</span></div>`;
+    }
+
+    // Component breakdown
+    const components = publish.componentPublishInfo || {};
+    if (Object.keys(components).length > 0) {
+      html += `<div style="margin-top:var(--space-3);font-size:var(--text-xs);font-weight:600;color:var(--text-muted)">Components</div>`;
+      for (const [name, comp] of Object.entries(components)) {
+        const cState = comp?.state || 'Unknown';
+        const cClass = cState === 'Success' ? 'success' : cState === 'Running' ? 'running' : 'failed';
+        const label = name === 'sparkLibraries' ? 'Spark Libraries' : name === 'sparkSettings' ? 'Spark Settings' : name;
+        html += `<div class="ws-status-row"><span class="ws-status-dot ${cClass}"></span><span class="ws-status-label">${this._esc(label)}</span><span class="ws-status-value">${this._esc(cState)}</span></div>`;
+      }
+    }
+    html += '</div></div>';
+
+    // Environment info
+    html += '<div class="ws-item-info"><div class="ws-item-info-header">Environment Info</div><div class="ws-item-info-body">';
+    html += this._infoRow('Description', item.description || 'Environment');
+    html += this._infoRow('Workspace', ws.name || ws.displayName || ws.id);
+    html += '</div></div>';
+
+    this._contentEl.innerHTML = html;
+    this._bindContentActions(ws);
+    this._showItemInspector(item, ws, { publish });
+  }
+
+  _showGenericItemContent(item, ws) {
+    let html = this._buildRichHeader(item, ws);
+
+    html += '<div class="ws-content-actions">';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>';
+    html += `<button class="ws-action-btn" data-action="rename-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Rename</button>`;
+    html += `<button class="ws-action-btn danger" data-action="delete-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Delete</button>`;
+    html += '</div>';
+
+    html += '<div class="ws-item-info"><div class="ws-item-info-header">Item Info</div><div class="ws-item-info-body">';
+    html += this._infoRow('Type', item.type || 'Unknown');
+    html += this._infoRow('Description', item.description || '\u2014');
+    html += this._infoRow('Workspace', ws.name || ws.displayName || ws.id);
+    html += this._infoRow('ID', item.id);
+    html += '</div></div>';
+
+    html += '<a class="ws-fabric-link" href="#" data-action="open-fabric-lh">More details available in Fabric \u2197</a>';
+
+    this._contentEl.innerHTML = html;
+    this._bindContentActions(ws);
+    this._showItemInspector(item, ws, {});
   }
 
   // ────────────────────────────────────────────
@@ -12406,6 +15308,120 @@ class WorkspaceExplorer {
 
       this._favoritesEl.appendChild(el);
     }
+  }
+
+  // ──── Type-Specific Content Helpers ────
+
+  /** Build a rich content header with name, type badge, full GUID, and description. */
+  _buildRichHeader(item, ws) {
+    const color = this._getItemColor(item.type);
+    const badge = this._getTypeAbbrev(item.type);
+    let html = '<div class="ws-content-header">';
+    html += `<div class="ws-content-name">${this._esc(item.displayName)}</div>`;
+    html += '<div class="ws-content-meta">';
+    html += `<span class="ws-type-badge" style="color:${color}">${badge}</span>`;
+    html += ` <span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(item.id)}">${this._esc(item.id)}</span>`;
+    html += '</div>';
+    if (item.description) {
+      html += `<div style="font-size:var(--text-sm);color:var(--text-dim);margin-top:var(--space-1)">${this._esc(item.description)}</div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /** Build a clickable linked item card. */
+  _buildLinkedCard(name, label, typeBadge, itemId, dotColor) {
+    return `<div class="ws-linked-card" data-navigate-item="${this._esc(itemId)}">
+      <div class="ws-linked-card-header">
+        <span class="ws-linked-card-dot" style="background:${dotColor}"></span>
+        <span class="ws-linked-card-name">${this._esc(name)}</span>
+      </div>
+      <div class="ws-linked-card-label">${this._esc(label)}</div>
+      <div class="ws-linked-card-id">${this._esc(typeBadge)} \u00b7 ${this._esc(String(itemId).substring(0, 8))}\u2026</div>
+    </div>`;
+  }
+
+  /** Build an info row for item info cards. */
+  _infoRow(key, value) {
+    return `<div class="ws-item-info-row"><span class="ws-item-info-key">${this._esc(key)}</span><span class="ws-item-info-val">${this._esc(String(value))}</span></div>`;
+  }
+
+  /** Resolve item name from workspace children cache. */
+  _resolveItemName(wsId, itemId) {
+    const children = this._children[wsId] || [];
+    const found = children.find(c => c.id === itemId);
+    return found ? found.displayName : null;
+  }
+
+  /** Bind click handlers for linked item cards — navigate to that item in the tree. */
+  _bindLinkedCardClicks(ws) {
+    if (!this._contentEl) return;
+    this._contentEl.querySelectorAll('[data-navigate-item]').forEach(card => {
+      card.addEventListener('click', () => {
+        const targetId = card.dataset.navigateItem;
+        const children = this._children[ws.id] || [];
+        const target = children.find(c => c.id === targetId);
+        if (target) {
+          this._selectItem(target, ws);
+          // Highlight in tree
+          if (this._treeEl) {
+            this._treeEl.querySelectorAll('.ws-tree-item.selected').forEach(el => el.classList.remove('selected'));
+            const treeItem = this._treeEl.querySelector(`[data-item-id="${targetId}"]`);
+            if (treeItem) {
+              treeItem.classList.add('selected');
+              treeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+          }
+        }
+      });
+    });
+  }
+
+  /** Populate inspector panel for any item type. */
+  _showItemInspector(item, ws, extra) {
+    if (!this._inspectorEl) return;
+    let html = '<div class="ws-insp-section"><div class="ws-insp-title">Item Info</div>';
+    html += '<dl class="ws-insp-kv">';
+    html += `<dt>Name</dt><dd>${this._esc(item.displayName)}</dd>`;
+    html += `<dt>Type</dt><dd>${this._esc(item.type || 'Unknown')}</dd>`;
+    html += `<dt>ID</dt><dd style="font-family:var(--font-mono);font-size:10px;word-break:break-all">${this._esc(item.id)}</dd>`;
+    html += `<dt>Workspace</dt><dd>${this._esc(ws.name || ws.displayName || ws.id)}</dd>`;
+    if (item.description) {
+      html += `<dt>Description</dt><dd>${this._esc(item.description)}</dd>`;
+    }
+    if (extra.defaultLH) {
+      const lhName = this._resolveItemName(ws.id, extra.defaultLH.itemId) || extra.defaultLH.itemId;
+      html += `<dt>Default LH</dt><dd>${this._esc(lhName)}</dd>`;
+    }
+    if (extra.attachedEnv) {
+      const envName = this._resolveItemName(ws.id, extra.attachedEnv.itemId) || extra.attachedEnv.itemId;
+      html += `<dt>Environment</dt><dd>${this._esc(envName)}</dd>`;
+    }
+    if (extra.publish) {
+      html += `<dt>Publish State</dt><dd>${this._esc(extra.publish.state || 'Unknown')}</dd>`;
+    }
+    html += '</dl></div>';
+    this._inspectorEl.innerHTML = html;
+  }
+
+  /** Open the full notebook IDE, replacing content+inspector panels. */
+  async _openNotebookIDE(item, ws) {
+    if (!this._contentEl || !item) return;
+
+    if (typeof NotebookView === 'undefined') {
+      this._toast('Notebook IDE not yet available', 'info');
+      return;
+    }
+
+    // Hide inspector panel to give notebook full width
+    const inspectorPanel = document.getElementById('ws-inspector-panel');
+    if (inspectorPanel) inspectorPanel.style.display = 'none';
+
+    // Create and load notebook view
+    this._activeNotebookView = new NotebookView(
+      this._contentEl, this._api, ws.id, item
+    );
+    await this._activeNotebookView.load();
   }
 
   // ────────────────────────────────────────────

@@ -1,0 +1,2105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Notebook Mini IDE Design Reference</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   EDOG Design Tokens
+   ═══════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #f4f5f7; --surface: #fff; --surface-2: #f8f9fb; --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06); --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23; --text-dim: #5a6070; --text-muted: #8e95a5;
+  --accent: #6d5cff; --accent-dim: rgba(109,92,255,0.07); --accent-glow: rgba(109,92,255,0.15);
+  --green: #18a058; --amber: #e5940c; --red: #e5453b; --blue: #2d7ff9; --purple: #a855f7; --teal: #0d9488;
+  --font: 'Inter', -apple-system, system-ui, sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+  --bg: #0f1117; --surface: #161923; --surface-2: #1e2230; --surface-3: #252a38;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --text: #e8eaf0; --text-dim: #9aa0b2; --text-muted: #5f6578;
+  --accent: #8577ff; --accent-dim: rgba(133,119,255,0.10); --accent-glow: rgba(133,119,255,0.20);
+  --green: #34d399; --amber: #f0b429; --red: #ff6b6b; --blue: #5b9bff; --purple: #a78bfa; --teal: #2dd4bf;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Reset & Base
+   ═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Page Layout
+   ═══════════════════════════════════════════════════════════════ */
+.page-header {
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+
+.page-header .subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: var(--space-2);
+}
+
+.page-header .meta {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.theme-toggle {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* TOC */
+.toc {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-8) var(--space-6);
+}
+
+.toc-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-3);
+}
+
+.toc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-2);
+  list-style: none;
+}
+
+.toc-list a {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-radius: var(--r4);
+  transition: all var(--transition);
+}
+
+.toc-list a:hover { color: var(--accent); background: var(--accent-dim); }
+.toc-list a .toc-num { color: var(--text-muted); font-weight: 600; margin-right: var(--space-2); font-family: var(--mono); font-size: 11px; }
+
+/* Sections */
+.design-section {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-8);
+  border-top: 1px solid var(--border);
+}
+
+.section-header {
+  margin-bottom: var(--space-6);
+}
+
+.section-header h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.section-num {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--r4);
+}
+
+.section-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: var(--space-2);
+  max-width: 700px;
+}
+
+.usage-notes {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+
+.usage-notes strong { color: var(--text); font-weight: 600; }
+
+.demo-area {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+}
+
+.demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-3);
+}
+
+/* State row for showing variants */
+.state-row {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.state-col {
+  flex: 1;
+  min-width: 300px;
+}
+
+.state-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-2);
+  padding-left: var(--space-1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Notebook Cell Component (base from design bible §20b, extended)
+   ═══════════════════════════════════════════════════════════════ */
+.nb-cell {
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+  transition: all var(--transition);
+}
+.nb-cell:hover { border-color: var(--border-bright); }
+.nb-cell + .nb-cell { margin-top: 8px; }
+
+.nb-cell-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.nb-cell-num { font-family: var(--mono); color: var(--text-muted); font-size: 11px; min-width: 32px; }
+.nb-cell-lang {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--r4);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.nb-cell-lang.sql { color: var(--amber); background: rgba(229,148,12,0.10); }
+.nb-cell-lang.python { color: var(--green); background: rgba(24,160,88,0.10); }
+.nb-cell-lang.markdown { color: var(--blue); background: rgba(45,127,249,0.10); }
+
+.nb-cell-status { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.nb-cell-time { font-family: var(--mono); font-size: 10px; color: var(--text-muted); }
+
+.nb-code {
+  padding: 12px 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--surface);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.nb-output {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: var(--surface-2);
+}
+
+.nb-run-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 80ms ease-out;
+  font-size: 11px;
+}
+.nb-run-btn:hover { background: var(--surface-3); color: var(--green); }
+
+/* ── Extended cell states ── */
+.nb-cell.selected { border-color: var(--accent); border-left: 3px solid var(--accent); box-shadow: var(--shadow-sm); }
+.nb-cell.editing { border-color: var(--accent); border-left: 3px solid var(--accent); }
+.nb-cell.running { border-color: var(--amber); }
+.nb-cell.success { }
+.nb-cell.error { }
+
+.nb-cell.running .nb-cell-header { background: rgba(229,148,12,0.05); }
+
+/* Status dots */
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.status-dot.green { background: var(--green); }
+.status-dot.amber { background: var(--amber); }
+.status-dot.red { background: var(--red); }
+.status-dot.muted { background: var(--text-muted); }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-bright);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Stop button */
+.nb-stop-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  color: var(--red);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 80ms ease-out;
+  font-size: 9px;
+}
+.nb-stop-btn:hover { background: rgba(229,69,59,0.08); }
+
+/* Error output */
+.nb-output.error-output {
+  background: rgba(229,69,59,0.04);
+  color: var(--red);
+  border-top-color: rgba(229,69,59,0.15);
+}
+
+[data-theme="dark"] .nb-output.error-output {
+  background: rgba(255,107,107,0.06);
+}
+
+.error-type { color: var(--red); font-weight: 600; }
+.error-msg { color: var(--text); }
+.error-trace { color: var(--text-muted); }
+
+/* Code syntax coloring (minimal) */
+.kw { color: var(--accent); }
+.str { color: var(--green); }
+.num { color: var(--amber); }
+.fn { color: var(--blue); }
+.cm { color: var(--text-muted); font-style: italic; }
+.op { color: var(--text-dim); }
+
+/* Table output */
+.nb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.nb-table th {
+  text-align: left;
+  padding: 6px 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border-bright);
+  font-size: 11px;
+}
+
+.nb-table td {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.nb-table tr:nth-child(even) td { background: var(--surface-2); }
+.nb-table tr:hover td { background: var(--accent-dim); }
+
+/* Magic label */
+.magic-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  padding: 1px 6px;
+  border-radius: var(--r4);
+  margin-bottom: 4px;
+}
+
+/* Markdown rendered */
+.nb-markdown-rendered {
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.nb-markdown-rendered h3 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.nb-markdown-rendered p { margin-top: 4px; color: var(--text-dim); }
+.nb-markdown-rendered code { font-family: var(--mono); font-size: 12px; background: var(--surface-3); padding: 1px 4px; border-radius: 3px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Full-page layout mockup
+   ═══════════════════════════════════════════════════════════════ */
+.layout-mockup {
+  display: flex;
+  height: 520px;
+  background: var(--bg);
+  border-radius: var(--r6);
+  overflow: hidden;
+}
+
+.layout-sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.layout-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Sidebar tree */
+.sidebar-header {
+  padding: var(--space-3) var(--space-4);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition);
+  border-left: 2px solid transparent;
+}
+.tree-item:hover { background: var(--surface-2); color: var(--text); }
+.tree-item.active { background: var(--accent-dim); color: var(--accent); border-left-color: var(--accent); font-weight: 600; }
+.tree-item .tree-icon { font-size: 11px; color: var(--text-muted); width: 16px; text-align: center; flex-shrink: 0; }
+.tree-item.active .tree-icon { color: var(--accent); }
+.tree-item.indent-1 { padding-left: 28px; }
+.tree-item.indent-2 { padding-left: 44px; }
+
+.tree-type-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tree-type-badge.nb { color: var(--accent); background: var(--accent-dim); }
+.tree-type-badge.lh { color: var(--green); background: rgba(24,160,88,0.08); }
+.tree-type-badge.env { color: var(--amber); background: rgba(229,148,12,0.08); }
+.tree-type-badge.sql { color: var(--blue); background: rgba(45,127,249,0.08); }
+
+/* Notebook toolbar */
+.nb-toolbar {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.nb-toolbar-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nb-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: text;
+  padding: 2px 4px;
+  border-radius: var(--r4);
+  border: 1px solid transparent;
+  transition: all var(--transition);
+}
+
+.nb-title:hover { border-color: var(--border-bright); }
+
+.dirty-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+  transition: opacity var(--transition);
+}
+
+.dirty-dot.hidden { opacity: 0; }
+
+.type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--r4);
+  color: var(--accent);
+  background: var(--accent-dim);
+  letter-spacing: 0.3px;
+}
+
+.nb-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.nb-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+
+.nb-action-btn:hover { border-color: var(--border-bright); color: var(--text); background: var(--surface-2); }
+.nb-action-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.nb-action-btn.primary:hover { opacity: 0.9; }
+.nb-action-btn .btn-icon { font-size: 11px; }
+
+/* Save states */
+.nb-action-btn.saving { color: var(--text-muted); pointer-events: none; }
+.nb-action-btn.saved { color: var(--green); border-color: var(--green); }
+
+/* Toolbar context row */
+.nb-context {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.context-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.context-chip:hover { border-color: var(--border-bright); color: var(--text); background: var(--surface-3); }
+.context-chip .chip-label { color: var(--text-muted); }
+.context-sep { color: var(--text-muted); font-size: 10px; }
+
+/* Notebook content scroll area */
+.nb-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  background: var(--bg);
+}
+
+/* Between-cell add button */
+.add-cell-gap {
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.add-cell-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r4);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  opacity: 0;
+  font-family: var(--font);
+}
+
+.add-cell-gap:hover .add-cell-btn { opacity: 1; }
+.add-cell-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* Add cell dropdown */
+.add-cell-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  display: none;
+  min-width: 160px;
+}
+
+.add-cell-dropdown.open { display: block; }
+
+.add-cell-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  color: var(--text-dim);
+  border-radius: var(--r4);
+  cursor: pointer;
+  transition: all var(--transition);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+}
+
+.add-cell-option:hover { background: var(--accent-dim); color: var(--accent); }
+
+/* More menu */
+.more-menu {
+  position: relative;
+}
+
+.more-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 80ms ease-out;
+}
+
+.more-btn:hover { background: var(--surface-3); color: var(--text); }
+
+.more-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 10;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  display: none;
+  min-width: 180px;
+}
+
+.more-dropdown.open { display: block; }
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  color: var(--text-dim);
+  border-radius: var(--r4);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.menu-item:hover { background: var(--accent-dim); color: var(--accent); }
+.menu-item.danger:hover { background: rgba(229,69,59,0.06); color: var(--red); }
+.menu-item .menu-key { margin-left: auto; font-size: 10px; font-family: var(--mono); color: var(--text-muted); }
+.menu-sep { height: 1px; background: var(--border); margin: var(--space-1) 0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Run Status Bar
+   ═══════════════════════════════════════════════════════════════ */
+.run-status-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.run-status-bar .status-text { display: flex; align-items: center; gap: var(--space-2); }
+
+@keyframes pulse-bg {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.pulse { animation: pulse-bg 1.5s ease-in-out infinite; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Environment Dropdown
+   ═══════════════════════════════════════════════════════════════ */
+.env-dropdown-wrap { position: relative; display: inline-block; }
+
+.env-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  min-width: 240px;
+  display: none;
+}
+
+.env-dropdown.open { display: block; }
+
+.env-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  font-size: 12px;
+  color: var(--text-dim);
+  border-radius: var(--r4);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.env-option:hover { background: var(--accent-dim); color: var(--text); }
+.env-option.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.env-option .env-check { width: 16px; font-size: 12px; color: var(--accent); }
+.env-option .env-name { font-weight: 500; }
+.env-option .env-status { margin-left: auto; font-size: 11px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Info Cards (for Environment, Generic Items, Linked Items)
+   ═══════════════════════════════════════════════════════════════ */
+.info-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+}
+
+.info-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+
+.info-card-header h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.info-card-body {
+  padding: var(--space-4);
+}
+
+.info-row {
+  display: flex;
+  align-items: baseline;
+  padding: var(--space-1) 0;
+  font-size: 12px;
+}
+
+.info-label {
+  width: 140px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.info-value {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.info-value.copyable {
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: all var(--transition);
+}
+.info-value.copyable:hover { background: var(--accent-dim); color: var(--accent); }
+
+.fabric-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all var(--transition);
+}
+.fabric-link:hover { text-decoration: underline; }
+
+/* Linked item card */
+.linked-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.linked-card:hover { border-color: var(--border-bright); box-shadow: var(--shadow-sm); }
+
+.linked-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.linked-card-icon.lh { background: rgba(24,160,88,0.08); color: var(--green); }
+.linked-card-icon.env { background: rgba(229,148,12,0.08); color: var(--amber); }
+
+.linked-card-info { flex: 1; min-width: 0; }
+.linked-card-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.linked-card-meta { font-size: 11px; color: var(--text-muted); }
+.linked-card-arrow { color: var(--text-muted); font-size: 12px; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Keyboard Shortcuts
+   ═══════════════════════════════════════════════════════════════ */
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-2);
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r4);
+}
+
+.shortcut-row:hover { background: var(--surface-2); }
+
+.shortcut-key {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface-3);
+  padding: 2px 8px;
+  border-radius: var(--r4);
+  border: 1px solid var(--border);
+  min-width: 100px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.shortcut-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Show more / Show less toggle
+   ═══════════════════════════════════════════════════════════════ */
+.show-more-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--surface-2);
+}
+.show-more-toggle:hover { color: var(--accent); background: var(--accent-dim); }
+
+/* Discard confirmation inline */
+.discard-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: var(--space-3);
+}
+
+.discard-confirm button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r4);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all var(--transition);
+}
+
+.discard-confirm button:hover { border-color: var(--border-bright); color: var(--text); }
+.discard-confirm button.danger { color: var(--red); border-color: var(--red); }
+.discard-confirm button.danger:hover { background: rgba(229,69,59,0.06); }
+
+/* Drag handle */
+.drag-handle {
+  width: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  cursor: grab;
+  padding: 4px 0;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.nb-cell:hover .drag-handle { opacity: 0.5; }
+.drag-handle:hover { opacity: 1 !important; }
+
+.drag-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+/* Publish status card */
+.publish-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  padding: var(--space-3) var(--space-4);
+}
+
+.publish-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: 12px;
+}
+
+.publish-component { color: var(--text-dim); min-width: 120px; }
+.publish-status { font-weight: 600; }
+.publish-status.success { color: var(--green); }
+.publish-status.pending { color: var(--amber); }
+.publish-status.failed { color: var(--red); }
+
+/* Toolbar state variants */
+.toolbar-states {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.toolbar-state-demo {
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Markdown cell toggle
+   ═══════════════════════════════════════════════════════════════ */
+.md-toggle-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.md-toggle-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  border-bottom: 2px solid transparent;
+  font-family: var(--font);
+}
+
+.md-toggle-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.md-toggle-btn:hover { color: var(--text-dim); }
+
+</style>
+</head>
+<body>
+
+<!-- Theme Toggle -->
+<button class="theme-toggle" onclick="toggleTheme()" id="themeToggle">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  Theme
+</button>
+
+<!-- Page Header -->
+<div class="page-header">
+  <h1>EDOG Playground — Notebook Mini IDE</h1>
+  <div class="subtitle">Design reference for the in-studio notebook editing experience. Every state, component, and interaction pattern documented with live demos.</div>
+  <div class="meta">
+    <span>Version 1.0</span>
+    <span>·</span>
+    <span>2026-04-15</span>
+    <span>·</span>
+    <span>Kael Andersen (UX), Mika Tanaka (CSS), Zara Okonkwo (JS)</span>
+  </div>
+</div>
+
+<!-- Table of Contents -->
+<nav class="toc">
+  <div class="toc-title">Contents</div>
+  <ul class="toc-list">
+    <li><a href="#s1"><span class="toc-num">01</span> Full-Page Layout</a></li>
+    <li><a href="#s2"><span class="toc-num">02</span> Notebook Toolbar</a></li>
+    <li><a href="#s3"><span class="toc-num">03</span> Code Cells — All States</a></li>
+    <li><a href="#s4"><span class="toc-num">04</span> Cell Output Variants</a></li>
+    <li><a href="#s5"><span class="toc-num">05</span> Between-Cell Actions</a></li>
+    <li><a href="#s6"><span class="toc-num">06</span> Run Status Bar</a></li>
+    <li><a href="#s7"><span class="toc-num">07</span> Environment Chip &amp; Switcher</a></li>
+    <li><a href="#s8"><span class="toc-num">08</span> Save / Load Flow States</a></li>
+    <li><a href="#s9"><span class="toc-num">09</span> Environment Content View</a></li>
+    <li><a href="#s10"><span class="toc-num">10</span> Generic Item Views</a></li>
+    <li><a href="#s11"><span class="toc-num">11</span> Linked Item Cards</a></li>
+    <li><a href="#s12"><span class="toc-num">12</span> Keyboard Shortcuts</a></li>
+  </ul>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 1: Full-Page Layout
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s1">
+  <div class="section-header">
+    <h2><span class="section-num">01</span> Full-Page Notebook IDE Layout</h2>
+    <div class="section-desc">When a Notebook is selected in the workspace tree, the center and right panels are replaced by the notebook editor. The sidebar stays visible with the active item highlighted.</div>
+  </div>
+  <div class="demo-area">
+    <div class="layout-mockup">
+      <!-- Sidebar -->
+      <div class="layout-sidebar">
+        <div class="sidebar-header">Workspace Explorer</div>
+        <div class="tree-item"><span class="tree-icon">▸</span> TestWorkspace</div>
+        <div class="tree-item indent-1"><span class="tree-icon">▾</span> TestLH <span class="tree-type-badge lh">LH</span></div>
+        <div class="tree-item indent-2"><span class="tree-icon">▸</span> Tables</div>
+        <div class="tree-item indent-2 active"><span class="tree-icon">◆</span> AnalysisNotebook <span class="tree-type-badge nb">NB</span></div>
+        <div class="tree-item indent-2"><span class="tree-icon">◆</span> ETL_Pipeline <span class="tree-type-badge nb">NB</span></div>
+        <div class="tree-item indent-1"><span class="tree-icon">▸</span> testenv <span class="tree-type-badge env">ENV</span></div>
+        <div class="tree-item indent-1"><span class="tree-icon">▸</span> SalesEndpoint <span class="tree-type-badge sql">SQL</span></div>
+      </div>
+      <!-- Main: Notebook IDE -->
+      <div class="layout-main">
+        <!-- Toolbar -->
+        <div class="nb-toolbar">
+          <div class="nb-toolbar-top">
+            <span class="nb-title">AnalysisNotebook</span>
+            <span class="dirty-dot hidden" id="layoutDirtyDot"></span>
+            <span class="type-badge">NB</span>
+            <div class="nb-actions">
+              <button class="nb-action-btn primary"><span class="btn-icon">▶</span> Run All</button>
+              <button class="nb-action-btn"><span class="btn-icon">+</span> Cell</button>
+              <button class="nb-action-btn"><span class="btn-icon">⟲</span> Refresh</button>
+              <button class="nb-action-btn" id="layoutSaveBtn" onclick="animateSave(this)">Save</button>
+            </div>
+          </div>
+          <div class="nb-context">
+            <span class="context-chip"><span class="chip-label">Default LH:</span> TestLH</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Env:</span> testenv</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Kernel:</span> synapse_pyspark</span>
+          </div>
+        </div>
+        <!-- Cells -->
+        <div class="nb-content">
+          <div class="nb-cell selected" onclick="selectCell(this)">
+            <div class="nb-cell-header">
+              <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+              <span class="nb-cell-num">[1]</span>
+              <button class="nb-run-btn" title="Run cell">▶</button>
+              <span class="nb-cell-lang sql">SQL</span>
+              <div class="nb-cell-status">
+                <span class="status-dot green"></span>
+                <span class="nb-cell-time">0.42s</span>
+              </div>
+            </div>
+            <div class="nb-code"><span class="kw">SELECT</span> TableName, RowCount, LastModified
+<span class="kw">FROM</span> sys.tables
+<span class="kw">WHERE</span> RowCount <span class="op">&gt;</span> <span class="num">1000</span>
+<span class="kw">ORDER BY</span> LastModified <span class="kw">DESC</span></div>
+            <div class="nb-output">
+              <table class="nb-table">
+                <thead><tr><th>TableName</th><th>RowCount</th><th>LastModified</th></tr></thead>
+                <tbody>
+                  <tr><td>SalesTransactions</td><td>1,240,891</td><td>2026-04-15 08:32</td></tr>
+                  <tr><td>CustomerDim</td><td>45,230</td><td>2026-04-14 22:10</td></tr>
+                  <tr><td>ProductCatalog</td><td>8,412</td><td>2026-04-14 17:45</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="add-cell-gap"><button class="add-cell-btn">+ Add Cell</button></div>
+          <div class="nb-cell" onclick="selectCell(this)">
+            <div class="nb-cell-header">
+              <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+              <span class="nb-cell-num">[2]</span>
+              <button class="nb-run-btn" title="Run cell">▶</button>
+              <span class="nb-cell-lang python">PY</span>
+              <div class="nb-cell-status"></div>
+            </div>
+            <div class="nb-code"><span class="magic-label">%%pyspark</span>
+df = spark.sql(<span class="str">"SELECT * FROM SalesTransactions LIMIT 100"</span>)
+df.groupBy(<span class="str">"Region"</span>).agg(
+    F.sum(<span class="str">"Amount"</span>).alias(<span class="str">"TotalAmount"</span>),
+    F.count(<span class="str">"*"</span>).alias(<span class="str">"TxCount"</span>)
+).show()</div>
+          </div>
+        </div>
+        <!-- Status bar -->
+        <div class="run-status-bar">
+          <span class="status-text"><span class="status-dot green"></span> Last run: 12.4s · 2 cells · 2026-04-15 09:42</span>
+          <div style="margin-left:auto;">
+            <button class="nb-action-btn primary" style="padding:2px 10px;font-size:11px;">▶ Run All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="usage-notes">
+    <strong>Layout rule:</strong> Notebook IDE takes over the content + inspector panels. Sidebar stays unchanged. Back navigation via tree deselection or breadcrumb.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 2: Notebook Toolbar
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s2">
+  <div class="section-header">
+    <h2><span class="section-num">02</span> Notebook Toolbar</h2>
+    <div class="section-desc">Three toolbar states: Clean (unmodified), Dirty (has changes), and Saving (in progress). The context row shows default lakehouse, environment, and kernel — all clickable.</div>
+  </div>
+
+  <div class="toolbar-states">
+    <!-- Clean -->
+    <div>
+      <div class="state-label">Clean</div>
+      <div class="toolbar-state-demo">
+        <div class="nb-toolbar">
+          <div class="nb-toolbar-top">
+            <span class="nb-title">AnalysisNotebook</span>
+            <span class="dirty-dot hidden"></span>
+            <span class="type-badge">NB</span>
+            <div class="nb-actions">
+              <button class="nb-action-btn primary"><span class="btn-icon">▶</span> Run All</button>
+              <button class="nb-action-btn"><span class="btn-icon">+</span> Cell</button>
+              <button class="nb-action-btn"><span class="btn-icon">⟲</span> Refresh</button>
+              <button class="nb-action-btn">Save</button>
+            </div>
+          </div>
+          <div class="nb-context">
+            <span class="context-chip"><span class="chip-label">Default LH:</span> TestLH</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Env:</span> testenv</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Kernel:</span> synapse_pyspark</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Dirty -->
+    <div>
+      <div class="state-label">Dirty (modified)</div>
+      <div class="toolbar-state-demo">
+        <div class="nb-toolbar">
+          <div class="nb-toolbar-top">
+            <span class="nb-title">AnalysisNotebook</span>
+            <span class="dirty-dot"></span>
+            <span class="type-badge">NB</span>
+            <div class="nb-actions">
+              <button class="nb-action-btn primary"><span class="btn-icon">▶</span> Run All</button>
+              <button class="nb-action-btn"><span class="btn-icon">+</span> Cell</button>
+              <button class="nb-action-btn"><span class="btn-icon">⟲</span> Refresh</button>
+              <button class="nb-action-btn" onclick="animateSave(this)">Save</button>
+            </div>
+          </div>
+          <div class="nb-context">
+            <span class="context-chip"><span class="chip-label">Default LH:</span> TestLH</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Env:</span> testenv</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Kernel:</span> synapse_pyspark</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Saving -->
+    <div>
+      <div class="state-label">Saving (click Save above to see animation)</div>
+      <div class="toolbar-state-demo">
+        <div class="nb-toolbar">
+          <div class="nb-toolbar-top">
+            <span class="nb-title">AnalysisNotebook</span>
+            <span class="dirty-dot" style="opacity:0.4"></span>
+            <span class="type-badge">NB</span>
+            <div class="nb-actions">
+              <button class="nb-action-btn primary"><span class="btn-icon">▶</span> Run All</button>
+              <button class="nb-action-btn"><span class="btn-icon">+</span> Cell</button>
+              <button class="nb-action-btn"><span class="btn-icon">⟲</span> Refresh</button>
+              <button class="nb-action-btn saving"><span class="spinner" style="width:10px;height:10px;border-width:1.5px;border-top-color:var(--accent);"></span> Saving...</button>
+            </div>
+          </div>
+          <div class="nb-context">
+            <span class="context-chip"><span class="chip-label">Default LH:</span> TestLH</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Env:</span> testenv</span>
+            <span class="context-sep">·</span>
+            <span class="context-chip"><span class="chip-label">Kernel:</span> synapse_pyspark</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 3: Code Cells — All States
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s3">
+  <div class="section-header">
+    <h2><span class="section-num">03</span> Code Cells — All States</h2>
+    <div class="section-desc">Every cell state a user can encounter. Click cells to see the selected state. Click Run to see the running → completed animation.</div>
+  </div>
+
+  <!-- Idle -->
+  <div style="margin-bottom:var(--space-4);">
+    <div class="state-label">Idle</div>
+    <div class="demo-area" style="padding:var(--space-4);">
+      <div class="nb-cell" onclick="selectCell(this)">
+        <div class="nb-cell-header">
+          <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+          <span class="nb-cell-num">[1]</span>
+          <button class="nb-run-btn" onclick="event.stopPropagation(); runCell(this)" title="Run cell">▶</button>
+          <span class="nb-cell-lang sql">SQL</span>
+          <div class="nb-cell-status"></div>
+          <div class="more-menu">
+            <button class="more-btn" onclick="event.stopPropagation(); toggleMenu(this)">⋯</button>
+            <div class="more-dropdown">
+              <div class="menu-item">Copy <span class="menu-key">Ctrl+C</span></div>
+              <div class="menu-item">Move Up <span class="menu-key">Ctrl+↑</span></div>
+              <div class="menu-item">Move Down <span class="menu-key">Ctrl+↓</span></div>
+              <div class="menu-sep"></div>
+              <div class="menu-item">Change Language</div>
+              <div class="menu-sep"></div>
+              <div class="menu-item danger">Delete <span class="menu-key">Ctrl+Del</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="nb-code"><span class="kw">SELECT</span> <span class="fn">COUNT</span>(<span class="op">*</span>) <span class="kw">AS</span> total_rows
+<span class="kw">FROM</span> SalesTransactions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selected / Focused -->
+  <div style="margin-bottom:var(--space-4);">
+    <div class="state-label">Selected / Focused</div>
+    <div class="demo-area" style="padding:var(--space-4);">
+      <div class="nb-cell selected">
+        <div class="nb-cell-header">
+          <div class="drag-handle" style="opacity:0.5;"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+          <span class="nb-cell-num">[2]</span>
+          <button class="nb-run-btn" title="Run cell">▶</button>
+          <span class="nb-cell-lang python">PY</span>
+          <div class="nb-cell-status"></div>
+          <div class="more-menu"><button class="more-btn">⋯</button></div>
+        </div>
+        <div class="nb-code"><span class="magic-label">%%pyspark</span>
+df = spark.sql(<span class="str">"SELECT Region, SUM(Amount) FROM Sales GROUP BY Region"</span>)
+display(df)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Running -->
+  <div style="margin-bottom:var(--space-4);">
+    <div class="state-label">Running</div>
+    <div class="demo-area" style="padding:var(--space-4);">
+      <div class="nb-cell running">
+        <div class="nb-cell-header">
+          <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+          <span class="nb-cell-num">[3]</span>
+          <button class="nb-stop-btn" title="Stop execution">■</button>
+          <span class="nb-cell-lang sql">SQL</span>
+          <div class="nb-cell-status">
+            <span class="spinner"></span>
+            <span style="font-size:11px;color:var(--amber);" class="pulse">Running...</span>
+          </div>
+        </div>
+        <div class="nb-code"><span class="kw">SELECT</span> t.TableName, <span class="fn">COUNT</span>(p.PartitionId) <span class="kw">AS</span> parts
+<span class="kw">FROM</span> sys.tables t
+<span class="kw">JOIN</span> sys.partitions p <span class="kw">ON</span> t.ObjectId <span class="op">=</span> p.ObjectId
+<span class="kw">GROUP BY</span> t.TableName</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Completed (Success) -->
+  <div style="margin-bottom:var(--space-4);">
+    <div class="state-label">Completed — Success</div>
+    <div class="demo-area" style="padding:var(--space-4);">
+      <div class="nb-cell success">
+        <div class="nb-cell-header">
+          <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+          <span class="nb-cell-num">[1]</span>
+          <button class="nb-run-btn" onclick="event.stopPropagation(); runCell(this)" title="Run cell">▶</button>
+          <span class="nb-cell-lang sql">SQL</span>
+          <div class="nb-cell-status">
+            <span class="status-dot green"></span>
+            <span class="nb-cell-time">0.42s</span>
+          </div>
+        </div>
+        <div class="nb-code"><span class="kw">SELECT</span> TableName, RowCount <span class="kw">FROM</span> sys.tables <span class="kw">LIMIT</span> <span class="num">5</span></div>
+        <div class="nb-output">
+          <table class="nb-table">
+            <thead><tr><th>TableName</th><th>RowCount</th></tr></thead>
+            <tbody>
+              <tr><td>SalesTransactions</td><td>1,240,891</td></tr>
+              <tr><td>CustomerDim</td><td>45,230</td></tr>
+              <tr><td>ProductCatalog</td><td>8,412</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Completed (Error) -->
+  <div style="margin-bottom:var(--space-4);">
+    <div class="state-label">Completed — Error</div>
+    <div class="demo-area" style="padding:var(--space-4);">
+      <div class="nb-cell error">
+        <div class="nb-cell-header">
+          <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+          <span class="nb-cell-num">[4]</span>
+          <button class="nb-run-btn" title="Run cell">▶</button>
+          <span class="nb-cell-lang python">PY</span>
+          <div class="nb-cell-status">
+            <span class="status-dot red"></span>
+            <span class="nb-cell-time">1.87s</span>
+          </div>
+        </div>
+        <div class="nb-code"><span class="magic-label">%%pyspark</span>
+df = spark.sql(<span class="str">"SELECT * FROM nonexistent_table"</span>)
+display(df)</div>
+        <div class="nb-output error-output"><span class="error-type">AnalysisException:</span> <span class="error-msg">Table or view not found: nonexistent_table</span>
+<span class="error-trace">  at org.apache.spark.sql.catalyst.analysis.package$AnalysisErrorAt
+  at org.apache.spark.sql.catalyst.analysis.Analyzer$ResolveRelations
+  ... 42 more</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Markdown cell -->
+  <div style="margin-bottom:var(--space-4);">
+    <div class="state-label">Markdown Cell — Rendered &amp; Edit views (click Edit / Preview)</div>
+    <div class="demo-area" style="padding:var(--space-4);">
+      <div class="nb-cell" id="mdCell">
+        <div class="nb-cell-header">
+          <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+          <span class="nb-cell-num">[5]</span>
+          <span class="nb-cell-lang markdown">MD</span>
+          <div class="nb-cell-status"></div>
+        </div>
+        <div class="md-toggle-bar">
+          <button class="md-toggle-btn active" onclick="showMdView('preview', this)">Preview</button>
+          <button class="md-toggle-btn" onclick="showMdView('edit', this)">Edit</button>
+        </div>
+        <div class="nb-markdown-rendered" id="mdPreview">
+          <h3>Data Quality Analysis</h3>
+          <p>This notebook validates the <code>SalesTransactions</code> table after the nightly ETL run. Key checks include row count delta, null percentages, and schema drift.</p>
+        </div>
+        <div class="nb-code" id="mdEdit" style="display:none;">### Data Quality Analysis
+
+This notebook validates the `SalesTransactions` table after the nightly ETL run. Key checks include row count delta, null percentages, and schema drift.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 4: Cell Output Variants
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s4">
+  <div class="section-header">
+    <h2><span class="section-num">04</span> Cell Output Variants</h2>
+    <div class="section-desc">Five output presentations: table data, plain text, error trace, empty prompt, and truncated large output.</div>
+  </div>
+
+  <div class="state-row">
+    <!-- Table output -->
+    <div class="state-col" style="min-width:340px;">
+      <div class="state-label">Table Output</div>
+      <div class="demo-area">
+        <div class="nb-output" style="padding:0;">
+          <table class="nb-table">
+            <thead><tr><th>Region</th><th>TotalAmount</th><th>TxCount</th></tr></thead>
+            <tbody>
+              <tr><td>North</td><td>$2,341,200</td><td>12,401</td></tr>
+              <tr><td>South</td><td>$1,890,500</td><td>9,823</td></tr>
+              <tr><td>East</td><td>$3,102,800</td><td>15,672</td></tr>
+              <tr><td>West</td><td>$2,756,100</td><td>13,905</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- Text output -->
+    <div class="state-col" style="min-width:340px;">
+      <div class="state-label">Text Output</div>
+      <div class="demo-area">
+        <div class="nb-output">Total rows processed: 45,230
+Schema version: v3.2.1
+Null percentage: 0.02%
+Execution engine: Synapse Spark 3.4</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-row" style="margin-top:var(--space-4);">
+    <!-- Error output -->
+    <div class="state-col" style="min-width:340px;">
+      <div class="state-label">Error Output</div>
+      <div class="demo-area">
+        <div class="nb-output error-output"><span class="error-type">Py4JJavaError:</span> <span class="error-msg">An error occurred while calling o42.count.</span>
+<span class="error-trace">: org.apache.spark.SparkException: Job aborted
+  Caused by: java.lang.OutOfMemoryError: GC overhead
+  at java.lang.OutOfMemoryError.&lt;init&gt;
+  ... 28 more</span></div>
+      </div>
+    </div>
+    <!-- Empty output -->
+    <div class="state-col" style="min-width:340px;">
+      <div class="state-label">Empty Output</div>
+      <div class="demo-area">
+        <div class="nb-output" style="text-align:center; color: var(--text-muted); font-style: italic; font-family: var(--font); font-size: 12px;">Click ▶ Run to execute</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Large / truncated output -->
+  <div style="margin-top:var(--space-4);">
+    <div class="state-label">Large Output (truncated)</div>
+    <div class="demo-area">
+      <div class="nb-output" id="largeOutput">
+        <table class="nb-table">
+          <thead><tr><th>Id</th><th>TableName</th><th>RowCount</th><th>SizeMB</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>SalesTransactions</td><td>1,240,891</td><td>4,521</td></tr>
+            <tr><td>2</td><td>CustomerDim</td><td>45,230</td><td>128</td></tr>
+            <tr><td>3</td><td>ProductCatalog</td><td>8,412</td><td>24</td></tr>
+          </tbody>
+        </table>
+        <div style="text-align:center;padding:var(--space-2);font-size:11px;color:var(--text-muted);">Showing 3 of 47 rows</div>
+      </div>
+      <div class="show-more-toggle" onclick="toggleShowMore(this)">Show more ▾</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 5: Between-Cell Actions
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s5">
+  <div class="section-header">
+    <h2><span class="section-num">05</span> Between-Cell Actions</h2>
+    <div class="section-desc">Hover the gap between cells to reveal the Add Cell button. Click it for the cell type dropdown. The ⋯ menu on each cell provides move/copy/delete. Drag handle appears on cell hover.</div>
+  </div>
+
+  <div class="demo-area" style="padding:var(--space-4);">
+    <!-- Cell 1 -->
+    <div class="nb-cell" onclick="selectCell(this)">
+      <div class="nb-cell-header">
+        <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+        <span class="nb-cell-num">[1]</span>
+        <button class="nb-run-btn">▶</button>
+        <span class="nb-cell-lang sql">SQL</span>
+        <div class="nb-cell-status"><span class="status-dot green"></span><span class="nb-cell-time">0.12s</span></div>
+        <div class="more-menu">
+          <button class="more-btn" onclick="event.stopPropagation(); toggleMenu(this)">⋯</button>
+          <div class="more-dropdown">
+            <div class="menu-item">Copy <span class="menu-key">Ctrl+C</span></div>
+            <div class="menu-item">Move Up <span class="menu-key">Ctrl+↑</span></div>
+            <div class="menu-item">Move Down <span class="menu-key">Ctrl+↓</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-item">Change Language</div>
+            <div class="menu-sep"></div>
+            <div class="menu-item danger">Delete <span class="menu-key">Ctrl+Del</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="nb-code"><span class="kw">SELECT</span> <span class="num">1</span> <span class="kw">AS</span> test</div>
+    </div>
+
+    <!-- Add cell gap with dropdown -->
+    <div class="add-cell-gap" id="addCellDemo" style="height:28px;">
+      <button class="add-cell-btn" style="opacity:1;" onclick="toggleAddDropdown()">+ Add Cell</button>
+      <div class="add-cell-dropdown" id="addCellDropdown">
+        <button class="add-cell-option"><span class="nb-cell-lang sql" style="font-size:9px;">SQL</span> SQL Cell</button>
+        <button class="add-cell-option"><span class="nb-cell-lang python" style="font-size:9px;">PY</span> Python Cell</button>
+        <button class="add-cell-option"><span class="nb-cell-lang markdown" style="font-size:9px;">MD</span> Markdown Cell</button>
+      </div>
+    </div>
+
+    <!-- Cell 2 -->
+    <div class="nb-cell" onclick="selectCell(this)">
+      <div class="nb-cell-header">
+        <div class="drag-handle"><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span><span class="drag-dot"></span></div>
+        <span class="nb-cell-num">[2]</span>
+        <button class="nb-run-btn">▶</button>
+        <span class="nb-cell-lang python">PY</span>
+        <div class="nb-cell-status"></div>
+        <div class="more-menu"><button class="more-btn" onclick="event.stopPropagation(); toggleMenu(this)">⋯</button><div class="more-dropdown"><div class="menu-item">Copy</div><div class="menu-item">Move Up</div><div class="menu-item">Move Down</div><div class="menu-sep"></div><div class="menu-item">Change Language</div><div class="menu-sep"></div><div class="menu-item danger">Delete</div></div></div>
+      </div>
+      <div class="nb-code"><span class="magic-label">%%pyspark</span>
+<span class="fn">print</span>(<span class="str">"Hello from Spark"</span>)</div>
+    </div>
+  </div>
+
+  <div class="usage-notes">
+    <strong>Hover the gap</strong> between cells to reveal the + Add Cell button. Click to pick a cell type. The ⋯ menu is always accessible in each cell header for move, copy, delete, and language change.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 6: Run Status Bar
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s6">
+  <div class="section-header">
+    <h2><span class="section-num">06</span> Notebook Run Status Bar</h2>
+    <div class="section-desc">Sticky bottom bar showing overall notebook run state. Five distinct states.</div>
+  </div>
+
+  <div class="toolbar-states">
+    <div>
+      <div class="state-label">Not Started</div>
+      <div class="demo-area">
+        <div class="run-status-bar">
+          <span class="status-text"><span class="status-dot muted"></span> Last run: Never</span>
+          <div style="margin-left:auto;"><button class="nb-action-btn primary" style="padding:2px 10px;font-size:11px;">▶ Run All</button></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="state-label">Running</div>
+      <div class="demo-area">
+        <div class="run-status-bar">
+          <span class="status-text"><span class="spinner"></span> <span class="pulse" style="color:var(--amber);">Running cell 3/7...</span></span>
+          <div style="margin-left:auto;"><button class="nb-action-btn" style="padding:2px 10px;font-size:11px;color:var(--red);border-color:var(--red);">Cancel</button></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="state-label">Success</div>
+      <div class="demo-area">
+        <div class="run-status-bar">
+          <span class="status-text"><span class="status-dot green"></span> Completed in 12.4s · 7 cells · 2026-04-15 09:42</span>
+          <div style="margin-left:auto;"><button class="nb-action-btn primary" style="padding:2px 10px;font-size:11px;">▶ Run All</button></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="state-label">Failed</div>
+      <div class="demo-area">
+        <div class="run-status-bar">
+          <span class="status-text"><span class="status-dot red"></span> Failed at cell 4 — AnalysisException: Table not found</span>
+          <div style="margin-left:auto;"><button class="nb-action-btn" style="padding:2px 10px;font-size:11px;color:var(--accent);border-color:var(--accent);">View Error</button></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="state-label">Cancelled</div>
+      <div class="demo-area">
+        <div class="run-status-bar">
+          <span class="status-text"><span class="status-dot amber"></span> Cancelled by user at cell 3</span>
+          <div style="margin-left:auto;"><button class="nb-action-btn primary" style="padding:2px 10px;font-size:11px;">▶ Run All</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 7: Environment Chip & Switcher
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s7">
+  <div class="section-header">
+    <h2><span class="section-num">07</span> Environment Chip &amp; Switcher</h2>
+    <div class="section-desc">The environment chip in the toolbar. Click to expand the environment selector dropdown with status indicators.</div>
+  </div>
+
+  <div class="demo-area" style="padding:var(--space-6);">
+    <div class="env-dropdown-wrap">
+      <span class="context-chip" onclick="toggleEnvDropdown()" style="cursor:pointer;">
+        <span class="chip-label">Env:</span> testenv <span style="font-size:10px;color:var(--text-muted);">▾</span>
+      </span>
+      <div class="env-dropdown" id="envDropdown">
+        <div class="env-option active">
+          <span class="env-check">✓</span>
+          <span class="status-dot green"></span>
+          <span class="env-name">testenv</span>
+          <span class="env-status" style="color:var(--green);">Success</span>
+        </div>
+        <div class="env-option" onclick="selectEnv(this)">
+          <span class="env-check">&nbsp;</span>
+          <span class="status-dot amber pulse"></span>
+          <span class="env-name">custom-env</span>
+          <span class="env-status" style="color:var(--amber);">Running</span>
+        </div>
+        <div class="env-option" onclick="selectEnv(this)">
+          <span class="env-check">&nbsp;</span>
+          <span class="status-dot red"></span>
+          <span class="env-name">broken-env</span>
+          <span class="env-status" style="color:var(--red);">Failed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="usage-notes">
+    <strong>Click the chip</strong> to open the dropdown. Each environment shows its publish state. Selecting a new environment will re-attach the notebook.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 8: Save / Load Flow States
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s8">
+  <div class="section-header">
+    <h2><span class="section-num">08</span> Save / Load Flow States</h2>
+    <div class="section-desc">Save button transitions through three states. Dirty indicator appears as an amber dot next to the title. Discard uses inline confirmation — no modals.</div>
+  </div>
+
+  <div class="state-row">
+    <div class="state-col">
+      <div class="state-label">Save States (click to animate)</div>
+      <div class="demo-area" style="padding:var(--space-4); display:flex; gap:var(--space-3); align-items:center; flex-wrap:wrap;">
+        <button class="nb-action-btn" onclick="animateSave(this)">Save</button>
+        <span style="font-size:11px;color:var(--text-muted);">→</span>
+        <button class="nb-action-btn saving" style="pointer-events:none;"><span class="spinner" style="width:10px;height:10px;border-width:1.5px;border-top-color:var(--accent);"></span> Saving...</button>
+        <span style="font-size:11px;color:var(--text-muted);">→</span>
+        <button class="nb-action-btn saved" style="pointer-events:none;">Saved ✓</button>
+      </div>
+    </div>
+    <div class="state-col">
+      <div class="state-label">Dirty Indicator</div>
+      <div class="demo-area" style="padding:var(--space-4); display:flex; align-items:center; gap:var(--space-2);">
+        <span style="font-size:15px;font-weight:700;color:var(--text);">AnalysisNotebook</span>
+        <span class="dirty-dot"></span>
+        <span class="type-badge">NB</span>
+        <span style="font-size:11px;color:var(--text-muted);margin-left:var(--space-3);">← amber dot = unsaved changes</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:var(--space-4);">
+    <div class="state-label">Discard Confirmation (inline, no modal)</div>
+    <div class="demo-area" style="padding:var(--space-4); display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap;">
+      <button class="nb-action-btn" onclick="showDiscard(this)"><span class="btn-icon">⟲</span> Refresh</button>
+      <div class="discard-confirm" id="discardConfirm" style="display:none;">
+        Discard unsaved changes?
+        <button class="danger" onclick="hideDiscard()">Yes, discard</button>
+        <button onclick="hideDiscard()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 9: Environment Content View
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s9">
+  <div class="section-header">
+    <h2><span class="section-num">09</span> Environment Content View</h2>
+    <div class="section-desc">When an Environment is selected in the tree (not a notebook), this view shows the publish status, component breakdown, and version details.</div>
+  </div>
+
+  <div class="demo-area" style="padding:var(--space-4);">
+    <div class="info-card">
+      <div class="info-card-header">
+        <span class="status-dot green"></span>
+        <h3>testenv</h3>
+        <span class="type-badge" style="color:var(--amber);background:rgba(229,148,12,0.08);">ENV</span>
+      </div>
+      <div class="info-card-body">
+        <div class="info-row">
+          <span class="info-label">GUID</span>
+          <span class="info-value copyable" title="Click to copy">124f4731-8a2c-4d5e-b1f3-9e7a6c8d2b4f</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">State</span>
+          <span class="info-value" style="color:var(--green);font-weight:600;">● Success</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Published</span>
+          <span class="info-value">2026-04-14 22:10 → 22:14 (4m 12s)</span>
+        </div>
+
+        <div style="margin-top:var(--space-4);">
+          <div class="state-label" style="margin-bottom:var(--space-2);">Publish Components</div>
+          <div class="publish-card">
+            <div class="publish-row">
+              <span class="publish-component">Spark Libraries</span>
+              <span class="publish-status success">● Published</span>
+            </div>
+            <div class="publish-row">
+              <span class="publish-component">Spark Settings</span>
+              <span class="publish-status success">● Published</span>
+            </div>
+            <div class="publish-row">
+              <span class="publish-component">Custom Packages</span>
+              <span class="publish-status pending">● Pending</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-row" style="margin-top:var(--space-3);">
+          <span class="info-label">Version GUID</span>
+          <span class="info-value copyable" title="Click to copy">f7e3b2a1-4c9d-48e5-a6f0-3d2c1b0a9e8f</span>
+        </div>
+
+        <div style="margin-top:var(--space-4);">
+          <a class="fabric-link" href="#">Open in Fabric ↗</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 10: Generic Item Views
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s10">
+  <div class="section-header">
+    <h2><span class="section-num">10</span> Generic Item Views</h2>
+    <div class="section-desc">Clean info cards for item types that have limited local data but link to the Fabric portal for full details.</div>
+  </div>
+
+  <div class="state-row" style="gap:var(--space-4);">
+    <!-- SQL Endpoint -->
+    <div class="state-col" style="min-width:260px;">
+      <div class="info-card">
+        <div class="info-card-header">
+          <h3>SalesEndpoint</h3>
+          <span class="type-badge" style="color:var(--blue);background:rgba(45,127,249,0.08);">SQL</span>
+        </div>
+        <div class="info-card-body">
+          <div class="info-row">
+            <span class="info-label">GUID</span>
+            <span class="info-value copyable" style="font-size:11px;">d4e5f6a7-b8c9...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Type</span>
+            <span class="info-value">SQLEndpoint</span>
+          </div>
+          <div style="margin-top:var(--space-3);">
+            <a class="fabric-link" href="#">Open in Fabric ↗</a>
+          </div>
+          <div style="margin-top:var(--space-2);font-size:11px;color:var(--text-muted);">More details available in Fabric ↗</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Report -->
+    <div class="state-col" style="min-width:260px;">
+      <div class="info-card">
+        <div class="info-card-header">
+          <h3>QuarterlySales</h3>
+          <span class="type-badge" style="color:var(--purple);background:rgba(168,85,247,0.08);">RPT</span>
+        </div>
+        <div class="info-card-body">
+          <div class="info-row">
+            <span class="info-label">GUID</span>
+            <span class="info-value copyable" style="font-size:11px;">a1b2c3d4-e5f6...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Type</span>
+            <span class="info-value">Report</span>
+          </div>
+          <div style="margin-top:var(--space-3);">
+            <a class="fabric-link" href="#">Open in Fabric ↗</a>
+          </div>
+          <div style="margin-top:var(--space-2);font-size:11px;color:var(--text-muted);">More details available in Fabric ↗</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Semantic Model -->
+    <div class="state-col" style="min-width:260px;">
+      <div class="info-card">
+        <div class="info-card-header">
+          <h3>SalesModel</h3>
+          <span class="type-badge" style="color:var(--teal);background:rgba(13,148,136,0.08);">SM</span>
+        </div>
+        <div class="info-card-body">
+          <div class="info-row">
+            <span class="info-label">GUID</span>
+            <span class="info-value copyable" style="font-size:11px;">7f8e9d0c-1b2a...</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Type</span>
+            <span class="info-value">SemanticModel</span>
+          </div>
+          <div style="margin-top:var(--space-3);">
+            <a class="fabric-link" href="#">Open in Fabric ↗</a>
+          </div>
+          <div style="margin-top:var(--space-2);font-size:11px;color:var(--text-muted);">More details available in Fabric ↗</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 11: Linked Item Cards
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s11">
+  <div class="section-header">
+    <h2><span class="section-num">11</span> Linked Item Cards</h2>
+    <div class="section-desc">When a Notebook is selected, linked items (default lakehouse, attached environment) appear as compact clickable cards that navigate to the linked item's detail view.</div>
+  </div>
+
+  <div class="demo-area" style="padding:var(--space-4);">
+    <div class="state-label" style="margin-bottom:var(--space-3);">Linked Items</div>
+    <div style="display:flex; flex-direction:column; gap:var(--space-2); max-width:400px;">
+      <div class="linked-card">
+        <div class="linked-card-icon lh">●</div>
+        <div class="linked-card-info">
+          <div class="linked-card-name">TestLH</div>
+          <div class="linked-card-meta">Default Lakehouse · LH · a96fdc44...</div>
+        </div>
+        <span class="linked-card-arrow">▸</span>
+      </div>
+      <div class="linked-card">
+        <div class="linked-card-icon env">⚙</div>
+        <div class="linked-card-info">
+          <div class="linked-card-name">testenv</div>
+          <div class="linked-card-meta">Attached Env · ENV · 124f4731...</div>
+        </div>
+        <span class="linked-card-arrow">▸</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="usage-notes">
+    <strong>Click behavior:</strong> Clicking a linked card navigates to that item's detail view in the workspace tree (same as clicking it in the sidebar). The arrow (▸) indicates navigability.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 12: Keyboard Shortcuts
+     ═══════════════════════════════════════════════════════════════ -->
+<section class="design-section" id="s12">
+  <div class="section-header">
+    <h2><span class="section-num">12</span> Keyboard Shortcuts Reference</h2>
+    <div class="section-desc">All keyboard interactions for the notebook IDE. Designed for keyboard-first workflow — no action requires a mouse.</div>
+  </div>
+
+  <div class="demo-area" style="padding:var(--space-4);">
+    <div class="shortcuts-grid">
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+Enter</span><span class="shortcut-desc">Run current cell</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Shift+Enter</span><span class="shortcut-desc">Run cell, move to next</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+Enter</span><span class="shortcut-desc">Run all cells</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+S</span><span class="shortcut-desc">Save notebook</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+↑</span><span class="shortcut-desc">Move cell up</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+↓</span><span class="shortcut-desc">Move cell down</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Escape</span><span class="shortcut-desc">Exit cell editing</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Enter</span><span class="shortcut-desc">Enter cell editing</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Tab</span><span class="shortcut-desc">Insert 4 spaces (in cell)</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+Shift+M</span><span class="shortcut-desc">Toggle markdown / code</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+Delete</span><span class="shortcut-desc">Delete cell</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Ctrl+K</span><span class="shortcut-desc">Command palette</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     JavaScript — Interactions
+     ═══════════════════════════════════════════════════════════════ -->
+<script>
+// Theme toggle
+function toggleTheme() {
+  var html = document.documentElement;
+  var isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? '' : 'dark');
+  document.getElementById('themeToggle').textContent = isDark ? '☀ Theme' : '☾ Theme';
+}
+
+// Cell selection
+function selectCell(cell) {
+  // Deselect siblings
+  var parent = cell.parentNode;
+  var cells = parent.querySelectorAll('.nb-cell');
+  cells.forEach(function(c) { c.classList.remove('selected'); });
+  cell.classList.add('selected');
+}
+
+// Run cell animation
+function runCell(btn) {
+  var cell = btn.closest('.nb-cell');
+  var header = cell.querySelector('.nb-cell-header');
+  var statusArea = cell.querySelector('.nb-cell-status');
+
+  // Set running state
+  cell.classList.add('running');
+  cell.classList.remove('success', 'error');
+  btn.outerHTML = '<button class="nb-stop-btn" title="Stop">■</button>';
+  statusArea.innerHTML = '<span class="spinner"></span><span style="font-size:11px;color:var(--amber);" class="pulse">Running...</span>';
+
+  // Complete after 2s
+  setTimeout(function() {
+    cell.classList.remove('running');
+    cell.classList.add('success');
+    var stopBtn = cell.querySelector('.nb-stop-btn');
+    if (stopBtn) {
+      stopBtn.outerHTML = '<button class="nb-run-btn" onclick="event.stopPropagation(); runCell(this)" title="Run cell">▶</button>';
+    }
+    statusArea.innerHTML = '<span class="status-dot green"></span><span class="nb-cell-time">0.42s</span>';
+  }, 2000);
+}
+
+// Save animation
+function animateSave(btn) {
+  var originalText = btn.innerHTML;
+  btn.classList.add('saving');
+  btn.innerHTML = '<span class="spinner" style="width:10px;height:10px;border-width:1.5px;border-top-color:var(--accent);"></span> Saving...';
+
+  setTimeout(function() {
+    btn.classList.remove('saving');
+    btn.classList.add('saved');
+    btn.innerHTML = 'Saved ✓';
+
+    setTimeout(function() {
+      btn.classList.remove('saved');
+      btn.innerHTML = originalText || 'Save';
+    }, 1500);
+  }, 1200);
+}
+
+// More menu toggle
+function toggleMenu(btn) {
+  // Close all open menus first
+  document.querySelectorAll('.more-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  var dropdown = btn.nextElementSibling;
+  if (dropdown) dropdown.classList.toggle('open');
+}
+
+// Add cell dropdown
+function toggleAddDropdown() {
+  var dd = document.getElementById('addCellDropdown');
+  dd.classList.toggle('open');
+}
+
+// Environment dropdown
+function toggleEnvDropdown() {
+  var dd = document.getElementById('envDropdown');
+  dd.classList.toggle('open');
+}
+
+function selectEnv(option) {
+  var parent = option.parentNode;
+  parent.querySelectorAll('.env-option').forEach(function(o) {
+    o.classList.remove('active');
+    o.querySelector('.env-check').textContent = '\u00A0';
+  });
+  option.classList.add('active');
+  option.querySelector('.env-check').textContent = '✓';
+}
+
+// Markdown cell toggle
+function showMdView(view, btn) {
+  var cell = document.getElementById('mdCell');
+  var preview = document.getElementById('mdPreview');
+  var edit = document.getElementById('mdEdit');
+  var toggleBar = cell.querySelector('.md-toggle-bar');
+  toggleBar.querySelectorAll('.md-toggle-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+
+  if (view === 'edit') {
+    preview.style.display = 'none';
+    edit.style.display = 'block';
+  } else {
+    preview.style.display = 'block';
+    edit.style.display = 'none';
+  }
+}
+
+// Show more toggle
+function toggleShowMore(el) {
+  var isShowing = el.textContent.indexOf('less') !== -1;
+  el.textContent = isShowing ? 'Show more ▾' : 'Show less ▴';
+}
+
+// Discard confirmation
+function showDiscard(btn) {
+  document.getElementById('discardConfirm').style.display = 'inline-flex';
+}
+function hideDiscard() {
+  document.getElementById('discardConfirm').style.display = 'none';
+}
+
+// Close menus on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.more-menu')) {
+    document.querySelectorAll('.more-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  }
+  if (!e.target.closest('.add-cell-gap')) {
+    document.querySelectorAll('.add-cell-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  }
+  if (!e.target.closest('.env-dropdown-wrap')) {
+    document.querySelectorAll('.env-dropdown.open').forEach(function(d) { d.classList.remove('open'); });
+  }
+});
+</script>
+
+</body>
+</html>

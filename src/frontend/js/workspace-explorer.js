@@ -37,6 +37,13 @@ class WorkspaceExplorer {
 
     /** @type {Intl.NumberFormat} Shared formatter for row counts */
     this._numFmt = new Intl.NumberFormat('en-IN');
+
+    /** @type {Object<string, object[]>} Notebook properties per workspace */
+    this._notebookCache = {};
+    /** @type {Object<string, object[]>} Environment properties per workspace */
+    this._environmentCache = {};
+    /** @type {NotebookView|null} Active notebook IDE instance */
+    this._activeNotebookView = null;
   }
 
   async init() {
@@ -1047,17 +1054,19 @@ class WorkspaceExplorer {
   }
 
   _selectItem(item, workspace) {
+    // Clean up active notebook IDE if navigating away
+    if (this._activeNotebookView) {
+      this._activeNotebookView.destroy();
+      this._activeNotebookView = null;
+      const inspectorPanel = document.getElementById('ws-inspector-panel');
+      if (inspectorPanel) inspectorPanel.style.display = '';
+    }
+
     this._selectedItem = { ...item, workspaceId: workspace.id, workspaceName: workspace.displayName };
     this._selectedWorkspace = workspace;
 
-    const isLH = this._isLakehouse(item);
-    if (isLH) {
-      this._showLakehouseContent(item, workspace);
-      this._clearInspector();
-    } else {
-      this._showItemContent(item, workspace);
-      this._clearInspector();
-    }
+    this._showItemContent(item, workspace);
+    this._clearInspector();
     this._renderTree();
   }
 
@@ -1158,6 +1167,20 @@ class WorkspaceExplorer {
           window.open(`https://app.fabric.microsoft.com/groups/${ws.id}`, '_blank');
         } else if (action === 'clone-env') {
           this._toast('Clone Environment — coming soon');
+        } else if (action === 'open-notebook-ide') {
+          this._openNotebookIDE(this._selectedItem, this._selectedWorkspace);
+        } else if (action === 'rename-item') {
+          const itm = this._selectedItem;
+          if (itm) {
+            this._ctxTarget = { workspace: ws, item: itm, isWorkspace: false, isLakehouse: false };
+            this._ctxRename();
+          }
+        } else if (action === 'delete-item') {
+          const itm = this._selectedItem;
+          if (itm) {
+            this._ctxTarget = { workspace: ws, item: itm, isWorkspace: false, isLakehouse: false };
+            this._ctxDelete();
+          }
         }
       });
     });
@@ -1574,25 +1597,161 @@ class WorkspaceExplorer {
   }
 
   // ────────────────────────────────────────────
-  // Content panel: Non-lakehouse item
+  // Content panel: Type dispatcher
   // ────────────────────────────────────────────
 
   _showItemContent(item, ws) {
     if (!this._contentEl) return;
-    let html = '<div class="ws-content-header">';
-    html += `<div class="ws-content-name">${this._esc(item.displayName)}</div>`;
-    html += '<div class="ws-content-meta">';
-    html += `<span class="ws-type-badge">${this._esc(item.type || 'Item')}</span>`;
-    html += ` <span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(item.id)}">${this._esc(item.id)}</span>`;
-    html += '</div></div>';
+    const type = (item.type || '').toLowerCase();
 
+    if (type === 'lakehouse') {
+      this._showLakehouseContent(item, ws);
+    } else if (type === 'notebook') {
+      this._showNotebookContent(item, ws);
+    } else if (type === 'environment') {
+      this._showEnvironmentContent(item, ws);
+    } else {
+      this._showGenericItemContent(item, ws);
+    }
+  }
+
+  // ──── Type-Specific Content Views ────
+
+  async _showNotebookContent(item, ws) {
+    // Fetch notebook properties (cached per workspace)
+    if (!this._notebookCache[ws.id]) {
+      try {
+        const resp = await this._api.listNotebooks(ws.id);
+        this._notebookCache[ws.id] = resp.value || [];
+      } catch (e) {
+        this._notebookCache[ws.id] = [];
+      }
+    }
+    const nbData = this._notebookCache[ws.id].find(n => n.id === item.id);
+    const props = nbData?.properties || {};
+    const defaultLH = props.defaultLakehouse;
+    const attachedEnv = props.attachedEnvironment;
+
+    let html = this._buildRichHeader(item, ws);
+
+    // Action bar
     html += '<div class="ws-content-actions">';
-    html += `<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>`;
+    html += '<button class="ws-action-btn accent" data-action="open-notebook-ide" title="Open notebook cell editor">&#9654; Open Notebook IDE</button>';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh" title="Open in Fabric portal">Open in Fabric</button>';
+    html += `<button class="ws-action-btn" data-action="rename-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}" title="Rename notebook">Rename</button>`;
+    html += `<button class="ws-action-btn danger" data-action="delete-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}" title="Delete notebook">Delete</button>`;
     html += '</div>';
+
+    // Linked item cards
+    if (defaultLH || attachedEnv) {
+      html += '<div class="ws-linked-cards">';
+      if (defaultLH) {
+        const lhName = this._resolveItemName(ws.id, defaultLH.itemId) || defaultLH.itemId;
+        html += this._buildLinkedCard(lhName, 'Default Lakehouse', 'LH', defaultLH.itemId, 'var(--status-succeeded)');
+      }
+      if (attachedEnv) {
+        const envName = this._resolveItemName(ws.id, attachedEnv.itemId) || attachedEnv.itemId;
+        html += this._buildLinkedCard(envName, 'Attached Environment', 'ENV', attachedEnv.itemId, 'var(--comp-onelake)');
+      }
+      html += '</div>';
+    }
+
+    // Notebook info card
+    html += '<div class="ws-item-info"><div class="ws-item-info-header">Notebook Info</div><div class="ws-item-info-body">';
+    html += this._infoRow('Default Lakehouse', defaultLH ? (this._resolveItemName(ws.id, defaultLH.itemId) || defaultLH.itemId) : '\u2014');
+    html += this._infoRow('Attached Environment', attachedEnv ? (this._resolveItemName(ws.id, attachedEnv.itemId) || attachedEnv.itemId) : '\u2014');
+    html += this._infoRow('Description', item.description || '\u2014');
+    html += '</div></div>';
 
     this._contentEl.innerHTML = html;
     this._bindContentActions(ws);
-    this._clearInspector();
+    this._bindLinkedCardClicks(ws);
+    this._showItemInspector(item, ws, { defaultLH, attachedEnv });
+  }
+
+  async _showEnvironmentContent(item, ws) {
+    if (!this._environmentCache[ws.id]) {
+      try {
+        const resp = await this._api.listEnvironments(ws.id);
+        this._environmentCache[ws.id] = resp.value || [];
+      } catch (e) {
+        this._environmentCache[ws.id] = [];
+      }
+    }
+    const envData = this._environmentCache[ws.id].find(e => e.id === item.id);
+    const props = envData?.properties || {};
+    const publish = props.publishDetails || {};
+    const state = publish.state || 'Unknown';
+
+    let html = this._buildRichHeader(item, ws);
+
+    html += '<div class="ws-content-actions">';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>';
+    html += `<button class="ws-action-btn" data-action="rename-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Rename</button>`;
+    html += `<button class="ws-action-btn danger" data-action="delete-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Delete</button>`;
+    html += '</div>';
+
+    // Publish status card
+    const stateClass = state === 'Success' ? 'success' : state === 'Running' ? 'running' : state === 'Failed' ? 'failed' : '';
+    html += '<div class="ws-env-publish"><div class="ws-env-publish-header">Publish Status</div><div class="ws-env-publish-body">';
+    html += `<div class="ws-status-row"><span class="ws-status-dot ${stateClass}"></span><span class="ws-status-label">State</span><span class="ws-status-value">${this._esc(state)}</span></div>`;
+
+    if (publish.targetVersion) {
+      html += `<div class="ws-status-row"><span class="ws-status-label" style="margin-left:var(--space-4)">Version</span><span class="ws-status-value mono">${this._esc(publish.targetVersion)}</span></div>`;
+    }
+    if (publish.startTime) {
+      const start = new Date(publish.startTime);
+      const end = publish.endTime ? new Date(publish.endTime) : null;
+      const duration = end ? ((end - start) / 1000).toFixed(1) + 's' : 'In progress';
+      html += `<div class="ws-status-row"><span class="ws-status-label" style="margin-left:var(--space-4)">Published</span><span class="ws-status-value">${start.toLocaleString()}</span></div>`;
+      html += `<div class="ws-status-row"><span class="ws-status-label" style="margin-left:var(--space-4)">Duration</span><span class="ws-status-value">${this._esc(duration)}</span></div>`;
+    }
+
+    // Component breakdown
+    const components = publish.componentPublishInfo || {};
+    if (Object.keys(components).length > 0) {
+      html += `<div style="margin-top:var(--space-3);font-size:var(--text-xs);font-weight:600;color:var(--text-muted)">Components</div>`;
+      for (const [name, comp] of Object.entries(components)) {
+        const cState = comp?.state || 'Unknown';
+        const cClass = cState === 'Success' ? 'success' : cState === 'Running' ? 'running' : 'failed';
+        const label = name === 'sparkLibraries' ? 'Spark Libraries' : name === 'sparkSettings' ? 'Spark Settings' : name;
+        html += `<div class="ws-status-row"><span class="ws-status-dot ${cClass}"></span><span class="ws-status-label">${this._esc(label)}</span><span class="ws-status-value">${this._esc(cState)}</span></div>`;
+      }
+    }
+    html += '</div></div>';
+
+    // Environment info
+    html += '<div class="ws-item-info"><div class="ws-item-info-header">Environment Info</div><div class="ws-item-info-body">';
+    html += this._infoRow('Description', item.description || 'Environment');
+    html += this._infoRow('Workspace', ws.name || ws.displayName || ws.id);
+    html += '</div></div>';
+
+    this._contentEl.innerHTML = html;
+    this._bindContentActions(ws);
+    this._showItemInspector(item, ws, { publish });
+  }
+
+  _showGenericItemContent(item, ws) {
+    let html = this._buildRichHeader(item, ws);
+
+    html += '<div class="ws-content-actions">';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>';
+    html += `<button class="ws-action-btn" data-action="rename-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Rename</button>`;
+    html += `<button class="ws-action-btn danger" data-action="delete-item" data-item-id="${this._esc(item.id)}" data-ws-id="${this._esc(ws.id)}">Delete</button>`;
+    html += '</div>';
+
+    html += '<div class="ws-item-info"><div class="ws-item-info-header">Item Info</div><div class="ws-item-info-body">';
+    html += this._infoRow('Type', item.type || 'Unknown');
+    html += this._infoRow('Description', item.description || '\u2014');
+    html += this._infoRow('Workspace', ws.name || ws.displayName || ws.id);
+    html += this._infoRow('ID', item.id);
+    html += '</div></div>';
+
+    html += '<a class="ws-fabric-link" href="#" data-action="open-fabric-lh">More details available in Fabric \u2197</a>';
+
+    this._contentEl.innerHTML = html;
+    this._bindContentActions(ws);
+    this._showItemInspector(item, ws, {});
   }
 
   // ────────────────────────────────────────────
@@ -2003,6 +2162,120 @@ class WorkspaceExplorer {
 
       this._favoritesEl.appendChild(el);
     }
+  }
+
+  // ──── Type-Specific Content Helpers ────
+
+  /** Build a rich content header with name, type badge, full GUID, and description. */
+  _buildRichHeader(item, ws) {
+    const color = this._getItemColor(item.type);
+    const badge = this._getTypeAbbrev(item.type);
+    let html = '<div class="ws-content-header">';
+    html += `<div class="ws-content-name">${this._esc(item.displayName)}</div>`;
+    html += '<div class="ws-content-meta">';
+    html += `<span class="ws-type-badge" style="color:${color}">${badge}</span>`;
+    html += ` <span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(item.id)}">${this._esc(item.id)}</span>`;
+    html += '</div>';
+    if (item.description) {
+      html += `<div style="font-size:var(--text-sm);color:var(--text-dim);margin-top:var(--space-1)">${this._esc(item.description)}</div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /** Build a clickable linked item card. */
+  _buildLinkedCard(name, label, typeBadge, itemId, dotColor) {
+    return `<div class="ws-linked-card" data-navigate-item="${this._esc(itemId)}">
+      <div class="ws-linked-card-header">
+        <span class="ws-linked-card-dot" style="background:${dotColor}"></span>
+        <span class="ws-linked-card-name">${this._esc(name)}</span>
+      </div>
+      <div class="ws-linked-card-label">${this._esc(label)}</div>
+      <div class="ws-linked-card-id">${this._esc(typeBadge)} \u00b7 ${this._esc(String(itemId).substring(0, 8))}\u2026</div>
+    </div>`;
+  }
+
+  /** Build an info row for item info cards. */
+  _infoRow(key, value) {
+    return `<div class="ws-item-info-row"><span class="ws-item-info-key">${this._esc(key)}</span><span class="ws-item-info-val">${this._esc(String(value))}</span></div>`;
+  }
+
+  /** Resolve item name from workspace children cache. */
+  _resolveItemName(wsId, itemId) {
+    const children = this._children[wsId] || [];
+    const found = children.find(c => c.id === itemId);
+    return found ? found.displayName : null;
+  }
+
+  /** Bind click handlers for linked item cards — navigate to that item in the tree. */
+  _bindLinkedCardClicks(ws) {
+    if (!this._contentEl) return;
+    this._contentEl.querySelectorAll('[data-navigate-item]').forEach(card => {
+      card.addEventListener('click', () => {
+        const targetId = card.dataset.navigateItem;
+        const children = this._children[ws.id] || [];
+        const target = children.find(c => c.id === targetId);
+        if (target) {
+          this._selectItem(target, ws);
+          // Highlight in tree
+          if (this._treeEl) {
+            this._treeEl.querySelectorAll('.ws-tree-item.selected').forEach(el => el.classList.remove('selected'));
+            const treeItem = this._treeEl.querySelector(`[data-item-id="${targetId}"]`);
+            if (treeItem) {
+              treeItem.classList.add('selected');
+              treeItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+          }
+        }
+      });
+    });
+  }
+
+  /** Populate inspector panel for any item type. */
+  _showItemInspector(item, ws, extra) {
+    if (!this._inspectorEl) return;
+    let html = '<div class="ws-insp-section"><div class="ws-insp-title">Item Info</div>';
+    html += '<dl class="ws-insp-kv">';
+    html += `<dt>Name</dt><dd>${this._esc(item.displayName)}</dd>`;
+    html += `<dt>Type</dt><dd>${this._esc(item.type || 'Unknown')}</dd>`;
+    html += `<dt>ID</dt><dd style="font-family:var(--font-mono);font-size:10px;word-break:break-all">${this._esc(item.id)}</dd>`;
+    html += `<dt>Workspace</dt><dd>${this._esc(ws.name || ws.displayName || ws.id)}</dd>`;
+    if (item.description) {
+      html += `<dt>Description</dt><dd>${this._esc(item.description)}</dd>`;
+    }
+    if (extra.defaultLH) {
+      const lhName = this._resolveItemName(ws.id, extra.defaultLH.itemId) || extra.defaultLH.itemId;
+      html += `<dt>Default LH</dt><dd>${this._esc(lhName)}</dd>`;
+    }
+    if (extra.attachedEnv) {
+      const envName = this._resolveItemName(ws.id, extra.attachedEnv.itemId) || extra.attachedEnv.itemId;
+      html += `<dt>Environment</dt><dd>${this._esc(envName)}</dd>`;
+    }
+    if (extra.publish) {
+      html += `<dt>Publish State</dt><dd>${this._esc(extra.publish.state || 'Unknown')}</dd>`;
+    }
+    html += '</dl></div>';
+    this._inspectorEl.innerHTML = html;
+  }
+
+  /** Open the full notebook IDE, replacing content+inspector panels. */
+  async _openNotebookIDE(item, ws) {
+    if (!this._contentEl || !item) return;
+
+    if (typeof NotebookView === 'undefined') {
+      this._toast('Notebook IDE not yet available', 'info');
+      return;
+    }
+
+    // Hide inspector panel to give notebook full width
+    const inspectorPanel = document.getElementById('ws-inspector-panel');
+    if (inspectorPanel) inspectorPanel.style.display = 'none';
+
+    // Create and load notebook view
+    this._activeNotebookView = new NotebookView(
+      this._contentEl, this._api, ws.id, item
+    );
+    await this._activeNotebookView.load();
   }
 
   // ────────────────────────────────────────────
