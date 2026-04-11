@@ -395,6 +395,18 @@ class WorkspaceExplorer {
     this._copyToClipboard(id, 'ID copied');
   }
 
+  /** Start inline rename from hover action button (wraps _ctxRename). */
+  _startRename(target) {
+    this._ctxTarget = target;
+    this._ctxRename();
+  }
+
+  /** Trigger delete from hover action button (wraps _ctxDelete). */
+  _handleDelete(target) {
+    this._ctxTarget = target;
+    this._ctxDelete();
+  }
+
   _ctxCopyName() {
     const t = this._ctxTarget;
     if (!t) return;
@@ -766,14 +778,20 @@ class WorkspaceExplorer {
     for (const ws of this._workspaces) {
       const isExpanded = this._expanded.has(ws.id);
       const isSelected = this._selectedWorkspace && this._selectedWorkspace.id === ws.id && !this._selectedItem;
+      const children = this._children[ws.id];
+      const childCount = children ? children.length : null;
+
       const wsEl = this._buildTreeNode({
         name: ws.displayName,
         depth: 0,
-        toggle: isExpanded ? '\u25BE' : '\u25B8',
+        isWorkspace: true,
+        expanded: isExpanded,
         selected: isSelected,
+        countBadge: childCount,
+        actions: true,
       });
 
-      // Click toggle arrow → expand/collapse; click name → select workspace
+      // Click toggle arrow → expand/collapse; click name → select AND expand
       const toggleEl = wsEl.querySelector('.ws-tree-toggle');
       const nameEl = wsEl.querySelector('.ws-tree-name');
       if (toggleEl) {
@@ -785,11 +803,40 @@ class WorkspaceExplorer {
       if (nameEl) {
         nameEl.addEventListener('click', (e) => {
           e.stopPropagation();
+          // Select workspace AND expand if not already expanded
+          if (!this._expanded.has(ws.id)) {
+            this._toggleWorkspace(ws);
+          }
           this._selectWorkspace(ws);
         });
       }
-      // Fallback: clicking the row toggles
-      wsEl.addEventListener('click', () => this._toggleWorkspace(ws));
+      // Fallback: clicking the row toggles + selects
+      wsEl.addEventListener('click', () => {
+        if (!this._expanded.has(ws.id)) {
+          this._toggleWorkspace(ws);
+        }
+        this._selectWorkspace(ws);
+      });
+
+      // Action button events
+      if (wsEl._renameBtn) {
+        wsEl._renameBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._startRename({ workspace: ws, isWorkspace: true });
+        });
+      }
+      if (wsEl._deleteBtn) {
+        wsEl._deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._handleDelete({ workspace: ws, isWorkspace: true });
+        });
+      }
+      if (wsEl._moreBtn) {
+        wsEl._moreBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._showContextMenu(e, { workspace: ws, item: null, isWorkspace: true, isLakehouse: false });
+        });
+      }
 
       // Context menu
       wsEl.addEventListener('contextmenu', (e) => {
@@ -803,8 +850,8 @@ class WorkspaceExplorer {
           // Loading indicator while children are being fetched
           const loadEl = document.createElement('div');
           loadEl.className = 'ws-tree-item dimmed';
-          loadEl.style.paddingLeft = 'calc(var(--space-3) + 16px)';
-          loadEl.textContent = 'Loading...';
+          loadEl.setAttribute('data-depth', '1');
+          loadEl.textContent = 'Loading\u2026';
           this._treeEl.appendChild(loadEl);
         } else {
           for (const item of this._children[ws.id]) {
@@ -814,14 +861,38 @@ class WorkspaceExplorer {
             name: item.displayName,
             depth: 1,
             dotColor: this._getItemColor(item.type),
+            typeBadge: this._getTypeAbbrev(item.type),
             dimmed: !isLH,
             selected: isItemSelected,
+            childAnim: true,
+            actions: true,
           });
 
           itemEl.addEventListener('click', (e) => {
             e.stopPropagation();
             this._selectItem(item, ws);
           });
+
+          // Action button events for child items
+          if (itemEl._renameBtn) {
+            itemEl._renameBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this._startRename({ workspace: ws, item, isWorkspace: false, isLakehouse: isLH });
+            });
+          }
+          if (itemEl._deleteBtn) {
+            itemEl._deleteBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this._handleDelete({ workspace: ws, item, isWorkspace: false, isLakehouse: isLH });
+            });
+          }
+          if (itemEl._moreBtn) {
+            itemEl._moreBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              this._showContextMenu(e, { workspace: ws, item, isWorkspace: false, isLakehouse: isLH });
+            });
+          }
+
           itemEl.addEventListener('contextmenu', (e) => {
             this._showContextMenu(e, { workspace: ws, item, isWorkspace: false, isLakehouse: isLH });
           });
@@ -835,6 +906,8 @@ class WorkspaceExplorer {
 
   /**
    * Build a single tree-node DOM element.
+   * Supports: SVG chevron toggle, folder icon, color dot, type badge,
+   * count badge, hover action buttons (rename/delete/more).
    * @param {object} opts
    */
   _buildTreeNode(opts) {
@@ -842,31 +915,87 @@ class WorkspaceExplorer {
     let cls = 'ws-tree-item';
     if (opts.dimmed) cls += ' dimmed';
     if (opts.selected) cls += ' selected';
+    if (opts.childAnim) cls += ' ws-tree-child';
     el.className = cls;
-    el.style.paddingLeft = (12 + (opts.depth || 0) * 16) + 'px';
+    el.setAttribute('data-depth', String(opts.depth || 0));
 
-    if (opts.toggle) {
+    // SVG chevron toggle (workspaces only)
+    if (opts.isWorkspace) {
       const toggle = document.createElement('span');
-      toggle.className = 'ws-tree-toggle';
-      toggle.textContent = opts.toggle;
+      toggle.className = 'ws-tree-toggle' + (opts.expanded ? ' expanded' : '');
+      toggle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
       el.appendChild(toggle);
+
+      // Folder icon
+      const folder = document.createElement('span');
+      folder.className = 'ws-tree-folder-icon';
+      folder.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+      el.appendChild(folder);
     }
 
-    if (opts.dot) {
-      const dot = document.createElement('span');
-      dot.className = `ws-tree-dot ${opts.dot}`;
-      el.appendChild(dot);
-    } else if (opts.dotColor) {
+    // Color dot (child items)
+    if (opts.dotColor) {
       const dot = document.createElement('span');
       dot.className = 'ws-tree-dot';
       dot.style.background = opts.dotColor;
       el.appendChild(dot);
     }
 
+    // Name label
     const nameEl = document.createElement('span');
     nameEl.className = 'ws-tree-name';
     nameEl.textContent = opts.name;
     el.appendChild(nameEl);
+
+    // Type badge for child items ("LH", "NB", etc.)
+    if (opts.typeBadge) {
+      const badge = document.createElement('span');
+      badge.className = 'ws-tree-type-badge';
+      badge.textContent = opts.typeBadge;
+      el.appendChild(badge);
+    }
+
+    // Count badge for workspaces ("N items")
+    if (opts.countBadge !== undefined && opts.countBadge !== null) {
+      const count = document.createElement('span');
+      count.className = 'ws-tree-count';
+      count.textContent = opts.countBadge === 1 ? '1 item' : `${opts.countBadge} items`;
+      el.appendChild(count);
+    }
+
+    // Hover action buttons: rename, delete, ⋯
+    if (opts.actions) {
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'ws-tree-actions';
+
+      // Rename
+      const renBtn = document.createElement('button');
+      renBtn.className = 'ws-tree-action-btn';
+      renBtn.title = 'Rename';
+      renBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>';
+      actionsEl.appendChild(renBtn);
+
+      // Delete
+      const delBtn = document.createElement('button');
+      delBtn.className = 'ws-tree-action-btn danger';
+      delBtn.title = 'Delete';
+      delBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+      actionsEl.appendChild(delBtn);
+
+      // More (⋯)
+      const moreBtn = document.createElement('button');
+      moreBtn.className = 'ws-tree-action-btn';
+      moreBtn.title = 'More actions';
+      moreBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+      actionsEl.appendChild(moreBtn);
+
+      el.appendChild(actionsEl);
+
+      // Store refs for event binding
+      el._renameBtn = renBtn;
+      el._deleteBtn = delBtn;
+      el._moreBtn = moreBtn;
+    }
 
     return el;
   }
@@ -903,6 +1032,10 @@ class WorkspaceExplorer {
       }
     }
     this._renderTree();
+    // Refresh content panel if this workspace is currently selected
+    if (this._selectedWorkspace && this._selectedWorkspace.id === ws.id && !this._selectedItem) {
+      this._showWorkspaceContent(ws);
+    }
   }
 
   _selectWorkspace(ws) {
@@ -934,20 +1067,23 @@ class WorkspaceExplorer {
 
   _showWorkspaceContent(ws) {
     if (!this._contentEl) return;
-    const capacityId = ws.capacityId || 'N/A';
+    const capacityId = ws.capacityId || '';
+    const envLabel = this._getEnvironmentLabel(ws);
 
     let html = '<div class="ws-content-header">';
     html += `<div class="ws-content-name">${this._esc(ws.displayName)}</div>`;
     html += '<div class="ws-content-meta">';
-    html += `<span class="ws-meta-id" data-copy-id="${this._esc(ws.id)}" title="Click to copy ID">${this._esc(ws.id.substring(0, 12))}...</span>`;
-    html += `<span class="ws-meta-badge">${this._esc(capacityId)}</span>`;
+    html += `<span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(ws.id)}">${this._esc(ws.id)}</span>`;
+    if (capacityId) {
+      html += `<span class="ws-meta-badge ws-badge-env">${this._esc(envLabel)}</span>`;
+    }
     html += '</div></div>';
 
-    // Action buttons
+    // Action buttons with icons
     html += '<div class="ws-content-actions">';
-    html += '<button class="ws-action-btn" data-action="rename-ws">Rename</button>';
-    html += `<button class="ws-action-btn" data-action="open-fabric-ws">Open in Fabric</button>`;
-    html += '<button class="ws-action-btn" data-action="delete-ws" style="color:var(--level-error)">Delete</button>';
+    html += '<button class="ws-action-btn" data-action="rename-ws"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
+    html += '<button class="ws-action-btn" data-action="open-fabric-ws"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
+    html += '<button class="ws-action-btn danger" data-action="delete-ws"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>Delete</button>';
     html += '</div>';
 
     // Items table
@@ -1066,9 +1202,9 @@ class WorkspaceExplorer {
 
     html += '<div class="ws-content-actions">';
     html += '<button class="ws-deploy-btn" id="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>';
-    html += '<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>';
-    html += '<button class="ws-action-btn" data-action="rename-lh">Rename</button>';
-    html += '<button class="ws-action-btn" data-action="clone-env">Clone Environment</button>';
+    html += '<button class="ws-action-btn" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
+    html += '<button class="ws-action-btn" data-action="rename-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
+    html += '<button class="ws-action-btn" data-action="clone-env"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Clone Environment</button>';
     html += '</div>';
 
     html += '<div id="ws-deploy-progress" class="ws-deploy-progress" style="display:none"></div>';
@@ -1406,7 +1542,7 @@ class WorkspaceExplorer {
     html += `<div class="ws-content-name">${this._esc(item.displayName)}</div>`;
     html += '<div class="ws-content-meta">';
     html += `<span class="ws-type-badge">${this._esc(item.type || 'Item')}</span>`;
-    html += ` <span class="ws-meta-id" data-copy-id="${this._esc(item.id)}" title="Click to copy ID">${this._esc(item.id.substring(0, 12))}...</span>`;
+    html += ` <span class="ws-guid" title="Click to copy" data-copy-id="${this._esc(item.id)}">${this._esc(item.id)}</span>`;
     html += '</div></div>';
 
     html += '<div class="ws-content-actions">';
@@ -1840,8 +1976,25 @@ class WorkspaceExplorer {
       'Pipeline': '#e5940c',
       'MLExperiment': '#a855f7',
       'Report': 'var(--text-muted)',
+      'Environment': '#0d9488',
+      'SemanticModel': '#6d5cff',
     };
     return colors[type] || 'var(--text-muted)';
+  }
+
+  /** Get short type abbreviation for tree type badge. */
+  _getTypeAbbrev(type) {
+    const abbrevs = {
+      'Lakehouse': 'LH',
+      'Notebook': 'NB',
+      'Pipeline': 'PL',
+      'MLExperiment': 'ML',
+      'Report': 'RPT',
+      'Environment': 'ENV',
+      'SemanticModel': 'SM',
+      'SQLEndpoint': 'SQL',
+    };
+    return abbrevs[type] || type?.substring(0, 3)?.toUpperCase() || '';
   }
 
   _isLakehouse(item) {
@@ -1858,7 +2011,11 @@ class WorkspaceExplorer {
     if (cap.includes('ppe') || cap.includes('PPE')) return 'PPE';
     if (cap.includes('prod') || cap.includes('PROD')) return 'Prod';
     if (cap.includes('test') || cap.includes('TEST')) return 'Test';
-    return cap ? cap.substring(0, 8) : 'Unknown';
+    // Detect from API host configuration
+    const host = this._api?._baseUrl || window.location.hostname || '';
+    if (host.includes('-int-') || host.includes('ppe') || host.includes('windows-int')) return 'PPE';
+    if (host.includes('fabric.microsoft.com')) return 'Prod';
+    return cap ? 'PPE' : 'Unknown';
   }
 
   /**

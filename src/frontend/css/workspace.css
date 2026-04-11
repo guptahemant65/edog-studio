@@ -49,7 +49,10 @@
   padding: var(--space-2) 0;
 }
 
-/* Tree items */
+/* Tree list container — 1px gap between items */
+.ws-tree-content { display: flex; flex-direction: column; gap: 1px; }
+
+/* Tree items — 13px font per design bible */
 .ws-tree-item {
   display: flex;
   align-items: center;
@@ -57,32 +60,52 @@
   height: 30px;
   padding: 0 var(--space-3);
   cursor: pointer;
-  font-size: var(--text-sm);
+  font-size: 13px;
   color: var(--text);
   transition: all var(--transition-fast);
   border-left: 3px solid transparent;
   user-select: none;
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   margin: 0 var(--space-1) 0 0;
+  position: relative;
 }
 .ws-tree-item:hover { background: var(--surface-2); }
 .ws-tree-item.selected {
   background: var(--accent-dim);
   border-left-color: var(--accent);
   color: var(--accent);
-  font-weight: 500;
 }
+.ws-tree-item.selected .ws-tree-name { font-weight: 600; }
 .ws-tree-item.dimmed { opacity: 0.6; }
 .ws-tree-item.dimmed:hover { opacity: 0.85; }
 
+/* Tree depth indentation — 20px per level per bible */
+.ws-tree-item[data-depth="0"] { padding-left: 12px; }
+.ws-tree-item[data-depth="1"] { padding-left: 32px; }
+.ws-tree-item[data-depth="2"] { padding-left: 52px; }
+
+/* SVG chevron toggle with rotation animation */
 .ws-tree-toggle {
-  font-size: var(--text-xs);
-  color: var(--text-muted);
-  width: 14px;
-  text-align: center;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: transform 150ms ease-out;
+}
+.ws-tree-toggle.expanded { transform: rotate(90deg); }
+
+/* Folder icon for workspaces */
+.ws-tree-folder-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  width: 16px;
+  height: 16px;
 }
 
+/* Color dot for child items */
 .ws-tree-dot {
   width: 8px;
   height: 8px;
@@ -92,12 +115,99 @@
 .ws-tree-dot.lakehouse { background: var(--status-succeeded); }
 .ws-tree-dot.other { background: var(--text-muted); }
 
+/* Item name label */
 .ws-tree-name {
   flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Item count badge — "4 items" on workspaces */
+.ws-tree-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 100px;
+  background: var(--surface-2);
+  font-variant-numeric: tabular-nums;
+  transition: opacity 100ms ease-out;
+}
+
+/* Type badge for child items — "LH", "NB", etc. */
+.ws-tree-type-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  transition: opacity 100ms ease-out;
+}
+
+/* Hover action buttons — fade in on tree-item hover */
+.ws-tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+.ws-tree-item:hover .ws-tree-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Hide count/type badge on hover to make room for actions */
+.ws-tree-item:hover .ws-tree-count,
+.ws-tree-item:hover .ws-tree-type-badge { opacity: 0; }
+
+.ws-tree-action-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--transition-fast);
+}
+.ws-tree-action-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.ws-tree-action-btn.danger:hover {
+  background: rgba(229, 69, 59, 0.08);
+  color: var(--level-error);
+  border-color: rgba(229, 69, 59, 0.2);
+}
+
+/* Staggered expand animation for child items */
+@keyframes ws-tree-child-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ws-tree-child {
+  animation: ws-tree-child-in 150ms ease-out both;
+}
+.ws-tree-child:nth-child(1) { animation-delay: 0ms; }
+.ws-tree-child:nth-child(2) { animation-delay: 50ms; }
+.ws-tree-child:nth-child(3) { animation-delay: 50ms; }
+.ws-tree-child:nth-child(4) { animation-delay: 100ms; }
+.ws-tree-child:nth-child(5) { animation-delay: 100ms; }
+.ws-tree-child:nth-child(6) { animation-delay: 150ms; }
 
 /* Favorites */
 .ws-favorites {
@@ -347,11 +457,14 @@
   border: 1px solid var(--border-bright);
   background: var(--surface); color: var(--text-dim); cursor: pointer;
   font-family: var(--font-body);
-  height: 32px; display: inline-flex; align-items: center;
+  height: 32px; display: inline-flex; align-items: center; gap: 6px;
   transition: all var(--transition-fast);
   white-space: nowrap;
 }
+.ws-action-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
 .ws-action-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-bright); }
+.ws-action-btn.danger { color: var(--level-error); border-color: rgba(229,69,59,0.3); }
+.ws-action-btn.danger:hover { background: rgba(229,69,59,0.06); }
 
 .ws-section { margin-top: var(--space-4); }
 .ws-section-count {
@@ -714,23 +827,33 @@
   opacity: 0.88;
 }
 
-/* Inline rename input in tree */
+/* Inline rename input in tree — bible §5 */
 .ws-tree-item.editing .ws-tree-name {
-  display: none;
+  opacity: 0;
+  position: absolute;
+  pointer-events: none;
 }
+.ws-tree-item.editing .ws-tree-count,
+.ws-tree-item.editing .ws-tree-type-badge,
+.ws-tree-item.editing .ws-tree-actions { display: none; }
 .ws-inline-rename {
-  background: var(--surface);
+  background: rgba(109, 92, 255, 0.04);
   border: 1.5px solid var(--accent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   color: var(--text);
   font-family: inherit;
-  font-size: inherit;
-  padding: var(--space-1) var(--space-1);
+  font-size: 13px;
+  padding: 4px 10px;
   outline: none;
-  width: 160px;
-  height: 22px;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
   box-sizing: border-box;
+  box-shadow: 0 0 0 3px rgba(109, 92, 255, 0.12),
+              inset 0 1px 2px rgba(109, 92, 255, 0.06);
+  animation: ws-rename-fade-in 100ms ease-out;
 }
+@keyframes ws-rename-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* Create-new inline input in tree */
 .ws-create-row {
