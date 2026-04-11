@@ -827,40 +827,19 @@ mark {
 .topbar-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-bright); }
 
     /* === css/sidebar.css === */
-/* Sidebar — 52px icon-only, hover-expands to 200px */
+/* Sidebar — 52px icon-only, overlay-expand on hover */
 .sidebar {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  width: var(--sidebar-width);
+  align-items: center;
+  width: var(--sidebar-width); /* 52px always — never expands */
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: var(--space-3) 0;
   gap: var(--space-1);
   z-index: var(--z-sidebar);
   flex-shrink: 0;
-  overflow: hidden;
-  transition: width 200ms ease-out;
   position: relative;
-}
-
-.sidebar:hover {
-  width: 200px;
-}
-
-/* Active indicator bar — slides vertically on the sidebar */
-.sidebar::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 3px;
-  height: 20px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
-  transition: transform 200ms ease-out;
-  transform: translateY(var(--active-bar-y, 20px));
-  pointer-events: none;
 }
 
 .sidebar-icon {
@@ -868,30 +847,21 @@ mark {
   align-items: center;
   justify-content: center;
   width: 36px;
-  min-width: 36px;
   height: 36px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 17px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--transition-normal), color var(--transition-normal);
   position: relative;
-  margin-left: var(--space-2);
-  gap: 10px;
-  white-space: nowrap;
-}
-
-/* Expand icon row on sidebar hover */
-.sidebar:hover .sidebar-icon {
-  width: calc(200px - var(--space-4));
-  justify-content: flex-start;
-  padding: 0 var(--space-3);
 }
 
 .sidebar-icon svg {
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
+  stroke-width: 1.8;
 }
 
 .sidebar-icon:hover {
@@ -904,70 +874,117 @@ mark {
   color: var(--accent);
 }
 
+/* Active bar — full-height indicator at left edge of sidebar */
+.sidebar-icon.active::before {
+  content: '';
+  position: absolute;
+  left: -8px; /* centers on sidebar left edge: (52 - 36) / 2 = 8 */
+  top: 0;
+  width: 3px;
+  height: 36px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 2px 0 8px rgba(109,92,255,0.3);
+}
+
 .sidebar-icon.disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: default;
   pointer-events: none;
 }
 
-/* Label — hidden collapsed, visible expanded */
-.sidebar-label {
-  font-size: var(--text-sm);
-  font-family: var(--font-body);
-  color: inherit;
+/* Labels and shortcuts hidden in sidebar — only visible in the drawer */
+.sidebar-label,
+.sidebar-shortcut {
+  display: none;
+}
+
+/* ─── Hover Drawer (overlay, doesn't push content) ─── */
+.sidebar-drawer {
+  position: absolute;
+  left: 100%; /* right edge of sidebar */
+  top: 0;
+  bottom: 0;
+  width: 180px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 16px rgba(0,0,0,0.08);
+  padding: var(--space-3) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 150ms ease-out;
-  overflow: hidden;
+  z-index: calc(var(--z-sidebar) - 1);
+}
+
+.sidebar:hover .sidebar-drawer {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-drawer-item {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-3);
+  gap: var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  margin: 0 var(--space-1);
+  transition: background 100ms ease-out;
+}
+
+.sidebar-drawer-item:hover {
+  background: var(--surface-2);
+}
+
+.sidebar-drawer-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sidebar-drawer-item.disabled {
+  opacity: 0.4;
   pointer-events: none;
 }
 
-.sidebar:hover .sidebar-label {
-  opacity: 1;
+.sidebar-drawer-label {
+  font-size: var(--text-md);
+  font-family: var(--font-body);
+  color: var(--text);
+  flex: 1;
 }
 
-/* Staggered label fade-in */
-.sidebar:hover .sidebar-icon:nth-child(1) .sidebar-label { transition-delay: 30ms; }
-.sidebar:hover .sidebar-icon:nth-child(2) .sidebar-label { transition-delay: 50ms; }
-.sidebar:hover .sidebar-icon:nth-child(3) .sidebar-label { transition-delay: 70ms; }
-.sidebar:hover .sidebar-icon:nth-child(4) .sidebar-label { transition-delay: 90ms; }
-.sidebar:hover .sidebar-icon:nth-child(5) .sidebar-label { transition-delay: 110ms; }
-.sidebar:hover .sidebar-icon:nth-child(6) .sidebar-label { transition-delay: 130ms; }
+.sidebar-drawer-item.disabled .sidebar-drawer-label {
+  color: var(--text-muted);
+}
 
-/* Shortcut badge — pushed right */
-.sidebar-shortcut {
+.sidebar-drawer-shortcut {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--surface-2);
   border-radius: var(--radius-sm);
-  padding: 0 var(--space-1);
+  padding: 1px var(--space-2);
   line-height: 18px;
-  margin-left: auto;
-  opacity: 0;
-  transition: opacity 150ms ease-out;
   flex-shrink: 0;
 }
 
-.sidebar:hover .sidebar-shortcut {
-  opacity: 1;
-}
-
 .sidebar-spacer { flex: 1; }
+.sidebar-drawer-spacer { flex: 1; }
 
 /* Phase badge */
 .sidebar-phase {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--surface-2);
   border-radius: var(--radius-full);
   padding: 2px var(--space-2);
-  line-height: 16px;
   margin: 0 auto var(--space-2);
-  text-align: center;
-  transition: all var(--transition-normal);
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .sidebar-phase.connected {
@@ -988,11 +1005,9 @@ mark {
 .sidebar-token-dot.amber { background: var(--status-cancelled); box-shadow: 0 0 6px rgba(229,148,12,0.4); }
 .sidebar-token-dot.red { background: var(--status-failed); box-shadow: 0 0 6px rgba(229,69,59,0.4); }
 
-/* Tooltip — positioned right of sidebar */
+/* Tooltip — shows only when sidebar is NOT hovered (drawer hidden) */
 .sidebar-tooltip {
   position: fixed;
-  left: 0;
-  top: 0;
   background: var(--surface-3);
   color: var(--text);
   font-size: var(--text-sm);
@@ -1002,7 +1017,7 @@ mark {
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--transition-fast);
+  transition: opacity 100ms ease-out;
   z-index: calc(var(--z-sidebar) + 1);
   box-shadow: var(--shadow-md);
 }
@@ -10197,7 +10212,7 @@ class Sidebar {
     this._icons = Array.from(this._el.querySelectorAll('.sidebar-icon'));
     this._phaseEl = document.getElementById('sidebar-phase');
 
-    this._injectLabels();
+    this._injectDrawer();
     this._createTooltip();
     this._bindTooltips();
 
@@ -10215,28 +10230,47 @@ class Sidebar {
     if (saved && this._getIcon(saved) && !this._getIcon(saved).classList.contains('disabled')) {
       this.switchView(saved);
     }
-
-    this._updateActiveBar();
   }
 
-  /** Inject label + shortcut spans into each icon button */
-  _injectLabels() {
+  /** Build the overlay drawer with label + shortcut for each icon */
+  _injectDrawer() {
+    const drawer = document.createElement('div');
+    drawer.className = 'sidebar-drawer';
+
     this._icons.forEach(icon => {
-      const label = icon.dataset.label;
-      const shortcut = icon.dataset.shortcut;
-      if (label) {
-        const span = document.createElement('span');
-        span.className = 'sidebar-label';
-        span.textContent = label;
-        icon.appendChild(span);
+      const item = document.createElement('div');
+      item.className = 'sidebar-drawer-item';
+      if (icon.classList.contains('active')) item.classList.add('active');
+      if (icon.classList.contains('disabled')) item.classList.add('disabled');
+
+      const label = document.createElement('span');
+      label.className = 'sidebar-drawer-label';
+      label.textContent = icon.dataset.label || '';
+      item.appendChild(label);
+
+      if (icon.dataset.shortcut) {
+        const shortcut = document.createElement('span');
+        shortcut.className = 'sidebar-drawer-shortcut';
+        shortcut.textContent = icon.dataset.shortcut;
+        item.appendChild(shortcut);
       }
-      if (shortcut) {
-        const badge = document.createElement('span');
-        badge.className = 'sidebar-shortcut';
-        badge.textContent = shortcut;
-        icon.appendChild(badge);
-      }
+
+      item.addEventListener('click', () => {
+        if (!icon.classList.contains('disabled')) {
+          this.switchView(icon.dataset.view);
+        }
+      });
+
+      drawer.appendChild(item);
+      icon._drawerItem = item;
     });
+
+    const spacer = document.createElement('div');
+    spacer.className = 'sidebar-drawer-spacer';
+    drawer.appendChild(spacer);
+
+    this._drawer = drawer;
+    this._el.appendChild(drawer);
   }
 
   /** Create the shared tooltip element */
@@ -10250,7 +10284,8 @@ class Sidebar {
   _bindTooltips() {
     this._icons.forEach(icon => {
       icon.addEventListener('mouseenter', () => {
-        if (this._el.matches(':hover') && this._el.offsetWidth > 100) return;
+        // Suppress tooltip when drawer is visible (sidebar hovered)
+        if (this._el.matches(':hover')) return;
         this._tooltipTimer = setTimeout(() => this._showTooltip(icon), 400);
       });
       icon.addEventListener('mouseleave', () => this._hideTooltip());
@@ -10279,16 +10314,6 @@ class Sidebar {
     if (this._tooltip) this._tooltip.classList.remove('visible');
   }
 
-  /** Move the active bar (::after on sidebar) to the active icon position */
-  _updateActiveBar() {
-    const icon = this._getIcon(this._activeView);
-    if (!icon || !this._el) return;
-    const sidebarRect = this._el.getBoundingClientRect();
-    const iconRect = icon.getBoundingClientRect();
-    const y = iconRect.top - sidebarRect.top + (iconRect.height - 20) / 2;
-    this._el.style.setProperty('--active-bar-y', y + 'px');
-  }
-
   switchView(viewId) {
     if (viewId === this._activeView) return;
     const icon = this._getIcon(viewId);
@@ -10303,7 +10328,12 @@ class Sidebar {
 
     this._activeView = viewId;
     localStorage.setItem('edog-active-view', viewId);
-    this._updateActiveBar();
+
+    // Sync drawer active state
+    this._icons.forEach(i => {
+      if (i._drawerItem) i._drawerItem.classList.remove('active');
+    });
+    if (icon._drawerItem) icon._drawerItem.classList.add('active');
 
     if (this.onViewChange) this.onViewChange(viewId);
   }
@@ -10314,8 +10344,10 @@ class Sidebar {
       const iconPhase = icon.dataset.phase;
       if (iconPhase === 'connected' && phase === 'disconnected') {
         icon.classList.add('disabled');
+        if (icon._drawerItem) icon._drawerItem.classList.add('disabled');
       } else {
         icon.classList.remove('disabled');
+        if (icon._drawerItem) icon._drawerItem.classList.remove('disabled');
       }
     });
 
