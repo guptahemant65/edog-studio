@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Design Bible Part 4a</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --accent:   #6d5cff;
+  --green:    #18a058;
+  --amber:    #e5940c;
+  --red:      #e5453b;
+  --blue:     #2d7ff9;
+  --purple:   #a855f7;
+  --teal:     #0d9488;
+
+  --bg:       #fff;
+  --bg-2:     #f8f9fb;
+  --bg-3:     #f4f5f7;
+  --bg-4:     #ebedf0;
+
+  --text:     #1a1d23;
+  --text-2:   #5a6070;
+  --text-3:   #8e95a5;
+
+  --border:        rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --font:  'Inter', system-ui, sans-serif;
+  --mono:  'Cascadia Code', 'Consolas', monospace;
+
+  --r4:   4px;
+  --r6:   6px;
+  --r10:  10px;
+  --r16:  16px;
+  --r100: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+  --bg:       #0f1117;
+  --bg-2:     #161923;
+  --bg-3:     #1e2230;
+  --bg-4:     #252a38;
+
+  --text:     #e8eaf0;
+  --text-2:   #9aa0b2;
+  --text-3:   #5f6578;
+
+  --border:        rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* ─── RESET + BASE ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ─── PAGE LAYOUT ───────────────────────────────────────────────────────── */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+.page-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.page-wordmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+.page-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover { background: var(--bg-4); color: var(--text); }
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.page-intro { padding: 40px 0 0; }
+
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.page-title span {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-subtitle {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--text-2);
+  max-width: 600px;
+}
+
+.toc {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toc-item {
+  padding: 6px 14px;
+  border-radius: var(--r100);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toc-item:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ─── SECTION WRAPPER ───────────────────────────────────────────────────── */
+.section { scroll-margin-top: 80px; }
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-num {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r6);
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.section-meta h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.section-meta p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.demo-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.demo-card + .demo-card { margin-top: 12px; }
+
+.demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+/* ─── § 21 · LOG ENTRY PATTERNS ─────────────────────────────────────────── */
+
+/* 21a — Log Row */
+.log-list { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: var(--r6); overflow: hidden; }
+
+.log-row {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg);
+  cursor: pointer;
+  transition: background 100ms ease-out;
+  position: relative;
+  min-height: 40px;
+}
+
+.log-row:hover { background: color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+.log-row:active { transform: scale(0.997); transition: transform 60ms; }
+.log-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; border-radius: 2px; }
+
+.log-row.expanded { background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+.log-row.expanded .log-msg { white-space: normal; word-break: break-word; }
+
+/* Level strip */
+.log-strip { width: 3px; flex-shrink: 0; }
+.log-strip.msg  { background: var(--green); }
+.log-strip.warn { background: var(--amber); }
+.log-strip.err  { background: var(--red); }
+.log-strip.vrb  { background: var(--text-3); }
+
+/* Gutter */
+.log-gutter {
+  width: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 4px;
+  border-right: 1px solid var(--border);
+}
+
+.gutter-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r4);
+  transition: all 100ms ease-out;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.gutter-btn:hover { background: var(--bg-4); }
+.gutter-btn:active { transform: scale(0.9); }
+.gutter-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.bookmark-btn { color: var(--text-3); }
+.bookmark-btn.active { color: #e5a700; }
+
+.breakpoint-btn { color: var(--text-3); font-size: 10px; }
+.breakpoint-btn.active { color: var(--red); }
+
+/* Content */
+.log-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+
+.log-ts {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.log-level-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: var(--r100);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.log-level-badge.msg  { background: color-mix(in srgb, var(--blue) 14%, var(--bg)); color: var(--blue); }
+.log-level-badge.warn { background: color-mix(in srgb, var(--amber) 14%, var(--bg)); color: var(--amber); }
+.log-level-badge.err  { background: color-mix(in srgb, var(--red) 14%, var(--bg)); color: var(--red); }
+.log-level-badge.vrb  { background: var(--bg-4); color: var(--text-3); }
+
+.log-source {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--r100);
+  background: color-mix(in srgb, var(--purple) 10%, var(--bg));
+  color: var(--purple);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.log-msg {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* 21b — Error Group */
+.error-group {
+  border-radius: var(--r6);
+  border: 1px solid color-mix(in srgb, var(--red) 20%, var(--border));
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.error-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--red) 6%, var(--bg));
+  cursor: pointer;
+  transition: background 100ms ease-out;
+  user-select: none;
+}
+
+.error-group-header:hover { background: color-mix(in srgb, var(--red) 10%, var(--bg)); }
+.error-group-header:active { transform: scale(0.997); transition: transform 60ms; }
+.error-group-header:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.error-group-icon { color: var(--red); font-size: 16px; flex-shrink: 0; }
+
+.error-group-msg {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.error-group-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--r100);
+  background: var(--red);
+  color: #fff;
+}
+
+.error-group-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.error-group-chevron {
+  color: var(--text-3);
+  font-size: 12px;
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+
+.error-group.open .error-group-chevron { transform: rotate(90deg); }
+
+.error-group-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 350ms cubic-bezier(0.4,0,0.2,1);
+  background: var(--bg);
+}
+
+.error-group.open .error-group-body { max-height: 600px; }
+
+.error-group-entries { padding: 2px 0 2px 20px; }
+
+.error-group-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  border-left: 2px solid color-mix(in srgb, var(--red) 25%, transparent);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.error-group.open .error-group-entry {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.error-group.open .error-group-entry:nth-child(1) { transition-delay: 30ms; }
+.error-group.open .error-group-entry:nth-child(2) { transition-delay: 60ms; }
+.error-group.open .error-group-entry:nth-child(3) { transition-delay: 90ms; }
+.error-group.open .error-group-entry:nth-child(4) { transition-delay: 120ms; }
+.error-group.open .error-group-entry:nth-child(5) { transition-delay: 150ms; }
+.error-group.open .error-group-entry:nth-child(6) { transition-delay: 180ms; }
+.error-group.open .error-group-entry:nth-child(7) { transition-delay: 210ms; }
+
+.error-entry-ts {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  min-width: 72px;
+}
+
+.error-entry-msg { color: var(--red); font-size: 12px; }
+
+/* 21c — Breakpoint Bar */
+.breakpoint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-3);
+  border-radius: var(--r6);
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+}
+
+.bp-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r100);
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  transition: all var(--transition);
+  user-select: none;
+}
+
+.bp-pill:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+
+.bp-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.bp-pattern { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+
+.bp-remove {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  transition: all 100ms;
+  padding: 0;
+  line-height: 1;
+}
+
+.bp-remove:hover { background: var(--red); color: #fff; }
+.bp-remove:active { transform: scale(0.85); }
+.bp-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.bp-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: var(--r100);
+  border: 1px dashed var(--border-bright);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+}
+
+.bp-add-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.bp-add-btn:active { transform: scale(0.97); transition: transform 60ms; }
+.bp-add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.bp-input-row {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.bp-input-row.visible { display: flex; }
+
+.bp-input {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: var(--r4);
+  border: 1px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  width: 180px;
+  transition: border-color var(--transition);
+}
+
+.bp-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+.bp-color-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.bp-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 100ms;
+}
+
+.bp-color-swatch:hover { transform: scale(1.15); }
+.bp-color-swatch.selected { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg); }
+.bp-color-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ─── § 22 · HTTP & API PATTERNS ────────────────────────────────────────── */
+
+/* 22a — HTTP Request Row */
+.http-table { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: var(--r6); overflow: hidden; }
+
+.http-row {
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  padding: 10px 14px;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 100ms ease-out;
+  position: relative;
+}
+
+.http-row:hover { background: color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+.http-row:active { transform: scale(0.997); transition: transform 60ms; }
+.http-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
+
+.http-method {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: var(--r4);
+  text-align: center;
+  min-width: 56px;
+  user-select: none;
+}
+
+.http-method.get    { background: color-mix(in srgb, var(--blue) 14%, var(--bg)); color: var(--blue); }
+.http-method.post   { background: color-mix(in srgb, var(--green) 14%, var(--bg)); color: var(--green); }
+.http-method.put    { background: color-mix(in srgb, var(--amber) 14%, var(--bg)); color: var(--amber); }
+.http-method.patch  { background: color-mix(in srgb, var(--purple) 14%, var(--bg)); color: var(--purple); }
+.http-method.delete { background: color-mix(in srgb, var(--red) 14%, var(--bg)); color: var(--red); }
+
+.http-url {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-3);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.http-url b { color: var(--text); font-weight: 600; }
+
+.http-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: var(--r100);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.http-status.s2xx { background: color-mix(in srgb, var(--green) 14%, var(--bg)); color: var(--green); }
+.http-status.s4xx { background: color-mix(in srgb, var(--amber) 14%, var(--bg)); color: var(--amber); }
+.http-status.s5xx { background: color-mix(in srgb, var(--red) 14%, var(--bg)); color: var(--red); }
+.http-status.pending { background: var(--bg-4); color: var(--text-3); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.http-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--text-3);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.http-duration {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: right;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+
+.http-duration.fast { color: var(--green); }
+.http-duration.medium { color: var(--amber); }
+.http-duration.slow { color: var(--red); }
+
+.http-retry {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--r100);
+  background: color-mix(in srgb, var(--amber) 14%, var(--bg));
+  color: var(--amber);
+  flex-shrink: 0;
+}
+
+/* Expandable detail */
+.http-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms cubic-bezier(0.4,0,0.2,1);
+  background: var(--bg);
+}
+
+.http-row.expanded + .http-detail { max-height: 500px; }
+
+.http-detail-inner {
+  padding: 0 14px 14px 82px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.http-detail-panel h4 {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.http-detail-panel pre {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-3);
+  padding: 10px 12px;
+  border-radius: var(--r4);
+  overflow-x: auto;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 22b — cURL Copy */
+.curl-section { display: flex; flex-direction: column; gap: 12px; }
+
+.curl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font);
+  align-self: flex-start;
+}
+
+.curl-btn:hover { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.curl-btn:active { transform: scale(0.97); transition: transform 60ms; }
+.curl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.curl-btn.copied { border-color: var(--green); color: var(--green); background: color-mix(in srgb, var(--green) 8%, transparent); }
+
+.curl-codeblock {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 16px 20px;
+  border-radius: var(--r6);
+  background: #1a1d23;
+  color: #c5c9d4;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+[data-theme="light"] .curl-codeblock { background: #1e2230; }
+
+.curl-key { color: #7dd3fc; }
+.curl-str { color: #a5f3c4; }
+.curl-url { color: #fbbf24; }
+
+/* 22c — Response Status Badge */
+.status-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.status-badge-card {
+  flex: 1;
+  min-width: 180px;
+  padding: 16px 20px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all var(--transition);
+}
+
+.status-badge-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.status-code-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-code {
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+
+.status-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-code-line.s2xx .status-code,
+.status-code-line.s2xx .status-text { color: var(--green); }
+.status-code-line.s4xx .status-code,
+.status-code-line.s4xx .status-text { color: var(--amber); }
+.status-code-line.s5xx .status-code,
+.status-code-line.s5xx .status-text { color: var(--red); }
+
+.status-badge-card.s2xx { border-color: color-mix(in srgb, var(--green) 25%, var(--border)); background: color-mix(in srgb, var(--green) 4%, var(--bg)); }
+.status-badge-card.s4xx { border-color: color-mix(in srgb, var(--amber) 25%, var(--border)); background: color-mix(in srgb, var(--amber) 4%, var(--bg)); }
+.status-badge-card.s5xx { border-color: color-mix(in srgb, var(--red) 25%, var(--border)); background: color-mix(in srgb, var(--red) 4%, var(--bg)); }
+
+.status-detail {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.status-detail span { display: flex; align-items: center; gap: 4px; }
+
+/* ─── § 23 · TOKEN VISUALIZATION ────────────────────────────────────────── */
+
+/* 23a — JWT 3-Segment Split */
+.jwt-split {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: var(--r6);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.jwt-segment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 100ms ease-out;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.jwt-segment:last-child { border-bottom: none; }
+.jwt-segment:active { transform: scale(0.997); transition: transform 60ms; }
+.jwt-segment:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
+
+.jwt-segment.header-seg { background: color-mix(in srgb, var(--red) 6%, var(--bg)); }
+.jwt-segment.header-seg:hover { background: color-mix(in srgb, var(--red) 10%, var(--bg)); }
+
+.jwt-segment.payload-seg { background: color-mix(in srgb, var(--purple) 6%, var(--bg)); }
+.jwt-segment.payload-seg:hover { background: color-mix(in srgb, var(--purple) 10%, var(--bg)); }
+
+.jwt-segment.signature-seg { background: color-mix(in srgb, var(--teal) 6%, var(--bg)); }
+.jwt-segment.signature-seg:hover { background: color-mix(in srgb, var(--teal) 10%, var(--bg)); }
+
+.jwt-seg-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.jwt-segment.header-seg .jwt-seg-label { color: var(--red); }
+.jwt-segment.payload-seg .jwt-seg-label { color: var(--purple); }
+.jwt-segment.signature-seg .jwt-seg-label { color: var(--teal); }
+
+.jwt-seg-value {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.jwt-seg-dot {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-align: center;
+  padding: 0 16px;
+  user-select: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.jwt-decoded-sections {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.jwt-decoded {
+  border-radius: var(--r6);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  scroll-margin-top: 120px;
+}
+
+.jwt-decoded-header {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.jwt-decoded.header-dec .jwt-decoded-header { background: color-mix(in srgb, var(--red) 8%, var(--bg)); color: var(--red); }
+.jwt-decoded.payload-dec .jwt-decoded-header { background: color-mix(in srgb, var(--purple) 8%, var(--bg)); color: var(--purple); }
+.jwt-decoded.signature-dec .jwt-decoded-header { background: color-mix(in srgb, var(--teal) 8%, var(--bg)); color: var(--teal); }
+
+.jwt-decoded pre {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 12px 16px;
+  color: var(--text-2);
+  background: var(--bg);
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.jwt-decoded .json-key { color: var(--blue); }
+.jwt-decoded .json-str { color: var(--green); }
+.jwt-decoded .json-num { color: var(--amber); }
+
+/* 23b — Token TTL Ring */
+.ttl-ring-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  justify-content: center;
+}
+
+.ttl-ring-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ttl-ring-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.ttl-ring-svg {
+  width: 48px;
+  height: 48px;
+  transform: rotate(-90deg);
+}
+
+.ttl-ring-bg {
+  fill: none;
+  stroke: var(--bg-4);
+  stroke-width: 4;
+}
+
+.ttl-ring-fg {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s ease, stroke 400ms ease;
+}
+
+.ttl-ring-fg.healthy { stroke: var(--green); }
+.ttl-ring-fg.warning { stroke: var(--amber); }
+.ttl-ring-fg.critical { stroke: var(--red); }
+.ttl-ring-fg.expired { stroke: var(--red); }
+
+.ttl-ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ttl-ring-text.expired-text { color: var(--red); font-size: 7px; font-weight: 700; letter-spacing: 0.02em; }
+
+.ttl-ring-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+/* 23c — Token Usage Stream */
+.token-stream { display: flex; flex-direction: column; gap: 1px; background: var(--border); border-radius: var(--r6); overflow: hidden; }
+
+.token-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg);
+  transition: background 100ms ease-out;
+  cursor: default;
+}
+
+.token-row:hover { background: color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+
+.token-ts {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
+.token-type-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--r100);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.token-type-badge.bearer { background: color-mix(in srgb, var(--blue) 14%, var(--bg)); color: var(--blue); }
+.token-type-badge.mwc    { background: color-mix(in srgb, var(--purple) 14%, var(--bg)); color: var(--purple); }
+.token-type-badge.s2s    { background: color-mix(in srgb, var(--teal) 14%, var(--bg)); color: var(--teal); }
+
+.token-api {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.token-result {
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.token-result.success { color: var(--green); }
+.token-result.fail { color: var(--red); }
+
+.token-result-code {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--red);
+  flex-shrink: 0;
+}
+
+.token-ttl {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  min-width: 100px;
+  text-align: right;
+}
+</style>
+</head>
+<body>
+
+<!-- ─── HEADER ───────────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <div class="page-wordmark">
+      <div class="page-wordmark-dot"></div>
+      EDOG Studio — Design Bible
+    </div>
+    <div class="page-meta">
+      <span>Part 4a · Real-time Data Viz</span>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle dark mode">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3.5"/><path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.4 3.4l.7.7M11.9 11.9l.7.7M3.4 12.6l.7-.7M11.9 4.1l.7-.7"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ─── MAIN ─────────────────────────────────────────────────────────────── -->
+<div class="main">
+
+  <!-- Intro -->
+  <div class="page-intro">
+    <h1 class="page-title">Real-time <span>Data Visualization</span></h1>
+    <p class="page-subtitle">Logs, HTTP pipelines, and token flows — the patterns engineers live in 8 hours a day. Every component must survive 1000+ events/sec without jank.</p>
+    <nav class="toc">
+      <a class="toc-item" href="#s21">21 · Log Entry Patterns</a>
+      <a class="toc-item" href="#s22">22 · HTTP &amp; API Patterns</a>
+      <a class="toc-item" href="#s23">23 · Token Visualization</a>
+    </nav>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- § 21 · LOG ENTRY PATTERNS                                             -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s21">
+    <div class="section-header">
+      <div class="section-num">21</div>
+      <div class="section-meta">
+        <h2>Log Entry Patterns</h2>
+        <p>For the Logs view (F04) — 1000+ logs/sec streaming, used 8hrs/day</p>
+      </div>
+    </div>
+
+    <!-- 21a — Log Row with Gutter -->
+    <div class="demo-card">
+      <div class="demo-label">21a · Log Row with Gutter</div>
+      <div class="log-list" id="logList">
+        <!-- Row 1: Message -->
+        <div class="log-row" tabindex="0" onclick="toggleLogExpand(this)">
+          <div class="log-strip msg"></div>
+          <div class="log-gutter">
+            <button class="gutter-btn bookmark-btn" onclick="event.stopPropagation(); toggleBookmark(this)" title="Toggle bookmark" aria-label="Toggle bookmark">&#9734;</button>
+            <button class="gutter-btn breakpoint-btn" onclick="event.stopPropagation(); toggleBreakpoint(this)" title="Toggle breakpoint" aria-label="Toggle breakpoint">&#9679;</button>
+          </div>
+          <div class="log-content">
+            <span class="log-ts">10:42:18.347</span>
+            <span class="log-level-badge msg">MSG</span>
+            <span class="log-source">DagExecutor</span>
+            <span class="log-msg">Starting DAG execution for workspace 8f3a2b1c with 14 nodes, topological sort complete in 2.1ms</span>
+          </div>
+        </div>
+        <!-- Row 2: Warning -->
+        <div class="log-row" tabindex="0" onclick="toggleLogExpand(this)">
+          <div class="log-strip warn"></div>
+          <div class="log-gutter">
+            <button class="gutter-btn bookmark-btn" onclick="event.stopPropagation(); toggleBookmark(this)" title="Toggle bookmark" aria-label="Toggle bookmark">&#9734;</button>
+            <button class="gutter-btn breakpoint-btn" onclick="event.stopPropagation(); toggleBreakpoint(this)" title="Toggle breakpoint" aria-label="Toggle breakpoint">&#9679;</button>
+          </div>
+          <div class="log-content">
+            <span class="log-ts">10:42:18.412</span>
+            <span class="log-level-badge warn">WARN</span>
+            <span class="log-source">SparkClient</span>
+            <span class="log-msg">Retry attempt 2/3 for request POST /v1/livy/sessions — previous attempt timed out after 30000ms</span>
+          </div>
+        </div>
+        <!-- Row 3: Error -->
+        <div class="log-row" tabindex="0" onclick="toggleLogExpand(this)">
+          <div class="log-strip err"></div>
+          <div class="log-gutter">
+            <button class="gutter-btn bookmark-btn" onclick="event.stopPropagation(); toggleBookmark(this)" title="Toggle bookmark" aria-label="Toggle bookmark">&#9734;</button>
+            <button class="gutter-btn breakpoint-btn active" onclick="event.stopPropagation(); toggleBreakpoint(this)" title="Toggle breakpoint" aria-label="Toggle breakpoint">&#9679;</button>
+          </div>
+          <div class="log-content">
+            <span class="log-ts">10:42:18.503</span>
+            <span class="log-level-badge err">ERR</span>
+            <span class="log-source">TokenManager</span>
+            <span class="log-msg">NullReferenceException: Object reference not set to an instance of an object at FabricLiveTable.Auth.TokenCache.GetCachedToken()</span>
+          </div>
+        </div>
+        <!-- Row 4: Verbose -->
+        <div class="log-row" tabindex="0" onclick="toggleLogExpand(this)">
+          <div class="log-strip vrb"></div>
+          <div class="log-gutter">
+            <button class="gutter-btn bookmark-btn" onclick="event.stopPropagation(); toggleBookmark(this)" title="Toggle bookmark" aria-label="Toggle bookmark">&#9734;</button>
+            <button class="gutter-btn breakpoint-btn" onclick="event.stopPropagation(); toggleBreakpoint(this)" title="Toggle breakpoint" aria-label="Toggle breakpoint">&#9679;</button>
+          </div>
+          <div class="log-content">
+            <span class="log-ts">10:42:18.591</span>
+            <span class="log-level-badge vrb">VRB</span>
+            <span class="log-source">HttpPipeline</span>
+            <span class="log-msg">Outbound request correlation-id=7a4f9c2e headers=[Authorization: Bearer ey***, X-Request-Id: 7a4f9c2e]</span>
+          </div>
+        </div>
+        <!-- Row 5: Message -->
+        <div class="log-row" tabindex="0" onclick="toggleLogExpand(this)">
+          <div class="log-strip msg"></div>
+          <div class="log-gutter">
+            <button class="gutter-btn bookmark-btn active" onclick="event.stopPropagation(); toggleBookmark(this)" title="Toggle bookmark" aria-label="Toggle bookmark">&#9733;</button>
+            <button class="gutter-btn breakpoint-btn" onclick="event.stopPropagation(); toggleBreakpoint(this)" title="Toggle breakpoint" aria-label="Toggle breakpoint">&#9679;</button>
+          </div>
+          <div class="log-content">
+            <span class="log-ts">10:42:18.648</span>
+            <span class="log-level-badge msg">MSG</span>
+            <span class="log-source">DagExecutor</span>
+            <span class="log-msg">DAG node "LoadCustomerData" completed successfully — 3 downstream nodes unblocked, elapsed 247ms</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 21b — Collapsible Error Group -->
+    <div class="demo-card">
+      <div class="demo-label">21b · Collapsible Error Group</div>
+      <div class="error-group" id="errorGroup">
+        <div class="error-group-header" tabindex="0" onclick="toggleErrorGroup()" onkeydown="if(event.key==='Enter')toggleErrorGroup()">
+          <span class="error-group-icon">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.5v4M8 10.5v.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+          <span class="error-group-msg">NullReferenceException in SparkClient</span>
+          <span class="error-group-count">&times;7</span>
+          <span class="error-group-time">10:42:18 — 10:42:31</span>
+          <span class="error-group-chevron">&#9656;</span>
+        </div>
+        <div class="error-group-body">
+          <div class="error-group-entries">
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:18.503</span><span class="error-entry-msg">NullReferenceException at TokenCache.GetCachedToken() line 142</span></div>
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:19.841</span><span class="error-entry-msg">NullReferenceException at TokenCache.GetCachedToken() line 142</span></div>
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:21.207</span><span class="error-entry-msg">NullReferenceException at SparkClient.SendRequest() line 89</span></div>
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:24.015</span><span class="error-entry-msg">NullReferenceException at TokenCache.GetCachedToken() line 142</span></div>
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:26.332</span><span class="error-entry-msg">NullReferenceException at SparkClient.SendRequest() line 89</span></div>
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:29.118</span><span class="error-entry-msg">NullReferenceException at TokenCache.GetCachedToken() line 142</span></div>
+            <div class="error-group-entry"><span class="error-entry-ts">10:42:31.440</span><span class="error-entry-msg">NullReferenceException at SparkClient.SendRequest() line 89</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 21c — Log Breakpoint Bar -->
+    <div class="demo-card">
+      <div class="demo-label">21c · Log Breakpoint Bar</div>
+      <div class="breakpoint-bar" id="breakpointBar">
+        <div class="bp-pill" data-bp="1">
+          <span class="bp-dot" style="background:var(--red)"></span>
+          <span class="bp-pattern">NullRef.*</span>
+          <button class="bp-remove" onclick="removeBp(this)" title="Remove breakpoint" aria-label="Remove breakpoint">&times;</button>
+        </div>
+        <div class="bp-pill" data-bp="2">
+          <span class="bp-dot" style="background:var(--amber)"></span>
+          <span class="bp-pattern">timeout</span>
+          <button class="bp-remove" onclick="removeBp(this)" title="Remove breakpoint" aria-label="Remove breakpoint">&times;</button>
+        </div>
+        <div class="bp-pill" data-bp="3">
+          <span class="bp-dot" style="background:var(--blue)"></span>
+          <span class="bp-pattern">DAG.*started</span>
+          <button class="bp-remove" onclick="removeBp(this)" title="Remove breakpoint" aria-label="Remove breakpoint">&times;</button>
+        </div>
+        <button class="bp-add-btn" onclick="showBpInput()" id="bpAddBtn">+ Add Breakpoint</button>
+        <div class="bp-input-row" id="bpInputRow">
+          <input class="bp-input" id="bpInput" type="text" placeholder="Regex pattern..." onkeydown="if(event.key==='Enter')addBp()">
+          <div class="bp-color-picker" id="bpColorPicker">
+            <button class="bp-color-swatch selected" style="background:var(--red)" onclick="selectBpColor(this)" data-color="var(--red)" tabindex="0" aria-label="Red"></button>
+            <button class="bp-color-swatch" style="background:var(--amber)" onclick="selectBpColor(this)" data-color="var(--amber)" tabindex="0" aria-label="Amber"></button>
+            <button class="bp-color-swatch" style="background:var(--blue)" onclick="selectBpColor(this)" data-color="var(--blue)" tabindex="0" aria-label="Blue"></button>
+            <button class="bp-color-swatch" style="background:var(--green)" onclick="selectBpColor(this)" data-color="var(--green)" tabindex="0" aria-label="Green"></button>
+            <button class="bp-color-swatch" style="background:var(--purple)" onclick="selectBpColor(this)" data-color="var(--purple)" tabindex="0" aria-label="Purple"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- § 22 · HTTP & API PATTERNS                                            -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s22">
+    <div class="section-header">
+      <div class="section-num">22</div>
+      <div class="section-meta">
+        <h2>HTTP &amp; API Patterns</h2>
+        <p>For HTTP Pipeline view (F04) + API Playground (F11) — every outbound call visualized</p>
+      </div>
+    </div>
+
+    <!-- 22a — HTTP Request Row -->
+    <div class="demo-card">
+      <div class="demo-label">22a · HTTP Request Row</div>
+      <div class="http-table" id="httpTable">
+        <!-- GET 200 -->
+        <div class="http-row" tabindex="0" onclick="toggleHttpRow(this)">
+          <span class="http-method get">GET</span>
+          <span class="http-url">biazure-int-edog...<b>/v1/workspaces</b></span>
+          <span class="http-status s2xx">200 OK</span>
+          <span class="http-duration fast">127ms</span>
+        </div>
+        <div class="http-detail">
+          <div class="http-detail-inner">
+            <div class="http-detail-panel"><h4>Request Headers</h4><pre>Authorization: Bearer eyJ0eXAi...
+X-Request-Id: 7a4f9c2e-1b3d
+Accept: application/json
+User-Agent: edog-studio/1.0</pre></div>
+            <div class="http-detail-panel"><h4>Response Body</h4><pre>{
+  "workspaces": [
+    { "id": "8f3a2b1c", "name": "Sales Analytics" },
+    { "id": "a1b2c3d4", "name": "Inventory Pipeline" }
+  ],
+  "count": 2
+}</pre></div>
+          </div>
+        </div>
+
+        <!-- POST 201 -->
+        <div class="http-row" tabindex="0" onclick="toggleHttpRow(this)">
+          <span class="http-method post">POST</span>
+          <span class="http-url">biazure-int-edog...<b>/v1/livy/sessions</b></span>
+          <span class="http-status s2xx">201 Created</span>
+          <span class="http-duration medium">1,842ms</span>
+        </div>
+        <div class="http-detail">
+          <div class="http-detail-inner">
+            <div class="http-detail-panel"><h4>Request Body</h4><pre>{
+  "kind": "spark",
+  "proxyUser": "edog-service",
+  "conf": {
+    "spark.driver.memory": "4g"
+  }
+}</pre></div>
+            <div class="http-detail-panel"><h4>Response Body</h4><pre>{
+  "id": 42,
+  "state": "starting",
+  "kind": "spark",
+  "log": []
+}</pre></div>
+          </div>
+        </div>
+
+        <!-- PUT 401 -->
+        <div class="http-row" tabindex="0" onclick="toggleHttpRow(this)">
+          <span class="http-method put">PUT</span>
+          <span class="http-url">biazure-int-edog...<b>/v1/tables/config</b></span>
+          <span class="http-status s4xx">401 Unauthorized</span>
+          <span class="http-duration fast">89ms</span>
+        </div>
+        <div class="http-detail">
+          <div class="http-detail-inner">
+            <div class="http-detail-panel"><h4>Request Headers</h4><pre>Authorization: Bearer [EXPIRED]
+Content-Type: application/json
+X-Request-Id: e2f8a1c4-9d7b</pre></div>
+            <div class="http-detail-panel"><h4>Response Body</h4><pre>{
+  "error": {
+    "code": "TokenExpired",
+    "message": "Bearer token has expired"
+  }
+}</pre></div>
+          </div>
+        </div>
+
+        <!-- DELETE 500 with retry -->
+        <div class="http-row" tabindex="0" onclick="toggleHttpRow(this)">
+          <span class="http-method delete">DELETE</span>
+          <span class="http-url">biazure-int-edog...<b>/v1/sessions/42</b></span>
+          <span class="http-status s5xx">500 Server Error</span>
+          <span class="http-duration slow">4,210ms</span>
+          <span class="http-retry">&times;3</span>
+        </div>
+        <div class="http-detail">
+          <div class="http-detail-inner">
+            <div class="http-detail-panel"><h4>Request Headers</h4><pre>Authorization: Bearer eyJ0eXAi...
+X-Request-Id: b3c4d5e6-7f8a
+X-Retry-Count: 3</pre></div>
+            <div class="http-detail-panel"><h4>Response Body</h4><pre>{
+  "error": {
+    "code": "InternalError",
+    "message": "Session cleanup failed",
+    "requestId": "b3c4d5e6-7f8a"
+  }
+}</pre></div>
+          </div>
+        </div>
+
+        <!-- PATCH pending -->
+        <div class="http-row" tabindex="0" onclick="toggleHttpRow(this)">
+          <span class="http-method patch">PATCH</span>
+          <span class="http-url">biazure-int-edog...<b>/v1/lakehouses/deploy</b></span>
+          <span class="http-status pending"><span class="http-spinner"></span>Pending</span>
+          <span class="http-duration" style="color:var(--text-3)">—</span>
+        </div>
+        <div class="http-detail">
+          <div class="http-detail-inner">
+            <div class="http-detail-panel"><h4>Request Body</h4><pre>{
+  "lakehouseId": "lh-9f8e7d6c",
+  "config": { "autoRefresh": true },
+  "deployMode": "incremental"
+}</pre></div>
+            <div class="http-detail-panel"><h4>Response</h4><pre style="color:var(--text-3);font-style:italic;">Waiting for response...</pre></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 22b — cURL Copy Button -->
+    <div class="demo-card">
+      <div class="demo-label">22b · cURL Copy Button</div>
+      <div class="curl-section">
+        <button class="curl-btn" id="curlBtn" onclick="copyCurl()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>
+          <span id="curlBtnText">Copy as cURL</span>
+        </button>
+        <div class="curl-codeblock"><span class="curl-key">curl</span> <span class="curl-str">-X POST</span> \
+  <span class="curl-url">'https://biazure-int-edog.fabric.microsoft.com/v1/livy/sessions'</span> \
+  <span class="curl-key">-H</span> <span class="curl-str">'Authorization: Bearer eyJ0eXAiOiJKV1QiLC...'</span> \
+  <span class="curl-key">-H</span> <span class="curl-str">'Content-Type: application/json'</span> \
+  <span class="curl-key">-H</span> <span class="curl-str">'X-Request-Id: 7a4f9c2e-1b3d-4e5f'</span> \
+  <span class="curl-key">-d</span> <span class="curl-str">'{
+    "kind": "spark",
+    "proxyUser": "edog-service",
+    "conf": { "spark.driver.memory": "4g" }
+  }'</span></div>
+      </div>
+    </div>
+
+    <!-- 22c — Response Status Badge -->
+    <div class="demo-card">
+      <div class="demo-label">22c · Response Status Badge</div>
+      <div class="status-badge-row">
+        <div class="status-badge-card s2xx">
+          <div class="status-code-line s2xx">
+            <span class="status-code">200</span>
+            <span class="status-text">OK</span>
+          </div>
+          <div class="status-detail">
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 4v4.5l3 1.5"/></svg>
+              342ms
+            </span>
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13V5.5A2.5 2.5 0 015.5 3h5A2.5 2.5 0 0113 5.5V13"/><path d="M3 13h10M6 7h4M6 10h2"/></svg>
+              2.4 KB
+            </span>
+          </div>
+        </div>
+
+        <div class="status-badge-card s2xx">
+          <div class="status-code-line s2xx">
+            <span class="status-code">201</span>
+            <span class="status-text">Created</span>
+          </div>
+          <div class="status-detail">
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 4v4.5l3 1.5"/></svg>
+              1,842ms
+            </span>
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13V5.5A2.5 2.5 0 015.5 3h5A2.5 2.5 0 0113 5.5V13"/><path d="M3 13h10M6 7h4M6 10h2"/></svg>
+              856 B
+            </span>
+          </div>
+        </div>
+
+        <div class="status-badge-card s4xx">
+          <div class="status-code-line s4xx">
+            <span class="status-code">404</span>
+            <span class="status-text">Not Found</span>
+          </div>
+          <div class="status-detail">
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 4v4.5l3 1.5"/></svg>
+              58ms
+            </span>
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13V5.5A2.5 2.5 0 015.5 3h5A2.5 2.5 0 0113 5.5V13"/><path d="M3 13h10M6 7h4M6 10h2"/></svg>
+              128 B
+            </span>
+          </div>
+        </div>
+
+        <div class="status-badge-card s5xx">
+          <div class="status-code-line s5xx">
+            <span class="status-code">500</span>
+            <span class="status-text">Internal Server Error</span>
+          </div>
+          <div class="status-detail">
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 4v4.5l3 1.5"/></svg>
+              4,210ms
+            </span>
+            <span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13V5.5A2.5 2.5 0 015.5 3h5A2.5 2.5 0 0113 5.5V13"/><path d="M3 13h10M6 7h4M6 10h2"/></svg>
+              512 B
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <!-- § 23 · TOKEN VISUALIZATION                                            -->
+  <!-- ═══════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s23">
+    <div class="section-header">
+      <div class="section-num">23</div>
+      <div class="section-meta">
+        <h2>Token Visualization</h2>
+        <p>For Token Inspector (F04 Tokens) + Token Debugger (F33) — every token decoded and tracked</p>
+      </div>
+    </div>
+
+    <!-- 23a — JWT 3-Segment Split -->
+    <div class="demo-card">
+      <div class="demo-label">23a · JWT 3-Segment Split</div>
+      <div class="jwt-split">
+        <div class="jwt-segment header-seg" tabindex="0" onclick="scrollToDecoded('header')" title="Click to view decoded header">
+          <span class="jwt-seg-label">Header</span>
+          <span class="jwt-seg-value">eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjJiMjY0MmQ5In0</span>
+        </div>
+        <div class="jwt-segment payload-seg" tabindex="0" onclick="scrollToDecoded('payload')" title="Click to view decoded payload">
+          <span class="jwt-seg-label">Payload</span>
+          <span class="jwt-seg-value">eyJhdWQiOiJodHRwczovL2FuYWx5c2lzLndpbmRvd3MubmV0L3Bvd2VyYmkiLCJpc3MiOiJodHRwczovL3N0cy53aW5kb3dzLm5ldC83MmY5ODhiZi04NmYxIiwidXBuIjoiZGV2QGZhYnJpYy5tc2Z0In0</span>
+        </div>
+        <div class="jwt-segment signature-seg" tabindex="0" onclick="scrollToDecoded('signature')" title="Click to view signature">
+          <span class="jwt-seg-label">Signature</span>
+          <span class="jwt-seg-value">Lobn9MEsBTgg2f3LKl7VhcPmYRE4xLe_qZxAdk8c1GUu9T0_Hv4bXn_iFWbm3sz9oRPAHkVq5i7F0</span>
+        </div>
+      </div>
+
+      <div class="jwt-decoded-sections">
+        <div class="jwt-decoded header-dec" id="jwt-header">
+          <div class="jwt-decoded-header">Decoded Header</div>
+          <pre>{
+  <span class="json-key">"alg"</span>: <span class="json-str">"RS256"</span>,
+  <span class="json-key">"typ"</span>: <span class="json-str">"JWT"</span>,
+  <span class="json-key">"kid"</span>: <span class="json-str">"2b2642d9-a418-4b2c"</span>
+}</pre>
+        </div>
+        <div class="jwt-decoded payload-dec" id="jwt-payload">
+          <div class="jwt-decoded-header">Decoded Payload</div>
+          <pre>{
+  <span class="json-key">"aud"</span>: <span class="json-str">"https://analysis.windows.net/powerbi"</span>,
+  <span class="json-key">"iss"</span>: <span class="json-str">"https://sts.windows.net/72f988bf-86f1"</span>,
+  <span class="json-key">"iat"</span>: <span class="json-num">1718294400</span>,
+  <span class="json-key">"exp"</span>: <span class="json-num">1718298000</span>,
+  <span class="json-key">"upn"</span>: <span class="json-str">"dev@fabric.msft"</span>,
+  <span class="json-key">"name"</span>: <span class="json-str">"EDOG Developer"</span>,
+  <span class="json-key">"tid"</span>: <span class="json-str">"72f988bf-86f1-41af-91ab-2d7cd011db47"</span>,
+  <span class="json-key">"scp"</span>: <span class="json-str">"Workspace.ReadWrite.All Dataset.ReadWrite.All"</span>
+}</pre>
+        </div>
+        <div class="jwt-decoded signature-dec" id="jwt-signature">
+          <div class="jwt-decoded-header">Signature (Raw)</div>
+          <pre style="word-break:break-all;">2e86e7f4c12c053820d9fdcb2a5ed585e3e664113
+8c4b7bea99c00769f1bd0654bbd4f4fc7bf86d79
+ff8895598be6db3be74a138022655ae98bb17450</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- 23b — Token TTL Ring -->
+    <div class="demo-card">
+      <div class="demo-label">23b · Token TTL Ring</div>
+      <div class="ttl-ring-row">
+        <!-- Healthy -->
+        <div class="ttl-ring-item">
+          <div class="ttl-ring-wrap">
+            <svg class="ttl-ring-svg" viewBox="0 0 48 48">
+              <circle class="ttl-ring-bg" cx="24" cy="24" r="20"/>
+              <circle class="ttl-ring-fg healthy" cx="24" cy="24" r="20"
+                stroke-dasharray="125.66"
+                stroke-dashoffset="18.85"/>
+            </svg>
+            <div class="ttl-ring-text">42m</div>
+          </div>
+          <span class="ttl-ring-label">Healthy</span>
+        </div>
+        <!-- Warning -->
+        <div class="ttl-ring-item">
+          <div class="ttl-ring-wrap">
+            <svg class="ttl-ring-svg" viewBox="0 0 48 48">
+              <circle class="ttl-ring-bg" cx="24" cy="24" r="20"/>
+              <circle class="ttl-ring-fg warning" cx="24" cy="24" r="20"
+                stroke-dasharray="125.66"
+                stroke-dashoffset="83.77"/>
+            </svg>
+            <div class="ttl-ring-text">8m</div>
+          </div>
+          <span class="ttl-ring-label">Warning</span>
+        </div>
+        <!-- Critical -->
+        <div class="ttl-ring-item">
+          <div class="ttl-ring-wrap">
+            <svg class="ttl-ring-svg" viewBox="0 0 48 48">
+              <circle class="ttl-ring-bg" cx="24" cy="24" r="20"/>
+              <circle class="ttl-ring-fg critical" cx="24" cy="24" r="20"
+                stroke-dasharray="125.66"
+                stroke-dashoffset="113.09"/>
+            </svg>
+            <div class="ttl-ring-text">4:18</div>
+          </div>
+          <span class="ttl-ring-label">Critical</span>
+        </div>
+        <!-- Expired -->
+        <div class="ttl-ring-item">
+          <div class="ttl-ring-wrap">
+            <svg class="ttl-ring-svg" viewBox="0 0 48 48">
+              <circle class="ttl-ring-bg" cx="24" cy="24" r="20"/>
+              <circle class="ttl-ring-fg expired" cx="24" cy="24" r="20"
+                stroke-dasharray="125.66"
+                stroke-dashoffset="125.66"/>
+            </svg>
+            <div class="ttl-ring-text expired-text">EXPIRED</div>
+          </div>
+          <span class="ttl-ring-label">Expired</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 23c — Token Usage Stream Row -->
+    <div class="demo-card">
+      <div class="demo-label">23c · Token Usage Stream Row</div>
+      <div class="token-stream">
+        <div class="token-row">
+          <span class="token-ts">10:42:18</span>
+          <span class="token-type-badge bearer">Bearer</span>
+          <span class="token-api">/v1/workspaces</span>
+          <span class="token-result success">&#10003;</span>
+          <span class="token-ttl">38m remaining</span>
+        </div>
+        <div class="token-row">
+          <span class="token-ts">10:42:19</span>
+          <span class="token-type-badge mwc">MwcToken</span>
+          <span class="token-api">/v1/livy/sessions</span>
+          <span class="token-result success">&#10003;</span>
+          <span class="token-ttl">24m remaining</span>
+        </div>
+        <div class="token-row">
+          <span class="token-ts">10:42:21</span>
+          <span class="token-type-badge s2s">S2S</span>
+          <span class="token-api">/v1/tables/config</span>
+          <span class="token-result fail">&#10007;</span>
+          <span class="token-result-code">401</span>
+          <span class="token-ttl" style="color:var(--red)">0m — expired</span>
+        </div>
+        <div class="token-row">
+          <span class="token-ts">10:42:24</span>
+          <span class="token-type-badge bearer">Bearer</span>
+          <span class="token-api">/v1/lakehouses/deploy</span>
+          <span class="token-result fail">&#10007;</span>
+          <span class="token-result-code">403</span>
+          <span class="token-ttl">12m remaining</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- .main -->
+
+<!-- ─── SCRIPTS ──────────────────────────────────────────────────────────── -->
+<script>
+/* ── Theme Toggle ── */
+function toggleTheme() {
+  const html = document.documentElement;
+  html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+}
+
+/* ── 21a: Log Row ── */
+function toggleLogExpand(row) {
+  row.classList.toggle('expanded');
+}
+
+function toggleBookmark(btn) {
+  btn.classList.toggle('active');
+  btn.innerHTML = btn.classList.contains('active') ? '\u2605' : '\u2606';
+}
+
+function toggleBreakpoint(btn) {
+  btn.classList.toggle('active');
+}
+
+/* ── 21b: Error Group ── */
+function toggleErrorGroup() {
+  document.getElementById('errorGroup').classList.toggle('open');
+}
+
+/* ── 21c: Breakpoint Bar ── */
+let selectedBpColor = 'var(--red)';
+
+function removeBp(btn) {
+  const pill = btn.closest('.bp-pill');
+  pill.style.opacity = '0';
+  pill.style.transform = 'scale(0.8)';
+  pill.style.transition = 'all 200ms ease';
+  setTimeout(() => pill.remove(), 200);
+}
+
+function showBpInput() {
+  const row = document.getElementById('bpInputRow');
+  const btn = document.getElementById('bpAddBtn');
+  row.classList.toggle('visible');
+  if (row.classList.contains('visible')) {
+    btn.style.display = 'none';
+    document.getElementById('bpInput').focus();
+  } else {
+    btn.style.display = '';
+  }
+}
+
+function selectBpColor(swatch) {
+  document.querySelectorAll('.bp-color-swatch').forEach(s => s.classList.remove('selected'));
+  swatch.classList.add('selected');
+  selectedBpColor = swatch.dataset.color;
+}
+
+function addBp() {
+  const input = document.getElementById('bpInput');
+  const val = input.value.trim();
+  if (!val) return;
+
+  const pill = document.createElement('div');
+  pill.className = 'bp-pill';
+  pill.innerHTML =
+    '<span class="bp-dot" style="background:' + selectedBpColor + '"></span>' +
+    '<span class="bp-pattern">' + escHtml(val) + '</span>' +
+    '<button class="bp-remove" onclick="removeBp(this)" title="Remove breakpoint" aria-label="Remove breakpoint">&times;</button>';
+
+  const bar = document.getElementById('breakpointBar');
+  const addBtn = document.getElementById('bpAddBtn');
+  bar.insertBefore(pill, addBtn);
+
+  input.value = '';
+  document.getElementById('bpInputRow').classList.remove('visible');
+  addBtn.style.display = '';
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ── 22a: HTTP Row ── */
+function toggleHttpRow(row) {
+  const wasExpanded = row.classList.contains('expanded');
+  document.querySelectorAll('.http-row.expanded').forEach(r => r.classList.remove('expanded'));
+  if (!wasExpanded) row.classList.add('expanded');
+}
+
+/* ── 22b: cURL Copy ── */
+function copyCurl() {
+  const curlText =
+    "curl -X POST \\\n" +
+    "  'https://biazure-int-edog.fabric.microsoft.com/v1/livy/sessions' \\\n" +
+    "  -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLC...' \\\n" +
+    "  -H 'Content-Type: application/json' \\\n" +
+    "  -H 'X-Request-Id: 7a4f9c2e-1b3d-4e5f' \\\n" +
+    "  -d '{ \"kind\": \"spark\", \"proxyUser\": \"edog-service\", \"conf\": { \"spark.driver.memory\": \"4g\" } }'";
+
+  navigator.clipboard.writeText(curlText).catch(() => {});
+
+  const btn = document.getElementById('curlBtn');
+  const txt = document.getElementById('curlBtnText');
+  btn.classList.add('copied');
+  txt.textContent = 'Copied \u2713';
+  setTimeout(() => {
+    btn.classList.remove('copied');
+    txt.textContent = 'Copy as cURL';
+  }, 1500);
+}
+
+/* ── 23a: JWT Scroll ── */
+function scrollToDecoded(section) {
+  const el = document.getElementById('jwt-' + section);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.boxShadow = '0 0 0 2px var(--accent)';
+    setTimeout(() => { el.style.boxShadow = ''; }, 1200);
+  }
+}
+</script>
+</body>
+</html>

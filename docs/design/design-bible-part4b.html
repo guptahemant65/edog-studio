@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Design Bible Part 4b</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --accent:   #6d5cff;
+  --green:    #18a058;
+  --amber:    #e5940c;
+  --red:      #e5453b;
+  --blue:     #2d7ff9;
+  --purple:   #a855f7;
+  --teal:     #0d9488;
+
+  --bg:       #fff;
+  --bg-2:     #f8f9fb;
+  --bg-3:     #f4f5f7;
+  --bg-4:     #ebedf0;
+
+  --text:     #1a1d23;
+  --text-2:   #5a6070;
+  --text-3:   #8e95a5;
+
+  --border:        rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --font:  'Inter', system-ui, sans-serif;
+  --mono:  'Cascadia Code', 'Consolas', monospace;
+
+  --r4:   4px;
+  --r6:   6px;
+  --r10:  10px;
+  --r16:  16px;
+  --r100: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+  --bg:       #0f1117;
+  --bg-2:     #161923;
+  --bg-3:     #1e2230;
+  --bg-4:     #252a38;
+
+  --text:     #e8eaf0;
+  --text-2:   #9aa0b2;
+  --text-3:   #5f6578;
+
+  --border:        rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* ─── RESET + BASE ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ─── PAGE LAYOUT ───────────────────────────────────────────────────────── */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+.page-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.page-wordmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+.page-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover { background: var(--bg-4); color: var(--text); }
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.page-intro { padding: 40px 0 0; }
+
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.page-title span {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-subtitle {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--text-2);
+  max-width: 600px;
+}
+
+.toc {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toc-item {
+  padding: 6px 14px;
+  border-radius: var(--r100);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toc-item:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ─── SECTION WRAPPER ───────────────────────────────────────────────────── */
+.section { scroll-margin-top: 80px; }
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-num {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r6);
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.section-meta h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.section-meta p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.demo-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.demo-card + .demo-card { margin-top: 12px; }
+
+.demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+/* ─── BADGES (shared) ───────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.badge.success { background: color-mix(in srgb, var(--green) 12%, var(--bg)); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 25%, transparent); }
+.badge.warn    { background: color-mix(in srgb, var(--amber) 12%, var(--bg)); color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); }
+.badge.error   { background: color-mix(in srgb, var(--red)   12%, var(--bg)); color: var(--red);   border: 1px solid color-mix(in srgb, var(--red)   25%, transparent); }
+.badge.info    { background: color-mix(in srgb, var(--blue)  12%, var(--bg)); color: var(--blue);  border: 1px solid color-mix(in srgb, var(--blue)  25%, transparent); }
+.badge.muted   { background: var(--bg-3); color: var(--text-3); border: 1px solid var(--border); }
+.badge.accent  { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+
+/* ─── BUTTONS (shared) ──────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: var(--r6);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn-accent  { background: var(--accent); color: #fff; }
+.btn-accent:hover { filter: brightness(1.1); }
+
+.btn-ghost   { background: transparent; color: var(--text-2); border-color: var(--border-bright); }
+.btn-ghost:hover { background: var(--bg-3); color: var(--text); }
+
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* ─── § 24 · DASHBOARD CARDS ────────────────────────────────────────────── */
+
+/* 24a — Metric Cards */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.metric-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 16px;
+  min-width: 0;
+  cursor: default;
+  transition: all var(--transition);
+  user-select: none;
+}
+
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-bright);
+}
+
+.metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.metric-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.metric-trend {
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.metric-trend.up-bad   { color: var(--red); }
+.metric-trend.down-good { color: var(--green); }
+.metric-trend.stable   { color: var(--text-3); }
+.metric-trend.up-good  { color: var(--green); }
+
+.metric-sparkline {
+  margin-top: 8px;
+  display: block;
+}
+
+.metric-sparkline path {
+  transition: d 300ms;
+}
+
+.metric-footer {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* 24b — SKU Selector */
+.sku-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+}
+
+.sku-card {
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: var(--r10);
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  user-select: none;
+}
+
+.sku-card:hover:not(.disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
+}
+
+.sku-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.sku-card.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+.sku-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.sku-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.sku-card.selected .sku-check { display: flex; }
+
+.sku-tier {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.sku-detail {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
+.sku-price {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--amber);
+}
+
+.sku-badge-unavail {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  background: var(--bg-4);
+  padding: 2px 8px;
+  border-radius: var(--r100);
+}
+
+/* 24c — Cost Comparison */
+.cost-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.cost-side {
+  padding: 20px;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  border: 2px solid transparent;
+}
+
+.cost-side:first-child { border-right: 1px solid var(--border); border-radius: var(--r10) 0 0 var(--r10); }
+.cost-side:last-child  { border-radius: 0 var(--r10) var(--r10) 0; }
+
+.cost-side:hover { background: color-mix(in srgb, var(--accent) 3%, var(--bg)); }
+.cost-side:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.cost-side.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--bg)); }
+.cost-side.recommended { border-color: var(--green); background: color-mix(in srgb, var(--green) 5%, var(--bg)); }
+
+.cost-side-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+
+.cost-side-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.cost-metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.cost-metric:last-child { border-bottom: none; }
+
+.cost-metric-val {
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.cost-recommended-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 2px 8px;
+  border-radius: var(--r100);
+  background: color-mix(in srgb, var(--green) 14%, var(--bg));
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--green) 25%, transparent);
+}
+
+.cost-delta {
+  grid-column: 1 / -1;
+  padding: 12px 20px;
+  background: var(--bg-3);
+  font-size: 12px;
+  color: var(--text-2);
+  text-align: center;
+  font-weight: 500;
+  border-top: 1px solid var(--border);
+}
+
+.cost-delta strong { color: var(--text); font-weight: 600; }
+
+/* 24d — Multi-Signal Alert */
+.alert-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+}
+
+.alert-banner {
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.alert-banner.critical { background: var(--red); }
+.alert-banner.warning  { background: var(--amber); }
+.alert-banner.info-sev { background: var(--blue); }
+
+.alert-body { padding: 20px; }
+
+.alert-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.signal-list { display: flex; flex-direction: column; gap: 10px; }
+
+.signal-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-2);
+  border-radius: var(--r6);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.signal-bar-wrap {
+  width: 60px;
+  height: 6px;
+  background: var(--bg-4);
+  border-radius: 3px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.signal-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 400ms ease;
+}
+
+.signal-bar-fill.red   { background: var(--red); }
+.signal-bar-fill.amber { background: var(--amber); }
+.signal-bar-fill.green { background: var(--green); }
+
+.signal-text { flex: 1; }
+
+.signal-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r100);
+  white-space: nowrap;
+}
+
+.signal-badge.red   { background: color-mix(in srgb, var(--red) 12%, var(--bg)); color: var(--red); }
+.signal-badge.amber { background: color-mix(in srgb, var(--amber) 12%, var(--bg)); color: var(--amber); }
+.signal-badge.warn  { background: color-mix(in srgb, var(--amber) 12%, var(--bg)); color: var(--amber); }
+
+.alert-confidence {
+  margin-top: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.confidence-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.confidence-label {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.alert-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.alert-timestamp {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ─── § 25 · WIZARD & MULTI-STEP FORMS ──────────────────────────────────── */
+
+/* 25a — Wizard Layout */
+.wizard-layout {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+  background: var(--bg);
+  min-height: 320px;
+}
+
+.wizard-sidebar {
+  width: 200px;
+  background: var(--bg-3);
+  padding: 24px 16px;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.wizard-steps { display: flex; flex-direction: column; gap: 0; }
+
+.wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  position: relative;
+  cursor: default;
+}
+
+.wizard-step-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition: all var(--transition);
+}
+
+.wizard-step.completed .wizard-step-dot { background: var(--green); color: #fff; }
+.wizard-step.current .wizard-step-dot   { background: var(--accent); color: #fff; }
+.wizard-step.future .wizard-step-dot    { background: var(--bg-4); color: var(--text-3); border: 1px solid var(--border-bright); }
+
+.wizard-step-label {
+  font-size: 13px;
+  color: var(--text-3);
+  transition: all var(--transition);
+}
+
+.wizard-step.completed .wizard-step-label { color: var(--text-2); }
+.wizard-step.current .wizard-step-label   { color: var(--text); font-weight: 600; }
+
+/* connector lines */
+.wizard-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 30px;
+  bottom: -10px;
+  width: 2px;
+  z-index: 0;
+}
+
+.wizard-step.completed:not(:last-child)::after { background: var(--green); }
+.wizard-step.current:not(:last-child)::after   { background: var(--accent); }
+.wizard-step.future:not(:last-child)::after     { background: var(--border-bright); background-image: repeating-linear-gradient(to bottom, var(--border-bright) 0 4px, transparent 4px 8px); }
+
+.wizard-content {
+  flex: 1;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.wizard-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.wizard-form { flex: 1; display: flex; flex-direction: column; gap: 16px; }
+
+.wizard-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-bottom: 6px;
+}
+
+.wizard-field input[type="text"] {
+  width: 100%;
+  max-width: 360px;
+  padding: 8px 12px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  transition: all var(--transition);
+}
+
+.wizard-field input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+.wizard-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-4);
+  border: 1px solid var(--border-bright);
+  position: relative;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.toggle-track.on { background: var(--accent); border-color: var(--accent); }
+
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: all var(--transition);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.toggle-track.on .toggle-thumb { left: 18px; }
+
+.wizard-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* 25b — Checklist Card */
+.checklist-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+}
+
+.checklist-title {
+  padding: 16px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.checklist-items { display: flex; flex-direction: column; }
+
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+
+.checklist-row:last-child { border-bottom: none; }
+.checklist-row:hover { background: color-mix(in srgb, var(--accent) 2%, var(--bg)); }
+
+.check-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.check-icon.pass { background: color-mix(in srgb, var(--green) 14%, var(--bg)); color: var(--green); }
+.check-icon.fail { background: color-mix(in srgb, var(--red) 14%, var(--bg)); color: var(--red); }
+.check-icon.checking { background: color-mix(in srgb, var(--amber) 14%, var(--bg)); color: var(--amber); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.check-icon.checking svg { animation: spin 1s linear infinite; }
+
+.check-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.check-text.failed-text { color: var(--red); }
+
+.btn-fix {
+  padding: 4px 12px;
+  border-radius: var(--r6);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font);
+  border: 1px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-fix:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-fix:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.checklist-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-2);
+}
+
+.checklist-summary {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.checklist-bar-wrap {
+  width: 120px;
+  height: 6px;
+  background: var(--bg-4);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.checklist-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--green);
+  transition: width 400ms ease;
+}
+
+/* ─── § 26 · TEST & COMPARISON PATTERNS ─────────────────────────────────── */
+
+/* 26a — Test Case Row */
+.test-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.test-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-bright);
+  background: var(--bg-3);
+}
+
+.test-table th:first-child { border-radius: var(--r6) 0 0 0; }
+.test-table th:last-child  { border-radius: 0 var(--r6) 0 0; }
+
+.test-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+  transition: background var(--transition);
+}
+
+.test-table tbody tr { cursor: pointer; }
+.test-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 3%, var(--bg)); }
+
+.test-table tbody tr.fail-row td { background: color-mix(in srgb, var(--red) 4%, var(--bg)); }
+.test-table tbody tr.fail-row:hover td { background: color-mix(in srgb, var(--red) 8%, var(--bg)); }
+
+.test-table tbody tr.skip-row td { color: var(--text-3); }
+
+.test-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.test-icon.pass { background: color-mix(in srgb, var(--green) 14%, var(--bg)); color: var(--green); }
+.test-icon.fail { background: color-mix(in srgb, var(--red) 14%, var(--bg)); color: var(--red); }
+.test-icon.skip { background: var(--bg-4); color: var(--text-3); }
+
+.test-val-bad { color: var(--red); font-weight: 700; }
+.test-mono { font-family: var(--mono); font-size: 12px; }
+
+.test-expand {
+  display: none;
+  padding: 12px 20px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  line-height: 1.7;
+}
+
+.test-expand.open { display: table-row; }
+
+/* 26b — Metric Delta Badge */
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--r100);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--mono);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.delta-badge.worse  { background: color-mix(in srgb, var(--red) 12%, var(--bg)); color: var(--red); }
+.delta-badge.better { background: color-mix(in srgb, var(--green) 12%, var(--bg)); color: var(--green); }
+.delta-badge.stable { background: var(--bg-3); color: var(--text-3); }
+
+.delta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* 26c — Execution Comparison Summary */
+.exec-compare {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  overflow: hidden;
+}
+
+.exec-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.exec-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.exec-verdict {
+  padding: 3px 12px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.exec-verdict.regression { background: color-mix(in srgb, var(--red) 14%, var(--bg)); color: var(--red); border: 1px solid color-mix(in srgb, var(--red) 25%, transparent); }
+.exec-verdict.ok         { background: color-mix(in srgb, var(--green) 14%, var(--bg)); color: var(--green); border: 1px solid color-mix(in srgb, var(--green) 25%, transparent); }
+
+.exec-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.exec-metric {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.exec-metric:nth-child(2n) { border-right: none; }
+.exec-metric:nth-last-child(-n+2) { border-bottom: none; }
+
+.exec-metric-label { font-weight: 500; }
+
+.exec-metric-values {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.exec-arrow { color: var(--text-3); }
+
+.exec-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  background: var(--bg-2);
+}
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <div class="page-wordmark">
+      <div class="page-wordmark-dot"></div>
+      EDOG Playground
+    </div>
+    <div class="page-meta">
+      <span>Part 4b — Dashboards, Wizards &amp; Tests</span>
+      <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+        <svg id="theme-icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg id="theme-icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- ═══ INTRO ═══ -->
+  <div class="page-intro">
+    <h1 class="page-title">Design Bible · <span>Part 4b</span></h1>
+    <p class="page-subtitle">Dashboard cards, wizard forms, and test/comparison patterns for Capacity Command Center, Cost Estimator, Intelligent Alerting, Test Environment Wizard, and Regression Suite.</p>
+    <div class="toc">
+      <a class="toc-item" href="#s24">24 · Dashboard Cards</a>
+      <a class="toc-item" href="#s25">25 · Wizard &amp; Multi-Step Forms</a>
+      <a class="toc-item" href="#s26">26 · Test &amp; Comparison Patterns</a>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 24 · DASHBOARD CARDS
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="section" id="s24">
+    <div class="section-header">
+      <div class="section-num">24</div>
+      <div class="section-meta">
+        <h2>Dashboard Cards</h2>
+        <p>Capacity Command Center (F24) · Cost Estimator (F30) · Intelligent Alerting (F32)</p>
+      </div>
+    </div>
+
+    <!-- 24a — Metric Cards -->
+    <div class="demo-card">
+      <div class="demo-label">24a · Metric Card Grid</div>
+      <div class="metric-grid" id="metricGrid">
+        <!-- JS-rendered -->
+      </div>
+    </div>
+
+    <!-- 24b — SKU Selector -->
+    <div class="demo-card">
+      <div class="demo-label">24b · SKU Selector — Capacity Provisioner (F25)</div>
+      <div class="sku-grid" id="skuGrid">
+        <!-- JS-rendered -->
+      </div>
+    </div>
+
+    <!-- 24c — Cost Comparison -->
+    <div class="demo-card">
+      <div class="demo-label">24c · Cost Comparison — Cost Estimator (F30)</div>
+      <div class="cost-compare" id="costCompare">
+        <div class="cost-side" id="costLeft" tabindex="0" onclick="selectCostSide('left')" onkeydown="if(event.key==='Enter')selectCostSide('left')">
+          <div class="cost-side-label">Current</div>
+          <div class="cost-side-title">P1</div>
+          <div class="cost-metric"><span>vCores</span><span class="cost-metric-val">8</span></div>
+          <div class="cost-metric"><span>Memory</span><span class="cost-metric-val">25 GB</span></div>
+          <div class="cost-metric"><span>Est. DAG time</span><span class="cost-metric-val">12m</span></div>
+          <div class="cost-metric"><span>Cost</span><span class="cost-metric-val">$$</span></div>
+        </div>
+        <div class="cost-side recommended" id="costRight" tabindex="0" onclick="selectCostSide('right')" onkeydown="if(event.key==='Enter')selectCostSide('right')">
+          <span class="cost-recommended-badge">Recommended</span>
+          <div class="cost-side-label">Proposed</div>
+          <div class="cost-side-title">F4</div>
+          <div class="cost-metric"><span>vCores</span><span class="cost-metric-val">16</span></div>
+          <div class="cost-metric"><span>Memory</span><span class="cost-metric-val">50 GB</span></div>
+          <div class="cost-metric"><span>Est. DAG time</span><span class="cost-metric-val">6m</span></div>
+          <div class="cost-metric"><span>Cost</span><span class="cost-metric-val">$$$</span></div>
+        </div>
+        <div class="cost-delta"><strong>2x faster</strong> · +50% cost · Recommended for heavy DAGs</div>
+      </div>
+    </div>
+
+    <!-- 24d — Multi-Signal Alert Card -->
+    <div class="demo-card">
+      <div class="demo-label">24d · Multi-Signal Alert — Intelligent Alerting (F32)</div>
+      <div class="alert-card" id="alertCard">
+        <div class="alert-banner critical">CRITICAL</div>
+        <div class="alert-body">
+          <div class="alert-title">DAG likely to fail</div>
+          <div class="signal-list">
+            <div class="signal-row">
+              <div class="signal-bar-wrap"><div class="signal-bar-fill red" style="width:89%"></div></div>
+              <span class="signal-text">Capacity at 89% utilization</span>
+              <span class="signal-badge red">89%</span>
+            </div>
+            <div class="signal-row">
+              <div class="signal-bar-wrap"><div class="signal-bar-fill amber" style="width:100%"></div></div>
+              <span class="signal-text">Node 5 running 3.2x slower than baseline</span>
+              <span class="signal-badge amber">3.2x</span>
+            </div>
+            <div class="signal-row">
+              <div class="signal-bar-wrap"><div class="signal-bar-fill red" style="width:15%"></div></div>
+              <span class="signal-text">MWC token expires in <strong id="tokenCountdown">4:00</strong></span>
+              <span class="signal-badge red" id="tokenBadge">4m left</span>
+            </div>
+          </div>
+          <div class="alert-confidence">
+            <span class="confidence-value">92%</span>
+            <span class="confidence-label">combined likelihood of failure</span>
+          </div>
+          <div class="alert-actions">
+            <button class="btn btn-ghost btn-sm" onclick="this.textContent='Viewing...'">View DAG</button>
+            <button class="btn btn-ghost btn-sm" onclick="this.textContent='Checking...'">Check Capacity</button>
+            <button class="btn btn-accent btn-sm" onclick="this.textContent='Refreshing...'">Refresh Token</button>
+          </div>
+          <div class="alert-timestamp" id="alertTs">Triggered 30s ago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 25 · WIZARD & MULTI-STEP FORMS
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="section" id="s25">
+    <div class="section-header">
+      <div class="section-num">25</div>
+      <div class="section-meta">
+        <h2>Wizard &amp; Multi-Step Forms</h2>
+        <p>Test Environment Wizard (F16) · Capacity Provisioner (F25) · Startup Config Validator (F46)</p>
+      </div>
+    </div>
+
+    <!-- 25a — Wizard Layout -->
+    <div class="demo-card">
+      <div class="demo-label">25a · Wizard Layout — Test Environment Wizard (F16)</div>
+      <div class="wizard-layout" id="wizardLayout">
+        <div class="wizard-sidebar" id="wizardSidebar">
+          <!-- JS-rendered steps -->
+        </div>
+        <div class="wizard-content" id="wizardContent">
+          <!-- JS-rendered content -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 25b — Checklist Card -->
+    <div class="demo-card">
+      <div class="demo-label">25b · Checklist Card — Startup Config Validator (F46)</div>
+      <div class="checklist-card" id="checklistCard">
+        <div class="checklist-title">Environment Check</div>
+        <div class="checklist-items" id="checklistItems">
+          <!-- JS-rendered -->
+        </div>
+        <div class="checklist-footer" id="checklistFooter">
+          <!-- JS-rendered -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 26 · TEST & COMPARISON PATTERNS
+       ═══════════════════════════════════════════════════════════════════ -->
+  <div class="section" id="s26">
+    <div class="section-header">
+      <div class="section-num">26</div>
+      <div class="section-meta">
+        <h2>Test &amp; Comparison Patterns</h2>
+        <p>Regression Suite (F40) · Execution Comparison (F15)</p>
+      </div>
+    </div>
+
+    <!-- 26a — Test Case Row -->
+    <div class="demo-card">
+      <div class="demo-label">26a · Test Case Rows — Regression Suite (F40)</div>
+      <table class="test-table" id="testTable">
+        <thead>
+          <tr>
+            <th style="width:50px">Status</th>
+            <th>Test Name</th>
+            <th>Expected</th>
+            <th>Actual</th>
+            <th style="width:72px">Duration</th>
+          </tr>
+        </thead>
+        <tbody id="testBody">
+          <!-- JS-rendered -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 26b — Metric Delta Badge -->
+    <div class="demo-card">
+      <div class="demo-label">26b · Metric Delta Badges</div>
+      <div class="delta-row">
+        <span class="delta-badge worse">+314% &#8593;</span>
+        <span class="delta-badge better">-12% &#8595;</span>
+        <span class="delta-badge stable">~0% &#8594;</span>
+        <span class="delta-badge worse">+2.1s</span>
+        <span class="delta-badge better">-0.8s</span>
+        <span class="delta-badge stable">0ms</span>
+      </div>
+    </div>
+
+    <!-- 26c — Execution Comparison Summary -->
+    <div class="demo-card">
+      <div class="demo-label">26c · Execution Comparison Summary — Execution Comparison (F15)</div>
+      <div class="exec-compare" id="execCompare">
+        <div class="exec-header">
+          <span class="exec-title">Run #42 vs Run #43</span>
+          <span class="exec-verdict regression" id="execVerdict">REGRESSION DETECTED</span>
+        </div>
+        <div class="exec-grid">
+          <div class="exec-metric">
+            <span class="exec-metric-label">Total time</span>
+            <span class="exec-metric-values">12m 30s <span class="exec-arrow">&#8594;</span> 18m 45s <span class="delta-badge worse" style="font-size:10px;padding:2px 6px">+50%</span></span>
+          </div>
+          <div class="exec-metric">
+            <span class="exec-metric-label">Nodes passed</span>
+            <span class="exec-metric-values">12/12 <span class="exec-arrow">&#8594;</span> 11/12 <span class="delta-badge worse" style="font-size:10px;padding:2px 6px">-1</span></span>
+          </div>
+          <div class="exec-metric">
+            <span class="exec-metric-label">Failed nodes</span>
+            <span class="exec-metric-values">0 <span class="exec-arrow">&#8594;</span> <strong style="color:var(--red)">1</strong></span>
+          </div>
+          <div class="exec-metric">
+            <span class="exec-metric-label">CU consumed</span>
+            <span class="exec-metric-values">4.2 <span class="exec-arrow">&#8594;</span> 6.8 <span class="delta-badge worse" style="font-size:10px;padding:2px 6px">+62%</span></span>
+          </div>
+        </div>
+        <div class="exec-footer">
+          <button class="btn btn-accent btn-sm" onclick="this.textContent='Loading diff...'">View Full Diff</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE
+   ═══════════════════════════════════════════════════════════════════════ */
+const themeToggle = document.getElementById('themeToggle');
+const sunIcon  = document.getElementById('theme-icon-sun');
+const moonIcon = document.getElementById('theme-icon-moon');
+
+function setTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  sunIcon.style.display  = dark ? 'none'  : '';
+  moonIcon.style.display = dark ? ''      : 'none';
+}
+
+themeToggle.addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  setTheme(!isDark);
+});
+
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  setTheme(true);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 24a · METRIC CARDS
+   ═══════════════════════════════════════════════════════════════════════ */
+const METRICS = [
+  { label: 'CPU Utilization', value: '72%', trend: '8%', dir: 'up-bad',   arrow: '\u2191', data: [30,45,42,55,60,52,48,58,65,70,62,55,68,72,78,74,65,70,75,68,72,80,76,72] },
+  { label: 'Memory',          value: '45%', trend: '12%', dir: 'down-good', arrow: '\u2193', data: [80,75,72,68,65,60,58,55,52,50,48,52,55,50,48,47,46,44,42,48,50,46,44,45] },
+  { label: 'Throughput',      value: '842/s', trend: '5%', dir: 'up-good', arrow: '\u2191', data: [400,450,500,520,540,580,600,650,680,700,720,750,770,780,790,800,810,820,830,835,838,840,841,842] },
+  { label: 'Latency',         value: '23ms',  trend: '0%', dir: 'stable', arrow: '\u2192', data: [22,24,23,22,25,23,24,22,23,24,23,22,23,24,25,23,22,23,24,23,22,23,24,23] },
+];
+
+function buildSparkline(data, color) {
+  const w = 120, h = 32, pad = 2;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = pad + (i / (data.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((v - min) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const linePath = 'M' + pts.join(' L');
+  const areaPath = linePath + ` L${(w - pad).toFixed(1)},${h} L${pad},${h} Z`;
+  return `<svg class="metric-sparkline" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="${areaPath}" fill="${color}" opacity="0.12"/>
+    <path d="${linePath}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function renderMetrics() {
+  const grid = document.getElementById('metricGrid');
+  const colors = { 'up-bad': 'var(--red)', 'down-good': 'var(--green)', 'up-good': 'var(--green)', 'stable': 'var(--text-3)' };
+  grid.innerHTML = METRICS.map(m => `
+    <div class="metric-card">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-row">
+        <span class="metric-value">${m.value}</span>
+        <span class="metric-trend ${m.dir}">${m.arrow} ${m.trend}</span>
+      </div>
+      ${buildSparkline(m.data, colors[m.dir])}
+      <div class="metric-footer">Last 1h</div>
+    </div>
+  `).join('');
+}
+
+renderMetrics();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 24b · SKU SELECTOR
+   ═══════════════════════════════════════════════════════════════════════ */
+const SKUS = [
+  { tier: 'F2',  cores: '4',  mem: '12 GB', price: '$',    disabled: false },
+  { tier: 'F4',  cores: '8',  mem: '25 GB', price: '$$',   disabled: false },
+  { tier: 'F8',  cores: '16', mem: '50 GB', price: '$$$',  disabled: false },
+  { tier: 'F16', cores: '32', mem: '100 GB',price: '$$$$', disabled: false },
+  { tier: 'F32', cores: '64', mem: '200 GB',price: '$$$$$',disabled: false },
+  { tier: 'F64', cores: '128',mem: '400 GB',price: '$$$$$$',disabled: true },
+];
+
+let selectedSku = 'F4';
+
+function renderSkus() {
+  const grid = document.getElementById('skuGrid');
+  grid.innerHTML = SKUS.map(s => {
+    const sel = s.tier === selectedSku;
+    const cls = ['sku-card'];
+    if (sel) cls.push('selected');
+    if (s.disabled) cls.push('disabled');
+    return `
+      <div class="${cls.join(' ')}" tabindex="${s.disabled ? -1 : 0}"
+           onclick="selectSku('${s.tier}')"
+           onkeydown="if(event.key==='Enter')selectSku('${s.tier}')">
+        <div class="sku-check">\u2713</div>
+        <div class="sku-tier">${s.tier}</div>
+        <div class="sku-detail">${s.cores} vCores<br>${s.mem}</div>
+        <div class="sku-price">${s.price}</div>
+        ${s.disabled ? '<span class="sku-badge-unavail">Unavailable</span>' : ''}
+      </div>`;
+  }).join('');
+}
+
+function selectSku(tier) {
+  const sku = SKUS.find(s => s.tier === tier);
+  if (!sku || sku.disabled) return;
+  selectedSku = tier;
+  renderSkus();
+}
+
+renderSkus();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 24c · COST COMPARISON
+   ═══════════════════════════════════════════════════════════════════════ */
+function selectCostSide(side) {
+  document.getElementById('costLeft').classList.toggle('selected', side === 'left');
+  document.getElementById('costRight').classList.toggle('selected', side === 'right');
+  document.getElementById('costRight').classList.toggle('recommended', side !== 'right');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 24d · TOKEN COUNTDOWN
+   ═══════════════════════════════════════════════════════════════════════ */
+let tokenSeconds = 240;
+setInterval(() => {
+  if (tokenSeconds > 0) tokenSeconds--;
+  const m = Math.floor(tokenSeconds / 60);
+  const s = tokenSeconds % 60;
+  const el = document.getElementById('tokenCountdown');
+  const badge = document.getElementById('tokenBadge');
+  if (el) el.textContent = `${m}:${String(s).padStart(2, '0')}`;
+  if (badge) badge.textContent = tokenSeconds > 60 ? `${m}m left` : `${tokenSeconds}s left`;
+}, 1000);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 25a · WIZARD
+   ═══════════════════════════════════════════════════════════════════════ */
+const WIZARD_STEPS = [
+  { label: 'Workspace',     heading: 'Select Workspace',    type: 'info',   info: 'Workspace "FLT-Dev" selected.' },
+  { label: 'Lakehouse',     heading: 'Create Lakehouse',    type: 'form' },
+  { label: 'Notebook',      heading: 'Attach Notebook',     type: 'info',   info: 'Choose a notebook to attach to this lakehouse.' },
+  { label: 'Configuration', heading: 'Review Configuration',type: 'info',   info: 'Set environment variables and feature flags.' },
+  { label: 'Review',        heading: 'Review & Deploy',     type: 'info',   info: 'Confirm all settings before deployment.' },
+];
+
+let wizardCurrent = 1;
+
+function renderWizard() {
+  const sidebar = document.getElementById('wizardSidebar');
+  sidebar.innerHTML = '<div class="wizard-steps">' + WIZARD_STEPS.map((s, i) => {
+    let state = 'future';
+    if (i < wizardCurrent) state = 'completed';
+    if (i === wizardCurrent) state = 'current';
+    const dotContent = state === 'completed' ? '\u2713' : state === 'current' ? '\u25CF' : '\u25CB';
+    return `<div class="wizard-step ${state}">
+      <div class="wizard-step-dot">${dotContent}</div>
+      <span class="wizard-step-label">${s.label}</span>
+    </div>`;
+  }).join('') + '</div>';
+
+  const step = WIZARD_STEPS[wizardCurrent];
+  const content = document.getElementById('wizardContent');
+  let formHtml = '';
+
+  if (step.type === 'form') {
+    formHtml = `
+      <div class="wizard-field">
+        <label for="wizLhName">Lakehouse name</label>
+        <input type="text" id="wizLhName" value="flt-test-lakehouse" />
+      </div>
+      <div class="wizard-toggle-row">
+        <div class="toggle-track ${wizardSchemaOn ? 'on' : ''}" id="wizSchemaToggle" tabindex="0"
+             onclick="wizardSchemaOn=!wizardSchemaOn;renderWizard()"
+             onkeydown="if(event.key==='Enter'){wizardSchemaOn=!wizardSchemaOn;renderWizard()}">
+          <div class="toggle-thumb"></div>
+        </div>
+        <span>Enable schema</span>
+      </div>`;
+  } else {
+    formHtml = `<p style="color:var(--text-2);font-size:13px;padding:20px 0">${step.info}</p>`;
+  }
+
+  content.innerHTML = `
+    <div class="wizard-heading">${step.heading}</div>
+    <div class="wizard-form">${formHtml}</div>
+    <div class="wizard-nav">
+      <button class="btn btn-ghost" onclick="wizardBack()" ${wizardCurrent === 0 ? 'disabled style="opacity:.4;pointer-events:none"' : ''}>Back</button>
+      <button class="btn btn-accent" onclick="wizardNext()">${wizardCurrent === WIZARD_STEPS.length - 1 ? 'Deploy' : 'Next'}</button>
+    </div>`;
+}
+
+let wizardSchemaOn = false;
+
+function wizardNext() {
+  if (wizardCurrent < WIZARD_STEPS.length - 1) wizardCurrent++;
+  renderWizard();
+}
+
+function wizardBack() {
+  if (wizardCurrent > 0) wizardCurrent--;
+  renderWizard();
+}
+
+renderWizard();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 25b · CHECKLIST
+   ═══════════════════════════════════════════════════════════════════════ */
+const CHECKS = [
+  { id: 'c1', text: 'Python 3.12 found',       status: 'pass' },
+  { id: 'c2', text: '.NET 8 SDK installed',     status: 'pass' },
+  { id: 'c3', text: 'EdogLogServer reachable',  status: 'pass' },
+  { id: 'c4', text: 'Bearer token expired',     status: 'fail', fix: 'Re-authenticate' },
+  { id: 'c5', text: 'Checking Fabric API access', status: 'checking' },
+];
+
+function renderChecklist() {
+  const items = document.getElementById('checklistItems');
+  const passCount = CHECKS.filter(c => c.status === 'pass').length;
+  const total = CHECKS.length;
+
+  items.innerHTML = CHECKS.map(c => {
+    let iconHtml = '';
+    if (c.status === 'pass') {
+      iconHtml = '<div class="check-icon pass">\u2713</div>';
+    } else if (c.status === 'fail') {
+      iconHtml = '<div class="check-icon fail">\u2717</div>';
+    } else {
+      iconHtml = `<div class="check-icon checking"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 2 A10 10 0 0 1 22 12"/></svg></div>`;
+    }
+
+    const textCls = c.status === 'fail' ? 'check-text failed-text' : 'check-text';
+    const fixBtn = c.status === 'fail' ? `<button class="btn-fix" onclick="fixCheck('${c.id}')">${c.fix}</button>` : '';
+
+    return `<div class="checklist-row">${iconHtml}<span class="${textCls}">${c.text}</span>${fixBtn}</div>`;
+  }).join('');
+
+  const footer = document.getElementById('checklistFooter');
+  const pct = Math.round((passCount / total) * 100);
+  footer.innerHTML = `
+    <span class="checklist-summary">${passCount} of ${total} checks passed</span>
+    <div class="checklist-bar-wrap"><div class="checklist-bar-fill" style="width:${pct}%"></div></div>`;
+}
+
+function fixCheck(id) {
+  const check = CHECKS.find(c => c.id === id);
+  if (!check) return;
+  check.status = 'checking';
+  check.text = check.text.replace('expired', 'refreshing...');
+  renderChecklist();
+  setTimeout(() => {
+    check.status = 'pass';
+    check.text = 'Bearer token valid';
+    delete check.fix;
+    renderChecklist();
+  }, 1500);
+}
+
+renderChecklist();
+
+/* finish the "checking" item after 2s */
+setTimeout(() => {
+  const c5 = CHECKS.find(c => c.id === 'c5');
+  if (c5 && c5.status === 'checking') {
+    c5.status = 'pass';
+    c5.text = 'Fabric API access confirmed';
+    renderChecklist();
+  }
+}, 2500);
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   § 26a · TEST CASE ROWS
+   ═══════════════════════════════════════════════════════════════════════ */
+const TEST_ROWS = [
+  { status: 'pass', name: 'sales_transactions > 0 rows', expected: '28,47,593 rows', actual: '28,47,593 rows', duration: '1.2s', detail: 'Assertion passed: row count matches expected value within tolerance.' },
+  { status: 'pass', name: 'inventory_snapshot schema valid', expected: '12 columns',   actual: '12 columns',   duration: '0.4s', detail: 'All columns match schema definition. Types verified.' },
+  { status: 'fail', name: 'Node 5 < 5s',                   expected: '< 5s',          actual: '8.7s',          duration: '8.7s', detail: 'AssertionError: Node 5 execution time 8.7s exceeds threshold 5s.\n  at TestRunner.assertDuration (test_runner.py:142)\n  Baseline: 3.2s | Current: 8.7s | Delta: +172%' },
+  { status: 'pass', name: 'CU consumption within budget',  expected: '\u2264 5.0 CU',  actual: '4.2 CU',       duration: '0.1s', detail: 'CU consumption 4.2 is within budget of 5.0.' },
+  { status: 'skip', name: 'MLV refresh',                    expected: '\u2014',         actual: '\u2014',        duration: '\u2014', detail: 'Skipped: MLV refresh test requires connected mode.' },
+];
+
+function renderTests() {
+  const tbody = document.getElementById('testBody');
+  tbody.innerHTML = TEST_ROWS.map((t, i) => {
+    const iconCls = t.status;
+    const icon = t.status === 'pass' ? '\u2713' : t.status === 'fail' ? '\u2717' : '\u25CB';
+    const rowCls = t.status === 'fail' ? 'fail-row' : t.status === 'skip' ? 'skip-row' : '';
+    const actualCls = t.status === 'fail' ? 'test-val-bad' : '';
+    return `
+      <tr class="${rowCls}" onclick="toggleTestDetail(${i})">
+        <td><span class="test-icon ${iconCls}">${icon}</span></td>
+        <td>${t.name}</td>
+        <td class="test-mono">${t.expected}</td>
+        <td class="test-mono ${actualCls}">${t.actual}</td>
+        <td class="test-mono">${t.duration}</td>
+      </tr>
+      <tr class="test-expand" id="testDetail${i}">
+        <td colspan="5"><pre style="white-space:pre-wrap;margin:0;font-family:var(--mono);font-size:12px">${t.detail}</pre></td>
+      </tr>`;
+  }).join('');
+}
+
+function toggleTestDetail(idx) {
+  const el = document.getElementById('testDetail' + idx);
+  if (el) el.classList.toggle('open');
+}
+
+renderTests();
+</script>
+</body>
+</html>
