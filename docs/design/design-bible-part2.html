@@ -127,6 +127,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .token-field-label{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3)}
 .token-field-value{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r4);padding:6px 10px;word-break:break-all;line-height:1.5}
 .token-field-value.green{color:var(--green)} .token-field-value.amber{color:var(--amber)} .token-field-value.red{color:var(--red)}
+.token-issued-to{font-size:12px;color:var(--text-2);padding:0 0 12px;border-bottom:1px solid var(--border);line-height:1.6}
+.token-issued-to strong{color:var(--text);font-weight:700}
+.token-copy-btn{width:100%;padding:9px 14px;border-radius:var(--r6);border:1px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all var(--transition);user-select:none}
+.token-copy-btn:hover{background:color-mix(in srgb,var(--accent) 85%,#000)}
+.token-copy-btn:active{transform:scale(.97)}
+.token-copy-btn.copied{background:var(--green);border-color:var(--green)}
+.token-claims-section{display:flex;flex-direction:column;gap:2px}
+.token-claims-heading{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:6px}
+.token-claims-table{width:100%;border-collapse:collapse}
+.token-claims-table td{padding:5px 0;font-size:12px;vertical-align:top;border-bottom:1px solid var(--border)}
+.token-claims-table td:first-child{width:36px;color:var(--text-3);font-weight:600;padding-right:10px;white-space:nowrap}
+.token-claims-table td:last-child{font-family:var(--mono);color:var(--text);word-break:break-all}
+.token-claims-table .scope-badge{display:inline-block;padding:2px 8px;border-radius:var(--r100);background:color-mix(in srgb,var(--accent) 12%,var(--bg));color:var(--accent);font-size:11px;font-weight:600;font-family:var(--mono)}
 .drawer-open-btn{position:absolute;top:16px;right:16px;z-index:5}
 /* 9b - Split pane */
 .split-pane-wrap{display:flex;height:240px;border-radius:var(--r10);overflow:hidden;border:1px solid var(--border);background:var(--bg)}
@@ -395,6 +408,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
             <button class="drawer-close" onclick="closeDrawer()">✕</button>
           </div>
           <div class="drawer-body">
+            <div class="token-issued-to">Issued to <strong>Admin1CBA</strong> · FabricFMLV08PPE · expires in <span style="color:var(--green);font-weight:600">42 min</span></div>
+            <button class="token-copy-btn" id="copyTokenBtn" onclick="copyToken()">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M5.5 10.5h-1a1.5 1.5 0 0 1-1.5-1.5v-5a1.5 1.5 0 0 1 1.5-1.5h5a1.5 1.5 0 0 1 1.5 1.5v1"/></svg>
+              <span id="copyTokenLabel">Copy Token</span>
+            </button>
             <div class="token-field">
               <span class="token-field-label">Token Type</span>
               <span class="token-field-value">MSAL · Bearer</span>
@@ -418,6 +436,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
             <div class="token-field">
               <span class="token-field-label">Status</span>
               <span class="token-field-value green">Valid</span>
+            </div>
+            <div class="token-claims-section">
+              <div class="token-claims-heading">Decoded Claims</div>
+              <table class="token-claims-table">
+                <tr><td>sub</td><td>Admin1CBA</td></tr>
+                <tr><td>upn</td><td>Admin1CBA@FabricFMLV08PPE.ccsctp.net</td></tr>
+                <tr><td>aud</td><td>https://analysis.windows-int.net/powerbi/api</td></tr>
+                <tr><td>iss</td><td>https://sts.windows-ppe.net/28abbcd0-c110-...</td></tr>
+                <tr><td>exp</td><td><span style="color:var(--green)">2026-04-11T06:53:41Z (42 min remaining)</span></td></tr>
+                <tr><td>scp</td><td><span class="scope-badge">user_impersonation</span></td></tr>
+                <tr><td>tid</td><td>28abbcd0-c110-4976-8e2a-b3ea2ebfdab8</td></tr>
+              </table>
             </div>
           </div>
         </div>
@@ -980,6 +1010,20 @@ function closeDrawer() {
   document.getElementById('drawerBackdrop').classList.remove('open');
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+function copyToken() {
+  const jwt = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJBZG1pbjFDQkEiLCJ1cG4iOiJBZG1pbjFDQkFARmFicmljRk1MVjA4UFBFLmNjc2N0cC5uZXQiLCJhdWQiOiJodHRwczovL2FuYWx5c2lzLndpbmRvd3MtaW50Lm5ldC9wb3dlcmJpL2FwaSIsImlzcyI6Imh0dHBzOi8vc3RzLndpbmRvd3MtcHBlLm5ldC8yOGFiYmNkMC1jMTEwLSIsImV4cCI6MTc0NDM1NDQyMSwic2NwIjoidXNlcl9pbXBlcnNvbmF0aW9uIiwidGlkIjoiMjhhYmJjZDAtYzExMC00OTc2LThlMmEtYjNlYTJlYmZkYWI4In0.mock-signature';
+  navigator.clipboard.writeText(jwt).then(function() {
+    var btn = document.getElementById('copyTokenBtn');
+    var label = document.getElementById('copyTokenLabel');
+    btn.classList.add('copied');
+    label.textContent = 'Copied \u2713';
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      label.textContent = 'Copy Token';
+    }, 1500);
+  });
+}
 
 /* === § 9B SPLIT PANE ==================================================== */
 (function() {
