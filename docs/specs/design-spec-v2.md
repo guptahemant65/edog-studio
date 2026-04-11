@@ -41,6 +41,8 @@ EDOG operates in two distinct modes:
 - Sidebar tabs 2-4 (Logs, DAG, Spark) transition from disabled empty-state to active
 - Top bar: service status changes gray→amber→green, token countdown appears
 
+> **Architecture Clarification (2026-04-11):** Phase 1 vs Phase 2 does NOT determine API availability. ALL Fabric APIs (notebook CRUD, environment management, table listing via MWC, Jupyter sessions) work in BOTH phases via bearer/MWC token. Phase 2 only changes WHERE FLT request processing happens — from cloud to local relay via EDOG DevMode interceptors. The sidebar icons for Logs/DAG/Spark are disabled in Phase 1 because there's no local FLT service to capture telemetry FROM, not because APIs are unavailable.
+
 ### Default View on Launch
 **Workspace Explorer** — "Here's your environment, pick a lakehouse, then work."
 
@@ -186,11 +188,11 @@ When disconnected, tabs 2-4 show a "Connect to a Lakehouse to enable this view" 
 **When a table is selected (Phase 1 — disconnected):**
 - Section: TABLE INFO — Name, Type, Format, Location as key-value pairs
 
-**When a table is selected (Phase 2 — connected, future):**
+**When a table is selected (Both phases — requires MWC token):**
 - Section: SCHEMA — column list (name, type, nullable) in compact rows
 - Section: PREVIEW — first 5 data rows in a mini-grid
 - Section: STATS — Row Count, File Count, Total Size, Partitions
-- Note: Schema/preview/stats require SQL endpoint or Delta metadata access — **Phase 2 feature**.
+- Note: Schema/preview/stats require MWC token for capacity host DataArtifact endpoints. Available in both phases once MWC token is acquired.
 
 **When a workspace is selected:**
 - Capacity info: SKU, Region, CU usage (if available from capacity API), throttling state
@@ -199,7 +201,7 @@ When disconnected, tabs 2-4 show a "Connect to a Lakehouse to enable this view" 
 
 **Feasibility notes:**
 - Basic table metadata: ✅ Available from `List Tables` API
-- Schema, row counts, data preview: ⚠️ Requires SQL endpoint connection or Delta metadata reading. **Phase 2.**
+- Schema, row counts, data preview: ✅ Available via MWC token + capacity host DataArtifact endpoints + OneLake delta log. **Both phases (requires MWC token).**
 - Capacity info: ⚠️ Need to verify `GET /v1/capacities/{id}` API availability. Likely requires admin scope.
 
 ---

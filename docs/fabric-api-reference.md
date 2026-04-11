@@ -76,8 +76,8 @@ The PBI-audience bearer token works against the **redirect host** (`biazure-int-
 FLT code **always** creates lakehouses with `{"enableSchemas": true}`. This means:
 
 1. The public API table listing (`GET /v1/.../tables`) returns **400 UnsupportedOperationForSchemasEnabledLakehouse** for ALL FLT lakehouses
-2. Tables for schema-enabled lakehouses must be listed via the **capacity host DataArtifact endpoint** which requires an MWC token (Phase 2 only)
-3. In Phase 1 (disconnected), table listing is NOT available — the inspector should show "Deploy to view tables" placeholder
+2. Tables for schema-enabled lakehouses must be listed via the **capacity host DataArtifact endpoint** which requires an MWC token (Both phases — requires MWC token)
+3. In Phase 1 (disconnected), table listing is available once MWC token is acquired — the inspector can show tables without full FLT deployment
 
 ### CRITICAL: MWC Token Auth Scheme
 
@@ -158,6 +158,64 @@ GET  /webapi/.../artifacts/DataArtifact/{lhId}/schemas/{schemaName}/batchGetTabl
 | **List capacities** | GET | `/v1/capacities` | redirect | ⚠️ NOT TESTED | — | May need admin scope |
 | **Assign to capacity** | POST | `/v1/workspaces/{wsId}/assignToCapacity` | redirect | ⚠️ NOT TESTED | — | Body: `{ capacityId }` |
 
+### CATEGORY: Notebook Operations (Verified 2026-04-11)
+
+| Endpoint | Method | Path | Host | Status | Response Shape | Notes |
+|----------|--------|------|------|--------|---------------|-------|
+| **List notebooks** | GET | `/v1/workspaces/{wsId}/notebooks` | redirect | ✅ OK 200 | `{ value: [{ id, type, displayName, description, workspaceId, properties }] }` | `properties` has `attachedEnvironment` (itemId, workspaceId), `defaultLakehouse` (itemId, workspaceId), `primaryWarehouse` |
+| **Get notebook** | GET | `/v1/workspaces/{wsId}/notebooks/{nbId}` | redirect | ✅ OK 200 | Same as above, single item | |
+| **Create notebook** | POST | `/v1/workspaces/{wsId}/notebooks` | redirect | ✅ 201 | `{ id, type, displayName, description, workspaceId }` | Body: `{ displayName, description }` |
+| **Delete notebook** | DELETE | `/v1/workspaces/{wsId}/notebooks/{nbId}` | redirect | ✅ 200 | — | |
+| **Read cells (getDefinition)** | POST | `/v1/workspaces/{wsId}/notebooks/{nbId}/getDefinition` | redirect | ✅ 202 LRO | Poll: `GET /v1/operations/{opId}` → `GET /v1/operations/{opId}/result` | Result: `{ definition: { parts: [{ path, payloadType, payload }] } }`. `notebook-content.sql` has cells, `.platform` has metadata. Payload is base64 encoded. |
+| **Write cells (updateDefinition)** | POST | `/v1/workspaces/{wsId}/notebooks/{nbId}/updateDefinition` | redirect | ✅ (needs payload) | 400 if empty body: "Definition field is required" | Body: `{ definition: { parts: [...] } }` matching getDefinition format |
+| **Run notebook** | POST | `/v1/workspaces/{wsId}/items/{nbId}/jobs/instances?jobType=RunNotebook` | redirect | ✅ 202 LRO | `Location` header with job URL. Poll: `GET .../jobs/instances/{jobId}` → `{ id, itemId, jobType, status, failureReason, startTimeUtc, endTimeUtc }` | Status values: NotStarted, InProgress, Completed, Failed, Cancelled |
+| **Cancel notebook run** | POST | `.../jobs/instances/{jobId}/cancel` | redirect | ✅ 202 | — | |
+| **Get run status** | GET | `.../items/{nbId}/jobs/instances/{jobId}` | powerbiapi host | ✅ 200 | `{ id, itemId, jobType, invokeType, status, failureReason, rootActivityId, startTimeUtc, endTimeUtc }` | Note: Location header may point to `powerbiapi.analysis-df.windows.net` |
+
+### CATEGORY: Jupyter Kernel / Cell Execution (Capacity Host, MWC Token)
+
+These use the **capacity host** with **MwcToken** auth. Found via HAR capture of Fabric notebook editor.
+
+| Endpoint | Method | Path (on capacity host) | Status | Notes |
+|----------|--------|------------------------|--------|-------|
+| **Create Jupyter session** | POST | `/webapi/capacities/{cap}/workloads/Notebook/Data/Automatic/api/workspaces/{ws}/artifacts/{nb}/jupyterApi/versions/1/api/sessions` | ✅ 201 | Body: `{ "kernel": { "id": null, "name": "synapse_pyspark" }, "name": "", "path": "notebooks/{nbId}.ipynb", "type": "notebook" }`. Response has kernel ID + execution_state |
+| **List kernel specs** | GET | `...Notebook/Data/Automatic/api/workspaces/{ws}/artifacts/{nb}/jupyterApi/versions/1/api/kernelspecs` | ✅ 200 | Available kernels (synapse_pyspark) |
+| **Notebook content** | HEAD | `...Notebook/Data/Automatic/api/workspaces/{ws}/artifacts/{nb}/content` | ✅ 200 | Check notebook content availability |
+| **Notebook checkpoints** | GET | `...Notebook/Data/Automatic/api/workspaces/{ws}/artifacts/{nb}/checkpoints` | ✅ 200 | Save checkpoints |
+| **Validate resource** | GET | `...Notebook/AzNBProxy/Automatic/workspaces/{ws}/api/gateway/validateResource` | ✅ 200 | Pre-flight validation |
+| **Instant attach session** | POST/GET | `...Notebook/Data/Automatic/instantAttachApi/versions/1/workspaces/{ws}/sessions` | ✅ | Quick session attach |
+| **Notebook WebSocket** | WSS | `wss://{capHost}/.../Notebook/AzNBProxy/Automatic/workspaces/{ws}/api/proxy/ws/tinymgr/lobby` | ✅ 101 | Real-time notebook communication (Jupyter kernel protocol) |
+| **Azure map metadata** | GET | `...artifacts/{nb}/azuremap/metadata` | ✅ 200 | Azure resource mapping |
+
+### CATEGORY: Spark Configuration (Capacity Host, MWC Token)
+
+| Endpoint | Method | Path (on capacity host) | Status | Notes |
+|----------|--------|------------------------|--------|-------|
+| **Get Spark settings** | GET | `/webapi/capacities/{cap}/workloads/SparkCore/SparkCoreService/Automatic/v1/workspaces/{ws}/sparkSettings` | ✅ 200 | Current Spark configuration |
+| **Runtime constraints** | GET | `...SparkCoreService/automatic/v1/workspaces/{ws}/settings/constraints/runtime` | ✅ 200 | Spark runtime version constraints |
+| **Feature enabled** | GET | `...SparkCoreService/automatic/v1/workspaces/{ws}/artifacts/{id}/settingsFeatureEnabled` | ✅ 200 | Feature flag check for Spark settings |
+| **Session settings fingerprint** | GET | `...SparkCoreService/automatic/v1/workspaces/{ws}/artifacts/{id}/hcSessionSettings/fingerprint` | ✅ 200 | High-concurrency session settings hash |
+
+### CATEGORY: Environment Operations (Verified 2026-04-11)
+
+| Endpoint | Method | Path | Host | Status | Response Shape | Notes |
+|----------|--------|------|------|--------|---------------|-------|
+| **List environments** | GET | `/v1/workspaces/{wsId}/environments` | redirect | ✅ OK 200 | `{ value: [{ id, type, displayName, description, workspaceId, properties }] }` | `properties.publishDetails` has `state` (Success/Running/Failed), `targetVersion`, `startTime`, `endTime`, `componentPublishInfo` (sparkLibraries.state, sparkSettings.state) |
+
+### CATEGORY: OneLake / Delta Log (Bearer Token)
+
+| Endpoint | Method | Path | Host | Status | Notes |
+|----------|--------|------|------|--------|-------|
+| **List files** | GET | `/{wsId}/{lhId}/Tables/dbo/{table}/_delta_log?resource=filesystem&recursive=true` | `onelake-int-edog.dfs.pbidedicated.windows-int.net` | ✅ 200 | ADLS Gen2 API. Header: `x-ms-version: 2021-06-08`. Returns `{ paths: [{ name, isDirectory, contentLength, lastModified }] }` |
+| **Read file** | GET | `/{wsId}/{path}` | same OneLake host | ✅ 200 | Read delta log JSON commits. Each line is a JSON action (add, remove, metaData, protocol) |
+| **Table stats** | — | Computed | — | ✅ | Sum `numRecords` from `add.stats` across active files in latest delta state. EDOG serves via `GET /api/mwc/table-stats?wsId=&lhId=&tableName=` |
+
+### CATEGORY: Livy Session History
+
+| Endpoint | Method | Path | Host | Status | Notes |
+|----------|--------|------|------|--------|-------|
+| **List Livy sessions** | GET | `/v1/workspaces/{wsId}/spark/livySessions` | redirect | ✅ 200 | Returns 100+ historical sessions with `state`, `livyId`, `livyName`, `sparkApplicationId`, `submitter`, `item` refs |
+
 ---
 
 ## Response Shape Differences: Metadata vs v1 API
@@ -212,13 +270,19 @@ Browser → /api/fabric/* → dev-server.py → https://biazure-int-edog-redirec
 
 ## Known Issues
 
-1. **Tables 400 for schema-enabled lakehouses** — All PPE lakehouses appear to have schemas enabled, causing `GET .../tables` to fail with `UnsupportedOperationForSchemasEnabledLakehouse`. Need to either create a non-schema lakehouse for testing or find an alternative tables endpoint.
+1. ~~**Tables 400 for schema-enabled lakehouses**~~ — **RESOLVED**: Added MWC proxy endpoints in dev-server.py. Tables now load via capacity host with MwcToken auth. OneLake delta log provides row counts and file sizes.
 
 2. **`api.fabric.microsoft.com` requires Fabric-audience token** — Our Playwright-captured bearer token has PBI audience and cannot call the public Fabric API. All calls must go through the redirect host.
 
 3. **`/metadata/artifacts/{id}/tables` does not exist** — The metadata API has no tables endpoint. Must use v1 path.
 
 4. **Some workspaces return 404 on `/v1/workspaces/{id}/items`** — e.g., `psai_FLT_1` returned `EntityNotFound`. May be a permissions issue or workspace type incompatibility.
+
+5. **Notebook getDefinition is an LRO** — Takes 5-8 seconds. POST returns 202 + operation ID. Must poll, then get result. Cell content is base64-encoded in `notebook-content.sql` format.
+
+6. **Jupyter session creation needs capacity host + MwcToken** — Not available via redirect host. Must use `{capId}.pbidedicated.windows-int.net` with Notebook workload path.
+
+7. **Cell-by-cell execution uses Jupyter protocol over WebSocket** — Not REST. The tinymgr/lobby WebSocket endpoint handles kernel messages. Complex to implement.
 
 ---
 
@@ -956,4 +1020,34 @@ Separate from V1 — used for ML/AI workload authentication.
 | Spark Session | 2 | 🔍 Discovered |
 | Copilot AI | 2 | 🔍 Discovered |
 | Internal (we build) | 6 | 🔧 EdogLogServer |
-| **Total** | **~86** | |
+| Notebook Operations | 9 | ✅ Tested |
+| Jupyter Kernel / Cell Execution | 8 | ✅ Tested (HAR) |
+| Spark Configuration | 4 | ✅ Tested |
+| Environment Operations | 1 | ✅ Tested |
+| OneLake / Delta Log | 3 | ✅ Tested |
+| Livy Session History | 1 | ✅ Tested |
+| **Total** | **~112** | |
+
+---
+
+## Notebook Content Format (notebook-content.sql)
+
+Fabric notebooks are stored as specially formatted SQL files with comment-based markers:
+
+### Structure
+- `-- Fabric notebook source` — file header
+- `-- METADATA ********************` + `-- META { ... }` — notebook-level metadata (kernel, dependencies)
+- `-- MARKDOWN ********************` — markdown cell (lines prefixed with `-- `)
+- `-- CELL ********************` — code cell
+- `-- METADATA ********************` + `-- META { "language": "..." }` — per-cell metadata
+
+### Language Detection
+- Default (no prefix): SparkSQL
+- `-- MAGIC %%pyspark` prefix: Python (strip `-- MAGIC ` from each line)
+- `-- MAGIC %%sql` prefix: SQL (explicit)
+- Cell metadata `"language"` field: authoritative source
+
+### Dependencies (in notebook-level metadata)
+- `dependencies.lakehouse.default_lakehouse`: Lakehouse ID
+- `dependencies.lakehouse.default_lakehouse_name`: Lakehouse display name
+- `dependencies.environment.environmentId`: Environment ID
