@@ -26,6 +26,11 @@ class WorkspaceExplorer {
     this._ctxTarget = null;
 
     this._isMock = new URLSearchParams(window.location.search).has('mock');
+
+    /** @type {{ col: string|null, dir: 'asc'|'desc'|null }} */
+    this._tableSort = { col: null, dir: null };
+    /** @type {HTMLElement[]|null} original row order before sorting */
+    this._tableSortOriginalRows = null;
   }
 
   async init() {
@@ -897,11 +902,19 @@ class WorkspaceExplorer {
   _bindContentActions(ws) {
     if (!this._contentEl) return;
 
-    // Click-to-copy on ID
-    const idEl = this._contentEl.querySelector('.ws-meta-id');
+    // Click-to-copy on ID (supports both .ws-meta-id and .ws-guid)
+    const idEl = this._contentEl.querySelector('.ws-meta-id') || this._contentEl.querySelector('.ws-guid');
     if (idEl) {
       idEl.addEventListener('click', () => {
-        this._copyToClipboard(idEl.dataset.copyId || ws.id, 'ID copied');
+        const copyId = idEl.dataset.copyId || ws.id;
+        this._copyToClipboard(copyId, 'Copied!');
+        idEl.classList.add('copied');
+        const origText = idEl.textContent;
+        idEl.textContent = 'Copied!';
+        setTimeout(() => {
+          idEl.classList.remove('copied');
+          idEl.textContent = origText;
+        }, 1200);
       });
     }
 
@@ -925,6 +938,8 @@ class WorkspaceExplorer {
           }
         } else if (action === 'open-fabric-lh') {
           window.open(`https://app.fabric.microsoft.com/groups/${ws.id}`, '_blank');
+        } else if (action === 'clone-env') {
+          this._toast('Clone Environment — coming soon');
         }
       });
     });
@@ -947,17 +962,31 @@ class WorkspaceExplorer {
   async _showLakehouseContent(lh, ws) {
     if (!this._contentEl) return;
 
+    const envLabel = this._getEnvironmentLabel(ws);
+    const health = this._getHealthStatus(ws);
+    const lastMod = lh.lastUpdatedDate ? this._formatDate(lh.lastUpdatedDate) : null;
+
     let html = '<div class="ws-content-header">';
     html += `<div class="ws-content-name">${this._esc(lh.displayName)}</div>`;
     html += '<div class="ws-content-meta">';
-    html += `<span class="ws-meta-id" data-copy-id="${this._esc(lh.id)}" title="Click to copy ID">${this._esc(lh.id.substring(0, 12))}...</span>`;
-    html += '<span class="ws-meta-badge">Lakehouse</span>';
+    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID">${this._esc(lh.id)}</span>`;
+    html += '</div>';
+    html += '<div class="ws-header-badges">';
+    html += `<span class="ws-badge ws-badge-env">${this._esc(envLabel)}</span>`;
+    if (ws._region) {
+      html += `<span class="ws-badge ws-badge-region">${this._esc(ws._region)}</span>`;
+    }
+    if (lastMod) {
+      html += `<span class="ws-modified">Modified ${lastMod}</span>`;
+    }
+    html += `<span class="ws-badge ws-badge-health" style="color:${health.color}">● ${this._esc(health.status)}</span>`;
     html += '</div></div>';
 
     html += '<div class="ws-content-actions">';
-    html += '<button class="ws-deploy-btn" id="ws-deploy-btn">Deploy to this Lakehouse</button>';
-    html += '<button class="ws-action-btn" data-action="rename-lh">Rename</button>';
+    html += '<button class="ws-deploy-btn" id="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>';
     html += '<button class="ws-action-btn" data-action="open-fabric-lh">Open in Fabric</button>';
+    html += '<button class="ws-action-btn" data-action="rename-lh">Rename</button>';
+    html += '<button class="ws-action-btn" data-action="clone-env">Clone Environment</button>';
     html += '</div>';
 
     html += '<div id="ws-deploy-progress" class="ws-deploy-progress" style="display:none"></div>';
@@ -987,12 +1016,24 @@ class WorkspaceExplorer {
       const tables = await this._loadTables(ws.id, lh.id, ws.capacityId);
       tablesEl = document.getElementById('ws-tables-list');
       if (!tablesEl) return;
+
+      // Update section title with count
+      const titleEl = tablesEl.closest('.ws-section')?.querySelector('.ws-section-title');
+      if (titleEl) titleEl.innerHTML = `Tables <span class="ws-section-count">${tables.length}</span>`;
+
       if (tables.length === 0) {
         tablesEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">No tables found</div>';
         return;
       }
-      let tableHtml = '<table class="ws-table"><thead><tr>';
-      tableHtml += '<th>Name</th><th>Type</th><th>Format</th>';
+
+      // Reset sort state
+      this._tableSort = { col: 'name', dir: 'asc' };
+      this._tableSortOriginalRows = null;
+
+      let tableHtml = '<div class="ws-table-container"><table class="ws-table"><thead><tr>';
+      tableHtml += '<th class="sortable sorted" data-col="name">Name <span class="sort-icon">\u25B2</span></th>';
+      tableHtml += '<th class="sortable" data-col="type">Type <span class="sort-icon">\u25B2\u25BC</span></th>';
+      tableHtml += '<th class="sortable" data-col="format">Format <span class="sort-icon">\u25B2\u25BC</span></th>';
       tableHtml += '</tr></thead><tbody>';
       for (const t of tables) {
         tableHtml += `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}">`;
@@ -1001,8 +1042,13 @@ class WorkspaceExplorer {
         tableHtml += `<td>${this._esc(t.format || 'delta')}</td>`;
         tableHtml += '</tr>';
       }
-      tableHtml += '</tbody></table>';
+      tableHtml += '</tbody></table></div>';
       tablesEl.innerHTML = tableHtml;
+
+      // Bind sort handlers on column headers
+      tablesEl.querySelectorAll('.ws-table th.sortable').forEach(th => {
+        th.addEventListener('click', () => this._sortTable(th.dataset.col, tablesEl));
+      });
 
       // Bind table row clicks → inspector
       tablesEl.querySelectorAll('.ws-table-row[data-table-name]').forEach(row => {
@@ -1019,6 +1065,69 @@ class WorkspaceExplorer {
       if (errEl) errEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load tables</div>';
       this._toast(`Tables: ${err.message}`, 'error');
     }
+  }
+
+  // ────────────────────────────────────────────
+  // Table sorting (DOM-only, no re-fetch)
+  // ────────────────────────────────────────────
+
+  /**
+   * Cycle sort: asc → desc → neutral (original order).
+   * @param {string} column - data-col value (name, type, format)
+   * @param {HTMLElement} container - the ws-tables-list element
+   */
+  _sortTable(column, container) {
+    const table = container.querySelector('.ws-table');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    // Capture original order on first sort interaction
+    if (!this._tableSortOriginalRows) {
+      this._tableSortOriginalRows = Array.from(tbody.querySelectorAll('tr'));
+    }
+
+    // Determine next direction
+    let nextDir;
+    if (this._tableSort.col === column) {
+      if (this._tableSort.dir === 'asc') nextDir = 'desc';
+      else if (this._tableSort.dir === 'desc') nextDir = null;
+      else nextDir = 'asc';
+    } else {
+      nextDir = 'asc';
+    }
+
+    this._tableSort = { col: nextDir ? column : null, dir: nextDir };
+
+    // Column index mapping
+    const colIndex = { name: 0, type: 1, format: 2 }[column] ?? 0;
+
+    if (!nextDir) {
+      // Restore original order
+      for (const row of this._tableSortOriginalRows) tbody.appendChild(row);
+    } else {
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const mult = nextDir === 'asc' ? 1 : -1;
+      rows.sort((a, b) => {
+        const aText = (a.children[colIndex]?.textContent || '').toLowerCase();
+        const bText = (b.children[colIndex]?.textContent || '').toLowerCase();
+        return aText < bText ? -1 * mult : aText > bText ? 1 * mult : 0;
+      });
+      for (const row of rows) tbody.appendChild(row);
+    }
+
+    // Update header icons
+    table.querySelectorAll('th.sortable').forEach(th => {
+      const icon = th.querySelector('.sort-icon');
+      if (!icon) return;
+      if (th.dataset.col === this._tableSort.col) {
+        th.classList.add('sorted');
+        icon.textContent = this._tableSort.dir === 'asc' ? '\u25B2' : '\u25BC';
+      } else {
+        th.classList.remove('sorted');
+        icon.textContent = '\u25B2\u25BC';
+      }
+    });
   }
 
   // ────────────────────────────────────────────
@@ -1286,6 +1395,31 @@ class WorkspaceExplorer {
 
   _isLakehouse(item) {
     return (item.type || '').toLowerCase().includes('lakehouse');
+  }
+
+  /**
+   * Derive environment label from workspace/capacity context.
+   * @param {object} ws - Workspace object with capacityId.
+   * @returns {string} Environment label like "PPE", "Prod", or truncated ID.
+   */
+  _getEnvironmentLabel(ws) {
+    const cap = ws.capacityId || '';
+    if (cap.includes('ppe') || cap.includes('PPE')) return 'PPE';
+    if (cap.includes('prod') || cap.includes('PROD')) return 'Prod';
+    if (cap.includes('test') || cap.includes('TEST')) return 'Test';
+    return cap ? cap.substring(0, 8) : 'Unknown';
+  }
+
+  /**
+   * Derive health status from workspace/capacity state.
+   * @param {object} ws - Workspace object.
+   * @returns {{status: string, color: string}} Health status.
+   */
+  _getHealthStatus(ws) {
+    const state = (ws.state || 'Active').toLowerCase();
+    if (state === 'active') return { status: 'Healthy', color: 'var(--status-succeeded)' };
+    if (state === 'throttled') return { status: 'Throttled', color: 'var(--level-warning)' };
+    return { status: 'Unknown', color: 'var(--text-muted)' };
   }
 
   _formatDate(isoStr) {
