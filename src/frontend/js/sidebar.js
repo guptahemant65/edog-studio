@@ -1,6 +1,6 @@
 /**
- * Sidebar — 52px icon-only navigation with hover-expand, phase-aware
- * view switching, animated active bar, and tooltip system.
+ * Sidebar — 52px icon-only navigation with per-icon slide-out labels,
+ * phase-aware view switching, and animated active bar.
  */
 class Sidebar {
   constructor() {
@@ -8,8 +8,6 @@ class Sidebar {
     this._icons = [];
     this._activeView = 'workspace';
     this._phase = 'disconnected';
-    this._tooltip = null;
-    this._tooltipTimer = null;
     this._phaseEl = null;
     this.onViewChange = null;
   }
@@ -19,9 +17,7 @@ class Sidebar {
     this._icons = Array.from(this._el.querySelectorAll('.sidebar-icon'));
     this._phaseEl = document.getElementById('sidebar-phase');
 
-    this._injectDrawer();
-    this._createTooltip();
-    this._bindTooltips();
+    this._injectLabels();
 
     this._icons.forEach(icon => {
       icon.removeAttribute('title');
@@ -39,86 +35,28 @@ class Sidebar {
     }
   }
 
-  /** Build the overlay drawer with label + shortcut for each icon */
-  _injectDrawer() {
-    const drawer = document.createElement('div');
-    drawer.className = 'sidebar-drawer';
+  /** Inject a slide-out label into each icon for the waterfall hover effect. */
+  _injectLabels() {
+    this._icons.forEach((icon, idx) => {
+      const pill = document.createElement('span');
+      pill.className = 'sidebar-slide-label';
+      // Stagger delay for waterfall effect: each icon 20ms later
+      pill.style.transitionDelay = (idx * 20) + 'ms';
 
-    this._icons.forEach(icon => {
-      const item = document.createElement('div');
-      item.className = 'sidebar-drawer-item';
-      if (icon.classList.contains('active')) item.classList.add('active');
-      if (icon.classList.contains('disabled')) item.classList.add('disabled');
-
-      const label = document.createElement('span');
-      label.className = 'sidebar-drawer-label';
-      label.textContent = icon.dataset.label || '';
-      item.appendChild(label);
+      const name = document.createElement('span');
+      name.className = 'sidebar-slide-name';
+      name.textContent = icon.dataset.label || '';
+      pill.appendChild(name);
 
       if (icon.dataset.shortcut) {
-        const shortcut = document.createElement('span');
-        shortcut.className = 'sidebar-drawer-shortcut';
-        shortcut.textContent = icon.dataset.shortcut;
-        item.appendChild(shortcut);
+        const key = document.createElement('kbd');
+        key.className = 'sidebar-slide-key';
+        key.textContent = icon.dataset.shortcut;
+        pill.appendChild(key);
       }
 
-      item.addEventListener('click', () => {
-        if (!icon.classList.contains('disabled')) {
-          this.switchView(icon.dataset.view);
-        }
-      });
-
-      drawer.appendChild(item);
-      icon._drawerItem = item;
+      icon.appendChild(pill);
     });
-
-    const spacer = document.createElement('div');
-    spacer.className = 'sidebar-drawer-spacer';
-    drawer.appendChild(spacer);
-
-    this._drawer = drawer;
-    this._el.appendChild(drawer);
-  }
-
-  /** Create the shared tooltip element */
-  _createTooltip() {
-    this._tooltip = document.createElement('div');
-    this._tooltip.className = 'sidebar-tooltip';
-    document.body.appendChild(this._tooltip);
-  }
-
-  /** Bind hover events for tooltip on each icon (only when sidebar collapsed) */
-  _bindTooltips() {
-    this._icons.forEach(icon => {
-      icon.addEventListener('mouseenter', () => {
-        // Suppress tooltip when drawer is visible (sidebar hovered)
-        if (this._el.matches(':hover')) return;
-        this._tooltipTimer = setTimeout(() => this._showTooltip(icon), 400);
-      });
-      icon.addEventListener('mouseleave', () => this._hideTooltip());
-    });
-
-    this._el.addEventListener('mouseenter', () => this._hideTooltip());
-  }
-
-  _showTooltip(icon) {
-    const rect = icon.getBoundingClientRect();
-    const label = icon.dataset.label || '';
-    const shortcut = icon.dataset.shortcut || '';
-    const disabled = icon.classList.contains('disabled');
-
-    this._tooltip.textContent = disabled
-      ? 'Deploy to enable'
-      : label + (shortcut ? ' \u00B7 ' + shortcut : '');
-
-    this._tooltip.style.left = (rect.right + 8) + 'px';
-    this._tooltip.style.top = (rect.top + rect.height / 2 - 12) + 'px';
-    this._tooltip.classList.add('visible');
-  }
-
-  _hideTooltip() {
-    clearTimeout(this._tooltipTimer);
-    if (this._tooltip) this._tooltip.classList.remove('visible');
   }
 
   switchView(viewId) {
@@ -136,12 +74,6 @@ class Sidebar {
     this._activeView = viewId;
     localStorage.setItem('edog-active-view', viewId);
 
-    // Sync drawer active state
-    this._icons.forEach(i => {
-      if (i._drawerItem) i._drawerItem.classList.remove('active');
-    });
-    if (icon._drawerItem) icon._drawerItem.classList.add('active');
-
     if (this.onViewChange) this.onViewChange(viewId);
   }
 
@@ -151,21 +83,19 @@ class Sidebar {
       const iconPhase = icon.dataset.phase;
       if (iconPhase === 'connected' && phase === 'disconnected') {
         icon.classList.add('disabled');
-        if (icon._drawerItem) icon._drawerItem.classList.add('disabled');
       } else {
         icon.classList.remove('disabled');
-        if (icon._drawerItem) icon._drawerItem.classList.remove('disabled');
       }
     });
 
     if (this._phaseEl) {
       if (phase === 'connected') {
-        this._phaseEl.textContent = 'P2';
-        this._phaseEl.title = 'Phase 2 \u00B7 Connected';
+        this._phaseEl.textContent = '\u25C9';
+        this._phaseEl.title = 'Connected \u00B7 FLT service running';
         this._phaseEl.classList.add('connected');
       } else {
-        this._phaseEl.textContent = 'P1';
-        this._phaseEl.title = 'Phase 1 \u00B7 Disconnected';
+        this._phaseEl.textContent = '\u25CB';
+        this._phaseEl.title = 'Browsing \u00B7 No service connected';
         this._phaseEl.classList.remove('connected');
       }
     }

@@ -37,10 +37,11 @@
 }
 
 .brand-studio {
-  font-weight: 500;
+  font-weight: 600;
   font-size: 11px;
-  letter-spacing: 0.12em;
-  opacity: 0.6;
+  letter-spacing: 0.14em;
+  opacity: 0.85;
+  color: var(--text);
 }
 
 .service-status {

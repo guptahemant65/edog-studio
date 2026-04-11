@@ -1,9 +1,9 @@
-/* Sidebar — 52px icon-only, overlay-expand on hover */
+/* Sidebar — 52px icon-only with per-icon slide-out labels */
 .sidebar {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: var(--sidebar-width); /* 52px always — never expands */
+  width: var(--sidebar-width);
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: var(--space-3) 0;
@@ -24,8 +24,9 @@
   color: var(--text-muted);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background var(--transition-normal), color var(--transition-normal);
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
+  overflow: visible;
 }
 
 .sidebar-icon svg {
@@ -33,11 +34,19 @@
   height: 22px;
   flex-shrink: 0;
   stroke-width: 1.8;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Edgy hover — sharper, lifted, crisp */
 .sidebar-icon:hover {
   background: var(--surface-2);
   color: var(--text);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 1px var(--border-bright), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.sidebar-icon:hover svg {
+  transform: scale(1.08);
 }
 
 .sidebar-icon.active {
@@ -45,11 +54,11 @@
   color: var(--accent);
 }
 
-/* Active bar — full-height indicator at left edge of sidebar */
+/* Active bar — accent indicator at left edge */
 .sidebar-icon.active::before {
   content: '';
   position: absolute;
-  left: -8px; /* centers on sidebar left edge: (52 - 36) / 2 = 8 */
+  left: -8px;
   top: 0;
   width: 3px;
   height: 36px;
@@ -64,92 +73,72 @@
   pointer-events: none;
 }
 
-/* Labels and shortcuts hidden in sidebar — only visible in the drawer */
+/* ─── Per-icon Slide-out Label (waterfall hover) ─── */
+.sidebar-slide-label {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06);
+  white-space: nowrap;
+  pointer-events: none;
+  /* Start state: shifted left + invisible */
+  opacity: 0;
+  transform: translateY(-50%) translateX(-6px);
+  transition:
+    opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: calc(var(--z-sidebar) + 2);
+}
+
+/* Waterfall reveal on hover */
+.sidebar-icon:hover .sidebar-slide-label {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+/* Dismiss faster than reveal */
+.sidebar-icon:not(:hover) .sidebar-slide-label {
+  transition-duration: 100ms, 120ms;
+  transition-delay: 0ms;
+}
+
+.sidebar-slide-name {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.sidebar-slide-key {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 5px;
+  line-height: 18px;
+}
+
+.sidebar-icon.disabled .sidebar-slide-name {
+  color: var(--text-muted);
+}
+
+/* Hidden elements */
 .sidebar-label,
 .sidebar-shortcut {
   display: none;
 }
 
-/* ─── Hover Drawer (overlay, doesn't push content) ─── */
-.sidebar-drawer {
-  position: absolute;
-  left: calc(100% + 1px); /* right edge of sidebar + border */
-  top: 0;
-  bottom: 0;
-  width: 180px;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  box-shadow: 4px 0 16px rgba(0,0,0,0.08);
-  padding: var(--space-3) 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 150ms ease-out 200ms; /* 200ms delay before showing */
-  z-index: calc(var(--z-sidebar) + 1);
-}
-
-.sidebar:hover .sidebar-drawer {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* Dismiss immediately (no delay) when mouse leaves */
-.sidebar:not(:hover) .sidebar-drawer {
-  transition-delay: 0ms;
-}
-
-.sidebar-drawer-item {
-  display: flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 var(--space-3);
-  gap: var(--space-2);
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  margin: 0 var(--space-1);
-  transition: background 100ms ease-out;
-}
-
-.sidebar-drawer-item:hover {
-  background: var(--surface-2);
-}
-
-.sidebar-drawer-item.active {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.sidebar-drawer-item.disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.sidebar-drawer-label {
-  font-size: var(--text-md);
-  font-family: var(--font-body);
-  color: var(--text);
-  flex: 1;
-}
-
-.sidebar-drawer-item.disabled .sidebar-drawer-label {
-  color: var(--text-muted);
-}
-
-.sidebar-drawer-shortcut {
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  padding: 1px var(--space-2);
-  line-height: 18px;
-  flex-shrink: 0;
-}
-
 .sidebar-spacer { flex: 1; }
-.sidebar-drawer-spacer { flex: 1; }
 
 /* Phase badge */
 .sidebar-phase {
@@ -180,24 +169,3 @@
 .sidebar-token-dot.green { background: var(--status-succeeded); box-shadow: 0 0 6px rgba(24,160,88,0.4); }
 .sidebar-token-dot.amber { background: var(--status-cancelled); box-shadow: 0 0 6px rgba(229,148,12,0.4); }
 .sidebar-token-dot.red { background: var(--status-failed); box-shadow: 0 0 6px rgba(229,69,59,0.4); }
-
-/* Tooltip — shows only when sidebar is NOT hovered (drawer hidden) */
-.sidebar-tooltip {
-  position: fixed;
-  background: var(--surface-3);
-  color: var(--text);
-  font-size: var(--text-sm);
-  font-family: var(--font-body);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-sm);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 100ms ease-out;
-  z-index: calc(var(--z-sidebar) + 1);
-  box-shadow: var(--shadow-md);
-}
-
-.sidebar-tooltip.visible {
-  opacity: 1;
-}

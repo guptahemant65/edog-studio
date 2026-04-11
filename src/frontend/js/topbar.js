@@ -104,7 +104,7 @@ class TopBar {
   _updateServiceStatus(status) {
     if (!this._statusEl) return;
     this._statusEl.className = 'service-status ' + status;
-    const labels = { running: 'Connected', stopped: 'Phase 1', building: 'Deploying...' };
+    const labels = { running: 'Connected', stopped: 'Browsing', building: 'Deploying\u2026' };
     if (this._statusTextEl) {
       let label = labels[status] || status;
       if (status === 'running' && this._uptimeStart) {
