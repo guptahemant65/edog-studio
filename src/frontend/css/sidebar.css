@@ -1,37 +1,16 @@
-/* Sidebar — 52px icon-only, hover-expands to 200px */
+/* Sidebar — 52px icon-only, overlay-expand on hover */
 .sidebar {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  width: var(--sidebar-width);
+  align-items: center;
+  width: var(--sidebar-width); /* 52px always — never expands */
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: var(--space-3) 0;
   gap: var(--space-1);
   z-index: var(--z-sidebar);
   flex-shrink: 0;
-  overflow: hidden;
-  transition: width 200ms ease-out;
   position: relative;
-}
-
-.sidebar:hover {
-  width: 200px;
-}
-
-/* Active indicator bar — slides vertically on the sidebar */
-.sidebar::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 3px;
-  height: 20px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
-  transition: transform 200ms ease-out;
-  transform: translateY(var(--active-bar-y, 20px));
-  pointer-events: none;
 }
 
 .sidebar-icon {
@@ -39,30 +18,21 @@
   align-items: center;
   justify-content: center;
   width: 36px;
-  min-width: 36px;
   height: 36px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 17px;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background var(--transition-normal), color var(--transition-normal);
   position: relative;
-  margin-left: var(--space-2);
-  gap: 10px;
-  white-space: nowrap;
-}
-
-/* Expand icon row on sidebar hover */
-.sidebar:hover .sidebar-icon {
-  width: calc(200px - var(--space-4));
-  justify-content: flex-start;
-  padding: 0 var(--space-3);
 }
 
 .sidebar-icon svg {
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
+  stroke-width: 1.8;
 }
 
 .sidebar-icon:hover {
@@ -75,70 +45,117 @@
   color: var(--accent);
 }
 
+/* Active bar — full-height indicator at left edge of sidebar */
+.sidebar-icon.active::before {
+  content: '';
+  position: absolute;
+  left: -8px; /* centers on sidebar left edge: (52 - 36) / 2 = 8 */
+  top: 0;
+  width: 3px;
+  height: 36px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 2px 0 8px rgba(109,92,255,0.3);
+}
+
 .sidebar-icon.disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: default;
   pointer-events: none;
 }
 
-/* Label — hidden collapsed, visible expanded */
-.sidebar-label {
-  font-size: var(--text-sm);
-  font-family: var(--font-body);
-  color: inherit;
+/* Labels and shortcuts hidden in sidebar — only visible in the drawer */
+.sidebar-label,
+.sidebar-shortcut {
+  display: none;
+}
+
+/* ─── Hover Drawer (overlay, doesn't push content) ─── */
+.sidebar-drawer {
+  position: absolute;
+  left: 100%; /* right edge of sidebar */
+  top: 0;
+  bottom: 0;
+  width: 180px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 16px rgba(0,0,0,0.08);
+  padding: var(--space-3) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 150ms ease-out;
-  overflow: hidden;
+  z-index: calc(var(--z-sidebar) - 1);
+}
+
+.sidebar:hover .sidebar-drawer {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-drawer-item {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--space-3);
+  gap: var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  margin: 0 var(--space-1);
+  transition: background 100ms ease-out;
+}
+
+.sidebar-drawer-item:hover {
+  background: var(--surface-2);
+}
+
+.sidebar-drawer-item.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sidebar-drawer-item.disabled {
+  opacity: 0.4;
   pointer-events: none;
 }
 
-.sidebar:hover .sidebar-label {
-  opacity: 1;
+.sidebar-drawer-label {
+  font-size: var(--text-md);
+  font-family: var(--font-body);
+  color: var(--text);
+  flex: 1;
 }
 
-/* Staggered label fade-in */
-.sidebar:hover .sidebar-icon:nth-child(1) .sidebar-label { transition-delay: 30ms; }
-.sidebar:hover .sidebar-icon:nth-child(2) .sidebar-label { transition-delay: 50ms; }
-.sidebar:hover .sidebar-icon:nth-child(3) .sidebar-label { transition-delay: 70ms; }
-.sidebar:hover .sidebar-icon:nth-child(4) .sidebar-label { transition-delay: 90ms; }
-.sidebar:hover .sidebar-icon:nth-child(5) .sidebar-label { transition-delay: 110ms; }
-.sidebar:hover .sidebar-icon:nth-child(6) .sidebar-label { transition-delay: 130ms; }
+.sidebar-drawer-item.disabled .sidebar-drawer-label {
+  color: var(--text-muted);
+}
 
-/* Shortcut badge — pushed right */
-.sidebar-shortcut {
+.sidebar-drawer-shortcut {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--surface-2);
   border-radius: var(--radius-sm);
-  padding: 0 var(--space-1);
+  padding: 1px var(--space-2);
   line-height: 18px;
-  margin-left: auto;
-  opacity: 0;
-  transition: opacity 150ms ease-out;
   flex-shrink: 0;
 }
 
-.sidebar:hover .sidebar-shortcut {
-  opacity: 1;
-}
-
 .sidebar-spacer { flex: 1; }
+.sidebar-drawer-spacer { flex: 1; }
 
 /* Phase badge */
 .sidebar-phase {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-muted);
-  background: var(--surface-3);
+  background: var(--surface-2);
   border-radius: var(--radius-full);
   padding: 2px var(--space-2);
-  line-height: 16px;
   margin: 0 auto var(--space-2);
-  text-align: center;
-  transition: all var(--transition-normal);
   white-space: nowrap;
-  overflow: hidden;
 }
 
 .sidebar-phase.connected {
@@ -159,11 +176,9 @@
 .sidebar-token-dot.amber { background: var(--status-cancelled); box-shadow: 0 0 6px rgba(229,148,12,0.4); }
 .sidebar-token-dot.red { background: var(--status-failed); box-shadow: 0 0 6px rgba(229,69,59,0.4); }
 
-/* Tooltip — positioned right of sidebar */
+/* Tooltip — shows only when sidebar is NOT hovered (drawer hidden) */
 .sidebar-tooltip {
   position: fixed;
-  left: 0;
-  top: 0;
   background: var(--surface-3);
   color: var(--text);
   font-size: var(--text-sm);
@@ -173,7 +188,7 @@
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  transition: opacity var(--transition-fast);
+  transition: opacity 100ms ease-out;
   z-index: calc(var(--z-sidebar) + 1);
   box-shadow: var(--shadow-md);
 }

@@ -19,7 +19,7 @@ class Sidebar {
     this._icons = Array.from(this._el.querySelectorAll('.sidebar-icon'));
     this._phaseEl = document.getElementById('sidebar-phase');
 
-    this._injectLabels();
+    this._injectDrawer();
     this._createTooltip();
     this._bindTooltips();
 
@@ -37,28 +37,47 @@ class Sidebar {
     if (saved && this._getIcon(saved) && !this._getIcon(saved).classList.contains('disabled')) {
       this.switchView(saved);
     }
-
-    this._updateActiveBar();
   }
 
-  /** Inject label + shortcut spans into each icon button */
-  _injectLabels() {
+  /** Build the overlay drawer with label + shortcut for each icon */
+  _injectDrawer() {
+    const drawer = document.createElement('div');
+    drawer.className = 'sidebar-drawer';
+
     this._icons.forEach(icon => {
-      const label = icon.dataset.label;
-      const shortcut = icon.dataset.shortcut;
-      if (label) {
-        const span = document.createElement('span');
-        span.className = 'sidebar-label';
-        span.textContent = label;
-        icon.appendChild(span);
+      const item = document.createElement('div');
+      item.className = 'sidebar-drawer-item';
+      if (icon.classList.contains('active')) item.classList.add('active');
+      if (icon.classList.contains('disabled')) item.classList.add('disabled');
+
+      const label = document.createElement('span');
+      label.className = 'sidebar-drawer-label';
+      label.textContent = icon.dataset.label || '';
+      item.appendChild(label);
+
+      if (icon.dataset.shortcut) {
+        const shortcut = document.createElement('span');
+        shortcut.className = 'sidebar-drawer-shortcut';
+        shortcut.textContent = icon.dataset.shortcut;
+        item.appendChild(shortcut);
       }
-      if (shortcut) {
-        const badge = document.createElement('span');
-        badge.className = 'sidebar-shortcut';
-        badge.textContent = shortcut;
-        icon.appendChild(badge);
-      }
+
+      item.addEventListener('click', () => {
+        if (!icon.classList.contains('disabled')) {
+          this.switchView(icon.dataset.view);
+        }
+      });
+
+      drawer.appendChild(item);
+      icon._drawerItem = item;
     });
+
+    const spacer = document.createElement('div');
+    spacer.className = 'sidebar-drawer-spacer';
+    drawer.appendChild(spacer);
+
+    this._drawer = drawer;
+    this._el.appendChild(drawer);
   }
 
   /** Create the shared tooltip element */
@@ -72,7 +91,8 @@ class Sidebar {
   _bindTooltips() {
     this._icons.forEach(icon => {
       icon.addEventListener('mouseenter', () => {
-        if (this._el.matches(':hover') && this._el.offsetWidth > 100) return;
+        // Suppress tooltip when drawer is visible (sidebar hovered)
+        if (this._el.matches(':hover')) return;
         this._tooltipTimer = setTimeout(() => this._showTooltip(icon), 400);
       });
       icon.addEventListener('mouseleave', () => this._hideTooltip());
@@ -101,16 +121,6 @@ class Sidebar {
     if (this._tooltip) this._tooltip.classList.remove('visible');
   }
 
-  /** Move the active bar (::after on sidebar) to the active icon position */
-  _updateActiveBar() {
-    const icon = this._getIcon(this._activeView);
-    if (!icon || !this._el) return;
-    const sidebarRect = this._el.getBoundingClientRect();
-    const iconRect = icon.getBoundingClientRect();
-    const y = iconRect.top - sidebarRect.top + (iconRect.height - 20) / 2;
-    this._el.style.setProperty('--active-bar-y', y + 'px');
-  }
-
   switchView(viewId) {
     if (viewId === this._activeView) return;
     const icon = this._getIcon(viewId);
@@ -125,7 +135,12 @@ class Sidebar {
 
     this._activeView = viewId;
     localStorage.setItem('edog-active-view', viewId);
-    this._updateActiveBar();
+
+    // Sync drawer active state
+    this._icons.forEach(i => {
+      if (i._drawerItem) i._drawerItem.classList.remove('active');
+    });
+    if (icon._drawerItem) icon._drawerItem.classList.add('active');
 
     if (this.onViewChange) this.onViewChange(viewId);
   }
@@ -136,8 +151,10 @@ class Sidebar {
       const iconPhase = icon.dataset.phase;
       if (iconPhase === 'connected' && phase === 'disconnected') {
         icon.classList.add('disabled');
+        if (icon._drawerItem) icon._drawerItem.classList.add('disabled');
       } else {
         icon.classList.remove('disabled');
+        if (icon._drawerItem) icon._drawerItem.classList.remove('disabled');
       }
     });
 
