@@ -1,11 +1,21 @@
 /**
- * Sidebar — 52px icon-only navigation with per-icon slide-out labels,
- * phase-aware view switching, and animated active bar.
+ * Sidebar — 52px icon rail with seamless expanding pill labels.
+ *
+ * Architecture:
+ *   .sidebar-slot  — flex child for vertical positioning + active indicator
+ *   .sidebar-icon  — absolute button inside slot, expands on hover/focus
+ *                    Contains SVG + name + key as one surface (no seam)
+ *
+ * JS responsibilities:
+ *   1. Inject label spans into each button
+ *   2. Measure content width → set --expanded-w per button
+ *   3. Manage active/disabled state on the SLOT, not the button
+ *   4. Keyboard shortcuts 1-6
  */
 class Sidebar {
   constructor() {
     this._el = document.getElementById('sidebar');
-    this._icons = [];
+    this._slots = [];
     this._activeView = 'workspace';
     this._phase = 'disconnected';
     this._phaseEl = null;
@@ -14,56 +24,73 @@ class Sidebar {
 
   init() {
     if (!this._el) return;
-    this._icons = Array.from(this._el.querySelectorAll('.sidebar-icon'));
+    this._slots = Array.from(this._el.querySelectorAll('.sidebar-slot'));
     this._phaseEl = document.getElementById('sidebar-phase');
 
     this._injectLabels();
+    this._measureWidths();
 
-    this._icons.forEach(icon => {
-      icon.removeAttribute('title');
-      icon.addEventListener('click', () => {
-        if (icon.classList.contains('disabled')) return;
-        this.switchView(icon.dataset.view);
+    this._slots.forEach(slot => {
+      const btn = slot.querySelector('.sidebar-icon');
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        if (slot.classList.contains('disabled')) return;
+        this.switchView(btn.dataset.view);
       });
     });
 
     document.addEventListener('keydown', (e) => this._onKeyDown(e));
 
     const saved = localStorage.getItem('edog-active-view');
-    if (saved && this._getIcon(saved) && !this._getIcon(saved).classList.contains('disabled')) {
+    if (saved && this._getSlot(saved) && !this._getSlot(saved).classList.contains('disabled')) {
       this.switchView(saved);
     }
   }
 
-  /** Inject an inline label into each icon — revealed by CSS on hover. */
+  /** Inject label + shortcut spans into each icon button. */
   _injectLabels() {
-    this._icons.forEach(icon => {
-      const pill = document.createElement('span');
-      pill.className = 'sidebar-slide-label';
+    this._slots.forEach(slot => {
+      const btn = slot.querySelector('.sidebar-icon');
+      if (!btn) return;
 
       const name = document.createElement('span');
       name.className = 'sidebar-slide-name';
-      name.textContent = icon.dataset.label || '';
-      pill.appendChild(name);
+      name.textContent = btn.dataset.label || '';
+      btn.appendChild(name);
 
-      if (icon.dataset.shortcut) {
+      if (btn.dataset.shortcut) {
         const key = document.createElement('kbd');
         key.className = 'sidebar-slide-key';
-        key.textContent = icon.dataset.shortcut;
-        pill.appendChild(key);
+        key.textContent = btn.dataset.shortcut;
+        btn.appendChild(key);
       }
+    });
+  }
 
-      icon.appendChild(pill);
+  /** Measure each button's natural expanded width and set --expanded-w. */
+  _measureWidths() {
+    this._slots.forEach(slot => {
+      const btn = slot.querySelector('.sidebar-icon');
+      if (!btn) return;
+      // Temporarily expand to measure
+      btn.style.maxWidth = 'none';
+      btn.style.position = 'static';
+      btn.style.visibility = 'hidden';
+      const w = btn.scrollWidth + 14; // padding buffer
+      btn.style.maxWidth = '';
+      btn.style.position = '';
+      btn.style.visibility = '';
+      btn.style.setProperty('--expanded-w', w + 'px');
     });
   }
 
   switchView(viewId) {
     if (viewId === this._activeView) return;
-    const icon = this._getIcon(viewId);
-    if (!icon || icon.classList.contains('disabled')) return;
+    const slot = this._getSlot(viewId);
+    if (!slot || slot.classList.contains('disabled')) return;
 
-    this._icons.forEach(i => i.classList.remove('active'));
-    icon.classList.add('active');
+    this._slots.forEach(s => s.classList.remove('active'));
+    slot.classList.add('active');
 
     document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
     const panel = document.getElementById('view-' + viewId);
@@ -77,12 +104,14 @@ class Sidebar {
 
   setPhase(phase) {
     this._phase = phase;
-    this._icons.forEach(icon => {
-      const iconPhase = icon.dataset.phase;
+    this._slots.forEach(slot => {
+      const btn = slot.querySelector('.sidebar-icon');
+      if (!btn) return;
+      const iconPhase = btn.dataset.phase;
       if (iconPhase === 'connected' && phase === 'disconnected') {
-        icon.classList.add('disabled');
+        slot.classList.add('disabled');
       } else {
-        icon.classList.remove('disabled');
+        slot.classList.remove('disabled');
       }
     });
 
@@ -98,15 +127,15 @@ class Sidebar {
       }
     }
 
-    if (this._getIcon(this._activeView)?.classList.contains('disabled')) {
+    if (this._getSlot(this._activeView)?.classList.contains('disabled')) {
       this.switchView('workspace');
     }
   }
 
   getActiveView() { return this._activeView; }
 
-  _getIcon(viewId) {
-    return this._icons.find(i => i.dataset.view === viewId) || null;
+  _getSlot(viewId) {
+    return this._slots.find(s => s.dataset.view === viewId) || null;
   }
 
   _onKeyDown(e) {

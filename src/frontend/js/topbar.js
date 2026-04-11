@@ -248,40 +248,54 @@ class TopBar {
       ? Math.max(0, Math.floor((this._bearerExpiresAt - Date.now()) / 1000))
       : 0;
     const bearerMin = Math.floor(bearerSec / 60);
+    const bearerSecRem = bearerSec % 60;
     const hasMwc = !!config.mwcToken;
     const mwcMin = config.tokenExpiryMinutes || 0;
 
+    // Parse username parts
+    const user = health.lastUsername || '';
+    const userParts = user.split('@');
+    const userName = userParts[0] || '\u2014';
+    const userDomain = userParts[1] || '\u2014';
+
     body.innerHTML =
-      this._renderCard('Bearer (AAD/Entra)', bearerMin, health.hasBearerToken, [
-        ['User', health.lastUsername || '\u2014'],
-        ['Phase', config.phase || 'disconnected'],
+      this._renderCard('bearer', 'Bearer (AAD/Entra)', bearerMin, bearerSecRem, health.hasBearerToken, [
+        ['User', userName],
+        ['Domain', userDomain],
         ['Workspace', config.workspaceId || '\u2014'],
+        ['Phase', config.phase || 'disconnected'],
+        ['Countdown', health.hasBearerToken ? bearerMin + 'm ' + bearerSecRem + 's' : '\u2014'],
+        ['Source', '.edog-bearer-cache'],
       ]) +
-      this._renderCard('MWC (Capacity)', mwcMin, hasMwc, [
+      this._renderCard('mwc', 'MWC (Capacity)', mwcMin, 0, hasMwc, [
         ['Artifact', config.artifactId || '\u2014'],
         ['Capacity', config.capacityId || '\u2014'],
+        ['Endpoint', config.fabricBaseUrl ? 'pbidedicated' : '\u2014'],
         ['Expired', config.tokenExpired ? 'Yes' : 'No'],
-      ]) +
-      '<div class="ti-actions">' +
-        '<button class="ti-btn primary" id="ti-refresh-btn">Refresh Token</button>' +
-        '<button class="ti-btn" id="ti-copy-bearer">Copy Bearer</button>' +
-      '</div>';
+        ['Remaining', hasMwc ? mwcMin + 'm' : '\u2014'],
+        ['Source', '.edog-token-cache'],
+      ]);
 
-    // Wire copy button
-    const copyBtn = document.getElementById('ti-copy-bearer');
+    // Wire per-card buttons
+    this._wireCardButtons('bearer', config.bearerToken);
+    this._wireCardButtons('mwc', config.mwcToken);
+  }
+
+  _wireCardButtons(id, token) {
+    const copyBtn = document.getElementById('ti-copy-' + id);
     if (copyBtn) {
       copyBtn.addEventListener('click', () => {
-        const token = config.bearerToken;
         if (token && navigator.clipboard) {
           navigator.clipboard.writeText(token);
           copyBtn.textContent = 'Copied!';
-          setTimeout(() => { copyBtn.textContent = 'Copy Bearer'; }, 1500);
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        } else {
+          copyBtn.textContent = 'No token';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
         }
       });
     }
-
-    // Wire refresh button
-    const refreshBtn = document.getElementById('ti-refresh-btn');
+    const refreshBtn = document.getElementById('ti-refresh-' + id);
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => {
         refreshBtn.textContent = 'Refreshing\u2026';
@@ -293,10 +307,12 @@ class TopBar {
     }
   }
 
-  _renderCard(title, minutes, hasToken, claims) {
+  _renderCard(id, title, minutes, seconds, hasToken, claims) {
     const pct = hasToken ? Math.min((minutes / 60) * 100, 100) : 0;
     const color = !hasToken ? 'red' : minutes > 10 ? 'green' : minutes > 5 ? 'amber' : 'red';
-    const badge = hasToken ? minutes + 'm remaining' : 'Not available';
+    const badge = hasToken
+      ? minutes + 'm ' + (seconds ? seconds + 's' : '') + ' remaining'
+      : 'Not available';
     const claimsHtml = claims.map(([k, v]) =>
       '<dt>' + k + '</dt><dd>' + v + '</dd>'
     ).join('');
@@ -304,11 +320,15 @@ class TopBar {
     return '<div class="ti-token-card">' +
       '<div class="ti-token-header">' +
         '<span>' + title + '</span>' +
-        '<span class="ti-type-badge">' + badge + '</span>' +
+        '<span class="ti-type-badge ' + color + '">' + badge + '</span>' +
       '</div>' +
       '<div class="ti-expiry-bar"><div class="ti-expiry-fill ' + color + '" style="width:' + pct + '%"></div></div>' +
       '<div class="ti-token-body">' +
         '<dl class="ti-claims">' + claimsHtml + '</dl>' +
+      '</div>' +
+      '<div class="ti-card-actions">' +
+        '<button class="ti-btn" id="ti-refresh-' + id + '">Refresh</button>' +
+        '<button class="ti-btn" id="ti-copy-' + id + '">Copy</button>' +
       '</div>' +
     '</div>';
   }
