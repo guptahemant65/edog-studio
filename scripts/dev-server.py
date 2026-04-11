@@ -1491,12 +1491,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(502, {"error": "jupyter_session_error", "message": str(e)})
                 return
 
-        # Step 1: Poll session until kernel is idle (max 120s)
+        # Step 1: Poll session until kernel is idle (max 10 min)
         session_url = f"{cap_host}{base}/sessions/{session_id}"
         print(f"  [JUPYTER] Polling session until kernel idle...")
         ctx = ssl.create_default_context()
         kernel_ready = False
-        for attempt in range(60):
+        for attempt in range(300):  # Max 10 min (300 x 2s)
             try:
                 req = urllib.request.Request(session_url, headers={
                     "Authorization": f"MwcToken {token}",
@@ -1511,7 +1511,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 if kstate == "dead":
                     self._json_response(500, {"error": "kernel_dead", "message": "Kernel died during startup"})
                     return
-                print(f"  [JUPYTER] Kernel state: {kstate} (attempt {attempt + 1})...")
+                if attempt % 15 == 0:
+                    print(f"  [JUPYTER] Kernel state: {kstate} ({attempt * 2}s elapsed)...")
             except Exception as e:
                 print(f"  [JUPYTER] Poll error: {e}")
             time.sleep(2)
@@ -1519,7 +1520,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if not kernel_ready:
             self._json_response(504, {
                 "error": "kernel_timeout",
-                "message": "Kernel did not become idle within 120s. Try again.",
+                "message": "Kernel did not become idle within 10 minutes. Try again.",
             })
             return
 
