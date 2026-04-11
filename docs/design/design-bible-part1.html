@@ -1,0 +1,2457 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Design Bible Part 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --accent:   #6d5cff;
+  --green:    #18a058;
+  --amber:    #e5940c;
+  --red:      #e5453b;
+  --blue:     #2d7ff9;
+  --purple:   #a855f7;
+  --teal:     #0d9488;
+
+  --bg:       #fff;
+  --bg-2:     #f8f9fb;
+  --bg-3:     #f4f5f7;
+  --bg-4:     #ebedf0;
+
+  --text:     #1a1d23;
+  --text-2:   #5a6070;
+  --text-3:   #8e95a5;
+
+  --border:        rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --font:  'Inter', system-ui, sans-serif;
+  --mono:  'Cascadia Code', 'Consolas', monospace;
+
+  --r4:   4px;
+  --r6:   6px;
+  --r10:  10px;
+  --r16:  16px;
+  --r100: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+  --bg:       #0f1117;
+  --bg-2:     #161923;
+  --bg-3:     #1e2230;
+  --bg-4:     #252a38;
+
+  --text:     #e8eaf0;
+  --text-2:   #9aa0b2;
+  --text-3:   #5f6578;
+
+  --border:        rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* ─── RESET + BASE ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ─── PAGE LAYOUT ───────────────────────────────────────────────────────── */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+.page-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.page-wordmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+.page-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover { background: var(--bg-4); color: var(--text); }
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.page-intro {
+  padding: 40px 0 0;
+}
+
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.page-title span {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-subtitle {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--text-2);
+  max-width: 600px;
+}
+
+.toc {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toc-item {
+  padding: 6px 14px;
+  border-radius: var(--r100);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toc-item:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ─── SECTION WRAPPER ───────────────────────────────────────────────────── */
+.section {
+  scroll-margin-top: 80px;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-num {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r6);
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.section-meta h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.section-meta p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.demo-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.demo-card + .demo-card { margin-top: 12px; }
+
+.demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+/* ─── § 1 · ICON SYSTEM ─────────────────────────────────────────────────── */
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.icon-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+}
+
+.icon-tile:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-tile:active { transform: translateY(0); }
+
+.icon-tile svg { display: block; }
+
+.icon-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* ─── § 2 · GUID DISPLAY ────────────────────────────────────────────────── */
+.guid-list { display: flex; flex-direction: column; gap: 10px; }
+
+.guid-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--r6);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.guid-row:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--bg-3)); }
+
+.guid-row.copied { border-color: var(--green); background: color-mix(in srgb, var(--green) 8%, var(--bg-3)); }
+
+.guid-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  min-width: 96px;
+  text-transform: uppercase;
+}
+
+.guid-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+  flex: 1;
+}
+
+.guid-copy-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r4);
+  border: 1px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.guid-copy-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.guid-tooltip {
+  position: absolute;
+  right: 48px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--r100);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms;
+  white-space: nowrap;
+}
+
+.guid-tooltip.show { opacity: 1; }
+
+/* ─── § 3 · BADGE SYSTEM ────────────────────────────────────────────────── */
+.badge-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: all var(--transition);
+  cursor: default;
+  user-select: none;
+}
+
+.badge:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+
+.badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.badge.success  { background: color-mix(in srgb, var(--green)  12%, var(--bg)); color: var(--green);  border: 1px solid color-mix(in srgb, var(--green)  25%, transparent); }
+.badge.warn     { background: color-mix(in srgb, var(--amber)  12%, var(--bg)); color: var(--amber);  border: 1px solid color-mix(in srgb, var(--amber)  25%, transparent); }
+.badge.error    { background: color-mix(in srgb, var(--red)    12%, var(--bg)); color: var(--red);    border: 1px solid color-mix(in srgb, var(--red)    25%, transparent); }
+.badge.info     { background: color-mix(in srgb, var(--blue)   12%, var(--bg)); color: var(--blue);   border: 1px solid color-mix(in srgb, var(--blue)   25%, transparent); }
+.badge.muted    { background: var(--bg-3);                                      color: var(--text-3); border: 1px solid var(--border); }
+.badge.accent   { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.badge.purple   { background: color-mix(in srgb, var(--purple) 12%, var(--bg)); color: var(--purple); border: 1px solid color-mix(in srgb, var(--purple) 25%, transparent); }
+.badge.teal     { background: color-mix(in srgb, var(--teal)   12%, var(--bg)); color: var(--teal);   border: 1px solid color-mix(in srgb, var(--teal)   25%, transparent); }
+
+.badge.success .badge-dot  { background: var(--green); }
+.badge.warn    .badge-dot  { background: var(--amber); }
+.badge.error   .badge-dot  { background: var(--red); }
+.badge.info    .badge-dot  { background: var(--blue); }
+.badge.muted   .badge-dot  { background: var(--text-3); }
+.badge.accent  .badge-dot  { background: var(--accent); }
+
+.badge.pulse .badge-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,100% { box-shadow: 0 0 0 0px currentColor; }
+  50%  { box-shadow: 0 0 0 3px transparent; }
+}
+
+/* ─── § 4 · PROGRESS INDICATORS ─────────────────────────────────────────── */
+.progress-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* 4a — circular ring */
+.ring-demo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+.ring-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+
+.ring-svg { transform: rotate(-90deg); }
+
+.ring-track { fill: none; stroke: var(--bg-4); stroke-width: 6; }
+
+.ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms cubic-bezier(0.4,0,0.2,1), stroke 300ms;
+}
+
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ring-controls { display: flex; align-items: center; gap: 8px; width: 100%; }
+
+.ring-slider {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* 4b — stepper */
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 8px 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.step-node {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border-bright);
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+  transition: all 300ms;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.step-node.done { background: var(--green); border-color: var(--green); color: #fff; }
+.step-node.active { border-color: var(--accent); color: var(--accent); }
+.step-node.active::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0.4;
+  animation: step-pulse 1.4s ease-in-out infinite;
+}
+
+.step-node.error { background: var(--red); border-color: var(--red); color: #fff; }
+
+@keyframes step-pulse {
+  0%,100% { transform: scale(1); opacity: 0.4; }
+  50% { transform: scale(1.2); opacity: 0; }
+}
+
+.step-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.step-label.active { color: var(--accent); font-weight: 600; }
+.step-label.done   { color: var(--green); }
+.step-label.error  { color: var(--red); }
+
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--bg-4);
+  min-width: 20px;
+  transition: background 300ms;
+}
+
+.step-line.done { background: var(--green); }
+
+.stepper-controls { display: flex; gap: 8px; margin-top: 16px; }
+
+/* 4c — linear bar */
+.progress-bar-wrap {
+  height: 8px;
+  background: var(--bg-4);
+  border-radius: var(--r100);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: var(--r100);
+  background: linear-gradient(90deg, var(--accent), var(--purple));
+  transition: width 400ms cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+}
+
+.progress-bar-fill.success { background: var(--green); }
+.progress-bar-fill.error   { background: var(--red); animation: shake-bar 300ms; }
+
+@keyframes shake-bar {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+.progress-bar-fill.indeterminate {
+  width: 40% !important;
+  animation: shimmer-bar 1.6s ease-in-out infinite;
+  background: linear-gradient(90deg, var(--accent) 0%, var(--purple) 50%, var(--accent) 100%);
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer-bar {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(350%); }
+}
+
+.bar-row { display: flex; flex-direction: column; gap: 6px; }
+.bar-title { font-size: 12px; font-weight: 500; color: var(--text-2); }
+
+/* 4d — progress toast */
+.progress-toast {
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r10);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-md);
+  max-width: 360px;
+  margin: 0 auto;
+}
+
+.toast-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; display: flex; justify-content: space-between; }
+.toast-step  { font-size: 11px; color: var(--text-3); margin-bottom: 10px; }
+.toast-cancel {
+  padding: 4px 10px;
+  border-radius: var(--r4);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.toast-cancel:hover { background: var(--bg-4); }
+
+/* 4e — skeleton */
+.skeleton-wrap { display: flex; flex-direction: column; gap: 10px; }
+
+.sk {
+  border-radius: var(--r4);
+  background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-4) 50%, var(--bg-3) 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sk-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.sk-row { display: flex; gap: 8px; align-items: center; }
+.sk-circle { border-radius: 50%; flex-shrink: 0; }
+.sk-card { border-radius: var(--r10); }
+
+/* ─── § 5 · CRUD OPERATIONS ─────────────────────────────────────────────── */
+.tree-list { display: flex; flex-direction: column; gap: 2px; }
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r6);
+  cursor: pointer;
+  transition: background var(--transition);
+  position: relative;
+  user-select: none;
+}
+
+.tree-item:hover { background: var(--bg-3); }
+
+.tree-item-actions {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.tree-item:hover .tree-item-actions { display: flex; }
+
+.tree-action-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all var(--transition);
+}
+
+.tree-action-btn:hover { background: var(--bg-4); color: var(--text); }
+.tree-action-btn.danger:hover { background: color-mix(in srgb, var(--red) 15%, var(--bg)); color: var(--red); }
+
+.tree-item-label { font-size: 13px; color: var(--text); flex: 1; }
+
+.tree-item.renaming .tree-item-label { display: none; }
+
+.rename-input {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r4);
+  padding: 2px 8px;
+  color: var(--text);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.tree-item.renaming .tree-item-actions { display: none; }
+
+.inline-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--r6);
+  border: 1.5px dashed var(--border-bright);
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-top: 4px;
+}
+
+.inline-create:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--bg)); }
+
+.inline-create-input {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+}
+
+.inline-create-input::placeholder { color: var(--text-3); }
+
+/* toasts */
+.toast-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r10);
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-md);
+  animation: toast-in 200ms cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.toast-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.toast.success .toast-icon { background: var(--green);  color: #fff; }
+.toast.error   .toast-icon { background: var(--red);    color: #fff; }
+.toast.warn    .toast-icon { background: var(--amber);  color: #fff; }
+.toast.info    .toast-icon { background: var(--blue);   color: #fff; }
+
+.toast-body { flex: 1; }
+.toast-body strong { font-size: 13px; font-weight: 600; color: var(--text); }
+.toast-body p { font-size: 12px; color: var(--text-2); margin-top: 2px; }
+
+.toast-actions { display: flex; gap: 6px; margin-top: 6px; }
+
+.toast-btn {
+  padding: 3px 10px;
+  border-radius: var(--r4);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border-bright);
+  cursor: pointer;
+  background: var(--bg-3);
+  color: var(--text-2);
+  transition: all var(--transition);
+}
+
+.toast-btn.danger { background: color-mix(in srgb, var(--red) 10%, var(--bg)); color: var(--red); border-color: color-mix(in srgb, var(--red) 25%, transparent); }
+.toast-btn.danger:hover { background: var(--red); color: #fff; }
+.toast-btn:hover { background: var(--bg-4); }
+
+.toast-close {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r4);
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.toast-close:hover { background: var(--bg-3); color: var(--text); }
+
+/* undo toast countdown */
+.undo-countdown {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.undo-ring-svg { transform: rotate(-90deg); }
+.undo-ring-track { fill: none; stroke: var(--bg-4); stroke-width: 3; }
+.undo-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 82;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 200ms linear;
+}
+
+.undo-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* saving state */
+.saving-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--r6);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-4);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── § 6 · DATA TABLE ──────────────────────────────────────────────────── */
+.data-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--r10);
+  border: 1px solid var(--border);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-3);
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition);
+}
+
+.data-table th:hover { color: var(--text); }
+.data-table th.sorted { color: var(--accent); }
+
+.sort-icon { margin-left: 4px; opacity: 0.5; font-size: 10px; }
+.sorted .sort-icon { opacity: 1; }
+
+.data-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.data-table td.num {
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: right;
+  color: var(--text-2);
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.data-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--bg-3) 50%, transparent); }
+
+.data-table tbody tr { cursor: pointer; transition: background var(--transition); }
+.data-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, var(--bg)) !important; }
+.data-table tbody tr.selected td { background: color-mix(in srgb, var(--accent) 10%, var(--bg)) !important; }
+.data-table tbody tr:active td { background: color-mix(in srgb, var(--accent) 15%, var(--bg)) !important; }
+
+/* ─── § 7 · FORM INPUTS ─────────────────────────────────────────────────── */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-label .required { color: var(--red); font-weight: 700; }
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--r6);
+  border: 1.5px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: all var(--transition);
+}
+
+.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+.form-input.error { border-color: var(--red); }
+.form-input.error:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 15%, transparent); }
+.form-input:disabled { background: var(--bg-3); color: var(--text-3); cursor: not-allowed; }
+
+.form-hint { font-size: 11px; color: var(--text-3); }
+.form-error { font-size: 11px; color: var(--red); display: flex; align-items: center; gap: 4px; }
+
+/* custom dropdown */
+.custom-select {
+  position: relative;
+  user-select: none;
+}
+
+.custom-select-trigger {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--r6);
+  border: 1.5px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all var(--transition);
+}
+
+.custom-select-trigger:hover { border-color: var(--accent); }
+.custom-select.open .custom-select-trigger { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+.custom-select-arrow {
+  transition: transform 200ms;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.custom-select.open .custom-select-arrow { transform: rotate(180deg); }
+
+.custom-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  overflow: hidden;
+  display: none;
+  animation: dropdown-in 120ms cubic-bezier(0.4,0,0.2,1);
+}
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.custom-select.open .custom-select-dropdown { display: block; }
+
+.custom-select-option {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-select-option:hover { background: var(--bg-3); }
+.custom-select-option.selected { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); color: var(--accent); font-weight: 500; }
+
+/* toggle switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.toggle {
+  width: 40px;
+  height: 22px;
+  border-radius: var(--r100);
+  background: var(--bg-4);
+  position: relative;
+  cursor: pointer;
+  transition: background 200ms;
+  flex-shrink: 0;
+}
+
+.toggle.on { background: var(--green); }
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  transition: transform 200ms cubic-bezier(0.4,0,0.2,1);
+}
+
+.toggle.on .toggle-thumb { transform: translateX(18px); }
+
+/* search input */
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 72px 8px 34px;
+  border-radius: var(--r6);
+  border: 1.5px solid var(--border-bright);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: all var(--transition);
+}
+
+.search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+.search-kbd {
+  position: absolute;
+  right: 34px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.kbd {
+  padding: 2px 5px;
+  border-radius: var(--r4);
+  background: var(--bg-3);
+  border: 1px solid var(--border-bright);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+
+.search-clear {
+  position: absolute;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-4);
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  transition: all var(--transition);
+}
+
+.search-clear:hover { background: var(--bg-3); color: var(--text); }
+
+/* textarea */
+.code-textarea {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--r6);
+  border: 1.5px solid var(--border-bright);
+  background: #0f1117;
+  color: #c9d1d9;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  outline: none;
+  resize: vertical;
+  min-height: 120px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.code-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
+
+/* ─── § 8 · TABS & NAVIGATION ───────────────────────────────────────────── */
+
+/* underline tabs */
+.tabs-underline {
+  display: flex;
+  border-bottom: 1px solid var(--border-bright);
+  gap: 0;
+  position: relative;
+  overflow-x: auto;
+}
+
+.tab-underline {
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  position: relative;
+  transition: color var(--transition);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.tab-underline:hover { color: var(--text); }
+.tab-underline.active { color: var(--accent); font-weight: 600; }
+
+.tab-underline-indicator {
+  position: absolute;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: var(--r100) var(--r100) 0 0;
+  transition: left 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1);
+}
+
+.tab-content {
+  padding: 20px 0 0;
+  font-size: 13px;
+  color: var(--text-2);
+  min-height: 60px;
+}
+
+/* pill tabs */
+.tabs-pill {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-3);
+  border-radius: var(--r100);
+  padding: 4px;
+  width: fit-content;
+}
+
+.tab-pill {
+  padding: 5px 14px;
+  border-radius: var(--r100);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.tab-pill:hover { color: var(--text); }
+.tab-pill.active { background: var(--bg); color: var(--text); box-shadow: var(--shadow-sm); font-weight: 600; }
+
+/* breadcrumbs */
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.crumb {
+  font-size: 13px;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--r4);
+  transition: all var(--transition);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.crumb:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.crumb.current { color: var(--text); font-weight: 500; cursor: default; }
+.crumb.current:hover { background: transparent; color: var(--text); }
+
+.crumb-sep {
+  color: var(--text-3);
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+/* ─── UTILITY BUTTON ────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--r6);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: color-mix(in srgb, var(--accent) 85%, #000); }
+.btn-secondary { background: var(--bg-3); color: var(--text-2); border-color: var(--border-bright); }
+.btn-secondary:hover { background: var(--bg-4); color: var(--text); }
+.btn-danger { background: color-mix(in srgb, var(--red) 10%, var(--bg)); color: var(--red); border-color: color-mix(in srgb, var(--red) 25%, transparent); }
+.btn-danger:hover { background: var(--red); color: #fff; }
+.btn-ghost { background: transparent; color: var(--text-2); }
+.btn-ghost:hover { background: var(--bg-3); color: var(--text); }
+
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* ─── DIVIDER ────────────────────────────────────────────────────────────── */
+.divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+/* ─── SUBSECTION LABEL ───────────────────────────────────────────────────── */
+.sub-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── FOOTER ────────────────────────────────────────────────────────────── */
+.page-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 32px;
+  padding-top: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-3);
+  font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<!-- ─── PAGE HEADER ───────────────────────────────────────────────────────── -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <div class="page-wordmark">
+      <div class="page-wordmark-dot"></div>
+      EDOG Studio · Design Bible
+    </div>
+    <div class="page-meta">
+      <span>Part 1 · Sections 1–8</span>
+      <button class="theme-toggle" id="themeToggle" title="Toggle dark mode">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path id="theme-icon-sun" d="M8 11A3 3 0 1 0 8 5a3 3 0 0 0 0 6zm0 1.5V14m0-12V1.5m4.95 1.55-1.06 1.06M3.11 12.89l-1.06 1.06M14 8h-1.5M3.5 8H2m10.45 4.95-1.06-1.06M4.11 4.11 3.05 3.05" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <path id="theme-icon-moon" d="M13.5 9.5A5.5 5.5 0 0 1 5.5 2.5a5.5 5.5 0 1 0 8 7z" fill="currentColor" style="display:none"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ─── MAIN ──────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- INTRO -->
+  <div class="page-intro">
+    <div class="page-title">EDOG Playground<br><span>Design Bible — Part 1</span></div>
+    <p class="page-subtitle">The living design system for EDOG Studio. Every token, component, and interaction pattern. Sections 1–8.</p>
+    <nav class="toc">
+      <a class="toc-item" href="#s1">1 · Icons</a>
+      <a class="toc-item" href="#s2">2 · GUIDs</a>
+      <a class="toc-item" href="#s3">3 · Badges</a>
+      <a class="toc-item" href="#s4">4 · Progress</a>
+      <a class="toc-item" href="#s5">5 · CRUD</a>
+      <a class="toc-item" href="#s6">6 · Data Table</a>
+      <a class="toc-item" href="#s7">7 · Forms</a>
+      <a class="toc-item" href="#s8">8 · Tabs & Nav</a>
+    </nav>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 1 · ICON SYSTEM
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s1">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <div class="section-meta">
+        <h2>Icon System</h2>
+        <p>22 semantic SVG icons at 24×24, 1.6px stroke, colored by resource type. Click to copy SVG.</p>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="icon-grid" id="iconGrid"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 2 · GUID DISPLAY
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s2">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <div class="section-meta">
+        <h2>GUID Display</h2>
+        <p>Full GUIDs, never truncated. Click-to-copy with green flash and "Copied!" confirmation.</p>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="guid-list">
+        <div class="guid-row" onclick="copyGuid(this)">
+          <span class="guid-label">Workspace</span>
+          <span class="guid-value">a3f7c2e1-84b0-4d9f-9e56-1c2d3f4a5b6c</span>
+          <button class="guid-copy-btn" title="Copy">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/>
+            </svg>
+          </button>
+          <span class="guid-tooltip">Copied!</span>
+        </div>
+        <div class="guid-row" onclick="copyGuid(this)">
+          <span class="guid-label">Lakehouse</span>
+          <span class="guid-value">7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a</span>
+          <button class="guid-copy-btn" title="Copy">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/>
+            </svg>
+          </button>
+          <span class="guid-tooltip">Copied!</span>
+        </div>
+        <div class="guid-row" onclick="copyGuid(this)">
+          <span class="guid-label">Table ID</span>
+          <span class="guid-value">f1e2d3c4-b5a6-9870-fedc-ba9876543210</span>
+          <button class="guid-copy-btn" title="Copy">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/>
+            </svg>
+          </button>
+          <span class="guid-tooltip">Copied!</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 3 · BADGE SYSTEM
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s3">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <div class="section-meta">
+        <h2>Badge System</h2>
+        <p>20+ pill variants for status, environment, type, and phase. Hover for lift effect.</p>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="sub-label">Status</div>
+      <div class="badge-grid">
+        <span class="badge success pulse"><span class="badge-dot"></span>Healthy</span>
+        <span class="badge success"><span class="badge-dot"></span>Succeeded</span>
+        <span class="badge success"><span class="badge-dot"></span>Connected</span>
+        <span class="badge info pulse"><span class="badge-dot"></span>Running</span>
+        <span class="badge warn"><span class="badge-dot"></span>Degraded</span>
+        <span class="badge warn"><span class="badge-dot"></span>Expiring</span>
+        <span class="badge info"><span class="badge-dot"></span>Building</span>
+        <span class="badge error"><span class="badge-dot"></span>Failed</span>
+        <span class="badge error"><span class="badge-dot"></span>Unhealthy</span>
+        <span class="badge muted"><span class="badge-dot"></span>Expired</span>
+        <span class="badge muted"><span class="badge-dot"></span>Stopped</span>
+        <span class="badge error"><span class="badge-dot"></span>No token</span>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">Phase & Environment</div>
+      <div class="badge-grid">
+        <span class="badge accent">Phase 1</span>
+        <span class="badge purple">Phase 2</span>
+        <span class="badge teal">F2 PPE</span>
+        <span class="badge info">West US 2</span>
+        <span class="badge muted">East US</span>
+        <span class="badge muted">North EU</span>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">Type Tags</div>
+      <div class="badge-grid">
+        <span class="badge info">patches</span>
+        <span class="badge teal">Delta</span>
+        <span class="badge purple">SQL</span>
+        <span class="badge accent">PySpark</span>
+        <span class="badge muted">Parquet</span>
+        <span class="badge warn">Preview</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 4 · PROGRESS INDICATORS
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s4">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <div class="section-meta">
+        <h2>Progress Indicators</h2>
+        <p>Five distinct progress patterns covering every async operation in EDOG Studio.</p>
+      </div>
+    </div>
+
+    <!-- 4a circular -->
+    <div class="demo-card">
+      <div class="sub-label">4a · Circular Ring</div>
+      <div class="ring-demo">
+        <div class="ring-wrap" id="ringWrap">
+          <svg class="ring-svg" width="72" height="72" viewBox="0 0 72 72">
+            <circle class="ring-track" cx="36" cy="36" r="28"/>
+            <circle class="ring-fill" id="ringFill" cx="36" cy="36" r="28"
+              stroke-dasharray="175.9" stroke-dashoffset="175.9"/>
+          </svg>
+          <div class="ring-label" id="ringLabel">0%</div>
+        </div>
+        <div class="ring-controls">
+          <input type="range" min="0" max="100" value="0" class="ring-slider" id="ringSlider">
+          <button class="btn btn-secondary" onclick="ringSuccess()">✓ Done</button>
+          <button class="btn btn-danger" onclick="ringError()">✕ Error</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4b stepper -->
+    <div class="demo-card">
+      <div class="sub-label">4b · Deploy Flow Stepper</div>
+      <div class="stepper" id="stepper">
+        <!-- built by JS -->
+      </div>
+      <div class="stepper-controls">
+        <button class="btn btn-primary" onclick="stepAdvance()">Advance ▸</button>
+        <button class="btn btn-danger"  onclick="stepError()">Fail Step</button>
+        <button class="btn btn-secondary" onclick="stepReset()">Reset</button>
+      </div>
+    </div>
+
+    <!-- 4c linear bars -->
+    <div class="demo-card">
+      <div class="sub-label">4c · Linear Progress Bar</div>
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div class="bar-row">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span class="bar-title">Determinate</span>
+            <span style="font-size:12px;color:var(--text-3)" id="barPct">64%</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="barFill" style="width:64%"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <input type="range" min="0" max="100" value="64" style="flex:1;accent-color:var(--accent)" id="barSlider">
+            <button class="btn btn-secondary" onclick="barSuccess()">Done</button>
+            <button class="btn btn-danger"    onclick="barError()">Error</button>
+          </div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-title" style="margin-bottom:6px;">Indeterminate (shimmer)</div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill indeterminate" style="width:40%!important"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4d progress toast -->
+    <div class="demo-card">
+      <div class="sub-label">4d · Progress Toast</div>
+      <div class="progress-toast">
+        <div class="toast-title">
+          <span>Deploying to TestLH-01</span>
+          <button class="toast-cancel" id="toastCancelBtn" onclick="toastReset()">Cancel</button>
+        </div>
+        <div class="toast-step" id="toastStep">Fetching MWC token…</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="toastBar" style="width:0%"></div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="toastStart()">▸ Start</button>
+        <button class="btn btn-secondary" onclick="toastReset()">Reset</button>
+      </div>
+    </div>
+
+    <!-- 4e skeleton -->
+    <div class="demo-card">
+      <div class="sub-label">4e · Skeleton Shimmer</div>
+      <div class="skeleton-wrap">
+        <div class="sk-row">
+          <div class="sk sk-circle" style="width:36px;height:36px;"></div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+            <div class="sk" style="height:12px;width:55%;"></div>
+            <div class="sk" style="height:10px;width:35%;"></div>
+          </div>
+        </div>
+        <div class="sk sk-card" style="height:80px;width:100%;"></div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div class="sk" style="height:10px;width:100%;"></div>
+          <div class="sk" style="height:10px;width:88%;"></div>
+          <div class="sk" style="height:10px;width:72%;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div class="sk sk-card" style="height:60px;"></div>
+          <div class="sk sk-card" style="height:60px;"></div>
+          <div class="sk sk-card" style="height:60px;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 5 · CRUD OPERATIONS
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s5">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <div class="section-meta">
+        <h2>CRUD Operations</h2>
+        <p>Inline rename, create, delete confirmation, saving states, and toast feedback.</p>
+      </div>
+    </div>
+
+    <!-- 5a tree items -->
+    <div class="demo-card">
+      <div class="sub-label">5a · Tree Items with Inline Rename</div>
+      <div class="tree-list" id="treeList">
+        <div class="tree-item" data-name="sales_transactions">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <span class="tree-item-label">sales_transactions</span>
+          <div class="tree-item-actions">
+            <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
+            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'sales_transactions')">✕</button>
+          </div>
+        </div>
+        <div class="tree-item" data-name="customer_dim">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <span class="tree-item-label">customer_dim</span>
+          <div class="tree-item-actions">
+            <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
+            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'customer_dim')">✕</button>
+          </div>
+        </div>
+        <div class="tree-item" data-name="product_catalog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <span class="tree-item-label">product_catalog</span>
+          <div class="tree-item-actions">
+            <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
+            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'product_catalog')">✕</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5b inline create -->
+      <div class="inline-create" id="inlineCreate" onclick="activateInlineCreate()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M8 2v12M2 8h12"/>
+        </svg>
+        <input class="inline-create-input" id="inlineInput" placeholder="New table name…" style="pointer-events:none"
+          onkeydown="handleInlineCreate(event)" onblur="deactivateInlineCreate()">
+      </div>
+    </div>
+
+    <!-- 5c delete confirmation -->
+    <div class="demo-card">
+      <div class="sub-label">5c · Delete Confirmation Toast</div>
+      <div class="toast-stack" id="deleteToastArea"></div>
+      <button class="btn btn-secondary" onclick="showDeleteToast('sales_transactions')" style="margin-top:12px;">
+        Show Delete Confirmation
+      </button>
+    </div>
+
+    <!-- 5d saving state -->
+    <div class="demo-card">
+      <div class="sub-label">5d · Saving State</div>
+      <div class="saving-state" id="savingState" style="display:none">
+        <div class="spinner"></div>
+        <span style="font-size:13px;font-weight:500;color:var(--text-2)">Renaming to "transactions_v2"…</span>
+      </div>
+      <div class="progress-bar-wrap" id="savingBar" style="margin-top:8px;display:none">
+        <div class="progress-bar-fill indeterminate" style="width:40%!important"></div>
+      </div>
+      <button class="btn btn-secondary" onclick="showSaving()" style="margin-top:12px;" id="savingBtn">
+        Simulate Rename
+      </button>
+    </div>
+
+    <!-- 5e toast variants -->
+    <div class="demo-card">
+      <div class="sub-label">5e · Toast Variants</div>
+      <div class="toast-stack" id="toastArea">
+        <div class="toast success">
+          <div class="toast-icon">✓</div>
+          <div class="toast-body"><strong>Table renamed</strong><p>Successfully renamed to "transactions_v2"</p></div>
+          <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+        </div>
+        <div class="toast error">
+          <div class="toast-icon">✗</div>
+          <div class="toast-body">
+            <strong>Build failed</strong><p>EdogLogServer.cs(114): Nullable reference</p>
+            <div class="toast-actions">
+              <button class="toast-btn" onclick="this.closest('.toast').remove()">Retry</button>
+            </div>
+          </div>
+          <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+        </div>
+        <div class="toast warn">
+          <div class="toast-icon">⚠</div>
+          <div class="toast-body"><strong>Token expiring</strong><p>MWC token expires in 8 minutes</p></div>
+          <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+        </div>
+        <div class="toast info">
+          <div class="toast-icon">i</div>
+          <div class="toast-body"><strong>Background refresh</strong><p>Workspace metadata synced</p></div>
+          <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5f undo toast -->
+    <div class="demo-card">
+      <div class="sub-label">5f · Undo Toast with Countdown</div>
+      <div id="undoArea"></div>
+      <button class="btn btn-secondary" onclick="showUndo('sales_transactions', 'transactions_v2')" style="margin-top:12px;">
+        Trigger Undo Toast
+      </button>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 6 · DATA TABLE
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s6">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <div class="section-meta">
+        <h2>Data Table</h2>
+        <p>Sticky header, sortable columns, zebra rows, hover/select states, monospace numbers.</p>
+      </div>
+    </div>
+
+    <div class="demo-card" style="padding:0;overflow:hidden;">
+      <div class="data-table-wrap">
+        <table class="data-table" id="dataTable">
+          <thead>
+            <tr id="tableHead"></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 7 · FORM INPUTS
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s7">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <div class="section-meta">
+        <h2>Form Inputs</h2>
+        <p>Text, dropdown, toggle, search, and code textarea — all states including error and disabled.</p>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="sub-label">7a · Text Input</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Lakehouse Name <span class="required">*</span></label>
+          <input class="form-input" type="text" placeholder="e.g. TestLakehouse-01">
+          <span class="form-hint">Must be unique within workspace</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Environment ID</label>
+          <input class="form-input error" type="text" value="invalid-guid-format">
+          <span class="form-error">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><circle cx="6" cy="6" r="5"/><path d="M6 3v3.5M6 8.5v.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+            Must be a valid GUID
+          </span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Display Name</label>
+          <input class="form-input" type="text" disabled value="Production Lakehouse" placeholder="">
+          <span class="form-hint">Editing disabled in read-only mode</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">7b · Custom Dropdown</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="form-group">
+          <label class="form-label">Region</label>
+          <div class="custom-select" id="regionSelect">
+            <div class="custom-select-trigger" onclick="toggleSelect('regionSelect')">
+              <span id="regionVal">West US 2</span>
+              <span class="custom-select-arrow">▾</span>
+            </div>
+            <div class="custom-select-dropdown">
+              <div class="custom-select-option selected" onclick="selectOption('regionSelect','regionVal','West US 2')">
+                <span class="badge info" style="font-size:10px;">★</span> West US 2
+              </div>
+              <div class="custom-select-option" onclick="selectOption('regionSelect','regionVal','East US')">East US</div>
+              <div class="custom-select-option" onclick="selectOption('regionSelect','regionVal','North Europe')">North Europe</div>
+              <div class="custom-select-option" onclick="selectOption('regionSelect','regionVal','Southeast Asia')">Southeast Asia</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Environment</label>
+          <div class="custom-select" id="envSelect">
+            <div class="custom-select-trigger" onclick="toggleSelect('envSelect')">
+              <span id="envVal">F2 PPE</span>
+              <span class="custom-select-arrow">▾</span>
+            </div>
+            <div class="custom-select-dropdown">
+              <div class="custom-select-option" onclick="selectOption('envSelect','envVal','F2 PPE')">F2 PPE</div>
+              <div class="custom-select-option selected" onclick="selectOption('envSelect','envVal','F2 PPE')">F2 INT</div>
+              <div class="custom-select-option" onclick="selectOption('envSelect','envVal','PROD')">PROD</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">7c · Toggle Switches</div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <div class="toggle-row">
+          <div class="toggle on" id="t1" onclick="toggleSwitch('t1')"><div class="toggle-thumb"></div></div>
+          <span style="font-size:13px;font-weight:500">DevMode Interceptor</span>
+          <span class="badge success" style="margin-left:4px;">On</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle" id="t2" onclick="toggleSwitch('t2')"><div class="toggle-thumb"></div></div>
+          <span style="font-size:13px;font-weight:500">Telemetry Capture</span>
+          <span class="badge muted" id="t2badge" style="margin-left:4px;">Off</span>
+        </div>
+        <div class="toggle-row">
+          <div class="toggle on" id="t3" onclick="toggleSwitch('t3')"><div class="toggle-thumb"></div></div>
+          <span style="font-size:13px;font-weight:500">Auto-refresh Metadata</span>
+          <span class="badge success" id="t3badge" style="margin-left:4px;">On</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">7d · Search Input</div>
+      <div class="search-input-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <circle cx="6.5" cy="6.5" r="4.5"/><path d="m11 11 3 3"/>
+        </svg>
+        <input class="search-input" id="searchInp" type="text" placeholder="Search tables, columns, flags…"
+          oninput="toggleClear()">
+        <div class="search-kbd">
+          <span class="kbd">Ctrl</span><span class="kbd">K</span>
+        </div>
+        <button class="search-clear" id="searchClear" style="display:none" onclick="clearSearch()">✕</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">7e · Code / SQL Textarea</div>
+      <textarea class="code-textarea" rows="5" spellcheck="false">SELECT
+  t.table_name,
+  t.row_count,
+  t.size_bytes / 1024.0 / 1024.0 AS size_mb
+FROM sys.tables t
+WHERE t.schema = 'dbo'
+ORDER BY t.size_bytes DESC;</textarea>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       § 8 · TABS & NAVIGATION
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s8">
+    <div class="section-header">
+      <div class="section-num">8</div>
+      <div class="section-meta">
+        <h2>Tabs &amp; Navigation</h2>
+        <p>Underline tabs with sliding indicator, pill tabs, and breadcrumb trail.</p>
+      </div>
+    </div>
+
+    <div class="demo-card">
+      <div class="sub-label">8a · Underline Tabs</div>
+      <div style="position:relative;">
+        <div class="tabs-underline" id="underlineTabs">
+          <div class="tab-underline active" onclick="switchUnderline(this)">Logs</div>
+          <div class="tab-underline" onclick="switchUnderline(this)">Telemetry</div>
+          <div class="tab-underline" onclick="switchUnderline(this)">System Files</div>
+          <div class="tab-underline" onclick="switchUnderline(this)">Spark Sessions</div>
+          <div class="tab-underline-indicator" id="tabIndicator"></div>
+        </div>
+        <div class="tab-content" id="tabContent">
+          <p>Real-time log stream from EdogLogServer. Supports breakpoints, bookmarks, and live filter.</p>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">8b · Pill Tabs</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="tabs-pill" id="pillTabs">
+          <div class="tab-pill active" onclick="switchPill(this)">Overview</div>
+          <div class="tab-pill" onclick="switchPill(this)">Schema</div>
+          <div class="tab-pill" onclick="switchPill(this)">Partitions</div>
+          <div class="tab-pill" onclick="switchPill(this)">History</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sub-label">8c · Breadcrumbs</div>
+      <nav class="breadcrumbs">
+        <a class="crumb" href="#">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6.5L8 2l6 4.5V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6.5z"/></svg>
+          EDOG
+        </a>
+        <span class="crumb-sep">›</span>
+        <a class="crumb" href="#">FMLVWS</a>
+        <span class="crumb-sep">›</span>
+        <a class="crumb" href="#">TestLakehouse-01</a>
+        <span class="crumb-sep">›</span>
+        <span class="crumb current">sales_transactions</span>
+      </nav>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="page-footer">
+    <span>EDOG Studio · Design Bible Part 1 · Sections 1–8</span>
+    <span>Built by the Hivemind · 9 agents · 1 vision</span>
+  </footer>
+
+</main>
+
+<script>
+/* ─── ICONS ──────────────────────────────────────────────────────────────── */
+const ICONS = [
+  {name:'Workspace',   color:'#6d5cff', path:'M3 7l9-5 9 5v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z M9 22V12h6v10', strokeW:1.6},
+  {name:'Lakehouse',   color:'#2d7ff9', d:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M9 22V12h6v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'},
+  {name:'Notebook',    color:'#a855f7', d:'<rect x="4" y="2" width="16" height="20" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 6h8M8 10h8M8 14h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M2 7h3M2 12h3M2 17h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'Pipeline',    color:'#e5940c', d:'<path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/>'},
+  {name:'ML Exp.',     color:'#0d9488', d:'<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'},
+  {name:'Report',      color:'#e5453b', d:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.6" fill="none"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'Table',       color:'#2d7ff9', d:'<rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'MLV',         color:'#6d5cff', d:'<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'},
+  {name:'Capacity',    color:'#e5940c', d:'<path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'},
+  {name:'Token',       color:'#18a058', d:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'},
+  {name:'Environment', color:'#0d9488', d:'<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="1.6" fill="none"/>'},
+  {name:'API',         color:'#a855f7', d:'<path d="M8 9l-3 3 3 3M16 9l3 3-3 3M13 6l-2 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="2" y="2" width="20" height="20" rx="4" stroke="currentColor" stroke-width="1.6" fill="none"/>'},
+  {name:'Command',     color:'#6d5cff', d:'<path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z" stroke="currentColor" stroke-width="1.6" fill="none"/>'},
+  {name:'Logs',        color:'#2d7ff9', d:'<path d="M4 6h16M4 10h16M4 14h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3 3h18v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3z" stroke="currentColor" stroke-width="1.6" fill="none"/>'},
+  {name:'DAG',         color:'#e5940c', d:'<circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="5" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="19" cy="12" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="19" r="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M7 12h10M12 7v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'Spark',       color:'#e5453b', d:'<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'},
+  {name:'Feat. Flag',  color:'#18a058', d:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 22v-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'Tenant',      color:'#a855f7', d:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'},
+  {name:'Git',         color:'#e5940c', d:'<circle cx="18" cy="18" r="3" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="6"  cy="6"  r="3" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="6"  cy="18" r="3" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M6 9v6M15.7 15.7 9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'Timer',       color:'#0d9488', d:'<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M9.5 2.5h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+  {name:'File',        color:'#5a6070', d:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="1.6" fill="none"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>'},
+  {name:'Create (+)',  color:'#6d5cff', d:'<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'},
+];
+
+(function buildIconGrid() {
+  const grid = document.getElementById('iconGrid');
+  ICONS.forEach(ic => {
+    const tile = document.createElement('div');
+    tile.className = 'icon-tile';
+    tile.title = 'Click to copy SVG';
+    const svgBody = ic.d
+      ? `<svg width="24" height="24" viewBox="0 0 24 24" style="color:${ic.color}">${ic.d}</svg>`
+      : `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${ic.color}" stroke-width="1.6" stroke-linecap="round"><path d="${ic.path}"/></svg>`;
+    tile.innerHTML = svgBody + `<span class="icon-label">${ic.name}</span>`;
+    tile.addEventListener('click', () => {
+      navigator.clipboard.writeText(tile.querySelector('svg').outerHTML).catch(() => {});
+      tile.style.borderColor = 'var(--green)';
+      setTimeout(() => { tile.style.borderColor = ''; }, 800);
+    });
+    grid.appendChild(tile);
+  });
+})();
+
+/* ─── GUID COPY ──────────────────────────────────────────────────────────── */
+function copyGuid(row) {
+  const val = row.querySelector('.guid-value').textContent.trim();
+  const tip = row.querySelector('.guid-tooltip');
+  navigator.clipboard.writeText(val).catch(() => {});
+  row.classList.add('copied');
+  tip.classList.add('show');
+  setTimeout(() => {
+    row.classList.remove('copied');
+    tip.classList.remove('show');
+  }, 1600);
+}
+
+/* ─── CIRCULAR RING ──────────────────────────────────────────────────────── */
+const ringFill = document.getElementById('ringFill');
+const ringLabel = document.getElementById('ringLabel');
+const ringSlider = document.getElementById('ringSlider');
+const CIRC = 175.9;
+
+function setRingPct(pct) {
+  ringFill.style.strokeDashoffset = CIRC - (CIRC * pct / 100);
+  ringFill.style.stroke = pct >= 100 ? 'var(--green)' : 'var(--accent)';
+  ringLabel.textContent = pct + '%';
+}
+
+ringSlider.addEventListener('input', () => {
+  ringFill.style.stroke = 'var(--accent)';
+  setRingPct(+ringSlider.value);
+});
+
+function ringSuccess() {
+  ringSlider.value = 100;
+  ringFill.style.stroke = 'var(--green)';
+  ringLabel.innerHTML = '✓';
+  ringFill.style.strokeDashoffset = 0;
+}
+
+function ringError() {
+  ringFill.style.stroke = 'var(--red)';
+  ringLabel.innerHTML = '✕';
+  const wrap = document.getElementById('ringWrap');
+  wrap.style.animation = 'none';
+  wrap.offsetHeight;
+  wrap.style.animation = 'shake-bar 300ms';
+  setTimeout(() => { wrap.style.animation = ''; }, 400);
+}
+
+/* ─── STEPPER ────────────────────────────────────────────────────────────── */
+const STEPS = ['Config', 'Token', 'Patch', 'Build', 'Launch'];
+let stepCurrent = 0;
+let stepHasError = false;
+
+function buildStepper() {
+  const el = document.getElementById('stepper');
+  el.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const isDone   = i < stepCurrent;
+    const isActive = i === stepCurrent && !stepHasError;
+    const isError  = i === stepCurrent && stepHasError;
+
+    const node = document.createElement('div');
+    node.className = 'step-node' + (isDone ? ' done' : isActive ? ' active' : isError ? ' error' : '');
+    node.textContent = isDone ? '✓' : isError ? '✕' : i + 1;
+
+    const label = document.createElement('span');
+    label.className = 'step-label' + (isDone ? ' done' : isActive ? ' active' : isError ? ' error' : '');
+    label.textContent = s;
+
+    const step = document.createElement('div');
+    step.className = 'step';
+    step.appendChild(node);
+    step.appendChild(label);
+    el.appendChild(step);
+
+    if (i < STEPS.length - 1) {
+      const line = document.createElement('div');
+      line.className = 'step-line' + (isDone ? ' done' : '');
+      el.appendChild(line);
+    }
+  });
+}
+
+buildStepper();
+
+function stepAdvance() {
+  stepHasError = false;
+  if (stepCurrent < STEPS.length - 1) stepCurrent++;
+  else stepCurrent = STEPS.length;
+  buildStepper();
+}
+
+function stepError() { stepHasError = true; buildStepper(); }
+function stepReset()  { stepCurrent = 0; stepHasError = false; buildStepper(); }
+
+/* ─── LINEAR BAR ─────────────────────────────────────────────────────────── */
+const barFill   = document.getElementById('barFill');
+const barSlider = document.getElementById('barSlider');
+const barPct    = document.getElementById('barPct');
+
+barSlider.addEventListener('input', () => {
+  const v = +barSlider.value;
+  barFill.className = 'progress-bar-fill';
+  barFill.style.width = v + '%';
+  barPct.textContent = v + '%';
+});
+
+function barSuccess() {
+  barFill.className = 'progress-bar-fill success';
+  barFill.style.width = '100%';
+  barPct.textContent = '100%';
+  barSlider.value = 100;
+}
+
+function barError() {
+  barFill.className = 'progress-bar-fill error';
+  barPct.textContent = 'Error';
+}
+
+/* ─── PROGRESS TOAST ─────────────────────────────────────────────────────── */
+const toastSteps = [
+  {pct:10, txt:'Fetching MWC token…'},
+  {pct:28, txt:'Patching config…'},
+  {pct:50, txt:'Building project…'},
+  {pct:72, txt:'Launching EdogLogServer…'},
+  {pct:90, txt:'Waiting for health check…'},
+  {pct:100, txt:'Deployed successfully ✓'},
+];
+let toastTimer = null;
+let toastIdx   = 0;
+
+function toastStart() {
+  toastReset();
+  advanceToast();
+}
+
+function advanceToast() {
+  if (toastIdx >= toastSteps.length) return;
+  const s = toastSteps[toastIdx++];
+  document.getElementById('toastBar').style.width  = s.pct + '%';
+  document.getElementById('toastStep').textContent = s.txt;
+  if (s.pct < 100) toastTimer = setTimeout(advanceToast, 900);
+  else document.getElementById('toastCancelBtn').textContent = 'Done';
+}
+
+function toastReset() {
+  clearTimeout(toastTimer);
+  toastIdx = 0;
+  document.getElementById('toastBar').style.width  = '0%';
+  document.getElementById('toastStep').textContent = 'Fetching MWC token…';
+  document.getElementById('toastCancelBtn').textContent = 'Cancel';
+}
+
+/* ─── TREE RENAME ────────────────────────────────────────────────────────── */
+function startRename(btn) {
+  const item = btn.closest('.tree-item');
+  const label = item.querySelector('.tree-item-label');
+  const existing = item.querySelector('.rename-input');
+  if (existing) return;
+
+  item.classList.add('renaming');
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'rename-input';
+  input.value = label.textContent;
+  item.insertBefore(input, item.querySelector('.tree-item-actions'));
+  input.focus();
+  input.select();
+
+  function finish(accept) {
+    item.classList.remove('renaming');
+    if (accept && input.value.trim()) label.textContent = input.value.trim();
+    input.remove();
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+    e.stopPropagation();
+  });
+  input.addEventListener('blur', () => finish(false));
+}
+
+/* ─── INLINE CREATE ──────────────────────────────────────────────────────── */
+function activateInlineCreate() {
+  const input = document.getElementById('inlineInput');
+  input.style.pointerEvents = 'auto';
+  input.focus();
+}
+
+function handleInlineCreate(e) {
+  if (e.key === 'Enter' && e.target.value.trim()) {
+    const name = e.target.value.trim();
+    const tree = document.getElementById('treeList');
+    const item = document.createElement('div');
+    item.className = 'tree-item';
+    item.dataset.name = name;
+    item.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      <span class="tree-item-label">${name}</span>
+      <div class="tree-item-actions">
+        <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
+        <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, '${name}')">✕</button>
+      </div>`;
+    tree.appendChild(item);
+    e.target.value = '';
+    deactivateInlineCreate();
+  }
+  if (e.key === 'Escape') deactivateInlineCreate();
+}
+
+function deactivateInlineCreate() {
+  const input = document.getElementById('inlineInput');
+  input.style.pointerEvents = 'none';
+  input.blur();
+}
+
+/* ─── DELETE CONFIRMATION ────────────────────────────────────────────────── */
+function confirmDelete(btn, name) {
+  const area = document.getElementById('deleteToastArea');
+  area.innerHTML = '';
+  const t = document.createElement('div');
+  t.className = 'toast warn';
+  t.innerHTML = `<div class="toast-icon">⚠</div>
+    <div class="toast-body">
+      <strong>Delete "${name}"?</strong>
+      <p>This action cannot be undone.</p>
+      <div class="toast-actions">
+        <button class="toast-btn danger" onclick="doDelete(this, '${name}')">Delete</button>
+        <button class="toast-btn" onclick="this.closest('.toast').remove()">Cancel</button>
+      </div>
+    </div>`;
+  area.appendChild(t);
+  area.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function showDeleteToast(name) { confirmDelete(null, name); }
+
+function doDelete(btn, name) {
+  btn.closest('.toast').remove();
+  const items = document.querySelectorAll('#treeList .tree-item');
+  items.forEach(i => { if (i.dataset.name === name) i.remove(); });
+}
+
+/* ─── SAVING STATE ───────────────────────────────────────────────────────── */
+function showSaving() {
+  const el   = document.getElementById('savingState');
+  const bar  = document.getElementById('savingBar');
+  const btn  = document.getElementById('savingBtn');
+  el.style.display = 'flex';
+  bar.style.display = 'block';
+  btn.disabled = true;
+  setTimeout(() => {
+    el.style.display = 'none';
+    bar.style.display = 'none';
+    btn.disabled = false;
+  }, 2200);
+}
+
+/* ─── UNDO TOAST ─────────────────────────────────────────────────────────── */
+function showUndo(fromName, toName) {
+  const area = document.getElementById('undoArea');
+  const TOTAL = 82;
+  let rem = 5;
+  let interval;
+
+  const t = document.createElement('div');
+  t.className = 'toast info';
+  t.innerHTML = `
+    <div class="undo-countdown">
+      <svg class="undo-ring-svg" width="32" height="32" viewBox="0 0 32 32">
+        <circle class="undo-ring-track" cx="16" cy="16" r="13"/>
+        <circle class="undo-ring-fill" id="undoRingFill" cx="16" cy="16" r="13"/>
+      </svg>
+      <div class="undo-num" id="undoNum">5</div>
+    </div>
+    <div class="toast-body">
+      <strong>Renamed to "${toName}"</strong>
+      <p>Was "${fromName}"</p>
+      <div class="toast-actions">
+        <button class="toast-btn" onclick="undoAction()">Undo</button>
+      </div>
+    </div>
+    <button class="toast-close" onclick="cancelUndo()">✕</button>`;
+
+  area.innerHTML = '';
+  area.appendChild(t);
+
+  function tick() {
+    rem--;
+    const fill = document.getElementById('undoRingFill');
+    const num  = document.getElementById('undoNum');
+    if (!fill) { clearInterval(interval); return; }
+    fill.style.strokeDashoffset = TOTAL - (TOTAL * rem / 5);
+    num.textContent = rem;
+    if (rem <= 0) { clearInterval(interval); t.remove(); }
+  }
+
+  interval = setInterval(tick, 1000);
+  window._undoInterval = interval;
+  window._undoToast = t;
+}
+
+function undoAction() {
+  clearInterval(window._undoInterval);
+  if (window._undoToast) window._undoToast.remove();
+}
+
+function cancelUndo() { undoAction(); }
+
+/* ─── DATA TABLE ─────────────────────────────────────────────────────────── */
+const TABLE_COLS = [
+  {key:'name',    label:'Table Name',  cls:''},
+  {key:'type',    label:'Type',        cls:''},
+  {key:'rows',    label:'Row Count',   cls:'num'},
+  {key:'size',    label:'Size (MB)',   cls:'num'},
+  {key:'updated', label:'Last Updated', cls:''},
+  {key:'status',  label:'Status',      cls:''},
+];
+
+const TABLE_ROWS = [
+  {name:'sales_transactions', type:'Delta',   rows:'124,891,203', size:'2,340.8', updated:'2 min ago',  status:'success'},
+  {name:'customer_dim',       type:'Parquet', rows:'4,210,500',   size:'312.4',  updated:'15 min ago', status:'success'},
+  {name:'product_catalog',    type:'Delta',   rows:'89,234',      size:'18.7',   updated:'1 hr ago',   status:'success'},
+  {name:'order_fact',         type:'Delta',   rows:'67,445,012',  size:'890.2',  updated:'5 min ago',  status:'info'},
+  {name:'session_events_raw', type:'Parquet', rows:'1,890,234',   size:'45.1',   updated:'8 min ago',  status:'warn'},
+  {name:'feature_flags_log',  type:'Delta',   rows:'23,112',      size:'2.3',    updated:'3 hr ago',   status:'success'},
+  {name:'_debug_snapshots',   type:'JSON',    rows:'1,204',       size:'0.9',    updated:'1 day ago',  status:'muted'},
+];
+
+let sortCol = null;
+let sortAsc = true;
+let selectedRow = null;
+
+function buildTable() {
+  const head = document.getElementById('tableHead');
+  const body = document.getElementById('tableBody');
+  head.innerHTML = '';
+  body.innerHTML = '';
+
+  TABLE_COLS.forEach(col => {
+    const th = document.createElement('th');
+    th.className = sortCol === col.key ? 'sorted' : '';
+    const arrow = sortCol === col.key ? (sortAsc ? '▲' : '▼') : '▲';
+    th.innerHTML = col.label + `<span class="sort-icon">${arrow}</span>`;
+    th.onclick = () => {
+      if (sortCol === col.key) sortAsc = !sortAsc;
+      else { sortCol = col.key; sortAsc = true; }
+      buildTable();
+    };
+    head.appendChild(th);
+  });
+
+  const rows = [...TABLE_ROWS];
+  if (sortCol) {
+    rows.sort((a, b) => {
+      const av = a[sortCol]; const bv = b[sortCol];
+      const n = v => parseFloat(v.replace(/[^0-9.]/g, ''));
+      const isNum = sortCol === 'rows' || sortCol === 'size';
+      const cmp = isNum ? n(av) - n(bv) : av.localeCompare(bv);
+      return sortAsc ? cmp : -cmp;
+    });
+  }
+
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (selectedRow === i) tr.classList.add('selected');
+    tr.onclick = () => { selectedRow = i; buildTable(); };
+
+    TABLE_COLS.forEach(col => {
+      const td = document.createElement('td');
+      if (col.cls) td.className = col.cls;
+      if (col.key === 'type') {
+        const map = {Delta:'teal', Parquet:'info', JSON:'muted', SQL:'purple'};
+        td.innerHTML = `<span class="badge ${map[r.type] || 'muted'}">${r.type}</span>`;
+      } else if (col.key === 'status') {
+        const map = {success:'Healthy', info:'Building', warn:'Degraded', muted:'Inactive'};
+        td.innerHTML = `<span class="badge ${r.status}"><span class="badge-dot"></span>${map[r.status]}</span>`;
+      } else {
+        td.textContent = r[col.key];
+      }
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+}
+
+buildTable();
+
+/* ─── FORM — DROPDOWN ────────────────────────────────────────────────────── */
+function toggleSelect(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+  document.addEventListener('click', function handler(e) {
+    if (!el.contains(e.target)) { el.classList.remove('open'); document.removeEventListener('click', handler); }
+  });
+}
+
+function selectOption(selectId, valId, val) {
+  document.getElementById(valId).textContent = val;
+  document.getElementById(selectId).classList.remove('open');
+  document.querySelectorAll(`#${selectId} .custom-select-option`).forEach(o => {
+    o.classList.toggle('selected', o.textContent.trim() === val);
+  });
+}
+
+/* ─── TOGGLE SWITCH ──────────────────────────────────────────────────────── */
+function toggleSwitch(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on');
+  const badge = document.getElementById(id + 'badge');
+  if (badge) {
+    const on = el.classList.contains('on');
+    badge.textContent = on ? 'On' : 'Off';
+    badge.className   = 'badge ' + (on ? 'success' : 'muted');
+  }
+}
+
+/* ─── SEARCH CLEAR ───────────────────────────────────────────────────────── */
+function toggleClear() {
+  const v = document.getElementById('searchInp').value;
+  document.getElementById('searchClear').style.display = v ? 'flex' : 'none';
+}
+
+function clearSearch() {
+  document.getElementById('searchInp').value = '';
+  document.getElementById('searchClear').style.display = 'none';
+  document.getElementById('searchInp').focus();
+}
+
+/* ─── TABS — UNDERLINE ───────────────────────────────────────────────────── */
+const TAB_CONTENT = {
+  'Logs':          'Real-time log stream from EdogLogServer. Supports breakpoints, bookmarks, and live filter.',
+  'Telemetry':     'SSR telemetry events captured by EdogTelemetryInterceptor. Grouped by operation and duration.',
+  'System Files':  'Live view of .edog-command/ channel files, config state, and IPC messages.',
+  'Spark Sessions':'Active Spark sessions via GTSBasedSparkClient override. Pool size, executors, job queue.',
+};
+
+function switchUnderline(tab) {
+  document.querySelectorAll('.tab-underline:not(.tab-underline-indicator)').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  const indicator = document.getElementById('tabIndicator');
+  indicator.style.left  = tab.offsetLeft + 'px';
+  indicator.style.width = tab.offsetWidth + 'px';
+  document.getElementById('tabContent').textContent = TAB_CONTENT[tab.textContent] || '';
+}
+
+// init indicator
+window.addEventListener('load', () => {
+  const active = document.querySelector('.tab-underline.active');
+  if (active) {
+    const ind = document.getElementById('tabIndicator');
+    ind.style.left  = active.offsetLeft + 'px';
+    ind.style.width = active.offsetWidth + 'px';
+  }
+});
+
+/* ─── TABS — PILL ────────────────────────────────────────────────────────── */
+function switchPill(tab) {
+  document.querySelectorAll('.tab-pill').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+}
+
+/* ─── DARK MODE ──────────────────────────────────────────────────────────── */
+const themeToggle = document.getElementById('themeToggle');
+const sunIcon  = document.getElementById('theme-icon-sun');
+const moonIcon = document.getElementById('theme-icon-moon');
+
+function setTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  sunIcon.style.display  = dark ? 'none'  : '';
+  moonIcon.style.display = dark ? ''      : 'none';
+}
+
+themeToggle.addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  setTheme(!isDark);
+});
+
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  setTheme(true);
+}
+</script>
+</body>
+</html>
