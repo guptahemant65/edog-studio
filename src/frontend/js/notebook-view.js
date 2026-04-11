@@ -803,13 +803,41 @@ class NotebookView {
         cellEl.classList.add('error');
         this._setCellStatus(cellEl, 'error');
         this._setCellOutput(cellEl, 'empty',
-          'WebSocket connection required. Per-cell execution unavailable — use "Run All" instead.');
+          'WebSocket connection required. Per-cell execution unavailable \u2014 use "Run All" instead.');
         return;
       }
 
+      if (result.status === 'error') {
+        cellEl.classList.add('error');
+        this._setCellStatus(cellEl, 'error');
+        const errMsg = result.error_value
+          ? `${result.error_name}: ${result.error_value}`
+          : (result.error || 'Execution failed');
+        const tbText = (result.traceback || []).join('\n');
+        this._setCellOutput(cellEl, 'error', tbText || errMsg);
+        return;
+      }
+
+      // Success — render outputs
       cellEl.classList.add('success');
       this._setCellStatus(cellEl, 'success');
-      this._setCellOutput(cellEl, 'result', result);
+      const outputs = result.outputs || [];
+      if (outputs.length === 0) {
+        this._setCellOutput(cellEl, 'empty', 'Execution completed (no output)');
+      } else {
+        // Combine all output text
+        const parts = outputs.map(o => {
+          if (o.html) return o.html;
+          if (o.text) return this._esc(o.text);
+          if (o.type === 'error') return `${o.ename}: ${o.evalue}`;
+          return '';
+        }).filter(Boolean);
+        const outputEl = cellEl.querySelector('.nb-output');
+        if (outputEl) {
+          outputEl.className = 'nb-output';
+          outputEl.innerHTML = `<pre class="nb-output-pre">${parts.join('\n')}</pre>`;
+        }
+      }
     } catch (err) {
       if (this._destroyed) return;
       cellEl.classList.remove('running');

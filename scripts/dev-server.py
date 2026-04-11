@@ -249,6 +249,151 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
     return token, None
 
 
+async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, code):
+    """Execute code on a Jupyter kernel via WebSocket (Jupyter wire protocol).
+
+    Connects to the tinymgr/lobby WebSocket, sends an execute_request message,
+    and collects output until execute_reply is received.
+
+    Returns dict with status, outputs, and error info.
+    """
+    import websockets
+    import uuid
+
+    ws_host = cap_host.replace("https://", "")
+    ws_path = (
+        f"/webapi/capacities/{cap_id}/workloads/Notebook"
+        f"/AzNBProxy/Automatic/workspaces/{ws_id}"
+        f"/api/proxy/ws/tinymgr/lobby"
+    )
+    ws_url = f"wss://{ws_host}{ws_path}"
+
+    headers = {
+        "Authorization": f"MwcToken {token}",
+    }
+
+    msg_id = str(uuid.uuid4())
+
+    # Jupyter execute_request message
+    execute_msg = json.dumps({
+        "header": {
+            "msg_id": msg_id,
+            "msg_type": "execute_request",
+            "username": "edog",
+            "session": str(uuid.uuid4()),
+            "version": "5.3",
+        },
+        "parent_header": {},
+        "metadata": {},
+        "content": {
+            "code": code,
+            "silent": False,
+            "store_history": True,
+            "user_expressions": {},
+            "allow_stdin": False,
+            "stop_on_error": True,
+        },
+        "buffers": [],
+        "channel": "shell",
+    })
+
+    outputs = []
+    status = "ok"
+    error_name = ""
+    error_value = ""
+    traceback_lines = []
+
+    try:
+        async with websockets.connect(
+            ws_url,
+            additional_headers=headers,
+            open_timeout=30,
+            close_timeout=5,
+            max_size=10 * 1024 * 1024,  # 10MB max message
+        ) as ws:
+            # Send execute request
+            await ws.send(execute_msg)
+            print(f"  [JUPYTER] Sent execute_request msg_id={msg_id[:8]}...")
+
+            # Collect responses until execute_reply
+            import asyncio
+            deadline = asyncio.get_event_loop().time() + 300  # 5 min timeout
+
+            while asyncio.get_event_loop().time() < deadline:
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=10)
+                except asyncio.TimeoutError:
+                    continue
+
+                try:
+                    msg = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+
+                msg_type = msg.get("msg_type") or msg.get("header", {}).get("msg_type", "")
+                parent_id = msg.get("parent_header", {}).get("msg_id", "")
+                content = msg.get("content", {})
+
+                # Only process messages that are replies to our request
+                if parent_id and parent_id != msg_id:
+                    continue
+
+                if msg_type == "stream":
+                    outputs.append({
+                        "type": "stream",
+                        "name": content.get("name", "stdout"),
+                        "text": content.get("text", ""),
+                    })
+                elif msg_type == "execute_result":
+                    data = content.get("data", {})
+                    outputs.append({
+                        "type": "execute_result",
+                        "text": data.get("text/plain", ""),
+                        "html": data.get("text/html", ""),
+                    })
+                elif msg_type == "display_data":
+                    data = content.get("data", {})
+                    outputs.append({
+                        "type": "display_data",
+                        "text": data.get("text/plain", ""),
+                        "html": data.get("text/html", ""),
+                    })
+                elif msg_type == "error":
+                    status = "error"
+                    error_name = content.get("ename", "")
+                    error_value = content.get("evalue", "")
+                    traceback_lines = content.get("traceback", [])
+                    outputs.append({
+                        "type": "error",
+                        "ename": error_name,
+                        "evalue": error_value,
+                        "traceback": traceback_lines,
+                    })
+                elif msg_type == "execute_reply":
+                    reply_status = content.get("status", "ok")
+                    if reply_status == "error":
+                        status = "error"
+                        error_name = content.get("ename", error_name)
+                        error_value = content.get("evalue", error_value)
+                    # execute_reply = done
+                    break
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"WebSocket error: {e}",
+            "outputs": outputs,
+        }
+
+    return {
+        "status": status,
+        "outputs": outputs,
+        "error_name": error_name,
+        "error_value": error_value,
+        "traceback": traceback_lines,
+    }
+
+
 class EdogDevHandler(SimpleHTTPRequestHandler):
     """HTTP handler for EDOG development server."""
 
@@ -1262,9 +1407,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def _serve_jupyter_execute_cell(self):
         """POST /api/notebook/execute-cell — execute a single notebook cell.
 
-        Tries REST kernel execute endpoint first. If the capacity host does not
-        support REST execute (404/405), returns WebSocket connection info so the
-        browser client can connect directly using the Jupyter wire protocol.
+        Flow: poll session until idle → connect WebSocket → send execute_request
+        → collect output messages → return results.
         """
         content_len = int(self.headers.get("Content-Length", 0))
         if content_len == 0:
@@ -1305,13 +1449,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         kernel_id = None
         session_id = None
+        base = _jupyter_api_path(cap_id, ws_id, nb_id)
 
         if cached:
             kernel_id = cached["kernelId"]
             session_id = cached["sessionId"]
             print(f"  [JUPYTER] Reusing session kernel={kernel_id[:8]}...")
         else:
-            base = _jupyter_api_path(cap_id, ws_id, nb_id)
             url = f"{cap_host}{base}/sessions"
             session_body = json.dumps({
                 "kernel": {"id": None, "name": "synapse_pyspark"},
@@ -1347,51 +1491,47 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(502, {"error": "jupyter_session_error", "message": str(e)})
                 return
 
-        # Try REST execute on the kernel
-        base = _jupyter_api_path(cap_id, ws_id, nb_id)
-        execute_url = f"{cap_host}{base}/kernels/{kernel_id}/execute"
-        print(f"  [JUPYTER] POST execute-cell kernel={kernel_id[:8]}... lang={language}")
+        # Step 1: Poll session until kernel is idle (max 120s)
+        session_url = f"{cap_host}{base}/sessions/{session_id}"
+        print(f"  [JUPYTER] Polling session until kernel idle...")
+        ctx = ssl.create_default_context()
+        kernel_ready = False
+        for attempt in range(60):
+            try:
+                req = urllib.request.Request(session_url, headers={
+                    "Authorization": f"MwcToken {token}",
+                }, method="GET")
+                with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                    sdata = json.loads(resp.read())
+                kstate = sdata.get("kernel", {}).get("execution_state", "unknown")
+                if kstate == "idle":
+                    kernel_ready = True
+                    print(f"  [JUPYTER] Kernel idle after {attempt * 2}s")
+                    break
+                if kstate == "dead":
+                    self._json_response(500, {"error": "kernel_dead", "message": "Kernel died during startup"})
+                    return
+                print(f"  [JUPYTER] Kernel state: {kstate} (attempt {attempt + 1})...")
+            except Exception as e:
+                print(f"  [JUPYTER] Poll error: {e}")
+            time.sleep(2)
 
+        if not kernel_ready:
+            self._json_response(504, {
+                "error": "kernel_timeout",
+                "message": "Kernel did not become idle within 120s. Try again.",
+            })
+            return
+
+        # Step 2: Execute via Jupyter WebSocket protocol
+        print(f"  [JUPYTER] Executing cell via WebSocket ({len(code)} chars, lang={language})...")
         try:
-            ctx = ssl.create_default_context()
-            execute_body = json.dumps({"code": code}).encode()
-            req = urllib.request.Request(execute_url, data=execute_body, headers={
-                "Authorization": f"MwcToken {token}",
-                "Content-Type": "application/json",
-            }, method="POST")
-            with urllib.request.urlopen(req, timeout=120, context=ctx) as resp:
-                resp_data = json.loads(resp.read())
-            print("  [JUPYTER] REST execute succeeded")
-            self._json_response(200, {"status": "executed", "result": resp_data})
-        except urllib.error.HTTPError as e:
-            if e.code in (404, 405):
-                # REST execute not available — return WebSocket fallback info
-                e.read()  # drain
-                ws_path = (
-                    f"/webapi/capacities/{cap_id}/workloads/Notebook"
-                    f"/AzNBProxy/Automatic/workspaces/{ws_id}"
-                    f"/api/proxy/ws/tinymgr/lobby"
-                )
-                ws_host = cap_host.replace("https://", "")
-                ws_url = f"wss://{ws_host}{ws_path}"
-                print("  [JUPYTER] REST execute unavailable, returning WebSocket info")
-                # Security: Do NOT send MWC token to browser.
-                # Return connection metadata only — client must use Run All instead.
-                self._json_response(200, {
-                    "status": "websocket_required",
-                    "message": (
-                        "Per-cell execution requires a Jupyter WebSocket session. "
-                        "Use Run All for batch execution, or deploy with "
-                        "EDOG DevMode for full cell-by-cell support."
-                    ),
-                    "wsUrl": ws_url,
-                    "kernelId": kernel_id,
-                    "sessionId": session_id,
-                    "protocol": "jupyter",
-                })
-            else:
-                err_body = e.read().decode("utf-8", "replace")[:500]
-                self._json_response(e.code, {"error": "execute_error", "message": err_body})
+            import asyncio
+            result = asyncio.run(_jupyter_ws_execute(
+                cap_host, cap_id, ws_id, nb_id, kernel_id, token, code
+            ))
+            print(f"  [JUPYTER] Execution complete: {result.get('status', 'unknown')}")
+            self._json_response(200, result)
         except Exception as e:
             traceback.print_exc()
             self._json_response(502, {"error": "execute_error", "message": str(e)})
