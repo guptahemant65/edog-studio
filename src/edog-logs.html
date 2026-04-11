@@ -2028,9 +2028,9 @@ mark {
   margin-bottom: var(--space-1);
 }
 .ws-linked-card-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 .ws-linked-card-name {
@@ -2045,7 +2045,7 @@ mark {
 }
 .ws-linked-card-id {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 
@@ -2058,13 +2058,13 @@ mark {
 }
 .ws-env-publish-header {
   padding: var(--space-2) var(--space-4);
-  background: var(--surface-2);
+  background: var(--surface-3);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 .ws-env-publish-body {
   padding: var(--space-3) var(--space-4);
@@ -2077,9 +2077,9 @@ mark {
   font-size: var(--text-sm);
 }
 .ws-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
   flex-shrink: 0;
 }
 .ws-status-dot.success { background: var(--status-succeeded); }
@@ -2111,13 +2111,13 @@ mark {
 }
 .ws-item-info-header {
   padding: var(--space-2) var(--space-4);
-  background: var(--surface-2);
+  background: var(--surface-3);
   border-bottom: 1px solid var(--border);
   font-size: var(--text-xs);
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 .ws-item-info-body {
   padding: var(--space-3) var(--space-4);
@@ -4890,9 +4890,95 @@ mark {
 .nb-context-chip .chip-label { color: var(--text-muted); }
 .nb-context-sep { color: var(--text-muted); font-size: var(--text-xs); }
 
-/* ── Cells — base extensions ── */
-/* §20b base defines .nb-cell, .nb-cell-header, .nb-code, .nb-output, etc.
-   Below we EXTEND those without redeclaring. */
+/* ── §20b Base — Notebook Cell ── */
+/* Mapped from design bible tokens → production tokens:
+   --bg-2 → --surface-2, --bg-3 → --surface-3, --bg-4 → --surface-3,
+   --text-2 → --text-dim, --text-3 → --text-muted,
+   --r10 → --radius-lg, --r4 → --radius-sm, --mono → --font-mono,
+   --green → --status-succeeded */
+
+.nb-cell {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.nb-cell:hover { border-color: var(--accent); }
+.nb-cell + .nb-cell { margin-top: var(--space-2); }
+
+.nb-cell-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-3);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.nb-cell-num {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 11px;
+  min-width: 32px;
+}
+
+.nb-cell-lang { color: var(--accent); }
+
+.nb-cell-status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nb-cell-time {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.nb-code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--surface-2);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.nb-output {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: var(--bg);
+}
+
+.nb-run-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.nb-run-btn:hover {
+  background: var(--surface-3);
+  color: var(--status-succeeded);
+}
 
 /* ── Cell states ── */
 
