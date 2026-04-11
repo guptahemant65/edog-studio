@@ -649,30 +649,129 @@ body {
 .sk-card { border-radius: var(--r10); }
 
 /* ─── § 5 · CRUD OPERATIONS ─────────────────────────────────────────────── */
-.tree-list { display: flex; flex-direction: column; gap: 2px; }
+.tree-list { display: flex; flex-direction: column; gap: 1px; }
 
 .tree-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 12px 6px 0;
   border-radius: var(--r6);
   cursor: pointer;
   transition: background var(--transition);
   position: relative;
   user-select: none;
+  border-left: 3px solid transparent;
 }
 
 .tree-item:hover { background: var(--bg-3); }
 
+/* selected state */
+.tree-item.selected {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg));
+}
+.tree-item.selected .tree-item-label { font-weight: 600; }
+
+/* dimmed items (non-lakehouse) */
+.tree-item.dimmed { opacity: 0.6; }
+.tree-item.dimmed:hover { opacity: 0.85; }
+
+/* depth indentation */
+.tree-item[data-depth="0"] { padding-left: 12px; }
+.tree-item[data-depth="1"] { padding-left: 32px; }
+.tree-item[data-depth="2"] { padding-left: 52px; }
+
+/* status dot */
+.tree-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tree-dot.green  { background: var(--green); }
+.tree-dot.blue   { background: var(--blue); }
+.tree-dot.amber  { background: var(--amber); }
+
+/* type badge pill */
+.tree-type-badge {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: var(--r4);
+  background: var(--bg-4);
+  color: var(--text-3);
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* item count badge */
+.tree-count-badge {
+  font-size: 11px;
+  color: var(--text-3);
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* expand/collapse toggle arrow */
+.tree-toggle {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-3);
+  transition: transform 150ms cubic-bezier(0.4,0,0.2,1);
+  cursor: pointer;
+}
+.tree-toggle.expanded { transform: rotate(90deg); }
+
+/* folder icon for workspaces */
+.tree-folder-icon { flex-shrink: 0; color: var(--text-3); }
+
+/* children container */
+.tree-children {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tree-children.collapsed { display: none; }
+
+/* stagger children animation */
+.tree-children .tree-item {
+  animation: tree-child-in 150ms ease-out both;
+}
+.tree-children .tree-item:nth-child(1) { animation-delay: 0ms; }
+.tree-children .tree-item:nth-child(2) { animation-delay: 50ms; }
+.tree-children .tree-item:nth-child(3) { animation-delay: 100ms; }
+.tree-children .tree-item:nth-child(4) { animation-delay: 150ms; }
+@keyframes tree-child-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* action buttons — fade in on hover, NOT display:none */
 .tree-item-actions {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 4px;
   margin-left: auto;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+  pointer-events: none;
 }
-
-.tree-item:hover .tree-item-actions { display: flex; }
+.tree-item:hover .tree-item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* hide count badge on hover to make room for actions */
+.tree-item:hover .tree-count-badge { display: none; }
 
 .tree-action-btn {
   width: 28px;
@@ -689,13 +788,12 @@ body {
   cursor: pointer;
   font-size: 14px;
   transition: all var(--transition);
+  padding: 0;
 }
 
 .tree-action-btn:hover { background: var(--bg-4); color: var(--text); border-color: var(--border); }
 .tree-action-btn.danger { color: var(--text-3); }
 .tree-action-btn.danger:hover { background: color-mix(in srgb, var(--red) 12%, var(--bg)); color: var(--red); border-color: color-mix(in srgb, var(--red) 30%, transparent); }
-.tree-action-btn.menu { font-size: 16px; letter-spacing: -1px; }
-.tree-action-btn.menu:hover { background: var(--bg-4); color: var(--text); border-color: var(--border); }
 
 /* context menu from ⋯ button */
 .ctx-menu {
@@ -704,11 +802,11 @@ body {
   top: calc(100% + 4px);
   background: var(--bg);
   border: 1px solid var(--border-bright);
-  border-radius: var(--r8);
+  border-radius: var(--r6);
   box-shadow: var(--shadow-md);
   padding: 4px;
   z-index: 50;
-  min-width: 150px;
+  min-width: 160px;
   animation: ctx-pop 120ms cubic-bezier(0.4,0,0.2,1);
 }
 
@@ -718,7 +816,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--r4);
   font-size: 12px;
   color: var(--text-2);
@@ -730,13 +828,33 @@ body {
 .ctx-menu-item.danger { color: var(--red); }
 .ctx-menu-item.danger:hover { background: color-mix(in srgb, var(--red) 10%, var(--bg)); }
 .ctx-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+.ctx-menu-icon { width: 14px; height: 14px; flex-shrink: 0; }
 
-.tree-item-label { font-size: 13px; color: var(--text); flex: 1; }
+.tree-item-label {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 100ms ease-out;
+}
 
-.tree-item.renaming .tree-item-label { display: none; }
+.tree-item.renaming .tree-item-label { opacity: 0; position: absolute; pointer-events: none; }
+
+/* rename input and wrapper */
+.rename-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  animation: rename-fade-in 100ms ease-out;
+}
+@keyframes rename-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .rename-input {
-  flex: 1;
   font: inherit;
   font-size: 13px;
   background: color-mix(in srgb, var(--accent) 4%, var(--bg));
@@ -747,6 +865,14 @@ body {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent),
               inset 0 1px 2px color-mix(in srgb, var(--accent) 8%, transparent);
+  width: 100%;
+}
+
+.rename-helper {
+  font-size: 10px;
+  color: var(--text-3);
+  padding-left: 2px;
+  user-select: none;
 }
 
 .rename-controls {
@@ -778,7 +904,7 @@ body {
 .rename-charcount.warn { color: var(--amber); }
 .rename-charcount.over { color: var(--red); font-weight: 600; }
 
-.tree-item.renaming .tree-item-actions { display: none; }
+.tree-item.renaming .tree-item-actions { opacity: 0; pointer-events: none; }
 
 .inline-create {
   display: flex;
@@ -1761,37 +1887,141 @@ body {
       </div>
     </div>
 
-    <!-- 5a tree items -->
+    <!-- 5a tree items with hierarchy -->
     <div class="demo-card">
       <div class="sub-label">5a · Tree Items with Inline Rename</div>
       <div class="tree-list" id="treeList">
-        <div class="tree-item" data-name="sales_transactions">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          <span class="tree-item-label">sales_transactions</span>
+
+        <!-- Workspace: FMLVWS (expanded) -->
+        <div class="tree-item" data-depth="0" data-name="FMLVWS" data-type="workspace" onclick="treeSelect(this)">
+          <span class="tree-toggle expanded" onclick="toggleTreeGroup(event, this)">▸</span>
+          <svg class="tree-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="tree-item-label">FMLVWS</span>
+          <span class="tree-count-badge">4 items</span>
           <div class="tree-item-actions">
-            <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
-            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'sales_transactions')">✕</button>
-            <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
+            <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'FMLVWS')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+            <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
           </div>
         </div>
-        <div class="tree-item" data-name="customer_dim">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          <span class="tree-item-label">customer_dim</span>
-          <div class="tree-item-actions">
-            <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
-            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'customer_dim')">✕</button>
-            <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
+        <div class="tree-children" data-parent="FMLVWS">
+          <div class="tree-item" data-depth="1" data-name="SalesData-LH" data-type="lakehouse" onclick="treeSelect(this)">
+            <span class="tree-dot green"></span>
+            <span class="tree-item-label">SalesData-LH</span>
+            <span class="tree-type-badge">LH</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'SalesData-LH')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+          <div class="tree-item selected" data-depth="1" data-name="TestLakehouse-01" data-type="lakehouse" onclick="treeSelect(this)">
+            <span class="tree-dot green"></span>
+            <span class="tree-item-label">TestLakehouse-01</span>
+            <span class="tree-type-badge">LH</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'TestLakehouse-01')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+          <div class="tree-item dimmed" data-depth="1" data-name="AnalysisNotebook" data-type="notebook" onclick="treeSelect(this)">
+            <span class="tree-dot blue"></span>
+            <span class="tree-item-label">AnalysisNotebook</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'AnalysisNotebook')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+          <div class="tree-item dimmed" data-depth="1" data-name="DataPipeline-Refresh" data-type="pipeline" onclick="treeSelect(this)">
+            <span class="tree-dot amber"></span>
+            <span class="tree-item-label">DataPipeline-Refresh</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'DataPipeline-Refresh')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
           </div>
         </div>
-        <div class="tree-item" data-name="product_catalog">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          <span class="tree-item-label">product_catalog</span>
+
+        <!-- Workspace: EDOG-Dev-Workspace (collapsed) -->
+        <div class="tree-item" data-depth="0" data-name="EDOG-Dev-Workspace" data-type="workspace" onclick="treeSelect(this)">
+          <span class="tree-toggle" onclick="toggleTreeGroup(event, this)">▸</span>
+          <svg class="tree-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="tree-item-label">EDOG-Dev-Workspace</span>
+          <span class="tree-count-badge">3 items</span>
           <div class="tree-item-actions">
-            <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
-            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'product_catalog')">✕</button>
-            <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
+            <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'EDOG-Dev-Workspace')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+            <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
           </div>
         </div>
+        <div class="tree-children collapsed" data-parent="EDOG-Dev-Workspace">
+          <div class="tree-item" data-depth="1" data-name="DevLakehouse" data-type="lakehouse" onclick="treeSelect(this)">
+            <span class="tree-dot green"></span>
+            <span class="tree-item-label">DevLakehouse</span>
+            <span class="tree-type-badge">LH</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'DevLakehouse')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+          <div class="tree-item dimmed" data-depth="1" data-name="IntegrationTests" data-type="notebook" onclick="treeSelect(this)">
+            <span class="tree-dot blue"></span>
+            <span class="tree-item-label">IntegrationTests</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'IntegrationTests')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+          <div class="tree-item dimmed" data-depth="1" data-name="ETL-Pipeline" data-type="pipeline" onclick="treeSelect(this)">
+            <span class="tree-dot amber"></span>
+            <span class="tree-item-label">ETL-Pipeline</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'ETL-Pipeline')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace: Perf-Testing-WS (collapsed) -->
+        <div class="tree-item" data-depth="0" data-name="Perf-Testing-WS" data-type="workspace" onclick="treeSelect(this)">
+          <span class="tree-toggle" onclick="toggleTreeGroup(event, this)">▸</span>
+          <svg class="tree-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="tree-item-label">Perf-Testing-WS</span>
+          <span class="tree-count-badge">2 items</span>
+          <div class="tree-item-actions">
+            <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+            <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'Perf-Testing-WS')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+            <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+          </div>
+        </div>
+        <div class="tree-children collapsed" data-parent="Perf-Testing-WS">
+          <div class="tree-item" data-depth="1" data-name="LoadTestLH" data-type="lakehouse" onclick="treeSelect(this)">
+            <span class="tree-dot green"></span>
+            <span class="tree-item-label">LoadTestLH</span>
+            <span class="tree-type-badge">LH</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'LoadTestLH')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+          <div class="tree-item dimmed" data-depth="1" data-name="BenchmarkNotebook" data-type="notebook" onclick="treeSelect(this)">
+            <span class="tree-dot blue"></span>
+            <span class="tree-item-label">BenchmarkNotebook</span>
+            <div class="tree-item-actions">
+              <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+              <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, 'BenchmarkNotebook')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+              <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- 5b inline create -->
@@ -2272,36 +2502,37 @@ function toastReset() {
 
 /* ─── TREE RENAME ────────────────────────────────────────────────────────── */
 function startRename(btn) {
+  event.stopPropagation();
   const item = btn.closest('.tree-item');
   const label = item.querySelector('.tree-item-label');
-  const existing = item.querySelector('.rename-input');
+  const existing = item.querySelector('.rename-wrap');
   if (existing) return;
 
   const MAX_LEN = 64;
   item.classList.add('renaming');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'rename-wrap';
 
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'rename-input';
   input.value = label.textContent;
   input.maxLength = MAX_LEN;
-  item.insertBefore(input, item.querySelector('.tree-item-actions'));
+  input.style.width = Math.max(label.offsetWidth, 120) + 'px';
 
-  /* save/cancel links + char count */
-  const controls = document.createElement('div');
-  controls.className = 'rename-controls';
-  controls.innerHTML = `<span class="rename-charcount">${input.value.length}/${MAX_LEN}</span><span class="rename-hint save">Save</span><span class="rename-hint">Cancel</span>`;
-  item.insertBefore(controls, item.querySelector('.tree-item-actions'));
+  const helper = document.createElement('div');
+  helper.className = 'rename-helper';
+  helper.textContent = 'Enter to save \u00B7 Esc to cancel';
+
+  wrap.appendChild(input);
+  wrap.appendChild(helper);
+
+  const actionsEl = item.querySelector('.tree-item-actions');
+  item.insertBefore(wrap, actionsEl);
 
   input.focus();
   input.select();
-
-  const charCount = controls.querySelector('.rename-charcount');
-  input.addEventListener('input', () => {
-    const len = input.value.length;
-    charCount.textContent = `${len}/${MAX_LEN}`;
-    charCount.className = 'rename-charcount' + (len >= MAX_LEN ? ' over' : len >= MAX_LEN - 10 ? ' warn' : '');
-  });
 
   function finish(accept) {
     item.classList.remove('renaming');
@@ -2311,22 +2542,48 @@ function startRename(btn) {
       item.classList.add('success-glow');
       setTimeout(() => item.classList.remove('success-glow'), 2100);
     }
-    input.remove();
-    controls.remove();
+    wrap.remove();
   }
 
-  controls.querySelector('.rename-hint.save').addEventListener('click', (e) => { e.stopPropagation(); finish(true); });
-  controls.querySelector('.rename-hint:last-child').addEventListener('click', (e) => { e.stopPropagation(); finish(false); });
-
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') finish(true);
-    if (e.key === 'Escape') finish(false);
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); finish(false); }
     e.stopPropagation();
   });
-  input.addEventListener('blur', (e) => {
-    /* delay so save/cancel click registers first */
+  input.addEventListener('blur', () => {
     setTimeout(() => { if (item.classList.contains('renaming')) finish(false); }, 120);
   });
+}
+
+/* ─── TREE EXPAND/COLLAPSE ──────────────────────────────────────────────── */
+function toggleTreeGroup(e, toggleEl) {
+  e.stopPropagation();
+  const wsItem = toggleEl.closest('.tree-item');
+  const wsName = wsItem.dataset.name;
+  const children = document.querySelector(`.tree-children[data-parent="${wsName}"]`);
+  if (!children) return;
+
+  const isExpanded = toggleEl.classList.contains('expanded');
+  if (isExpanded) {
+    toggleEl.classList.remove('expanded');
+    children.classList.add('collapsed');
+  } else {
+    toggleEl.classList.add('expanded');
+    children.classList.remove('collapsed');
+    /* re-trigger stagger animation */
+    children.querySelectorAll('.tree-item').forEach(el => {
+      el.style.animation = 'none';
+      el.offsetHeight; /* reflow */
+      el.style.animation = '';
+    });
+  }
+}
+
+/* ─── TREE SELECTION ────────────────────────────────────────────────────── */
+function treeSelect(item) {
+  if (item.classList.contains('renaming')) return;
+  document.querySelectorAll('#treeList .tree-item.selected').forEach(el => el.classList.remove('selected'));
+  item.classList.add('selected');
 }
 
 /* ─── INLINE CREATE ──────────────────────────────────────────────────────── */
@@ -2343,12 +2600,16 @@ function handleInlineCreate(e) {
     const item = document.createElement('div');
     item.className = 'tree-item success-glow';
     item.dataset.name = name;
-    item.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2d7ff9" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+    item.dataset.depth = '1';
+    item.dataset.type = 'lakehouse';
+    item.setAttribute('onclick', 'treeSelect(this)');
+    item.innerHTML = `<span class="tree-dot green"></span>
       <span class="tree-item-label">${name}</span>
+      <span class="tree-type-badge">LH</span>
       <div class="tree-item-actions">
-        <button class="tree-action-btn" title="Rename" onclick="startRename(this)">✎</button>
-        <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, '${name}')">✕</button>
-        <button class="tree-action-btn menu" title="More actions" onclick="showCtxMenu(event, this)">⋯</button>
+        <button class="tree-action-btn" title="Rename" onclick="startRename(this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg></button>
+        <button class="tree-action-btn danger" title="Delete" onclick="confirmDelete(this, '${name}')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
+        <button class="tree-action-btn" title="More actions" onclick="showCtxMenu(event, this)"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg></button>
       </div>`;
     tree.appendChild(item);
     setTimeout(() => item.classList.remove('success-glow'), 2100);
@@ -2441,11 +2702,11 @@ function showCtxMenu(e, btn) {
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.id = 'activeCtxMenu';
-  menu.innerHTML = `<div class="ctx-menu-item" onclick="startRename(this.closest('.tree-item').querySelector('.tree-action-btn'));closeCtxMenu();">✎ Rename</div>
-    <div class="ctx-menu-item" onclick="closeCtxMenu()">⬍ Move to…</div>
-    <div class="ctx-menu-item" onclick="closeCtxMenu()">◇ Duplicate</div>
+  menu.innerHTML = `<div class="ctx-menu-item" onclick="startRename(this.closest('.tree-item').querySelector('.tree-action-btn'));closeCtxMenu();"><svg class="ctx-menu-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg> Rename</div>
+    <div class="ctx-menu-item" onclick="closeCtxMenu()"><svg class="ctx-menu-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></svg> Move to…</div>
+    <div class="ctx-menu-item" onclick="closeCtxMenu()"><svg class="ctx-menu-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Duplicate</div>
     <div class="ctx-menu-sep"></div>
-    <div class="ctx-menu-item danger" onclick="confirmDelete(this.closest('.tree-item').querySelector('.tree-action-btn.danger'), '${name}');closeCtxMenu();">✕ Delete</div>`;
+    <div class="ctx-menu-item danger" onclick="confirmDelete(this.closest('.tree-item').querySelector('.tree-action-btn.danger'), '${name}');closeCtxMenu();"><svg class="ctx-menu-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg> Delete</div>`;
   item.appendChild(menu);
   setTimeout(() => document.addEventListener('click', closeCtxMenu, { once: true }), 0);
 }
