@@ -68,10 +68,16 @@ class TopBar {
         this._updateTokenDisplay(null);
       }
 
-      // T6: Phase indicator based on fabricBaseUrl
-      if (config.fabricBaseUrl) {
+      // T6: Phase indicator — prefer studioPhase (from dev-server supervisor)
+      if (config.studioPhase === 'running' || config.studioPhase === 'deploying') {
+        this._updateServiceStatus(config.studioPhase === 'deploying' ? 'building' : 'running');
+        if (config.studioPhase === 'running' && !this._uptimeStart) this._uptimeStart = Date.now();
+      } else if (config.fabricBaseUrl) {
         this._updateServiceStatus('running');
         if (!this._uptimeStart) this._uptimeStart = Date.now();
+      } else if (config.studioPhase === 'crashed') {
+        this._updateServiceStatus('stopped');
+        if (this._statusTextEl) this._statusTextEl.textContent = 'Service Crashed';
       } else {
         this._updateServiceStatus('stopped');
         this._uptimeStart = null;
@@ -79,6 +85,15 @@ class TopBar {
 
       // T8: Show git/patch meta only when real data exists
       this._updateGitVisibility(health || {});
+
+      // Sync sidebar phase from studio state
+      if (window.edogSidebar) {
+        if (config.studioPhase === 'running') {
+          window.edogSidebar.setPhase('connected');
+        } else if (config.studioPhase === 'idle' || config.studioPhase === 'stopped') {
+          window.edogSidebar.setPhase('disconnected');
+        }
+      }
 
       // Refresh inspector if open
       if (this._inspectorEl && this._inspectorEl.classList.contains('open')) {
