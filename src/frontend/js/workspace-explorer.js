@@ -2096,16 +2096,46 @@ class WorkspaceExplorer {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
       if (window.edogSidebar) window.edogSidebar.setPhase('connected');
       this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
+      // Show undeploy button
+      this._showUndeployButton(lh);
     } else if (state.status === 'stopped' && state.error) {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('failed');
       const btnEl = document.getElementById('ws-deploy-btn');
       if (btnEl) btnEl.style.display = '';
-    } else if (state.status === 'stopped') {
+    } else if (state.status === 'stopped' || state.status === 'idle') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
+      if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
       const btnEl = document.getElementById('ws-deploy-btn');
       if (btnEl) btnEl.style.display = '';
+      // Remove undeploy button
+      const undeployBtn = document.getElementById('ws-undeploy-btn');
+      if (undeployBtn) undeployBtn.remove();
     } else if (state.status === 'crashed') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('crashed');
+    }
+  }
+
+  _showUndeployButton(lh) {
+    // Replace deploy button with re-deploy + stop pair
+    const btnEl = document.getElementById('ws-deploy-btn');
+    if (btnEl) btnEl.textContent = '\u21BB Re-deploy';
+    // Add stop button if not exists
+    if (!document.getElementById('ws-undeploy-btn')) {
+      const actions = document.querySelector('.ws-content-actions');
+      if (actions) {
+        const stopBtn = document.createElement('button');
+        stopBtn.id = 'ws-undeploy-btn';
+        stopBtn.className = 'ws-action-btn';
+        stopBtn.innerHTML = '\u25A0 Stop Service';
+        stopBtn.style.color = 'var(--status-failed)';
+        stopBtn.addEventListener('click', () => {
+          if (this._deployFlow) {
+            this._deployFlow.undeploy();
+            this._toast('Service stopped', 'info');
+          }
+        });
+        actions.insertBefore(stopBtn, actions.children[1] || null);
+      }
     }
   }
 

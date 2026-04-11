@@ -759,6 +759,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_deploy_start()
         elif self.path == "/api/command/deploy-cancel":
             self._serve_deploy_cancel()
+        elif self.path == "/api/command/undeploy":
+            self._serve_undeploy()
         else:
             self.send_error(404)
 
@@ -860,25 +862,50 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     # ── Studio Supervisor Endpoints ───────────────────────────────────────
 
     def _serve_studio_status(self):
-        """GET /api/studio/status — authoritative studio phase."""
+        """GET /api/studio/status — authoritative studio phase.
+
+        Auto-corrects stale state: if phase is 'deploying' but no deploy
+        thread is running, or 'running' but FLT process is dead, fix it.
+        """
         with _studio_lock:
+            # Auto-correct: deploying but no active pipeline → reset to idle
+            if _studio_state["phase"] == "deploying":
+                # Check if deploy thread is actually running
+                deploy_id = _studio_state.get("deployId")
+                start_time = _studio_state.get("deployStartTime", 0)
+                # If deploy started >5min ago and still "deploying", it's stale
+                if start_time and (time.time() - start_time) > 300:
+                    _studio_state.update({"phase": "idle", "deployId": None})
+
+            # Auto-correct: running but FLT process is dead → crashed
+            if _studio_state["phase"] == "running" and _flt_process and _flt_process.poll() is not None:
+                _studio_state.update({
+                    "phase": "crashed",
+                    "deployError": f"FLT exited with code {_flt_process.returncode}",
+                })
+
+            # Auto-correct: running but no FLT process reference → idle
+            if _studio_state["phase"] == "running" and _flt_process is None:
+                _studio_state.update({"phase": "idle"})
+
             state = dict(_studio_state)
             state["deployLogs"] = list(_studio_state["deployLogs"][-200:])
         self._json_response(200, state)
 
     def _serve_deploy_start(self):
-        """POST /api/command/deploy — start deploy pipeline."""
-        with _studio_lock:
-            if _studio_state["phase"] == "deploying":
-                self._json_response(409, {"error": "deploy_in_progress"})
-                return
+        """POST /api/command/deploy — start deploy pipeline.
 
+        If already deployed to a different lakehouse, returns 409 with
+        current target info so the frontend can show a confirmation dialog.
+        Pass {"force": true} to allow re-deploy/switch.
+        """
         content_len = int(self.headers.get("Content-Length", 0))
         body = json.loads(self.rfile.read(content_len)) if content_len else {}
         ws_id = body.get("workspaceId", "")
         lh_id = body.get("artifactId", "")
         cap_id = body.get("capacityId", "")
         lh_name = body.get("lakehouseName", "")
+        force = body.get("force", False)
 
         if not all([ws_id, lh_id]):
             self._json_response(400, {
@@ -886,6 +913,40 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "message": "workspaceId and artifactId required",
             })
             return
+
+        with _studio_lock:
+            phase = _studio_state["phase"]
+            current_target = _studio_state.get("deployTarget")
+
+            # Block if deploy is actively running
+            if phase == "deploying":
+                self._json_response(409, {
+                    "error": "deploy_in_progress",
+                    "message": "A deployment is already in progress",
+                })
+                return
+
+            # If running/crashed on a DIFFERENT lakehouse, require confirmation
+            if phase in ("running", "crashed") and current_target and not force:
+                current_lh = current_target.get("artifactId", "")
+                if current_lh and current_lh != lh_id:
+                    self._json_response(409, {
+                        "error": "already_deployed",
+                        "message": f"Currently deployed to {current_target.get('lakehouseName', current_lh)}",
+                        "currentTarget": current_target,
+                    })
+                    return
+
+        # If already running, stop current service first
+        global _flt_process
+        if _flt_process and _flt_process.poll() is None:
+            _deploy_log("Stopping current service for re-deploy...", "warn")
+            _flt_process.terminate()
+            try:
+                _flt_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                _flt_process.kill()
+            _flt_process = None
 
         deploy_id = str(int(time.time() * 1000))
         _deploy_cancel.clear()
@@ -915,6 +976,40 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         """POST /api/command/deploy-cancel."""
         _deploy_cancel.set()
         self._json_response(200, {"ok": True})
+
+    def _serve_undeploy(self):
+        """POST /api/command/undeploy — stop FLT service, reset to Phase 1."""
+        global _flt_process
+        stopped = False
+
+        if _flt_process and _flt_process.poll() is None:
+            _deploy_log("Stopping FLT service...", "warn")
+            _flt_process.terminate()
+            try:
+                _flt_process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                _flt_process.kill()
+            stopped = True
+            _flt_process = None
+
+        with _studio_lock:
+            target_name = ""
+            if _studio_state.get("deployTarget"):
+                target_name = _studio_state["deployTarget"].get("lakehouseName", "")
+            _studio_state.update({
+                "phase": "idle",
+                "deployId": None,
+                "fltPort": None,
+                "fltPid": None,
+                "deployStep": 0,
+                "deployMessage": "",
+                "deployError": None,
+                "deployLogs": [],
+                "deployTarget": None,
+                "deployStartTime": None,
+            })
+
+        self._json_response(200, {"ok": True, "stopped": stopped, "lakehouse": target_name})
 
     def _serve_deploy_stream(self):
         """GET /api/command/deploy-stream — SSE stream."""

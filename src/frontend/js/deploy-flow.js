@@ -30,7 +30,8 @@ class DeployFlow {
   ];
 
   /** Start a new deploy. */
-  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName) {
+  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName, force) {
+    this._pendingTarget = { workspaceId, artifactId, capacityId, lakehouseName };
     this._active = true;
     this._startTime = Date.now();
     this._logs = [];
@@ -42,8 +43,18 @@ class DeployFlow {
       const resp = await fetch('/api/command/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName }),
+        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName, force: !!force }),
       });
+
+      if (resp.status === 409) {
+        const err = await resp.json().catch(() => ({}));
+        if (err.error === 'already_deployed') {
+          this._showSwitchConfirm(err.currentTarget, { workspaceId, artifactId, capacityId, lakehouseName });
+          return;
+        }
+        this._onFailed(err.message || 'Deploy already in progress');
+        return;
+      }
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({ message: 'Deploy request failed' }));
         this._onFailed(err.message || 'Deploy request failed');
@@ -297,6 +308,55 @@ class DeployFlow {
     this._state.message = 'Deploy failed';
     this._render();
     if (this.onUpdate) this.onUpdate(this._state);
+  }
+
+  /** Show inline confirmation when switching deploy target. */
+  _showSwitchConfirm(currentTarget, newTarget) {
+    this._stopElapsedTimer();
+    this._active = false;
+    const curName = currentTarget.lakehouseName || currentTarget.artifactId || 'current';
+    const newName = newTarget.lakehouseName || newTarget.artifactId || 'new';
+
+    this._el.innerHTML =
+      '<div class="deploy-stepper">' +
+        '<div class="deploy-error" style="border-left-color:var(--accent)">' +
+          '<div class="deploy-error-title" style="color:var(--accent)">Switch deployment target?</div>' +
+          '<div class="deploy-error-detail">' +
+            'Currently deployed to <strong>' + this._esc(curName) + '</strong>. ' +
+            'Switching to <strong>' + this._esc(newName) + '</strong> will stop the current service.' +
+          '</div>' +
+          '<div style="display:flex;gap:var(--space-2);margin-top:var(--space-3)">' +
+            '<button class="deploy-retry-btn" id="deploy-switch-confirm">Switch</button>' +
+            '<button class="deploy-cancel-btn" id="deploy-switch-cancel">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('deploy-switch-confirm')?.addEventListener('click', () => {
+      const t = this._pendingTarget;
+      if (t) this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName, true);
+    });
+    document.getElementById('deploy-switch-cancel')?.addEventListener('click', () => {
+      this._el.innerHTML = '';
+      this._el.style.display = 'none';
+      const btn = document.getElementById('ws-deploy-btn');
+      if (btn) btn.style.display = '';
+      if (this.onUpdate) this.onUpdate({ status: 'stopped' });
+    });
+  }
+
+  /** Undeploy — stop the service and return to Phase 1. */
+  async undeploy() {
+    try {
+      await fetch('/api/command/undeploy', { method: 'POST' });
+    } catch { /* best effort */ }
+    this._closeSSE();
+    this._stopElapsedTimer();
+    this._active = false;
+    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
+    this._el.innerHTML = '';
+    this._el.style.display = 'none';
+    if (this.onUpdate) this.onUpdate({ status: 'idle' });
   }
 
   _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
