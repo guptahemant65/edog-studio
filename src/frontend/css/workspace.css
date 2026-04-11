@@ -362,6 +362,32 @@
   margin-left: var(--space-2); vertical-align: middle;
 }
 
+/* Table filter input */
+.ws-table-filter {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; margin-bottom: 8px;
+  background: var(--surface-2); border-radius: var(--radius-md);
+  border: 1px solid transparent; transition: border-color 120ms;
+}
+.ws-table-filter:focus-within { border-color: var(--accent); }
+.ws-filter-icon { width: 14px; height: 14px; color: var(--text-muted); flex-shrink: 0; }
+.ws-filter-input {
+  flex: 1; border: none; background: transparent; outline: none;
+  font: inherit; font-size: 12px; color: var(--text);
+}
+.ws-filter-input::placeholder { color: var(--text-muted); }
+.ws-filter-count {
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--font-mono); white-space: nowrap;
+}
+.ws-filter-clear {
+  width: 18px; height: 18px; border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; transition: all 80ms;
+}
+.ws-filter-clear:hover { background: var(--surface-3); color: var(--text); }
+
 /* Table container — scrollable body with sticky header */
 .ws-table-container {
   max-height: 400px; overflow-y: auto;
@@ -515,6 +541,12 @@
 }
 .ws-schema-table tr:last-child td, .ws-preview-table tr:last-child td { border-bottom: none; }
 .ws-preview-note { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
+.ws-preview-placeholder { text-align: center; padding: var(--space-4); }
+.ws-preview-empty {
+  text-align: center; color: var(--text-muted); padding: var(--space-4) var(--space-2);
+  font-family: var(--font-body); font-style: italic;
+}
+.ws-preview-note .ws-preview-btn { margin-top: var(--space-2); }
 
 .ws-fav-item {
   display: flex; align-items: center; gap: var(--space-2);

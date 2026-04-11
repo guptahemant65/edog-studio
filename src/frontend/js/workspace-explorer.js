@@ -630,7 +630,76 @@ class WorkspaceExplorer {
   _bindGlobalKeys() {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this._hideContextMenu();
+      // Ctrl+F inside content panel → focus table filter
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        const filterInput = this._contentEl?.querySelector('.ws-filter-input');
+        if (filterInput && this._contentEl.contains(document.activeElement)) {
+          e.preventDefault();
+          filterInput.focus();
+          filterInput.select();
+        }
+      }
     });
+  }
+
+  /**
+   * Insert a filter bar above the table container inside ws-tables-list.
+   * @param {HTMLElement} tablesEl - the ws-tables-list element
+   */
+  _insertTableFilter(tablesEl) {
+    const container = tablesEl.querySelector('.ws-table-container');
+    if (!container) return;
+
+    const filterDiv = document.createElement('div');
+    filterDiv.className = 'ws-table-filter';
+    filterDiv.innerHTML =
+      '<svg class="ws-filter-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="6.5" cy="6.5" r="5"/><line x1="10" y1="10" x2="14.5" y2="14.5"/></svg>' +
+      '<input class="ws-filter-input" placeholder="Filter tables..." />' +
+      '<span class="ws-filter-count" style="display:none"></span>' +
+      '<button class="ws-filter-clear" style="display:none">\u2715</button>';
+
+    tablesEl.insertBefore(filterDiv, container);
+
+    const input = filterDiv.querySelector('.ws-filter-input');
+    const countEl = filterDiv.querySelector('.ws-filter-count');
+    const clearBtn = filterDiv.querySelector('.ws-filter-clear');
+    const rows = container.querySelectorAll('.ws-table-row[data-table-name]');
+    const totalCount = rows.length;
+
+    const applyFilter = () => {
+      const query = input.value.toLowerCase();
+      let visible = 0;
+      rows.forEach(row => {
+        const name = (row.dataset.tableName || '').toLowerCase();
+        const match = !query || name.includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      if (query) {
+        countEl.textContent = `${visible} of ${totalCount}`;
+        countEl.style.display = '';
+        clearBtn.style.display = '';
+      } else {
+        countEl.style.display = 'none';
+        clearBtn.style.display = 'none';
+      }
+    };
+
+    const clearFilter = () => {
+      input.value = '';
+      applyFilter();
+      input.focus();
+    };
+
+    input.addEventListener('input', applyFilter);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        clearFilter();
+      }
+    });
+    clearBtn.addEventListener('click', clearFilter);
   }
 
   // ────────────────────────────────────────────
@@ -1070,6 +1139,9 @@ class WorkspaceExplorer {
       // Store tables for enrichment merging
       this._currentTables = tables;
 
+      // Insert table filter bar above the table container
+      this._insertTableFilter(tablesEl);
+
       // Bind sort handlers on column headers
       tablesEl.querySelectorAll('.ws-table th.sortable').forEach(th => {
         th.addEventListener('click', () => this._sortTable(th.dataset.col, tablesEl));
@@ -1395,7 +1467,12 @@ class WorkspaceExplorer {
       html += this._renderSchemaShimmer();
     }
 
+    // Preview section — column headers from schema or placeholder
+    html += this._renderPreviewSection(table);
+
     this._inspectorEl.innerHTML = html;
+
+    this._bindPreviewActions(table);
 
     // Auto-load schema if not already enriched
     if (!(table.schema && table.schema.length > 0) &&
@@ -1441,6 +1518,77 @@ class WorkspaceExplorer {
     return html;
   }
 
+  /** Render data preview section — shows column headers from schema or a placeholder. */
+  _renderPreviewSection(table) {
+    let html = '<div class="ws-insp-section ws-preview-section">';
+    html += '<div class="ws-insp-title">Preview</div>';
+
+    if (table.schema && table.schema.length > 0) {
+      // Show column headers as an empty preview table
+      const maxCols = 6;
+      const cols = table.schema.slice(0, maxCols);
+      const colCount = cols.length;
+      html += '<table class="ws-preview-table"><thead><tr>';
+      for (const col of cols) {
+        html += `<th>${this._esc(col.name)}</th>`;
+      }
+      if (table.schema.length > maxCols) {
+        html += `<th>\u22ef</th>`;
+      }
+      html += '</tr></thead><tbody>';
+      html += `<tr><td colspan="${table.schema.length > maxCols ? colCount + 1 : colCount}" class="ws-preview-empty">`;
+      html += 'Deploy to load preview data</td></tr>';
+      html += '</tbody></table>';
+      html += '<div class="ws-preview-note">';
+      html += '<button class="ws-action-btn ws-preview-btn">Load Preview</button>';
+      html += '</div>';
+    } else {
+      html += '<div class="ws-preview-placeholder">';
+      html += '<div class="ws-empty-desc">Table preview requires a running FLT service</div>';
+      html += '<button class="ws-action-btn ws-preview-btn">Load Preview</button>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /** Bind click handler for the Load Preview button. */
+  _bindPreviewActions(table) {
+    if (!this._inspectorEl) return;
+    const btn = this._inspectorEl.querySelector('.ws-preview-btn');
+    if (!btn) return;
+    btn.addEventListener('click', () => this._handlePreviewLoad(table));
+  }
+
+  /** Handle Load Preview click — show shimmer then phase-1 message. */
+  _handlePreviewLoad(table) {
+    if (!this._inspectorEl) return;
+    const section = this._inspectorEl.querySelector('.ws-preview-section');
+    if (!section) return;
+
+    // Replace content with shimmer rows
+    let shimmer = '<div class="ws-insp-title">Preview</div>';
+    shimmer += '<div class="ws-insp-skel">';
+    shimmer += '<div class="skel-line skel-line--lg"></div>';
+    shimmer += '<div class="skel-line skel-line--md"></div>';
+    shimmer += '<div class="skel-line skel-line--sm"></div>';
+    shimmer += '</div>';
+    section.innerHTML = shimmer;
+
+    // After 2s, show phase-1 unavailable message
+    setTimeout(() => {
+      if (!this._inspectorEl) return;
+      const s = this._inspectorEl.querySelector('.ws-preview-section');
+      if (!s) return;
+      let msg = '<div class="ws-insp-title">Preview</div>';
+      msg += '<div class="ws-preview-placeholder">';
+      msg += '<div class="ws-empty-desc">Preview not available \u2014 deploy to enable</div>';
+      msg += '</div>';
+      s.innerHTML = msg;
+    }, 2000);
+  }
+
   /** Auto-fetch schema for a single table and update the inspector in-place. */
   async _autoLoadSchema(table) {
     const ws = this._selectedWorkspace;
@@ -1469,6 +1617,7 @@ class WorkspaceExplorer {
         const schema = details.result.schema;
         if (schema && schema.length > 0) {
           this._replaceSchemaShimmer(this._renderSchemaSection(schema));
+          this._updatePreviewWithSchema(table);
           return;
         }
       }
@@ -1509,6 +1658,18 @@ class WorkspaceExplorer {
       });
     }
     shimmer.replaceWith(frag);
+  }
+
+  /** Update the preview section in-place once schema becomes available. */
+  _updatePreviewWithSchema(table) {
+    if (!this._inspectorEl) return;
+    const section = this._inspectorEl.querySelector('.ws-preview-section');
+    if (!section) return;
+    const previewHtml = this._renderPreviewSection(table);
+    const frag = document.createRange().createContextualFragment(previewHtml);
+    const btn = frag.querySelector('.ws-preview-btn');
+    if (btn) btn.addEventListener('click', () => this._handlePreviewLoad(table));
+    section.replaceWith(frag);
   }
 
   _showWorkspaceInspector(ws) {
