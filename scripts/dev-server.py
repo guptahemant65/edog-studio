@@ -119,14 +119,16 @@ def _normalize_workspaces(resp_body: bytes) -> bytes:
     return json.dumps({"value": normalized}).encode()
 
 
-def _get_mwc_token(bearer: str, ws_id: str, lh_id: str, cap_id: str) -> tuple:
-    """Generate or retrieve cached MWC token for a workspace/lakehouse/capacity tuple.
+def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str,
+                   workload_type: str = "Lakehouse") -> tuple:
+    """Generate or retrieve cached MWC token for a workspace/artifact/capacity tuple.
 
     Args:
         bearer: Bearer token for authentication.
         ws_id: Workspace object ID.
-        lh_id: Lakehouse object ID.
+        artifact_id: Artifact object ID (lakehouse, notebook, etc.).
         cap_id: Capacity object ID.
+        workload_type: Fabric workload type (Lakehouse, Notebook, etc.).
 
     Returns:
         Tuple of (mwc_token, host_url).
@@ -134,19 +136,19 @@ def _get_mwc_token(bearer: str, ws_id: str, lh_id: str, cap_id: str) -> tuple:
     Raises:
         urllib.error.HTTPError: If the token endpoint returns an error.
     """
-    cache_key = f"{ws_id}:{lh_id}:{cap_id}"
+    cache_key = f"{ws_id}:{artifact_id}:{cap_id}:{workload_type}"
     with _mwc_lock:
         cached = _mwc_cache.get(cache_key)
         if cached and time.time() < cached["expiry"] - 300:
-            print(f"  [MWC] Cache hit for {cache_key[:20]}...")
+            print(f"  [MWC] Cache hit for {cache_key[:30]}...")
             return cached["token"], cached["host"]
 
-    print(f"  [MWC] Generating token for ws={ws_id[:8]}... lh={lh_id[:8]}...")
+    print(f"  [MWC] Generating {workload_type} token for ws={ws_id[:8]}... artifact={artifact_id[:8]}...")
     body = json.dumps({
         "type": "[Start] GetMWCToken",
-        "workloadType": "Lakehouse",
+        "workloadType": workload_type,
         "workspaceObjectId": ws_id,
-        "artifactObjectIds": [lh_id],
+        "artifactObjectIds": [artifact_id],
         "capacityObjectId": cap_id,
     }).encode()
 
@@ -200,18 +202,51 @@ def _jupyter_api_path(cap_id: str, ws_id: str, nb_id: str) -> str:
     )
 
 
-def _resolve_mwc_for_jupyter(cap_id: str):
+def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
+                             lh_id: str = ""):
     """Resolve MWC token for Jupyter operations.
 
-    Tries in-memory MWC cache (matching cap_id), then file cache.
-    Returns the token string or None.
+    Jupyter requires a Notebook-workload MWC token, not a Lakehouse one.
+    Tries in-memory cache, then generates a Notebook-scoped token.
+    Returns (token, host) tuple or (None, None).
     """
+    # Try in-memory cache — prefer Notebook-scoped token
+    nb_key = f"{ws_id}:{nb_id}:{cap_id}:Notebook"
     with _mwc_lock:
+        cached = _mwc_cache.get(nb_key)
+        if cached and time.time() < cached["expiry"] - 300:
+            print(f"  [JUPYTER] MWC Notebook cache hit")
+            return cached["token"], cached.get("host", "")
+        # Fall back to any token for this capacity
         for key, entry in _mwc_cache.items():
-            if key.endswith(f":{cap_id}") and time.time() < entry["expiry"] - 300:
-                return entry["token"]
+            if cap_id in key and time.time() < entry["expiry"] - 300:
+                print(f"  [JUPYTER] MWC cache hit (non-notebook): {key[:30]}...")
+                return entry["token"], entry.get("host", "")
+
+    # Generate a Notebook-scoped MWC token
+    if ws_id and nb_id:
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if bearer:
+            try:
+                print(f"  [JUPYTER] Generating Notebook MWC token for nb={nb_id[:8]}...")
+                token, host = _get_mwc_token(bearer, ws_id, nb_id, cap_id,
+                                             workload_type="Notebook")
+                return token, host
+            except Exception as e:
+                print(f"  [JUPYTER] Notebook MWC token failed: {e}")
+                # Try Lakehouse-scoped as fallback
+                if lh_id:
+                    try:
+                        print(f"  [JUPYTER] Falling back to Lakehouse MWC token...")
+                        token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id,
+                                                     workload_type="Lakehouse")
+                        return token, host
+                    except Exception as e2:
+                        print(f"  [JUPYTER] Lakehouse MWC fallback also failed: {e2}")
+
+    # File cache as last resort
     token, _ = _read_cache(MWC_CACHE)
-    return token
+    return token, None
 
 
 class EdogDevHandler(SimpleHTTPRequestHandler):
@@ -812,27 +847,38 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [NOTEBOOK] POST getDefinition ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
+            location = None
+            resp_data = None
             req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
             try:
                 with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                    # Synchronous 200 — definition returned directly
-                    resp_data = json.loads(resp.read())
+                    status_code = resp.getcode()
+                    if status_code == 202:
+                        # 202 Accepted — extract Location for LRO polling
+                        location = resp.headers.get("Location", "")
+                        retry_after = int(resp.headers.get("Retry-After", "2"))
+                        resp.read()  # drain body
+                    else:
+                        # Synchronous 200 — definition returned directly
+                        resp_data = json.loads(resp.read())
             except urllib.error.HTTPError as e:
-                if e.code != 202:
+                if e.code == 202:
+                    # Some servers raise HTTPError for 202
+                    location = e.headers.get("Location", "")
+                    retry_after = int(e.headers.get("Retry-After", "2"))
+                    e.read()
+                else:
                     body = e.read().decode("utf-8", "replace")[:500]
                     self._json_response(e.code, {"error": "getDefinition_error", "message": body})
                     return
-                # 202 Accepted — extract Location and Retry-After
-                location = e.headers.get("Location", "")
-                retry_after = int(e.headers.get("Retry-After", "2"))
-                e.read()  # drain the body
+
+            # Step 2: If LRO, poll Location URL until Succeeded (max 60s)
+            if location and not resp_data:
                 if not location:
                     self._json_response(502, {"error": "no_location", "message": "202 without Location header"})
                     return
 
-                # Step 2: Poll Location URL until Succeeded (max 60s)
                 print(f"  [NOTEBOOK] Polling LRO: {location[:80]}...")
-                resp_data = None
                 for attempt in range(30):
                     time.sleep(retry_after if attempt == 0 else 2)
                     poll_req = urllib.request.Request(location, headers=headers, method="GET")
@@ -855,9 +901,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     })
                     return
 
-            # Step 3: GET the result URL
-            result_url = location + "/result" if location else None
-            if result_url:
+                # Step 3: GET the result URL
+                result_url = location + "/result"
                 result_req = urllib.request.Request(result_url, headers=headers, method="GET")
                 with urllib.request.urlopen(result_req, timeout=30, context=ctx) as result_resp:
                     resp_data = json.loads(result_resp.read())
@@ -1085,6 +1130,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         """POST /api/notebook/create-session — create a Jupyter kernel session."""
         content_len = int(self.headers.get("Content-Length", 0))
         if content_len == 0:
+            print("  [JUPYTER] Rejected: empty body")
             self._json_response(400, {"error": "empty_body", "message": "Request body required"})
             return
 
@@ -1092,23 +1138,28 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         ws_id = body.get("wsId")
         nb_id = body.get("nbId")
         cap_id = body.get("capId")
+        lh_id = body.get("lhId", "")
+        print(f"  [JUPYTER] create-session wsId={ws_id} nbId={nb_id} capId={cap_id}")
 
         if not all([ws_id, nb_id, cap_id]):
+            print(f"  [JUPYTER] Rejected: missing params ws={bool(ws_id)} nb={bool(nb_id)} cap={bool(cap_id)}")
             self._json_response(400, {
                 "error": "missing_params",
-                "message": "wsId, nbId, and capId are required",
+                "message": f"wsId, nbId, and capId are required. Got ws={bool(ws_id)} nb={bool(nb_id)} cap={bool(cap_id)}",
             })
             return
 
-        token = _resolve_mwc_for_jupyter(cap_id)
+        token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id, lh_id)
         if not token:
+            print(f"  [JUPYTER] Rejected: no MWC token for capId={cap_id}")
             self._json_response(400, {
                 "error": "no_mwc_token",
                 "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
             })
             return
+        if not cap_host:
+            cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
 
-        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
         base = _jupyter_api_path(cap_id, ws_id, nb_id)
         url = f"{cap_host}{base}/sessions"
 
@@ -1172,15 +1223,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             })
             return
 
-        token = _resolve_mwc_for_jupyter(cap_id)
+        token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id)
         if not token:
             self._json_response(400, {
                 "error": "no_mwc_token",
-                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+                "message": "MWC token not available.",
             })
             return
+        if not cap_host:
+            cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
 
-        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
         base = _jupyter_api_path(cap_id, ws_id, nb_id)
         url = f"{cap_host}{base}/kernelspecs"
 
@@ -1236,15 +1288,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(400, {"error": "empty_code", "message": "code must not be empty"})
             return
 
-        token = _resolve_mwc_for_jupyter(cap_id)
+        token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id, body.get("lhId", ""))
         if not token:
             self._json_response(400, {
                 "error": "no_mwc_token",
-                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+                "message": "MWC token not available. Deploy to a lakehouse first.",
             })
             return
-
-        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
+        if not cap_host:
+            cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
 
         # Reuse cached session or create a new one
         cache_key = f"{ws_id}:{nb_id}:{cap_id}"
@@ -1320,7 +1372,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     f"/AzNBProxy/Automatic/workspaces/{ws_id}"
                     f"/api/proxy/ws/tinymgr/lobby"
                 )
-                ws_url = f"wss://{cap_id}.pbidedicated.windows-int.net{ws_path}"
+                ws_host = cap_host.replace("https://", "")
+                ws_url = f"wss://{ws_host}{ws_path}"
                 print("  [JUPYTER] REST execute unavailable, returning WebSocket info")
                 # Security: Do NOT send MWC token to browser.
                 # Return connection metadata only — client must use Run All instead.
@@ -1363,18 +1416,18 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             })
             return
 
-        token = _resolve_mwc_for_jupyter(cap_id)
+        token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id, body.get("lhId", ""))
         if not token:
             self._json_response(400, {
                 "error": "no_mwc_token",
-                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+                "message": "MWC token not available.",
             })
             return
+        if not cap_host:
+            cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
 
-        cap_host = f"https://{cap_id}.pbidedicated.windows-int.net"
         base = _jupyter_api_path(cap_id, ws_id, nb_id)
         url = f"{cap_host}{base}/sessions/{session_id}"
-
         print(f"  [JUPYTER] DELETE session={session_id[:8]}...")
 
         try:

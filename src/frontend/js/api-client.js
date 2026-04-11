@@ -325,13 +325,14 @@ class FabricApiClient {
    * @param {string} workspaceId
    * @param {string} notebookId
    * @param {string} capacityId
+   * @param {string} [lakehouseId] - Default lakehouse ID for MWC token generation.
    * @returns {Promise<{kernelId: string, sessionId: string, wsUrl?: string, mwcToken?: string}>}
    */
-  async createJupyterSession(workspaceId, notebookId, capacityId) {
+  async createJupyterSession(workspaceId, notebookId, capacityId, lakehouseId = '') {
     const resp = await fetch('/api/notebook/create-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId }),
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId, lhId: lakehouseId }),
     });
     if (!resp.ok) {
       const err = new Error(`Jupyter session creation failed: ${resp.status}`);

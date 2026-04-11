@@ -16,12 +16,14 @@ class NotebookView {
    * @param {FabricApiClient} apiClient — Initialized API client instance.
    * @param {string} workspaceId — Current workspace GUID.
    * @param {{ id: string, displayName: string, type: string, properties?: object }} notebook
+   * @param {{ capacityId?: string }} [options] — Extra context from workspace.
    */
-  constructor(containerEl, apiClient, workspaceId, notebook) {
+  constructor(containerEl, apiClient, workspaceId, notebook, options = {}) {
     this._container = containerEl;
     this._api = apiClient;
     this._wsId = workspaceId;
     this._notebook = notebook;
+    this._wsCapacityId = options.capacityId || null;
     this._cells = [];
     this._notebookMeta = {};
     this._platform = '';
@@ -767,8 +769,9 @@ class NotebookView {
     if (!this._jupyterSession) {
       this._setCellStatus(cellEl, 'spinner');
       try {
+        const lhId = this._getDefaultLakehouseId();
         const session = await this._api.createJupyterSession(
-          this._wsId, this._notebook.id, capId
+          this._wsId, this._notebook.id, capId, lhId
         );
         this._jupyterSession = {
           sessionId: session.sessionId || session.id,
@@ -896,6 +899,8 @@ class NotebookView {
   }
 
   _getCapacityId() {
+    // Priority: workspace capacity > notebook metadata > notebook properties > config
+    if (this._wsCapacityId) return this._wsCapacityId;
     const meta = this._notebookMeta || {};
     if (meta.trident && meta.trident.capacityId) return meta.trident.capacityId;
     const props = this._notebook.properties || {};
@@ -903,6 +908,21 @@ class NotebookView {
     const config = this._api.getConfig && this._api.getConfig();
     if (config && config.capacityId) return config.capacityId;
     return null;
+  }
+
+  _getDefaultLakehouseId() {
+    const props = this._notebook.properties || {};
+    if (props.defaultLakehouse && props.defaultLakehouse.itemId) {
+      return props.defaultLakehouse.itemId;
+    }
+    const meta = this._notebookMeta || {};
+    const deps = meta.dependencies || {};
+    if (deps.lakehouse && deps.lakehouse.default_lakehouse) {
+      return deps.lakehouse.default_lakehouse;
+    }
+    const config = this._api.getConfig && this._api.getConfig();
+    if (config && config.lakehouseId) return config.lakehouseId;
+    return '';
   }
 
   // ── Save ──────────────────────────────────────────────────────

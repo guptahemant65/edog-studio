@@ -228,6 +228,8 @@ class NotebookParser {
 
   /**
    * Collect META JSON lines following a METADATA boundary.
+   * Handles both single-line META (-- META {...}) and multi-line META
+   * where each line is prefixed with "-- META ".
    * @param {string[]} lines — All lines of the file.
    * @param {number} startIdx — Index to begin scanning.
    * @returns {{ data: object, linesConsumed: number }}
@@ -235,21 +237,31 @@ class NotebookParser {
   static _collectMeta(lines, startIdx) {
     let data = {};
     let consumed = 0;
+    const metaLines = [];
 
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i];
       if (line.startsWith('-- META ')) {
-        const jsonStr = line.slice(8);
-        try {
-          data = Object.assign(data, JSON.parse(jsonStr));
-        } catch {
-          // Malformed JSON — skip silently
-        }
+        metaLines.push(line.slice(8)); // Strip "-- META " prefix
         consumed = i - startIdx + 1;
       } else if (line.trim() === '' || line === '--') {
         consumed = i - startIdx + 1;
       } else {
         break;
+      }
+    }
+
+    if (metaLines.length > 0) {
+      const jsonStr = metaLines.join('\n');
+      try {
+        data = JSON.parse(jsonStr);
+      } catch {
+        // Try joining without newlines (compact format)
+        try {
+          data = JSON.parse(metaLines.join(''));
+        } catch {
+          // Malformed meta — leave as empty
+        }
       }
     }
 

@@ -2273,7 +2273,7 @@ class WorkspaceExplorer {
 
     // Create and load notebook view
     this._activeNotebookView = new NotebookView(
-      this._contentEl, this._api, ws.id, item
+      this._contentEl, this._api, ws.id, item, { capacityId: ws.capacityId }
     );
     await this._activeNotebookView.load();
   }

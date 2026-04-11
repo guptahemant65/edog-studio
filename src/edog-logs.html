@@ -8347,13 +8347,14 @@ class FabricApiClient {
    * @param {string} workspaceId
    * @param {string} notebookId
    * @param {string} capacityId
+   * @param {string} [lakehouseId] - Default lakehouse ID for MWC token generation.
    * @returns {Promise<{kernelId: string, sessionId: string, wsUrl?: string, mwcToken?: string}>}
    */
-  async createJupyterSession(workspaceId, notebookId, capacityId) {
+  async createJupyterSession(workspaceId, notebookId, capacityId, lakehouseId = '') {
     const resp = await fetch('/api/notebook/create-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId }),
+      body: JSON.stringify({ wsId: workspaceId, nbId: notebookId, capId: capacityId, lhId: lakehouseId }),
     });
     if (!resp.ok) {
       const err = new Error(`Jupyter session creation failed: ${resp.status}`);
@@ -8760,6 +8761,8 @@ class NotebookParser {
 
   /**
    * Collect META JSON lines following a METADATA boundary.
+   * Handles both single-line META (-- META {...}) and multi-line META
+   * where each line is prefixed with "-- META ".
    * @param {string[]} lines — All lines of the file.
    * @param {number} startIdx — Index to begin scanning.
    * @returns {{ data: object, linesConsumed: number }}
@@ -8767,21 +8770,31 @@ class NotebookParser {
   static _collectMeta(lines, startIdx) {
     let data = {};
     let consumed = 0;
+    const metaLines = [];
 
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i];
       if (line.startsWith('-- META ')) {
-        const jsonStr = line.slice(8);
-        try {
-          data = Object.assign(data, JSON.parse(jsonStr));
-        } catch {
-          // Malformed JSON — skip silently
-        }
+        metaLines.push(line.slice(8)); // Strip "-- META " prefix
         consumed = i - startIdx + 1;
       } else if (line.trim() === '' || line === '--') {
         consumed = i - startIdx + 1;
       } else {
         break;
+      }
+    }
+
+    if (metaLines.length > 0) {
+      const jsonStr = metaLines.join('\n');
+      try {
+        data = JSON.parse(jsonStr);
+      } catch {
+        // Try joining without newlines (compact format)
+        try {
+          data = JSON.parse(metaLines.join(''));
+        } catch {
+          // Malformed meta — leave as empty
+        }
       }
     }
 
@@ -8858,12 +8871,14 @@ class NotebookView {
    * @param {FabricApiClient} apiClient — Initialized API client instance.
    * @param {string} workspaceId — Current workspace GUID.
    * @param {{ id: string, displayName: string, type: string, properties?: object }} notebook
+   * @param {{ capacityId?: string }} [options] — Extra context from workspace.
    */
-  constructor(containerEl, apiClient, workspaceId, notebook) {
+  constructor(containerEl, apiClient, workspaceId, notebook, options = {}) {
     this._container = containerEl;
     this._api = apiClient;
     this._wsId = workspaceId;
     this._notebook = notebook;
+    this._wsCapacityId = options.capacityId || null;
     this._cells = [];
     this._notebookMeta = {};
     this._platform = '';
@@ -9609,8 +9624,9 @@ class NotebookView {
     if (!this._jupyterSession) {
       this._setCellStatus(cellEl, 'spinner');
       try {
+        const lhId = this._getDefaultLakehouseId();
         const session = await this._api.createJupyterSession(
-          this._wsId, this._notebook.id, capId
+          this._wsId, this._notebook.id, capId, lhId
         );
         this._jupyterSession = {
           sessionId: session.sessionId || session.id,
@@ -9738,6 +9754,8 @@ class NotebookView {
   }
 
   _getCapacityId() {
+    // Priority: workspace capacity > notebook metadata > notebook properties > config
+    if (this._wsCapacityId) return this._wsCapacityId;
     const meta = this._notebookMeta || {};
     if (meta.trident && meta.trident.capacityId) return meta.trident.capacityId;
     const props = this._notebook.properties || {};
@@ -9745,6 +9763,21 @@ class NotebookView {
     const config = this._api.getConfig && this._api.getConfig();
     if (config && config.capacityId) return config.capacityId;
     return null;
+  }
+
+  _getDefaultLakehouseId() {
+    const props = this._notebook.properties || {};
+    if (props.defaultLakehouse && props.defaultLakehouse.itemId) {
+      return props.defaultLakehouse.itemId;
+    }
+    const meta = this._notebookMeta || {};
+    const deps = meta.dependencies || {};
+    if (deps.lakehouse && deps.lakehouse.default_lakehouse) {
+      return deps.lakehouse.default_lakehouse;
+    }
+    const config = this._api.getConfig && this._api.getConfig();
+    if (config && config.lakehouseId) return config.lakehouseId;
+    return '';
   }
 
   // ── Save ──────────────────────────────────────────────────────
@@ -15505,7 +15538,7 @@ class WorkspaceExplorer {
 
     // Create and load notebook view
     this._activeNotebookView = new NotebookView(
-      this._contentEl, this._api, ws.id, item
+      this._contentEl, this._api, ws.id, item, { capacityId: ws.capacityId }
     );
     await this._activeNotebookView.load();
   }
