@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Playground — Design Bible Part 4c</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --accent:   #6d5cff;
+  --green:    #18a058;
+  --amber:    #e5940c;
+  --red:      #e5453b;
+  --blue:     #2d7ff9;
+  --purple:   #a855f7;
+  --teal:     #0d9488;
+
+  --bg:       #fff;
+  --bg-2:     #f8f9fb;
+  --bg-3:     #f4f5f7;
+  --bg-4:     #ebedf0;
+
+  --text:     #1a1d23;
+  --text-2:   #5a6070;
+  --text-3:   #8e95a5;
+
+  --border:        rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --font:  'Inter', system-ui, sans-serif;
+  --mono:  'Cascadia Code', 'Consolas', monospace;
+
+  --r4:   4px;
+  --r6:   6px;
+  --r10:  10px;
+  --r16:  16px;
+  --r100: 100px;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+}
+
+[data-theme="dark"] {
+  --bg:       #0f1117;
+  --bg-2:     #161923;
+  --bg-3:     #1e2230;
+  --bg-4:     #252a38;
+
+  --text:     #e8eaf0;
+  --text-2:   #9aa0b2;
+  --text-3:   #5f6578;
+
+  --border:        rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+
+/* ─── RESET + BASE ──────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background var(--transition), color var(--transition);
+}
+
+/* ─── PAGE LAYOUT ───────────────────────────────────────────────────────── */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+}
+
+.page-header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.page-wordmark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+.page-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.theme-toggle:hover { background: var(--bg-4); color: var(--text); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 32px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+.page-intro { padding: 40px 0 0; }
+
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.page-title span {
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.page-subtitle {
+  margin-top: 8px;
+  font-size: 16px;
+  color: var(--text-2);
+  max-width: 600px;
+}
+
+.toc {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toc-item {
+  padding: 6px 14px;
+  border-radius: var(--r100);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.toc-item:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.toc-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ─── SECTION WRAPPER ───────────────────────────────────────────────────── */
+.section { scroll-margin-top: 80px; }
+
+.section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.section-num {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r6);
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.section-meta h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.section-meta p {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.demo-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.demo-card + .demo-card { margin-top: 12px; }
+
+.demo-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+/* ─── GLOBAL INTERACTIVE ────────────────────────────────────────────────── */
+button { font-family: var(--font); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border-radius: var(--r6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.btn-accent:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn-accent:active { transform: translateY(0); filter: brightness(0.95); }
+
+.btn-red {
+  background: var(--red);
+  color: #fff;
+  border-color: var(--red);
+}
+.btn-red:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn-red:active { transform: translateY(0); filter: brightness(0.95); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-2);
+  border-color: var(--border-bright);
+}
+.btn-ghost:hover { background: var(--bg-3); color: var(--text); border-color: var(--border-bright); }
+.btn-ghost:active { background: var(--bg-4); }
+
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* ─── § 27 · CONFIRMATION PATTERNS ─────────────────────────────────────── */
+
+/* 27a — Inline Confirmation */
+.inline-confirm-group { display: flex; flex-direction: column; gap: 16px; }
+
+.inline-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.inline-confirm-label {
+  font-size: 12px;
+  color: var(--text-3);
+  min-width: 100px;
+  font-weight: 500;
+}
+
+.inline-confirm-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.inline-trigger { position: relative; }
+
+.inline-expanded {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--r6);
+  background: color-mix(in srgb, var(--red) 8%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+  animation: inline-expand 200ms ease-out;
+}
+
+.inline-expanded[data-visible="true"] { display: flex; }
+.inline-expanded[data-visible="true"] + .inline-trigger { display: none; }
+
+.inline-expanded .inline-msg {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.inline-expanded .inline-timer {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+@keyframes inline-expand {
+  from { opacity: 0; transform: scaleX(0.6); transform-origin: left; }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+
+/* 27b — Destructive Confirmation Dialog */
+.dialog-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  animation: fade-in 160ms ease-out;
+}
+
+.dialog-backdrop[data-open="true"] { display: flex; }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.dialog-card {
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r16);
+  padding: 32px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  animation: dialog-scale 200ms cubic-bezier(0.34,1.56,0.64,1);
+}
+
+@keyframes dialog-scale {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dialog-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r10);
+  background: color-mix(in srgb, var(--red) 12%, var(--bg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.dialog-icon svg { color: var(--red); }
+
+.dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.dialog-body {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.dialog-confirm-input {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dialog-confirm-input label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.dialog-confirm-input input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.dialog-confirm-input input:focus { border-color: var(--accent); }
+
+.dialog-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 27c — Undo Toast */
+.toast-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.undo-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: var(--r10);
+  background: var(--bg-4);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-md);
+  animation: toast-in 200ms ease-out;
+  max-width: 420px;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.undo-toast[data-state="reverted"] {
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  background: color-mix(in srgb, var(--green) 8%, var(--bg));
+}
+
+.undo-toast[data-state="expired"] { opacity: 0.4; pointer-events: none; }
+
+.undo-toast .toast-msg {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+
+.undo-toast .toast-msg .check { color: var(--green); font-weight: 700; }
+
+.btn-undo {
+  padding: 4px 12px;
+  border-radius: var(--r4);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.btn-undo:hover { filter: brightness(1.1); }
+.btn-undo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.countdown-ring {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.countdown-ring .track { fill: none; stroke: var(--bg-4); stroke-width: 2.5; }
+.countdown-ring .fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.toast-trigger-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ─── § 28 · DATA EXPORT MENU ──────────────────────────────────────────── */
+.export-wrapper { position: relative; display: inline-flex; }
+
+.export-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 260px;
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r10);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  padding: 6px 0;
+  animation: dropdown-in 140ms ease-out;
+}
+
+.export-dropdown[data-open="true"] { display: block; }
+
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.export-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--transition);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+}
+
+.export-item:hover { background: color-mix(in srgb, var(--accent) 8%, var(--bg)); }
+.export-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.export-item .export-icon {
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.export-item .export-label { flex: 1; }
+
+.export-item .export-hint {
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+
+.export-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 14px;
+}
+
+/* 28b — Export Selection */
+.export-selection-demo {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.export-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Export toast */
+.export-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 10px 18px;
+  border-radius: var(--r10);
+  background: var(--bg-4);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  color: var(--text);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  z-index: 200;
+  animation: toast-in 200ms ease-out;
+}
+
+.export-toast[data-show="true"] { display: flex; }
+.export-toast .check { color: var(--green); font-weight: 700; }
+
+/* ─── § 29 · DENSITY MODES ─────────────────────────────────────────────── */
+.density-segmented {
+  display: inline-flex;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.density-option {
+  padding: 7px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all var(--transition);
+  font-family: var(--font);
+  position: relative;
+}
+
+.density-option:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.density-option + .density-option { border-left: 1px solid var(--border); }
+.density-option[data-active="true"] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.density-option[data-active="true"] + .density-option { border-left-color: var(--accent); }
+
+.density-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.density-col {
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  background: var(--bg);
+  overflow: hidden;
+  transition: opacity var(--transition), border-color var(--transition);
+}
+
+.density-col[data-dimmed="true"] { opacity: 0.4; }
+.density-col[data-active="true"] { border-color: var(--accent); opacity: 1; }
+
+.density-col-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.density-col[data-active="true"] .density-col-header {
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  color: var(--accent);
+}
+
+/* Density table rows */
+.dtable { width: 100%; border-collapse: collapse; }
+.dtable th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+.dtable td {
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.dtable tr:last-child td { border-bottom: none; }
+
+/* Compact */
+.dtable.compact th, .dtable.compact td { padding: 2px 8px; font-size: 10px; height: 20px; }
+/* Normal */
+.dtable.normal th, .dtable.normal td { padding: 5px 10px; font-size: 12px; height: 28px; }
+/* Comfortable */
+.dtable.comfortable th, .dtable.comfortable td { padding: 9px 12px; font-size: 13px; height: 36px; }
+
+/* Density tree */
+.dtree { list-style: none; padding: 0; }
+.dtree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.dtree-item:last-child { border-bottom: none; }
+.dtree-icon { color: var(--text-3); flex-shrink: 0; font-style: normal; }
+.dtree-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dtree.compact .dtree-item { padding: 1px 8px; font-size: 10px; min-height: 20px; }
+.dtree.compact .dtree-icon { font-size: 10px; }
+.dtree.normal .dtree-item { padding: 3px 10px; font-size: 12px; min-height: 28px; }
+.dtree.normal .dtree-icon { font-size: 13px; }
+.dtree.comfortable .dtree-item { padding: 6px 12px; font-size: 13px; min-height: 36px; }
+.dtree.comfortable .dtree-icon { font-size: 16px; }
+
+/* ─── § 30 · REDUCED MOTION & ACCESSIBILITY ────────────────────────────── */
+
+/* 30a — Motion comparison panels */
+.motion-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.motion-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--r10);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.motion-panel-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.motion-panel-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.motion-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.motion-row-label { font-size: 12px; color: var(--text-2); }
+
+/* Motion demo elements */
+.motion-demo-btn {
+  padding: 5px 14px;
+  border-radius: var(--r4);
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 200ms ease;
+  font-family: var(--font);
+}
+
+.motion-on .motion-demo-btn:hover { transform: scale(1.06); }
+.motion-off .motion-demo-btn:hover { background: color-mix(in srgb, var(--accent) 80%, #fff); transform: none; }
+
+.motion-demo-toast-sample {
+  padding: 6px 14px;
+  border-radius: var(--r6);
+  background: var(--bg-4);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-2);
+  opacity: 0;
+  transition: opacity 100ms;
+}
+
+.motion-on .motion-demo-toast-sample.show {
+  opacity: 1;
+  animation: toast-in 300ms ease-out;
+}
+.motion-off .motion-demo-toast-sample.show { opacity: 1; }
+
+.motion-progress-ring { flex-shrink: 0; }
+
+.motion-on .ring-anim { animation: ring-spin 1.2s linear infinite; }
+.motion-off .ring-anim { animation: none; }
+
+@keyframes ring-spin {
+  0% { transform: rotate(-90deg); }
+  100% { transform: rotate(270deg); }
+}
+
+/* Shimmer */
+.shimmer-bar {
+  height: 14px;
+  border-radius: var(--r4);
+  background: var(--bg-4);
+  width: 120px;
+  overflow: hidden;
+  position: relative;
+}
+
+.shimmer-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+}
+
+.motion-on .shimmer-bar::after { animation: shimmer 1.5s ease-in-out infinite; }
+.motion-off .shimmer-bar::after { display: none; }
+[data-theme="dark"] .shimmer-bar::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent); }
+
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* Tree expand demo */
+.tree-expand-demo { display: flex; flex-direction: column; gap: 2px; }
+
+.tree-child {
+  padding: 3px 8px 3px 24px;
+  font-size: 11px;
+  color: var(--text-2);
+  border-radius: var(--r4);
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.tree-child.show { opacity: 1; transform: translateY(0); }
+
+.motion-on .tree-child.show {
+  animation: tree-stagger 200ms ease-out backwards;
+}
+.motion-on .tree-child.show:nth-child(2) { animation-delay: 40ms; }
+.motion-on .tree-child.show:nth-child(3) { animation-delay: 80ms; }
+
+@keyframes tree-stagger {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.motion-toggle-row {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--bg-4);
+  border: 1px solid var(--border-bright);
+  cursor: pointer;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+.toggle-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.toggle-switch[data-on="true"] { background: var(--accent); border-color: var(--accent); }
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--transition);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-switch[data-on="true"]::after { transform: translateX(18px); }
+
+.toggle-label { font-size: 13px; color: var(--text-2); font-weight: 500; }
+
+/* 30b — Focus Management */
+.focus-demo-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.focus-trigger-btn {
+  align-self: flex-start;
+}
+
+.focus-modal {
+  display: none;
+  border: 2px solid var(--accent);
+  border-radius: var(--r10);
+  padding: 24px;
+  background: var(--bg);
+  max-width: 380px;
+  box-shadow: var(--shadow-lg);
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+}
+
+.focus-modal[data-open="true"] { display: flex; }
+
+.focus-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.focus-modal-title svg { color: var(--accent); }
+
+.focus-modal input[type="text"] {
+  padding: 8px 12px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r6);
+  background: var(--bg-2);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.focus-modal input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+
+.focus-modal .focus-actions { display: flex; gap: 8px; }
+
+.focus-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--bg-3);
+  border-radius: var(--r6);
+  padding: 8px 12px;
+  border: 1px dashed var(--border-bright);
+  line-height: 1.5;
+}
+
+.focus-indicator {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-3);
+  min-height: 20px;
+}
+
+/* Global focus ring override for this page */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 30c — Screen Reader Annotations */
+.sr-examples { display: flex; flex-direction: column; gap: 16px; }
+
+.sr-example-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r6);
+  background: var(--bg);
+}
+
+.sr-visual {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r6);
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+  min-width: 160px;
+}
+
+.sr-visual svg { flex-shrink: 0; }
+
+.sr-attrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.sr-attr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--r4);
+  font-family: var(--mono);
+  font-size: 11px;
+  background: color-mix(in srgb, var(--purple) 8%, var(--bg));
+  color: var(--purple);
+  border: 1px solid color-mix(in srgb, var(--purple) 20%, transparent);
+}
+
+.sr-attr-name { font-weight: 600; }
+.sr-attr-val { color: var(--text-2); }
+
+/* ─── RESPONSIVE ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .main { padding: 32px 16px 64px; gap: 48px; }
+  .page-title { font-size: 28px; }
+  .density-columns { grid-template-columns: 1fr; }
+  .motion-panels { grid-template-columns: 1fr; }
+  .sr-example-card { flex-direction: column; }
+}
+
+/* ─── prefers-reduced-motion ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  PAGE HEADER                                                          -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<header class="page-header" role="banner">
+  <div class="page-header-inner">
+    <div class="page-wordmark"><div class="page-wordmark-dot" aria-hidden="true"></div>EDOG Playground</div>
+    <div class="page-meta">
+      <span>Part 4c — Confirmation, Export, Density, A11y</span>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="3.5"/>
+          <path d="M8 1.5v1M8 13.5v1M1.5 8h1M13.5 8h1M3.4 3.4l.7.7M11.9 11.9l.7.7M3.4 12.6l.7-.7M11.9 4.1l.7-.7"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  MAIN                                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<main class="main" role="main">
+
+  <!-- INTRO -->
+  <div class="page-intro">
+    <h1 class="page-title">Design Bible — <span>Part 4c</span></h1>
+    <p class="page-subtitle">Confirmation flows, data export, density controls, and accessibility patterns for EDOG Studio.</p>
+    <nav class="toc" aria-label="Table of contents">
+      <a class="toc-item" href="#s27">27 Confirmation</a>
+      <a class="toc-item" href="#s28">28 Data Export</a>
+      <a class="toc-item" href="#s29">29 Density Modes</a>
+      <a class="toc-item" href="#s30">30 Reduced Motion &amp; A11y</a>
+    </nav>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <!--  § 27 · CONFIRMATION PATTERNS                                       -->
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s27" aria-labelledby="s27-title">
+    <div class="section-header">
+      <div class="section-num" aria-hidden="true">27</div>
+      <div class="section-meta">
+        <h2 id="s27-title">Confirmation Patterns</h2>
+        <p>Every destructive or irreversible action needs proper confirmation UX</p>
+      </div>
+    </div>
+
+    <!-- 27a — Inline Confirmation -->
+    <div class="demo-card" role="region" aria-label="Inline confirmation demo">
+      <div class="demo-label">27a · Inline Confirmation</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Button transforms on click instead of opening a dialog. Click once to expand, then Confirm or Cancel. Auto-reverts after 5 seconds.</p>
+      <div class="inline-confirm-group">
+
+        <div class="inline-confirm-row">
+          <span class="inline-confirm-label">Re-deploy</span>
+          <div class="inline-confirm-wrap" data-action="redeploy">
+            <div class="inline-expanded" data-visible="false" role="alert">
+              <span class="inline-msg">Re-deploy will restart the service.</span>
+              <button class="btn btn-red btn-sm inline-confirm-btn" aria-label="Confirm re-deploy">Confirm</button>
+              <button class="btn btn-ghost btn-sm inline-cancel-btn" aria-label="Cancel re-deploy">Cancel</button>
+              <span class="inline-timer" aria-live="polite">5</span>
+            </div>
+            <button class="btn btn-accent inline-trigger" data-label="Re-deploy">Re-deploy</button>
+          </div>
+        </div>
+
+        <div class="inline-confirm-row">
+          <span class="inline-confirm-label">Cancel DAG</span>
+          <div class="inline-confirm-wrap" data-action="canceldag">
+            <div class="inline-expanded" data-visible="false" role="alert">
+              <span class="inline-msg">Cancel will stop all running DAG nodes.</span>
+              <button class="btn btn-red btn-sm inline-confirm-btn" aria-label="Confirm cancel DAG">Confirm</button>
+              <button class="btn btn-ghost btn-sm inline-cancel-btn" aria-label="Cancel">Cancel</button>
+              <span class="inline-timer" aria-live="polite">5</span>
+            </div>
+            <button class="btn btn-accent inline-trigger" data-label="Cancel DAG">Cancel DAG</button>
+          </div>
+        </div>
+
+        <div class="inline-confirm-row">
+          <span class="inline-confirm-label">Force Unlock</span>
+          <div class="inline-confirm-wrap" data-action="forceunlock">
+            <div class="inline-expanded" data-visible="false" role="alert">
+              <span class="inline-msg">Force unlock may cause data corruption.</span>
+              <button class="btn btn-red btn-sm inline-confirm-btn" aria-label="Confirm force unlock">Confirm</button>
+              <button class="btn btn-ghost btn-sm inline-cancel-btn" aria-label="Cancel">Cancel</button>
+              <span class="inline-timer" aria-live="polite">5</span>
+            </div>
+            <button class="btn btn-accent inline-trigger" data-label="Force Unlock">Force Unlock</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 27b — Destructive Confirmation Dialog -->
+    <div class="demo-card" role="region" aria-label="Destructive confirmation dialog demo">
+      <div class="demo-label">27b · Destructive Confirmation Dialog</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Centered overlay for high-impact actions. Type the workspace name to enable the Delete button.</p>
+      <button class="btn btn-red" id="showDialogBtn">Show Dialog</button>
+    </div>
+
+    <!-- Dialog (rendered outside card for z-index) -->
+    <div class="dialog-backdrop" id="dialogBackdrop" data-open="false" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <div class="dialog-card">
+        <div class="dialog-icon" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <h3 class="dialog-title" id="dialog-title">Delete Workspace 'FMLVWS'?</h3>
+        <p class="dialog-body">This will permanently delete the workspace and all 6 items inside it. This action cannot be undone.</p>
+        <div class="dialog-confirm-input">
+          <label for="confirmInput">Type <strong>FMLVWS</strong> to confirm</label>
+          <input type="text" id="confirmInput" autocomplete="off" spellcheck="false" placeholder="FMLVWS">
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-ghost" id="dialogCancelBtn">Cancel</button>
+          <button class="btn btn-red" id="dialogDeleteBtn" disabled>Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 27c — Undo Pattern -->
+    <div class="demo-card" role="region" aria-label="Undo pattern demo">
+      <div class="demo-label">27c · Undo Pattern</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">After non-destructive actions, offer undo instead of pre-confirmation. Click Undo within 5 seconds to revert.</p>
+      <div class="toast-trigger-row">
+        <button class="btn btn-ghost" data-toast="rename">Rename Item</button>
+        <button class="btn btn-ghost" data-toast="move">Move Item</button>
+        <button class="btn btn-ghost" data-toast="settings">Change Settings</button>
+      </div>
+      <div class="toast-area" id="toastArea" role="status" aria-live="polite" style="margin-top:16px;"></div>
+    </div>
+  </section>
+
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <!--  § 28 · DATA EXPORT MENU                                            -->
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s28" aria-labelledby="s28-title">
+    <div class="section-header">
+      <div class="section-num" aria-hidden="true">28</div>
+      <div class="section-meta">
+        <h2 id="s28-title">Data Export Menu</h2>
+        <p>Universal export pattern used across all views (F48)</p>
+      </div>
+    </div>
+
+    <!-- 28a — Export Dropdown -->
+    <div class="demo-card" role="region" aria-label="Export dropdown demo">
+      <div class="demo-label">28a · Export Dropdown</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Button with dropdown menu for export options. Click each option for a toast confirmation.</p>
+      <div class="export-wrapper" id="exportWrapper">
+        <button class="btn btn-ghost" id="exportBtn" aria-haspopup="true" aria-expanded="false">
+          Export
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l3 3 3-3"/></svg>
+        </button>
+        <div class="export-dropdown" id="exportDropdown" data-open="false" role="menu" aria-label="Export options">
+          <button class="export-item" role="menuitem" data-export="clipboard">
+            <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4.5" y="2" width="7" height="9" rx="1.5"/><path d="M2.5 10V4a1.5 1.5 0 011.5-1.5h5"/></svg></span>
+            <span class="export-label">Copy to Clipboard</span>
+            <span class="export-hint">Ctrl+C</span>
+          </button>
+          <button class="export-item" role="menuitem" data-export="json-copy">
+            <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4.5" y="2" width="7" height="9" rx="1.5"/><path d="M2.5 10V4a1.5 1.5 0 011.5-1.5h5"/></svg></span>
+            <span class="export-label">Copy as JSON</span>
+            <span class="export-hint">Ctrl+Shift+C</span>
+          </button>
+          <button class="export-item" role="menuitem" data-export="curl">
+            <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4.5" y="2" width="7" height="9" rx="1.5"/><path d="M2.5 10V4a1.5 1.5 0 011.5-1.5h5"/></svg></span>
+            <span class="export-label">Copy as cURL</span>
+            <span class="export-hint">Ctrl+Shift+U</span>
+          </button>
+          <div class="export-sep" role="separator"></div>
+          <button class="export-item" role="menuitem" data-export="csv">
+            <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M7 2v7m0 0l-2.5-2.5M7 9l2.5-2.5"/><path d="M2.5 11h9"/></svg></span>
+            <span class="export-label">Download CSV</span>
+            <span class="export-hint">.csv</span>
+          </button>
+          <button class="export-item" role="menuitem" data-export="json-dl">
+            <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M7 2v7m0 0l-2.5-2.5M7 9l2.5-2.5"/><path d="M2.5 11h9"/></svg></span>
+            <span class="export-label">Download JSON</span>
+            <span class="export-hint">.json</span>
+          </button>
+          <button class="export-item" role="menuitem" data-export="excel">
+            <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M7 2v7m0 0l-2.5-2.5M7 9l2.5-2.5"/><path d="M2.5 11h9"/></svg></span>
+            <span class="export-label">Download Excel</span>
+            <span class="export-hint">.xlsx</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 28b — Export Selection -->
+      <div class="export-selection-demo">
+        <div class="export-wrapper" id="exportSelWrapper">
+          <button class="btn btn-ghost" id="exportSelBtn" aria-haspopup="true" aria-expanded="false">
+            Export 3 of 7 tables
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5l3 3 3-3"/></svg>
+          </button>
+          <div class="export-dropdown" id="exportSelDropdown" data-open="false" role="menu" aria-label="Export selection options">
+            <button class="export-item" role="menuitem" data-export="all" style="font-weight:600;color:var(--accent);">
+              <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="5"/><path d="M5 7l1.5 1.5L9 5.5"/></svg></span>
+              <span class="export-label">Export All (7)</span>
+              <span class="export-hint"></span>
+            </button>
+            <div class="export-sep" role="separator"></div>
+            <button class="export-item" role="menuitem" data-export="sel-clipboard">
+              <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4.5" y="2" width="7" height="9" rx="1.5"/><path d="M2.5 10V4a1.5 1.5 0 011.5-1.5h5"/></svg></span>
+              <span class="export-label">Copy to Clipboard</span>
+              <span class="export-hint">Ctrl+C</span>
+            </button>
+            <button class="export-item" role="menuitem" data-export="sel-json">
+              <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="4.5" y="2" width="7" height="9" rx="1.5"/><path d="M2.5 10V4a1.5 1.5 0 011.5-1.5h5"/></svg></span>
+              <span class="export-label">Copy as JSON</span>
+              <span class="export-hint">Ctrl+Shift+C</span>
+            </button>
+            <div class="export-sep" role="separator"></div>
+            <button class="export-item" role="menuitem" data-export="sel-csv">
+              <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M7 2v7m0 0l-2.5-2.5M7 9l2.5-2.5"/><path d="M2.5 11h9"/></svg></span>
+              <span class="export-label">Download CSV</span>
+              <span class="export-hint">.csv</span>
+            </button>
+            <button class="export-item" role="menuitem" data-export="sel-excel">
+              <span class="export-icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M7 2v7m0 0l-2.5-2.5M7 9l2.5-2.5"/><path d="M2.5 11h9"/></svg></span>
+              <span class="export-label">Download Excel</span>
+              <span class="export-hint">.xlsx</span>
+            </button>
+          </div>
+        </div>
+        <span class="export-count-badge">3 selected</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Export toast (global) -->
+  <div class="export-toast" id="exportToast" data-show="false" role="status" aria-live="polite">
+    <span class="check">&#10003;</span>
+    <span id="exportToastMsg">Copied to clipboard</span>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <!--  § 29 · DENSITY MODES                                               -->
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s29" aria-labelledby="s29-title">
+    <div class="section-header">
+      <div class="section-num" aria-hidden="true">29</div>
+      <div class="section-meta">
+        <h2 id="s29-title">Density Modes</h2>
+        <p>3 density options affecting all tables, trees, and lists simultaneously (F45)</p>
+      </div>
+    </div>
+
+    <!-- 29a — Density Toggle -->
+    <div class="demo-card" role="region" aria-label="Density toggle demo">
+      <div class="demo-label">29a · Density Toggle</div>
+      <div class="density-segmented" role="radiogroup" aria-label="Density mode">
+        <button class="density-option" data-density="compact" role="radio" aria-checked="false">Compact</button>
+        <button class="density-option" data-density="normal" data-active="true" role="radio" aria-checked="true">Normal</button>
+        <button class="density-option" data-density="comfortable" role="radio" aria-checked="false">Comfortable</button>
+      </div>
+    </div>
+
+    <!-- 29b — Density Demo Table -->
+    <div class="demo-card" role="region" aria-label="Density table comparison">
+      <div class="demo-label">29b · Density Demo Table</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Same 5-row table in all 3 modes. The active density mode is highlighted.</p>
+      <div class="density-columns" id="densityTableCols">
+
+        <div class="density-col" data-mode="compact" data-dimmed="true">
+          <div class="density-col-header">Compact · 20px rows</div>
+          <table class="dtable compact" aria-label="Compact density table">
+            <thead><tr><th>Name</th><th>Type</th><th>Rows</th></tr></thead>
+            <tbody>
+              <tr><td>SalesData</td><td>Table</td><td>12,405</td></tr>
+              <tr><td>Customers</td><td>Table</td><td>8,312</td></tr>
+              <tr><td>Products</td><td>View</td><td>1,088</td></tr>
+              <tr><td>Orders</td><td>Table</td><td>45,200</td></tr>
+              <tr><td>Inventory</td><td>Table</td><td>3,750</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="density-col" data-mode="normal" data-active="true">
+          <div class="density-col-header">Normal · 28px rows</div>
+          <table class="dtable normal" aria-label="Normal density table">
+            <thead><tr><th>Name</th><th>Type</th><th>Rows</th></tr></thead>
+            <tbody>
+              <tr><td>SalesData</td><td>Table</td><td>12,405</td></tr>
+              <tr><td>Customers</td><td>Table</td><td>8,312</td></tr>
+              <tr><td>Products</td><td>View</td><td>1,088</td></tr>
+              <tr><td>Orders</td><td>Table</td><td>45,200</td></tr>
+              <tr><td>Inventory</td><td>Table</td><td>3,750</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="density-col" data-mode="comfortable" data-dimmed="true">
+          <div class="density-col-header">Comfortable · 36px rows</div>
+          <table class="dtable comfortable" aria-label="Comfortable density table">
+            <thead><tr><th>Name</th><th>Type</th><th>Rows</th></tr></thead>
+            <tbody>
+              <tr><td>SalesData</td><td>Table</td><td>12,405</td></tr>
+              <tr><td>Customers</td><td>Table</td><td>8,312</td></tr>
+              <tr><td>Products</td><td>View</td><td>1,088</td></tr>
+              <tr><td>Orders</td><td>Table</td><td>45,200</td></tr>
+              <tr><td>Inventory</td><td>Table</td><td>3,750</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 29c — Density Demo Tree -->
+    <div class="demo-card" role="region" aria-label="Density tree comparison">
+      <div class="demo-label">29c · Density Demo Tree</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Same 5-item tree in all 3 density modes.</p>
+      <div class="density-columns" id="densityTreeCols">
+
+        <div class="density-col" data-mode="compact" data-dimmed="true">
+          <div class="density-col-header">Compact</div>
+          <ul class="dtree compact" role="tree" aria-label="Compact tree">
+            <li class="dtree-item" role="treeitem"><em class="dtree-icon">&#9662;</em><span class="dtree-label">Workspace-Prod</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:24px;"><em class="dtree-icon">&#9656;</em><span class="dtree-label">SalesData-LH</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:24px;"><em class="dtree-icon">&#9656;</em><span class="dtree-label">Analytics-LH</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:40px;"><em class="dtree-icon">&#9679;</em><span class="dtree-label">Customers</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:40px;"><em class="dtree-icon">&#9679;</em><span class="dtree-label">Products</span></li>
+          </ul>
+        </div>
+
+        <div class="density-col" data-mode="normal" data-active="true">
+          <div class="density-col-header">Normal</div>
+          <ul class="dtree normal" role="tree" aria-label="Normal tree">
+            <li class="dtree-item" role="treeitem"><em class="dtree-icon">&#9662;</em><span class="dtree-label">Workspace-Prod</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:24px;"><em class="dtree-icon">&#9656;</em><span class="dtree-label">SalesData-LH</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:24px;"><em class="dtree-icon">&#9656;</em><span class="dtree-label">Analytics-LH</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:40px;"><em class="dtree-icon">&#9679;</em><span class="dtree-label">Customers</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:40px;"><em class="dtree-icon">&#9679;</em><span class="dtree-label">Products</span></li>
+          </ul>
+        </div>
+
+        <div class="density-col" data-mode="comfortable" data-dimmed="true">
+          <div class="density-col-header">Comfortable</div>
+          <ul class="dtree comfortable" role="tree" aria-label="Comfortable tree">
+            <li class="dtree-item" role="treeitem"><em class="dtree-icon">&#9662;</em><span class="dtree-label">Workspace-Prod</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:24px;"><em class="dtree-icon">&#9656;</em><span class="dtree-label">SalesData-LH</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:24px;"><em class="dtree-icon">&#9656;</em><span class="dtree-label">Analytics-LH</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:40px;"><em class="dtree-icon">&#9679;</em><span class="dtree-label">Customers</span></li>
+            <li class="dtree-item" role="treeitem" style="padding-left:40px;"><em class="dtree-icon">&#9679;</em><span class="dtree-label">Products</span></li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <!--  § 30 · REDUCED MOTION & ACCESSIBILITY                             -->
+  <!-- ═════════════════════════════════════════════════════════════════════ -->
+  <section class="section" id="s30" aria-labelledby="s30-title">
+    <div class="section-header">
+      <div class="section-num" aria-hidden="true">30</div>
+      <div class="section-meta">
+        <h2 id="s30-title">Reduced Motion &amp; Accessibility</h2>
+        <p>Show how every component degrades gracefully with prefers-reduced-motion</p>
+      </div>
+    </div>
+
+    <!-- 30a — Motion Comparison -->
+    <div class="demo-card" role="region" aria-label="Motion comparison demo">
+      <div class="demo-label">30a · Motion Comparison</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Two panels — "Motion On" vs "Motion Off". Click each Play button to see the difference.</p>
+
+      <div class="motion-panels">
+        <!-- Motion ON -->
+        <div class="motion-panel motion-on" id="motionOnPanel">
+          <div class="motion-panel-header">Motion On</div>
+          <div class="motion-panel-body">
+            <div class="motion-row">
+              <span class="motion-row-label">Toast appearance</span>
+              <button class="btn btn-ghost btn-sm" data-motion-demo="toast-on" aria-label="Play toast animation">Play</button>
+            </div>
+            <div class="motion-demo-toast-sample" id="toastOn">Toast slides in</div>
+
+            <div class="motion-row">
+              <span class="motion-row-label">Button hover</span>
+              <button class="motion-demo-btn">Hover me</button>
+            </div>
+
+            <div class="motion-row">
+              <span class="motion-row-label">Progress ring</span>
+              <svg class="motion-progress-ring" width="28" height="28" viewBox="0 0 28 28" aria-label="Animated progress ring">
+                <circle cx="14" cy="14" r="11" fill="none" stroke="var(--bg-4)" stroke-width="3"/>
+                <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="24 45" class="ring-anim"/>
+              </svg>
+            </div>
+
+            <div class="motion-row">
+              <span class="motion-row-label">Shimmer loading</span>
+              <div class="shimmer-bar"></div>
+            </div>
+
+            <div class="motion-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="motion-row-label">Tree expand</span>
+                <button class="btn btn-ghost btn-sm" data-motion-demo="tree-on" aria-label="Play tree expand animation">Play</button>
+              </div>
+              <div class="tree-expand-demo" id="treeOn">
+                <div style="font-size:12px;color:var(--text);">&#9662; Workspace</div>
+                <div class="tree-child" id="treeOnChild1">&#9656; SalesData-LH</div>
+                <div class="tree-child" id="treeOnChild2">&#9656; Analytics-LH</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Motion OFF -->
+        <div class="motion-panel motion-off" id="motionOffPanel">
+          <div class="motion-panel-header">Motion Off</div>
+          <div class="motion-panel-body">
+            <div class="motion-row">
+              <span class="motion-row-label">Toast appearance</span>
+              <button class="btn btn-ghost btn-sm" data-motion-demo="toast-off" aria-label="Play toast without animation">Play</button>
+            </div>
+            <div class="motion-demo-toast-sample" id="toastOff">Toast appears instantly</div>
+
+            <div class="motion-row">
+              <span class="motion-row-label">Button hover</span>
+              <button class="motion-demo-btn">Hover me</button>
+            </div>
+
+            <div class="motion-row">
+              <span class="motion-row-label">Progress ring</span>
+              <svg class="motion-progress-ring" width="28" height="28" viewBox="0 0 28 28" aria-label="Static progress ring">
+                <circle cx="14" cy="14" r="11" fill="none" stroke="var(--bg-4)" stroke-width="3"/>
+                <circle cx="14" cy="14" r="11" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="24 45" style="transform:rotate(-90deg);transform-origin:center;"/>
+              </svg>
+            </div>
+
+            <div class="motion-row">
+              <span class="motion-row-label">Shimmer loading</span>
+              <div class="shimmer-bar"></div>
+            </div>
+
+            <div class="motion-row" style="flex-direction:column;align-items:flex-start;gap:4px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="motion-row-label">Tree expand</span>
+                <button class="btn btn-ghost btn-sm" data-motion-demo="tree-off" aria-label="Show tree expand without animation">Play</button>
+              </div>
+              <div class="tree-expand-demo" id="treeOff">
+                <div style="font-size:12px;color:var(--text);">&#9662; Workspace</div>
+                <div class="tree-child" id="treeOffChild1">&#9656; SalesData-LH</div>
+                <div class="tree-child" id="treeOffChild2">&#9656; Analytics-LH</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="motion-toggle-row">
+        <button class="toggle-switch" id="motionToggle" data-on="false" role="switch" aria-checked="false" aria-label="Simulate reduced motion" tabindex="0"></button>
+        <span class="toggle-label">Simulate reduced motion (applies to right panel)</span>
+      </div>
+    </div>
+
+    <!-- 30b — Focus Management Demo -->
+    <div class="demo-card" role="region" aria-label="Focus management demo">
+      <div class="demo-label">30b · Focus Management Demo</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">Interactive tab-trap demonstration. Press Tab to cycle focus inside the modal. Escape closes it.</p>
+      <div class="focus-demo-area">
+        <button class="btn btn-accent focus-trigger-btn" id="focusTrigger">Open Focus Trap Modal</button>
+
+        <div class="focus-modal" id="focusModal" data-open="false" role="dialog" aria-modal="true" aria-labelledby="focus-modal-title">
+          <div class="focus-modal-title" id="focus-modal-title">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="7"/><path d="M9 6v4M9 12.5v.01"/></svg>
+            Focus Trap Active
+          </div>
+          <div class="focus-hint">Press <strong>Tab</strong> to navigate. Focus stays inside the modal. <strong>Shift+Tab</strong> goes backwards. <strong>Escape</strong> closes.</div>
+          <input type="text" placeholder="Focusable input field" id="focusInput" aria-label="Sample input field">
+          <div class="focus-actions">
+            <button class="btn btn-accent" id="focusSave">Save Changes</button>
+            <button class="btn btn-ghost" id="focusClose">Close</button>
+          </div>
+        </div>
+        <div class="focus-indicator" id="focusIndicator" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <!-- 30c — Screen Reader Annotations -->
+    <div class="demo-card" role="region" aria-label="Screen reader annotations demo">
+      <div class="demo-label">30c · Screen Reader Annotations</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">How key components are announced to screen readers. Aria attributes shown as visible labels.</p>
+
+      <div class="sr-examples">
+        <!-- Tree Item -->
+        <div class="sr-example-card">
+          <div class="sr-visual" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 4l4 3-4 3"/><path d="M8 4h3.5M8 7h3.5M8 10h3.5"/></svg>
+            <span>&#9662; SalesData-LH</span>
+          </div>
+          <div class="sr-attrs">
+            <span class="sr-attr"><span class="sr-attr-name">role</span>=<span class="sr-attr-val">"treeitem"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-expanded</span>=<span class="sr-attr-val">"true"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-selected</span>=<span class="sr-attr-val">"true"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-label</span>=<span class="sr-attr-val">"SalesData-LH, Lakehouse, 7 tables"</span></span>
+          </div>
+        </div>
+
+        <!-- Table Row -->
+        <div class="sr-example-card">
+          <div class="sr-visual" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1.5" y="2.5" width="11" height="9" rx="1.5"/><path d="M1.5 5.5h11M5 5.5v6"/></svg>
+            <span>Orders — 45,200</span>
+          </div>
+          <div class="sr-attrs">
+            <span class="sr-attr"><span class="sr-attr-name">role</span>=<span class="sr-attr-val">"row"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-rowindex</span>=<span class="sr-attr-val">"4"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-selected</span>=<span class="sr-attr-val">"false"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-label</span>=<span class="sr-attr-val">"Orders, Table, 45,200 rows"</span></span>
+          </div>
+        </div>
+
+        <!-- Badge -->
+        <div class="sr-example-card">
+          <div class="sr-visual" aria-hidden="true">
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r100);background:color-mix(in srgb,var(--green) 12%,var(--bg));color:var(--green);font-size:11px;font-weight:600;border:1px solid color-mix(in srgb,var(--green) 25%,transparent);">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--green);"></span>
+              Running
+            </span>
+          </div>
+          <div class="sr-attrs">
+            <span class="sr-attr"><span class="sr-attr-name">role</span>=<span class="sr-attr-val">"status"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-label</span>=<span class="sr-attr-val">"Status: Running"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-live</span>=<span class="sr-attr-val">"polite"</span></span>
+          </div>
+        </div>
+
+        <!-- Progress Ring -->
+        <div class="sr-example-card">
+          <div class="sr-visual" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" fill="none" stroke="var(--bg-4)" stroke-width="3"/>
+              <circle cx="12" cy="12" r="9" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-dasharray="40 57" style="transform:rotate(-90deg);transform-origin:center;"/>
+            </svg>
+            <span>72%</span>
+          </div>
+          <div class="sr-attrs">
+            <span class="sr-attr"><span class="sr-attr-name">role</span>=<span class="sr-attr-val">"progressbar"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-valuenow</span>=<span class="sr-attr-val">"72"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-valuemin</span>=<span class="sr-attr-val">"0"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-valuemax</span>=<span class="sr-attr-val">"100"</span></span>
+            <span class="sr-attr"><span class="sr-attr-name">aria-label</span>=<span class="sr-attr-val">"Deployment progress: 72%"</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!--  SCRIPTS                                                              -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  /* ── Theme Toggle ──────────────────────────────────────────────────── */
+  const html = document.documentElement;
+  const themeBtn = document.getElementById('themeToggle');
+  themeBtn.addEventListener('click', () => {
+    html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+  });
+
+  /* ── § 27a: Inline Confirmation ────────────────────────────────────── */
+  const inlineTimers = {};
+
+  document.querySelectorAll('.inline-trigger').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const wrap = btn.closest('.inline-confirm-wrap');
+      const expanded = wrap.querySelector('.inline-expanded');
+      const action = wrap.dataset.action;
+
+      expanded.dataset.visible = 'true';
+      const timerEl = expanded.querySelector('.inline-timer');
+      let remaining = 5;
+      timerEl.textContent = remaining;
+
+      clearInterval(inlineTimers[action]);
+      inlineTimers[action] = setInterval(() => {
+        remaining--;
+        timerEl.textContent = remaining;
+        if (remaining <= 0) {
+          clearInterval(inlineTimers[action]);
+          expanded.dataset.visible = 'false';
+        }
+      }, 1000);
+    });
+  });
+
+  document.querySelectorAll('.inline-cancel-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const wrap = btn.closest('.inline-confirm-wrap');
+      const expanded = wrap.querySelector('.inline-expanded');
+      const action = wrap.dataset.action;
+      clearInterval(inlineTimers[action]);
+      expanded.dataset.visible = 'false';
+    });
+  });
+
+  document.querySelectorAll('.inline-confirm-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const wrap = btn.closest('.inline-confirm-wrap');
+      const expanded = wrap.querySelector('.inline-expanded');
+      const action = wrap.dataset.action;
+      clearInterval(inlineTimers[action]);
+      expanded.dataset.visible = 'false';
+      showExportToast('Action confirmed: ' + action);
+    });
+  });
+
+  /* ── § 27b: Destructive Dialog ─────────────────────────────────────── */
+  const backdrop = document.getElementById('dialogBackdrop');
+  const confirmInput = document.getElementById('confirmInput');
+  const deleteBtn = document.getElementById('dialogDeleteBtn');
+
+  document.getElementById('showDialogBtn').addEventListener('click', () => {
+    backdrop.dataset.open = 'true';
+    confirmInput.value = '';
+    deleteBtn.disabled = true;
+    setTimeout(() => confirmInput.focus(), 100);
+  });
+
+  function closeDialog() {
+    backdrop.dataset.open = 'false';
+    document.getElementById('showDialogBtn').focus();
+  }
+
+  document.getElementById('dialogCancelBtn').addEventListener('click', closeDialog);
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) closeDialog();
+  });
+
+  confirmInput.addEventListener('input', () => {
+    deleteBtn.disabled = confirmInput.value !== 'FMLVWS';
+  });
+
+  deleteBtn.addEventListener('click', () => {
+    closeDialog();
+    showExportToast('Workspace deleted');
+  });
+
+  backdrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDialog();
+    if (e.key === 'Tab') {
+      const focusable = backdrop.querySelectorAll('input, button:not([disabled])');
+      const arr = Array.from(focusable);
+      const first = arr[0], last = arr[arr.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
+  /* ── § 27c: Undo Toasts ────────────────────────────────────────────── */
+  const toastConfigs = {
+    rename:   { msg: "Renamed to 'ProductionLH-v2'", revert: "Reverted to 'TestLH'" },
+    move:     { msg: "Moved to 'Production' workspace", revert: "Moved back to 'Staging' workspace" },
+    settings: { msg: "Settings changed to 'High Performance'", revert: "Reverted to 'Standard' settings" }
+  };
+
+  const toastArea = document.getElementById('toastArea');
+  let toastIdCounter = 0;
+
+  document.querySelectorAll('[data-toast]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.toast;
+      const cfg = toastConfigs[key];
+      createUndoToast(cfg.msg, cfg.revert);
+    });
+  });
+
+  function createUndoToast(msg, revertMsg) {
+    const id = ++toastIdCounter;
+    const circumference = 2 * Math.PI * 9;
+
+    const toast = document.createElement('div');
+    toast.className = 'undo-toast';
+    toast.dataset.state = 'active';
+    toast.id = 'undoToast' + id;
+    toast.innerHTML =
+      '<span class="toast-msg">' + msg + '</span>' +
+      '<button class="btn-undo" data-undo-id="' + id + '" aria-label="Undo action">Undo</button>' +
+      '<svg class="countdown-ring" viewBox="0 0 22 22" aria-hidden="true">' +
+        '<circle class="track" cx="11" cy="11" r="9"/>' +
+        '<circle class="fill" cx="11" cy="11" r="9" stroke-dasharray="' + circumference + '" stroke-dashoffset="0"/>' +
+      '</svg>';
+
+    toastArea.appendChild(toast);
+
+    const fillCircle = toast.querySelector('.fill');
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed += 100;
+      const fraction = elapsed / 5000;
+      fillCircle.setAttribute('stroke-dashoffset', String(circumference * fraction));
+      if (elapsed >= 5000) {
+        clearInterval(interval);
+        toast.dataset.state = 'expired';
+        setTimeout(() => toast.remove(), 600);
+      }
+    }, 100);
+
+    toast.querySelector('.btn-undo').addEventListener('click', () => {
+      clearInterval(interval);
+      toast.dataset.state = 'reverted';
+      toast.querySelector('.toast-msg').innerHTML = '<span class="check">&#10003;</span> ' + revertMsg;
+      toast.querySelector('.btn-undo').remove();
+      toast.querySelector('.countdown-ring').remove();
+      setTimeout(() => toast.remove(), 2000);
+    });
+  }
+
+  /* ── § 28: Export Dropdown ──────────────────────────────────────────── */
+  function setupExportDropdown(btnId, dropdownId) {
+    const btn = document.getElementById(btnId);
+    const dropdown = document.getElementById(dropdownId);
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = dropdown.dataset.open === 'true';
+      closeAllDropdowns();
+      if (!open) {
+        dropdown.dataset.open = 'true';
+        btn.setAttribute('aria-expanded', 'true');
+        const firstItem = dropdown.querySelector('.export-item');
+        if (firstItem) firstItem.focus();
+      }
+    });
+
+    dropdown.querySelectorAll('.export-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const key = item.dataset.export;
+        const msgs = {
+          'clipboard': 'Copied to clipboard',
+          'json-copy': 'Copied as JSON',
+          'curl': 'Copied as cURL command',
+          'csv': 'Downloading CSV...',
+          'json-dl': 'Downloading JSON...',
+          'excel': 'Downloading Excel...',
+          'all': 'Exporting all 7 tables',
+          'sel-clipboard': 'Copied 3 tables to clipboard',
+          'sel-json': 'Copied 3 tables as JSON',
+          'sel-csv': 'Downloading 3 tables as CSV...',
+          'sel-excel': 'Downloading 3 tables as Excel...'
+        };
+        showExportToast(msgs[key] || 'Done');
+        dropdown.dataset.open = 'false';
+        btn.setAttribute('aria-expanded', 'false');
+        btn.focus();
+      });
+
+      item.addEventListener('keydown', (e) => {
+        const items = Array.from(dropdown.querySelectorAll('.export-item'));
+        const idx = items.indexOf(item);
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const next = items[(idx + 1) % items.length];
+          next.focus();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const prev = items[(idx - 1 + items.length) % items.length];
+          prev.focus();
+        } else if (e.key === 'Escape') {
+          dropdown.dataset.open = 'false';
+          btn.setAttribute('aria-expanded', 'false');
+          btn.focus();
+        }
+      });
+    });
+  }
+
+  setupExportDropdown('exportBtn', 'exportDropdown');
+  setupExportDropdown('exportSelBtn', 'exportSelDropdown');
+
+  function closeAllDropdowns() {
+    document.querySelectorAll('.export-dropdown').forEach(d => d.dataset.open = 'false');
+    document.querySelectorAll('[aria-haspopup]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+  }
+
+  document.addEventListener('click', closeAllDropdowns);
+
+  /* Export toast helper */
+  let exportToastTimer;
+  function showExportToast(msg) {
+    const t = document.getElementById('exportToast');
+    const m = document.getElementById('exportToastMsg');
+    m.textContent = msg;
+    t.dataset.show = 'true';
+    clearTimeout(exportToastTimer);
+    exportToastTimer = setTimeout(() => { t.dataset.show = 'false'; }, 2000);
+  }
+
+  /* ── § 29: Density Toggle ──────────────────────────────────────────── */
+  const densityBtns = document.querySelectorAll('.density-option');
+  const tableCols = document.querySelectorAll('#densityTableCols .density-col');
+  const treeCols = document.querySelectorAll('#densityTreeCols .density-col');
+
+  densityBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.density;
+      densityBtns.forEach(b => {
+        const active = b.dataset.density === mode;
+        b.dataset.active = active ? 'true' : 'false';
+        b.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
+
+      function updateCols(cols) {
+        cols.forEach(col => {
+          if (col.dataset.mode === mode) {
+            col.dataset.active = 'true';
+            delete col.dataset.dimmed;
+          } else {
+            delete col.dataset.active;
+            col.dataset.dimmed = 'true';
+          }
+        });
+      }
+      updateCols(tableCols);
+      updateCols(treeCols);
+    });
+  });
+
+  /* ── § 30a: Motion Comparison ──────────────────────────────────────── */
+  document.querySelectorAll('[data-motion-demo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.motionDemo;
+      if (key === 'toast-on') {
+        const el = document.getElementById('toastOn');
+        el.classList.remove('show');
+        void el.offsetWidth;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 1500);
+      } else if (key === 'toast-off') {
+        const el = document.getElementById('toastOff');
+        el.classList.remove('show');
+        void el.offsetWidth;
+        el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 1500);
+      } else if (key === 'tree-on') {
+        const c1 = document.getElementById('treeOnChild1');
+        const c2 = document.getElementById('treeOnChild2');
+        c1.classList.remove('show'); c2.classList.remove('show');
+        void c1.offsetWidth;
+        c1.classList.add('show'); c2.classList.add('show');
+        setTimeout(() => { c1.classList.remove('show'); c2.classList.remove('show'); }, 2000);
+      } else if (key === 'tree-off') {
+        const c1 = document.getElementById('treeOffChild1');
+        const c2 = document.getElementById('treeOffChild2');
+        c1.classList.remove('show'); c2.classList.remove('show');
+        void c1.offsetWidth;
+        c1.classList.add('show'); c2.classList.add('show');
+        setTimeout(() => { c1.classList.remove('show'); c2.classList.remove('show'); }, 2000);
+      }
+    });
+  });
+
+  /* Motion toggle switch */
+  const motionToggle = document.getElementById('motionToggle');
+  motionToggle.addEventListener('click', () => {
+    const on = motionToggle.dataset.on === 'true';
+    motionToggle.dataset.on = on ? 'false' : 'true';
+    motionToggle.setAttribute('aria-checked', on ? 'false' : 'true');
+    const offPanel = document.getElementById('motionOffPanel');
+    if (!on) {
+      offPanel.classList.remove('motion-off');
+      offPanel.classList.add('motion-on');
+    } else {
+      offPanel.classList.remove('motion-on');
+      offPanel.classList.add('motion-off');
+    }
+  });
+  motionToggle.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); motionToggle.click(); }
+  });
+
+  /* ── § 30b: Focus Management Demo ──────────────────────────────────── */
+  const focusTrigger = document.getElementById('focusTrigger');
+  const focusModal = document.getElementById('focusModal');
+  const focusIndicator = document.getElementById('focusIndicator');
+  const focusInput = document.getElementById('focusInput');
+  const focusSave = document.getElementById('focusSave');
+  const focusClose = document.getElementById('focusClose');
+
+  const focusableEls = [focusInput, focusSave, focusClose];
+
+  focusTrigger.addEventListener('click', () => {
+    focusModal.dataset.open = 'true';
+    focusInput.focus();
+    focusIndicator.textContent = 'Focus: Input field (1 of 3)';
+  });
+
+  function closeFocusModal() {
+    focusModal.dataset.open = 'false';
+    focusTrigger.focus();
+    focusIndicator.textContent = 'Modal closed. Focus returned to trigger button.';
+  }
+
+  focusClose.addEventListener('click', closeFocusModal);
+  focusSave.addEventListener('click', () => {
+    closeFocusModal();
+    showExportToast('Changes saved');
+  });
+
+  focusModal.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeFocusModal(); return; }
+    if (e.key === 'Tab') {
+      const idx = focusableEls.indexOf(document.activeElement);
+      if (idx === -1) return;
+      if (e.shiftKey) {
+        e.preventDefault();
+        const prev = (idx - 1 + focusableEls.length) % focusableEls.length;
+        focusableEls[prev].focus();
+      } else {
+        e.preventDefault();
+        const next = (idx + 1) % focusableEls.length;
+        focusableEls[next].focus();
+      }
+    }
+  });
+
+  /* Track which element is focused inside the modal */
+  focusableEls.forEach((el, i) => {
+    el.addEventListener('focus', () => {
+      const labels = ['Input field', 'Save Changes button', 'Close button'];
+      focusIndicator.textContent = 'Focus: ' + labels[i] + ' (' + (i+1) + ' of ' + focusableEls.length + ')';
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
