@@ -1,8 +1,8 @@
-/* Sidebar — 52px icon-only with per-icon slide-out labels */
+/* Sidebar — 52px icon-only with expanding bar labels */
 .sidebar {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   width: var(--sidebar-width);
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -11,22 +11,30 @@
   z-index: var(--z-sidebar);
   flex-shrink: 0;
   position: relative;
+  overflow: visible;
 }
 
 .sidebar-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
+  min-width: 36px;
   height: 36px;
   border: none;
   background: transparent;
   color: var(--text-muted);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
-  overflow: visible;
+  padding: 0 7px;
+  margin: 0 auto;
+  /* Expand smoothly, contract a touch slower for the waterfall trail */
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    border-radius 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 200ms ease,
+    padding 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-icon svg {
@@ -34,19 +42,21 @@
   height: 22px;
   flex-shrink: 0;
   stroke-width: 1.8;
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Edgy hover — sharper, lifted, crisp */
+/* Edgy hover — bar grows, icon sharpens */
 .sidebar-icon:hover {
   background: var(--surface-2);
   color: var(--text);
   border-radius: var(--radius-sm);
   box-shadow: 0 0 0 1px var(--border-bright), 0 2px 8px rgba(0,0,0,0.06);
+  padding-right: 4px;
+  z-index: calc(var(--z-sidebar) + 2);
 }
 
 .sidebar-icon:hover svg {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 .sidebar-icon.active {
@@ -73,40 +83,34 @@
   pointer-events: none;
 }
 
-/* ─── Per-icon Slide-out Label (waterfall hover) ─── */
+/* ─── Expanding Bar Label (waterfall) ─── */
 .sidebar-slide-label {
-  position: absolute;
-  left: calc(100% + 6px);
-  top: 50%;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 10px;
-  background: var(--surface-3);
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.06);
+  overflow: hidden;
   white-space: nowrap;
-  pointer-events: none;
-  /* Start state: shifted left + invisible */
+  /* Collapsed state */
+  max-width: 0;
   opacity: 0;
-  transform: translateY(-50%) translateX(-6px);
+  padding-left: 0;
+  /* Contract: a bit slower so the trail lingers → waterfall */
   transition:
-    opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: calc(var(--z-sidebar) + 2);
+    max-width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease 40ms,
+    padding-left 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Waterfall reveal on hover */
+/* Expand on hover — bar stretches to fit text */
 .sidebar-icon:hover .sidebar-slide-label {
+  max-width: 180px;
   opacity: 1;
-  transform: translateY(-50%) translateX(0);
-}
-
-/* Dismiss faster than reveal */
-.sidebar-icon:not(:hover) .sidebar-slide-label {
-  transition-duration: 100ms, 120ms;
-  transition-delay: 0ms;
+  padding-left: 8px;
+  /* Expand: fast spring, no delay */
+  transition:
+    max-width 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 160ms ease,
+    padding-left 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-slide-name {

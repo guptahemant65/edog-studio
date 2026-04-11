@@ -35,13 +35,11 @@ class Sidebar {
     }
   }
 
-  /** Inject a slide-out label into each icon for the waterfall hover effect. */
+  /** Inject an inline label into each icon — revealed by CSS on hover. */
   _injectLabels() {
-    this._icons.forEach((icon, idx) => {
+    this._icons.forEach(icon => {
       const pill = document.createElement('span');
       pill.className = 'sidebar-slide-label';
-      // Stagger delay for waterfall effect: each icon 20ms later
-      pill.style.transitionDelay = (idx * 20) + 'ms';
 
       const name = document.createElement('span');
       name.className = 'sidebar-slide-name';
