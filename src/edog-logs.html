@@ -7134,6 +7134,14 @@ class FabricApiClient {
     return resp.json();
   }
 
+  /** Get row count and size for a single table via OneLake delta log. */
+  async getTableStats(workspaceId, lakehouseId, tableName) {
+    const params = `wsId=${workspaceId}&lhId=${lakehouseId}&tableName=${encodeURIComponent(tableName)}`;
+    const resp = await fetch(`/api/mwc/table-stats?${params}`);
+    if (!resp.ok) return null;
+    return resp.json();
+  }
+
   // --- Fabric CRUD APIs ---
 
   /**
@@ -11695,17 +11703,41 @@ class WorkspaceExplorer {
         });
       });
 
-      // Auto-enrich: fetch detailed metadata (rows, size, schema) in background
+      // Auto-enrich: fetch detailed metadata (type, schema) in background
       if (ws.capacityId && tables.length > 0) {
         const tableNames = tables.map(t => t.name);
         this._api.getTableDetails(ws.id, lh.id, ws.capacityId, tableNames)
           .then(result => this._enrichTableRows(result))
-          .catch(() => {
-            // Silently degrade — replace shimmer with dash placeholders
-            this._clearTableShimmer();
-          });
-      } else {
-        this._clearTableShimmer();
+          .catch(() => this._clearTableShimmer());
+
+        // Fetch row count + size for each table via OneLake delta log
+        for (const t of tables) {
+          this._api.getTableStats(ws.id, lh.id, t.name)
+            .then(stats => {
+              if (!stats || stats.rowCount == null) return;
+              // Update stored table
+              const stored = (this._currentTables || []).find(x => x.name === t.name);
+              if (stored) {
+                stored.rowCount = stats.rowCount;
+                stored.sizeInBytes = stats.sizeBytes;
+              }
+              // Update DOM
+              const row = document.querySelector(`.ws-table-row[data-table-name="${CSS.escape(t.name)}"]`);
+              if (row) {
+                const rowsCell = row.children[3];
+                const sizeCell = row.children[4];
+                if (rowsCell) {
+                  rowsCell.className = 'num';
+                  rowsCell.textContent = stats.rowCount != null ? this._numFmt.format(stats.rowCount) : '\u2014';
+                }
+                if (sizeCell) {
+                  sizeCell.className = 'num';
+                  sizeCell.textContent = this._formatSize(stats.sizeBytes);
+                }
+              }
+            })
+            .catch(() => {}); // silently degrade
+        }
       }
     } catch (err) {
       const errEl = document.getElementById('ws-tables-list');

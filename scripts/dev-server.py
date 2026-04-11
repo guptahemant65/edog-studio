@@ -201,6 +201,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_health()
         elif self.path.startswith("/api/mwc/tables"):
             self._serve_mwc_tables()
+        elif self.path.startswith("/api/mwc/table-stats"):
+            self._serve_table_stats()
         elif self.path.startswith("/edog-logs.html") or self.path == "/":
             self._serve_html()
         else:
@@ -603,7 +605,96 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             self._json_response(502, {"error": "mwc_request_error", "message": str(e)})
 
-    def _serve_mwc_token(self):
+    def _serve_table_stats(self):
+        """GET /api/mwc/table-stats — read row count and size from OneLake delta log.
+
+        Query params: wsId, lhId, tableName
+        Returns: { rowCount: int, sizeBytes: int }
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        lh_id = params.get("lhId", [None])[0]
+        table_name = params.get("tableName", [None])[0]
+
+        if not all([ws_id, lh_id, table_name]):
+            self._json_response(400, {"error": "missing_params",
+                                      "message": "wsId, lhId, and tableName required"})
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer_token"})
+            return
+
+        onelake_host = "https://onelake-int-edog.dfs.pbidedicated.windows-int.net"
+        log_path = f"/{ws_id}/{lh_id}/Tables/dbo/{table_name}/_delta_log"
+        ctx = ssl.create_default_context()
+
+        try:
+            # List delta log files
+            list_url = f"{onelake_host}{log_path}?resource=filesystem&recursive=false"
+            req = urllib.request.Request(list_url, headers={
+                "Authorization": f"Bearer {bearer}",
+                "x-ms-version": "2021-06-08",
+            })
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                listing = json.loads(resp.read())
+
+            # Find JSON commit files, sorted by name (version order)
+            json_files = sorted(
+                [p["name"] for p in listing.get("paths", [])
+                 if p["name"].endswith(".json") and not p.get("isDirectory")],
+            )
+
+            # Read each commit and accumulate active files
+            active_files = {}  # path → {size, numRecords}
+            for jf in json_files:
+                file_url = f"{onelake_host}/{ws_id}/{jf}"
+                req = urllib.request.Request(file_url, headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "x-ms-version": "2021-06-08",
+                })
+                with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                    content = resp.read().decode()
+
+                for line in content.strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    entry = json.loads(line)
+                    if "add" in entry:
+                        add = entry["add"]
+                        stats_raw = add.get("stats", "{}")
+                        stats = json.loads(stats_raw) if isinstance(stats_raw, str) else stats_raw
+                        active_files[add["path"]] = {
+                            "size": add.get("size", 0),
+                            "numRecords": stats.get("numRecords", 0),
+                        }
+                    elif "remove" in entry:
+                        active_files.pop(entry["remove"]["path"], None)
+
+            total_rows = sum(f["numRecords"] for f in active_files.values())
+            total_size = sum(f["size"] for f in active_files.values())
+
+            self._json_response(200, {
+                "tableName": table_name,
+                "rowCount": total_rows,
+                "sizeBytes": total_size,
+                "fileCount": len(active_files),
+            })
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                self._json_response(200, {
+                    "tableName": table_name,
+                    "rowCount": None,
+                    "sizeBytes": None,
+                    "error": "delta_log_not_found",
+                })
+            else:
+                body = e.read().decode("utf-8", "replace")[:200]
+                self._json_response(e.code, {"error": "onelake_error", "message": body})
+        except Exception as e:
+            self._json_response(502, {"error": "stats_error", "message": str(e)})
         """POST /api/edog/mwc-token — explicitly generate and return an MWC token."""
         content_len = int(self.headers.get("Content-Length", 0))
         if content_len == 0:

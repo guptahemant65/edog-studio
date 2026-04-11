@@ -134,6 +134,14 @@ class FabricApiClient {
     return resp.json();
   }
 
+  /** Get row count and size for a single table via OneLake delta log. */
+  async getTableStats(workspaceId, lakehouseId, tableName) {
+    const params = `wsId=${workspaceId}&lhId=${lakehouseId}&tableName=${encodeURIComponent(tableName)}`;
+    const resp = await fetch(`/api/mwc/table-stats?${params}`);
+    if (!resp.ok) return null;
+    return resp.json();
+  }
+
   // --- Fabric CRUD APIs ---
 
   /**
