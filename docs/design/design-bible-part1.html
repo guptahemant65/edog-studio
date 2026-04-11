@@ -910,27 +910,48 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 12px;
+  padding-left: 32px;
   border-radius: var(--r6);
-  border: 1.5px dashed var(--border-bright);
   cursor: pointer;
   transition: all var(--transition);
-  margin-top: 4px;
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.inline-create:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 5%, var(--bg)); }
+.inline-create:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+.inline-create:active { transform: scale(0.98); }
+
+.inline-create.active {
+  padding-left: 32px;
+  background: var(--bg);
+}
+
+.inline-create svg { flex-shrink: 0; }
 
 .inline-create-input {
   flex: 1;
   font: inherit;
   font-size: 13px;
+  font-weight: 500;
   background: transparent;
   border: none;
   outline: none;
   color: var(--text);
+  padding: 2px 0;
+  border-bottom: 1.5px solid var(--accent);
 }
 
-.inline-create-input::placeholder { color: var(--text-3); }
+.inline-create-input::placeholder { color: var(--text-3); font-weight: 400; }
+
+.inline-create-hint {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-left: auto;
+  white-space: nowrap;
+}
 
 /* toasts */
 .toast-stack {
@@ -2029,8 +2050,10 @@ body {
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M8 2v12M2 8h12"/>
         </svg>
-        <input class="inline-create-input" id="inlineInput" placeholder="New table name…" style="pointer-events:none"
+        <span class="inline-create-label">Add item</span>
+        <input class="inline-create-input" id="inlineInput" placeholder="Enter name…" style="display:none"
           onkeydown="handleInlineCreate(event)" onblur="deactivateInlineCreate()">
+        <span class="inline-create-hint" id="inlineHint" style="display:none">Enter ↵ · Esc ✕</span>
       </div>
     </div>
 
@@ -2588,8 +2611,14 @@ function treeSelect(item) {
 
 /* ─── INLINE CREATE ──────────────────────────────────────────────────────── */
 function activateInlineCreate() {
+  const wrap = document.getElementById('inlineCreate');
   const input = document.getElementById('inlineInput');
-  input.style.pointerEvents = 'auto';
+  const label = wrap.querySelector('.inline-create-label');
+  const hint = document.getElementById('inlineHint');
+  wrap.classList.add('active');
+  if (label) label.style.display = 'none';
+  input.style.display = '';
+  if (hint) hint.style.display = '';
   input.focus();
 }
 
@@ -2620,8 +2649,15 @@ function handleInlineCreate(e) {
 }
 
 function deactivateInlineCreate() {
+  const wrap = document.getElementById('inlineCreate');
   const input = document.getElementById('inlineInput');
-  input.style.pointerEvents = 'none';
+  const label = wrap.querySelector('.inline-create-label');
+  const hint = document.getElementById('inlineHint');
+  wrap.classList.remove('active');
+  if (label) label.style.display = '';
+  input.style.display = 'none';
+  if (hint) hint.style.display = 'none';
+  input.value = '';
   input.blur();
 }
 
