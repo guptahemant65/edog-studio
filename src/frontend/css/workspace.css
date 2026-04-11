@@ -72,8 +72,8 @@
   color: var(--accent);
   font-weight: 500;
 }
-.ws-tree-item.dimmed { opacity: 0.45; }
-.ws-tree-item.dimmed:hover { opacity: 0.7; }
+.ws-tree-item.dimmed { opacity: 0.6; }
+.ws-tree-item.dimmed:hover { opacity: 0.85; }
 
 .ws-tree-toggle {
   font-size: var(--text-xs);
@@ -84,8 +84,8 @@
 }
 
 .ws-tree-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -371,6 +371,10 @@
 .ws-table-num, .ws-table .num {
   font-family: var(--font-mono); color: var(--text-muted); text-align: right;
 }
+
+/* Shimmer cells for rows/size columns before enrichment */
+.ws-table .skel-cell { padding: 0; }
+.ws-table .skel-cell .skel-line { margin: 8px 12px; }
 .ws-type-badge {
   display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-full);
   font-size: var(--text-xs); background: var(--surface-2); color: var(--text-dim);

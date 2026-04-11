@@ -923,8 +923,8 @@ mark {
   color: var(--accent);
   font-weight: 500;
 }
-.ws-tree-item.dimmed { opacity: 0.45; }
-.ws-tree-item.dimmed:hover { opacity: 0.7; }
+.ws-tree-item.dimmed { opacity: 0.6; }
+.ws-tree-item.dimmed:hover { opacity: 0.85; }
 
 .ws-tree-toggle {
   font-size: var(--text-xs);
@@ -935,8 +935,8 @@ mark {
 }
 
 .ws-tree-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -1222,6 +1222,10 @@ mark {
 .ws-table-num, .ws-table .num {
   font-family: var(--font-mono); color: var(--text-muted); text-align: right;
 }
+
+/* Shimmer cells for rows/size columns before enrichment */
+.ws-table .skel-cell { padding: 0; }
+.ws-table .skel-cell .skel-line { margin: 8px 12px; }
 .ws-type-badge {
   display: inline-block; padding: 2px var(--space-2); border-radius: var(--radius-full);
   font-size: var(--text-xs); background: var(--surface-2); color: var(--text-dim);
@@ -9807,6 +9811,12 @@ class WorkspaceExplorer {
     this._tableSort = { col: null, dir: null };
     /** @type {HTMLElement[]|null} original row order before sorting */
     this._tableSortOriginalRows = null;
+
+    /** @type {object[]|null} Current table list for enrichment merging */
+    this._currentTables = null;
+
+    /** @type {Intl.NumberFormat} Shared formatter for row counts */
+    this._numFmt = new Intl.NumberFormat('en-IN');
   }
 
   async init() {
@@ -10512,7 +10522,7 @@ class WorkspaceExplorer {
           const itemEl = this._buildTreeNode({
             name: item.displayName,
             depth: 1,
-            dot: isLH ? 'lakehouse' : 'other',
+            dotColor: this._getItemColor(item.type),
             dimmed: !isLH,
             selected: isItemSelected,
           });
@@ -10554,6 +10564,11 @@ class WorkspaceExplorer {
     if (opts.dot) {
       const dot = document.createElement('span');
       dot.className = `ws-tree-dot ${opts.dot}`;
+      el.appendChild(dot);
+    } else if (opts.dotColor) {
+      const dot = document.createElement('span');
+      dot.className = 'ws-tree-dot';
+      dot.style.background = opts.dotColor;
       el.appendChild(dot);
     }
 
@@ -10810,16 +10825,23 @@ class WorkspaceExplorer {
       tableHtml += '<th class="sortable sorted" data-col="name">Name <span class="sort-icon">\u25B2</span></th>';
       tableHtml += '<th class="sortable" data-col="type">Type <span class="sort-icon">\u25B2\u25BC</span></th>';
       tableHtml += '<th class="sortable" data-col="format">Format <span class="sort-icon">\u25B2\u25BC</span></th>';
+      tableHtml += '<th class="sortable num" data-col="rows">Rows <span class="sort-icon">\u25B2\u25BC</span></th>';
+      tableHtml += '<th class="sortable num" data-col="size">Size <span class="sort-icon">\u25B2\u25BC</span></th>';
       tableHtml += '</tr></thead><tbody>';
       for (const t of tables) {
         tableHtml += `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}">`;
         tableHtml += `<td class="ws-table-name">${this._esc(t.name)}</td>`;
         tableHtml += `<td><span class="ws-type-badge">${this._esc(t.type || 'Delta')}</span></td>`;
         tableHtml += `<td>${this._esc(t.format || 'delta')}</td>`;
+        tableHtml += '<td class="num skel-cell"><div class="skel-line skel-line--sm"></div></td>';
+        tableHtml += '<td class="num skel-cell"><div class="skel-line skel-line--xs"></div></td>';
         tableHtml += '</tr>';
       }
       tableHtml += '</tbody></table></div>';
       tablesEl.innerHTML = tableHtml;
+
+      // Store tables for enrichment merging
+      this._currentTables = tables;
 
       // Bind sort handlers on column headers
       tablesEl.querySelectorAll('.ws-table th.sortable').forEach(th => {
@@ -10836,6 +10858,19 @@ class WorkspaceExplorer {
           if (tbl) this._showTableInspector(tbl);
         });
       });
+
+      // Auto-enrich: fetch detailed metadata (rows, size, schema) in background
+      if (ws.capacityId && tables.length > 0) {
+        const tableNames = tables.map(t => t.name);
+        this._api.getTableDetails(ws.id, lh.id, ws.capacityId, tableNames)
+          .then(result => this._enrichTableRows(result))
+          .catch(() => {
+            // Silently degrade — replace shimmer with dash placeholders
+            this._clearTableShimmer();
+          });
+      } else {
+        this._clearTableShimmer();
+      }
     } catch (err) {
       const errEl = document.getElementById('ws-tables-list');
       if (errEl) errEl.innerHTML = '<div class="ws-tree-item dimmed" style="justify-content:center">Could not load tables</div>';
@@ -10876,7 +10911,8 @@ class WorkspaceExplorer {
     this._tableSort = { col: nextDir ? column : null, dir: nextDir };
 
     // Column index mapping
-    const colIndex = { name: 0, type: 1, format: 2 }[column] ?? 0;
+    const colIndex = { name: 0, type: 1, format: 2, rows: 3, size: 4 }[column] ?? 0;
+    const isNumeric = column === 'rows' || column === 'size';
 
     if (!nextDir) {
       // Restore original order
@@ -10885,9 +10921,16 @@ class WorkspaceExplorer {
       const rows = Array.from(tbody.querySelectorAll('tr'));
       const mult = nextDir === 'asc' ? 1 : -1;
       rows.sort((a, b) => {
-        const aText = (a.children[colIndex]?.textContent || '').toLowerCase();
-        const bText = (b.children[colIndex]?.textContent || '').toLowerCase();
-        return aText < bText ? -1 * mult : aText > bText ? 1 * mult : 0;
+        const aText = (a.children[colIndex]?.textContent || '').trim();
+        const bText = (b.children[colIndex]?.textContent || '').trim();
+        if (isNumeric) {
+          const aNum = parseFloat(aText.replace(/[^0-9.]/g, '')) || 0;
+          const bNum = parseFloat(bText.replace(/[^0-9.]/g, '')) || 0;
+          return (aNum - bNum) * mult;
+        }
+        const aLow = aText.toLowerCase();
+        const bLow = bText.toLowerCase();
+        return aLow < bLow ? -1 * mult : aLow > bLow ? 1 * mult : 0;
       });
       for (const row of rows) tbody.appendChild(row);
     }
@@ -10903,6 +10946,121 @@ class WorkspaceExplorer {
         th.classList.remove('sorted');
         icon.textContent = '\u25B2\u25BC';
       }
+    });
+  }
+
+  // ────────────────────────────────────────────
+  // Table enrichment (auto-fetch rows/size/schema)
+  // ────────────────────────────────────────────
+
+  /**
+   * Map a table type string to a short display badge label.
+   * @param {string} type - e.g. "MATERIALIZED_LAKE_VIEW", "EXTERNAL", "MANAGED"
+   * @returns {string} Short badge label
+   */
+  _tableTypeBadge(type) {
+    const map = {
+      'MATERIALIZED_LAKE_VIEW': 'MLV',
+      'EXTERNAL': 'External',
+      'MANAGED': 'Managed',
+    };
+    return map[type] || type || 'Table';
+  }
+
+  /**
+   * Format byte counts to human-readable size strings.
+   * @param {number} bytes
+   * @returns {string} e.g. "156 MB", "1.2 GB"
+   */
+  _formatSize(bytes) {
+    if (bytes == null || isNaN(bytes)) return '\u2014';
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const val = bytes / Math.pow(1024, i);
+    return `${val < 10 && i > 0 ? val.toFixed(1) : Math.round(val)} ${units[i]}`;
+  }
+
+  /**
+   * Enrich rendered table rows with data from batchGetTableDetails response.
+   * Updates shimmer cells with actual values and merges data onto stored tables.
+   * @param {object} result - Response from getTableDetails API
+   */
+  _enrichTableRows(result) {
+    const items = (result && result.value) || [];
+    const detailMap = new Map();
+    for (const item of items) {
+      if (item.tableName) detailMap.set(item.tableName, item);
+    }
+
+    // Merge onto stored table objects for inspector use
+    if (this._currentTables) {
+      for (const tbl of this._currentTables) {
+        const detail = detailMap.get(tbl.name);
+        if (!detail) continue;
+        if (detail.result) {
+          tbl.location = detail.result.location || tbl.location;
+          tbl.schema = detail.result.schema || tbl.schema;
+          tbl._enrichedType = detail.result.type || null;
+          if (detail.result.format) tbl.format = detail.result.format;
+        }
+        tbl.schemaName = detail.schemaName || tbl.schemaName;
+        tbl.status = detail.status;
+        tbl.rowCount = detail.result?.rowCount ?? null;
+        tbl.sizeInBytes = detail.result?.sizeInBytes ?? null;
+      }
+    }
+
+    // Update DOM cells
+    const tablesEl = document.getElementById('ws-tables-list');
+    if (!tablesEl) return;
+
+    tablesEl.querySelectorAll('.ws-table-row[data-table-name]').forEach(row => {
+      const name = row.dataset.tableName;
+      const detail = detailMap.get(name);
+
+      // Rows cell (index 3)
+      const rowsCell = row.children[3];
+      // Size cell (index 4)
+      const sizeCell = row.children[4];
+
+      if (detail && detail.result) {
+        // Update type badge if enriched type is available
+        const typeBadge = row.children[1]?.querySelector('.ws-type-badge');
+        if (typeBadge && detail.result.type) {
+          typeBadge.textContent = this._tableTypeBadge(detail.result.type);
+        }
+
+        // Rows
+        if (rowsCell) {
+          const count = detail.result.rowCount;
+          rowsCell.className = 'num';
+          rowsCell.textContent = count != null ? this._numFmt.format(count) : '\u2014';
+        }
+
+        // Size
+        if (sizeCell) {
+          sizeCell.className = 'num';
+          sizeCell.textContent = this._formatSize(detail.result.sizeInBytes);
+        }
+      } else {
+        // No detail for this table — clear shimmer with dash
+        if (rowsCell) { rowsCell.className = 'num'; rowsCell.textContent = '\u2014'; }
+        if (sizeCell) { sizeCell.className = 'num'; sizeCell.textContent = '\u2014'; }
+      }
+    });
+  }
+
+  /**
+   * Remove shimmer from Rows/Size cells, replacing with dash placeholders.
+   * Called when enrichment is skipped (no capacityId) or fails.
+   */
+  _clearTableShimmer() {
+    const tablesEl = document.getElementById('ws-tables-list');
+    if (!tablesEl) return;
+    tablesEl.querySelectorAll('.skel-cell').forEach(cell => {
+      cell.className = 'num';
+      cell.textContent = '\u2014';
     });
   }
 
@@ -11168,6 +11326,18 @@ class WorkspaceExplorer {
   // ────────────────────────────────────────────
   // Helpers
   // ────────────────────────────────────────────
+
+  /** Map item type to a color for the tree dot indicator. */
+  _getItemColor(type) {
+    const colors = {
+      'Lakehouse': 'var(--status-succeeded)',
+      'Notebook': '#2d7ff9',
+      'Pipeline': '#e5940c',
+      'MLExperiment': '#a855f7',
+      'Report': 'var(--text-muted)',
+    };
+    return colors[type] || 'var(--text-muted)';
+  }
 
   _isLakehouse(item) {
     return (item.type || '').toLowerCase().includes('lakehouse');
