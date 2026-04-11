@@ -20,11 +20,27 @@
 }
 
 .topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-weight: 800;
   font-size: var(--text-lg);
   color: var(--accent);
   letter-spacing: 0.06em;
+  user-select: none;
+}
+
+.brand-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.brand-studio {
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
 }
 
 .service-status {
