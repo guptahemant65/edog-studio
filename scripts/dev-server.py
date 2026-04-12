@@ -719,6 +719,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith("/api/logs") or self.path.startswith("/api/telemetry") \
                 or self.path.startswith("/api/stats") or self.path.startswith("/api/executions"):
             self._proxy_to_flt("GET")
+        elif self.path == "/ws/logs":
+            # WebSocket upgrade request — can't handle in stdlib HTTP server.
+            # Return 426 so the client knows to use the FLT port instead.
+            self._json_response(426, {"error": "ws_not_here", "message": "WebSocket available on FLT port after deploy"})
         else:
             self.send_error(404)
 

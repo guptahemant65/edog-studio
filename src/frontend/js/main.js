@@ -175,7 +175,8 @@ class EdogLogViewer {
     
     this.bindEventListeners();
     await this.loadInitialData();
-    this.ws.connect();
+    // Don't auto-connect WebSocket — _checkDeployResume will connect
+    // to the right port if FLT is running. Otherwise no WS is needed.
   }
 
   /** Check for active/completed deploy on page load (refresh recovery). */
