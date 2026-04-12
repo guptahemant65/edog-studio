@@ -77,7 +77,21 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             builder.Services.AddSignalR();
 
+            // CORS: allow dev-server (5555) to connect to FLT SignalR hub (5557)
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("EdogDev", policy =>
+                {
+                    policy.SetIsOriginAllowed(_ => true)  // localhost only — internal dev tool
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
+                });
+            });
+
             app = builder.Build();
+
+            app.UseCors("EdogDev");
 
             hubContext = app.Services.GetRequiredService<IHubContext<EdogPlaygroundHub>>();
 
