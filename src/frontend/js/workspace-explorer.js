@@ -2177,11 +2177,29 @@ class WorkspaceExplorer {
         stopBtn.className = 'ws-action-btn';
         stopBtn.innerHTML = '\u25A0 Stop Service';
         stopBtn.style.color = 'var(--status-failed)';
-        stopBtn.addEventListener('click', () => {
+        stopBtn.addEventListener('click', async () => {
+          stopBtn.disabled = true;
+          stopBtn.textContent = 'Stopping\u2026';
+          try {
+            await fetch('/api/command/undeploy', { method: 'POST' });
+          } catch { /* best effort */ }
+          // Reset UI to Phase 1
+          if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
+          if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+          // Clean up deploy flow if exists
           if (this._deployFlow) {
-            this._deployFlow.undeploy();
-            this._toast('Service stopped', 'info');
+            this._deployFlow.destroy();
+            this._deployFlow = null;
           }
+          // Reset buttons
+          stopBtn.remove();
+          if (btnEl) {
+            btnEl.textContent = '\u25B6 Deploy to this Lakehouse';
+            btnEl.style.display = '';
+          }
+          const progressEl = document.getElementById('ws-deploy-progress');
+          if (progressEl) { progressEl.style.display = 'none'; progressEl.innerHTML = ''; }
+          this._toast('Service stopped', 'info');
         });
         actions.insertBefore(stopBtn, actions.children[1] || null);
       }
