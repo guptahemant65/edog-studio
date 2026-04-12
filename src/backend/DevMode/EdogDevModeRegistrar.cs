@@ -53,7 +53,20 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterFeatureFlighterWrapper()
         {
-            // TODO: Phase 2B — wrap IFeatureFlighter with EdogFeatureFlighterWrapper
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.FeatureFlightProvider.IFeatureFlighter>();
+                if (inner is EdogFeatureFlighterWrapper) return;
+                var wrapper = new EdogFeatureFlighterWrapper(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.FeatureFlightProvider.IFeatureFlighter>(wrapper);
+                Console.WriteLine("[EDOG] ✓ FeatureFlighter interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ FeatureFlighter interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterPerfMarkerCallback()

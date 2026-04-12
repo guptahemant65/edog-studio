@@ -74,6 +74,7 @@ DEVMODE_FILES = {
     "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
     "EdogTopicRouter": SERVICE_PATH / "DevMode/EdogTopicRouter.cs",
     "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
+    "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
