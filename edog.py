@@ -1680,40 +1680,62 @@ def ensure_signalr_nuget(repo_root):
     """Ensure the FLT project has the SignalR MessagePack NuGet package reference.
 
     Required for EdogPlaygroundHub SignalR hub (ADR-006).
-    Adds PackageReference if not already present.
+    FLT uses central package version management, so we must patch BOTH:
+    1. Directory.Packages.props — add PackageVersion with version
+    2. Microsoft.LiveTable.Service.csproj — add PackageReference without version
     """
-    csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
-    if not csproj.exists():
-        print(f"   ⚠️  FLT csproj not found: {csproj}")
-        return False
-
-    content = csproj.read_text(encoding="utf-8")
-    pkg = "Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
-
-    if pkg in content:
-        return True  # Already present
-
-    # Insert the PackageReference after the last existing PackageReference
     import re
-    # Find the last </PackageReference> or /> closing a PackageReference
-    pattern = r'(<PackageReference\s[^>]*/>\s*\n)'
-    matches = list(re.finditer(pattern, content))
-    if not matches:
-        # Try multi-line PackageReference
-        pattern2 = r'(</PackageReference>\s*\n)'
-        matches = list(re.finditer(pattern2, content))
 
-    if matches:
-        last_match = matches[-1]
-        insert_pos = last_match.end()
-        new_ref = f'    <PackageReference Include="{pkg}" Version="8.*" />\n'
-        content = content[:insert_pos] + new_ref + content[insert_pos:]
-        csproj.write_text(content, encoding="utf-8")
-        print(f"   ✅ Added {pkg} NuGet to FLT csproj")
-        return True
+    pkg = "Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
+    pkg_version = "8.0.8"  # Match .NET 8 SDK
+
+    # 1. Patch Directory.Packages.props (central version)
+    packages_props = repo_root / "Directory.Packages.props"
+    if packages_props.exists():
+        content = packages_props.read_text(encoding="utf-8")
+        if pkg not in content:
+            # Insert after the last PackageVersion line
+            matches = list(re.finditer(r'(\s*<PackageVersion\s[^/]*/>\s*\n)', content))
+            if matches:
+                insert_pos = matches[-1].end()
+                indent = "    "
+                new_line = f'{indent}<PackageVersion Include="{pkg}" Version="{pkg_version}" />\n'
+                content = content[:insert_pos] + new_line + content[insert_pos:]
+                packages_props.write_text(content, encoding="utf-8")
+                print(f"   ✅ Added {pkg} v{pkg_version} to Directory.Packages.props")
+            else:
+                print(f"   ⚠️  Could not find insertion point in Directory.Packages.props")
+                return False
+        else:
+            print(f"   ⏭️  {pkg} already in Directory.Packages.props")
     else:
-        print(f"   ⚠️  Could not find insertion point for NuGet in {csproj}")
+        print(f"   ⚠️  Directory.Packages.props not found at {packages_props}")
         return False
+
+    # 2. Patch csproj (reference without version — central management handles it)
+    csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
+    if csproj.exists():
+        content = csproj.read_text(encoding="utf-8")
+        if pkg not in content:
+            # Insert after the last PackageReference line
+            matches = list(re.finditer(r'(\s*<PackageReference\s[^/]*/>\s*\n)', content))
+            if matches:
+                insert_pos = matches[-1].end()
+                indent = "    "
+                new_line = f'{indent}<PackageReference Include="{pkg}" />\n'
+                content = content[:insert_pos] + new_line + content[insert_pos:]
+                csproj.write_text(content, encoding="utf-8")
+                print(f"   ✅ Added {pkg} PackageReference to csproj (no version — central)")
+            else:
+                print(f"   ⚠️  Could not find insertion point in csproj")
+                return False
+        else:
+            print(f"   ⏭️  {pkg} already in csproj")
+    else:
+        print(f"   ⚠️  csproj not found at {csproj}")
+        return False
+
+    return True
 
 
 def revert_log_viewer_files(repo_root):
@@ -1730,15 +1752,22 @@ def revert_log_viewer_files(repo_root):
     if devmode_dir.exists() and not any(devmode_dir.iterdir()):
         devmode_dir.rmdir()
 
-    # Remove SignalR NuGet from csproj if present
+    # Remove SignalR NuGet from csproj and Directory.Packages.props if present
+    pkg_line = 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'
+    import re
     csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
     if csproj.exists():
         content = csproj.read_text(encoding="utf-8")
-        pkg_line = 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'
         if pkg_line in content:
-            import re
             content = re.sub(r'\s*<PackageReference\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', '\n', content)
             csproj.write_text(content, encoding="utf-8")
+
+    packages_props = repo_root / "Directory.Packages.props"
+    if packages_props.exists():
+        content = packages_props.read_text(encoding="utf-8")
+        if pkg_line in content:
+            content = re.sub(r'\s*<PackageVersion\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', '\n', content)
+            packages_props.write_text(content, encoding="utf-8")
     
     return removed
 
