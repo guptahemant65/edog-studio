@@ -17,6 +17,7 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 SRC_DIR = os.path.join(PROJECT_DIR, "src", "frontend")
+LIB_DIR = os.path.join(PROJECT_DIR, "lib")
 OUTPUT_FILE = os.path.join(PROJECT_DIR, "src", "edog-logs.html")
 
 # CSS modules — order matters (variables first, then layout, then components)
@@ -46,11 +47,17 @@ CSS_MODULES = [
     "css/onboarding.css",
 ]
 
+# Vendor libraries — inlined BEFORE our JS modules (order matters)
+LIB_MODULES = [
+    "signalr.min.js",
+    "signalr-protocol-msgpack.min.js",
+]
+
 # JS modules — order matters (dependencies first, then features, then main)
 JS_MODULES = [
     "js/mock-data.js",
     "js/state.js",
-    "js/websocket.js",
+    "js/signalr-manager.js",
     "js/api-client.js",
     "js/notebook-parser.js",
     "js/notebook-view.js",
@@ -84,6 +91,16 @@ def read_file(path):
         return f.read()
 
 
+def read_lib(filename):
+    """Read a vendor library from lib/ directory."""
+    full_path = os.path.join(LIB_DIR, filename)
+    if not os.path.exists(full_path):
+        print(f"  WARNING: Missing vendor lib: {filename}")
+        return f"/* VENDOR LIB NOT FOUND: {filename} */\n"
+    with open(full_path, encoding="utf-8") as f:
+        return f.read()
+
+
 def build():
     """Assemble all modules into a single HTML file."""
     print("Building EDOG Log Viewer...")
@@ -108,8 +125,13 @@ def build():
         print(f"  CSS: {module} ({len(content)} bytes)")
     all_css = "\n".join(css_parts)
 
-    # Assemble JS
+    # Assemble JS — vendor libraries first, then our modules
     js_parts = []
+    for lib in LIB_MODULES:
+        content = read_lib(lib)
+        js_parts.append(f"// === lib/{lib} ===")
+        js_parts.append(content)
+        print(f"  LIB: lib/{lib} ({len(content)} bytes)")
     for module in JS_MODULES:
         content = read_file(module)
         js_parts.append(f"// === {module} ===")
@@ -126,8 +148,10 @@ def build():
         f.write(output)
 
     total_css = sum(len(read_file(m)) for m in CSS_MODULES)
+    total_lib = sum(len(read_lib(m)) for m in LIB_MODULES)
     total_js = sum(len(read_file(m)) for m in JS_MODULES)
     print(f"\n  Total CSS: {total_css:,} bytes ({len(CSS_MODULES)} modules)")
+    print(f"  Total LIB: {total_lib:,} bytes ({len(LIB_MODULES)} vendor libs)")
     print(f"  Total JS:  {total_js:,} bytes ({len(JS_MODULES)} modules)")
     print(f"  Output:    {os.path.getsize(OUTPUT_FILE):,} bytes")
     print("  Done!")
