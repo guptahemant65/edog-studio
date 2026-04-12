@@ -2745,6 +2745,12 @@ def headless_deploy(repo_root):
         emit(2, "Code patches applied successfully", "success")
     except Exception as e:
         emit(2, f"Patching failed: {e}", "error")
+        emit(2, "Reverting changes...", "warn")
+        try:
+            revert_all_changes(repo_root)
+            emit(2, "Changes reverted", "info")
+        except Exception as re:
+            emit(2, f"Revert also failed: {re}", "error")
         return 1
 
     # Auto-install git pre-commit hook to prevent committing EDOG changes
@@ -2786,6 +2792,13 @@ def headless_deploy(repo_root):
             for line in (build_proc.stderr or "").splitlines()[-15:]:
                 if line.strip():
                     emit(3, line.strip(), "error")
+            # Auto-revert on build failure — don't leave FLT in broken state
+            emit(3, "Reverting patches due to build failure...", "warn")
+            try:
+                revert_all_changes(repo_root)
+                emit(3, "Patches reverted — FLT repo is clean", "info")
+            except Exception as re:
+                emit(3, f"Revert failed: {re}", "error")
             return build_proc.returncode
 
         emit(3, "Build succeeded", "success")
@@ -2793,12 +2806,30 @@ def headless_deploy(repo_root):
 
     except subprocess.TimeoutExpired:
         emit(3, "Build timed out after 300 seconds", "error")
+        emit(3, "Reverting patches...", "warn")
+        try:
+            revert_all_changes(repo_root)
+            emit(3, "Patches reverted", "info")
+        except Exception:
+            pass
         return 1
     except FileNotFoundError:
         emit(3, "dotnet not found — ensure .NET SDK is installed", "error")
+        emit(3, "Reverting patches...", "warn")
+        try:
+            revert_all_changes(repo_root)
+            emit(3, "Patches reverted", "info")
+        except Exception:
+            pass
         return 1
     except Exception as e:
         emit(3, f"Build error: {e}", "error")
+        emit(3, "Reverting patches...", "warn")
+        try:
+            revert_all_changes(repo_root)
+            emit(3, "Patches reverted", "info")
+        except Exception:
+            pass
         return 1
 
 
