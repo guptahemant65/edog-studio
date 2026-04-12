@@ -115,22 +115,62 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterRetryInterceptor()
         {
-            // TODO: Phase 2B — wrap RetryPolicyProviderV2 with EdogRetryInterceptor
+            try
+            {
+                EdogRetryInterceptor.Start();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Retry interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterCacheInterceptor()
         {
-            // TODO: Phase 2B — wrap ISqlEndpointMetadataCache with EdogCacheInterceptor
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.SqlEndpoint.ISqlEndpointMetadataCache>();
+                if (inner is EdogCacheInterceptor) return;
+                var wrapper = new EdogCacheInterceptor(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.SqlEndpoint.ISqlEndpointMetadataCache>(wrapper);
+                Console.WriteLine("[EDOG] ✓ Cache interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Cache interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterSparkSessionInterceptor()
         {
-            // TODO: Phase 2B — wrap ISparkClientFactory with EdogSparkSessionInterceptor
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.SparkHttp.ISparkClientFactory>();
+                if (inner is EdogSparkSessionInterceptor) return;
+                var wrapper = new EdogSparkSessionInterceptor(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.SparkHttp.ISparkClientFactory>(wrapper);
+                Console.WriteLine("[EDOG] ✓ Spark session interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Spark session interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterDiRegistryCapture()
         {
-            // TODO: Phase 2B — enumerate WireUp registrations via EdogDiRegistryCapture
+            try
+            {
+                EdogDiRegistryCapture.CaptureRegistrations();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ DI registry capture failed: {ex.Message}");
+            }
         }
     }
 }

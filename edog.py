@@ -77,6 +77,10 @@ DEVMODE_FILES = {
     "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
     "EdogFileSystemInterceptor": SERVICE_PATH / "DevMode/EdogFileSystemInterceptor.cs",
     "EdogPerfMarkerCallback": SERVICE_PATH / "DevMode/EdogPerfMarkerCallback.cs",
+    "EdogRetryInterceptor": SERVICE_PATH / "DevMode/EdogRetryInterceptor.cs",
+    "EdogCacheInterceptor": SERVICE_PATH / "DevMode/EdogCacheInterceptor.cs",
+    "EdogSparkSessionInterceptor": SERVICE_PATH / "DevMode/EdogSparkSessionInterceptor.cs",
+    "EdogDiRegistryCapture": SERVICE_PATH / "DevMode/EdogDiRegistryCapture.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
