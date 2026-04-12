@@ -7,6 +7,10 @@
 
 namespace Microsoft.LiveTable.Service.DevMode
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Threading;
+    using System.Threading.Channels;
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.SignalR;
 
@@ -46,6 +50,59 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, "log");
             await base.OnConnectedAsync();
+        }
+
+        /// <summary>
+        /// Client streams a topic: receives snapshot (history) then live events.
+        /// Called when user activates a tab. Cancelled when user leaves tab.
+        /// SignalR recognizes ChannelReader&lt;T&gt; return type as a streaming method.
+        /// </summary>
+        /// <param name="topic">Topic name (e.g., "log", "flag", "perf").</param>
+        /// <param name="cancellationToken">Fires when client disconnects or disposes stream.</param>
+        public ChannelReader<TopicEvent> SubscribeToTopic(
+            string topic,
+            CancellationToken cancellationToken)
+        {
+            var buffer = EdogTopicRouter.GetBuffer(topic);
+            if (buffer == null)
+                throw new ArgumentException($"Unknown topic: {topic}");
+
+            var channel = Channel.CreateBounded<TopicEvent>(
+                new BoundedChannelOptions(1000)
+                {
+                    FullMode = BoundedChannelFullMode.DropOldest,
+                    SingleReader = true,
+                    SingleWriter = false
+                });
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Phase 1: Yield snapshot (buffered history)
+                    foreach (var item in buffer.GetSnapshot())
+                    {
+                        await channel.Writer.WriteAsync(item, cancellationToken);
+                    }
+
+                    // Phase 2: Yield live events as they arrive
+                    await foreach (var item in buffer.ReadLiveAsync(cancellationToken))
+                    {
+                        await channel.Writer.WriteAsync(item, cancellationToken);
+                    }
+                }
+                catch (OperationCanceledException) { /* Client disconnected — clean */ }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[EDOG] Stream error for topic '{topic}': {ex.Message}");
+                }
+                finally
+                {
+                    channel.Writer.Complete();
+                }
+            }, cancellationToken);
+
+            return channel.Reader;
         }
     }
 }
