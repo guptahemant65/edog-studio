@@ -461,6 +461,77 @@ def _deploy_step(step, message, deploy_id):
     return True
 
 
+def _drain_flt_stdout(proc, deploy_id):
+    """Read FLT process stdout continuously to prevent pipe buffer blocking.
+
+    Also captures output as deploy log entries so the terminal shows FLT output.
+    """
+    try:
+        while proc.poll() is None:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            line = line.rstrip()
+            if line:
+                _deploy_log("[FLT] " + line, "info")
+    except Exception:
+        pass
+
+
+def _handle_account_picker(username, timeout=45):
+    """Auto-select the DevMode account picker that appears when FLT starts.
+
+    Uses pywinauto to find the Edge/browser window and keyboard to select
+    the account matching the edog-config username. Runs silently — the user
+    should not notice this happening.
+    """
+    try:
+        from pywinauto import Desktop
+        from pywinauto.keyboard import send_keys
+    except ImportError:
+        _deploy_log("pywinauto not installed — please select account manually", "warn")
+        return False
+
+    account_name = username.split("@")[0] if "@" in username else username
+    _deploy_log(f"Watching for account picker (account: {username})...", "info")
+
+    start = time.time()
+    while (time.time() - start) < timeout:
+        try:
+            desktop = Desktop(backend="uia")
+            for win in desktop.windows():
+                try:
+                    title = win.window_text().lower()
+                    is_login = any(kw in title for kw in [
+                        "pick an account", "sign in to your account",
+                        "login.microsoftonline", "login.windows", "sign in -",
+                    ])
+                    if is_login and ("edge" in title or "chrome" in title or "msedge" in title):
+                        _deploy_log("Account picker detected — auto-selecting...", "info")
+                        try:
+                            win.set_focus()
+                            time.sleep(0.5)
+                            try:
+                                win.click_input()
+                                time.sleep(0.3)
+                            except Exception:
+                                pass
+                            send_keys("{TAB}{TAB}{ENTER}")
+                            time.sleep(1)
+                            _deploy_log(f"Account selected: {username}", "success")
+                            return True
+                        except Exception as e:
+                            _deploy_log(f"Account picker keyboard error: {e}", "warn")
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        time.sleep(1)
+
+    _deploy_log(f"Account picker not found within {timeout}s — select manually if prompted", "warn")
+    return False
+
+
 def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
     """Real deploy pipeline. Runs on background thread."""
     global _flt_process
@@ -592,21 +663,42 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state["fltPid"] = _flt_process.pid
                 _studio_state["fltPort"] = FLT_INTERNAL_PORT
 
+            # Drain stdout in background (prevents pipe buffer blocking)
+            threading.Thread(
+                target=_drain_flt_stdout, args=(_flt_process, deploy_id), daemon=True
+            ).start()
+
+            # Auto-handle DevMode account picker (silent, uses logged-in username)
+            username = config.get("username", "")
+            threading.Thread(
+                target=_handle_account_picker, args=(username,), daemon=True
+            ).start()
+
         except Exception as e:
             _deploy_log(f"Launch failed: {e}", "error")
             with _studio_lock:
                 _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — launch error"})
             return
 
-        # Step 4: Health check
-        if not _deploy_step(4, "Waiting for service ready...", deploy_id):
+        # Step 4: Health check (2 min — account picker takes 30-60s)
+        if not _deploy_step(4, "Waiting for service ready (auto-selecting account)...", deploy_id):
             return
         healthy = False
-        for attempt in range(60):
+        for attempt in range(120):
             if _deploy_cancel.is_set():
                 _flt_process.terminate()
                 with _studio_lock:
                     _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
+                return
+            # Check if FLT process died
+            if _flt_process.poll() is not None:
+                _deploy_log(f"FLT process exited with code {_flt_process.returncode}", "error")
+                with _studio_lock:
+                    _studio_state.update({
+                        "phase": "stopped",
+                        "deployError": f"FLT process exited with code {_flt_process.returncode}",
+                        "deployMessage": "Deploy failed — service crashed during startup",
+                    })
                 return
             try:
                 url = f"http://localhost:{FLT_INTERNAL_PORT}/api/stats"
@@ -617,16 +709,16 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                         break
             except Exception:
                 pass
-            if attempt % 5 == 0:
-                _deploy_log(f"Ping attempt {attempt + 1}/60...", "info")
+            if attempt % 10 == 0:
+                _deploy_log(f"Ping attempt {attempt + 1}/120...", "info")
             time.sleep(1)
 
         if not healthy:
-            _deploy_log("Health check timed out after 60s", "error")
+            _deploy_log("Health check timed out after 120s", "error")
             with _studio_lock:
                 _studio_state.update({
                     "phase": "stopped",
-                    "deployError": "Service did not become healthy in 60s",
+                    "deployError": "Service did not become healthy in 120s",
                     "deployMessage": "Deploy failed — health check timeout",
                 })
             return
