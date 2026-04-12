@@ -668,13 +668,23 @@ class EdogLogViewer {
 
     if (viewId === 'logs') {
       // Re-init virtual scroll — container may have been hidden (zero height)
-      // when data loaded, causing the renderer to skip rendering
       this.renderer.containerReady = false;
-      this.renderer.flush();
-      this.renderer.scheduleRender();
 
-      // Ensure SignalR is connected (may have been set up before view was visible)
-      if (this.ws && this.ws.status === 'disconnected' && this.ws._port) {
+      // If buffer is empty but service is running, fetch logs from REST + ensure SignalR
+      const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
+      if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
+        // Service is deployed (port changed from default) but we have no logs — fetch them
+        this.loadInitialData().then(() => {
+          this.renderer.flush();
+          this.renderer.scheduleRender();
+        });
+      } else {
+        this.renderer.flush();
+        this.renderer.scheduleRender();
+      }
+
+      // Ensure SignalR is connected
+      if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
         this.ws.connect();
       }
     }
