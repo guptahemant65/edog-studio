@@ -12,52 +12,38 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
-    using System.Net.WebSockets;
-    using System.Text;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.AspNetCore.Builder;
     using Microsoft.AspNetCore.Hosting;
     using Microsoft.AspNetCore.Http;
+    using Microsoft.AspNetCore.SignalR;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
     using Microsoft.Extensions.Logging;
 
     /// <summary>
-    /// Embedded Kestrel HTTP + WebSocket server for real-time log viewing in EDOG devmode.
-    /// Provides REST APIs and WebSocket streaming for log entries and telemetry events.
-    ///
-    /// Batched streaming protocol:
-    ///   - Logs and telemetry events are collected into per-client batch buffers.
-    ///   - A dedicated flush timer fires every 150 ms and sends one JSON message per client.
-    ///   - If a client's outbound buffer exceeds a threshold, a summary message is sent instead
-    ///     and the detailed entries are dropped (backpressure).
+    /// Embedded Kestrel HTTP + SignalR server for real-time log viewing in EDOG devmode.
+    /// Provides REST APIs and SignalR streaming (via EdogPlaygroundHub) for log entries
+    /// and telemetry events. Each interceptor's AddLog/AddTelemetry calls SendAsync
+    /// directly via hub context — no batch timer (ADR-006).
     /// </summary>
     internal sealed class EdogLogServer : IDisposable
 {
     private const int MaxLogEntries = 10000;
     private const int MaxTelemetryEvents = 5000;
-    private const int BatchFlushIntervalMs = 150;
-
-    /// <summary>
-    /// Approximate byte threshold for a client's pending send queue.
-    /// When exceeded, the server switches to summary messages for that client.
-    /// </summary>
-    private const int BackpressureBytesThreshold = 64 * 1024;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private readonly int port;
     private readonly ConcurrentQueue<LogEntry> logBuffer = new();
     private readonly ConcurrentQueue<TelemetryEvent> telemetryBuffer = new();
-    private readonly ConcurrentDictionary<int, ClientState> webSocketClients = new();
-    private int nextClientId;
 
-    private Timer batchFlushTimer;
+    private IHubContext<EdogPlaygroundHub> hubContext;
     private WebApplication app;
     private Task hostTask;
-    private string htmlContent = "<html><body><h1>EDOG Log Server</h1><p>WebSocket endpoint: /ws/logs</p></body></html>";
+    private string htmlContent = "<html><body><h1>EDOG Log Server</h1><p>SignalR endpoint: /hub/playground</p></body></html>";
     private bool disposed;
     private EdogApiProxy apiProxy;
 
@@ -89,7 +75,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             builder.WebHost.UseUrls($"http://localhost:{port}");
             builder.WebHost.UseKestrel(options => options.AllowSynchronousIO = true);
 
+            builder.Services.AddSignalR()
+                .AddMessagePackProtocol();
+
             app = builder.Build();
+
+            hubContext = app.Services.GetRequiredService<IHubContext<EdogPlaygroundHub>>();
 
             // Initialize API proxy — look for edog-config.json near the HTML source
             var configDir = FindEdogConfigDir();
@@ -104,9 +95,6 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             ConfigureRoutes();
-
-            // Start the batch flush timer — fires every 150 ms on a ThreadPool thread
-            batchFlushTimer = new Timer(_ => FlushAllClients(), null, BatchFlushIntervalMs, BatchFlushIntervalMs);
 
             hostTask = Task.Run(async () =>
             {
@@ -135,13 +123,6 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         try
         {
-            batchFlushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
-            batchFlushTimer?.Dispose();
-            batchFlushTimer = null;
-
-            // Final flush so no logs are lost
-            FlushAllClients();
-
             await app.StopAsync(TimeSpan.FromSeconds(5));
             await app.DisposeAsync();
             
@@ -169,7 +150,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
-    /// Adds a log entry to the ring buffer and enqueues it for batched broadcast.
+    /// Adds a log entry to the ring buffer and broadcasts via SignalR.
     /// </summary>
     /// <param name="entry">Log entry to add.</param>
     public void AddLog(LogEntry entry)
@@ -181,9 +162,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             logBuffer.Enqueue(entry);
             TrimBuffer(logBuffer, MaxLogEntries);
 
-            foreach (var kvp in webSocketClients)
+            if (hubContext != null)
             {
-                kvp.Value.PendingLogs.Enqueue(entry);
+                _ = hubContext.Clients.Group("log").SendAsync("LogEntry", entry);
             }
         }
         catch (Exception ex)
@@ -193,7 +174,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
-    /// Adds a telemetry event to the ring buffer and enqueues it for batched broadcast.
+    /// Adds a telemetry event to the ring buffer and broadcasts via SignalR.
     /// </summary>
     /// <param name="telemetryEvent">Telemetry event to add.</param>
     public void AddTelemetry(TelemetryEvent telemetryEvent)
@@ -205,9 +186,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             telemetryBuffer.Enqueue(telemetryEvent);
             TrimBuffer(telemetryBuffer, MaxTelemetryEvents);
 
-            foreach (var kvp in webSocketClients)
+            if (hubContext != null)
             {
-                kvp.Value.PendingTelemetry.Enqueue(telemetryEvent);
+                _ = hubContext.Clients.Group("telemetry").SendAsync("TelemetryEvent", telemetryEvent);
             }
         }
         catch (Exception ex)
@@ -216,132 +197,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
     }
 
-    // ────────────────────────────────────────────────────────────
-    //  Batch flush logic
-    // ────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Called by the flush timer every 150 ms. Drains each client's pending queues
-    /// and sends a single batch message. If a client is back-pressured, sends a
-    /// summary instead.
-    /// </summary>
-    private void FlushAllClients()
-    {
-        foreach (var (clientId, clientState) in webSocketClients.ToArray())
-        {
-            try
-            {
-                if (clientState.Socket.State != WebSocketState.Open)
-                {
-                    webSocketClients.TryRemove(clientId, out _);
-                    continue;
-                }
-
-                var logs = DrainQueue(clientState.PendingLogs);
-                var telemetry = DrainQueue(clientState.PendingTelemetry);
-
-                if (logs.Count == 0 && telemetry.Count == 0)
-                    continue;
-
-                if (clientState.PendingBytes > BackpressureBytesThreshold)
-                {
-                    SendSummary(clientState, logs, telemetry);
-                    continue;
-                }
-
-                SendBatch(clientState, logs, telemetry);
-            }
-            catch
-            {
-                webSocketClients.TryRemove(clientId, out _);
-            }
-        }
-    }
-
-    private void SendBatch(ClientState client, List<LogEntry> logs, List<TelemetryEvent> telemetry)
-    {
-        var payload = JsonSerializer.Serialize(new
-        {
-            type = "batch",
-            logs,
-            telemetry
-        }, JsonOptions);
-
-        SendToClient(client, payload);
-    }
-
-    private void SendSummary(ClientState client, List<LogEntry> logs, List<TelemetryEvent> telemetry)
-    {
-        var levels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var log in logs)
-        {
-            var lvl = log.Level ?? "Unknown";
-            levels.TryGetValue(lvl, out var count);
-            levels[lvl] = count + 1;
-        }
-
-        var payload = JsonSerializer.Serialize(new
-        {
-            type = "summary",
-            dropped = logs.Count + telemetry.Count,
-            droppedLogs = logs.Count,
-            droppedTelemetry = telemetry.Count,
-            levels
-        }, JsonOptions);
-
-        SendToClient(client, payload);
-    }
-
-    private void SendToClient(ClientState client, string json)
-    {
-        var bytes = Encoding.UTF8.GetBytes(json);
-        Interlocked.Add(ref client.PendingBytes, bytes.Length);
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                if (client.Socket.State == WebSocketState.Open)
-                {
-                    await client.SendLock.WaitAsync();
-                    try
-                    {
-                        await client.Socket.SendAsync(
-                            new ArraySegment<byte>(bytes),
-                            WebSocketMessageType.Text,
-                            true,
-                            CancellationToken.None);
-                    }
-                    finally
-                    {
-                        client.SendLock.Release();
-                    }
-                }
-            }
-            catch
-            {
-                // Client gone — will be cleaned up on next flush
-            }
-            finally
-            {
-                Interlocked.Add(ref client.PendingBytes, -bytes.Length);
-            }
-        });
-    }
-
-    private static List<T> DrainQueue<T>(ConcurrentQueue<T> queue)
-    {
-        var items = new List<T>();
-        while (queue.TryDequeue(out var item))
-        {
-            items.Add(item);
-        }
-        return items;
-    }
-
     private void ConfigureRoutes()
     {
-        app!.UseWebSockets();
+        // Map the SignalR hub endpoint
+        app!.MapHub<EdogPlaygroundHub>("/hub/playground");
 
         // Root endpoint — studio mode returns JSON health, standalone serves HTML
         app.MapGet("/", async context =>
@@ -508,46 +367,6 @@ namespace Microsoft.LiveTable.Service.DevMode
             app.MapGet("/api/flt/config", apiProxy.HandleConfig);
             app.MapGet("/api/edog/health", apiProxy.HandleHealth);
         }
-
-        // WebSocket endpoint
-        app.MapGet("/ws/logs", async context =>
-        {
-            if (!context.WebSockets.IsWebSocketRequest)
-            {
-                context.Response.StatusCode = 400;
-                return;
-            }
-
-            var origin = context.Request.Headers["Origin"].ToString();
-            if (!string.IsNullOrEmpty(origin)
-                && !origin.Contains("localhost", StringComparison.OrdinalIgnoreCase)
-                && !origin.Contains("127.0.0.1"))
-            {
-                context.Response.StatusCode = 403;
-                return;
-            }
-
-            try
-            {
-                var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                var clientId = Interlocked.Increment(ref nextClientId);
-                var clientState = new ClientState(webSocket);
-                webSocketClients.TryAdd(clientId, clientState);
-                
-                try
-                {
-                    await HandleWebSocket(webSocket);
-                }
-                finally
-                {
-                    webSocketClients.TryRemove(clientId, out _);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"WebSocket error: {ex}");
-            }
-        });
     }
 
     private static string FindEdogConfigDir()
@@ -598,35 +417,6 @@ namespace Microsoft.LiveTable.Service.DevMode
         return null;
     }
 
-    private async Task HandleWebSocket(WebSocket webSocket)
-    {
-        try
-        {
-            var buffer = new byte[1024 * 4];
-            while (webSocket.State == WebSocketState.Open)
-            {
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                if (result.MessageType == WebSocketMessageType.Close)
-                    break;
-                
-                await Task.Delay(100); // Keep connection alive
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"WebSocket handling error: {ex}");
-        }
-        finally
-        {
-            try
-            {
-                if (webSocket.State == WebSocketState.Open)
-                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Connection closed", CancellationToken.None);
-            }
-            catch { /* Best effort cleanup */ }
-        }
-    }
-
     private static void TrimBuffer<T>(ConcurrentQueue<T> buffer, int maxSize)
     {
         while (buffer.Count > maxSize && buffer.TryDequeue(out _)) { }
@@ -669,47 +459,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         try
         {
-            batchFlushTimer?.Dispose();
-            batchFlushTimer = null;
             Stop().GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error during EdogLogServer disposal: {ex}");
         }
-    }
-
-    // ────────────────────────────────────────────────────────────
-    //  Per-client state for batching + backpressure
-    // ────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Tracks a connected WebSocket client's pending batch and send-pressure.
-    /// </summary>
-    private sealed class ClientState
-    {
-        public ClientState(WebSocket socket)
-        {
-            Socket = socket;
-        }
-
-        public WebSocket Socket { get; }
-
-        /// <summary>Pending log entries waiting for next flush.</summary>
-        public ConcurrentQueue<LogEntry> PendingLogs { get; } = new();
-
-        /// <summary>Pending telemetry events waiting for next flush.</summary>
-        public ConcurrentQueue<TelemetryEvent> PendingTelemetry { get; } = new();
-
-        /// <summary>
-        /// Approximate bytes currently in-flight. Used for backpressure detection.
-        /// </summary>
-        public int PendingBytes;
-
-        /// <summary>
-        /// Serializes WebSocket SendAsync calls so frames don't interleave.
-        /// </summary>
-        public SemaphoreSlim SendLock { get; } = new(1, 1);
     }
 }
 }
