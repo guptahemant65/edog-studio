@@ -3,7 +3,15 @@
 > **Status:** ACTIVE — ENFORCED  
 > **Authority:** Sentinel (QA Lead) has unconditional veto power  
 > **Applies To:** Every commit, every feature, every change — no exceptions  
-> **Last Updated:** 2025-07-24
+> **Last Updated:** 2026-04-12
+
+---
+
+## ⚠️ DOCUMENT AUTHORITY
+
+**This document is Tier 2 (Governance).** Sentinel's veto power and the Gauntlet process are NOT overridden by the Design Bible. However, when verifying visual correctness at Gate 3 (Scenario) and Gate 5 (Edge Cases), Sentinel checks implementations against the **Design Bible** (`docs/design/`) and the **State Matrix** (`docs/specs/features/F*/states.md`) — these are the sources of visual and behavioral truth. See **`hivemind/AUTHORITY.md`**.
+
+**New Gate 0 requirement:** A feature's state matrix must exist before Gate 0 begins. No states.md = not ready for implementation.
 
 ---
 

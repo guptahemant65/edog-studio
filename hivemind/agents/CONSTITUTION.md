@@ -4,7 +4,17 @@
 > **Classification:** INTERNAL — MANDATORY READING
 > **Applies To:** All edog-studio agents (Vex, Pixel, Sentinel, Sana)
 > **Authority:** CEO (Hemant Gupta)
-> **Last Updated:** 2025-07-17
+> **Last Updated:** 2026-04-12
+
+---
+
+## ⚠️ DOCUMENT AUTHORITY — READ FIRST
+
+**This Constitution is Tier 2.** The Design Bible (Tier 0) and Feature Specs/State Matrices (Tier 1) override this document on visual and behavioral decisions. See **`hivemind/AUTHORITY.md`** for the full hierarchy.
+
+**The Design Bible (`docs/design/design-bible-*.html`) is the supreme document.** If the Bible specifies a color, transition, spacing, font, or component pattern that conflicts with this Constitution or any Tier 3/4 document, the Bible wins. No exceptions.
+
+**State matrices (`docs/specs/features/F*/states.md`) are required for every feature.** A feature without a state matrix is not specified and not buildable.
 
 ---
 

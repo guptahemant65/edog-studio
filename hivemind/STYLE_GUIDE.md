@@ -2,7 +2,15 @@
 
 > **Status:** 🟢 ACTIVE  
 > **Applies To:** All edog-studio agents  
-> **Last Updated:** 2026-04-08
+> **Last Updated:** 2026-04-12
+
+---
+
+## ⚠️ DOCUMENT AUTHORITY — READ FIRST
+
+**This document is Tier 3.** The Design Bible (Tier 0) is the supreme visual reference and overrides this Style Guide on any conflict. See **`hivemind/AUTHORITY.md`** for the full hierarchy.
+
+**In practice:** When the Bible defines a token, component pattern, color, font, transition, or spacing value — use the Bible's version. This Style Guide governs coding conventions for Python, C#, JS structure, Git, and any CSS decisions the Bible doesn't explicitly cover.
 
 ---
 

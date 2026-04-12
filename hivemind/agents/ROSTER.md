@@ -3,6 +3,9 @@
 > **Classification:** INTERNAL
 > **Status:** REFORMED TEAM — 4 Agents
 > **Governance:** CEO (Hemant Gupta) → Architect (Sana) → Domain Leads (Vex, Pixel, Sentinel)
+> **Last Updated:** 2026-04-12
+
+**⚠️ Before reading this roster, read `hivemind/AUTHORITY.md` — the document authority hierarchy. The Design Bible is the supreme document.**
 
 ---
 

@@ -2,7 +2,21 @@
 
 > **Status:** 🟢 ACTIVE  
 > **Applies To:** All edog-studio agents  
-> **Last Updated:** 2026-04-08
+> **Last Updated:** 2026-04-12
+
+---
+
+## ⚠️ DOCUMENT AUTHORITY — READ FIRST
+
+**This document is Tier 3.** The Design Bible (Tier 0) overrides these standards on visual decisions. See **`hivemind/AUTHORITY.md`** for the full hierarchy.
+
+**Key overrides from the Design Bible:**
+- **Colors:** The Bible uses hex (`#6d5cff`), `rgba()`, and `color-mix()`. When implementing Bible components, use Bible tokens — not OKLCH.
+- **Transitions:** The Bible uses `160ms cubic-bezier(0.4,0,0.2,1)`. Use this, not "150ms ease-out."
+- **Radii:** The Bible defines `--r4`, `--r6`, `--r10`, `--r16`, `--r100`. These are not restricted to 4px multiples.
+- **Typography:** The Bible uses `'Inter', system-ui, sans-serif`. Use this font stack.
+
+**When NOT overridden:** These standards still fully govern Python code, C# code, Git conventions, testing requirements, security, build process, and any visual decision the Bible does not explicitly address.
 
 ---
 
