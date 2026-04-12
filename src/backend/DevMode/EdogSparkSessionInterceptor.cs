@@ -12,6 +12,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.LiveTable.Service.SparkHttp;
+    using Microsoft.LiveTable.Service.TokenManagement;
     using Microsoft.MWC.Workload.Client.Library.Providers;
 
     /// <summary>
