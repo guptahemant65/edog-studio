@@ -170,10 +170,10 @@ class TestEdogLogServerMigration:
         assert "class ClientState" not in logserver_source
 
     def test_send_async_log_entry(self, logserver_source: str) -> None:
-        assert 'SendAsync("LogEntry"' in logserver_source
+        assert 'EdogTopicRouter.Publish("log"' in logserver_source
 
     def test_send_async_telemetry_event(self, logserver_source: str) -> None:
-        assert 'SendAsync("TelemetryEvent"' in logserver_source
+        assert 'EdogTopicRouter.Publish("telemetry"' in logserver_source
 
     def test_rest_api_logs_preserved(self, logserver_source: str) -> None:
         assert '"/api/logs"' in logserver_source

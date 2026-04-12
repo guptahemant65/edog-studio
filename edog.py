@@ -73,6 +73,7 @@ DEVMODE_FILES = {
     "TopicEvent": SERVICE_PATH / "DevMode/TopicEvent.cs",
     "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
     "EdogTopicRouter": SERVICE_PATH / "DevMode/EdogTopicRouter.cs",
+    "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
@@ -1799,7 +1800,10 @@ def apply_log_viewer_registration_workloadapp_cs(content):
         "            // (must be set here, inside RunAsync, so it persists after PlatformLogger is configured)\n"
         "            Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
         "                new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
-        "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));"
+        "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
+        "\n"
+        "            // EDOG DevMode - Register all runtime interceptors (Phase 2)\n"
+        "            Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();"
     )
     
     if original in content:
@@ -1819,7 +1823,14 @@ def revert_log_viewer_registration_program_cs(content):
 
 def revert_log_viewer_registration_workloadapp_cs(content):
     """Revert log viewer telemetry interceptor registration from WorkloadApp.cs."""
-    # First remove the Tracer re-set block (added alongside telemetry interceptor)
+    # First remove the RegisterAll() block (Phase 2 interceptor registration)
+    registrar_pattern = (
+        r"\n\s*// EDOG DevMode - Register all runtime interceptors \(Phase 2\)\n"
+        r"\s*Microsoft\.LiveTable\.Service\.DevMode\.EdogDevModeRegistrar\.RegisterAll\(\);"
+    )
+    content = re.sub(registrar_pattern, "", content)
+
+    # Remove the Tracer re-set block (added alongside telemetry interceptor)
     tracer_pattern = (
         r"\n\s*// EDOG DevMode - Re-set Tracer test logger after platform init\n"
         r"\s*//.*\n"
