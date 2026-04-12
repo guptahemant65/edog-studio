@@ -1751,12 +1751,22 @@ def apply_log_viewer_registration_workloadapp_cs(content):
         return content, "already_applied"
     
     # Find the TelemetryReporter registration line and replace with interceptor wrapper
+    # Also re-set the Tracer test logger HERE (inside RunAsync callback) because
+    # the platform logger initialized during RunAsync takes priority over our
+    # pre-RunAsync SetStructuredTestLogger call. Re-setting it here ensures
+    # the test logger fires for ALL Tracer calls during service runtime.
     original = "WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, CustomLiveTableTelemetryReporter>();"
     replacement = (
         "// EDOG DevMode - Wrap telemetry reporter with web log viewer interceptor\n"
         "            WireUp.RegisterInstance<ICustomLiveTableTelemetryReporter>(\n"
         "                new Microsoft.LiveTable.Service.DevMode.EdogTelemetryInterceptor(\n"
         "                    new CustomLiveTableTelemetryReporter(),\n"
+        "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
+        "\n"
+        "            // EDOG DevMode - Re-set Tracer test logger after platform init\n"
+        "            // (must be set here, inside RunAsync, so it persists after PlatformLogger is configured)\n"
+        "            Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
+        "                new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
         "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));"
     )
     
@@ -1777,6 +1787,16 @@ def revert_log_viewer_registration_program_cs(content):
 
 def revert_log_viewer_registration_workloadapp_cs(content):
     """Revert log viewer telemetry interceptor registration from WorkloadApp.cs."""
+    # First remove the Tracer re-set block (added alongside telemetry interceptor)
+    tracer_pattern = (
+        r"\n\s*// EDOG DevMode - Re-set Tracer test logger after platform init\n"
+        r"\s*//.*\n"
+        r"\s*Microsoft\.ServicePlatform\.Telemetry\.Tracer\.SetStructuredTestLogger\(\n"
+        r"\s*new Microsoft\.LiveTable\.Service\.DevMode\.EdogLogInterceptor\(\n"
+        r"\s*WireUp\.Resolve<Microsoft\.LiveTable\.Service\.DevMode\.EdogLogServer>\(\)\)\);"
+    )
+    content = re.sub(tracer_pattern, "", content)
+
     # Replace interceptor wrapper back with original registration
     pattern = (
         r"// EDOG DevMode - Wrap telemetry reporter with web log viewer interceptor\n"
