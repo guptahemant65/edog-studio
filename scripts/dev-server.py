@@ -507,15 +507,36 @@ def _handle_account_picker(username, timeout=45):
                         "login.microsoftonline", "login.windows", "sign in -",
                     ])
                     if is_login and ("edge" in title or "chrome" in title or "msedge" in title):
-                        _deploy_log("Account picker detected — auto-selecting...", "info")
+                        _deploy_log("Account picker detected — looking for account...", "info")
                         try:
                             win.set_focus()
-                            time.sleep(0.3)
-                            send_keys("{TAB}{TAB}{ENTER}")
-                            _deploy_log(f"Account selected: {username}", "success")
-                            return True
+                            time.sleep(0.5)
+                            # Find the account tile matching our username
+                            account_name = username.split("@")[0] if "@" in username else username
+                            found = False
+                            try:
+                                # Search all child elements for text matching our account
+                                descendants = win.descendants()
+                                for el in descendants:
+                                    try:
+                                        el_text = el.window_text()
+                                        if account_name.lower() in el_text.lower() or username.lower() in el_text.lower():
+                                            _deploy_log(f"Found account element: {el_text[:50]}", "info")
+                                            el.click_input()
+                                            found = True
+                                            break
+                                    except Exception:
+                                        continue
+                            except Exception as e:
+                                _deploy_log(f"Could not search account elements: {e}", "warn")
+
+                            if found:
+                                _deploy_log(f"Account selected: {username}", "success")
+                            else:
+                                _deploy_log(f"Account '{account_name}' not found in picker — please select manually", "warn")
+                            return found
                         except Exception as e:
-                            _deploy_log(f"Account picker keyboard error: {e}", "warn")
+                            _deploy_log(f"Account picker error: {e}", "warn")
                 except Exception:
                     continue
         except Exception:
