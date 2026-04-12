@@ -162,8 +162,23 @@ class EdogLogViewer {
     this.runtimeView.registerTab('logs', {
       activate: () => {
         this.renderer.containerReady = false;
-        this.renderer.flush();
-        this.renderer.scheduleRender();
+
+        // If buffer is empty but service is running, fetch logs from REST + ensure SignalR
+        const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
+        if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
+          this.loadInitialData().then(() => {
+            this.renderer.flush();
+            this.renderer.scheduleRender();
+          });
+        } else {
+          this.renderer.flush();
+          this.renderer.scheduleRender();
+        }
+
+        // Ensure SignalR is connected
+        if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
+          this.ws.connect();
+        }
       },
       deactivate: () => { /* Logs stay in buffer, just stop rendering */ }
     });

@@ -6536,6 +6536,419 @@ mark {
 .deploy-step.active .deploy-step-label { color: var(--text); font-weight: 500; }
 .deploy-step.done .deploy-step-label { color: var(--status-succeeded); }
 
+    /* === css/runtime.css === */
+/* ===== Runtime View Shell =====
+ * Tab bar, connection bar, phase overlays, Internals dropdown.
+ * Reference: f04-runtime-view-integrated.html (shell architecture)
+ */
+
+/* ── Runtime sidebar indicators ── */
+
+.rt-dot {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-1);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-succeeded);
+  box-shadow: 0 0 4px rgba(24, 160, 88, 0.5);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.rt-dot.on {
+  opacity: 1;
+}
+
+.rt-lock {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.rt-lock.on {
+  opacity: 0.5;
+}
+
+.rt-lock svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Connection status bar ── */
+
+.rt-connection-bar {
+  height: var(--space-8);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  gap: var(--space-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: all 200ms ease;
+}
+
+.rt-conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+  transition: all 200ms ease;
+}
+
+.rt-conn-dot.connected {
+  background: var(--status-succeeded);
+  box-shadow: 0 0 6px rgba(24, 160, 88, 0.4);
+}
+
+.rt-conn-dot.reconnecting {
+  background: var(--level-warning);
+  box-shadow: 0 0 6px rgba(229, 148, 12, 0.4);
+  animation: rt-pulse-dot 1.2s ease infinite;
+}
+
+.rt-conn-dot.failed {
+  background: var(--level-error);
+  box-shadow: 0 0 6px rgba(229, 69, 59, 0.4);
+}
+
+@keyframes rt-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.rt-conn-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 200ms ease;
+}
+
+.rt-conn-label.connected { color: var(--status-succeeded); }
+.rt-conn-label.reconnecting { color: var(--level-warning); }
+.rt-conn-label.failed { color: var(--level-error); }
+
+.rt-conn-sep {
+  width: 1px;
+  height: var(--space-4);
+  background: var(--border-bright);
+}
+
+.rt-conn-throughput {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rt-conn-port {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ── Tab bar ── */
+
+.rt-tab-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  height: 40px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rt-tab-bar-inner {
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 100%;
+}
+
+.rt-tab {
+  padding: 0 14px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  position: relative;
+  transition: color 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.rt-tab:hover {
+  color: var(--text);
+}
+
+.rt-tab.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Sliding indicator line */
+.rt-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  transition: left 200ms ease-out, width 200ms ease-out;
+  /* z-index: 2 — above tab bar border */
+  z-index: 2;
+}
+
+/* ── Internals dropdown ── */
+
+.rt-tab-internals {
+  position: relative;
+}
+
+.rt-internals-chevron {
+  font-size: 10px;
+  opacity: 0.5;
+  transition: transform 200ms ease;
+}
+
+.rt-internals-chevron.open {
+  transform: rotate(180deg);
+}
+
+.rt-internals-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  /* z-index: 200 — above content, below command palette */
+  z-index: 200;
+  padding: var(--space-1);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 100ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 100ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rt-internals-dropdown.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.rt-internals-dropdown.closing {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transition-duration: 80ms;
+  transition-timing-function: ease-in;
+  pointer-events: none;
+}
+
+.rt-dd-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 7px var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rt-dd-item:hover {
+  background: var(--accent-hover);
+  color: var(--text);
+}
+
+.rt-dd-item.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.rt-dd-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.rt-dd-item:hover svg {
+  opacity: 1;
+}
+
+/* ── Tab content area ── */
+
+.rt-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.rt-tab-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.rt-tab-content.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Phase 1 overlay ── */
+
+.rt-phase1-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--bg);
+  /* z-index: 50 — above tab content, below dropdown */
+  z-index: 50;
+  transition: opacity 300ms ease;
+}
+
+.rt-phase1-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rt-phase1-overlay svg {
+  width: 64px;
+  height: 64px;
+  color: var(--text-muted);
+  opacity: 0.3;
+}
+
+.rt-phase1-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rt-phase1-desc {
+  font-size: var(--text-md);
+  color: var(--text-dim);
+  max-width: 360px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.rt-phase1-btn {
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-md);
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rt-phase1-btn:hover {
+  opacity: 0.85;
+}
+
+/* ── Service stopped overlay ── */
+
+.rt-stopped-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(229, 148, 12, 0.06);
+  /* z-index: 40 — below phase1 overlay */
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.rt-stopped-overlay.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rt-stopped-box {
+  background: var(--surface);
+  border: 1px solid rgba(229, 148, 12, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-8);
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.rt-stopped-box h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--level-warning);
+  margin-bottom: var(--space-1);
+}
+
+.rt-stopped-box p {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+
+/* ── Tab enable animation ── */
+
+@keyframes rt-tab-enable {
+  from { opacity: 0.4; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rt-tab.enabling {
+  animation: rt-tab-enable 200ms ease-out both;
+}
+
+/* ── Sidebar unlock animation ── */
+
+@keyframes rt-sidebar-unlock {
+  0% { opacity: 0.3; transform: scale(0.95); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.sidebar-slot[data-view="runtime"].unlocking .sidebar-icon {
+  animation: rt-sidebar-unlock 300ms ease both;
+}
+
+/* ── View panel layout for Runtime ── */
+
+#view-runtime {
+  display: flex;
+  flex-direction: column;
+}
+
     /* === css/mock-components.css === */
 /* ═══════════════════════════════════════════════════
    Mock Component Classes
@@ -7718,11 +8131,9 @@ window.onerror = function(msg, src, line, col, err) {
     <!-- Sidebar (52px icon rail — expanding pill labels on hover/focus) -->
     <nav id="sidebar" class="sidebar">
       <div class="sidebar-slot active" data-view="workspace"><button class="sidebar-icon" data-view="workspace" data-phase="both" data-label="Workspace Explorer" data-shortcut="1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button></div>
-      <div class="sidebar-slot" data-view="logs"><button class="sidebar-icon" data-view="logs" data-phase="connected" data-label="Logs" data-shortcut="2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button></div>
-      <div class="sidebar-slot" data-view="dag"><button class="sidebar-icon" data-view="dag" data-phase="connected" data-label="DAG Studio" data-shortcut="3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></button></div>
-      <div class="sidebar-slot" data-view="spark"><button class="sidebar-icon" data-view="spark" data-phase="connected" data-label="Spark Inspector" data-shortcut="4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button></div>
-      <div class="sidebar-slot" data-view="api"><button class="sidebar-icon" data-view="api" data-phase="both" data-label="API Playground" data-shortcut="5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button></div>
-      <div class="sidebar-slot" data-view="environment"><button class="sidebar-icon" data-view="environment" data-phase="both" data-label="Environment" data-shortcut="6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button></div>
+      <div class="sidebar-slot" data-view="runtime"><button class="sidebar-icon" data-view="runtime" data-phase="connected" data-label="Runtime" data-shortcut="2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="rt-dot" id="rt-sidebar-dot"></span><span class="rt-lock" id="rt-sidebar-lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></span></button></div>
+      <div class="sidebar-slot" data-view="api"><button class="sidebar-icon" data-view="api" data-phase="both" data-label="API Playground" data-shortcut="3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button></div>
+      <div class="sidebar-slot" data-view="environment"><button class="sidebar-icon" data-view="environment" data-phase="both" data-label="Environment" data-shortcut="4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button></div>
       <div class="sidebar-spacer"></div>
       <div id="sidebar-phase" class="sidebar-phase" title="Browsing · No service connected">&#9675;</div>
       <span id="sidebar-token-dot" class="sidebar-token-dot" title="Token status"></span>
@@ -7760,112 +8171,148 @@ window.onerror = function(msg, src, line, col, err) {
         </div>
       </div>
 
-      <!-- View 2: Logs -->
-      <div id="view-logs" class="view-panel" data-view="logs">
-        <!-- Breakpoints bar -->
-        <div id="breakpoints-bar" class="breakpoints-bar"></div>
-        <!-- Logs toolbar (scoped to logs view) -->
-        <div id="toolbar" class="logs-toolbar">
-          <div class="time-filter">
-            <button class="time-btn active" data-range="0" title="All time">All</button>
-            <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
-            <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
-            <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
-            <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
-          </div>
-          <div class="search-wrapper">
-            <span class="search-icon">&#9906;</span>
-            <input type="text" id="search-input" placeholder="Search logs..." />
-            <span id="search-count" class="search-count"></span>
-          </div>
-          <select id="endpoint-filter" title="Filter by API endpoint">
-            <option value="">All Endpoints</option>
-          </select>
-          <select id="component-filter" title="Filter by component">
-            <option value="">All Components</option>
-          </select>
-          <div class="raid-filter-wrapper">
-            <span class="raid-filter-icon">&#9672;</span>
-            <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
-            <div id="raid-dropdown" class="raid-dropdown">
-              <div class="raid-dropdown-header">Recent Executions</div>
-              <div id="raid-dropdown-list"></div>
-            </div>
-          </div>
-          <span id="execution-badge">Execution: <span id="exec-badge-id"></span> &#8212; <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">&#10005;</span></span>
-          <div class="level-filters">
-            <button class="level-btn" data-level="Verbose">V</button>
-            <button class="level-btn active" data-level="Message">M</button>
-            <button class="level-btn active" data-level="Warning">W</button>
-            <button class="level-btn active" data-level="Error">E</button>
-          </div>
-          <div class="preset-bar">
-            <button class="preset-btn" data-preset="all" title="Show all">All</button>
-            <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
-            <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
-            <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
-          </div>
-          <div class="toolbar-actions">
-            <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">Clear</button>
-            <button id="export-btn" class="action-btn" title="Export JSON">Export</button>
-            <button id="pause-btn" class="action-btn" title="Pause (Space)">Pause</button>
-            <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error">&#8595;E</button>
-          </div>
+      <!-- View 2: Runtime View (replaces separate Logs/DAG/Spark views) -->
+      <div id="view-runtime" class="view-panel" data-view="runtime">
+        <!-- Connection status bar -->
+        <div id="rt-connection-bar" class="rt-connection-bar">
+          <span class="rt-conn-dot" id="rt-conn-dot"></span>
+          <span class="rt-conn-label" id="rt-conn-label">Disconnected</span>
+          <span class="rt-conn-sep"></span>
+          <span class="rt-conn-throughput" id="rt-conn-throughput"></span>
+          <span class="rt-conn-port" id="rt-conn-port"></span>
         </div>
-        <div id="logs-panel" class="panel">
-          <div class="panel-header">
-            <div class="stats-bar">
-              <span>Logs: <strong id="stat-logs">0</strong></span>
-              <span>SSR: <strong id="stat-ssr">0</strong></span>
-              <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
-            </div>
-            <span id="correlation-badge" class="correlation-badge" style="display:none">
-              Filtered: <span id="correlation-id"></span> <button id="correlation-close">&#10005;</button>
-            </span>
-          </div>
-          <div id="logs-container" class="log-scroll">
-            <div id="empty-state" class="empty-state">
-              <div class="empty-icon">&#8801;</div>
-              <div class="empty-text">Waiting for logs...</div>
-              <div class="empty-dots"><span></span><span></span><span></span></div>
-            </div>
-          </div>
-          <div class="logs-status" id="logs-status-bar">
-            Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
-          </div>
-          <button id="resume-scroll-btn" class="scroll-fab" style="display:none">&#8595; Resume auto-scroll</button>
-        </div>
-      </div>
 
-      <!-- View 3: DAG Studio (includes old SSR telemetry, execution summary, and command center) -->
-      <div id="view-dag" class="view-panel" data-view="dag">
-        <div id="dag-studio-content" class="dag-studio">
-          <!-- Reuse existing control panel and execution summary -->
-          <div id="control-panel" class="control-panel">
-            <div id="cp-connection-bar" class="connection-bar loading">
-              <div class="conn-status-row">
-                <span class="conn-dot"></span>
-                <span class="conn-status-text">Checking connection...</span>
+        <!-- Tab bar with sliding indicator -->
+        <div id="rt-tab-bar" class="rt-tab-bar">
+          <div class="rt-tab-bar-inner" id="rt-tab-bar-inner">
+            <div class="rt-tab active" data-tab="logs">Logs</div>
+            <div class="rt-tab" data-tab="telemetry">Telemetry</div>
+            <div class="rt-tab" data-tab="sysfiles">System Files</div>
+            <div class="rt-tab" data-tab="spark">Spark Sessions</div>
+            <div class="rt-tab rt-tab-internals" data-tab="internals" id="rt-tab-internals">
+              <span id="rt-internals-label">Internals</span>
+              <span class="rt-internals-chevron" id="rt-internals-chevron">&#x25BE;</span>
+              <div class="rt-internals-dropdown" id="rt-internals-dropdown">
+                <div class="rt-dd-item" data-sub="tokens"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Tokens</div>
+                <div class="rt-dd-item" data-sub="caches"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>Caches</div>
+                <div class="rt-dd-item" data-sub="http"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>HTTP Pipeline</div>
+                <div class="rt-dd-item" data-sub="retries"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Retries</div>
+                <div class="rt-dd-item" data-sub="flags"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Feature Flags</div>
+                <div class="rt-dd-item" data-sub="di"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>DI Registry</div>
+                <div class="rt-dd-item" data-sub="perf"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Perf Markers</div>
               </div>
-              <div class="conn-ids"></div>
             </div>
-            <div id="cp-dag-overview" class="dag-overview"></div>
-            <div id="cp-execution" class="execution-card idle"></div>
-            <div id="cp-history" class="exec-history"></div>
+            <div class="rt-tab-indicator" id="rt-tab-indicator"></div>
           </div>
         </div>
-      </div>
 
-      <!-- View 4: Spark Inspector -->
-      <div id="view-spark" class="view-panel" data-view="spark">
-        <div class="view-empty-state connected-only">
-          <span class="empty-icon">&#9889;</span>
-          <span class="empty-text">Connect to a Lakehouse to enable Spark Inspector</span>
-          <button class="empty-action" data-goto="workspace">Go to Workspace Explorer</button>
+        <!-- Phase 1 overlay -->
+        <div id="rt-phase1-overlay" class="rt-phase1-overlay">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+          <div class="rt-phase1-title">Runtime View requires a running FLT service</div>
+          <div class="rt-phase1-desc">Deploy to a lakehouse to enable logs, telemetry, Spark debugging, and all internal inspection tools.</div>
+          <button class="rt-phase1-btn" id="rt-phase1-go-ws">Go to Workspace Explorer</button>
+        </div>
+
+        <!-- Service stopped overlay -->
+        <div id="rt-stopped-overlay" class="rt-stopped-overlay">
+          <div class="rt-stopped-box">
+            <h4>&#x26A0; Service stopped &#x2014; data is stale</h4>
+            <p id="rt-stopped-time">Last data received at --:--:--</p>
+          </div>
+        </div>
+
+        <!-- Tab content containers -->
+        <div id="rt-content" class="rt-content">
+          <div id="rt-tab-logs" class="rt-tab-content active">
+            <!-- Breakpoints bar -->
+            <div id="breakpoints-bar" class="breakpoints-bar"></div>
+            <!-- Logs toolbar (scoped to logs view) -->
+            <div id="toolbar" class="logs-toolbar">
+              <div class="time-filter">
+                <button class="time-btn active" data-range="0" title="All time">All</button>
+                <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
+                <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
+                <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
+                <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
+              </div>
+              <div class="search-wrapper">
+                <span class="search-icon">&#9906;</span>
+                <input type="text" id="search-input" placeholder="Search logs..." />
+                <span id="search-count" class="search-count"></span>
+              </div>
+              <select id="endpoint-filter" title="Filter by API endpoint">
+                <option value="">All Endpoints</option>
+              </select>
+              <select id="component-filter" title="Filter by component">
+                <option value="">All Components</option>
+              </select>
+              <div class="raid-filter-wrapper">
+                <span class="raid-filter-icon">&#9672;</span>
+                <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
+                <div id="raid-dropdown" class="raid-dropdown">
+                  <div class="raid-dropdown-header">Recent Executions</div>
+                  <div id="raid-dropdown-list"></div>
+                </div>
+              </div>
+              <span id="execution-badge">Execution: <span id="exec-badge-id"></span> &#8212; <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">&#10005;</span></span>
+              <div class="level-filters">
+                <button class="level-btn" data-level="Verbose">V</button>
+                <button class="level-btn active" data-level="Message">M</button>
+                <button class="level-btn active" data-level="Warning">W</button>
+                <button class="level-btn active" data-level="Error">E</button>
+              </div>
+              <div class="preset-bar">
+                <button class="preset-btn" data-preset="all" title="Show all">All</button>
+                <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
+                <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
+                <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
+              </div>
+              <div class="toolbar-actions">
+                <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">Clear</button>
+                <button id="export-btn" class="action-btn" title="Export JSON">Export</button>
+                <button id="pause-btn" class="action-btn" title="Pause (Space)">Pause</button>
+                <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error">&#8595;E</button>
+              </div>
+            </div>
+            <div id="logs-panel" class="panel">
+              <div class="panel-header">
+                <div class="stats-bar">
+                  <span>Logs: <strong id="stat-logs">0</strong></span>
+                  <span>SSR: <strong id="stat-ssr">0</strong></span>
+                  <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
+                </div>
+                <span id="correlation-badge" class="correlation-badge" style="display:none">
+                  Filtered: <span id="correlation-id"></span> <button id="correlation-close">&#10005;</button>
+                </span>
+              </div>
+              <div id="logs-container" class="log-scroll">
+                <div id="empty-state" class="empty-state">
+                  <div class="empty-icon">&#8801;</div>
+                  <div class="empty-text">Waiting for logs...</div>
+                  <div class="empty-dots"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+              <div class="logs-status" id="logs-status-bar">
+                Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
+              </div>
+              <button id="resume-scroll-btn" class="scroll-fab" style="display:none">&#8595; Resume auto-scroll</button>
+            </div>
+          </div>
+          <div id="rt-tab-telemetry" class="rt-tab-content"></div>
+          <div id="rt-tab-sysfiles" class="rt-tab-content"></div>
+          <div id="rt-tab-spark" class="rt-tab-content"></div>
+          <div id="rt-tab-tokens" class="rt-tab-content"></div>
+          <div id="rt-tab-caches" class="rt-tab-content"></div>
+          <div id="rt-tab-http" class="rt-tab-content"></div>
+          <div id="rt-tab-retries" class="rt-tab-content"></div>
+          <div id="rt-tab-flags" class="rt-tab-content"></div>
+          <div id="rt-tab-di" class="rt-tab-content"></div>
+          <div id="rt-tab-perf" class="rt-tab-content"></div>
         </div>
       </div>
 
-      <!-- View 5: API Playground -->
+      <!-- View 3: API Playground -->
       <div id="view-api" class="view-panel" data-view="api">
         <div class="view-empty-state">
           <span class="empty-icon">&#9657;</span>
@@ -7873,7 +8320,7 @@ window.onerror = function(msg, src, line, col, err) {
         </div>
       </div>
 
-      <!-- View 6: Environment -->
+      <!-- View 4: Environment -->
       <div id="view-environment" class="view-panel" data-view="environment">
         <div class="view-empty-state">
           <span class="empty-icon">&#9881;</span>
@@ -8482,6 +8929,10 @@ class SignalRManager {
     this._closing = false;
     this._subscribedTopics = new Set(['log']);
     this._reconnectTimer = null;
+
+    // Topic-based event bus (Phase 3)
+    this._listeners = new Map();      // topic → Set<callback>
+    this._activeStreams = new Map();   // topic → IStreamResult
   }
 
   /** Set the SignalR target port (call when FLT starts on a different port). */
@@ -8592,8 +9043,15 @@ class SignalRManager {
   /** Re-subscribe to all tracked topics after a reconnect. */
   _resubscribeAll = () => {
     if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    // Re-subscribe old group-based topics (backward compat for Logs)
     for (const topic of this._subscribedTopics) {
       this.connection.invoke('Subscribe', topic).catch(() => {});
+    }
+    // Re-stream active topic streams (Phase 3 event bus)
+    const activeTopics = [...this._activeStreams.keys()];
+    this._activeStreams.clear();
+    for (const topic of activeTopics) {
+      this.subscribeTopic(topic);
     }
   }
 
@@ -8601,6 +9059,61 @@ class SignalRManager {
     this.status = status;
     if (this.onStatusChange) {
       this.onStatusChange(status);
+    }
+  }
+
+  // ===== TOPIC EVENT BUS (Phase 3) =====
+
+  /** Register a listener for a topic. Multiple listeners per topic OK. */
+  on(topic, callback) {
+    if (!this._listeners.has(topic)) this._listeners.set(topic, new Set());
+    this._listeners.get(topic).add(callback);
+  }
+
+  /** Unregister a listener. */
+  off(topic, callback) {
+    const set = this._listeners.get(topic);
+    if (set) {
+      set.delete(callback);
+      if (set.size === 0) this._listeners.delete(topic);
+    }
+  }
+
+  /** Start streaming a topic via ChannelReader (snapshot + live). */
+  subscribeTopic(topic) {
+    if (this._activeStreams.has(topic)) return;
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+
+    try {
+      const stream = this.connection.stream('SubscribeToTopic', topic);
+      this._activeStreams.set(topic, stream);
+      stream.subscribe({
+        next: (event) => {
+          const t = (event && event.topic) || topic;
+          const cbs = this._listeners.get(t);
+          if (cbs) cbs.forEach(cb => {
+            try { cb(event); } catch (e) { console.error('[stream]', t, e); }
+          });
+        },
+        error: (err) => {
+          console.error('[stream error]', topic, err);
+          this._activeStreams.delete(topic);
+        },
+        complete: () => {
+          this._activeStreams.delete(topic);
+        }
+      });
+    } catch (err) {
+      console.error('[subscribeTopic]', topic, err);
+    }
+  }
+
+  /** Stop streaming a topic. */
+  unsubscribeTopic(topic) {
+    const stream = this._activeStreams.get(topic);
+    if (stream) {
+      try { stream.dispose(); } catch (e) { /* dispose can throw if already closed */ }
+      this._activeStreams.delete(topic);
     }
   }
 
@@ -14535,11 +15048,373 @@ class Sidebar {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
 
-    const views = ['workspace', 'logs', 'dag', 'spark', 'api', 'environment'];
+    const views = ['workspace', 'runtime', 'api', 'environment'];
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 6) {
+    if (num >= 1 && num <= 4) {
       e.preventDefault();
       this.switchView(views[num - 1]);
+    }
+  }
+}
+
+// === js/runtime-view.js ===
+/**
+ * RuntimeView — Tab bar orchestrator with phase transitions.
+ *
+ * Manages the Runtime View shell:
+ *   - Tab bar: sliding underline, active state, keyboard Alt+1-5
+ *   - Internals dropdown: open/close, selection, label rewrite
+ *   - Connection status bar: dot colour, throughput, port
+ *   - Phase transitions: Phase 1 overlay, Phase 2 unlock
+ *   - Tab lifecycle: activate()/deactivate() on registered modules
+ *
+ * Reference: f04-runtime-view-integrated.html (shell architecture)
+ */
+class RuntimeView {
+  constructor(signalr) {
+    this._signalr = signalr;
+    this._tabs = {};           // tabId → { module, el }
+    this._activeTab = 'logs';  // default tab
+    this._phase = 'disconnected';
+    this._internalsOpen = false;
+    this._internalsActiveId = null;
+    this._connectionStatus = 'disconnected';
+
+    // Top-level tab IDs (order matches tab bar)
+    this._topTabIds = ['logs', 'telemetry', 'sysfiles', 'spark'];
+
+    // Internals sub-view IDs
+    this._internalsIds = ['tokens', 'caches', 'http', 'retries', 'flags', 'di', 'perf'];
+
+    // DOM references — populated in init()
+    this._tabBar = null;
+    this._tabBarInner = null;
+    this._indicator = null;
+    this._tabEls = null;
+    this._internalsTab = null;
+    this._internalsLabel = null;
+    this._internalsChevron = null;
+    this._dropdown = null;
+    this._phase1Overlay = null;
+    this._stoppedOverlay = null;
+    this._connDot = null;
+    this._connLabel = null;
+    this._connThroughput = null;
+    this._connPort = null;
+    this._sidebarDot = null;
+    this._sidebarLock = null;
+  }
+
+  init() {
+    // Cache DOM
+    this._tabBar = document.getElementById('rt-tab-bar');
+    this._tabBarInner = document.getElementById('rt-tab-bar-inner');
+    this._indicator = document.getElementById('rt-tab-indicator');
+    this._internalsTab = document.getElementById('rt-tab-internals');
+    this._internalsLabel = document.getElementById('rt-internals-label');
+    this._internalsChevron = document.getElementById('rt-internals-chevron');
+    this._dropdown = document.getElementById('rt-internals-dropdown');
+    this._phase1Overlay = document.getElementById('rt-phase1-overlay');
+    this._stoppedOverlay = document.getElementById('rt-stopped-overlay');
+    this._connDot = document.getElementById('rt-conn-dot');
+    this._connLabel = document.getElementById('rt-conn-label');
+    this._connThroughput = document.getElementById('rt-conn-throughput');
+    this._connPort = document.getElementById('rt-conn-port');
+    this._sidebarDot = document.getElementById('rt-sidebar-dot');
+    this._sidebarLock = document.getElementById('rt-sidebar-lock');
+
+    if (!this._tabBar) return;
+
+    // Collect tab elements
+    this._tabEls = this._tabBarInner
+      ? Array.from(this._tabBarInner.querySelectorAll('.rt-tab'))
+      : [];
+
+    // Bind top-level tab clicks
+    this._tabEls.forEach(el => {
+      const tabId = el.dataset.tab;
+      if (!tabId) return;
+
+      if (tabId === 'internals') {
+        el.addEventListener('click', (e) => {
+          // Don't toggle if clicking a dropdown item
+          if (e.target.closest('.rt-dd-item')) return;
+          this.toggleInternals();
+        });
+      } else {
+        el.addEventListener('click', () => this.switchTab(tabId));
+      }
+    });
+
+    // Bind dropdown item clicks
+    if (this._dropdown) {
+      this._dropdown.querySelectorAll('.rt-dd-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const subId = item.dataset.sub;
+          if (subId) this.selectInternal(subId);
+        });
+      });
+    }
+
+    // Close dropdown on outside click
+    document.addEventListener('click', (e) => {
+      if (this._internalsOpen && !e.target.closest('.rt-tab-internals')) {
+        this._closeInternals();
+      }
+    });
+
+    // Phase 1 "Go to Workspace" button
+    const goWsBtn = document.getElementById('rt-phase1-go-ws');
+    if (goWsBtn) {
+      goWsBtn.addEventListener('click', () => {
+        if (window.edogSidebar) window.edogSidebar.switchView('workspace');
+      });
+    }
+
+    // Keyboard: Alt+1-5 for tabs within Runtime View
+    document.addEventListener('keydown', (e) => this._onKeyDown(e));
+
+    // Set initial indicator position
+    requestAnimationFrame(() => this._updateTabIndicator(this._activeTab));
+  }
+
+  /** Register a tab module. Called by main.js for each tab. */
+  registerTab(tabId, module) {
+    this._tabs[tabId] = {
+      module: module,
+      el: document.getElementById('rt-tab-' + tabId)
+    };
+  }
+
+  /** Switch to a tab. Handles deactivate/activate lifecycle. */
+  switchTab(tabId) {
+    if (tabId === this._activeTab) return;
+
+    // Close Internals dropdown if switching away
+    if (this._internalsOpen) this._closeInternals();
+
+    // Deactivate current tab module
+    const current = this._tabs[this._activeTab];
+    if (current && current.module && current.module.deactivate) {
+      current.module.deactivate();
+    }
+    if (current && current.el) current.el.classList.remove('active');
+
+    // Update tab bar active state
+    this._tabEls.forEach(el => el.classList.remove('active'));
+
+    // Determine which tab bar element to activate
+    const isInternals = this._internalsIds.indexOf(tabId) !== -1;
+    if (isInternals) {
+      // Internals sub-view — activate the Internals tab element
+      if (this._internalsTab) this._internalsTab.classList.add('active');
+      this._internalsActiveId = tabId;
+      this._updateInternalsLabel(tabId);
+      this._updateInternalsDropdownActive(tabId);
+      this._updateTabIndicator('internals');
+    } else {
+      // Top-level tab
+      const tabEl = this._tabEls.find(el => el.dataset.tab === tabId);
+      if (tabEl) tabEl.classList.add('active');
+      this._internalsActiveId = null;
+      this._resetInternalsLabel();
+      this._updateTabIndicator(tabId);
+    }
+
+    // Activate new tab
+    this._activeTab = tabId;
+    const next = this._tabs[tabId];
+    if (next && next.el) next.el.classList.add('active');
+    if (next && next.module && next.module.activate) {
+      next.module.activate();
+    }
+  }
+
+  /** Open/close Internals dropdown. */
+  toggleInternals() {
+    if (this._internalsOpen) {
+      this._closeInternals();
+    } else {
+      this._openInternals();
+    }
+  }
+
+  /** Select an Internals sub-view. */
+  selectInternal(subId) {
+    this._closeInternals();
+    this.switchTab(subId);
+  }
+
+  /** Set connection status (connected/reconnecting/failed/disconnected). */
+  setConnectionStatus(status, throughput) {
+    this._connectionStatus = status;
+
+    if (this._connDot) {
+      this._connDot.className = 'rt-conn-dot';
+      if (status === 'connected' || status === 'reconnecting' || status === 'failed') {
+        this._connDot.classList.add(status);
+      }
+    }
+
+    if (this._connLabel) {
+      this._connLabel.className = 'rt-conn-label';
+      const labels = {
+        'connected': 'Connected',
+        'reconnecting': 'Reconnecting...',
+        'failed': 'Connection Failed',
+        'disconnected': 'Disconnected',
+        'connecting': 'Connecting...'
+      };
+      this._connLabel.textContent = labels[status] || status;
+      if (status === 'connected' || status === 'reconnecting' || status === 'failed') {
+        this._connLabel.classList.add(status);
+      }
+    }
+
+    // Update sidebar green dot
+    if (this._sidebarDot) {
+      if (status === 'connected') {
+        this._sidebarDot.classList.add('on');
+      } else {
+        this._sidebarDot.classList.remove('on');
+      }
+    }
+
+    if (throughput !== undefined && this._connThroughput) {
+      this._connThroughput.textContent = throughput + ' msg/s';
+    }
+  }
+
+  /** Update port display. */
+  setPort(port) {
+    if (this._connPort && port) {
+      this._connPort.textContent = 'Port: ' + port;
+    }
+  }
+
+  /** Set phase (disconnected/connected). */
+  setPhase(phase) {
+    this._phase = phase;
+
+    if (phase === 'connected') {
+      // Hide Phase 1 overlay
+      if (this._phase1Overlay) this._phase1Overlay.classList.add('hidden');
+      // Hide lock on sidebar
+      if (this._sidebarLock) this._sidebarLock.classList.remove('on');
+      // Animate tab labels enabling with stagger
+      this._tabEls.forEach((el, i) => {
+        setTimeout(() => {
+          el.classList.add('enabling');
+          setTimeout(() => el.classList.remove('enabling'), 200);
+        }, i * 100);
+      });
+    } else {
+      // Show Phase 1 overlay
+      if (this._phase1Overlay) this._phase1Overlay.classList.remove('hidden');
+      // Show lock on sidebar
+      if (this._sidebarLock) this._sidebarLock.classList.add('on');
+      // Hide stopped overlay
+      if (this._stoppedOverlay) this._stoppedOverlay.classList.remove('on');
+    }
+  }
+
+  /** Show/hide service stopped overlay. */
+  setServiceStopped(stopped, timestamp) {
+    if (!this._stoppedOverlay) return;
+    if (stopped) {
+      this._stoppedOverlay.classList.add('on');
+      const timeEl = document.getElementById('rt-stopped-time');
+      if (timeEl && timestamp) {
+        timeEl.textContent = 'Last data received at ' + timestamp;
+      }
+    } else {
+      this._stoppedOverlay.classList.remove('on');
+    }
+  }
+
+  // ── Private Methods ──
+
+  _openInternals() {
+    this._internalsOpen = true;
+    if (this._dropdown) this._dropdown.classList.add('open');
+    if (this._internalsChevron) this._internalsChevron.classList.add('open');
+  }
+
+  _closeInternals() {
+    this._internalsOpen = false;
+    if (this._dropdown) {
+      this._dropdown.classList.add('closing');
+      this._dropdown.classList.remove('open');
+      setTimeout(() => {
+        if (this._dropdown) this._dropdown.classList.remove('closing');
+      }, 80);
+    }
+    if (this._internalsChevron) this._internalsChevron.classList.remove('open');
+  }
+
+  _updateInternalsLabel(subId) {
+    if (!this._internalsLabel) return;
+    const nameMap = {
+      'tokens': 'Tokens',
+      'caches': 'Caches',
+      'http': 'HTTP Pipeline',
+      'retries': 'Retries',
+      'flags': 'Feature Flags',
+      'di': 'DI Registry',
+      'perf': 'Perf Markers'
+    };
+    this._internalsLabel.textContent = 'Internals: ' + (nameMap[subId] || subId);
+  }
+
+  _resetInternalsLabel() {
+    if (this._internalsLabel) this._internalsLabel.textContent = 'Internals';
+    this._updateInternalsDropdownActive(null);
+  }
+
+  _updateInternalsDropdownActive(subId) {
+    if (!this._dropdown) return;
+    this._dropdown.querySelectorAll('.rt-dd-item').forEach(item => {
+      if (item.dataset.sub === subId) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+
+  /** Slide the tab indicator line to the target tab. */
+  _updateTabIndicator(tabId) {
+    if (!this._indicator || !this._tabBarInner) return;
+
+    // Find the tab element — for internals sub-views, target the Internals tab
+    const targetId = this._internalsIds.indexOf(tabId) !== -1 ? 'internals' : tabId;
+    const tabEl = this._tabEls.find(el => el.dataset.tab === targetId);
+    if (!tabEl) return;
+
+    const barRect = this._tabBarInner.getBoundingClientRect();
+    const tabRect = tabEl.getBoundingClientRect();
+
+    this._indicator.style.left = (tabRect.left - barRect.left) + 'px';
+    this._indicator.style.width = tabRect.width + 'px';
+  }
+
+  /** Keyboard shortcuts: Alt+1-4 for top tabs, Alt+5 for Internals toggle. */
+  _onKeyDown(e) {
+    if (!e.altKey) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Only handle when Runtime View is active
+    const rtPanel = document.getElementById('view-runtime');
+    if (!rtPanel || !rtPanel.classList.contains('active')) return;
+
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 4) {
+      e.preventDefault();
+      this.switchTab(this._topTabIds[num - 1]);
+    } else if (num === 5) {
+      e.preventDefault();
+      this.toggleInternals();
     }
   }
 }
@@ -17087,11 +17962,9 @@ class CommandPalette {
   _getCommands() {
     return [
       { group: 'Views', icon: '\u25A6', label: 'Workspace Explorer', shortcut: '1', action: () => this._sidebar.switchView('workspace') },
-      { group: 'Views', icon: '\u2261', label: 'Logs', shortcut: '2', action: () => this._sidebar.switchView('logs') },
-      { group: 'Views', icon: '\u25C7', label: 'DAG Studio', shortcut: '3', action: () => this._sidebar.switchView('dag') },
-      { group: 'Views', icon: '\u26A1', label: 'Spark Inspector', shortcut: '4', action: () => this._sidebar.switchView('spark') },
-      { group: 'Views', icon: '\u25B9', label: 'API Playground', shortcut: '5', action: () => this._sidebar.switchView('api') },
-      { group: 'Views', icon: '\u2699', label: 'Environment', shortcut: '6', action: () => this._sidebar.switchView('environment') },
+      { group: 'Views', icon: '\u26A1', label: 'Runtime', shortcut: '2', action: () => this._sidebar.switchView('runtime') },
+      { group: 'Views', icon: '\u25B9', label: 'API Playground', shortcut: '3', action: () => this._sidebar.switchView('api') },
+      { group: 'Views', icon: '\u2699', label: 'Environment', shortcut: '4', action: () => this._sidebar.switchView('environment') },
       { group: 'Actions', icon: '\u25B6', label: 'Run DAG', action: () => {} },
       { group: 'Actions', icon: '\u2718', label: 'Cancel DAG', action: () => {} },
       { group: 'Actions', icon: '\u21BB', label: 'Restart Service', action: () => {} },
@@ -17759,7 +18632,7 @@ class MockRenderer {
 
   // ── Spark Inspector ──
   _renderSparkInspector() {
-    const panel = document.getElementById('view-spark');
+    const panel = document.getElementById('rt-tab-spark') || document.getElementById('view-spark');
     if (!panel) return;
 
     panel.innerHTML = `<div class="spark-inspector">
@@ -18830,7 +19703,7 @@ class MockRenderer {
         // Wire "View Logs" button
         const btn = document.getElementById('deploy-view-logs');
         if (btn) btn.addEventListener('click', () => {
-          const sidebar = document.querySelector('.sidebar-icon[data-view="logs"]');
+          const sidebar = document.querySelector('.sidebar-icon[data-view="runtime"]');
           if (sidebar) sidebar.click();
         });
       }
@@ -20084,6 +20957,7 @@ class EdogLogViewer {
     this.apiClient = new FabricApiClient();
     this.topbar = new TopBar();
     this.sidebar = new Sidebar();
+    this.runtimeView = new RuntimeView(this.ws);
     this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
     this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
 
@@ -20100,7 +20974,8 @@ class EdogLogViewer {
     // Wire error-intel jump-to-error
     this.errorIntel.onJumpToError = (errorMsg) => {
       this.filter.setSearch(errorMsg.substring(0, 60));
-      this.sidebar.switchView('logs');
+      this.sidebar.switchView('runtime');
+      this.runtimeView.switchTab('logs');
     };
 
     // Chain auto-RAID-populate into live execution detection
@@ -20131,7 +21006,33 @@ class EdogLogViewer {
     await this.apiClient.init();
     this.topbar.init();
     this.sidebar.init();
+    this.runtimeView.init();
     this.commandPalette.init();
+
+    // Register the Logs tab module (existing renderer handles it)
+    this.runtimeView.registerTab('logs', {
+      activate: () => {
+        this.renderer.containerReady = false;
+
+        // If buffer is empty but service is running, fetch logs from REST + ensure SignalR
+        const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
+        if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
+          this.loadInitialData().then(() => {
+            this.renderer.flush();
+            this.renderer.scheduleRender();
+          });
+        } else {
+          this.renderer.flush();
+          this.renderer.scheduleRender();
+        }
+
+        // Ensure SignalR is connected
+        if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
+          this.ws.connect();
+        }
+      },
+      deactivate: () => { /* Logs stay in buffer, just stop rendering */ }
+    });
 
     // Expose globals for deploy phase sync
     window.edogTopBar = this.topbar;
@@ -20142,6 +21043,7 @@ class EdogLogViewer {
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
     this.sidebar.setPhase(phase);
+    this.runtimeView.setPhase(phase);
 
     // Wire sidebar view switching
     this.sidebar.onViewChange = (viewId) => this._onViewChange(viewId);
@@ -20180,7 +21082,11 @@ class EdogLogViewer {
               if (s.status === 'running') {
                 this.topbar.setDeployStatus('connected');
                 this.sidebar.setPhase('connected');
-                if (s.fltPort && this.ws) this.ws.setPort(s.fltPort);
+                if (this.runtimeView) this.runtimeView.setPhase('connected');
+                if (s.fltPort && this.ws) {
+                  this.ws.setPort(s.fltPort);
+                  if (this.runtimeView) this.runtimeView.setPort(s.fltPort);
+                }
                 this.loadInitialData();
               } else if (s.status === 'stopped' && s.error) {
                 this.topbar.setDeployStatus('failed');
@@ -20192,8 +21098,12 @@ class EdogLogViewer {
         this.topbar.setDeployStatus('deploying');
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
+        if (this.runtimeView) this.runtimeView.setPhase('connected');
         this.topbar.setDeployStatus('connected');
-        if (state.fltPort) this.ws.setPort(state.fltPort);
+        if (state.fltPort) {
+          this.ws.setPort(state.fltPort);
+          if (this.runtimeView) this.runtimeView.setPort(state.fltPort);
+        }
         this.loadInitialData();
       } else if (state.phase === 'crashed') {
         this.topbar.setDeployStatus('crashed');
@@ -20480,6 +21390,8 @@ class EdogLogViewer {
       badge.textContent = labels[status] || `● ${status}`;
       badge.className = `status-badge ${status}`;
     }
+    // Wire to RuntimeView connection bar
+    if (this.runtimeView) this.runtimeView.setConnectionStatus(status);
   }
   
   loadInitialData = async () => {
@@ -20627,44 +21539,46 @@ class EdogLogViewer {
   
   // ===== VIEW MANAGEMENT =====
   
-  // Compatibility bridge: old switchTab calls route through sidebar
+  // Compatibility bridge: old switchTab calls route through sidebar + runtime view
   switchTab = (tabId) => {
-    const viewMap = { 'logs': 'logs', 'ssr': 'logs', 'summary': 'dag', 'timeline': 'dag' };
+    const viewMap = { 'logs': 'runtime', 'ssr': 'runtime', 'summary': 'runtime', 'timeline': 'runtime' };
     const viewId = viewMap[tabId] || tabId;
     if (this.sidebar) {
       this.sidebar.switchView(viewId);
+    }
+    // If routing to runtime, also switch the inner tab
+    if (viewId === 'runtime' && this.runtimeView) {
+      const rtTabMap = { 'logs': 'logs', 'ssr': 'telemetry', 'summary': 'logs', 'timeline': 'logs' };
+      this.runtimeView.switchTab(rtTabMap[tabId] || 'logs');
     }
   }
 
   _onViewChange = (viewId) => {
     // Activate/deactivate view-specific modules
-    if (viewId === 'dag') {
-      this.controlPanel.activate();
-    } else {
-      this.controlPanel.deactivate();
-    }
+    if (viewId === 'runtime') {
+      // RuntimeView handles its own tab switching
+      this.runtimeView.switchTab(this.runtimeView._activeTab);
 
-    if (viewId === 'logs') {
-      // Re-init virtual scroll — container may have been hidden (zero height)
-      this.renderer.containerReady = false;
-
-      // If buffer is empty but service is running, fetch logs from REST + ensure SignalR
-      const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
-      if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
-        // Service is deployed (port changed from default) but we have no logs — fetch them
-        this.loadInitialData().then(() => {
+      // If current tab is logs, ensure data is loaded
+      if (this.runtimeView._activeTab === 'logs') {
+        this.renderer.containerReady = false;
+        const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
+        if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
+          this.loadInitialData().then(() => {
+            this.renderer.flush();
+            this.renderer.scheduleRender();
+          });
+        } else {
           this.renderer.flush();
           this.renderer.scheduleRender();
-        });
-      } else {
-        this.renderer.flush();
-        this.renderer.scheduleRender();
+        }
+        if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
+          this.ws.connect();
+        }
       }
-
-      // Ensure SignalR is connected
-      if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
-        this.ws.connect();
-      }
+    } else {
+      // DAG control panel deactivation (legacy — will be removed in Layer 2)
+      this.controlPanel.deactivate();
     }
   }
 
@@ -20933,7 +21847,8 @@ class EdogLogViewer {
   }
 
   jumpToNextError = () => {
-    this.sidebar.switchView('logs');
+    this.sidebar.switchView('runtime');
+    this.runtimeView.switchTab('logs');
     const container = document.getElementById('logs-container');
     if (!container) return;
 
