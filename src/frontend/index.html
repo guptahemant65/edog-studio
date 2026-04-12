@@ -66,11 +66,9 @@ window.onerror = function(msg, src, line, col, err) {
     <!-- Sidebar (52px icon rail — expanding pill labels on hover/focus) -->
     <nav id="sidebar" class="sidebar">
       <div class="sidebar-slot active" data-view="workspace"><button class="sidebar-icon" data-view="workspace" data-phase="both" data-label="Workspace Explorer" data-shortcut="1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button></div>
-      <div class="sidebar-slot" data-view="logs"><button class="sidebar-icon" data-view="logs" data-phase="connected" data-label="Logs" data-shortcut="2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button></div>
-      <div class="sidebar-slot" data-view="dag"><button class="sidebar-icon" data-view="dag" data-phase="connected" data-label="DAG Studio" data-shortcut="3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></button></div>
-      <div class="sidebar-slot" data-view="spark"><button class="sidebar-icon" data-view="spark" data-phase="connected" data-label="Spark Inspector" data-shortcut="4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></button></div>
-      <div class="sidebar-slot" data-view="api"><button class="sidebar-icon" data-view="api" data-phase="both" data-label="API Playground" data-shortcut="5"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button></div>
-      <div class="sidebar-slot" data-view="environment"><button class="sidebar-icon" data-view="environment" data-phase="both" data-label="Environment" data-shortcut="6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button></div>
+      <div class="sidebar-slot" data-view="runtime"><button class="sidebar-icon" data-view="runtime" data-phase="connected" data-label="Runtime" data-shortcut="2"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="rt-dot" id="rt-sidebar-dot"></span><span class="rt-lock" id="rt-sidebar-lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></span></button></div>
+      <div class="sidebar-slot" data-view="api"><button class="sidebar-icon" data-view="api" data-phase="both" data-label="API Playground" data-shortcut="3"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button></div>
+      <div class="sidebar-slot" data-view="environment"><button class="sidebar-icon" data-view="environment" data-phase="both" data-label="Environment" data-shortcut="4"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></button></div>
       <div class="sidebar-spacer"></div>
       <div id="sidebar-phase" class="sidebar-phase" title="Browsing · No service connected">&#9675;</div>
       <span id="sidebar-token-dot" class="sidebar-token-dot" title="Token status"></span>
@@ -108,112 +106,148 @@ window.onerror = function(msg, src, line, col, err) {
         </div>
       </div>
 
-      <!-- View 2: Logs -->
-      <div id="view-logs" class="view-panel" data-view="logs">
-        <!-- Breakpoints bar -->
-        <div id="breakpoints-bar" class="breakpoints-bar"></div>
-        <!-- Logs toolbar (scoped to logs view) -->
-        <div id="toolbar" class="logs-toolbar">
-          <div class="time-filter">
-            <button class="time-btn active" data-range="0" title="All time">All</button>
-            <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
-            <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
-            <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
-            <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
-          </div>
-          <div class="search-wrapper">
-            <span class="search-icon">&#9906;</span>
-            <input type="text" id="search-input" placeholder="Search logs..." />
-            <span id="search-count" class="search-count"></span>
-          </div>
-          <select id="endpoint-filter" title="Filter by API endpoint">
-            <option value="">All Endpoints</option>
-          </select>
-          <select id="component-filter" title="Filter by component">
-            <option value="">All Components</option>
-          </select>
-          <div class="raid-filter-wrapper">
-            <span class="raid-filter-icon">&#9672;</span>
-            <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
-            <div id="raid-dropdown" class="raid-dropdown">
-              <div class="raid-dropdown-header">Recent Executions</div>
-              <div id="raid-dropdown-list"></div>
-            </div>
-          </div>
-          <span id="execution-badge">Execution: <span id="exec-badge-id"></span> &#8212; <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">&#10005;</span></span>
-          <div class="level-filters">
-            <button class="level-btn" data-level="Verbose">V</button>
-            <button class="level-btn active" data-level="Message">M</button>
-            <button class="level-btn active" data-level="Warning">W</button>
-            <button class="level-btn active" data-level="Error">E</button>
-          </div>
-          <div class="preset-bar">
-            <button class="preset-btn" data-preset="all" title="Show all">All</button>
-            <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
-            <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
-            <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
-          </div>
-          <div class="toolbar-actions">
-            <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">Clear</button>
-            <button id="export-btn" class="action-btn" title="Export JSON">Export</button>
-            <button id="pause-btn" class="action-btn" title="Pause (Space)">Pause</button>
-            <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error">&#8595;E</button>
-          </div>
+      <!-- View 2: Runtime View (replaces separate Logs/DAG/Spark views) -->
+      <div id="view-runtime" class="view-panel" data-view="runtime">
+        <!-- Connection status bar -->
+        <div id="rt-connection-bar" class="rt-connection-bar">
+          <span class="rt-conn-dot" id="rt-conn-dot"></span>
+          <span class="rt-conn-label" id="rt-conn-label">Disconnected</span>
+          <span class="rt-conn-sep"></span>
+          <span class="rt-conn-throughput" id="rt-conn-throughput"></span>
+          <span class="rt-conn-port" id="rt-conn-port"></span>
         </div>
-        <div id="logs-panel" class="panel">
-          <div class="panel-header">
-            <div class="stats-bar">
-              <span>Logs: <strong id="stat-logs">0</strong></span>
-              <span>SSR: <strong id="stat-ssr">0</strong></span>
-              <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
-            </div>
-            <span id="correlation-badge" class="correlation-badge" style="display:none">
-              Filtered: <span id="correlation-id"></span> <button id="correlation-close">&#10005;</button>
-            </span>
-          </div>
-          <div id="logs-container" class="log-scroll">
-            <div id="empty-state" class="empty-state">
-              <div class="empty-icon">&#8801;</div>
-              <div class="empty-text">Waiting for logs...</div>
-              <div class="empty-dots"><span></span><span></span><span></span></div>
-            </div>
-          </div>
-          <div class="logs-status" id="logs-status-bar">
-            Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
-          </div>
-          <button id="resume-scroll-btn" class="scroll-fab" style="display:none">&#8595; Resume auto-scroll</button>
-        </div>
-      </div>
 
-      <!-- View 3: DAG Studio (includes old SSR telemetry, execution summary, and command center) -->
-      <div id="view-dag" class="view-panel" data-view="dag">
-        <div id="dag-studio-content" class="dag-studio">
-          <!-- Reuse existing control panel and execution summary -->
-          <div id="control-panel" class="control-panel">
-            <div id="cp-connection-bar" class="connection-bar loading">
-              <div class="conn-status-row">
-                <span class="conn-dot"></span>
-                <span class="conn-status-text">Checking connection...</span>
+        <!-- Tab bar with sliding indicator -->
+        <div id="rt-tab-bar" class="rt-tab-bar">
+          <div class="rt-tab-bar-inner" id="rt-tab-bar-inner">
+            <div class="rt-tab active" data-tab="logs">Logs</div>
+            <div class="rt-tab" data-tab="telemetry">Telemetry</div>
+            <div class="rt-tab" data-tab="sysfiles">System Files</div>
+            <div class="rt-tab" data-tab="spark">Spark Sessions</div>
+            <div class="rt-tab rt-tab-internals" data-tab="internals" id="rt-tab-internals">
+              <span id="rt-internals-label">Internals</span>
+              <span class="rt-internals-chevron" id="rt-internals-chevron">&#x25BE;</span>
+              <div class="rt-internals-dropdown" id="rt-internals-dropdown">
+                <div class="rt-dd-item" data-sub="tokens"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Tokens</div>
+                <div class="rt-dd-item" data-sub="caches"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>Caches</div>
+                <div class="rt-dd-item" data-sub="http"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>HTTP Pipeline</div>
+                <div class="rt-dd-item" data-sub="retries"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Retries</div>
+                <div class="rt-dd-item" data-sub="flags"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Feature Flags</div>
+                <div class="rt-dd-item" data-sub="di"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>DI Registry</div>
+                <div class="rt-dd-item" data-sub="perf"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Perf Markers</div>
               </div>
-              <div class="conn-ids"></div>
             </div>
-            <div id="cp-dag-overview" class="dag-overview"></div>
-            <div id="cp-execution" class="execution-card idle"></div>
-            <div id="cp-history" class="exec-history"></div>
+            <div class="rt-tab-indicator" id="rt-tab-indicator"></div>
           </div>
         </div>
-      </div>
 
-      <!-- View 4: Spark Inspector -->
-      <div id="view-spark" class="view-panel" data-view="spark">
-        <div class="view-empty-state connected-only">
-          <span class="empty-icon">&#9889;</span>
-          <span class="empty-text">Connect to a Lakehouse to enable Spark Inspector</span>
-          <button class="empty-action" data-goto="workspace">Go to Workspace Explorer</button>
+        <!-- Phase 1 overlay -->
+        <div id="rt-phase1-overlay" class="rt-phase1-overlay">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+          <div class="rt-phase1-title">Runtime View requires a running FLT service</div>
+          <div class="rt-phase1-desc">Deploy to a lakehouse to enable logs, telemetry, Spark debugging, and all internal inspection tools.</div>
+          <button class="rt-phase1-btn" id="rt-phase1-go-ws">Go to Workspace Explorer</button>
+        </div>
+
+        <!-- Service stopped overlay -->
+        <div id="rt-stopped-overlay" class="rt-stopped-overlay">
+          <div class="rt-stopped-box">
+            <h4>&#x26A0; Service stopped &#x2014; data is stale</h4>
+            <p id="rt-stopped-time">Last data received at --:--:--</p>
+          </div>
+        </div>
+
+        <!-- Tab content containers -->
+        <div id="rt-content" class="rt-content">
+          <div id="rt-tab-logs" class="rt-tab-content active">
+            <!-- Breakpoints bar -->
+            <div id="breakpoints-bar" class="breakpoints-bar"></div>
+            <!-- Logs toolbar (scoped to logs view) -->
+            <div id="toolbar" class="logs-toolbar">
+              <div class="time-filter">
+                <button class="time-btn active" data-range="0" title="All time">All</button>
+                <button class="time-btn" data-range="60" title="Last 1 minute">1m</button>
+                <button class="time-btn" data-range="300" title="Last 5 minutes">5m</button>
+                <button class="time-btn" data-range="900" title="Last 15 minutes">15m</button>
+                <button class="time-btn" data-range="3600" title="Last 1 hour">1h</button>
+              </div>
+              <div class="search-wrapper">
+                <span class="search-icon">&#9906;</span>
+                <input type="text" id="search-input" placeholder="Search logs..." />
+                <span id="search-count" class="search-count"></span>
+              </div>
+              <select id="endpoint-filter" title="Filter by API endpoint">
+                <option value="">All Endpoints</option>
+              </select>
+              <select id="component-filter" title="Filter by component">
+                <option value="">All Components</option>
+              </select>
+              <div class="raid-filter-wrapper">
+                <span class="raid-filter-icon">&#9672;</span>
+                <input type="text" id="raid-filter-input" placeholder="Filter by RAID or IterationId..." autocomplete="off" />
+                <div id="raid-dropdown" class="raid-dropdown">
+                  <div class="raid-dropdown-header">Recent Executions</div>
+                  <div id="raid-dropdown-list"></div>
+                </div>
+              </div>
+              <span id="execution-badge">Execution: <span id="exec-badge-id"></span> &#8212; <span id="exec-badge-counts"></span> <span class="badge-clear" id="exec-badge-clear" title="Clear execution filter">&#10005;</span></span>
+              <div class="level-filters">
+                <button class="level-btn" data-level="Verbose">V</button>
+                <button class="level-btn active" data-level="Message">M</button>
+                <button class="level-btn active" data-level="Warning">W</button>
+                <button class="level-btn active" data-level="Error">E</button>
+              </div>
+              <div class="preset-bar">
+                <button class="preset-btn" data-preset="all" title="Show all">All</button>
+                <button class="preset-btn active" data-preset="flt" title="FLT application logs only">FLT</button>
+                <button class="preset-btn" data-preset="dag" title="DAG execution logs">DAG</button>
+                <button class="preset-btn" data-preset="spark" title="Spark/GTS logs">Spark</button>
+              </div>
+              <div class="toolbar-actions">
+                <button id="clear-btn" class="action-btn" title="Clear (Ctrl+L)">Clear</button>
+                <button id="export-btn" class="action-btn" title="Export JSON">Export</button>
+                <button id="pause-btn" class="action-btn" title="Pause (Space)">Pause</button>
+                <button id="btn-next-error" class="action-btn error-jump" title="Jump to next error">&#8595;E</button>
+              </div>
+            </div>
+            <div id="logs-panel" class="panel">
+              <div class="panel-header">
+                <div class="stats-bar">
+                  <span>Logs: <strong id="stat-logs">0</strong></span>
+                  <span>SSR: <strong id="stat-ssr">0</strong></span>
+                  <span>Errors: <strong id="stat-errors" class="stat-errors">0</strong></span>
+                </div>
+                <span id="correlation-badge" class="correlation-badge" style="display:none">
+                  Filtered: <span id="correlation-id"></span> <button id="correlation-close">&#10005;</button>
+                </span>
+              </div>
+              <div id="logs-container" class="log-scroll">
+                <div id="empty-state" class="empty-state">
+                  <div class="empty-icon">&#8801;</div>
+                  <div class="empty-text">Waiting for logs...</div>
+                  <div class="empty-dots"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+              <div class="logs-status" id="logs-status-bar">
+                Showing <span id="visible-count">0</span> of <span id="total-count">0</span> logs
+              </div>
+              <button id="resume-scroll-btn" class="scroll-fab" style="display:none">&#8595; Resume auto-scroll</button>
+            </div>
+          </div>
+          <div id="rt-tab-telemetry" class="rt-tab-content"></div>
+          <div id="rt-tab-sysfiles" class="rt-tab-content"></div>
+          <div id="rt-tab-spark" class="rt-tab-content"></div>
+          <div id="rt-tab-tokens" class="rt-tab-content"></div>
+          <div id="rt-tab-caches" class="rt-tab-content"></div>
+          <div id="rt-tab-http" class="rt-tab-content"></div>
+          <div id="rt-tab-retries" class="rt-tab-content"></div>
+          <div id="rt-tab-flags" class="rt-tab-content"></div>
+          <div id="rt-tab-di" class="rt-tab-content"></div>
+          <div id="rt-tab-perf" class="rt-tab-content"></div>
         </div>
       </div>
 
-      <!-- View 5: API Playground -->
+      <!-- View 3: API Playground -->
       <div id="view-api" class="view-panel" data-view="api">
         <div class="view-empty-state">
           <span class="empty-icon">&#9657;</span>
@@ -221,7 +255,7 @@ window.onerror = function(msg, src, line, col, err) {
         </div>
       </div>
 
-      <!-- View 6: Environment -->
+      <!-- View 4: Environment -->
       <div id="view-environment" class="view-panel" data-view="environment">
         <div class="view-empty-state">
           <span class="empty-icon">&#9881;</span>
