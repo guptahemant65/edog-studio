@@ -30,6 +30,7 @@ class WebSocketManager {
 
     this.url = 'ws://localhost:5555/ws/logs';
     this._port = 5555;
+    this._closing = false;
   }
 
   /** Set the WebSocket target port (call when FLT starts on a different port). */
@@ -46,6 +47,7 @@ class WebSocketManager {
   }
 
   connect = () => {
+    this._closing = false;
     try {
       this.ws = new WebSocket(this.url);
       this.setStatus('connecting');
@@ -88,7 +90,9 @@ class WebSocketManager {
       this.ws.onclose = () => {
         console.log('WebSocket closed');
         this.setStatus('disconnected');
-        this.scheduleReconnect();
+        if (!this._closing) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onerror = (error) => {
@@ -142,7 +146,7 @@ class WebSocketManager {
     console.log('Reconnecting in ' + delay + 'ms (attempt ' + this.reconnectAttempts + ')');
     this.setStatus('reconnecting');
 
-    setTimeout(() => {
+    this._reconnectTimer = setTimeout(() => {
       this.connect();
     }, delay);
   }
@@ -155,6 +159,8 @@ class WebSocketManager {
   }
 
   disconnect = () => {
+    this._closing = true;
+    if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
     if (this.ws) {
       this.ws.close();
       this.ws = null;

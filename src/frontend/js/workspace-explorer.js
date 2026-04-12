@@ -2098,13 +2098,13 @@ class WorkspaceExplorer {
     } else if (state.status === 'running') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
       if (window.edogSidebar) window.edogSidebar.setPhase('connected');
-      // Connect WebSocket to FLT port for live logs
       if (state.fltPort && window.edogWs) window.edogWs.setPort(state.fltPort);
-      // Fetch existing logs from FLT (startup logs captured before WS connected)
       if (window.edogApp && window.edogApp.loadInitialData) window.edogApp.loadInitialData();
       this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
-      // Show undeploy button
-      this._showUndeployButton(lh);
+      // Only show undeploy button if this lakehouse's content panel is still displayed
+      if (document.getElementById('ws-deploy-btn')) {
+        this._showUndeployButton(lh);
+      }
     } else if (state.status === 'stopped' && state.error) {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('failed');
       const btnEl = document.getElementById('ws-deploy-btn');
@@ -2145,12 +2145,10 @@ class WorkspaceExplorer {
         // This lakehouse is currently deployed — show re-deploy + stop
         this._showUndeployButton(lh);
         // Also attach DeployFlow for undeploy capability
-        if (!this._deployFlow) {
-          const progressEl = document.getElementById('ws-deploy-progress');
-          if (progressEl) {
-            this._deployFlow = new DeployFlow(progressEl);
-            this._deployFlow.onUpdate = (s) => this._onDeployUpdate(s, lh, ws);
-          }
+        const progressEl = document.getElementById('ws-deploy-progress');
+        if (!this._deployFlow && progressEl) {
+          this._deployFlow = new DeployFlow(progressEl);
+          this._deployFlow.onUpdate = (s) => this._onDeployUpdate(s, lh, ws);
         }
       } else if (deployedToOther) {
         // Different lakehouse is deployed — show "Deploy (switch from X)"
@@ -2183,6 +2181,8 @@ class WorkspaceExplorer {
           try {
             await fetch('/api/command/undeploy', { method: 'POST' });
           } catch { /* best effort */ }
+          // Disconnect WebSocket (prevent reconnect spam to dead service)
+          if (window.edogWs) window.edogWs.disconnect();
           // Reset UI to Phase 1
           if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
           if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');

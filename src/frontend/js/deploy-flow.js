@@ -115,16 +115,26 @@ class DeployFlow {
     this._es.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
+        this._sseErrors = 0;
+        const stepChanged = data.step !== this._state.step || data.status !== this._state.status;
+
         this._state.step = data.step;
         this._state.status = data.status === 'deploying' ? 'deploying' : data.status;
         this._state.message = data.message || '';
-        this._state.error = data.error || null;
-        this._state.fltPort = data.fltPort || null;
+        this._state.error = data.error != null ? data.error : null;
+        this._state.fltPort = data.fltPort != null ? data.fltPort : this._state.fltPort;
 
         if (data.log) {
           this._logs.push(data.log);
+          if (!stepChanged) {
+            // Only a new log line — append incrementally
+            this._appendLog(data.log);
+            if (this.onUpdate) this.onUpdate(this._state);
+            return;
+          }
         }
 
+        // Step or status changed — full re-render
         this._render();
         if (this.onUpdate) this.onUpdate(this._state);
       } catch { /* malformed event */ }
@@ -136,8 +146,8 @@ class DeployFlow {
         this._state.step = data.step;
         this._state.status = data.status;
         this._state.message = data.message || '';
-        this._state.error = data.error || null;
-        this._state.fltPort = data.fltPort || null;
+        this._state.error = data.error != null ? data.error : null;
+        this._state.fltPort = data.fltPort != null ? data.fltPort : null;
       } catch { /* ignore */ }
 
       this._closeSSE();
@@ -148,7 +158,11 @@ class DeployFlow {
     });
 
     this._es.onerror = () => {
-      // EventSource auto-reconnects; 'complete' event handles terminal state
+      this._sseErrors = (this._sseErrors || 0) + 1;
+      if (this._sseErrors >= 3 && this._active) {
+        this._state.message = 'Connection lost — reconnecting...';
+        this._render();
+      }
     };
   }
 
@@ -364,11 +378,12 @@ class DeployFlow {
 
     const dismiss = () => {
       backdrop.remove();
+      // Don't change deploy state — the current service is still running
+      // Just restore the deploy button for this lakehouse
       this._el.innerHTML = '';
       this._el.style.display = 'none';
       const btn = document.getElementById('ws-deploy-btn');
       if (btn) btn.style.display = '';
-      if (this.onUpdate) this.onUpdate({ status: 'stopped' });
     };
 
     document.getElementById('deploy-switch-cancel')?.addEventListener('click', dismiss);
@@ -389,6 +404,17 @@ class DeployFlow {
     this._el.innerHTML = '';
     this._el.style.display = 'none';
     if (this.onUpdate) this.onUpdate({ status: 'idle' });
+  }
+
+  _appendLog(log) {
+    const term = document.getElementById('deploy-terminal');
+    if (!term) return;
+    const cls = log.level === 'error' ? ' error' : log.level === 'warn' ? ' warn' : log.level === 'success' ? ' success' : '';
+    const line = document.createElement('div');
+    line.className = 'deploy-terminal-line' + cls;
+    line.innerHTML = '<span class="ts">[' + this._esc(log.ts || '') + ']</span> ' + this._esc(log.msg || '');
+    term.appendChild(line);
+    if (this._terminalOpen) term.scrollTop = term.scrollHeight;
   }
 
   _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }

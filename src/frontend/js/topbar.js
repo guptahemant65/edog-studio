@@ -24,6 +24,7 @@ class TopBar {
     this._lastConfig = null;
     this._lastHealth = null;
     this._inspectorEl = null;
+    this._deployActive = false;
   }
 
   init() {
@@ -69,19 +70,21 @@ class TopBar {
         this._updateTokenDisplay(null);
       }
 
-      // T6: Phase indicator — prefer studioPhase (from dev-server supervisor)
-      if (config.studioPhase === 'running' || config.studioPhase === 'deploying') {
-        this._updateServiceStatus(config.studioPhase === 'deploying' ? 'building' : 'running');
-        if (config.studioPhase === 'running' && !this._uptimeStart) this._uptimeStart = Date.now();
-      } else if (config.fabricBaseUrl) {
-        this._updateServiceStatus('running');
-        if (!this._uptimeStart) this._uptimeStart = Date.now();
-      } else if (config.studioPhase === 'crashed') {
-        this._updateServiceStatus('stopped');
-        if (this._statusTextEl) this._statusTextEl.textContent = 'Service Crashed';
-      } else {
-        this._updateServiceStatus('stopped');
-        this._uptimeStart = null;
+      // T6: Phase indicator — prefer studioPhase, but don't override active deploy error states
+      if (!this._deployActive) {
+        if (config.studioPhase === 'running' || config.studioPhase === 'deploying') {
+          this._updateServiceStatus(config.studioPhase === 'deploying' ? 'building' : 'running');
+          if (config.studioPhase === 'running' && !this._uptimeStart) this._uptimeStart = Date.now();
+        } else if (config.fabricBaseUrl) {
+          this._updateServiceStatus('running');
+          if (!this._uptimeStart) this._uptimeStart = Date.now();
+        } else if (config.studioPhase === 'crashed') {
+          this._updateServiceStatus('stopped');
+          if (this._statusTextEl) this._statusTextEl.textContent = 'Service Crashed';
+        } else {
+          this._updateServiceStatus('stopped');
+          this._uptimeStart = null;
+        }
       }
 
       // T8: Show git/patch meta only when real data exists
@@ -355,6 +358,7 @@ class TopBar {
   /** Update top bar for deploy lifecycle states. */
   setDeployStatus(status) {
     if (!this._statusEl || !this._statusTextEl) return;
+    this._deployActive = (status === 'deploying' || status === 'failed' || status === 'crashed');
     switch (status) {
       case 'deploying':
         this._statusEl.className = 'service-status building';

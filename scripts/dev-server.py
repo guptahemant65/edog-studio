@@ -476,6 +476,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state.update({
                     "phase": "stopped",
                     "deployError": "No bearer token. Run authentication first.",
+                    "deployMessage": "Deploy failed — no bearer token",
                 })
             return
         try:
@@ -484,7 +485,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         except Exception as e:
             _deploy_log(f"Token fetch failed: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": f"Token fetch failed: {e}"})
+                _studio_state.update({"phase": "stopped", "deployError": f"Token fetch failed: {e}", "deployMessage": "Deploy failed — token fetch error"})
             return
 
         # Step 1: Update config (atomic write)
@@ -500,7 +501,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         except Exception as e:
             _deploy_log(f"Config update failed: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": str(e)})
+                _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — config update error"})
             return
 
         # Step 2: Patch + Build (via edog.py --headless-deploy)
@@ -550,6 +551,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                     _studio_state.update({
                         "phase": "stopped",
                         "deployError": f"Patch/build failed (exit {proc.returncode})",
+                        "deployMessage": "Deploy failed — patch/build error",
                     })
                 return
             _deploy_log("Patch and build succeeded", "success")
@@ -557,7 +559,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         except Exception as e:
             _deploy_log(f"Patch/build error: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": str(e)})
+                _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — patch/build error"})
             return
 
         # Step 3: Launch FLT (dev-server owns the process)
@@ -593,7 +595,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         except Exception as e:
             _deploy_log(f"Launch failed: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": str(e)})
+                _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — launch error"})
             return
 
         # Step 4: Health check
@@ -625,6 +627,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state.update({
                     "phase": "stopped",
                     "deployError": "Service did not become healthy in 60s",
+                    "deployMessage": "Deploy failed — health check timeout",
                 })
             return
 
@@ -652,7 +655,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
     except Exception as e:
         _deploy_log(f"Unexpected error: {e}", "error")
         with _studio_lock:
-            _studio_state.update({"phase": "stopped", "deployError": str(e)})
+            _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — unexpected error"})
 
 
 def _monitor_flt(deploy_id):
@@ -783,7 +786,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "tokenExpiryMinutes": int((mwc_exp - time.time()) / 60) if mwc_exp else 0,
             "tokenExpired": mwc is None,
             "mwcToken": mwc,
-            "fabricBaseUrl": None,
+            "fabricBaseUrl": f"http://localhost:{_studio_state.get('fltPort')}" if _studio_state.get("fltPort") else None,
             "bearerToken": bearer,
             "phase": "connected" if mwc else "disconnected",
             "fltPort": _studio_state.get("fltPort"),
@@ -878,7 +881,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 deploy_id = _studio_state.get("deployId")
                 start_time = _studio_state.get("deployStartTime", 0)
                 # If deploy started >5min ago and still "deploying", it's stale
-                if start_time and (time.time() - start_time) > 300:
+                if start_time and (time.time() - start_time) > 900:
                     _studio_state.update({"phase": "idle", "deployId": None})
 
             # Auto-correct: running but FLT process is dead → crashed
@@ -982,7 +985,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self._json_response(200, {"ok": True})
 
     def _serve_undeploy(self):
-        """POST /api/command/undeploy — stop FLT service, reset to Phase 1."""
+        """POST /api/command/undeploy — stop FLT service + revert patches."""
         global _flt_process
         stopped = False
 
@@ -995,6 +998,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 _flt_process.kill()
             stopped = True
             _flt_process = None
+
+        # Revert code changes (restore FLT source to clean state)
+        try:
+            import sys as _sys
+            result = subprocess.run(
+                [_sys.executable, str(PROJECT_DIR / "edog.py"), "--revert"],
+                capture_output=True, text=True, timeout=30,
+                encoding="utf-8", errors="replace",
+            )
+            reverted = result.returncode == 0
+            if reverted:
+                _deploy_log("Code changes reverted", "success")
+        except Exception as e:
+            _deploy_log(f"Revert failed: {e}", "warn")
+            reverted = False
 
         with _studio_lock:
             target_name = ""
@@ -1013,7 +1031,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "deployStartTime": None,
             })
 
-        self._json_response(200, {"ok": True, "stopped": stopped, "lakehouse": target_name})
+        self._json_response(200, {"ok": True, "stopped": stopped, "reverted": reverted, "lakehouse": target_name})
 
     def _serve_deploy_stream(self):
         """GET /api/command/deploy-stream — SSE stream."""
@@ -1043,6 +1061,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             for i, log_entry in enumerate(logs):
                 event_id = last_idx + i
+                # NOTE: step/message/error are snapshot values at read time,
+                # not the step that was active when this log was produced.
+                # Known limitation — acceptable for now.
                 data = json.dumps({
                     "step": step, "total": total, "status": phase,
                     "message": msg, "error": err, "log": log_entry,
@@ -1055,7 +1076,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     return
             last_idx += len(logs)
 
-            if phase in ("running", "crashed", "stopped", "idle"):
+            if phase in ("running", "crashed", "stopped"):
                 final = json.dumps({
                     "step": step, "total": total, "status": phase,
                     "message": msg, "error": err, "fltPort": flt_port,
@@ -2203,7 +2224,6 @@ if __name__ == "__main__":
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down...")
-        # Kill FLT process if we own one
         if _flt_process and _flt_process.poll() is None:
             print(f"  Stopping FLT service (PID: {_flt_process.pid})...")
             _flt_process.terminate()
@@ -2212,5 +2232,17 @@ if __name__ == "__main__":
             except subprocess.TimeoutExpired:
                 _flt_process.kill()
             print("  FLT service stopped.")
+            # Revert code changes
+            print("  Reverting EDOG patches...")
+            try:
+                import sys as _sys
+                subprocess.run(
+                    [_sys.executable, str(PROJECT_DIR / "edog.py"), "--revert"],
+                    capture_output=True, text=True, timeout=30,
+                    encoding="utf-8", errors="replace",
+                )
+                print("  Patches reverted.")
+            except Exception:
+                print("  Revert failed — run: edog --revert")
         server.server_close()
         print("Server stopped.")

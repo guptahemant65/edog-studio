@@ -165,9 +165,6 @@ class EdogLogViewer {
     const phase = this.apiClient.getPhase();
     this.sidebar.setPhase(phase);
 
-    // Check for active/completed deploy (page refresh recovery)
-    this._checkDeployResume();
-
     // Wire sidebar view switching
     this.sidebar.onViewChange = (viewId) => this._onViewChange(viewId);
 
@@ -176,6 +173,10 @@ class EdogLogViewer {
     
     this.bindEventListeners();
     await this.loadInitialData();
+
+    // Check for active/completed deploy (AFTER workspace explorer DOM exists)
+    this._checkDeployResume();
+
     // Don't auto-connect WebSocket — _checkDeployResume will connect
     // to the right port if FLT is running. Otherwise no WS is needed.
   }
@@ -188,29 +189,33 @@ class EdogLogViewer {
       const state = await resp.json();
 
       if (state.phase === 'deploying') {
-        // Deploy in progress — resume the stepper
+        // Deploy in progress — let workspace explorer handle the resume
         const progressEl = document.getElementById('ws-deploy-progress');
         if (progressEl) {
           progressEl.style.display = 'block';
           const btnEl = document.getElementById('ws-deploy-btn');
           if (btnEl) btnEl.style.display = 'none';
-          const flow = new DeployFlow(progressEl);
-          flow.onUpdate = (s) => {
-            if (s.status === 'running') {
-              this.topbar.setDeployStatus('connected');
-              this.sidebar.setPhase('connected');
-            } else if (s.status === 'stopped' && s.error) {
-              this.topbar.setDeployStatus('failed');
-            }
-          };
-          flow.resume(state);
+
+          if (!this.workspaceExplorer._deployFlow) {
+            this.workspaceExplorer._deployFlow = new DeployFlow(progressEl);
+            this.workspaceExplorer._deployFlow.onUpdate = (s) => {
+              if (s.status === 'running') {
+                this.topbar.setDeployStatus('connected');
+                this.sidebar.setPhase('connected');
+                if (s.fltPort && this.ws) this.ws.setPort(s.fltPort);
+                this.loadInitialData();
+              } else if (s.status === 'stopped' && s.error) {
+                this.topbar.setDeployStatus('failed');
+              }
+            };
+          }
+          this.workspaceExplorer._deployFlow.resume(state);
         }
+        this.topbar.setDeployStatus('deploying');
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
         this.topbar.setDeployStatus('connected');
-        // Connect WebSocket to FLT port
         if (state.fltPort) this.ws.setPort(state.fltPort);
-        // Fetch existing logs from FLT (missed during initial load)
         this.loadInitialData();
       } else if (state.phase === 'crashed') {
         this.topbar.setDeployStatus('crashed');

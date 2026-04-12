@@ -843,6 +843,96 @@ mark {
 }
 .topbar-btn:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-bright); }
 
+/* ── Deploy Info Tooltip (rich hover card, design bible §13b) ── */
+.deploy-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  min-width: 240px;
+  max-width: 320px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  z-index: calc(var(--z-topbar) + 10);
+}
+
+.deploy-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 16px;
+  border: 6px solid transparent;
+  border-bottom-color: var(--border-bright);
+}
+
+.deploy-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 17px;
+  border: 5px solid transparent;
+  border-bottom-color: var(--surface);
+}
+
+.deploy-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dt-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.dt-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dt-phase {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dt-info {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 3px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.dt-info dt {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.dt-info dd {
+  color: var(--text);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dt-mono {
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
     /* === css/sidebar.css === */
 /* ── Sidebar — 52px icon rail with seamless expanding pill ──
  *
@@ -1009,6 +1099,17 @@ mark {
 .sidebar-label,
 .sidebar-shortcut {
   display: none;
+}
+
+/* Phase 2 cascade-enable animation */
+.sidebar-slot.cascade-in .sidebar-icon {
+  animation: sidebar-cascade-in 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sidebar-cascade-in {
+  0% { opacity: 0.4; transform: scale(0.85); }
+  60% { transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 .sidebar-spacer { flex: 1; }
@@ -2163,6 +2264,461 @@ mark {
   transition: color var(--transition-fast);
 }
 .ws-fabric-link:hover { color: var(--accent); }
+
+    /* === css/deploy.css === */
+/* Deploy Stepper — 5-step horizontal wizard with terminal
+ * Design bible §25a. OKLCH colors. 4px grid.
+ * @author Mika Tanaka — EDOG Studio hivemind
+ */
+
+/* ── Stepper container ── */
+.deploy-stepper {
+  padding: var(--space-4);
+}
+
+/* ── Step circles row ── */
+.deploy-steps {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* Connector lines between circles */
+.deploy-steps::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: calc(var(--space-2) + 14px);
+  right: calc(var(--space-2) + 14px);
+  height: 2px;
+  background: var(--border-bright);
+  z-index: 0;
+}
+
+/* Individual step */
+.deploy-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Step circle — 28px, numbered */
+.deploy-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-body);
+  border: 2px solid var(--border-bright);
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: all 250ms ease-out;
+}
+
+/* Step label */
+.deploy-step-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+  transition: color var(--transition-fast);
+}
+
+/* ── States ── */
+
+/* Active — accent fill + pulse */
+.deploy-step.active .deploy-step-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  animation: deploy-pulse 1.6s ease-in-out infinite;
+}
+.deploy-step.active .deploy-step-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Done — green fill + pop */
+.deploy-step.done .deploy-step-dot {
+  border-color: var(--status-succeeded);
+  background: var(--status-succeeded);
+  color: #fff;
+  animation: deploy-pop 300ms ease-out;
+}
+.deploy-step.done .deploy-step-label {
+  color: var(--status-succeeded);
+}
+
+/* Failed — red fill */
+.deploy-step.failed .deploy-step-dot {
+  border-color: var(--status-failed);
+  background: var(--status-failed);
+  color: #fff;
+}
+.deploy-step.failed .deploy-step-label {
+  color: var(--status-failed);
+  font-weight: 600;
+}
+
+/* ── Progress bar ── */
+.deploy-progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: var(--space-3);
+}
+
+.deploy-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-full);
+  transition: width 400ms ease-out;
+}
+.deploy-progress-fill.done {
+  background: var(--status-succeeded);
+}
+.deploy-progress-fill.failed {
+  background: var(--status-failed);
+}
+
+/* ── Status row ── */
+.deploy-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  min-height: 28px;
+}
+
+.deploy-status-msg {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-status-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.deploy-elapsed {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* Cancel / Retry buttons */
+.deploy-cancel-btn,
+.deploy-retry-btn {
+  font-size: var(--text-xs);
+  font-family: var(--font-body);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.deploy-cancel-btn:hover {
+  border-color: var(--status-failed);
+  color: var(--status-failed);
+}
+.deploy-retry-btn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.deploy-retry-btn:hover {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+/* ── Toggle details button ── */
+.deploy-toggle-details {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) 0;
+  margin-bottom: var(--space-2);
+  transition: color var(--transition-fast);
+}
+.deploy-toggle-details:hover {
+  color: var(--text-dim);
+}
+
+/* ── Terminal ── */
+.deploy-terminal {
+  background: oklch(0.15 0 0);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 250ms ease-out, padding 250ms ease-out;
+  padding: 0 var(--space-3);
+}
+.deploy-terminal.open {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.deploy-terminal-line {
+  color: oklch(0.75 0 0);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.deploy-terminal-line .ts {
+  color: oklch(0.50 0 0);
+  margin-right: var(--space-1);
+}
+.deploy-terminal-line.warn {
+  color: oklch(0.80 0.15 85);
+}
+.deploy-terminal-line.error {
+  color: oklch(0.70 0.20 25);
+}
+.deploy-terminal-line.success {
+  color: oklch(0.75 0.15 145);
+}
+
+/* ── Success banner ── */
+.deploy-success {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-3);
+  background: oklch(0.97 0.02 145);
+  border-left: 3px solid var(--status-succeeded);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--status-succeeded);
+}
+.deploy-success-meta {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Error card ── */
+.deploy-error {
+  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-3);
+  background: oklch(0.97 0.02 25);
+  border-left: 3px solid var(--status-failed);
+  border-radius: var(--radius-sm);
+}
+.deploy-error-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--status-failed);
+  margin-bottom: var(--space-1);
+}
+.deploy-error-detail {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── Dark theme overrides ── */
+[data-theme="dark"] .deploy-success {
+  background: oklch(0.20 0.03 145);
+}
+[data-theme="dark"] .deploy-error {
+  background: oklch(0.20 0.03 25);
+}
+
+/* ── Animations ── */
+@keyframes deploy-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.55 0.20 285 / 0.4); }
+  50%      { box-shadow: 0 0 0 6px oklch(0.55 0.20 285 / 0); }
+}
+
+@keyframes deploy-pop {
+  0%   { transform: scale(0.6); }
+  60%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* ── Switch Confirmation Dialog (design bible §27b) ── */
+
+.deploy-dialog-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: oklch(0.10 0 0 / 0.55);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  animation: deploy-dialog-fade 160ms ease-out;
+}
+
+.deploy-dialog-backdrop[data-open="true"] { display: flex; }
+
+@keyframes deploy-dialog-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.deploy-dialog-card {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: 16px;
+  padding: 28px 32px;
+  max-width: 440px;
+  width: 90%;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08);
+  animation: deploy-dialog-scale 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes deploy-dialog-scale {
+  from { opacity: 0; transform: scale(0.92) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.deploy-dialog-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--accent-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+.deploy-dialog-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.deploy-dialog-body {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+/* Side-by-side comparison */
+.deploy-dialog-compare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.deploy-dialog-target {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.deploy-dialog-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.deploy-dialog-target.from .deploy-dialog-label { color: var(--status-failed); }
+.deploy-dialog-target.to .deploy-dialog-label { color: var(--status-succeeded); }
+
+.deploy-dialog-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-dialog-id {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-dialog-arrow {
+  font-size: 20px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.deploy-dialog-actions {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.deploy-dialog-btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: 1px solid var(--border-bright);
+  transition: all var(--transition-fast);
+}
+
+.deploy-dialog-btn.ghost {
+  background: var(--surface);
+  color: var(--text-dim);
+}
+.deploy-dialog-btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+
+.deploy-dialog-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.deploy-dialog-btn.primary:hover { opacity: 0.88; }
 
     /* === css/filters.css === */
 .search-wrapper {
@@ -7920,9 +8476,25 @@ class WebSocketManager {
     this.onSummary = null;
 
     this.url = 'ws://localhost:5555/ws/logs';
+    this._port = 5555;
+    this._closing = false;
+  }
+
+  /** Set the WebSocket target port (call when FLT starts on a different port). */
+  setPort(port) {
+    if (port && port !== this._port) {
+      this._port = port;
+      this.url = 'ws://localhost:' + port + '/ws/logs';
+      // Reconnect if currently connected to old port
+      if (this.ws && this.ws.readyState <= 1) {
+        this.ws.close();
+      }
+      this.connect();
+    }
   }
 
   connect = () => {
+    this._closing = false;
     try {
       this.ws = new WebSocket(this.url);
       this.setStatus('connecting');
@@ -7965,7 +8537,9 @@ class WebSocketManager {
       this.ws.onclose = () => {
         console.log('WebSocket closed');
         this.setStatus('disconnected');
-        this.scheduleReconnect();
+        if (!this._closing) {
+          this.scheduleReconnect();
+        }
       };
 
       this.ws.onerror = (error) => {
@@ -8019,7 +8593,7 @@ class WebSocketManager {
     console.log('Reconnecting in ' + delay + 'ms (attempt ' + this.reconnectAttempts + ')');
     this.setStatus('reconnecting');
 
-    setTimeout(() => {
+    this._reconnectTimer = setTimeout(() => {
       this.connect();
     }, delay);
   }
@@ -8032,6 +8606,8 @@ class WebSocketManager {
   }
 
   disconnect = () => {
+    this._closing = true;
+    if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -12936,10 +13512,12 @@ class TopBar {
     this._lastConfig = null;
     this._lastHealth = null;
     this._inspectorEl = null;
+    this._deployActive = false;
   }
 
   init() {
     this._createTokenInspector();
+    this._createDeployTooltip();
     this._bindTokenClick();
     this._startConfigPolling();
   }
@@ -12980,17 +13558,37 @@ class TopBar {
         this._updateTokenDisplay(null);
       }
 
-      // T6: Phase indicator based on fabricBaseUrl
-      if (config.fabricBaseUrl) {
-        this._updateServiceStatus('running');
-        if (!this._uptimeStart) this._uptimeStart = Date.now();
-      } else {
-        this._updateServiceStatus('stopped');
-        this._uptimeStart = null;
+      // T6: Phase indicator — prefer studioPhase, but don't override active deploy error states
+      if (!this._deployActive) {
+        if (config.studioPhase === 'running' || config.studioPhase === 'deploying') {
+          this._updateServiceStatus(config.studioPhase === 'deploying' ? 'building' : 'running');
+          if (config.studioPhase === 'running' && !this._uptimeStart) this._uptimeStart = Date.now();
+        } else if (config.fabricBaseUrl) {
+          this._updateServiceStatus('running');
+          if (!this._uptimeStart) this._uptimeStart = Date.now();
+        } else if (config.studioPhase === 'crashed') {
+          this._updateServiceStatus('stopped');
+          if (this._statusTextEl) this._statusTextEl.textContent = 'Service Crashed';
+        } else {
+          this._updateServiceStatus('stopped');
+          this._uptimeStart = null;
+        }
       }
 
       // T8: Show git/patch meta only when real data exists
       this._updateGitVisibility(health || {});
+
+      // Sync sidebar phase and WebSocket port from studio state
+      if (window.edogSidebar) {
+        if (config.studioPhase === 'running') {
+          window.edogSidebar.setPhase('connected');
+        } else if (config.studioPhase === 'idle' || config.studioPhase === 'stopped') {
+          window.edogSidebar.setPhase('disconnected');
+        }
+      }
+      if (config.fltPort && config.studioPhase === 'running' && window.edogWs) {
+        window.edogWs.setPort(config.fltPort);
+      }
 
       // Refresh inspector if open
       if (this._inspectorEl && this._inspectorEl.classList.contains('open')) {
@@ -13245,10 +13843,520 @@ class TopBar {
     '</div>';
   }
 
+  /** Update top bar for deploy lifecycle states. */
+  setDeployStatus(status) {
+    if (!this._statusEl || !this._statusTextEl) return;
+    this._deployActive = (status === 'deploying' || status === 'failed' || status === 'crashed');
+    switch (status) {
+      case 'deploying':
+        this._statusEl.className = 'service-status building';
+        this._statusTextEl.textContent = 'Deploying\u2026';
+        this._uptimeStart = null;
+        break;
+      case 'connected':
+        this._statusEl.className = 'service-status running';
+        this._uptimeStart = Date.now();
+        this._statusTextEl.textContent = 'Connected 0m00s';
+        this._refreshDeployTooltip();
+        break;
+      case 'failed':
+        this._statusEl.className = 'service-status stopped';
+        this._statusTextEl.textContent = 'Deploy Failed';
+        break;
+      case 'crashed':
+        this._statusEl.className = 'service-status stopped';
+        this._statusTextEl.textContent = 'Service Crashed';
+        break;
+      case 'stopped':
+        this._statusEl.className = 'service-status stopped';
+        this._statusTextEl.textContent = 'Browsing';
+        this._uptimeStart = null;
+        break;
+    }
+  }
+
+  // ─── Deploy Info Tooltip (rich hover card on service status) ───
+
+  _createDeployTooltip() {
+    if (!this._statusEl) return;
+    const tip = document.createElement('div');
+    tip.className = 'deploy-tooltip';
+    tip.id = 'deploy-tooltip';
+    this._statusEl.style.position = 'relative';
+    this._statusEl.appendChild(tip);
+    this._deployTip = tip;
+
+    this._statusEl.addEventListener('mouseenter', () => {
+      this._refreshDeployTooltip();
+      if (this._deployTip.innerHTML) this._deployTip.classList.add('visible');
+    });
+    this._statusEl.addEventListener('mouseleave', () => {
+      this._deployTip.classList.remove('visible');
+    });
+  }
+
+  async _refreshDeployTooltip() {
+    if (!this._deployTip) return;
+    try {
+      const resp = await fetch('/api/studio/status');
+      if (!resp.ok) return;
+      const s = await resp.json();
+      if (!s.deployTarget || s.phase === 'idle') {
+        this._deployTip.innerHTML = '';
+        return;
+      }
+      const t = s.deployTarget;
+      const phase = s.phase;
+      const dotColor = phase === 'running' ? 'var(--status-succeeded)'
+        : phase === 'crashed' ? 'var(--status-failed)'
+        : phase === 'deploying' ? 'var(--accent)' : 'var(--text-muted)';
+
+      this._deployTip.innerHTML =
+        '<div class="dt-header">' +
+          '<span class="dt-dot" style="background:' + dotColor + '"></span>' +
+          '<span class="dt-phase">' + this._escTip(phase.charAt(0).toUpperCase() + phase.slice(1)) + '</span>' +
+        '</div>' +
+        '<dl class="dt-info">' +
+          '<dt>Lakehouse</dt><dd>' + this._escTip(t.lakehouseName || t.artifactId) + '</dd>' +
+          '<dt>Workspace</dt><dd class="dt-mono">' + this._escTip(t.workspaceId || '\u2014') + '</dd>' +
+          '<dt>Capacity</dt><dd class="dt-mono">' + this._escTip(t.capacityId || '\u2014') + '</dd>' +
+          (s.fltPid ? '<dt>PID</dt><dd class="dt-mono">' + s.fltPid + '</dd>' : '') +
+          (s.fltPort ? '<dt>Port</dt><dd class="dt-mono">:' + s.fltPort + '</dd>' : '') +
+        '</dl>';
+    } catch {
+      // Silent fail
+    }
+  }
+
+  _escTip(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
   destroy() {
     if (this._tokenTimer) clearInterval(this._tokenTimer);
     if (this._uptimeTimer) clearInterval(this._uptimeTimer);
   }
+}
+
+// === js/deploy-flow.js ===
+/**
+ * DeployFlow — 5-step deploy stepper with SSE streaming and terminal.
+ *
+ * Uses EventSource (SSE) for real-time progress from the backend.
+ * Renders into a container element. Supports resume on page refresh.
+ *
+ * @author Zara Okonkwo + Mika Tanaka — EDOG Studio hivemind
+ */
+class DeployFlow {
+  constructor(containerEl) {
+    this._el = containerEl;
+    this._es = null;        // EventSource
+    this._active = false;
+    this._terminalOpen = false;
+    this._logs = [];
+    this._startTime = null;
+    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
+    this._elapsedTimer = null;
+
+    /** Callback: onUpdate({step, total, status, message, error, fltPort}) */
+    this.onUpdate = null;
+  }
+
+  static STEPS = [
+    { id: 0, label: 'Fetch token' },
+    { id: 1, label: 'Update config' },
+    { id: 2, label: 'Patch + Build' },
+    { id: 3, label: 'Launch service' },
+    { id: 4, label: 'Ready check' },
+  ];
+
+  /** Start a new deploy. */
+  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName, force) {
+    this._pendingTarget = { workspaceId, artifactId, capacityId, lakehouseName };
+    this._active = true;
+    this._startTime = Date.now();
+    this._logs = [];
+    this._state = { step: 0, total: 5, status: 'deploying', message: 'Initiating deploy...', error: null, fltPort: null };
+    this._render();
+    this._startElapsedTimer();
+
+    try {
+      const resp = await fetch('/api/command/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName, force: !!force }),
+      });
+
+      if (resp.status === 409) {
+        const err = await resp.json().catch(() => ({}));
+        if (err.error === 'already_deployed') {
+          this._showSwitchConfirm(err.currentTarget, { workspaceId, artifactId, capacityId, lakehouseName });
+          return;
+        }
+        this._onFailed(err.message || 'Deploy already in progress');
+        return;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ message: 'Deploy request failed' }));
+        this._onFailed(err.message || 'Deploy request failed');
+        return;
+      }
+      this._connectSSE();
+    } catch (e) {
+      this._onFailed('Network error: ' + e.message);
+    }
+  }
+
+  /** Resume from existing state (page refresh recovery). */
+  resume(state) {
+    this._active = state.phase === 'deploying';
+    this._startTime = state.deployStartTime ? state.deployStartTime * 1000 : Date.now();
+    this._logs = (state.deployLogs || []).map(l => ({ ts: l.ts, msg: l.msg, level: l.level }));
+    this._state = {
+      step: state.deployStep || 0,
+      total: state.deployTotal || 5,
+      status: state.phase === 'deploying' ? 'deploying' : state.phase,
+      message: state.deployMessage || '',
+      error: state.deployError || null,
+      fltPort: state.fltPort || null,
+    };
+    this._el.style.display = 'block';
+    this._render();
+    if (this._active) {
+      this._startElapsedTimer();
+      this._connectSSE();
+    }
+  }
+
+  cancel() {
+    fetch('/api/command/deploy-cancel', { method: 'POST' }).catch(() => {});
+    this._closeSSE();
+    this._stopElapsedTimer();
+    this._active = false;
+    this._state.status = 'stopped';
+    this._state.message = 'Deploy cancelled';
+    this._render();
+    if (this.onUpdate) this.onUpdate(this._state);
+  }
+
+  isActive() { return this._active; }
+
+  destroy() {
+    this._closeSSE();
+    this._stopElapsedTimer();
+    this._el.innerHTML = '';
+  }
+
+  // ── SSE ──────────────────────────────────────
+
+  _connectSSE() {
+    this._closeSSE();
+    this._es = new EventSource('/api/command/deploy-stream');
+
+    this._es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        this._sseErrors = 0;
+        const stepChanged = data.step !== this._state.step || data.status !== this._state.status;
+
+        this._state.step = data.step;
+        this._state.status = data.status === 'deploying' ? 'deploying' : data.status;
+        this._state.message = data.message || '';
+        this._state.error = data.error != null ? data.error : null;
+        this._state.fltPort = data.fltPort != null ? data.fltPort : this._state.fltPort;
+
+        if (data.log) {
+          this._logs.push(data.log);
+          if (!stepChanged) {
+            // Only a new log line — append incrementally
+            this._appendLog(data.log);
+            if (this.onUpdate) this.onUpdate(this._state);
+            return;
+          }
+        }
+
+        // Step or status changed — full re-render
+        this._render();
+        if (this.onUpdate) this.onUpdate(this._state);
+      } catch { /* malformed event */ }
+    };
+
+    this._es.addEventListener('complete', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        this._state.step = data.step;
+        this._state.status = data.status;
+        this._state.message = data.message || '';
+        this._state.error = data.error != null ? data.error : null;
+        this._state.fltPort = data.fltPort != null ? data.fltPort : null;
+      } catch { /* ignore */ }
+
+      this._closeSSE();
+      this._stopElapsedTimer();
+      this._active = false;
+      this._render();
+      if (this.onUpdate) this.onUpdate(this._state);
+    });
+
+    this._es.onerror = () => {
+      this._sseErrors = (this._sseErrors || 0) + 1;
+      if (this._sseErrors >= 3 && this._active) {
+        this._state.message = 'Connection lost — reconnecting...';
+        this._render();
+      }
+    };
+  }
+
+  _closeSSE() {
+    if (this._es) {
+      this._es.close();
+      this._es = null;
+    }
+  }
+
+  // ── Elapsed timer ───────────────────────────
+
+  _startElapsedTimer() {
+    this._stopElapsedTimer();
+    this._elapsedTimer = setInterval(() => {
+      const el = this._el.querySelector('.deploy-elapsed');
+      if (el && this._startTime) {
+        el.textContent = Math.floor((Date.now() - this._startTime) / 1000) + 's';
+      }
+    }, 1000);
+  }
+
+  _stopElapsedTimer() {
+    if (this._elapsedTimer) {
+      clearInterval(this._elapsedTimer);
+      this._elapsedTimer = null;
+    }
+  }
+
+  // ── Render ──────────────────────────────────
+
+  _render() {
+    const { step, total, status, message, error, fltPort } = this._state;
+    const elapsed = this._startTime ? Math.floor((Date.now() - this._startTime) / 1000) : 0;
+    const pct = status === 'running' ? 100 : status === 'stopped' && !error ? 0 : Math.min(((step + (status === 'deploying' ? 0.5 : 0)) / total) * 100, 100);
+
+    let html = '<div class="deploy-stepper">';
+
+    // Step circles
+    html += '<div class="deploy-steps">';
+    for (let i = 0; i < DeployFlow.STEPS.length; i++) {
+      const s = DeployFlow.STEPS[i];
+      let cls = 'deploy-step';
+      let dot = String(i + 1);
+
+      if (status === 'running') {
+        cls = 'deploy-step done';
+        dot = '\u2713';
+      } else if (i < step) {
+        cls += ' done';
+        dot = '\u2713';
+      } else if (i === step && status === 'deploying') {
+        cls += ' active';
+      } else if (i === step && status === 'stopped' && error) {
+        cls += ' failed';
+        dot = '\u2715';
+      }
+
+      html += '<div class="' + cls + '">';
+      html += '<div class="deploy-step-dot">' + dot + '</div>';
+      html += '<span class="deploy-step-label">' + this._esc(s.label) + '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Progress bar
+    const barCls = status === 'running' ? 'done' : (status === 'stopped' && error) ? 'failed' : '';
+    html += '<div class="deploy-progress-bar"><div class="deploy-progress-fill ' + barCls + '" style="width:' + pct + '%"></div></div>';
+
+    // Status row
+    html += '<div class="deploy-status">';
+    html += '<span class="deploy-status-msg">' + this._esc(message) + '</span>';
+    html += '<div class="deploy-status-actions">';
+    if (this._active) {
+      html += '<span class="deploy-elapsed">' + elapsed + 's</span>';
+      html += '<button class="deploy-cancel-btn" id="deploy-cancel">Cancel</button>';
+    }
+    if (status === 'stopped' && error) {
+      html += '<button class="deploy-retry-btn" id="deploy-retry">Retry</button>';
+    }
+    html += '</div></div>';
+
+    // Toggle details
+    if (this._logs.length > 0 || this._active) {
+      const arrow = this._terminalOpen ? '\u25B4' : '\u25BE';
+      html += '<button class="deploy-toggle-details" id="deploy-toggle">' + (this._terminalOpen ? 'Hide' : 'Show') + ' details ' + arrow + '</button>';
+    }
+
+    // Terminal
+    html += '<div class="deploy-terminal' + (this._terminalOpen ? ' open' : '') + '" id="deploy-terminal">';
+    for (const l of this._logs) {
+      const lvlCls = l.level === 'error' ? ' error' : l.level === 'warn' ? ' warn' : l.level === 'success' ? ' success' : '';
+      html += '<div class="deploy-terminal-line' + lvlCls + '"><span class="ts">[' + this._esc(l.ts || '') + ']</span> ' + this._esc(l.msg || '') + '</div>';
+    }
+    html += '</div>';
+
+    // Success banner
+    if (status === 'running') {
+      html += '<div class="deploy-success">';
+      html += '<span>\u2713 Deployed successfully</span>';
+      html += '<span class="deploy-success-meta">' + elapsed + 's</span>';
+      if (fltPort) html += '<span class="deploy-success-meta">:' + fltPort + '</span>';
+      html += '</div>';
+    }
+
+    // Error card
+    if (status === 'stopped' && error) {
+      html += '<div class="deploy-error">';
+      html += '<div class="deploy-error-title">Deploy failed at step ' + (step + 1) + '</div>';
+      html += '<div class="deploy-error-detail">' + this._esc(error) + '</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+    this._el.innerHTML = html;
+    this._bindEvents();
+
+    // Auto-scroll terminal
+    if (this._terminalOpen) {
+      const term = document.getElementById('deploy-terminal');
+      if (term) term.scrollTop = term.scrollHeight;
+    }
+  }
+
+  _bindEvents() {
+    const cancel = document.getElementById('deploy-cancel');
+    if (cancel) cancel.addEventListener('click', () => this.cancel());
+
+    const retry = document.getElementById('deploy-retry');
+    if (retry) retry.addEventListener('click', () => {
+      fetch('/api/studio/status').then(r => r.json()).then(s => {
+        if (s.deployTarget) {
+          const t = s.deployTarget;
+          this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName);
+        }
+      });
+    });
+
+    const toggle = document.getElementById('deploy-toggle');
+    if (toggle) toggle.addEventListener('click', () => {
+      this._terminalOpen = !this._terminalOpen;
+      const term = document.getElementById('deploy-terminal');
+      if (term) {
+        term.classList.toggle('open', this._terminalOpen);
+        if (this._terminalOpen) term.scrollTop = term.scrollHeight;
+      }
+      toggle.textContent = (this._terminalOpen ? 'Hide' : 'Show') + ' details ' + (this._terminalOpen ? '\u25B4' : '\u25BE');
+    });
+  }
+
+  _onFailed(message) {
+    this._closeSSE();
+    this._stopElapsedTimer();
+    this._active = false;
+    this._state.status = 'stopped';
+    this._state.error = message;
+    this._state.message = 'Deploy failed';
+    this._render();
+    if (this.onUpdate) this.onUpdate(this._state);
+  }
+
+  /** Show centered confirmation dialog for switching deploy target (design bible §27b). */
+  _showSwitchConfirm(currentTarget, newTarget) {
+    this._stopElapsedTimer();
+    this._active = false;
+    const curName = currentTarget.lakehouseName || currentTarget.artifactId || 'current';
+    const newName = newTarget.lakehouseName || newTarget.artifactId || 'new';
+
+    // Remove any existing dialog
+    const old = document.getElementById('deploy-switch-dialog');
+    if (old) old.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'deploy-switch-dialog';
+    backdrop.className = 'deploy-dialog-backdrop';
+    backdrop.setAttribute('data-open', 'true');
+
+    backdrop.innerHTML =
+      '<div class="deploy-dialog-card">' +
+        '<div class="deploy-dialog-icon">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>' +
+        '</div>' +
+        '<div class="deploy-dialog-title">Switch deployment?</div>' +
+        '<div class="deploy-dialog-body">' +
+          'The current service will be stopped and redeployed to a new lakehouse.' +
+        '</div>' +
+        '<div class="deploy-dialog-compare">' +
+          '<div class="deploy-dialog-target from">' +
+            '<span class="deploy-dialog-label">Current</span>' +
+            '<span class="deploy-dialog-name">' + this._esc(curName) + '</span>' +
+            '<span class="deploy-dialog-id">' + this._esc(currentTarget.capacityId || '') + '</span>' +
+          '</div>' +
+          '<div class="deploy-dialog-arrow">\u2192</div>' +
+          '<div class="deploy-dialog-target to">' +
+            '<span class="deploy-dialog-label">New</span>' +
+            '<span class="deploy-dialog-name">' + this._esc(newName) + '</span>' +
+            '<span class="deploy-dialog-id">' + this._esc(newTarget.capacityId || '') + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="deploy-dialog-actions">' +
+          '<button class="deploy-dialog-btn ghost" id="deploy-switch-cancel">Cancel</button>' +
+          '<button class="deploy-dialog-btn primary" id="deploy-switch-confirm">Switch \u0026 Deploy</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(backdrop);
+
+    document.getElementById('deploy-switch-confirm')?.addEventListener('click', () => {
+      backdrop.remove();
+      const t = this._pendingTarget;
+      if (t) this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName, true);
+    });
+
+    const dismiss = () => {
+      backdrop.remove();
+      // Don't change deploy state — the current service is still running
+      // Just restore the deploy button for this lakehouse
+      this._el.innerHTML = '';
+      this._el.style.display = 'none';
+      const btn = document.getElementById('ws-deploy-btn');
+      if (btn) btn.style.display = '';
+    };
+
+    document.getElementById('deploy-switch-cancel')?.addEventListener('click', dismiss);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) dismiss(); });
+    const onKey = (e) => { if (e.key === 'Escape') { dismiss(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+  }
+
+  /** Undeploy — stop the service and return to Phase 1. */
+  async undeploy() {
+    try {
+      await fetch('/api/command/undeploy', { method: 'POST' });
+    } catch { /* best effort */ }
+    this._closeSSE();
+    this._stopElapsedTimer();
+    this._active = false;
+    this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
+    this._el.innerHTML = '';
+    this._el.style.display = 'none';
+    if (this.onUpdate) this.onUpdate({ status: 'idle' });
+  }
+
+  _appendLog(log) {
+    const term = document.getElementById('deploy-terminal');
+    if (!term) return;
+    const cls = log.level === 'error' ? ' error' : log.level === 'warn' ? ' warn' : log.level === 'success' ? ' success' : '';
+    const line = document.createElement('div');
+    line.className = 'deploy-terminal-line' + cls;
+    line.innerHTML = '<span class="ts">[' + this._esc(log.ts || '') + ']</span> ' + this._esc(log.msg || '');
+    term.appendChild(line);
+    if (this._terminalOpen) term.scrollTop = term.scrollHeight;
+  }
+
+  _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 }
 
 // === js/sidebar.js ===
@@ -13358,16 +14466,32 @@ class Sidebar {
 
   setPhase(phase) {
     this._phase = phase;
+    const connectedSlots = [];
+
     this._slots.forEach(slot => {
       const btn = slot.querySelector('.sidebar-icon');
       if (!btn) return;
       const iconPhase = btn.dataset.phase;
-      if (iconPhase === 'connected' && phase === 'disconnected') {
-        slot.classList.add('disabled');
+      if (iconPhase === 'connected') {
+        connectedSlots.push(slot);
+        if (phase === 'disconnected') {
+          slot.classList.add('disabled');
+        }
       } else {
         slot.classList.remove('disabled');
       }
     });
+
+    // Cascade-enable connected views with staggered animation
+    if (phase === 'connected') {
+      connectedSlots.forEach((slot, i) => {
+        setTimeout(() => {
+          slot.classList.remove('disabled');
+          slot.classList.add('cascade-in');
+          setTimeout(() => slot.classList.remove('cascade-in'), 400);
+        }, i * 150);
+      });
+    }
 
     if (this._phaseEl) {
       if (phase === 'connected') {
@@ -14631,7 +15755,7 @@ class WorkspaceExplorer {
     html += `<span class="ws-badge ws-badge-health" style="color:${health.color}">● ${this._esc(health.status)}</span>`;
     html += '</div></div>';
 
-    html += '<div class="ws-content-actions">';
+    html += '<div class="ws-content-actions" id="ws-content-actions">';
     html += '<button class="ws-deploy-btn" id="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>';
     html += '<button class="ws-action-btn" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
     html += '<button class="ws-action-btn" data-action="rename-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
@@ -14643,6 +15767,9 @@ class WorkspaceExplorer {
     html += '<div id="ws-tables-list">Loading tables...</div></div>';
 
     this._contentEl.innerHTML = html;
+
+    // Sync deploy button state from studio status
+    this._syncDeployButtons(lh, ws);
 
     // Bind actions
     const deployBtn = document.getElementById('ws-deploy-btn');
@@ -15477,44 +16604,138 @@ class WorkspaceExplorer {
   }
 
   // ────────────────────────────────────────────
-  // Deploy flow (simulated)
+  // Deploy flow (SSE-backed via DeployFlow)
   // ────────────────────────────────────────────
 
   async _deployToLakehouse(lh, ws) {
     const progressEl = document.getElementById('ws-deploy-progress');
     const btnEl = document.getElementById('ws-deploy-btn');
     if (!progressEl) return;
+
     if (btnEl) btnEl.style.display = 'none';
     progressEl.style.display = 'block';
 
-    const steps = [
-      'Fetching MWC token...',
-      'Updating config...',
-      'Patching code...',
-      'Building service...',
-      'Launching service...',
-    ];
+    if (!this._deployFlow) {
+      this._deployFlow = new DeployFlow(progressEl);
+      this._deployFlow.onUpdate = (state) => this._onDeployUpdate(state, lh, ws);
+    }
 
-    for (let i = 0; i < steps.length; i++) {
-      let html = '';
-      for (let idx = 0; idx < steps.length; idx++) {
-        let cls = 'ws-deploy-step';
-        let icon = '\u25CB'; // ○ pending
-        if (idx < i) { cls += ' done'; icon = '\u2713'; } // ✓ done
-        else if (idx === i) { cls += ' active'; icon = '\u25CF'; } // ● active
-        html += `<div class="${cls}"><span>${icon}</span> ${idx + 1}/${steps.length} ${this._esc(steps[idx])}</div>`;
+    const capacityId = ws.capacityId || '';
+    this._deployFlow.startDeploy(ws.id, lh.id, capacityId, lh.displayName || '');
+  }
+
+  _onDeployUpdate(state, lh, ws) {
+    if (state.status === 'deploying') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('deploying');
+    } else if (state.status === 'running') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
+      if (window.edogSidebar) window.edogSidebar.setPhase('connected');
+      if (state.fltPort && window.edogWs) window.edogWs.setPort(state.fltPort);
+      if (window.edogApp && window.edogApp.loadInitialData) window.edogApp.loadInitialData();
+      this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
+      // Only show undeploy button if this lakehouse's content panel is still displayed
+      if (document.getElementById('ws-deploy-btn')) {
+        this._showUndeployButton(lh);
       }
-      progressEl.innerHTML = html;
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 400));
+    } else if (state.status === 'stopped' && state.error) {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('failed');
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (btnEl) btnEl.style.display = '';
+    } else if (state.status === 'stopped' || state.status === 'idle') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
+      if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (btnEl) btnEl.style.display = '';
+      // Remove undeploy button
+      const undeployBtn = document.getElementById('ws-undeploy-btn');
+      if (undeployBtn) undeployBtn.remove();
+    } else if (state.status === 'crashed') {
+      if (window.edogTopBar) window.edogTopBar.setDeployStatus('crashed');
     }
+  }
 
-    // All done
-    let finalHtml = '';
-    for (let idx = 0; idx < steps.length; idx++) {
-      finalHtml += `<div class="ws-deploy-step done"><span>\u2713</span> ${idx + 1}/${steps.length} ${this._esc(steps[idx])}</div>`;
+  /**
+   * Sync deploy/undeploy buttons to match server-side deploy state.
+   * Called every time a lakehouse content panel is rendered.
+   */
+  async _syncDeployButtons(lh, ws) {
+    try {
+      const resp = await fetch('/api/studio/status');
+      if (!resp.ok) return;
+      const state = await resp.json();
+
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (!btnEl) return;
+
+      const isDeployed = state.phase === 'running' || state.phase === 'crashed';
+      const deployedToThis = isDeployed && state.deployTarget &&
+        state.deployTarget.artifactId === lh.id;
+      const deployedToOther = isDeployed && state.deployTarget &&
+        state.deployTarget.artifactId !== lh.id;
+
+      if (deployedToThis) {
+        // This lakehouse is currently deployed — show re-deploy + stop
+        this._showUndeployButton(lh);
+        // Also attach DeployFlow for undeploy capability
+        const progressEl = document.getElementById('ws-deploy-progress');
+        if (!this._deployFlow && progressEl) {
+          this._deployFlow = new DeployFlow(progressEl);
+          this._deployFlow.onUpdate = (s) => this._onDeployUpdate(s, lh, ws);
+        }
+      } else if (deployedToOther) {
+        // Different lakehouse is deployed — show "Deploy (switch from X)"
+        const otherName = state.deployTarget.lakehouseName || state.deployTarget.artifactId || '';
+        btnEl.textContent = '\u25B6 Deploy (switch from ' + otherName + ')';
+        btnEl.title = 'Currently deployed to ' + otherName + '. Click to switch.';
+      }
+      // else: nothing deployed — default "Deploy to this Lakehouse" button is fine
+    } catch {
+      // Studio status not available — keep default button
     }
-    progressEl.innerHTML = finalHtml;
-    this._toast('Deploy complete', 'success');
+  }
+
+  _showUndeployButton(lh) {
+    // Replace deploy button with re-deploy + stop pair
+    const btnEl = document.getElementById('ws-deploy-btn');
+    if (btnEl) btnEl.textContent = '\u21BB Re-deploy';
+    // Add stop button if not exists
+    if (!document.getElementById('ws-undeploy-btn')) {
+      const actions = document.querySelector('.ws-content-actions');
+      if (actions) {
+        const stopBtn = document.createElement('button');
+        stopBtn.id = 'ws-undeploy-btn';
+        stopBtn.className = 'ws-action-btn';
+        stopBtn.innerHTML = '\u25A0 Stop Service';
+        stopBtn.style.color = 'var(--status-failed)';
+        stopBtn.addEventListener('click', async () => {
+          stopBtn.disabled = true;
+          stopBtn.textContent = 'Stopping\u2026';
+          try {
+            await fetch('/api/command/undeploy', { method: 'POST' });
+          } catch { /* best effort */ }
+          // Disconnect WebSocket (prevent reconnect spam to dead service)
+          if (window.edogWs) window.edogWs.disconnect();
+          // Reset UI to Phase 1
+          if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
+          if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+          // Clean up deploy flow if exists
+          if (this._deployFlow) {
+            this._deployFlow.destroy();
+            this._deployFlow = null;
+          }
+          // Reset buttons
+          stopBtn.remove();
+          if (btnEl) {
+            btnEl.textContent = '\u25B6 Deploy to this Lakehouse';
+            btnEl.style.display = '';
+          }
+          const progressEl = document.getElementById('ws-deploy-progress');
+          if (progressEl) { progressEl.style.display = 'none'; progressEl.innerHTML = ''; }
+          this._toast('Service stopped', 'info');
+        });
+        actions.insertBefore(stopBtn, actions.children[1] || null);
+      }
+    }
   }
 
   // ────────────────────────────────────────────
@@ -18880,6 +20101,12 @@ class EdogLogViewer {
     this.sidebar.init();
     this.commandPalette.init();
 
+    // Expose globals for deploy phase sync
+    window.edogTopBar = this.topbar;
+    window.edogSidebar = this.sidebar;
+    window.edogWs = this.ws;
+    window.edogApp = this;
+
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
     this.sidebar.setPhase(phase);
@@ -18892,7 +20119,56 @@ class EdogLogViewer {
     
     this.bindEventListeners();
     await this.loadInitialData();
-    this.ws.connect();
+
+    // Check for active/completed deploy (AFTER workspace explorer DOM exists)
+    this._checkDeployResume();
+
+    // Don't auto-connect WebSocket — _checkDeployResume will connect
+    // to the right port if FLT is running. Otherwise no WS is needed.
+  }
+
+  /** Check for active/completed deploy on page load (refresh recovery). */
+  async _checkDeployResume() {
+    try {
+      const resp = await fetch('/api/studio/status');
+      if (!resp.ok) return;
+      const state = await resp.json();
+
+      if (state.phase === 'deploying') {
+        // Deploy in progress — let workspace explorer handle the resume
+        const progressEl = document.getElementById('ws-deploy-progress');
+        if (progressEl) {
+          progressEl.style.display = 'block';
+          const btnEl = document.getElementById('ws-deploy-btn');
+          if (btnEl) btnEl.style.display = 'none';
+
+          if (!this.workspaceExplorer._deployFlow) {
+            this.workspaceExplorer._deployFlow = new DeployFlow(progressEl);
+            this.workspaceExplorer._deployFlow.onUpdate = (s) => {
+              if (s.status === 'running') {
+                this.topbar.setDeployStatus('connected');
+                this.sidebar.setPhase('connected');
+                if (s.fltPort && this.ws) this.ws.setPort(s.fltPort);
+                this.loadInitialData();
+              } else if (s.status === 'stopped' && s.error) {
+                this.topbar.setDeployStatus('failed');
+              }
+            };
+          }
+          this.workspaceExplorer._deployFlow.resume(state);
+        }
+        this.topbar.setDeployStatus('deploying');
+      } else if (state.phase === 'running') {
+        this.sidebar.setPhase('connected');
+        this.topbar.setDeployStatus('connected');
+        if (state.fltPort) this.ws.setPort(state.fltPort);
+        this.loadInitialData();
+      } else if (state.phase === 'crashed') {
+        this.topbar.setDeployStatus('crashed');
+      }
+    } catch {
+      // Studio status not available — normal in standalone mode
+    }
   }
   
   bindEventListeners = () => {
@@ -19235,6 +20511,9 @@ class EdogLogViewer {
       
       // Deferred smart processing (non-blocking chunks)
       this.deferredSmartProcessing();
+
+      // Force a render so loaded logs appear in the UI
+      this.renderer.scheduleRender();
       
     } catch (error) {
       console.error('Failed to load initial data:', error);
