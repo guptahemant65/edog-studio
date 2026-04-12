@@ -53,6 +53,7 @@ This document establishes the authority hierarchy for all edog-studio documentat
 │  hivemind/ENGINEERING_STANDARDS.md                              │
 │  hivemind/STYLE_GUIDE.md                                        │
 │  docs/adr/ADR-*.md                                              │
+│  docs/specs/SIGNALR_PROTOCOL.md (transport contract)            │
 ├─────────────────────────────────────────────────────────────────┤
 │  TIER 4: OPERATIONAL DOCS                                      │
 │  How-to guides, debugging, onboarding, performance.            │

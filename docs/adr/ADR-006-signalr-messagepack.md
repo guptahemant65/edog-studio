@@ -37,8 +37,16 @@ EDOG Playground streams 11 event types from C# interceptors to browser.
 - Bounded Channel per topic on server (drop-oldest on backpressure)
 
 ## Consequences
-- +1 NuGet package (MessagePack protocol)
-- JS SignalR client adds ~40KB to HTML (acceptable within 800KB budget)
-- All 11 sub-views use same SignalR connection with group filtering
+- +1 NuGet package (MessagePack protocol) — DEFERRED: version conflict with FLT's MessagePack.Annotations
+- JS SignalR client adds ~47KB to HTML (acceptable within 800KB budget)
+- All 11 sub-views use same SignalR connection with streaming per topic
 - Replaces current raw WebSocket implementation in EdogLogServer
+
+## Addendum (2026-04-12): JSON Protocol + Streaming Architecture
+
+**MessagePack DEFERRED.** The `Microsoft.AspNetCore.SignalR.Protocols.MessagePack` NuGet package causes NU1603 version conflict with FLT's existing `MessagePack.Annotations` dependency under central package version management. Using **JSON protocol** (built-in, zero additional NuGet) until version alignment is resolved. All hub features work identically.
+
+**Streaming replaces groups.** Instead of group-based broadcast (`Clients.Group(topic).SendAsync`), we use **SignalR server-to-client streaming** with `ChannelReader<T>`. Client calls `connection.stream("SubscribeToTopic", topic)` and receives a unified stream: snapshot (buffered history) first, then live events. This eliminates the REST-fetch-for-history gap, provides built-in backpressure via bounded channels, and guarantees per-topic ordering.
+
+See `docs/specs/SIGNALR_PROTOCOL.md` for the full v2 protocol specification.
 
