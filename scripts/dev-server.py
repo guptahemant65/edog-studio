@@ -2202,5 +2202,15 @@ if __name__ == "__main__":
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nServer stopped.")
+        print("\nShutting down...")
+        # Kill FLT process if we own one
+        if _flt_process and _flt_process.poll() is None:
+            print(f"  Stopping FLT service (PID: {_flt_process.pid})...")
+            _flt_process.terminate()
+            try:
+                _flt_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _flt_process.kill()
+            print("  FLT service stopped.")
         server.server_close()
+        print("Server stopped.")
