@@ -70,6 +70,9 @@ DEVMODE_FILES = {
     "EdogLogModels": SERVICE_PATH / "DevMode/EdogLogModels.cs",
     "EdogLogInterceptor": SERVICE_PATH / "DevMode/EdogLogInterceptor.cs", 
     "EdogTelemetryInterceptor": SERVICE_PATH / "DevMode/EdogTelemetryInterceptor.cs",
+    "TopicEvent": SERVICE_PATH / "DevMode/TopicEvent.cs",
+    "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
+    "EdogTopicRouter": SERVICE_PATH / "DevMode/EdogTopicRouter.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
