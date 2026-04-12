@@ -57,11 +57,9 @@ class CommandPalette {
   _getCommands() {
     return [
       { group: 'Views', icon: '\u25A6', label: 'Workspace Explorer', shortcut: '1', action: () => this._sidebar.switchView('workspace') },
-      { group: 'Views', icon: '\u2261', label: 'Logs', shortcut: '2', action: () => this._sidebar.switchView('logs') },
-      { group: 'Views', icon: '\u25C7', label: 'DAG Studio', shortcut: '3', action: () => this._sidebar.switchView('dag') },
-      { group: 'Views', icon: '\u26A1', label: 'Spark Inspector', shortcut: '4', action: () => this._sidebar.switchView('spark') },
-      { group: 'Views', icon: '\u25B9', label: 'API Playground', shortcut: '5', action: () => this._sidebar.switchView('api') },
-      { group: 'Views', icon: '\u2699', label: 'Environment', shortcut: '6', action: () => this._sidebar.switchView('environment') },
+      { group: 'Views', icon: '\u26A1', label: 'Runtime', shortcut: '2', action: () => this._sidebar.switchView('runtime') },
+      { group: 'Views', icon: '\u25B9', label: 'API Playground', shortcut: '3', action: () => this._sidebar.switchView('api') },
+      { group: 'Views', icon: '\u2699', label: 'Environment', shortcut: '4', action: () => this._sidebar.switchView('environment') },
       { group: 'Actions', icon: '\u25B6', label: 'Run DAG', action: () => {} },
       { group: 'Actions', icon: '\u2718', label: 'Cancel DAG', action: () => {} },
       { group: 'Actions', icon: '\u21BB', label: 'Restart Service', action: () => {} },

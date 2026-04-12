@@ -158,9 +158,9 @@ class Sidebar {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
 
-    const views = ['workspace', 'logs', 'dag', 'spark', 'api', 'environment'];
+    const views = ['workspace', 'runtime', 'api', 'environment'];
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 6) {
+    if (num >= 1 && num <= 4) {
       e.preventDefault();
       this.switchView(views[num - 1]);
     }

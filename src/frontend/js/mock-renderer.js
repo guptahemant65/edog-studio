@@ -581,7 +581,7 @@ class MockRenderer {
 
   // ── Spark Inspector ──
   _renderSparkInspector() {
-    const panel = document.getElementById('view-spark');
+    const panel = document.getElementById('rt-tab-spark') || document.getElementById('view-spark');
     if (!panel) return;
 
     panel.innerHTML = `<div class="spark-inspector">
@@ -1652,7 +1652,7 @@ class MockRenderer {
         // Wire "View Logs" button
         const btn = document.getElementById('deploy-view-logs');
         if (btn) btn.addEventListener('click', () => {
-          const sidebar = document.querySelector('.sidebar-icon[data-view="logs"]');
+          const sidebar = document.querySelector('.sidebar-icon[data-view="runtime"]');
           if (sidebar) sidebar.click();
         });
       }

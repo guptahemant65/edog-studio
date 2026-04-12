@@ -106,6 +106,7 @@ class EdogLogViewer {
     this.apiClient = new FabricApiClient();
     this.topbar = new TopBar();
     this.sidebar = new Sidebar();
+    this.runtimeView = new RuntimeView(this.ws);
     this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
     this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
 
@@ -122,7 +123,8 @@ class EdogLogViewer {
     // Wire error-intel jump-to-error
     this.errorIntel.onJumpToError = (errorMsg) => {
       this.filter.setSearch(errorMsg.substring(0, 60));
-      this.sidebar.switchView('logs');
+      this.sidebar.switchView('runtime');
+      this.runtimeView.switchTab('logs');
     };
 
     // Chain auto-RAID-populate into live execution detection
@@ -153,7 +155,18 @@ class EdogLogViewer {
     await this.apiClient.init();
     this.topbar.init();
     this.sidebar.init();
+    this.runtimeView.init();
     this.commandPalette.init();
+
+    // Register the Logs tab module (existing renderer handles it)
+    this.runtimeView.registerTab('logs', {
+      activate: () => {
+        this.renderer.containerReady = false;
+        this.renderer.flush();
+        this.renderer.scheduleRender();
+      },
+      deactivate: () => { /* Logs stay in buffer, just stop rendering */ }
+    });
 
     // Expose globals for deploy phase sync
     window.edogTopBar = this.topbar;
@@ -164,6 +177,7 @@ class EdogLogViewer {
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
     this.sidebar.setPhase(phase);
+    this.runtimeView.setPhase(phase);
 
     // Wire sidebar view switching
     this.sidebar.onViewChange = (viewId) => this._onViewChange(viewId);
@@ -202,7 +216,11 @@ class EdogLogViewer {
               if (s.status === 'running') {
                 this.topbar.setDeployStatus('connected');
                 this.sidebar.setPhase('connected');
-                if (s.fltPort && this.ws) this.ws.setPort(s.fltPort);
+                if (this.runtimeView) this.runtimeView.setPhase('connected');
+                if (s.fltPort && this.ws) {
+                  this.ws.setPort(s.fltPort);
+                  if (this.runtimeView) this.runtimeView.setPort(s.fltPort);
+                }
                 this.loadInitialData();
               } else if (s.status === 'stopped' && s.error) {
                 this.topbar.setDeployStatus('failed');
@@ -214,8 +232,12 @@ class EdogLogViewer {
         this.topbar.setDeployStatus('deploying');
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
+        if (this.runtimeView) this.runtimeView.setPhase('connected');
         this.topbar.setDeployStatus('connected');
-        if (state.fltPort) this.ws.setPort(state.fltPort);
+        if (state.fltPort) {
+          this.ws.setPort(state.fltPort);
+          if (this.runtimeView) this.runtimeView.setPort(state.fltPort);
+        }
         this.loadInitialData();
       } else if (state.phase === 'crashed') {
         this.topbar.setDeployStatus('crashed');
@@ -502,6 +524,8 @@ class EdogLogViewer {
       badge.textContent = labels[status] || `● ${status}`;
       badge.className = `status-badge ${status}`;
     }
+    // Wire to RuntimeView connection bar
+    if (this.runtimeView) this.runtimeView.setConnectionStatus(status);
   }
   
   loadInitialData = async () => {
@@ -649,44 +673,46 @@ class EdogLogViewer {
   
   // ===== VIEW MANAGEMENT =====
   
-  // Compatibility bridge: old switchTab calls route through sidebar
+  // Compatibility bridge: old switchTab calls route through sidebar + runtime view
   switchTab = (tabId) => {
-    const viewMap = { 'logs': 'logs', 'ssr': 'logs', 'summary': 'dag', 'timeline': 'dag' };
+    const viewMap = { 'logs': 'runtime', 'ssr': 'runtime', 'summary': 'runtime', 'timeline': 'runtime' };
     const viewId = viewMap[tabId] || tabId;
     if (this.sidebar) {
       this.sidebar.switchView(viewId);
+    }
+    // If routing to runtime, also switch the inner tab
+    if (viewId === 'runtime' && this.runtimeView) {
+      const rtTabMap = { 'logs': 'logs', 'ssr': 'telemetry', 'summary': 'logs', 'timeline': 'logs' };
+      this.runtimeView.switchTab(rtTabMap[tabId] || 'logs');
     }
   }
 
   _onViewChange = (viewId) => {
     // Activate/deactivate view-specific modules
-    if (viewId === 'dag') {
-      this.controlPanel.activate();
-    } else {
-      this.controlPanel.deactivate();
-    }
+    if (viewId === 'runtime') {
+      // RuntimeView handles its own tab switching
+      this.runtimeView.switchTab(this.runtimeView._activeTab);
 
-    if (viewId === 'logs') {
-      // Re-init virtual scroll — container may have been hidden (zero height)
-      this.renderer.containerReady = false;
-
-      // If buffer is empty but service is running, fetch logs from REST + ensure SignalR
-      const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
-      if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
-        // Service is deployed (port changed from default) but we have no logs — fetch them
-        this.loadInitialData().then(() => {
+      // If current tab is logs, ensure data is loaded
+      if (this.runtimeView._activeTab === 'logs') {
+        this.renderer.containerReady = false;
+        const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
+        if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
+          this.loadInitialData().then(() => {
+            this.renderer.flush();
+            this.renderer.scheduleRender();
+          });
+        } else {
           this.renderer.flush();
           this.renderer.scheduleRender();
-        });
-      } else {
-        this.renderer.flush();
-        this.renderer.scheduleRender();
+        }
+        if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
+          this.ws.connect();
+        }
       }
-
-      // Ensure SignalR is connected
-      if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
-        this.ws.connect();
-      }
+    } else {
+      // DAG control panel deactivation (legacy — will be removed in Layer 2)
+      this.controlPanel.deactivate();
     }
   }
 
@@ -955,7 +981,8 @@ class EdogLogViewer {
   }
 
   jumpToNextError = () => {
-    this.sidebar.switchView('logs');
+    this.sidebar.switchView('runtime');
+    this.runtimeView.switchTab('logs');
     const container = document.getElementById('logs-container');
     if (!container) return;
 
