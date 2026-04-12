@@ -2100,6 +2100,8 @@ class WorkspaceExplorer {
       if (window.edogSidebar) window.edogSidebar.setPhase('connected');
       // Connect WebSocket to FLT port for live logs
       if (state.fltPort && window.edogWs) window.edogWs.setPort(state.fltPort);
+      // Fetch existing logs from FLT (startup logs captured before WS connected)
+      if (window.edogApp && window.edogApp.loadInitialData) window.edogApp.loadInitialData();
       this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
       // Show undeploy button
       this._showUndeployButton(lh);

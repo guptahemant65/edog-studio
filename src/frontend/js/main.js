@@ -159,6 +159,7 @@ class EdogLogViewer {
     window.edogTopBar = this.topbar;
     window.edogSidebar = this.sidebar;
     window.edogWs = this.ws;
+    window.edogApp = this;
 
     // Set phase based on token availability
     const phase = this.apiClient.getPhase();
@@ -209,6 +210,8 @@ class EdogLogViewer {
         this.topbar.setDeployStatus('connected');
         // Connect WebSocket to FLT port
         if (state.fltPort) this.ws.setPort(state.fltPort);
+        // Fetch existing logs from FLT (missed during initial load)
+        this.loadInitialData();
       } else if (state.phase === 'crashed') {
         this.topbar.setDeployStatus('crashed');
       }
