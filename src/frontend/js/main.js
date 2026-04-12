@@ -560,6 +560,9 @@ class EdogLogViewer {
       
       // Deferred smart processing (non-blocking chunks)
       this.deferredSmartProcessing();
+
+      // Force a render so loaded logs appear in the UI
+      this.renderer.scheduleRender();
       
     } catch (error) {
       console.error('Failed to load initial data:', error);
