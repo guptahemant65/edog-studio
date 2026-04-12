@@ -73,6 +73,7 @@ JS_MODULES = [
     "js/topbar.js",
     "js/deploy-flow.js",
     "js/sidebar.js",
+    "js/runtime-view.js",
     "js/workspace-explorer.js",
     "js/command-palette.js",
     "js/mock-renderer.js",
