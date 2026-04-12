@@ -461,10 +461,15 @@ def _deploy_step(step, message, deploy_id):
     return True
 
 
+# Event set when FLT stdout shows "DevConnection started" (service fully ready)
+_flt_ready_event = threading.Event()
+
+
 def _drain_flt_stdout(proc, deploy_id):
     """Read FLT process stdout continuously to prevent pipe buffer blocking.
 
-    Also captures output as deploy log entries so the terminal shows FLT output.
+    Also captures output as deploy log entries and sets _flt_ready_event
+    when the service is fully deployed (DevConnection started).
     """
     try:
         while proc.poll() is None:
@@ -474,6 +479,9 @@ def _drain_flt_stdout(proc, deploy_id):
             line = line.rstrip()
             if line:
                 _deploy_log("[FLT] " + line, "info")
+                # Check for deployment success markers
+                if "DevConnection started" in line:
+                    _flt_ready_event.set()
     except Exception:
         pass
 
@@ -695,50 +703,42 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — launch error"})
             return
 
-        # Step 4: Health check (2 min — account picker takes 30-60s)
-        if not _deploy_step(4, "Waiting for service ready (auto-selecting account)...", deploy_id):
+        # Step 4: Wait for FLT to be fully deployed
+        # The real indicator is "DevConnection started" in FLT stdout
+        # (captured by _drain_flt_stdout which sets _flt_ready_event)
+        if not _deploy_step(4, "Waiting for DevMode connection...", deploy_id):
             return
-        healthy = False
-        for attempt in range(120):
-            if _deploy_cancel.is_set():
-                _flt_process.terminate()
-                with _studio_lock:
-                    _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
-                return
-            # Check if FLT process died
-            if _flt_process.poll() is not None:
-                _deploy_log(f"FLT process exited with code {_flt_process.returncode}", "error")
-                with _studio_lock:
-                    _studio_state.update({
-                        "phase": "stopped",
-                        "deployError": f"FLT process exited with code {_flt_process.returncode}",
-                        "deployMessage": "Deploy failed — service crashed during startup",
-                    })
-                return
-            try:
-                url = f"http://localhost:{FLT_INTERNAL_PORT}/api/stats"
-                req = urllib.request.Request(url)
-                with urllib.request.urlopen(req, timeout=2) as resp:
-                    if resp.status == 200:
-                        healthy = True
-                        break
-            except Exception:
-                pass
-            if attempt % 10 == 0:
-                _deploy_log(f"Ping attempt {attempt + 1}/120...", "info")
-            time.sleep(1)
+        _flt_ready_event.clear()
+        healthy = _flt_ready_event.wait(timeout=180)  # 3 min max
 
-        if not healthy:
-            _deploy_log("Health check timed out after 120s", "error")
+        # Check if cancelled or process died while waiting
+        if _deploy_cancel.is_set():
+            _flt_process.terminate()
+            with _studio_lock:
+                _studio_state.update({"phase": "stopped", "deployMessage": "Cancelled"})
+            return
+
+        if _flt_process.poll() is not None:
+            _deploy_log(f"FLT process exited with code {_flt_process.returncode}", "error")
             with _studio_lock:
                 _studio_state.update({
                     "phase": "stopped",
-                    "deployError": "Service did not become healthy in 120s",
-                    "deployMessage": "Deploy failed — health check timeout",
+                    "deployError": f"FLT process exited with code {_flt_process.returncode}",
+                    "deployMessage": "Deploy failed — service crashed during startup",
                 })
             return
 
-        _deploy_log("Service healthy!", "success")
+        if not healthy:
+            _deploy_log("DevConnection not established within 180s", "error")
+            with _studio_lock:
+                _studio_state.update({
+                    "phase": "stopped",
+                    "deployError": "Service did not fully start within 180s",
+                    "deployMessage": "Deploy failed — DevMode connection timeout",
+                })
+            return
+
+        _deploy_log("DevConnection started — service fully deployed!", "success")
 
         # Done
         with _studio_lock:
