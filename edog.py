@@ -786,24 +786,35 @@ def install_git_hook(repo_root):
         print(f"❌ Git hooks directory not found: {hooks_dir}")
         return False
     
-    # Hook script content
+    # Hook script — blocks commits containing any EDOG-modified or EDOG-created file
     hook_script = '''#!/bin/sh
 # EDOG DevMode pre-commit hook
 # Prevents accidental commits of EDOG-modified files
+# Auto-installed by EDOG Studio deploy. Remove with: edog --uninstall-hook
 
-# Files that EDOG modifies
-EDOG_FILES="LiveTableController.cs LiveTableSchedulerRunController.cs GTSBasedSparkClient.cs"
+STAGED=$(git diff --cached --name-only)
 
-# Check if any EDOG files are staged
-for file in $EDOG_FILES; do
-    if git diff --cached --name-only | grep -q "$file"; then
-        # Check if file contains EDOG markers
-        if git diff --cached -- "*$file" | grep -q "EDOG DevMode"; then
+# 1. Block any staged DevMode/ files (created by EDOG, should never be committed)
+if echo "$STAGED" | grep -q "DevMode/"; then
+    echo ""
+    echo "COMMIT BLOCKED: EDOG DevMode files staged!"
+    echo ""
+    echo "   DevMode/ files are injected by EDOG and must not be committed."
+    echo "   Run: edog --revert"
+    echo ""
+    exit 1
+fi
+
+# 2. Block staged files that contain EDOG markers
+EDOG_PATCHED="GTSBasedSparkClient.cs Program.cs WorkloadApp.cs ParametersManifest.json Test.json"
+for file in $EDOG_PATCHED; do
+    if echo "$STAGED" | grep -q "$file"; then
+        if git diff --cached -- "*$file" | grep -qE "EDOG DevMode|EdogLogServer|EdogTelemetryInterceptor|DisableFLTAuth.*true"; then
             echo ""
-            echo "COMMIT BLOCKED: EDOG DevMode changes detected!"
+            echo "COMMIT BLOCKED: EDOG DevMode changes in $file!"
             echo ""
-            echo "   File: $file contains EDOG modifications."
-            echo "   Run 'edog --revert' before committing."
+            echo "   This file contains EDOG patches that must not be committed."
+            echo "   Run: edog --revert"
             echo ""
             exit 1
         fi
@@ -2280,6 +2291,12 @@ def revert_all_changes(repo_root):
     except Exception:
         pass
     
+    # 8. Remove git pre-commit hook (auto-installed during deploy)
+    try:
+        uninstall_git_hook(repo_root)
+    except Exception:
+        pass
+    
     return all_success
 
 
@@ -2655,6 +2672,13 @@ def headless_deploy(repo_root):
     except Exception as e:
         emit(2, f"Patching failed: {e}", "error")
         return 1
+
+    # Auto-install git pre-commit hook to prevent committing EDOG changes
+    try:
+        if install_git_hook(repo_root):
+            emit(2, "Git pre-commit hook installed", "info")
+    except Exception:
+        pass  # Non-fatal — don't block deploy for hook install failure
 
     # Step 3: Build
     emit(3, "Building FLT service...")
