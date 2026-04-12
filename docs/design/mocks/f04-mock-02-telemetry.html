@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Telemetry Tab Mock (F04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --green-dim: rgba(24,160,88,0.12);
+  --amber: #e5940c;
+  --amber-dim: rgba(229,148,12,0.12);
+  --red: #e5453b;
+  --red-dim: rgba(229,69,59,0.12);
+  --blue: #2d7ff9;
+  --purple: #a855f7;
+  --teal: #0d9488;
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out: cubic-bezier(0.22,1,0.36,1);
+}
+[data-theme="light"] {
+  --bg: #f8f9fc; --bg-2: #ffffff; --bg-3: #f0f1f5; --bg-4: #e8e9ee;
+  --text: #1a1d27; --text-2: #5c6070; --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08); --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03); --selected-bg: rgba(109,92,255,0.08);
+  --toolbar-bg: #f2f3f7; --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15); --scrollbar-track: transparent;
+  --badge-bg: rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --card-bg: #ffffff;
+  --section-header-bg: #f4f5f8;
+  --detail-bg: #fbfbfd;
+  --tree-line: rgba(0,0,0,0.1);
+  --slider-track: #dde0e6;
+  --slider-fill: var(--accent);
+}
+[data-theme="dark"] {
+  --bg: #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text: #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.03); --selected-bg: rgba(109,92,255,0.10);
+  --toolbar-bg: #13151d; --panel-bg: #161923;
+  --scrollbar-thumb: rgba(255,255,255,0.12); --scrollbar-track: transparent;
+  --badge-bg: rgba(255,255,255,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --card-bg: #1a1e2a;
+  --section-header-bg: #161923;
+  --detail-bg: #13151d;
+  --tree-line: rgba(255,255,255,0.1);
+  --slider-track: #2a2e3c;
+  --slider-fill: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input{background:none;border:none;outline:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* TAB BAR */
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 16px;height:40px;background:var(--bg-2);border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
+.tab-bar-left{display:flex;align-items:center;gap:0;position:relative}
+.tab{padding:0 16px;height:40px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600}
+.tab-indicator{position:absolute;bottom:0;height:3px;background:var(--accent);border-radius:3px 3px 0 0;transition:left 200ms ease,width 200ms ease}
+.tab-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+.tab-bar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.theme-toggle{width:32px;height:32px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.theme-toggle:hover{background:var(--hover-bg)}
+.theme-toggle svg{width:16px;height:16px;fill:var(--text-3)}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--toolbar-bg);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r6);padding:0 10px;height:32px;min-width:240px;flex:0 1 320px;transition:border-color var(--transition),box-shadow var(--transition)}
+.search-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.search-box svg{width:14px;height:14px;fill:var(--text-3);flex-shrink:0}
+.search-box input{flex:1;height:100%;font-size:12px;color:var(--text)}
+.search-box input::placeholder{color:var(--text-3)}
+.filter-count{font-size:11px;color:var(--text-3);white-space:nowrap}
+
+.status-pills{display:flex;gap:4px}
+.pill{padding:4px 12px;border-radius:var(--r100);font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition);border:1.5px solid var(--border);background:transparent;white-space:nowrap;user-select:none}
+.pill .pill-count{margin-left:4px;opacity:.7;font-weight:500}
+.pill:hover{border-color:var(--border-bright)}
+.pill.active-all{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pill.active-running{background:var(--green);color:#fff;border-color:var(--green)}
+.pill.active-succeeded{background:var(--green-dim);color:var(--green);border-color:var(--green)}
+.pill.active-failed{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+
+/* Duration slider */
+.duration-slider-wrap{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3)}
+.duration-slider{position:relative;width:120px;height:20px;cursor:pointer}
+.duration-slider .track{position:absolute;top:9px;left:0;right:0;height:3px;background:var(--slider-track);border-radius:2px}
+.duration-slider .fill{position:absolute;top:9px;height:3px;background:var(--accent);border-radius:2px}
+.duration-slider .thumb{position:absolute;top:5px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-2);box-shadow:var(--shadow-sm);cursor:grab;transform:translateX(-50%);transition:transform 80ms ease}
+.duration-slider .thumb:hover{transform:translateX(-50%) scale(1.2)}
+.duration-slider .thumb:active{cursor:grabbing;transform:translateX(-50%) scale(1.15)}
+
+.export-btn{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:var(--r6);font-size:12px;font-weight:500;border:1px solid var(--border);transition:all var(--transition);position:relative}
+.export-btn:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.export-btn svg{width:14px;height:14px;fill:var(--text-2)}
+.export-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r6);box-shadow:var(--shadow-md);overflow:hidden;z-index:100;min-width:120px;display:none}
+.export-dropdown.show{display:block;animation:dropIn 120ms var(--ease-out)}
+.export-dropdown button{display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;transition:background var(--transition)}
+.export-dropdown button:hover{background:var(--hover-bg)}
+@keyframes dropIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* MAIN CONTENT */
+.content-area{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.cards-container{flex:1;overflow-y:auto;padding:12px 16px 40px;scroll-behavior:smooth}
+
+/* EMPTY STATE */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;text-align:center;animation:fadeIn 300ms ease}
+.empty-icon{width:80px;height:80px;position:relative}
+.empty-icon .orbit{position:absolute;inset:0;border-radius:50%;border:1.5px dashed var(--border-bright);animation:spin 12s linear infinite}
+.empty-icon .orbit:nth-child(2){inset:12px;animation-duration:8s;animation-direction:reverse}
+.empty-icon .core{position:absolute;inset:24px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center}
+.empty-icon .core svg{width:20px;height:20px;fill:var(--accent);opacity:.7}
+.empty-icon .dot{position:absolute;width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:.5}
+.empty-icon .dot:nth-child(4){top:0;left:50%;transform:translateX(-50%);animation:orbitDot1 12s linear infinite}
+.empty-icon .dot:nth-child(5){top:50%;right:0;animation:orbitDot2 8s linear infinite}
+.empty-title{font-size:15px;font-weight:600;color:var(--text)}
+.empty-hint{font-size:12px;color:var(--text-3);max-width:300px;line-height:1.6}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes orbitDot1{from{transform:translateX(-50%) rotate(0deg) translateY(-40px)}to{transform:translateX(-50%) rotate(360deg) translateY(-40px)}}
+@keyframes orbitDot2{from{transform:rotate(0deg) translateX(40px)}to{transform:rotate(-360deg) translateX(40px)}}
+
+/* SECTION HEADERS */
+.section-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:8px;padding:6px 0;margin:4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);background:var(--bg);user-select:none}
+.section-header::after{content:'';flex:1;height:1px;background:var(--border)}
+.section-dot{width:6px;height:6px;border-radius:50%}
+.section-dot.active-dot{background:var(--green);animation:pulse-dot 2s ease infinite}
+.section-dot.completed-dot{background:var(--text-3)}
+.section-count{font-weight:500;color:var(--text-3);font-size:11px}
+
+/* ACTIVITY CARD */
+.activity-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r10);padding:12px 14px;margin-bottom:6px;cursor:pointer;transition:all 200ms ease,transform 300ms var(--ease-out),opacity 200ms ease;position:relative;overflow:hidden;border-left:3px solid transparent}
+.activity-card:hover{border-color:var(--border-bright);box-shadow:var(--shadow-sm);border-left-color:var(--accent);overflow:visible}
+.activity-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim);border-left-color:var(--accent)}
+.activity-card.running{border-left-color:var(--green)}
+.activity-card.succeeded{border-left-color:var(--green)}
+.activity-card.failed{border-left-color:var(--red)}
+.activity-card.long-running{border-left-color:var(--amber)}
+.activity-card.kb-focus{outline:2px solid var(--accent);outline-offset:2px}
+.activity-card.entering{animation:cardSlideIn 200ms var(--spring) both}
+.activity-card.fail-pulse{animation:failPulse 300ms ease}
+.activity-card.hidden-by-filter{display:none}
+
+@keyframes cardSlideIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes failPulse{0%{box-shadow:0 0 0 0 rgba(229,69,59,.35)}50%{box-shadow:0 0 16px 4px rgba(229,69,59,.2)}100%{box-shadow:0 0 0 0 transparent}}
+
+.card-row-1{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.card-name{font-size:14px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-name mark{background:var(--accent-dim);color:var(--accent);border-radius:2px;padding:0 1px}
+.status-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--r100);white-space:nowrap}
+.status-badge.running-badge{color:var(--green);background:var(--green-dim)}
+.status-badge.running-badge .badge-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 1.5s ease infinite}
+.status-badge.succeeded-badge{color:var(--green);background:var(--green-dim)}
+.status-badge.failed-badge{color:var(--red);background:var(--red-dim)}
+.status-badge.long-badge{color:var(--amber);background:var(--amber-dim)}
+
+.card-duration-text{font-size:12px;font-weight:600;font-family:var(--mono);color:var(--text-2);min-width:52px;text-align:right}
+.card-duration-text.counting{color:var(--accent)}
+.card-duration-text.long-pulse{animation:longPulse 2s ease infinite}
+@keyframes longPulse{0%,100%{opacity:1}50%{opacity:.6}}
+
+/* Duration Bar */
+.duration-bar{height:4px;background:var(--bg-3);border-radius:2px;overflow:hidden;margin:6px 0 4px}
+.duration-bar .fill{height:100%;border-radius:2px;transition:background-color 300ms ease;position:relative}
+.duration-bar .fill.running-fill{background:linear-gradient(90deg,var(--accent),var(--accent));animation:barPulse 1.8s ease infinite}
+.duration-bar .fill.succeeded-fill{background:var(--green)}
+.duration-bar .fill.failed-fill{background:var(--red)}
+.duration-bar .fill.amber-fill{background:var(--amber);animation:barPulse 1.8s ease infinite}
+@keyframes barPulse{0%,100%{opacity:1}50%{opacity:.65}}
+
+.card-row-2{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-3)}
+.card-row-2 .meta-tag{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;background:var(--badge-bg);border-radius:var(--r4);font-family:var(--mono);font-size:10px;white-space:nowrap}
+.card-error{font-size:11px;color:var(--red);margin-top:6px;padding:6px 8px;background:var(--red-dim);border-radius:var(--r4);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Hover preview */
+.hover-preview{position:fixed;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r10);padding:10px 14px;box-shadow:var(--shadow-md);z-index:9999;min-width:200px;font-size:11px;pointer-events:none;opacity:0;transition:opacity 120ms ease;display:none}
+.hover-preview::before{content:'';position:absolute;top:50%;left:-6px;transform:translateY(-50%);width:10px;height:10px;background:var(--bg-2);border-left:1px solid var(--border-bright);border-bottom:1px solid var(--border-bright);rotate:-315deg}
+.hover-preview-row{display:flex;justify-content:space-between;gap:12px;margin-bottom:4px;color:var(--text-2)}
+.hover-preview-row span:first-child{color:var(--text-3)}
+.hover-preview .sparkline-row{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+.sparkline-row .spark-label{font-size:10px;color:var(--text-3);margin-bottom:4px}
+.sparkline{display:flex;align-items:flex-end;gap:2px;height:20px}
+.sparkline .bar{width:8px;border-radius:2px 2px 0 0;background:var(--accent-dim);transition:background var(--transition)}
+.sparkline .bar.highlight{background:var(--accent)}
+
+/* DETAIL PANEL */
+.detail-overlay{position:absolute;bottom:0;left:0;right:0;background:var(--detail-bg);border-top:1px solid var(--border);z-index:50;display:none;flex-direction:column;max-height:50%;box-shadow:0 -4px 16px rgba(0,0,0,.06)}
+.detail-overlay.open{display:flex;animation:detailIn 150ms ease-out}
+@keyframes detailIn{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+.detail-resize-handle{height:6px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.detail-resize-handle::after{content:'';width:40px;height:3px;border-radius:2px;background:var(--border-bright)}
+.detail-header{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border)}
+.detail-header .detail-title{font-size:15px;font-weight:700;flex:1}
+.detail-header .detail-status{font-size:12px;font-weight:600}
+.detail-actions{display:flex;gap:6px}
+.detail-actions button{padding:4px 10px;border-radius:var(--r6);font-size:11px;font-weight:500;border:1px solid var(--border);transition:all var(--transition)}
+.detail-actions button:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.detail-actions .view-logs-btn{color:var(--accent);border-color:var(--accent-dim)}
+.detail-actions .view-logs-btn:hover{background:var(--accent-dim)}
+.detail-close{width:28px;height:28px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.detail-close:hover{background:var(--hover-bg)}
+.detail-close svg{width:14px;height:14px;fill:var(--text-3)}
+
+.detail-body{overflow-y:auto;padding:12px 16px 40px;flex:1}
+.detail-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:16px}
+.detail-meta-item{font-size:12px}
+.detail-meta-item .label{color:var(--text-3);font-size:11px;margin-bottom:2px}
+.detail-meta-item .value{font-weight:500;font-family:var(--mono);font-size:12px}
+
+.detail-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:12px 0 8px}
+
+/* JSON tree — contained card */
+.json-tree{font-family:var(--mono);font-size:11px;line-height:1.8;background:var(--bg-3);border:1px solid var(--border);border-radius:var(--r6);padding:10px 14px;overflow-x:auto;white-space:pre;display:block}
+.json-key{color:var(--accent)}
+.json-string{color:var(--green)}
+.json-number{color:var(--amber)}
+.json-bool{color:var(--purple)}
+.json-null{color:var(--text-3)}
+.json-brace{color:var(--text-3)}
+
+/* Child activities tree */
+.child-tree{padding-left:0}
+.child-node{display:flex;align-items:center;gap:8px;padding:4px 0 4px 20px;position:relative;font-size:12px}
+.child-node::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:1px;background:var(--tree-line)}
+.child-node::after{content:'';position:absolute;left:6px;top:50%;width:10px;height:1px;background:var(--tree-line)}
+.child-node:last-child::before{height:50%}
+.child-status{width:14px;height:14px;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0}
+.child-status.done{color:var(--green)}
+.child-status.running{color:var(--accent)}
+.child-status.pending{color:var(--text-3)}
+.child-name{font-weight:500;flex:1}
+.child-dur{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+.child-bar{width:60px;height:3px;background:var(--bg-3);border-radius:2px;overflow:hidden}
+.child-bar .fill{height:100%;border-radius:2px}
+
+/* TOAST */
+.toast-container{position:fixed;bottom:100px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r10);padding:10px 16px;box-shadow:var(--shadow-md);font-size:12px;font-weight:500;animation:toastIn 200ms var(--spring);display:flex;align-items:center;gap:8px}
+.toast.leaving{animation:toastOut 200ms ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-8px) scale(.96)}}
+.toast-icon{font-size:14px}
+
+/* STATE CONTROLLER */
+.state-ctrl-toggle{position:fixed;bottom:44px;right:16px;z-index:200;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-md);transition:transform 200ms var(--spring)}
+.state-ctrl-toggle:hover{transform:scale(1.08)}
+.state-ctrl-toggle svg{width:18px;height:18px;fill:#fff}
+.state-ctrl{position:fixed;bottom:92px;right:16px;z-index:200;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);width:260px;display:none;overflow:hidden}
+.state-ctrl.open{display:block;animation:dropIn 150ms var(--ease-out)}
+.state-ctrl-header{padding:10px 14px;font-size:12px;font-weight:700;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.state-ctrl-header svg{width:14px;height:14px;fill:var(--text-3)}
+.state-ctrl-body{padding:8px}
+.state-ctrl-body button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border-radius:var(--r6);font-size:12px;font-weight:500;text-align:left;transition:background var(--transition)}
+.state-ctrl-body button:hover{background:var(--hover-bg)}
+.state-ctrl-body button .sc-icon{width:20px;height:20px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.sc-divider{height:1px;background:var(--border);margin:4px 0}
+
+/* KEYBOARD HINTS — fixed footer bar */
+.kbd-hint{position:fixed;bottom:0;left:0;right:0;z-index:150;font-size:10px;color:var(--text-2);display:flex;align-items:center;gap:16px;padding:6px 16px;height:32px;background:var(--bg-3);border-top:1px solid var(--border-bright);box-shadow:0 -2px 8px rgba(0,0,0,0.06)}
+kbd{padding:1px 5px;border:1px solid var(--border-bright);border-radius:3px;font-family:var(--mono);font-size:10px;background:var(--bg-2)}
+
+/* EMPTY STATE FADE */
+.empty-state.fading{animation:fadeOut 150ms ease forwards}
+@keyframes fadeOut{to{opacity:0;transform:scale(.97)}}
+
+/* TIMELINE GUTTER */
+.timeline-gutter{position:absolute;left:0;top:0;bottom:0;width:3px}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <div class="tab-bar-left">
+      <div class="tab" data-tab="logs">Logs</div>
+      <div class="tab active" data-tab="telemetry"><span class="tab-dot"></span> Telemetry</div>
+      <div class="tab" data-tab="sysfiles">System Files</div>
+      <div class="tab" data-tab="spark">Spark</div>
+      <div class="tab" data-tab="internals">Internals &#9662;</div>
+      <div class="tab-indicator" id="tabIndicator"></div>
+    </div>
+    <div class="tab-bar-right">
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+        <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar" id="toolbar">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <input type="text" id="filterInput" placeholder="Filter activities..." autocomplete="off" spellcheck="false">
+    </div>
+    <span class="filter-count" id="filterCount"></span>
+
+    <div class="status-pills" id="statusPills">
+      <button class="pill active-all" data-status="all">All<span class="pill-count" id="countAll"></span></button>
+      <button class="pill" data-status="running">Running<span class="pill-count" id="countRunning"></span></button>
+      <button class="pill" data-status="succeeded">Succeeded<span class="pill-count" id="countSucceeded"></span></button>
+      <button class="pill" data-status="failed">Failed<span class="pill-count" id="countFailed"></span></button>
+    </div>
+
+    <div class="duration-slider-wrap">
+      <span id="durationLabel">0s – 60s</span>
+      <div class="duration-slider" id="durationSlider">
+        <div class="track"></div>
+        <div class="fill" id="sliderFill"></div>
+        <div class="thumb" id="thumbMin" data-which="min"></div>
+        <div class="thumb" id="thumbMax" data-which="max"></div>
+      </div>
+    </div>
+
+    <div style="position:relative">
+      <button class="export-btn" id="exportBtn">
+        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        Export
+      </button>
+      <div class="export-dropdown" id="exportDropdown">
+        <button data-format="json">Export as JSON</button>
+        <button data-format="csv">Export as CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="content-area" id="contentArea">
+    <div class="cards-container" id="cardsContainer">
+      <!-- Empty state shown initially -->
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <div class="orbit"></div>
+          <div class="orbit"></div>
+          <div class="core">
+            <svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg>
+          </div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+        <div class="empty-title">Waiting for telemetry events...</div>
+        <div class="empty-hint">SSR telemetry events will appear as operations execute. Activities, durations, and correlations stream in real-time.</div>
+      </div>
+    </div>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-overlay" id="detailPanel">
+      <div class="detail-resize-handle" id="detailResizeHandle"></div>
+      <div class="detail-header">
+        <div class="detail-title" id="detailTitle">–</div>
+        <div class="detail-status" id="detailStatus"></div>
+        <div class="detail-actions">
+          <button class="view-logs-btn" id="viewLogsBtn">View in Logs</button>
+          <button id="copyDataBtn">Copy data</button>
+        </div>
+        <button class="detail-close" id="detailClose"><svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- STATE CONTROLLER -->
+<button class="state-ctrl-toggle" id="stateCtrlToggle" title="State controller">
+  <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+</button>
+<div class="state-ctrl" id="stateCtrl">
+  <div class="state-ctrl-header">
+    <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58z"/></svg>
+    State Controller
+  </div>
+  <div class="state-ctrl-body">
+    <button onclick="SC.addRunning()"><span class="sc-icon" style="background:var(--green-dim);color:var(--green)">&#9679;</span> Add running activity</button>
+    <button onclick="SC.completeActivity()"><span class="sc-icon" style="background:var(--green-dim);color:var(--green)">&#10003;</span> Complete activity</button>
+    <button onclick="SC.failActivity()"><span class="sc-icon" style="background:var(--red-dim);color:var(--red)">&#10005;</span> Fail activity</button>
+    <button onclick="SC.addLongRunning()"><span class="sc-icon" style="background:var(--amber-dim);color:var(--amber)">&#9888;</span> Add long-running</button>
+    <div class="sc-divider"></div>
+    <button onclick="SC.loadDemoData()"><span class="sc-icon" style="background:var(--accent-dim);color:var(--accent)">&#9654;</span> Load demo data</button>
+    <button onclick="SC.clearAll()"><span class="sc-icon" style="background:var(--badge-bg);color:var(--text-3)">&#8635;</span> Clear all (empty state)</button>
+    <div class="sc-divider"></div>
+    <button onclick="SC.toggleTheme()"><span class="sc-icon" style="background:var(--badge-bg);color:var(--text-2)">&#9681;</span> Toggle theme</button>
+  </div>
+</div>
+
+<!-- KEYBOARD HINTS -->
+<div class="kbd-hint">
+  <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate</span>
+  <span><kbd>Enter</kbd> Details</span>
+  <span><kbd>Esc</kbd> Close</span>
+  <span><kbd>Ctrl+E</kbd> Export</span>
+</div>
+
+<div id="hoverTooltip" class="hover-preview"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   TELEMETRY TAB — EDOG Studio Mock
+   Pixel — Frontend Engineer
+   ═══════════════════════════════════════════════════════════════════ */
+'use strict';
+
+/* ─── Utilities ─── */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const genId = () => Math.random().toString(36).slice(2, 10);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const fmtDur = s => s < 0.1 ? `${(s*1000).toFixed(0)}ms` : s < 10 ? `${s.toFixed(2)}s` : s < 100 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`;
+const fmtTime = d => d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3,'0');
+
+/* ─── State ─── */
+let activities = [];
+let selectedId = null;
+let kbIndex = -1;
+let filterText = '';
+let statusFilter = 'all';
+let durMin = 0, durMax = 60;
+let detailOpen = false;
+let emptyVisible = true;
+
+/* ─── Activity Model ─── */
+function createActivity(opts) {
+  const now = Date.now();
+  return {
+    id: genId(),
+    name: opts.name || 'Activity',
+    status: opts.status || 'running', // running | succeeded | failed
+    startTime: opts.startTime || now,
+    endTime: opts.endTime || null,
+    elapsed: opts.elapsed || 0,
+    estimated: opts.estimated || 30,
+    error: opts.error || null,
+    properties: opts.properties || {},
+    children: opts.children || [],
+    isLongRunning: opts.isLongRunning || false,
+    sparkline: opts.sparkline || null,
+    _el: null,
+  };
+}
+
+/* ─── Mock Data ─── */
+const NOW = Date.now();
+function ts(secAgo) { return NOW - secAgo * 1000; }
+
+const DEMO_DATA = [
+  // Running
+  createActivity({ name:'RunDAG', status:'running', startTime:ts(12.4), elapsed:12.4, estimated:30,
+    properties:{ iterationId:'abc-def-123', dagNodeCount:7, completedNodes:3, targetLakehouse:'SalesLH-01' },
+    children:[
+      { name:'DagNode:RefreshSource', status:'succeeded', duration:2.4 },
+      { name:'DagNode:TransformSales', status:'running', duration:4.1 },
+      { name:'DagNode:AggregateSales', status:'pending', duration:0 },
+      { name:'DagNode:BuildIndex', status:'pending', duration:0 },
+      { name:'DagNode:UpdateCatalog', status:'pending', duration:0 },
+      { name:'DagNode:ValidateOutput', status:'pending', duration:0 },
+      { name:'DagNode:PublishMetrics', status:'pending', duration:0 },
+    ]
+  }),
+  createActivity({ name:'SparkExecute', status:'running', startTime:ts(8.1), elapsed:8.1, estimated:20,
+    properties:{ sessionId:'sess-xyz-9821', cellIndex:3, totalCells:5, executionMode:'batch' }
+  }),
+  createActivity({ name:'OneLakeWrite', status:'running', startTime:ts(3.2), elapsed:3.2, estimated:10,
+    properties:{ file:'dag-execution-metrics/status.json', sizeBytes:4210, operation:'PUT' }
+  }),
+  // Succeeded
+  createActivity({ name:'GetLatestDag', status:'succeeded', startTime:ts(60), endTime:ts(59.66), elapsed:0.34, estimated:1,
+    properties:{ nodeCount:7, edgeCount:9, dagVersion:'v3.2.1' },
+    sparkline:[0.28,0.42,0.31,0.34,0.38]
+  }),
+  createActivity({ name:'RefreshSource', status:'succeeded', startTime:ts(55), endTime:ts(52.6), elapsed:2.4, estimated:5,
+    properties:{ source:'OneLake://SalesLH-01/Tables/SalesRaw', rowsRead:142800 },
+    sparkline:[2.1,2.8,1.9,2.4,2.5]
+  }),
+  createActivity({ name:'TransformSales', status:'succeeded', startTime:ts(50), endTime:ts(45.9), elapsed:4.1, estimated:8,
+    properties:{ transformType:'SparkSQL', outputRows:98200, inputRows:142800 },
+    sparkline:[3.9,4.5,3.8,4.1,4.3]
+  }),
+  createActivity({ name:'CatalogResolve:SalesRaw', status:'succeeded', startTime:ts(62), endTime:ts(61.88), elapsed:0.12, estimated:0.5,
+    properties:{ table:'SalesRaw', lakehouse:'SalesLH-01', resolved:true }
+  }),
+  createActivity({ name:'CatalogResolve:ProductDim', status:'succeeded', startTime:ts(61.5), endTime:ts(61.42), elapsed:0.08, estimated:0.5,
+    properties:{ table:'ProductDim', lakehouse:'SalesLH-01', resolved:true }
+  }),
+  createActivity({ name:'TokenRefresh', status:'succeeded', startTime:ts(65), endTime:ts(63.8), elapsed:1.2, estimated:3,
+    properties:{ tokenType:'Bearer', audience:'api.fabric.microsoft.com', expiresIn:3600 }
+  }),
+  createActivity({ name:'PingApi', status:'succeeded', startTime:ts(70), endTime:ts(69.985), elapsed:0.015, estimated:0.1,
+    properties:{ endpoint:'/api/v1/health', statusCode:200 }
+  }),
+  createActivity({ name:'DagSchedulerCheck', status:'succeeded', startTime:ts(68), endTime:ts(67.55), elapsed:0.45, estimated:1,
+    properties:{ scheduledRuns:2, pendingRuns:1 }
+  }),
+  createActivity({ name:'SparkSessionCreate', status:'succeeded', startTime:ts(58), endTime:ts(54.2), elapsed:3.8, estimated:10,
+    properties:{ sessionId:'sess-xyz-9821', driverMemory:'4g', executorCount:2 },
+    sparkline:[4.2,3.5,4.8,3.8,3.1]
+  }),
+  createActivity({ name:'OneLakeRead', status:'succeeded', startTime:ts(56), endTime:ts(55.11), elapsed:0.89, estimated:2,
+    properties:{ file:'dagsettings.json', sizeBytes:1823, operation:'GET' }
+  }),
+  // Failed
+  createActivity({ name:'CatalogResolve:SalesTransactions', status:'failed', startTime:ts(40), endTime:ts(24.8), elapsed:15.2, estimated:0.5,
+    error:"TableNotFoundException: Cannot resolve table 'SalesTransactions' in lakehouse 'TestLH-01'",
+    properties:{ table:'SalesTransactions', lakehouse:'TestLH-01', resolved:false, retryCount:3 }
+  }),
+  createActivity({ name:'SparkExecute:Timeout', status:'failed', startTime:ts(90), endTime:ts(44.9), elapsed:45.1, estimated:30,
+    error:"TimeoutException: Spark session timed out after 45000ms",
+    properties:{ sessionId:'sess-old-1120', cellIndex:2, totalCells:5, timeoutMs:45000 }
+  }),
+  // Long-running
+  createActivity({ name:'OneLakeWrite:DagMetrics', status:'succeeded', startTime:ts(45), endTime:ts(13.8), elapsed:31.2, estimated:10,
+    isLongRunning:true,
+    properties:{ file:'dag-execution-metrics/full-report.parquet', sizeBytes:2148000, operation:'PUT', partitions:4 }
+  }),
+];
+
+/* ─── Tab Indicator ─── */
+function updateTabIndicator() {
+  const activeTab = document.querySelector('.tab.active');
+  const bar = $('#tabIndicator');
+  if (!activeTab || !bar) return;
+  const parentRect = activeTab.parentElement.getBoundingClientRect();
+  const rect = activeTab.getBoundingClientRect();
+  bar.style.left = (rect.left - parentRect.left) + 'px';
+  bar.style.width = rect.width + 'px';
+}
+
+/* ─── Rendering ─── */
+function getVisible() {
+  return activities.filter(a => {
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    if (filterText) {
+      const ft = filterText.toLowerCase();
+      if (!a.name.toLowerCase().includes(ft)) return false;
+    }
+    const dur = a.status === 'running' ? a.elapsed : a.elapsed;
+    if (dur < durMin || dur > durMax) return false;
+    return true;
+  });
+}
+
+function highlightText(text, query) {
+  if (!query) return text;
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return text;
+  return text.slice(0, idx) + '<mark>' + text.slice(idx, idx + query.length) + '</mark>' + text.slice(idx + query.length);
+}
+
+function buildCardHTML(a) {
+  const isRunning = a.status === 'running';
+  const isFailed = a.status === 'failed';
+  const isLong = a.isLongRunning || (a.elapsed > 30);
+
+  let statusHTML = '';
+  if (isRunning) {
+    statusHTML = `<span class="status-badge running-badge"><span class="badge-dot"></span> Running</span>`;
+  } else if (isFailed) {
+    statusHTML = `<span class="status-badge failed-badge">&#10005; Failed</span>`;
+  } else if (isLong) {
+    statusHTML = `<span class="status-badge long-badge" title="Long-running (&gt;30s)">&#9888; Succeeded</span>`;
+  } else {
+    statusHTML = `<span class="status-badge succeeded-badge">&#10003; Succeeded</span>`;
+  }
+
+  const pct = Math.min(100, (a.elapsed / Math.max(a.estimated, 0.01)) * 100);
+  let fillClass = 'running-fill';
+  if (!isRunning && !isFailed) fillClass = isLong ? 'amber-fill' : 'succeeded-fill';
+  else if (isFailed) fillClass = 'failed-fill';
+
+  const durClass = isRunning ? 'counting' : (isLong ? 'long-pulse' : '');
+
+  let metaTags = '';
+  const props = a.properties;
+  if (props.iterationId) metaTags += `<span class="meta-tag">iter: ${props.iterationId}</span>`;
+  if (props.sessionId) metaTags += `<span class="meta-tag">sess: ${props.sessionId}</span>`;
+  if (props.file) metaTags += `<span class="meta-tag">${props.file}</span>`;
+  if (props.table) metaTags += `<span class="meta-tag">table: ${props.table}</span>`;
+  if (props.nodeCount != null) metaTags += `<span class="meta-tag">nodes: ${props.nodeCount}</span>`;
+  if (props.edgeCount != null) metaTags += `<span class="meta-tag">edges: ${props.edgeCount}</span>`;
+  if (props.dagNodeCount != null && props.completedNodes != null) metaTags += `<span class="meta-tag">${props.completedNodes}/${props.dagNodeCount} nodes</span>`;
+  if (props.cellIndex != null) metaTags += `<span class="meta-tag">cell ${props.cellIndex} of ${props.totalCells}</span>`;
+
+  let errorHTML = '';
+  if (a.error) {
+    const shortErr = a.error.length > 80 ? a.error.slice(0, 80) + '...' : a.error;
+    errorHTML = `<div class="card-error">${shortErr}</div>`;
+  }
+
+  // Hover preview (for completed cards)
+  let previewHTML = '';
+  if (!isRunning) {
+    let previewRows = `<div class="hover-preview-row"><span>Duration</span><span>${fmtDur(a.elapsed)}</span></div>`;
+    previewRows += `<div class="hover-preview-row"><span>Status</span><span>${a.status}</span></div>`;
+    if (props.rowsRead) previewRows += `<div class="hover-preview-row"><span>Rows</span><span>${props.rowsRead.toLocaleString()}</span></div>`;
+    if (props.sizeBytes) previewRows += `<div class="hover-preview-row"><span>Size</span><span>${(props.sizeBytes/1024).toFixed(1)} KB</span></div>`;
+    if (a.sparkline) {
+      const maxSp = Math.max(...a.sparkline);
+      const bars = a.sparkline.map((v,i) => {
+        const h = Math.max(3, (v/maxSp)*20);
+        const cls = i === a.sparkline.length-1 ? 'bar highlight' : 'bar';
+        return `<div class="${cls}" style="height:${h}px"></div>`;
+      }).join('');
+      previewRows += `<div class="sparkline-row"><div class="spark-label">Recent durations</div><div class="sparkline">${bars}</div></div>`;
+    }
+    previewHTML = `<div class="hover-preview">${previewRows}</div>`;
+  }
+
+  const cardClass = [
+    'activity-card',
+    a.status === 'running' ? 'running' : '',
+    a.status === 'succeeded' ? (isLong ? 'long-running' : 'succeeded') : '',
+    a.status === 'failed' ? 'failed' : '',
+    a.id === selectedId ? 'selected' : '',
+  ].filter(Boolean).join(' ');
+
+  return `<div class="${cardClass}" data-id="${a.id}" id="card-${a.id}">
+    <div class="card-row-1">
+      <div class="card-name">${highlightText(a.name, filterText)}</div>
+      ${statusHTML}
+      <div class="card-duration-text ${durClass}" data-dur-id="${a.id}">${fmtDur(a.elapsed)}</div>
+    </div>
+    <div class="duration-bar"><div class="fill ${fillClass}" style="width:${Math.min(pct,100)}%" data-bar-id="${a.id}"></div></div>
+    <div class="card-row-2">${metaTags}</div>
+    ${errorHTML}
+  </div>`;
+}
+
+function renderCards() {
+  const container = $('#cardsContainer');
+  const visible = getVisible();
+  const running = visible.filter(a => a.status === 'running');
+  const completed = visible.filter(a => a.status !== 'running');
+
+  // Update filter counter
+  const total = activities.length;
+  const shown = visible.length;
+  $('#filterCount').textContent = shown < total ? `Showing ${shown} of ${total} activities` : `${total} activities`;
+
+  // Update pill counts
+  const allA = activities.length;
+  const runA = activities.filter(a => a.status === 'running').length;
+  const sucA = activities.filter(a => a.status === 'succeeded').length;
+  const failA = activities.filter(a => a.status === 'failed').length;
+  $('#countAll').textContent = ` ${allA}`;
+  $('#countRunning').textContent = ` ${runA}`;
+  $('#countSucceeded').textContent = ` ${sucA}`;
+  $('#countFailed').textContent = ` ${failA}`;
+
+  if (visible.length === 0 && activities.length === 0) {
+    if (!emptyVisible) showEmptyState();
+    return;
+  }
+  if (emptyVisible) hideEmptyState();
+
+  let html = '';
+  if (running.length > 0) {
+    html += `<div class="section-header"><span class="section-dot active-dot"></span> Active <span class="section-count">(${running.length})</span></div>`;
+    running.forEach(a => html += buildCardHTML(a));
+  }
+  if (completed.length > 0) {
+    html += `<div class="section-header"><span class="section-dot completed-dot"></span> Completed <span class="section-count">(${completed.length})</span></div>`;
+    completed.forEach(a => html += buildCardHTML(a));
+  }
+  if (visible.length === 0 && activities.length > 0) {
+    html = `<div style="text-align:center;padding:40px 0;color:var(--text-3);font-size:13px">No activities match current filters</div>`;
+  }
+
+  container.innerHTML = html;
+
+  // Rebind card clicks
+  container.querySelectorAll('.activity-card').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.id;
+      selectCard(id);
+    });
+  });
+}
+
+function showEmptyState() {
+  const es = document.getElementById('emptyState');
+  if (!es) {
+    const container = $('#cardsContainer');
+    container.innerHTML = `<div class="empty-state" id="emptyState">
+      <div class="empty-icon">
+        <div class="orbit"></div>
+        <div class="orbit"></div>
+        <div class="core"><svg viewBox="0 0 24 24"><path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"/></svg></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <div class="empty-title">Waiting for telemetry events...</div>
+      <div class="empty-hint">SSR telemetry events will appear as operations execute. Activities, durations, and correlations stream in real-time.</div>
+    </div>`;
+  }
+  emptyVisible = true;
+}
+
+function hideEmptyState() {
+  const es = document.getElementById('emptyState');
+  if (es) {
+    es.classList.add('fading');
+    setTimeout(() => { es.remove(); emptyVisible = false; renderCards(); }, 150);
+  } else {
+    emptyVisible = false;
+  }
+}
+
+/* ─── Card Selection ─── */
+function selectCard(id) {
+  selectedId = id;
+  $$('.activity-card').forEach(c => c.classList.toggle('selected', c.dataset.id === id));
+  const activity = activities.find(a => a.id === id);
+  if (activity) openDetail(activity);
+  // Update kbIndex
+  const visCards = Array.from($$('.activity-card'));
+  kbIndex = visCards.findIndex(c => c.dataset.id === id);
+}
+
+/* ─── Detail Panel ─── */
+function openDetail(a) {
+  const panel = $('#detailPanel');
+  const body = $('#detailBody');
+  const isRunning = a.status === 'running';
+  const isFailed = a.status === 'failed';
+  const isLong = a.isLongRunning || a.elapsed > 30;
+
+  $('#detailTitle').textContent = a.name;
+
+  let statusColor = 'var(--green)';
+  let statusText = 'Succeeded';
+  if (isRunning) { statusColor = 'var(--accent)'; statusText = 'Running'; }
+  else if (isFailed) { statusColor = 'var(--red)'; statusText = 'Failed'; }
+  else if (isLong) { statusColor = 'var(--amber)'; statusText = 'Succeeded (long-running)'; }
+  $('#detailStatus').style.color = statusColor;
+  $('#detailStatus').textContent = statusText;
+
+  const startDate = new Date(a.startTime);
+  let metaHTML = `
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="label">Status</div><div class="value" style="color:${statusColor}">${statusText}</div></div>
+      <div class="detail-meta-item"><div class="label">Started</div><div class="value">${fmtTime(startDate)}</div></div>
+      <div class="detail-meta-item"><div class="label">Duration</div><div class="value">${fmtDur(a.elapsed)}</div></div>
+      <div class="detail-meta-item"><div class="label">Estimated</div><div class="value">${fmtDur(a.estimated)}</div></div>
+    </div>`;
+
+  // Properties JSON
+  let propsHTML = '<div class="detail-section-title">Properties</div><pre class="json-tree">';
+  propsHTML += renderJSON(a.properties);
+  propsHTML += '</pre>';
+
+  // Children
+  let childHTML = '';
+  if (a.children.length > 0) {
+    childHTML = '<div class="detail-section-title">Child Activities</div><div class="child-tree">';
+    a.children.forEach(c => {
+      let statusIcon = '', statusClass = 'pending', fillColor = 'var(--bg-3)', fillPct = 0;
+      if (c.status === 'succeeded') { statusIcon = '&#10003;'; statusClass = 'done'; fillColor = 'var(--green)'; fillPct = 100; }
+      else if (c.status === 'running') { statusIcon = '&#9679;'; statusClass = 'running'; fillColor = 'var(--accent)'; fillPct = 60; }
+      else { statusIcon = '&#9675;'; statusClass = 'pending'; fillPct = 0; }
+      const durText = c.duration > 0 ? fmtDur(c.duration) : '—';
+      childHTML += `<div class="child-node">
+        <span class="child-status ${statusClass}">${statusIcon}</span>
+        <span class="child-name">${c.name}</span>
+        <span class="child-dur">${durText}</span>
+        <div class="child-bar"><div class="fill" style="width:${fillPct}%;background:${fillColor}"></div></div>
+      </div>`;
+    });
+    childHTML += '</div>';
+  }
+
+  // Error
+  let errHTML = '';
+  if (a.error) {
+    errHTML = `<div class="detail-section-title">Error</div>
+      <div style="padding:8px 10px;background:var(--red-dim);border-radius:var(--r6);font-family:var(--mono);font-size:11px;color:var(--red);white-space:pre-wrap;line-height:1.6">${a.error}</div>`;
+  }
+
+  body.innerHTML = metaHTML + propsHTML + childHTML + errHTML;
+  panel.classList.add('open');
+  detailOpen = true;
+}
+
+function closeDetail() {
+  $('#detailPanel').classList.remove('open');
+  detailOpen = false;
+  selectedId = null;
+  $$('.activity-card').forEach(c => c.classList.remove('selected'));
+}
+
+function renderJSON(obj, indent) {
+  indent = indent || 0;
+  const pad = '  '.repeat(indent);
+  const padInner = '  '.repeat(indent + 1);
+  const entries = Object.entries(obj);
+  if (entries.length === 0) return `<span class="json-brace">{}</span>`;
+  let html = `<span class="json-brace">{</span>\n`;
+  entries.forEach(([k, v], i) => {
+    const comma = i < entries.length - 1 ? ',' : '';
+    let valHTML;
+    if (typeof v === 'string') valHTML = `<span class="json-string">"${v}"</span>`;
+    else if (typeof v === 'number') valHTML = `<span class="json-number">${v}</span>`;
+    else if (typeof v === 'boolean') valHTML = `<span class="json-bool">${v}</span>`;
+    else if (v === null) valHTML = `<span class="json-null">null</span>`;
+    else valHTML = renderJSON(v, indent + 1);
+    html += `${padInner}<span class="json-key">"${k}"</span>: ${valHTML}${comma}\n`;
+  });
+  html += `${pad}<span class="json-brace">}</span>`;
+  return html;
+}
+
+/* ─── Live Duration Counters ─── */
+let tickInterval;
+function startTicking() {
+  if (tickInterval) return;
+  tickInterval = setInterval(() => {
+    const now = Date.now();
+    activities.forEach(a => {
+      if (a.status !== 'running') return;
+      a.elapsed = (now - a.startTime) / 1000;
+      a.isLongRunning = a.elapsed > 30;
+
+      // Update duration text
+      const durEl = document.querySelector(`[data-dur-id="${a.id}"]`);
+      if (durEl) {
+        durEl.textContent = fmtDur(a.elapsed);
+        if (a.isLongRunning) durEl.classList.add('long-pulse');
+      }
+
+      // Update bar width
+      const barEl = document.querySelector(`[data-bar-id="${a.id}"]`);
+      if (barEl) {
+        const pct = Math.min(100, (a.elapsed / Math.max(a.estimated, 0.01)) * 100);
+        barEl.style.width = pct + '%';
+        if (a.isLongRunning) {
+          barEl.classList.remove('running-fill');
+          barEl.classList.add('amber-fill');
+          // Also update the card border
+          const card = document.getElementById('card-' + a.id);
+          if (card) { card.classList.remove('running'); card.classList.add('long-running'); }
+          // Update badge
+          const badge = card && card.querySelector('.status-badge');
+          if (badge && !badge.classList.contains('long-badge')) {
+            badge.className = 'status-badge long-badge';
+            badge.innerHTML = '&#9888; Running (long)';
+          }
+        }
+      }
+    });
+  }, 100);
+}
+
+/* ─── Filters ─── */
+let debounceTimer;
+$('#filterInput').addEventListener('input', e => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    filterText = e.target.value.trim();
+    renderCards();
+  }, 200);
+});
+
+$('#statusPills').addEventListener('click', e => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  statusFilter = pill.dataset.status;
+  // Update pill active states
+  $$('.pill').forEach(p => {
+    p.className = 'pill';
+    if (p.dataset.status === statusFilter) {
+      if (statusFilter === 'all') p.classList.add('active-all');
+      else if (statusFilter === 'running') p.classList.add('active-running');
+      else if (statusFilter === 'succeeded') p.classList.add('active-succeeded');
+      else if (statusFilter === 'failed') p.classList.add('active-failed');
+    }
+  });
+  renderCards();
+});
+
+/* ─── Duration Slider (dual-thumb) ─── */
+(function initSlider() {
+  const slider = $('#durationSlider');
+  const fill = $('#sliderFill');
+  const tMin = $('#thumbMin');
+  const tMax = $('#thumbMax');
+  const label = $('#durationLabel');
+  let dragging = null;
+  const MAX_DUR = 60;
+
+  function update() {
+    const w = slider.offsetWidth;
+    const pMin = (durMin / MAX_DUR) * w;
+    const pMax = (durMax / MAX_DUR) * w;
+    tMin.style.left = pMin + 'px';
+    tMax.style.left = pMax + 'px';
+    fill.style.left = pMin + 'px';
+    fill.style.width = (pMax - pMin) + 'px';
+    label.textContent = `${Math.round(durMin)}s – ${Math.round(durMax)}s`;
+  }
+
+  function onMove(e) {
+    if (!dragging) return;
+    const rect = slider.getBoundingClientRect();
+    const x = (e.clientX || e.touches[0].clientX) - rect.left;
+    const val = clamp((x / rect.width) * MAX_DUR, 0, MAX_DUR);
+    if (dragging === 'min') { durMin = Math.min(val, durMax - 1); }
+    else { durMax = Math.max(val, durMin + 1); }
+    update();
+    renderCards();
+  }
+
+  function onUp() { dragging = null; document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
+
+  [tMin, tMax].forEach(t => {
+    t.addEventListener('mousedown', e => {
+      e.preventDefault();
+      dragging = t.dataset.which;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+
+  // Set initial
+  requestAnimationFrame(update);
+})();
+
+/* ─── Export ─── */
+$('#exportBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  $('#exportDropdown').classList.toggle('show');
+});
+document.addEventListener('click', () => { $('#exportDropdown').classList.remove('show'); });
+$('#exportDropdown').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const fmt = btn.dataset.format;
+  const visible = getVisible();
+  const count = visible.length;
+
+  if (fmt === 'json') {
+    const blob = new Blob([JSON.stringify(visible.map(a => ({
+      name: a.name, status: a.status, elapsed: a.elapsed, error: a.error, properties: a.properties
+    })), null, 2)], { type: 'application/json' });
+    downloadBlob(blob, 'telemetry-export.json');
+  } else {
+    let csv = 'Name,Status,Duration(s),Error\n';
+    visible.forEach(a => {
+      csv += `"${a.name}","${a.status}",${a.elapsed.toFixed(2)},"${(a.error||'').replace(/"/g,'""')}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    downloadBlob(blob, 'telemetry-export.csv');
+  }
+  showToast(`Exported ${count} activities to ${fmt.toUpperCase()}`);
+  $('#exportDropdown').classList.remove('show');
+});
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
+/* ─── Toast ─── */
+function showToast(msg, icon) {
+  icon = icon || '&#10003;';
+  const container = $('#toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="toast-icon">${icon}</span> ${msg}`;
+  container.appendChild(el);
+  setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 200); }, 2500);
+}
+
+/* ─── Theme ─── */
+$('#themeToggle').addEventListener('click', () => SC.toggleTheme());
+
+/* ─── Keyboard Navigation ─── */
+document.addEventListener('keydown', e => {
+  const cards = Array.from($$('.activity-card'));
+  if (!cards.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    kbIndex = Math.min(kbIndex + 1, cards.length - 1);
+    cards.forEach(c => c.classList.remove('kb-focus'));
+    cards[kbIndex].classList.add('kb-focus');
+    cards[kbIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    kbIndex = Math.max(kbIndex - 1, 0);
+    cards.forEach(c => c.classList.remove('kb-focus'));
+    cards[kbIndex].classList.add('kb-focus');
+    cards[kbIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } else if (e.key === 'Enter' && kbIndex >= 0 && kbIndex < cards.length) {
+    e.preventDefault();
+    selectCard(cards[kbIndex].dataset.id);
+  } else if (e.key === 'Escape') {
+    if (detailOpen) { closeDetail(); e.preventDefault(); }
+  } else if (e.ctrlKey && e.key === 'e') {
+    e.preventDefault();
+    $('#exportDropdown').classList.toggle('show');
+  }
+});
+
+/* ─── Detail Panel: View in Logs ─── */
+$('#viewLogsBtn').addEventListener('click', () => {
+  const a = activities.find(x => x.id === selectedId);
+  const iterId = a && a.properties.iterationId ? a.properties.iterationId : a ? a.id : '?';
+  showToast(`Would switch to Logs tab filtered by IterationId: ${iterId}`, '&#8594;');
+});
+
+/* ─── Detail Panel: Copy data ─── */
+$('#copyDataBtn').addEventListener('click', () => {
+  const a = activities.find(x => x.id === selectedId);
+  if (a) {
+    const text = JSON.stringify({ name: a.name, status: a.status, elapsed: a.elapsed, error: a.error, properties: a.properties, children: a.children }, null, 2);
+    navigator.clipboard.writeText(text).then(() => showToast('Activity data copied to clipboard'));
+  }
+});
+
+/* ─── Detail Panel: Close ─── */
+$('#detailClose').addEventListener('click', closeDetail);
+
+/* ─── Detail Panel: Resize ─── */
+(function initResize() {
+  const handle = $('#detailResizeHandle');
+  const panel = $('#detailPanel');
+  let startY, startH;
+  handle.addEventListener('mousedown', e => {
+    startY = e.clientY;
+    startH = panel.offsetHeight;
+    const onMove = ev => {
+      const diff = startY - ev.clientY;
+      panel.style.height = Math.max(120, startH + diff) + 'px';
+      panel.style.maxHeight = '80%';
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+/* ─── State Controller ─── */
+$('#stateCtrlToggle').addEventListener('click', () => {
+  $('#stateCtrl').classList.toggle('open');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.state-ctrl') && !e.target.closest('.state-ctrl-toggle')) {
+    $('#stateCtrl').classList.remove('open');
+  }
+});
+
+const RANDOM_NAMES = ['RunDAG','SparkExecute','OneLakeWrite','CatalogResolve','TokenRefresh','DagSchedulerCheck','SparkSessionCreate','OneLakeRead','RefreshSource','TransformSales','ValidateSchema','PublishMetrics','BuildIndex','MergePartitions'];
+
+const SC = {
+  addRunning() {
+    const name = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+    const a = createActivity({
+      name: name + ':' + genId().slice(0,4),
+      status: 'running',
+      startTime: Date.now(),
+      elapsed: 0,
+      estimated: 10 + Math.random() * 30,
+      properties: { sessionId: 'sess-' + genId(), source: 'mock' }
+    });
+    activities.unshift(a);
+    renderCards();
+    showToast(`New running: ${a.name}`, '&#9679;');
+    // Animate entry
+    requestAnimationFrame(() => {
+      const el = document.getElementById('card-' + a.id);
+      if (el) el.classList.add('entering');
+    });
+  },
+
+  completeActivity() {
+    const running = activities.filter(a => a.status === 'running');
+    if (running.length === 0) { showToast('No running activities', '&#8212;'); return; }
+    const a = running[0];
+    a.status = 'succeeded';
+    a.endTime = Date.now();
+    a.elapsed = (a.endTime - a.startTime) / 1000;
+    renderCards();
+    showToast(`Completed: ${a.name} (${fmtDur(a.elapsed)})`, '&#10003;');
+  },
+
+  failActivity() {
+    const running = activities.filter(a => a.status === 'running');
+    if (running.length === 0) { showToast('No running activities', '&#8212;'); return; }
+    const a = running[0];
+    a.status = 'failed';
+    a.endTime = Date.now();
+    a.elapsed = (a.endTime - a.startTime) / 1000;
+    a.error = 'SimulatedError: Operation failed after ' + fmtDur(a.elapsed);
+    renderCards();
+    // Pulse
+    requestAnimationFrame(() => {
+      const el = document.getElementById('card-' + a.id);
+      if (el) el.classList.add('fail-pulse');
+    });
+    showToast(`Failed: ${a.name}`, '&#10005;');
+  },
+
+  addLongRunning() {
+    const a = createActivity({
+      name: 'OneLakeWrite:LargeExport-' + genId().slice(0,4),
+      status: 'running',
+      startTime: Date.now() - 32000,
+      elapsed: 32,
+      estimated: 15,
+      isLongRunning: true,
+      properties: { file: 'export-' + genId() + '.parquet', sizeBytes: 5242880, operation: 'PUT' }
+    });
+    activities.unshift(a);
+    renderCards();
+    showToast(`Added long-running: ${a.name}`, '&#9888;');
+  },
+
+  loadDemoData() {
+    activities = [];
+    DEMO_DATA.forEach(d => {
+      activities.push(createActivity({
+        name: d.name, status: d.status, startTime: d.startTime, endTime: d.endTime,
+        elapsed: d.elapsed, estimated: d.estimated, error: d.error,
+        properties: { ...d.properties }, children: [...d.children],
+        isLongRunning: d.isLongRunning, sparkline: d.sparkline ? [...d.sparkline] : null
+      }));
+    });
+    emptyVisible = false;
+    renderCards();
+    showToast('Loaded 16 demo activities', '&#9654;');
+  },
+
+  clearAll() {
+    activities = [];
+    selectedId = null;
+    kbIndex = -1;
+    closeDetail();
+    const container = $('#cardsContainer');
+    container.innerHTML = '';
+    showEmptyState();
+    $('#filterCount').textContent = '';
+    showToast('Cleared — showing empty state', '&#8635;');
+  },
+
+  toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    const icon = $('#themeIcon');
+    icon.innerHTML = isDark
+      ? '<path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>'
+      : '<path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 0 0 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>';
+    showToast(isDark ? 'Light theme' : 'Dark theme', '&#9681;');
+  }
+};
+
+/* ─── Init ─── */
+function init() {
+  updateTabIndicator();
+  startTicking();
+
+  // Auto-load demo data after a brief delay to show the empty state first
+  setTimeout(() => {
+    SC.loadDemoData();
+  }, 1200);
+
+  // Tab clicks (visual only)
+  $$('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      $$('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      updateTabIndicator();
+      if (tab.dataset.tab !== 'telemetry') {
+        showToast(`Would switch to ${tab.textContent.trim()} tab`, '&#8594;');
+        // Reset back
+        setTimeout(() => {
+          $$('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelector('[data-tab="telemetry"]').classList.add('active');
+          updateTabIndicator();
+        }, 800);
+      }
+    });
+  });
+}
+
+window.addEventListener('load', init);
+window.addEventListener('resize', updateTabIndicator);
+
+// ── Hover tooltip for completed cards (body-level, escapes overflow clips) ──
+(function() {
+  const tip = document.getElementById('hoverTooltip');
+  let currentCardId = null;
+
+  document.addEventListener('mousemove', function(e) {
+    const card = e.target.closest('.activity-card');
+    if (!card) { hideTip(); return; }
+
+    const id = card.dataset.id;
+    if (id === currentCardId) {
+      // Just reposition
+      positionTip(card);
+      return;
+    }
+
+    const a = activities.find(x => x.id === id);
+    if (!a || a.status === 'running') { hideTip(); return; }
+
+    currentCardId = id;
+    const props = a.properties || {};
+    let rows = '<div class="hover-preview-row"><span>Duration</span><span>' + fmtDur(a.elapsed) + '</span></div>';
+    rows += '<div class="hover-preview-row"><span>Status</span><span>' + a.status + '</span></div>';
+    if (props.rowsRead) rows += '<div class="hover-preview-row"><span>Rows</span><span>' + props.rowsRead.toLocaleString() + '</span></div>';
+    if (props.sizeBytes) rows += '<div class="hover-preview-row"><span>Size</span><span>' + (props.sizeBytes/1024).toFixed(1) + ' KB</span></div>';
+    if (props.nodeCount) rows += '<div class="hover-preview-row"><span>Nodes</span><span>' + props.nodeCount + '</span></div>';
+    if (props.edgeCount) rows += '<div class="hover-preview-row"><span>Edges</span><span>' + props.edgeCount + '</span></div>';
+    if (a.sparkline) {
+      var maxSp = Math.max.apply(null, a.sparkline);
+      var bars = a.sparkline.map(function(v,i) {
+        var h = Math.max(3, (v/maxSp)*20);
+        var cls = i === a.sparkline.length-1 ? 'bar highlight' : 'bar';
+        return '<div class="' + cls + '" style="height:' + h + 'px"></div>';
+      }).join('');
+      rows += '<div class="sparkline-row"><div class="spark-label">Recent durations</div><div class="sparkline">' + bars + '</div></div>';
+    }
+    tip.innerHTML = rows;
+    positionTip(card);
+    tip.style.display = 'block';
+    // Force reflow before adding visible class for transition
+    tip.offsetHeight;
+    tip.style.opacity = '1';
+  });
+
+  function positionTip(card) {
+    var rect = card.getBoundingClientRect();
+    tip.style.left = (rect.right + 12) + 'px';
+    tip.style.top = (rect.top + rect.height/2) + 'px';
+    tip.style.transform = 'translateY(-50%)';
+    // Flip if off-screen right
+    var tipW = tip.offsetWidth || 200;
+    if (rect.right + 12 + tipW > window.innerWidth - 8) {
+      tip.style.left = (rect.left - tipW - 12) + 'px';
+    }
+  }
+
+  function hideTip() {
+    if (!currentCardId) return;
+    currentCardId = null;
+    tip.style.opacity = '0';
+    setTimeout(function() { if (!currentCardId) tip.style.display = 'none'; }, 120);
+  }
+
+  // Also hide on scroll
+  var container = document.querySelector('.cards-container');
+  if (container) container.addEventListener('scroll', hideTip, { passive: true });
+})();
+</script>
+</body>
+</html>
