@@ -14240,10 +14240,25 @@ class DeployFlow {
 
     const retry = document.getElementById('deploy-retry');
     if (retry) retry.addEventListener('click', () => {
+      // Try to get deploy target from server state first
       fetch('/api/studio/status').then(r => r.json()).then(s => {
         if (s.deployTarget) {
           const t = s.deployTarget;
           this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName);
+        } else if (this._pendingTarget) {
+          // Fallback: use the last known target from this session
+          const t = this._pendingTarget;
+          this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName);
+        } else {
+          this._onFailed('No deploy target available — select a lakehouse and try again');
+        }
+      }).catch(() => {
+        // Server unreachable — try local fallback
+        if (this._pendingTarget) {
+          const t = this._pendingTarget;
+          this.startDeploy(t.workspaceId, t.artifactId, t.capacityId, t.lakehouseName);
+        } else {
+          this._onFailed('Cannot reach server — select a lakehouse and try again');
         }
       });
     });
