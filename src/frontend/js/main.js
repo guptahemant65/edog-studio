@@ -668,6 +668,7 @@ class EdogLogViewer {
 
     if (viewId === 'logs') {
       this.renderer.flush();
+      this.renderer.scheduleRender();
     }
   }
 
