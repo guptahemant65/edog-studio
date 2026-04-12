@@ -40,7 +40,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     private readonly ConcurrentQueue<LogEntry> logBuffer = new();
     private readonly ConcurrentQueue<TelemetryEvent> telemetryBuffer = new();
 
-    private IHubContext<EdogPlaygroundHub> hubContext;
+    private volatile IHubContext<EdogPlaygroundHub> hubContext;
     private WebApplication app;
     private Task hostTask;
     private string htmlContent = "<html><body><h1>EDOG Log Server</h1><p>SignalR endpoint: /hub/playground</p></body></html>";
@@ -82,7 +82,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 options.AddPolicy("EdogDev", policy =>
                 {
-                    policy.SetIsOriginAllowed(_ => true)  // localhost only — internal dev tool
+                    policy.SetIsOriginAllowed(origin =>
+                        origin.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
+                        origin.Contains("127.0.0.1"))
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials();
@@ -94,6 +96,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             app.UseCors("EdogDev");
 
             hubContext = app.Services.GetRequiredService<IHubContext<EdogPlaygroundHub>>();
+
+            // Initialize topic router — creates all 11 ring buffers for streaming
+            EdogTopicRouter.Initialize();
 
             // Initialize API proxy — look for edog-config.json near the HTML source
             var configDir = FindEdogConfigDir();
@@ -175,10 +180,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             logBuffer.Enqueue(entry);
             TrimBuffer(logBuffer, MaxLogEntries);
 
-            if (hubContext != null)
-            {
-                _ = hubContext.Clients.Group("log").SendAsync("LogEntry", entry);
-            }
+            EdogTopicRouter.Publish("log", entry);
         }
         catch (Exception ex)
         {
@@ -199,10 +201,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             telemetryBuffer.Enqueue(telemetryEvent);
             TrimBuffer(telemetryBuffer, MaxTelemetryEvents);
 
-            if (hubContext != null)
-            {
-                _ = hubContext.Clients.Group("telemetry").SendAsync("TelemetryEvent", telemetryEvent);
-            }
+            EdogTopicRouter.Publish("telemetry", telemetryEvent);
         }
         catch (Exception ex)
         {
