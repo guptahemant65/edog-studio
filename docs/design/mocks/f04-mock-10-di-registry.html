@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Internals: DI Registry Mock (F04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --amber: #e5940c;
+  --red: #e5453b;
+  --blue: #2d7ff9;
+  --purple: #a855f7;
+  --teal: #0d9488;
+  --gold: #f5a623;
+  --cyan: #06b6d4;
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r8: 8px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out: cubic-bezier(0.16,1,0.3,1);
+}
+[data-theme="dark"] {
+  --bg: #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text: #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.03); --selected-bg: rgba(109,92,255,0.10);
+  --toolbar-bg: #13151d; --panel-bg: #161923;
+  --scrollbar-thumb: rgba(255,255,255,0.12); --scrollbar-track: transparent;
+  --badge-bg: rgba(255,255,255,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+}
+[data-theme="light"] {
+  --bg: #f8f9fc; --bg-2: #ffffff; --bg-3: #f0f1f5; --bg-4: #e8e9ee;
+  --text: #1a1d27; --text-2: #5c6070; --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08); --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03); --selected-bg: rgba(109,92,255,0.08);
+  --toolbar-bg: #f2f3f7; --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15); --scrollbar-track: transparent;
+  --badge-bg: rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input{background:none;border:none;outline:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden;padding-bottom:34px}
+
+/* TAB BAR */
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 16px;height:40px;background:var(--bg-2);border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
+.tab-bar-left{display:flex;align-items:center;gap:0;position:relative}
+.tab{padding:0 16px;height:40px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600}
+.tab .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.tab-underline{position:absolute;bottom:0;height:3px;background:var(--accent);border-radius:3px 3px 0 0;transition:left 200ms ease-out, width 200ms ease-out}
+.tab-bar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:12px;font-family:var(--mono);color:var(--text-2)}
+.conn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.conn-dot.green{background:var(--green);box-shadow:0 0 6px rgba(24,160,88,0.4)}
+.theme-toggle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;transition:all var(--transition);color:var(--text-2)}
+.theme-toggle:hover{background:var(--hover-bg);color:var(--text)}
+
+/* TOOLBAR */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:8px 16px;background:var(--toolbar-bg);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;transition:background var(--transition)}
+.toolbar-row{display:flex;gap:8px;align-items:center;width:100%;flex-wrap:wrap}
+.toolbar-separator{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+
+/* SEARCH BOX */
+.search-box{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);min-width:200px;max-width:320px;flex:1;transition:all var(--transition)}
+.search-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+.search-box svg{width:14px;height:14px;color:var(--text-3);flex-shrink:0}
+.search-box input{flex:1;font-size:12px;min-width:0;background:transparent}
+.search-box input::placeholder{color:var(--text-3)}
+.search-clear{width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;color:var(--text-3);cursor:pointer}
+.search-clear:hover{background:var(--hover-bg);color:var(--text)}
+
+/* LIFETIME PILLS (toolbar filter) */
+.lifetime-pills{display:flex;gap:2px;border:1px solid var(--border-bright);border-radius:var(--r6);overflow:hidden}
+.lt-pill{padding:3px 10px;font-size:11px;cursor:pointer;color:var(--text-2);transition:all var(--transition);user-select:none;white-space:nowrap}
+.lt-pill:hover{background:var(--hover-bg);color:var(--text)}
+.lt-pill.active{background:var(--accent);color:#fff}
+
+/* EDOG TOGGLE */
+.edog-toggle{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);font-size:12px;cursor:pointer;transition:all var(--transition);user-select:none;white-space:nowrap}
+.edog-toggle:hover{border-color:var(--accent);background:var(--hover-bg)}
+.edog-toggle.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.edog-toggle .toggle-track{width:26px;height:14px;border-radius:7px;background:var(--bg-4);position:relative;transition:background var(--transition)}
+.edog-toggle.active .toggle-track{background:var(--accent)}
+.edog-toggle .toggle-knob{width:10px;height:10px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:left var(--transition)}
+.edog-toggle.active .toggle-knob{left:14px}
+
+/* REG COUNTER */
+.reg-counter{font-size:12px;color:var(--text-2);font-family:var(--mono);white-space:nowrap}
+.reg-counter strong{color:var(--text);font-weight:600}
+
+/* DROPDOWN BTN (Export) */
+.dropdown-btn{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);font-size:12px;cursor:pointer;transition:all var(--transition);position:relative;white-space:nowrap}
+.dropdown-btn:hover{border-color:rgba(255,255,255,0.22);background:var(--hover-bg)}
+.dropdown-btn .chevron{font-size:10px;opacity:0.5;transition:transform var(--transition)}
+.dropdown-btn.open .chevron{transform:rotate(180deg)}
+.export-dropdown{position:absolute;top:calc(100% + 4px);right:0;min-width:160px;background:var(--bg-3);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);z-index:15;padding:4px 0;animation:ctx-appear 100ms var(--spring)}
+.export-dropdown.hidden{display:none}
+.export-dropdown .dd-item{display:flex;align-items:center;gap:8px;padding:6px 16px;cursor:pointer;font-size:12px;transition:background 80ms ease-out}
+.export-dropdown .dd-item:hover{background:var(--hover-bg)}
+@keyframes ctx-appear{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTENT AREA
+   ═══════════════════════════════════════════════════════════════════ */
+.content-area{flex:1;display:flex;overflow:hidden;position:relative}
+.table-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* EMPTY STATE */
+.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);text-align:center;transition:opacity 200ms ease;z-index:2}
+.empty-state svg{width:56px;height:56px;opacity:0.25}
+.empty-state .empty-title{font-size:15px;font-weight:500;color:var(--text-2)}
+.empty-state .empty-hint{font-size:12px;max-width:340px;line-height:1.5}
+.empty-state .empty-btn{margin-top:8px;padding:6px 18px;border-radius:var(--r6);background:var(--accent);color:#fff;font-size:12px;font-weight:500;cursor:pointer;transition:opacity var(--transition)}
+.empty-state .empty-btn:hover{opacity:0.85}
+.empty-state.hidden{opacity:0;pointer-events:none}
+
+/* TABLE */
+.reg-table-wrap{flex:1;overflow-y:auto;overflow-x:hidden}
+.reg-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.reg-table th{position:sticky;top:0;padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-3);background:var(--bg-3);border-bottom:1px solid var(--border-bright);text-align:left;cursor:pointer;user-select:none;transition:color var(--transition);white-space:nowrap;z-index:3}
+.reg-table th:hover{color:var(--text)}
+.reg-table th .sort-arrow{display:inline-block;font-size:10px;margin-left:4px;opacity:0.3;transition:opacity var(--transition)}
+.reg-table th.sorted .sort-arrow{opacity:1;color:var(--accent)}
+.reg-table th.sorted{color:var(--accent)}
+.col-service{width:30%}
+.col-impl{width:32%}
+.col-lifetime{width:14%}
+.col-edog{width:10%;text-align:center}
+.col-ns{width:14%}
+
+.reg-table td{padding:7px 12px;font-size:12px;font-family:var(--mono);border-bottom:1px solid var(--border);transition:background 80ms ease-out;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reg-table tbody tr{cursor:pointer;transition:background 80ms ease-out;position:relative}
+.reg-table tbody tr:hover{background:var(--hover-bg)}
+.reg-table tbody tr.selected{background:var(--selected-bg)}
+.reg-table tbody tr:nth-child(even){background:var(--bg-2)}
+.reg-table tbody tr:nth-child(even):hover{background:var(--hover-bg)}
+.reg-table tbody tr:nth-child(even).selected{background:var(--selected-bg)}
+
+/* EDOG intercepted rows */
+.reg-table tbody tr.edog-row{border-left:3px solid var(--accent)}
+.reg-table tbody tr.edog-row td:first-child{padding-left:9px}
+[data-theme="light"] .reg-table tbody tr.edog-row{background:rgba(109,92,255,0.03)}
+[data-theme="dark"] .reg-table tbody tr.edog-row{background:rgba(109,92,255,0.04)}
+.reg-table tbody tr.edog-row:nth-child(even){background:rgba(109,92,255,0.05)}
+.reg-table tbody tr.edog-row:hover{background:rgba(109,92,255,0.08)}
+.reg-table tbody tr.edog-row.selected{background:var(--selected-bg)}
+
+/* Row hiding animation */
+.reg-table tbody tr.hiding{max-height:0;opacity:0;transform:scaleY(0);transition:opacity 200ms ease, transform 200ms ease}
+.reg-table tbody tr.showing{animation:row-appear 200ms var(--ease-out) both}
+@keyframes row-appear{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* Lifetime pills */
+.lifetime-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r100);font-size:11px;font-weight:500;white-space:nowrap}
+.lifetime-badge.singleton{background:rgba(45,127,249,0.1);color:var(--blue)}
+.lifetime-badge.transient{background:rgba(229,148,12,0.1);color:var(--amber)}
+.lifetime-badge.scoped{background:rgba(24,160,88,0.1);color:var(--green)}
+.lifetime-badge .lt-icon{font-size:10px;opacity:0.7}
+
+/* EDOG badge */
+.edog-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:12px;color:var(--accent);background:var(--accent-dim);transition:transform var(--transition)}
+.reg-table tbody tr:hover .edog-badge{transform:scale(1.1)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL PANEL (right pane)
+   ═══════════════════════════════════════════════════════════════════ */
+.detail-pane{width:0;overflow:hidden;border-left:1px solid transparent;background:var(--panel-bg);transition:width 200ms var(--ease-out), border-color 200ms ease;flex-shrink:0;display:flex;flex-direction:column}
+.detail-pane.open{width:420px;border-left-color:var(--border-bright)}
+.detail-header{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.detail-header h3{font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-header-actions{display:flex;gap:4px}
+.detail-header-actions button{width:24px;height:24px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-3);transition:all var(--transition)}
+.detail-header-actions button:hover{background:var(--hover-bg);color:var(--text)}
+.detail-body{flex:1;overflow-y:auto;padding:16px}
+.detail-section{margin-bottom:20px}
+.detail-section:last-child{margin-bottom:0}
+.detail-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);margin-bottom:6px}
+.detail-value{font-size:12px;color:var(--text);line-height:1.5}
+.detail-value.mono{font-family:var(--mono)}
+
+/* Interception chain */
+.intercept-chain{display:flex;flex-direction:column;gap:0;margin-top:4px}
+.intercept-box{padding:8px 12px;border-radius:var(--r6);font-family:var(--mono);font-size:12px;line-height:1.4;position:relative}
+.intercept-box.original{background:var(--bg-3);color:var(--text-2);border:1px dashed var(--border-bright)}
+.intercept-box.wrapper{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(109,92,255,0.2)}
+.intercept-arrow{display:flex;align-items:center;justify-content:center;padding:4px 0;color:var(--text-3);font-size:16px}
+.intercept-arrow svg{width:16px;height:16px}
+
+/* Constructor params pills */
+.ctor-params{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.ctor-pill{display:inline-flex;align-items:center;padding:3px 8px;border-radius:var(--r100);font-family:var(--mono);font-size:11px;background:var(--bg-3);color:var(--text-2);border:1px solid var(--border);transition:all var(--transition)}
+.ctor-pill:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Registration source snippet */
+.reg-source{font-family:var(--mono);font-size:11px;line-height:1.6;padding:8px 12px;background:var(--bg-3);border-radius:var(--r6);overflow-x:auto;white-space:nowrap}
+.reg-source .kw{color:var(--blue)}
+.reg-source .type{color:var(--teal)}
+.reg-source .method{color:var(--amber)}
+.reg-source .punct{color:var(--text-3)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════════ */
+.footer{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;gap:12px;padding:6px 16px;background:var(--bg-3);border-top:1px solid var(--border);font-size:11px;color:var(--text-3);z-index:200;box-shadow:0 -2px 8px rgba(0,0,0,.04)}
+.footer kbd{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:3px;font-size:10px;font-family:var(--mono);color:var(--text-2);margin:0 1px}
+.footer-sep{width:1px;height:14px;background:var(--border)}
+.footer-left{display:flex;align-items:center;gap:10px}
+.footer-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOOLTIP (body-level)
+   ═══════════════════════════════════════════════════════════════════ */
+.tooltip{position:fixed;padding:4px 10px;border-radius:var(--r4);background:var(--bg-4);border:1px solid var(--border-bright);box-shadow:var(--shadow-md);font-size:11px;color:var(--text);pointer-events:none;z-index:300;white-space:nowrap;opacity:0;transition:opacity 120ms ease}
+.tooltip.visible{opacity:1}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container{position:fixed;bottom:48px;right:20px;z-index:250;display:flex;flex-direction:column-reverse;gap:8px}
+.toast{padding:8px 16px;border-radius:var(--r6);background:var(--bg-3);border:1px solid var(--border-bright);box-shadow:var(--shadow-md);font-size:12px;color:var(--text);animation:toast-in 200ms ease-out;max-width:320px}
+@keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.toast.out{animation:toast-out 150ms ease-in forwards}
+@keyframes toast-out{to{opacity:0;transform:translateY(-10px)}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATE CONTROLLER
+   ═══════════════════════════════════════════════════════════════════ */
+.state-controller-toggle{position:fixed;bottom:42px;left:16px;width:36px;height:36px;border-radius:50%;background:var(--bg-3);border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:210;box-shadow:var(--shadow-md);font-size:16px;transition:all var(--transition)}
+.state-controller-toggle:hover{background:var(--bg-4);transform:scale(1.1)}
+.state-controller{position:fixed;bottom:34px;left:0;right:0;background:var(--bg-2);border-top:2px solid var(--accent);z-index:205;transform:translateY(100%);transition:transform 200ms ease-out;max-height:220px;overflow-y:auto}
+.state-controller.open{transform:translateY(0)}
+.sc-header{display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-2);z-index:1}
+.sc-header h3{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);flex:1}
+.sc-header button{font-size:16px;color:var(--text-3);cursor:pointer}
+.sc-body{display:flex;gap:24px;padding:12px 16px;flex-wrap:wrap}
+.sc-group{display:flex;flex-direction:column;gap:6px}
+.sc-group label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)}
+.sc-group .sc-buttons{display:flex;gap:4px;flex-wrap:wrap}
+.sc-btn{padding:4px 12px;border-radius:var(--r4);border:1px solid var(--border-bright);font-size:11px;cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.sc-btn:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.sc-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NO-RESULTS STATE
+   ═══════════════════════════════════════════════════════════════════ */
+.no-results{display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 20px;color:var(--text-3);text-align:center}
+.no-results.visible{display:flex}
+.no-results .nr-icon{font-size:28px;opacity:0.3}
+.no-results .nr-title{font-size:13px;color:var(--text-2)}
+.no-results .nr-hint{font-size:11px}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <div class="tab-bar-left">
+      <div class="tab" data-tab="logs">Logs</div>
+      <div class="tab" data-tab="telemetry">Telemetry</div>
+      <div class="tab" data-tab="sysfiles">System Files</div>
+      <div class="tab" data-tab="spark">Spark</div>
+      <div class="tab active" data-tab="internals"><span class="dot" style="background:var(--accent)"></span>Internals: DI <span class="chevron" style="font-size:10px;opacity:.5">&#x25BE;</span></div>
+      <div class="tab-underline" id="tabUnderline"></div>
+    </div>
+    <div class="tab-bar-right">
+      <div class="conn-status">
+        <span class="conn-dot green"></span>
+        <span>Connected</span>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="theme-toggle" id="themeToggle" title="Toggle theme">&#x2600;</div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-row">
+      <div class="search-box" id="searchBox">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+        <input type="text" placeholder="Search types..." id="searchInput">
+        <div class="search-clear" id="searchClear" style="display:none" title="Clear">&#x2715;</div>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="lifetime-pills" id="lifetimePills">
+        <div class="lt-pill active" data-lt="all">All</div>
+        <div class="lt-pill" data-lt="Singleton">Singleton</div>
+        <div class="lt-pill" data-lt="Transient">Transient</div>
+        <div class="lt-pill" data-lt="Scoped">Scoped</div>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="edog-toggle" id="edogToggle">
+        <div class="toggle-track"><div class="toggle-knob"></div></div>
+        Show EDOG Only
+      </div>
+      <div class="toolbar-separator"></div>
+      <span class="reg-counter" id="regCounter"><strong>27</strong> registrations</span>
+      <div style="margin-left:auto"></div>
+      <div class="dropdown-btn" id="exportBtn">
+        Export <span class="chevron">&#x25BE;</span>
+        <div class="export-dropdown hidden" id="exportDropdown">
+          <div class="dd-item" data-format="json">Export as JSON</div>
+          <div class="dd-item" data-format="csv">Export as CSV</div>
+          <div class="dd-item" data-format="md">Export as Markdown</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content-area" id="contentArea">
+    <!-- EMPTY STATE (INT-DI-001) -->
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 56 56" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="8" y="12" width="40" height="32" rx="4"/>
+        <line x1="18" y1="22" x2="38" y2="22"/>
+        <line x1="18" y1="28" x2="38" y2="28"/>
+        <line x1="18" y1="34" x2="32" y2="34"/>
+        <circle cx="13" cy="22" r="2" fill="currentColor" opacity="0.3"/>
+        <circle cx="13" cy="28" r="2" fill="currentColor" opacity="0.3"/>
+        <circle cx="13" cy="34" r="2" fill="currentColor" opacity="0.3"/>
+      </svg>
+      <div class="empty-title">DI registry not yet captured</div>
+      <div class="empty-hint">Container state from WorkloadApp.cs will appear after service initialization. Ensure FLT is running and the EDOG interceptor is active.</div>
+      <button class="empty-btn" id="loadRegistryBtn">Load Registry</button>
+    </div>
+
+    <!-- TABLE PANE -->
+    <div class="table-pane" id="tablePane" style="display:none">
+      <div class="reg-table-wrap" id="tableWrap">
+        <table class="reg-table" id="regTable">
+          <thead>
+            <tr>
+              <th class="col-service sorted" data-col="service">Service Type <span class="sort-arrow">&#x25B2;</span></th>
+              <th class="col-impl" data-col="impl">Implementation <span class="sort-arrow">&#x25B2;</span></th>
+              <th class="col-lifetime" data-col="lifetime">Lifetime <span class="sort-arrow">&#x25B2;</span></th>
+              <th class="col-edog" data-col="edog">EDOG <span class="sort-arrow">&#x25B2;</span></th>
+              <th class="col-ns" data-col="ns">Namespace <span class="sort-arrow">&#x25B2;</span></th>
+            </tr>
+          </thead>
+          <tbody id="regBody"></tbody>
+        </table>
+        <div class="no-results" id="noResults">
+          <div class="nr-icon">&#x2205;</div>
+          <div class="nr-title">No matching registrations</div>
+          <div class="nr-hint">Try adjusting your search or filters</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAIL PANEL (INT-DI-003) -->
+    <div class="detail-pane" id="detailPane">
+      <div class="detail-header">
+        <h3 id="detailTitle">Service Detail</h3>
+        <div class="detail-header-actions">
+          <button id="detailCopy" title="Copy details">&#x2398;</button>
+          <button id="detailClose" title="Close (Esc)">&#x2715;</button>
+        </div>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer" id="footer">
+  <div class="footer-left">
+    <span><kbd>&#x2191;</kbd><kbd>&#x2193;</kbd> Navigate</span>
+    <div class="footer-sep"></div>
+    <span><kbd>Enter</kbd> Details</span>
+    <div class="footer-sep"></div>
+    <span><kbd>Esc</kbd> Close</span>
+    <div class="footer-sep"></div>
+    <span><kbd>Ctrl</kbd>+<kbd>E</kbd> EDOG Only</span>
+    <div class="footer-sep"></div>
+    <span><kbd>/</kbd> Search</span>
+  </div>
+  <div class="footer-right">
+    <span id="footerCount">27 registrations</span>
+  </div>
+</div>
+
+<!-- TOOLTIP (body-level) -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- STATE CONTROLLER -->
+<div class="state-controller-toggle" id="scToggle" title="State Controller">&#x2699;</div>
+<div class="state-controller" id="stateController">
+  <div class="sc-header">
+    <h3>&#x2699; State Controller</h3>
+    <button id="scClose">&#x2715;</button>
+  </div>
+  <div class="sc-body">
+    <div class="sc-group">
+      <label>DI State</label>
+      <div class="sc-buttons">
+        <div class="sc-btn active" data-state="empty">Empty (001)</div>
+        <div class="sc-btn" data-state="loaded">Loaded (002)</div>
+      </div>
+    </div>
+    <div class="sc-group">
+      <label>Quick Actions</label>
+      <div class="sc-buttons">
+        <div class="sc-btn" id="scLoadBtn">Load Registry</div>
+        <div class="sc-btn" id="scToggleEdog">Toggle EDOG Only</div>
+        <div class="sc-btn" id="scSelectFirst">Select First Row</div>
+      </div>
+    </div>
+    <div class="sc-group">
+      <label>Theme</label>
+      <div class="sc-buttons">
+        <div class="sc-btn" data-theme="dark">Dark</div>
+        <div class="sc-btn active" data-theme="light">Light</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   MOCK DATA — 27 DI REGISTRATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+const REGISTRATIONS = [
+  { id:1,  service:'ISparkClientFactory', impl:'EdogTracingSparkClientFactory', ns:'FabricLiveTable.DevMode', lifetime:'Singleton', edog:true, original:'GTSSparkClientFactory', originalNs:'FabricLiveTable.Spark', ctorParams:['ILogger<EdogTracingSparkClientFactory>','HttpClient','EdogLogServer'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.RunAsync()', regDetail:'DI override callback' },
+  { id:2,  service:'IFeatureFlighter', impl:'EdogFeatureFlighterWrapper', ns:'FabricLiveTable.DevMode', lifetime:'Singleton', edog:true, original:'FeatureFlighter', originalNs:'FabricLiveTable.Features', ctorParams:['ILogger<EdogFeatureFlighterWrapper>','IConfiguration','EdogApiProxy'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.RunAsync()', regDetail:'DI override callback' },
+  { id:3,  service:'IFileSystem', impl:'EdogFileSystemInterceptor', ns:'FabricLiveTable.DevMode', lifetime:'Singleton', edog:true, original:'OneLakeFileSystem', originalNs:'FabricLiveTable.Storage', ctorParams:['ILogger<EdogFileSystemInterceptor>','EdogLogServer','IConfiguration'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.RunAsync()', regDetail:'DI override callback' },
+  { id:4,  service:'ITokenProvider', impl:'EdogTokenInterceptor', ns:'FabricLiveTable.DevMode', lifetime:'Singleton', edog:true, original:'DefaultTokenProvider', originalNs:'FabricLiveTable.Auth', ctorParams:['ILogger<EdogTokenInterceptor>','EdogApiProxy'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.RunAsync()', regDetail:'DI override callback' },
+  { id:5,  service:'ICacheManager<string,DagDef>', impl:'EdogCacheInterceptor<DagDef>', ns:'FabricLiveTable.DevMode', lifetime:'Singleton', edog:true, original:'DagDefCache', originalNs:'FabricLiveTable.Caching', ctorParams:['ILogger<EdogCacheInterceptor<DagDef>>','EdogLogServer'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.RunAsync()', regDetail:'DI override callback' },
+  { id:6,  service:'IDagExecutionHandler', impl:'DagExecutionHandler', ns:'FabricLiveTable.Dag', lifetime:'Scoped', edog:false, ctorParams:['ILogger<DagExecutionHandler>','IDagScheduler','ICatalogResolver','ISparkClientFactory'], regSource:'RegisterScopedType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:7,  service:'ICatalogResolver', impl:'CatalogResolver', ns:'FabricLiveTable.Catalog', lifetime:'Scoped', edog:false, ctorParams:['ILogger<CatalogResolver>','IOneLakeClient','ICacheManager<string,DagDef>'], regSource:'RegisterScopedType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:8,  service:'ITokenManager', impl:'TokenCacheManager', ns:'FabricLiveTable.Auth', lifetime:'Singleton', edog:false, ctorParams:['ILogger<TokenCacheManager>','ITokenProvider','IConfiguration'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:9,  service:'ISparkSessionManager', impl:'SparkSessionManager', ns:'FabricLiveTable.Spark', lifetime:'Transient', edog:false, ctorParams:['ILogger<SparkSessionManager>','ISparkClientFactory','ITokenManager'], regSource:'RegisterTransientType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:10, service:'IDagScheduler', impl:'LiveTableSchedulerRun', ns:'FabricLiveTable.Dag', lifetime:'Scoped', edog:false, ctorParams:['ILogger<LiveTableSchedulerRun>','IDagExecutionHandler','ILockManager'], regSource:'RegisterScopedType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:11, service:'IDagCancellationHandler', impl:'DagCancellationHandler', ns:'FabricLiveTable.Dag', lifetime:'Scoped', edog:false, ctorParams:['ILogger<DagCancellationHandler>','IDagScheduler'], regSource:'RegisterScopedType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:12, service:'IRetryPolicyProvider', impl:'RetryPolicyProviderV2', ns:'FabricLiveTable.Resilience', lifetime:'Singleton', edog:false, ctorParams:['ILogger<RetryPolicyProviderV2>','IConfiguration'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:13, service:'ILockManager', impl:'DistributedLockManager', ns:'FabricLiveTable.Coordination', lifetime:'Singleton', edog:false, ctorParams:['ILogger<DistributedLockManager>','IConfiguration','IHttpClientFactory'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:14, service:'IMetricsCollector', impl:'MetricsSummaryCollector', ns:'FabricLiveTable.Telemetry', lifetime:'Singleton', edog:false, ctorParams:['ILogger<MetricsSummaryCollector>','ITelemetryClient'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:15, service:'IOneLakeClient', impl:'OneLakeClient', ns:'FabricLiveTable.Storage', lifetime:'Singleton', edog:false, ctorParams:['ILogger<OneLakeClient>','ITokenProvider','IHttpClientFactory','IRetryPolicyProvider'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:16, service:'INotebookExecutionContext', impl:'NotebookExecutionContextFactory', ns:'FabricLiveTable.Spark', lifetime:'Transient', edog:false, ctorParams:['ILogger<NotebookExecutionContextFactory>','ISparkSessionManager'], regSource:'RegisterTransientType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:17, service:'IPartitionManager', impl:'PartitionPruningManager', ns:'FabricLiveTable.Partitioning', lifetime:'Scoped', edog:false, ctorParams:['ILogger<PartitionPruningManager>','IOneLakeClient','ICatalogResolver'], regSource:'RegisterScopedType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:18, service:'ISettingsProvider', impl:'DagSettingsProvider', ns:'FabricLiveTable.Settings', lifetime:'Singleton', edog:false, ctorParams:['IConfiguration','IFeatureFlighter'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:19, service:'IErrorRegistry', impl:'ErrorRegistryProvider', ns:'FabricLiveTable.Errors', lifetime:'Singleton', edog:false, ctorParams:['ILogger<ErrorRegistryProvider>'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:20, service:'IHealthCheck', impl:'FltHealthCheckService', ns:'FabricLiveTable.Health', lifetime:'Singleton', edog:false, ctorParams:['ILogger<FltHealthCheckService>','IMetricsCollector','IConfiguration'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:21, service:'ICapacityManager', impl:'CapacityAdmissionManager', ns:'FabricLiveTable.Capacity', lifetime:'Singleton', edog:false, ctorParams:['ILogger<CapacityAdmissionManager>','IConfiguration','IMetricsCollector'], regSource:'RegisterSingletonType', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:22, service:'IWorkloadHost', impl:'WorkloadAppHost', ns:'FabricLiveTable.Hosting', lifetime:'Singleton', edog:false, ctorParams:['ILogger<WorkloadAppHost>','IConfiguration','IHealthCheck'], regSource:'RegisterSingletonType', regMethod:'Program.CreateHostBuilder()', regDetail:'Host registration' },
+  { id:23, service:'IHttpClientFactory', impl:'HttpClientFactoryRegistry', ns:'Microsoft.Extensions.Http', lifetime:'Singleton', edog:false, ctorParams:['ILogger<HttpClientFactoryRegistry>'], regSource:'AddHttpClient', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:24, service:'ILogger<T>', impl:'SerilogLoggerFactory', ns:'Serilog.Extensions.Logging', lifetime:'Singleton', edog:false, ctorParams:['LoggerConfiguration'], regSource:'AddSerilog', regMethod:'Program.CreateHostBuilder()', regDetail:'Host registration' },
+  { id:25, service:'IConfiguration', impl:'ConfigurationRoot', ns:'Microsoft.Extensions.Configuration', lifetime:'Singleton', edog:false, ctorParams:[], regSource:'AddConfiguration', regMethod:'Program.CreateHostBuilder()', regDetail:'Host registration' },
+  { id:26, service:'ITelemetryClient', impl:'ApplicationInsightsClient', ns:'Microsoft.ApplicationInsights', lifetime:'Singleton', edog:false, ctorParams:['IConfiguration','ILogger<ApplicationInsightsClient>'], regSource:'AddApplicationInsightsTelemetry', regMethod:'WorkloadApp.ConfigureServices()', regDetail:'Standard DI registration' },
+  { id:27, service:'IDataProtectionProvider', impl:'DataProtectionService', ns:'Microsoft.AspNetCore.DataProtection', lifetime:'Singleton', edog:false, ctorParams:['IConfiguration'], regSource:'AddDataProtection', regMethod:'Program.CreateHostBuilder()', regDetail:'Host registration' },
+];
+
+/* ═══════════════════════════════════════════════════════════════════
+   APPLICATION
+   ═══════════════════════════════════════════════════════════════════ */
+class DIRegistryApp {
+  constructor() {
+    this.els = {
+      emptyState: document.getElementById('emptyState'),
+      tablePane: document.getElementById('tablePane'),
+      regBody: document.getElementById('regBody'),
+      searchInput: document.getElementById('searchInput'),
+      searchClear: document.getElementById('searchClear'),
+      lifetimePills: document.getElementById('lifetimePills'),
+      edogToggle: document.getElementById('edogToggle'),
+      regCounter: document.getElementById('regCounter'),
+      footerCount: document.getElementById('footerCount'),
+      exportBtn: document.getElementById('exportBtn'),
+      exportDropdown: document.getElementById('exportDropdown'),
+      detailPane: document.getElementById('detailPane'),
+      detailTitle: document.getElementById('detailTitle'),
+      detailBody: document.getElementById('detailBody'),
+      detailClose: document.getElementById('detailClose'),
+      detailCopy: document.getElementById('detailCopy'),
+      noResults: document.getElementById('noResults'),
+      themeToggle: document.getElementById('themeToggle'),
+      scToggle: document.getElementById('scToggle'),
+      stateController: document.getElementById('stateController'),
+      scClose: document.getElementById('scClose'),
+      tooltip: document.getElementById('tooltip'),
+      toastContainer: document.getElementById('toastContainer'),
+      loadRegistryBtn: document.getElementById('loadRegistryBtn'),
+      tableWrap: document.getElementById('tableWrap'),
+    };
+
+    this._state = 'empty'; // empty | loaded
+    this._data = [...REGISTRATIONS];
+    this._filtered = [];
+    this._selectedId = null;
+    this._searchText = '';
+    this._lifetimeFilter = 'all';
+    this._edogOnly = false;
+    this._sortCol = 'service';
+    this._sortAsc = true;
+
+    this._bindEvents();
+    this._updateTabUnderline();
+  }
+
+  /* ─── EVENT BINDING ─── */
+  _bindEvents() {
+    // Theme
+    this.els.themeToggle.addEventListener('click', () => this._toggleTheme());
+
+    // Load registry from empty state
+    this.els.loadRegistryBtn.addEventListener('click', () => this._loadRegistry());
+
+    // Search
+    this.els.searchInput.addEventListener('input', () => {
+      this._searchText = this.els.searchInput.value.trim().toLowerCase();
+      this.els.searchClear.style.display = this._searchText ? 'flex' : 'none';
+      this._applyFilters();
+    });
+    this.els.searchClear.addEventListener('click', () => {
+      this.els.searchInput.value = '';
+      this._searchText = '';
+      this.els.searchClear.style.display = 'none';
+      this._applyFilters();
+    });
+
+    // Lifetime pills
+    this.els.lifetimePills.addEventListener('click', (e) => {
+      const pill = e.target.closest('.lt-pill');
+      if (!pill) return;
+      this._lifetimeFilter = pill.dataset.lt;
+      this.els.lifetimePills.querySelectorAll('.lt-pill').forEach(p => p.classList.toggle('active', p === pill));
+      this._applyFilters();
+    });
+
+    // EDOG toggle
+    this.els.edogToggle.addEventListener('click', () => {
+      this._edogOnly = !this._edogOnly;
+      this.els.edogToggle.classList.toggle('active', this._edogOnly);
+      this._applyFilters();
+    });
+
+    // Export dropdown — click to toggle
+    this.els.exportBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const dd = this.els.exportDropdown;
+      const isOpen = !dd.classList.contains('hidden');
+      dd.classList.toggle('hidden', isOpen);
+      this.els.exportBtn.classList.toggle('open', !isOpen);
+    });
+    this.els.exportDropdown.addEventListener('click', (e) => {
+      const item = e.target.closest('.dd-item');
+      if (!item) return;
+      e.stopPropagation();
+      this._exportAs(item.dataset.format);
+      this.els.exportDropdown.classList.add('hidden');
+      this.els.exportBtn.classList.remove('open');
+    });
+    document.addEventListener('click', () => {
+      this.els.exportDropdown.classList.add('hidden');
+      this.els.exportBtn.classList.remove('open');
+    });
+
+    // Sort headers
+    document.querySelectorAll('.reg-table th[data-col]').forEach(th => {
+      th.addEventListener('click', () => this._handleSort(th.dataset.col));
+    });
+
+    // Detail close
+    this.els.detailClose.addEventListener('click', () => this._closeDetail());
+    this.els.detailCopy.addEventListener('click', () => this._copyDetail());
+
+    // State controller
+    this.els.scToggle.addEventListener('click', () => this.els.stateController.classList.toggle('open'));
+    this.els.scClose.addEventListener('click', () => this.els.stateController.classList.remove('open'));
+
+    document.querySelectorAll('[data-state]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (btn.dataset.state === 'empty') this._showEmpty();
+        else this._loadRegistry();
+      });
+    });
+    document.querySelectorAll('[data-theme]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-theme]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.documentElement.dataset.theme = btn.dataset.theme;
+      });
+    });
+
+    document.getElementById('scLoadBtn').addEventListener('click', () => this._loadRegistry());
+    document.getElementById('scToggleEdog').addEventListener('click', () => {
+      this.els.edogToggle.click();
+    });
+    document.getElementById('scSelectFirst').addEventListener('click', () => {
+      if (this._filtered.length > 0) this._selectRow(this._filtered[0].id);
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', (e) => this._handleKeyboard(e));
+
+    // Tooltips
+    document.addEventListener('mouseover', (e) => {
+      const target = e.target.closest('[data-tip]');
+      if (target) this._showTooltip(target, target.dataset.tip);
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (e.target.closest('[data-tip]')) this._hideTooltip();
+    });
+  }
+
+  /* ─── TAB UNDERLINE ─── */
+  _updateTabUnderline() {
+    const activeTab = document.querySelector('.tab.active');
+    const underline = document.getElementById('tabUnderline');
+    if (activeTab && underline) {
+      underline.style.left = activeTab.offsetLeft + 'px';
+      underline.style.width = activeTab.offsetWidth + 'px';
+    }
+  }
+
+  /* ─── THEME ─── */
+  _toggleTheme() {
+    const current = document.documentElement.dataset.theme;
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    document.querySelectorAll('[data-theme]').forEach(b => b.classList.toggle('active', b.dataset.theme === next));
+  }
+
+  /* ─── STATES ─── */
+  _showEmpty() {
+    this._state = 'empty';
+    this.els.emptyState.classList.remove('hidden');
+    this.els.tablePane.style.display = 'none';
+    this._closeDetail();
+    document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('active', b.dataset.state === 'empty'));
+  }
+
+  _loadRegistry() {
+    if (this._state === 'loaded') return;
+    this._state = 'loaded';
+    this.els.emptyState.classList.add('hidden');
+    this.els.tablePane.style.display = 'flex';
+    document.querySelectorAll('[data-state]').forEach(b => b.classList.toggle('active', b.dataset.state === 'loaded'));
+    this._applyFilters();
+    this._toast('DI registry loaded — 27 service registrations captured');
+  }
+
+  /* ─── FILTERING & SORTING ─── */
+  _applyFilters() {
+    let data = [...this._data];
+
+    // Search
+    if (this._searchText) {
+      data = data.filter(r =>
+        r.service.toLowerCase().includes(this._searchText) ||
+        r.impl.toLowerCase().includes(this._searchText) ||
+        r.ns.toLowerCase().includes(this._searchText)
+      );
+    }
+
+    // Lifetime
+    if (this._lifetimeFilter !== 'all') {
+      data = data.filter(r => r.lifetime === this._lifetimeFilter);
+    }
+
+    // EDOG only
+    if (this._edogOnly) {
+      data = data.filter(r => r.edog);
+    }
+
+    // Sort
+    data.sort((a, b) => {
+      let va, vb;
+      switch (this._sortCol) {
+        case 'service': va = a.service; vb = b.service; break;
+        case 'impl': va = a.impl; vb = b.impl; break;
+        case 'lifetime': va = a.lifetime; vb = b.lifetime; break;
+        case 'edog': va = a.edog ? 1 : 0; vb = b.edog ? 1 : 0; break;
+        case 'ns': va = a.ns; vb = b.ns; break;
+        default: va = a.service; vb = b.service;
+      }
+      if (typeof va === 'string') {
+        const cmp = va.localeCompare(vb);
+        return this._sortAsc ? cmp : -cmp;
+      }
+      return this._sortAsc ? va - vb : vb - va;
+    });
+
+    this._filtered = data;
+    this._renderTable();
+    this._updateCounters();
+  }
+
+  _handleSort(col) {
+    if (this._sortCol === col) {
+      this._sortAsc = !this._sortAsc;
+    } else {
+      this._sortCol = col;
+      this._sortAsc = true;
+    }
+
+    // Update header UI
+    document.querySelectorAll('.reg-table th[data-col]').forEach(th => {
+      const isActive = th.dataset.col === this._sortCol;
+      th.classList.toggle('sorted', isActive);
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.innerHTML = isActive ? (this._sortAsc ? '&#x25B2;' : '&#x25BC;') : '&#x25B2;';
+    });
+
+    this._applyFilters();
+  }
+
+  /* ─── RENDERING ─── */
+  _renderTable() {
+    const body = this.els.regBody;
+    body.innerHTML = '';
+
+    if (this._filtered.length === 0) {
+      this.els.noResults.classList.add('visible');
+      return;
+    }
+    this.els.noResults.classList.remove('visible');
+
+    this._filtered.forEach((reg, idx) => {
+      const tr = document.createElement('tr');
+      tr.dataset.id = reg.id;
+      if (reg.edog) tr.classList.add('edog-row');
+      if (reg.id === this._selectedId) tr.classList.add('selected');
+      tr.classList.add('showing');
+
+      const ltClass = reg.lifetime.toLowerCase();
+      const ltIcons = { Singleton: '\u{1F512}', Transient: '\u21BB', Scoped: '\u25CE' };
+      const ltIcon = ltIcons[reg.lifetime] || '';
+
+      tr.innerHTML = `
+        <td data-tip="${reg.ns}.${reg.service}">${reg.service}</td>
+        <td data-tip="${reg.ns}.${reg.impl}">${reg.impl}</td>
+        <td><span class="lifetime-badge ${ltClass}"><span class="lt-icon">${ltIcon}</span> ${reg.lifetime}</span></td>
+        <td style="text-align:center">${reg.edog ? '<span class="edog-badge" data-tip="EDOG intercepted">\u26A1</span>' : ''}</td>
+        <td style="color:var(--text-3);font-size:11px" data-tip="${reg.ns}">${this._shortenNs(reg.ns)}</td>
+      `;
+
+      tr.addEventListener('click', () => this._selectRow(reg.id));
+      body.appendChild(tr);
+    });
+  }
+
+  _shortenNs(ns) {
+    const parts = ns.split('.');
+    if (parts.length <= 2) return ns;
+    return parts.slice(-2).join('.');
+  }
+
+  _updateCounters() {
+    const total = this._data.length;
+    const shown = this._filtered.length;
+    const isFiltered = this._searchText || this._lifetimeFilter !== 'all' || this._edogOnly;
+
+    if (isFiltered) {
+      this.els.regCounter.innerHTML = `<strong>${shown}</strong> of ${total} registrations`;
+      this.els.footerCount.textContent = `${shown} of ${total} registrations`;
+    } else {
+      this.els.regCounter.innerHTML = `<strong>${total}</strong> registrations`;
+      this.els.footerCount.textContent = `${total} registrations`;
+    }
+  }
+
+  /* ─── ROW SELECTION & DETAIL ─── */
+  _selectRow(id) {
+    this._selectedId = id;
+    this.els.regBody.querySelectorAll('tr').forEach(tr => {
+      tr.classList.toggle('selected', parseInt(tr.dataset.id) === id);
+    });
+    const reg = this._data.find(r => r.id === id);
+    if (reg) this._showDetail(reg);
+  }
+
+  _showDetail(reg) {
+    this.els.detailPane.classList.add('open');
+    this.els.detailTitle.textContent = reg.service;
+
+    let html = '';
+
+    // Service Type
+    html += `<div class="detail-section">
+      <div class="detail-label">Service Type</div>
+      <div class="detail-value mono">${reg.ns}.${reg.service}</div>
+    </div>`;
+
+    // Implementation
+    html += `<div class="detail-section">
+      <div class="detail-label">Implementation</div>
+      <div class="detail-value mono">${reg.ns}.${reg.impl}</div>
+    </div>`;
+
+    // Lifetime
+    const ltClass = reg.lifetime.toLowerCase();
+    html += `<div class="detail-section">
+      <div class="detail-label">Lifetime</div>
+      <div class="detail-value"><span class="lifetime-badge ${ltClass}" style="font-size:12px;padding:3px 10px">${reg.lifetime}</span></div>
+    </div>`;
+
+    // EDOG Interception
+    if (reg.edog) {
+      html += `<div class="detail-section">
+        <div class="detail-label">EDOG Interception</div>
+        <div class="intercept-chain">
+          <div class="intercept-box original">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);margin-bottom:4px">Original</div>
+            ${reg.originalNs}.${reg.original}
+          </div>
+          <div class="intercept-arrow">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3v10M4 9l4 4 4-4"/></svg>
+          </div>
+          <div class="intercept-box wrapper">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--accent);margin-bottom:4px">Wrapped by EDOG</div>
+            ${reg.ns}.${reg.impl}
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // Constructor Parameters
+    if (reg.ctorParams && reg.ctorParams.length > 0) {
+      html += `<div class="detail-section">
+        <div class="detail-label">Constructor Parameters</div>
+        <div class="ctor-params">
+          ${reg.ctorParams.map(p => `<span class="ctor-pill">${p}</span>`).join('')}
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="detail-section">
+        <div class="detail-label">Constructor Parameters</div>
+        <div class="detail-value" style="color:var(--text-3);font-style:italic">None (parameterless)</div>
+      </div>`;
+    }
+
+    // Registration Source
+    html += `<div class="detail-section">
+      <div class="detail-label">Registration Source</div>
+      <div class="reg-source"><span class="kw">WireUp</span><span class="punct">.</span><span class="method">${reg.regSource}</span><span class="punct">&lt;</span><span class="type">${reg.service}</span><span class="punct">,</span> <span class="type">${reg.impl}</span><span class="punct">&gt;()</span></div>
+      <div style="margin-top:6px;font-size:11px;color:var(--text-3)">Registered in: <span style="color:var(--text-2)">${reg.regMethod}</span> &mdash; ${reg.regDetail}</div>
+    </div>`;
+
+    this.els.detailBody.innerHTML = html;
+  }
+
+  _closeDetail() {
+    this.els.detailPane.classList.remove('open');
+    this._selectedId = null;
+    this.els.regBody.querySelectorAll('tr.selected').forEach(tr => tr.classList.remove('selected'));
+  }
+
+  _copyDetail() {
+    const reg = this._data.find(r => r.id === this._selectedId);
+    if (!reg) return;
+    const text = `${reg.service} -> ${reg.impl} (${reg.lifetime})${reg.edog ? ' [EDOG]' : ''}\nNamespace: ${reg.ns}\nRegistered in: ${reg.regMethod}`;
+    navigator.clipboard.writeText(text).then(() => this._toast('Detail copied to clipboard'));
+  }
+
+  /* ─── EXPORT ─── */
+  _exportAs(format) {
+    this._toast(`Exported ${this._filtered.length} registrations as ${format.toUpperCase()}`);
+  }
+
+  /* ─── KEYBOARD ─── */
+  _handleKeyboard(e) {
+    // Don't capture when typing in search
+    const isSearch = document.activeElement === this.els.searchInput;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (this.els.detailPane.classList.contains('open')) {
+        this._closeDetail();
+      } else if (isSearch) {
+        this.els.searchInput.blur();
+      } else {
+        this.els.stateController.classList.remove('open');
+      }
+      return;
+    }
+
+    if (e.key === '/' && !isSearch) {
+      e.preventDefault();
+      this.els.searchInput.focus();
+      return;
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'e') {
+      e.preventDefault();
+      this.els.edogToggle.click();
+      return;
+    }
+
+    if (this._state !== 'loaded' || isSearch) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      this._navigateRows(e.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+
+    if (e.key === 'Enter' && this._selectedId) {
+      e.preventDefault();
+      const reg = this._data.find(r => r.id === this._selectedId);
+      if (reg) this._showDetail(reg);
+      return;
+    }
+  }
+
+  _navigateRows(dir) {
+    if (this._filtered.length === 0) return;
+    const currentIdx = this._filtered.findIndex(r => r.id === this._selectedId);
+    let nextIdx;
+    if (currentIdx === -1) {
+      nextIdx = dir === 1 ? 0 : this._filtered.length - 1;
+    } else {
+      nextIdx = currentIdx + dir;
+      if (nextIdx < 0) nextIdx = 0;
+      if (nextIdx >= this._filtered.length) nextIdx = this._filtered.length - 1;
+    }
+    this._selectRow(this._filtered[nextIdx].id);
+
+    // Scroll into view
+    const row = this.els.regBody.querySelector(`tr[data-id="${this._filtered[nextIdx].id}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+
+  /* ─── TOOLTIP ─── */
+  _showTooltip(target, text) {
+    const tip = this.els.tooltip;
+    const rect = target.getBoundingClientRect();
+    tip.textContent = text;
+    tip.classList.add('visible');
+    tip.style.left = Math.min(rect.left, window.innerWidth - tip.offsetWidth - 8) + 'px';
+    tip.style.top = (rect.bottom + 6) + 'px';
+  }
+
+  _hideTooltip() {
+    this.els.tooltip.classList.remove('visible');
+  }
+
+  /* ─── TOAST ─── */
+  _toast(msg) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    this.els.toastContainer.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 200);
+    }, 3000);
+  }
+}
+
+/* ─── INIT ─── */
+const app = new DIRegistryApp();
+</script>
+</body>
+</html>

@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Feature Flags Tab Mock (F04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --amber: #e5940c;
+  --red: #e5453b;
+  --blue: #2d7ff9;
+  --purple: #a855f7;
+  --teal: #0d9488;
+  --gold: #f5a623;
+  --cyan: #06b6d4;
+  --magenta: #ec4899;
+  --lime: #84cc16;
+  --coral: #fb7185;
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+}
+[data-theme="dark"] {
+  --bg: #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text: #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.03); --selected-bg: rgba(109,92,255,0.10);
+  --toolbar-bg: #13151d; --panel-bg: #161923;
+  --scrollbar-thumb: rgba(255,255,255,0.12); --scrollbar-track: transparent;
+  --badge-bg: rgba(255,255,255,0.06);
+}
+[data-theme="light"] {
+  --bg: #f8f9fc; --bg-2: #ffffff; --bg-3: #f0f1f5; --bg-4: #e8e9ee;
+  --text: #1a1d27; --text-2: #5c6070; --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08); --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03); --selected-bg: rgba(109,92,255,0.08);
+  --toolbar-bg: #f2f3f7; --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15); --scrollbar-track: transparent;
+  --badge-bg: rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08); --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input{background:none;border:none;outline:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;padding-bottom:32px;overflow:hidden}
+
+/* TAB BAR */
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 16px;height:40px;background:var(--bg-2);border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
+.tab-bar-left{display:flex;align-items:center;gap:0;position:relative}
+.tab{padding:0 16px;height:40px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600}
+.tab .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.tab-underline{position:absolute;bottom:0;height:3px;background:var(--accent);border-radius:3px 3px 0 0;transition:left 200ms ease-out, width 200ms ease-out}
+.tab-bar-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:12px;font-family:var(--mono);color:var(--text-2)}
+.conn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:background var(--transition)}
+.conn-dot.green{background:var(--green);box-shadow:0 0 6px rgba(24,160,88,0.4)}
+.throughput{font-family:var(--mono);font-size:12px;color:var(--text-2)}
+
+/* TOOLBAR */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;padding:8px 16px;background:var(--toolbar-bg);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;transition:background var(--transition)}
+.toolbar-row{display:flex;gap:8px;align-items:center;width:100%;flex-wrap:wrap}
+.toolbar-separator{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+
+/* SEARCH */
+.search-box{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);min-width:200px;max-width:320px;flex:1;transition:all var(--transition);position:relative}
+.search-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+.search-box svg{width:14px;height:14px;color:var(--text-3);flex-shrink:0}
+.search-box input{flex:1;font-size:12px;min-width:0;background:transparent}
+.search-box input::placeholder{color:var(--text-3)}
+.search-clear{width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;color:var(--text-3);cursor:pointer}
+.search-clear:hover{background:var(--hover-bg);color:var(--text)}
+
+/* AUTOCOMPLETE */
+.autocomplete-list{position:absolute;top:100%;left:0;right:0;background:var(--bg-3);border:1px solid var(--border-bright);border-radius:var(--r6);box-shadow:var(--shadow-md);z-index:20;max-height:200px;overflow-y:auto;margin-top:2px}
+.autocomplete-list.hidden{display:none}
+.autocomplete-item{padding:5px 12px;font-size:12px;font-family:var(--mono);cursor:pointer;transition:background 80ms ease-out}
+.autocomplete-item:hover,.autocomplete-item.focused{background:var(--hover-bg)}
+.autocomplete-item mark{background:rgba(109,92,255,0.2);color:var(--accent);border-radius:2px;padding:0 1px}
+
+/* FILTER PILLS */
+.filter-pills{display:flex;gap:4px}
+.filter-pill{display:flex;align-items:center;gap:4px;padding:3px 10px;border-radius:var(--r100);font-size:12px;font-weight:500;border:1px solid var(--border-bright);cursor:pointer;transition:all var(--transition);user-select:none;white-space:nowrap}
+.filter-pill:hover{background:var(--hover-bg)}
+.filter-pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.filter-pill.fp-true{color:var(--green)}
+.filter-pill.fp-true.active{background:var(--green);border-color:var(--green);color:#fff}
+.filter-pill.fp-false{color:var(--red)}
+.filter-pill.fp-false.active{background:var(--red);border-color:var(--red);color:#fff}
+.filter-pill.fp-changed{color:var(--amber)}
+.filter-pill.fp-changed.active{background:var(--amber);border-color:var(--amber);color:#fff}
+.filter-pill .count{font-family:var(--mono);font-size:11px;opacity:0.7}
+
+/* TOOLBAR ACTIONS */
+.toolbar-action{display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:var(--r6);font-size:12px;color:var(--text-2);cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.toolbar-action:hover{background:var(--hover-bg);color:var(--text)}
+.toolbar-action.active{color:var(--accent);background:var(--accent-dim)}
+.toolbar-action svg{width:14px;height:14px}
+
+/* STAT BADGE */
+.stat-badge{font-size:12px;color:var(--text-2);font-family:var(--mono);white-space:nowrap}
+
+/* EXPORT DROPDOWN */
+.export-wrap{position:relative}
+.export-dropdown{position:absolute;top:100%;right:0;min-width:160px;background:var(--bg-3);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);z-index:15;padding:4px 0;animation:ctx-appear 100ms var(--spring)}
+.export-dropdown.hidden{display:none}
+.export-dropdown .dropdown-item{display:flex;align-items:center;gap:8px;padding:6px 16px;cursor:pointer;font-size:12px;transition:background 80ms ease-out}
+.export-dropdown .dropdown-item:hover{background:var(--hover-bg)}
+
+/* DROPDOWN BUTTON */
+.dropdown-btn{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);font-size:12px;cursor:pointer;transition:all var(--transition);position:relative;white-space:nowrap}
+.dropdown-btn:hover{border-color:rgba(255,255,255,0.22);background:var(--hover-bg)}
+.dropdown-btn .chevron{font-size:10px;opacity:0.5;transition:transform var(--transition)}
+.dropdown-btn.open .chevron{transform:rotate(180deg)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EVAL STREAM TABLE
+   ═══════════════════════════════════════════════════════════════════ */
+.content-area{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.stream-wrapper{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative}
+
+/* TABLE HEADER */
+.table-header{display:grid;grid-template-columns:minmax(220px,2fr) 120px 100px 120px 100px 90px;gap:0;padding:0 16px;height:32px;background:var(--bg-3);border-bottom:1px solid var(--border-bright);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-3);flex-shrink:0;align-items:center}
+.table-header .th{padding:0 8px;display:flex;align-items:center}
+
+/* EVAL ROWS */
+.eval-scroll{flex:1;overflow-y:auto;overflow-x:hidden;position:relative}
+.eval-scroll:focus{outline:none}
+.eval-row{display:grid;grid-template-columns:minmax(220px,2fr) 120px 100px 120px 100px 90px;gap:0;padding:0 16px;border-left:4px solid transparent;font-size:12px;line-height:1.5;cursor:pointer;transition:background 100ms ease-out;position:relative;min-height:32px;align-items:center;border-bottom:1px solid var(--border)}
+.eval-row:nth-child(odd){background:transparent}
+.eval-row:nth-child(even){background:var(--hover-bg)}
+.eval-row:hover{background:var(--selected-bg)}
+.eval-row.selected{background:var(--selected-bg);border-left-color:var(--accent)}
+.eval-row .cell{padding:4px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eval-row .flag-name{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--text)}
+.eval-row .ctx-val{color:var(--text-2);font-size:11px}
+.eval-row .timestamp-cell{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+/* RESULT BADGES */
+.result-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:var(--r100);font-size:11px;font-weight:600;letter-spacing:0.3px}
+.result-badge.true{background:rgba(24,160,88,0.12);color:var(--green)}
+.result-badge.false{background:rgba(229,69,59,0.12);color:var(--red)}
+
+/* CHANGED ROW */
+.eval-row.changed{border-left-color:var(--amber) !important}
+.eval-row.changed .change-badge{display:inline-flex}
+.change-badge{display:none;align-items:center;gap:3px;padding:1px 7px;border-radius:var(--r100);background:rgba(229,148,12,0.15);color:var(--amber);font-size:10px;font-weight:600;margin-left:6px;white-space:nowrap}
+.change-detail{font-size:11px;color:var(--text-2);padding:2px 8px 6px 8px;grid-column:1/-1;display:flex;align-items:center;gap:6px}
+.change-detail .prev-val{text-decoration:line-through;opacity:0.6}
+.change-detail .arrow{color:var(--amber);font-weight:700}
+
+/* FLASH ANIMATION for changed rows */
+@keyframes flash-amber{0%{border-left-color:var(--amber);background:rgba(229,148,12,0.12)}50%{border-left-color:var(--amber);background:rgba(229,148,12,0.05)}100%{border-left-color:var(--amber);background:transparent}}
+@keyframes pulse-bg{0%{background:rgba(229,148,12,0.15)}50%{background:rgba(229,148,12,0.04)}100%{background:rgba(229,148,12,0.15)}}
+.eval-row.flash-change{animation:flash-amber 300ms ease 2}
+
+/* SAME-FLAG GROUPING TINTS */
+.eval-row.flag-tint-0{}
+.eval-row.flag-tint-1{background:color-mix(in srgb, var(--bg) 96%, var(--accent))}
+.eval-row.flag-tint-1:hover{background:var(--selected-bg)}
+
+/* EMPTY STATE */
+.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--text-3);text-align:center;transition:opacity 150ms ease}
+.empty-state svg{width:48px;height:48px;opacity:0.3}
+.empty-state .empty-title{font-size:14px;font-weight:500;color:var(--text-2)}
+.empty-state .empty-hint{font-size:12px;max-width:340px}
+.empty-state.hidden{opacity:0;pointer-events:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SUMMARY VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+.summary-view{flex:1;overflow-y:auto;display:none;flex-direction:column}
+.summary-view.active{display:flex}
+.summary-header{display:grid;grid-template-columns:minmax(200px,2fr) 80px 100px 100px 80px 90px;gap:0;padding:0 16px;height:32px;background:var(--bg-3);border-bottom:1px solid var(--border-bright);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-3);flex-shrink:0;align-items:center}
+.summary-header .th{padding:0 8px}
+.summary-row{display:grid;grid-template-columns:minmax(200px,2fr) 80px 100px 100px 80px 90px;gap:0;padding:0 16px;font-size:12px;cursor:pointer;transition:background 100ms ease-out;min-height:36px;align-items:center;border-bottom:1px solid var(--border);border-left:4px solid transparent}
+.summary-row:hover{background:var(--selected-bg)}
+.summary-row .cell{padding:4px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.summary-row .flag-name{font-family:var(--mono);font-size:12px;font-weight:500}
+.summary-row .eval-count{font-family:var(--mono);font-weight:600;color:var(--text)}
+.summary-row .pct-bar{height:6px;border-radius:3px;background:var(--bg-4);overflow:hidden;display:flex}
+.summary-row .pct-bar .pct-fill-true{background:var(--green);height:100%}
+.summary-row .pct-bar .pct-fill-false{background:var(--red);height:100%}
+.summary-row .pct-label{font-size:10px;color:var(--text-3);margin-top:2px;font-family:var(--mono)}
+.summary-row .changed-indicator{font-weight:600}
+.summary-row .changed-indicator.yes{color:var(--amber)}
+.summary-row .changed-indicator.no{color:var(--text-3)}
+.summary-row .last-time{font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.detail-panel{background:var(--panel-bg);border-top:1px solid var(--border-bright);overflow:hidden;transition:height 150ms ease-out;flex-shrink:0}
+.detail-panel.closed{height:0 !important;border-top-color:transparent}
+.detail-resize{height:4px;cursor:ns-resize;background:transparent;transition:background var(--transition);flex-shrink:0}
+.detail-resize:hover{background:var(--accent)}
+.detail-header{display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--border);font-size:12px;flex-shrink:0}
+.detail-header-actions{margin-left:auto;display:flex;gap:4px}
+.detail-header-actions button{width:24px;height:24px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-3);transition:all var(--transition)}
+.detail-header-actions button:hover{background:var(--hover-bg);color:var(--text)}
+.detail-content{overflow-y:auto;padding:12px 16px;display:flex;gap:16px;flex-wrap:wrap}
+.detail-card{flex:1;min-width:200px;padding:10px 14px;background:var(--bg-3);border-radius:var(--r6);border:1px solid var(--border)}
+.detail-card-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);margin-bottom:6px}
+.detail-card-body{font-family:var(--mono);font-size:12px;line-height:1.6;word-break:break-word}
+.detail-card-body .kv{display:flex;gap:8px;padding:1px 0}
+.detail-card-body .kv-key{color:var(--blue);min-width:100px;flex-shrink:0}
+.detail-card-body .kv-val{color:var(--text)}
+
+/* EVAL PATH */
+.eval-path{display:flex;align-items:center;gap:0;flex-wrap:wrap}
+.eval-path-step{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:var(--r100);background:var(--bg-4);font-size:11px;font-family:var(--mono);color:var(--text-2);border:1px solid var(--border)}
+.eval-path-step.matched{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
+.eval-path-step.result-true{border-color:var(--green);background:rgba(24,160,88,0.1);color:var(--green);font-weight:600}
+.eval-path-step.result-false{border-color:var(--red);background:rgba(229,69,59,0.1);color:var(--red);font-weight:600}
+.eval-path-arrow{color:var(--text-3);font-size:14px;padding:0 4px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container{position:fixed;bottom:80px;right:20px;z-index:30;display:flex;flex-direction:column-reverse;gap:8px}
+.toast{padding:8px 16px;border-radius:var(--r6);background:var(--bg-3);border:1px solid var(--border-bright);box-shadow:var(--shadow-md);font-size:12px;color:var(--text);animation:toast-in 200ms ease-out;max-width:320px}
+@keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.toast.out{animation:toast-out 150ms ease-in forwards}
+@keyframes toast-out{to{opacity:0;transform:translateY(-10px)}}
+@keyframes ctx-appear{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME TOGGLE
+   ═══════════════════════════════════════════════════════════════════ */
+.theme-toggle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;transition:all var(--transition);color:var(--text-2)}
+.theme-toggle:hover{background:var(--hover-bg);color:var(--text)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATE CONTROLLER
+   ═══════════════════════════════════════════════════════════════════ */
+.state-controller-toggle{position:fixed;bottom:44px;left:16px;width:36px;height:36px;border-radius:50%;background:var(--bg-3);border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:25;box-shadow:var(--shadow-md);font-size:16px;transition:all var(--transition)}
+.state-controller-toggle:hover{background:var(--bg-4);transform:scale(1.1)}
+.state-controller{position:fixed;bottom:32px;left:0;right:0;background:var(--bg-2);border-top:2px solid var(--accent);z-index:24;transform:translateY(100%);transition:transform 200ms ease-out;max-height:220px;overflow-y:auto}
+.state-controller.open{transform:translateY(0)}
+.sc-header{display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg-2);z-index:1}
+.sc-header h3{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--accent);flex:1}
+.sc-header button{font-size:16px;color:var(--text-3);cursor:pointer}
+.sc-body{display:flex;gap:24px;padding:12px 16px;flex-wrap:wrap}
+.sc-group{display:flex;flex-direction:column;gap:6px}
+.sc-group label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)}
+.sc-group .sc-buttons{display:flex;gap:4px;flex-wrap:wrap}
+.sc-btn{padding:4px 12px;border-radius:var(--r4);border:1px solid var(--border-bright);font-size:11px;cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.sc-btn:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.sc-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD HINTS — fixed footer bar
+   ═══════════════════════════════════════════════════════════════════ */
+.kbd-hint{position:fixed;bottom:0;left:0;right:0;z-index:150;font-size:10px;color:var(--text-2);display:flex;align-items:center;gap:16px;padding:6px 16px;height:32px;background:var(--bg-3);border-top:1px solid var(--border-bright);box-shadow:0 -2px 8px rgba(0,0,0,0.06)}
+kbd{padding:1px 5px;border:1px solid var(--border-bright);border-radius:3px;font-family:var(--mono);font-size:10px;background:var(--bg-2)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOOLTIP
+   ═══════════════════════════════════════════════════════════════════ */
+.tooltip{position:fixed;z-index:100;padding:4px 10px;border-radius:var(--r4);background:var(--bg-4);border:1px solid var(--border-bright);box-shadow:var(--shadow-md);font-size:11px;color:var(--text);pointer-events:none;white-space:nowrap;animation:ctx-appear 80ms ease-out}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <div class="tab-bar-left">
+      <div class="tab" data-tab="logs">Logs</div>
+      <div class="tab" data-tab="telemetry">Telemetry</div>
+      <div class="tab" data-tab="sysfiles">System Files</div>
+      <div class="tab" data-tab="spark">Spark</div>
+      <div class="tab active" data-tab="internals"><span class="dot" style="background:var(--accent)"></span>Internals: Flags <span class="chevron">&#x25BE;</span></div>
+      <div class="tab-underline" id="tabUnderline"></div>
+    </div>
+    <div class="tab-bar-right">
+      <div class="conn-status">
+        <span class="conn-dot green"></span>
+        <span>Connected</span>
+      </div>
+      <span class="throughput">4 eval/s</span>
+      <div class="toolbar-separator"></div>
+      <div class="theme-toggle" id="themeToggle" title="Toggle theme">&#x2600;</div>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-row">
+      <div class="search-box" id="searchBox">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+        <input type="text" placeholder="Search flags..." id="searchInput" autocomplete="off">
+        <div class="search-clear" id="searchClear" style="display:none" title="Clear search">&#x2715;</div>
+        <div class="autocomplete-list hidden" id="autocomplete"></div>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="filter-pills" id="filterPills">
+        <div class="filter-pill active" data-filter="all">All <span class="count" id="countAll">0</span></div>
+        <div class="filter-pill fp-true" data-filter="true">True <span class="count" id="countTrue">0</span></div>
+        <div class="filter-pill fp-false" data-filter="false">False <span class="count" id="countFalse">0</span></div>
+        <div class="filter-pill fp-changed" data-filter="changed">Changed <span class="count" id="countChanged">0</span></div>
+      </div>
+      <div class="toolbar-separator"></div>
+      <div class="toolbar-action" id="summaryToggle" title="Toggle summary view">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="3" rx="1"/><rect x="2" y="7" width="12" height="3" rx="1"/><rect x="2" y="12" width="8" height="3" rx="1"/></svg>
+        Summary
+      </div>
+      <div class="toolbar-separator"></div>
+      <span class="stat-badge" id="statBadge">0 evals across 0 flags</span>
+      <div class="export-wrap">
+        <div class="dropdown-btn" id="exportBtn">Export <span class="chevron">&#x25BE;</span></div>
+        <div class="export-dropdown hidden" id="exportDropdown">
+          <div class="dropdown-item" data-format="json">Export as JSON</div>
+          <div class="dropdown-item" data-format="csv">Export as CSV</div>
+          <div class="dropdown-item" data-format="clipboard">Copy to Clipboard</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT AREA -->
+  <div class="content-area" id="contentArea">
+    <!-- STREAM VIEW -->
+    <div class="stream-wrapper" id="streamWrapper">
+      <div class="empty-state" id="emptyState">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.5">
+          <rect x="8" y="6" width="32" height="36" rx="4"/>
+          <path d="M16 16h16M16 22h10M16 28h14"/>
+          <circle cx="34" cy="34" r="8" fill="none" stroke-width="2"/>
+          <path d="M30 34h8M34 30v8" stroke-width="2"/>
+        </svg>
+        <div class="empty-title">No feature flag evaluations captured</div>
+        <div class="empty-hint">FeatureFlighter.IsEnabled() calls will appear here in real-time. Trigger an operation in FLT to see evaluations.</div>
+      </div>
+
+      <div class="table-header" id="tableHeader" style="display:none">
+        <div class="th">Flag Name</div>
+        <div class="th">Tenant</div>
+        <div class="th">Capacity</div>
+        <div class="th">Workspace</div>
+        <div class="th">Result</div>
+        <div class="th">Time</div>
+      </div>
+      <div class="eval-scroll" id="evalScroll" tabindex="0"></div>
+    </div>
+
+    <!-- SUMMARY VIEW -->
+    <div class="summary-view" id="summaryView">
+      <div class="summary-header">
+        <div class="th">Flag Name</div>
+        <div class="th">Evals</div>
+        <div class="th">True %</div>
+        <div class="th">False %</div>
+        <div class="th">Changed</div>
+        <div class="th">Last</div>
+      </div>
+      <div id="summaryBody"></div>
+    </div>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-resize" id="detailResize"></div>
+    <div class="detail-panel closed" id="detailPanel" style="height:200px">
+      <div class="detail-header">
+        <span style="font-weight:600" id="detailFlagName"></span>
+        <span id="detailResultBadge"></span>
+        <div class="detail-header-actions">
+          <button id="detailCopy" title="Copy (Ctrl+C)">&#x2398;</button>
+          <button id="detailClose" title="Close (Esc)">&#x2715;</button>
+        </div>
+      </div>
+      <div class="detail-content" id="detailContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- STATE CONTROLLER -->
+<div class="state-controller-toggle" id="scToggle" title="State Controller">&#x2699;</div>
+<div class="state-controller" id="stateController">
+  <div class="sc-header">
+    <h3>&#x2699; State Controller</h3>
+    <button id="scClose">&#x2715;</button>
+  </div>
+  <div class="sc-body">
+    <div class="sc-group">
+      <label>State</label>
+      <div class="sc-buttons">
+        <button class="sc-btn" data-state="empty">INT-FLAG-001 Empty</button>
+        <button class="sc-btn active" data-state="streaming">INT-FLAG-002 Streaming</button>
+        <button class="sc-btn" data-state="summary">INT-FLAG-006 Summary</button>
+      </div>
+    </div>
+    <div class="sc-group">
+      <label>Actions</label>
+      <div class="sc-buttons">
+        <button class="sc-btn" id="scAddEval">+ Add Eval</button>
+        <button class="sc-btn" id="scFlipFlag">&#x26A1; Flip Flag</button>
+        <button class="sc-btn" id="scToggleSummary">Toggle Summary</button>
+        <button class="sc-btn" id="scClear">Clear All</button>
+      </div>
+    </div>
+    <div class="sc-group">
+      <label>Theme</label>
+      <div class="sc-buttons">
+        <button class="sc-btn" data-theme="dark">Dark</button>
+        <button class="sc-btn active" data-theme="light">Light</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FIXED FOOTER -->
+<div class="kbd-hint">
+  <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate</span>
+  <span><kbd>Enter</kbd> Details</span>
+  <span><kbd>Esc</kbd> Close</span>
+  <span><kbd>Ctrl+E</kbd> Export</span>
+</div>
+
+<!-- TOOLTIP (body-level, managed by JS) -->
+<div class="tooltip" id="tooltip" style="display:none"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   MOCK DATA GENERATOR
+   ═══════════════════════════════════════════════════════════════════ */
+const FLAG_DEFS = [
+  { name: 'FLTDagExecutionHandlerV2', evalPath: ['PercentFilter(75%)', 'TenantAllowlist', 'Result'] },
+  { name: 'FLTSparkSessionPooling',   evalPath: ['GlobalToggle(ON)', 'Result'] },
+  { name: 'FLTOneLakePartitionPruning',evalPath: ['PercentFilter(0%)', 'CapacityDenylist(SKU-F64)', 'Result'] },
+  { name: 'FLTCacheEvictionPolicy',   evalPath: ['PercentFilter(100%)', 'Result'] },
+  { name: 'FLTRetryPolicyV3',         evalPath: ['PercentFilter(67%)', 'TenantAllowlist', 'Result'] },
+  { name: 'FLTCatalogResolverAsync',  evalPath: ['PercentFilter(50%)', 'WorkspaceFilter', 'Result'] },
+  { name: 'FLTMetricsCollection',     evalPath: ['GlobalToggle(ON)', 'Result'] },
+  { name: 'FLTNewDagScheduler',       evalPath: ['PercentFilter(10%)', 'TenantAllowlist', 'Result'] },
+];
+
+const WORKSPACES = ['EDOG-Dev-Workspace', 'EDOG-Dev-Workspace', 'EDOG-Dev-Workspace', 'Staging-Workspace-01', 'Perf-Test-WS'];
+
+function fmtTime(d) {
+  return String(d.getHours()).padStart(2,'0') + ':' +
+         String(d.getMinutes()).padStart(2,'0') + ':' +
+         String(d.getSeconds()).padStart(2,'0');
+}
+
+function generateMockEvals() {
+  const evals = [];
+  let id = 0;
+  const base = new Date(2026, 3, 12, 14, 39, 0);
+
+  function add(offsetSec, flagName, result, workspace, durationMs) {
+    const t = new Date(base.getTime() + offsetSec * 1000);
+    const def = FLAG_DEFS.find(f => f.name === flagName);
+    evals.push({
+      id: id++,
+      flagName,
+      tenant: 'FMLV08PPE',
+      capacity: 'SKU-F64',
+      workspace: workspace || 'EDOG-Dev-Workspace',
+      result,
+      timestamp: fmtTime(t),
+      timestampMs: offsetSec * 1000,
+      durationMs: durationMs || +(Math.random() * 0.8 + 0.1).toFixed(1),
+      evalPath: def ? def.evalPath : ['Unknown'],
+      changed: false,
+      prevResult: null,
+    });
+  }
+
+  // FLTDagExecutionHandlerV2: 8 evals, 75% true, FLIPS once at ~14:40:12
+  add(0,   'FLTDagExecutionHandlerV2', true,  null, 0.3);
+  add(18,  'FLTDagExecutionHandlerV2', true,  null, 0.2);
+  add(38,  'FLTDagExecutionHandlerV2', true,  null, 0.3);
+  add(55,  'FLTDagExecutionHandlerV2', true,  'Staging-Workspace-01', 0.4);
+  add(72,  'FLTDagExecutionHandlerV2', true,  null, 0.2);
+  add(82,  'FLTDagExecutionHandlerV2', false, null, 0.3); // FLIP! index=5
+  add(130, 'FLTDagExecutionHandlerV2', false, null, 0.3);
+  add(195, 'FLTDagExecutionHandlerV2', true,  null, 0.2);
+
+  // FLTSparkSessionPooling: 6 evals, 100% true
+  add(4,   'FLTSparkSessionPooling', true, null, 0.1);
+  add(28,  'FLTSparkSessionPooling', true, null, 0.2);
+  add(60,  'FLTSparkSessionPooling', true, null, 0.1);
+  add(88,  'FLTSparkSessionPooling', true, 'Staging-Workspace-01', 0.1);
+  add(110, 'FLTSparkSessionPooling', true, null, 0.2);
+  add(170, 'FLTSparkSessionPooling', true, null, 0.1);
+
+  // FLTOneLakePartitionPruning: 5 evals, 0% true
+  add(7,   'FLTOneLakePartitionPruning', false, null, 0.5);
+  add(42,  'FLTOneLakePartitionPruning', false, null, 0.4);
+  add(77,  'FLTOneLakePartitionPruning', false, null, 0.5);
+  add(120, 'FLTOneLakePartitionPruning', false, 'Perf-Test-WS', 0.4);
+  add(155, 'FLTOneLakePartitionPruning', false, null, 0.6);
+
+  // FLTCacheEvictionPolicy: 4 evals, 100% true
+  add(10,  'FLTCacheEvictionPolicy', true, null, 0.1);
+  add(50,  'FLTCacheEvictionPolicy', true, null, 0.2);
+  add(95,  'FLTCacheEvictionPolicy', true, null, 0.1);
+  add(145, 'FLTCacheEvictionPolicy', true, null, 0.1);
+
+  // FLTRetryPolicyV3: 3 evals, 67% true, FLIPS once
+  add(15,  'FLTRetryPolicyV3', true,  null, 0.3);
+  add(65,  'FLTRetryPolicyV3', true,  null, 0.2);
+  add(105, 'FLTRetryPolicyV3', false, null, 0.4); // FLIP!
+
+  // FLTCatalogResolverAsync: 2 evals, 50% true
+  add(25,  'FLTCatalogResolverAsync', true,  null, 0.6);
+  add(135, 'FLTCatalogResolverAsync', false, 'Staging-Workspace-01', 0.5);
+
+  // FLTMetricsCollection: 1 eval, true
+  add(35,  'FLTMetricsCollection', true, null, 0.1);
+
+  // FLTNewDagScheduler: 1 eval, false
+  add(48,  'FLTNewDagScheduler', false, null, 0.7);
+
+  // Sort by timestampMs
+  evals.sort((a, b) => a.timestampMs - b.timestampMs);
+
+  // Detect flips
+  const lastResult = {};
+  evals.forEach(ev => {
+    if (ev.flagName in lastResult && lastResult[ev.flagName] !== ev.result) {
+      ev.changed = true;
+      ev.prevResult = lastResult[ev.flagName];
+    }
+    lastResult[ev.flagName] = ev.result;
+  });
+
+  return evals;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   APP CLASS
+   ═══════════════════════════════════════════════════════════════════ */
+class FeatureFlagsMockApp {
+  constructor() {
+    this._evals = [];
+    this._filteredEvals = [];
+    this._selectedId = null;
+    this._focusedIdx = -1;
+    this._activeFilter = 'all';
+    this._searchQuery = '';
+    this._summaryMode = false;
+    this._detailOpen = false;
+    this._streamInterval = null;
+
+    this._cacheDOM();
+    this._bindEvents();
+    this._initMockData();
+    this._updateTabUnderline();
+  }
+
+  _cacheDOM() {
+    this.els = {
+      evalScroll: document.getElementById('evalScroll'),
+      emptyState: document.getElementById('emptyState'),
+      tableHeader: document.getElementById('tableHeader'),
+      searchInput: document.getElementById('searchInput'),
+      searchClear: document.getElementById('searchClear'),
+      autocomplete: document.getElementById('autocomplete'),
+      filterPills: document.getElementById('filterPills'),
+      countAll: document.getElementById('countAll'),
+      countTrue: document.getElementById('countTrue'),
+      countFalse: document.getElementById('countFalse'),
+      countChanged: document.getElementById('countChanged'),
+      statBadge: document.getElementById('statBadge'),
+      summaryToggle: document.getElementById('summaryToggle'),
+      summaryView: document.getElementById('summaryView'),
+      summaryBody: document.getElementById('summaryBody'),
+      streamWrapper: document.getElementById('streamWrapper'),
+      detailPanel: document.getElementById('detailPanel'),
+      detailFlagName: document.getElementById('detailFlagName'),
+      detailResultBadge: document.getElementById('detailResultBadge'),
+      detailContent: document.getElementById('detailContent'),
+      exportDropdown: document.getElementById('exportDropdown'),
+      toastContainer: document.getElementById('toastContainer'),
+      tabUnderline: document.getElementById('tabUnderline'),
+      tooltip: document.getElementById('tooltip'),
+    };
+  }
+
+  _bindEvents() {
+    // Tab bar
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this._updateTabUnderline();
+      });
+    });
+
+    // Filter pills
+    this.els.filterPills.addEventListener('click', e => {
+      const pill = e.target.closest('.filter-pill');
+      if (!pill) return;
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      this._activeFilter = pill.dataset.filter;
+      this._applyFilters();
+    });
+
+    // Search
+    let searchDebounce;
+    this.els.searchInput.addEventListener('input', () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => this._onSearch(), 150);
+      this._showAutocomplete();
+    });
+    this.els.searchInput.addEventListener('focus', () => this._showAutocomplete());
+    this.els.searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { this._clearSearch(); this.els.searchInput.blur(); }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); this._navigateAutocomplete(e.key === 'ArrowDown' ? 1 : -1); }
+      if (e.key === 'Enter') this._selectAutocompleteItem();
+    });
+    this.els.searchClear.addEventListener('click', () => this._clearSearch());
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.search-box')) this.els.autocomplete.classList.add('hidden');
+    });
+
+    // Summary toggle
+    this.els.summaryToggle.addEventListener('click', () => this._toggleSummary());
+
+    // Export dropdown
+    document.getElementById('exportBtn').addEventListener('click', e => {
+      e.stopPropagation();
+      this.els.exportDropdown.classList.toggle('hidden');
+    });
+    this.els.exportDropdown.addEventListener('click', e => {
+      const item = e.target.closest('.dropdown-item');
+      if (item) { this._export(item.dataset.format); this.els.exportDropdown.classList.add('hidden'); }
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.export-wrap')) this.els.exportDropdown.classList.add('hidden');
+    });
+
+    // Detail close
+    document.getElementById('detailClose').addEventListener('click', () => this._closeDetail());
+    document.getElementById('detailCopy').addEventListener('click', () => this._copySelected());
+
+    // Detail resize
+    this._initDetailResize();
+
+    // Eval scroll clicks
+    this.els.evalScroll.addEventListener('click', e => this._onEvalClick(e));
+
+    // Keyboard
+    document.addEventListener('keydown', e => this._onKeyDown(e));
+
+    // Theme
+    document.getElementById('themeToggle').addEventListener('click', () => this._toggleTheme());
+
+    // State controller
+    document.getElementById('scToggle').addEventListener('click', () => document.getElementById('stateController').classList.toggle('open'));
+    document.getElementById('scClose').addEventListener('click', () => document.getElementById('stateController').classList.remove('open'));
+    document.querySelectorAll('[data-state]').forEach(btn => btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      this._setState(btn.dataset.state);
+    }));
+    document.querySelectorAll('[data-theme]').forEach(btn => btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-theme]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.documentElement.setAttribute('data-theme', btn.dataset.theme);
+      document.getElementById('themeToggle').textContent = btn.dataset.theme === 'dark' ? '\u263E' : '\u2600';
+    }));
+    document.getElementById('scAddEval').addEventListener('click', () => this._addRandomEval());
+    document.getElementById('scFlipFlag').addEventListener('click', () => this._flipRandomFlag());
+    document.getElementById('scToggleSummary').addEventListener('click', () => this._toggleSummary());
+    document.getElementById('scClear').addEventListener('click', () => this._clearAll());
+
+    // Tooltips via body-level JS
+    document.addEventListener('mouseover', e => {
+      const target = e.target.closest('[data-tip]');
+      if (!target) return;
+      const tip = this.els.tooltip;
+      tip.textContent = target.dataset.tip;
+      tip.style.display = 'block';
+      const rect = target.getBoundingClientRect();
+      tip.style.left = rect.left + 'px';
+      tip.style.top = (rect.top - tip.offsetHeight - 6) + 'px';
+    });
+    document.addEventListener('mouseout', e => {
+      if (e.target.closest('[data-tip]')) this.els.tooltip.style.display = 'none';
+    });
+  }
+
+  /* ─── State Management ────────────────────────────────────────── */
+  _setState(state) {
+    if (this._streamInterval) { clearInterval(this._streamInterval); this._streamInterval = null; }
+
+    if (state === 'empty') {
+      this._evals = [];
+      this._filteredEvals = [];
+      this._selectedId = null;
+      this._closeDetail();
+      this._summaryMode = false;
+      this.els.summaryView.classList.remove('active');
+      this.els.streamWrapper.style.display = '';
+      this.els.emptyState.classList.remove('hidden');
+      this.els.tableHeader.style.display = 'none';
+      this.els.evalScroll.innerHTML = '';
+      this._updateCounts();
+      this.els.summaryToggle.classList.remove('active');
+    } else if (state === 'streaming') {
+      this._summaryMode = false;
+      this.els.summaryView.classList.remove('active');
+      this.els.streamWrapper.style.display = '';
+      this.els.summaryToggle.classList.remove('active');
+      if (this._evals.length === 0) this._initMockData();
+      else this._applyFilters();
+    } else if (state === 'summary') {
+      if (this._evals.length === 0) this._initMockData();
+      this._summaryMode = true;
+      this.els.summaryView.classList.add('active');
+      this.els.streamWrapper.style.display = 'none';
+      this.els.summaryToggle.classList.add('active');
+      this._renderSummary();
+    }
+  }
+
+  _initMockData() {
+    this._evals = generateMockEvals();
+    this._applyFilters();
+    this._updateCounts();
+    this.els.emptyState.classList.add('hidden');
+    this.els.tableHeader.style.display = '';
+    setTimeout(() => {
+      this.els.evalScroll.scrollTop = this.els.evalScroll.scrollHeight;
+    }, 50);
+  }
+
+  /* ─── Filtering ─────────────────────────────────────────────── */
+  _applyFilters() {
+    let filtered = [...this._evals];
+
+    // Result filter
+    if (this._activeFilter === 'true') filtered = filtered.filter(e => e.result === true);
+    else if (this._activeFilter === 'false') filtered = filtered.filter(e => e.result === false);
+    else if (this._activeFilter === 'changed') filtered = filtered.filter(e => e.changed);
+
+    // Search filter
+    if (this._searchQuery) {
+      const q = this._searchQuery.toLowerCase();
+      filtered = filtered.filter(e => e.flagName.toLowerCase().includes(q));
+    }
+
+    this._filteredEvals = filtered;
+    this._renderEvals();
+    this._updateCounts();
+  }
+
+  _updateCounts() {
+    const total = this._evals.length;
+    const trueCount = this._evals.filter(e => e.result === true).length;
+    const falseCount = this._evals.filter(e => e.result === false).length;
+    const changedCount = this._evals.filter(e => e.changed).length;
+    const uniqueFlags = new Set(this._evals.map(e => e.flagName)).size;
+
+    this.els.countAll.textContent = total;
+    this.els.countTrue.textContent = trueCount;
+    this.els.countFalse.textContent = falseCount;
+    this.els.countChanged.textContent = changedCount;
+    this.els.statBadge.textContent = `${total} evals across ${uniqueFlags} flags`;
+  }
+
+  /* ─── Render Eval Stream ────────────────────────────────────── */
+  _renderEvals() {
+    const scroll = this.els.evalScroll;
+    const wasAtBottom = scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 20;
+    scroll.innerHTML = '';
+
+    if (this._filteredEvals.length === 0 && this._evals.length > 0) {
+      scroll.innerHTML = '<div style="padding:40px;text-align:center;color:var(--text-3)">No evaluations match current filters</div>';
+      return;
+    }
+
+    // Build flag tint map for alternating same-flag grouping
+    const flagNames = [...new Set(this._evals.map(e => e.flagName))];
+    const flagTintMap = {};
+    flagNames.forEach((f, i) => { flagTintMap[f] = i % 2; });
+
+    this._filteredEvals.forEach(ev => {
+      const row = document.createElement('div');
+      row.className = 'eval-row';
+      row.dataset.evalId = ev.id;
+      row.classList.add('flag-tint-' + flagTintMap[ev.flagName]);
+
+      if (ev.id === this._selectedId) row.classList.add('selected');
+      if (ev.changed) row.classList.add('changed');
+
+      const resultClass = ev.result ? 'true' : 'false';
+      const resultSymbol = ev.result ? '&#x2713;' : '&#x2715;';
+      const resultText = ev.result ? 'true' : 'false';
+
+      let changeBadge = '';
+      if (ev.changed) {
+        changeBadge = `<span class="change-badge">&#x26A1; CHANGED</span>`;
+      }
+
+      let changeRow = '';
+      if (ev.changed) {
+        const prevText = ev.prevResult ? 'true' : 'false';
+        const newText = ev.result ? 'true' : 'false';
+        changeRow = `<div class="change-detail"><span class="prev-val">${prevText}</span> <span class="arrow">&#x2192;</span> <span style="font-weight:600;color:${ev.result ? 'var(--green)' : 'var(--red)'}">${newText}</span></div>`;
+      }
+
+      row.innerHTML = `
+        <div class="cell flag-name">${this._highlightSearch(ev.flagName)}${changeBadge}</div>
+        <div class="cell ctx-val">${ev.tenant}</div>
+        <div class="cell ctx-val">${ev.capacity}</div>
+        <div class="cell ctx-val" data-tip="${ev.workspace}">${ev.workspace.length > 14 ? ev.workspace.slice(0,14) + '...' : ev.workspace}</div>
+        <div class="cell"><span class="result-badge ${resultClass}">${resultSymbol} ${resultText}</span></div>
+        <div class="cell timestamp-cell">${ev.timestamp}</div>
+        ${changeRow}
+      `;
+
+      scroll.appendChild(row);
+    });
+
+    if (wasAtBottom) {
+      requestAnimationFrame(() => { scroll.scrollTop = scroll.scrollHeight; });
+    }
+  }
+
+  _highlightSearch(text) {
+    if (!this._searchQuery) return this._escapeHtml(text);
+    const q = this._searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(new RegExp(`(${q})`, 'gi'), '<mark>$1</mark>');
+  }
+
+  /* ─── Search & Autocomplete ─────────────────────────────────── */
+  _onSearch() {
+    this._searchQuery = this.els.searchInput.value.trim();
+    this.els.searchClear.style.display = this._searchQuery ? '' : 'none';
+    this._applyFilters();
+    this._showAutocomplete();
+  }
+
+  _clearSearch() {
+    this.els.searchInput.value = '';
+    this._searchQuery = '';
+    this.els.searchClear.style.display = 'none';
+    this.els.autocomplete.classList.add('hidden');
+    this._applyFilters();
+  }
+
+  _showAutocomplete() {
+    const q = this.els.searchInput.value.trim().toLowerCase();
+    if (!q) { this.els.autocomplete.classList.add('hidden'); return; }
+
+    const seen = [...new Set(this._evals.map(e => e.flagName))];
+    const matches = seen.filter(f => f.toLowerCase().includes(q));
+
+    if (matches.length === 0) { this.els.autocomplete.classList.add('hidden'); return; }
+
+    this.els.autocomplete.innerHTML = '';
+    matches.forEach(f => {
+      const item = document.createElement('div');
+      item.className = 'autocomplete-item';
+      const ql = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      item.innerHTML = f.replace(new RegExp(`(${ql})`, 'gi'), '<mark>$1</mark>');
+      item.dataset.flag = f;
+      item.addEventListener('click', () => {
+        this.els.searchInput.value = f;
+        this._searchQuery = f;
+        this.els.searchClear.style.display = '';
+        this.els.autocomplete.classList.add('hidden');
+        this._applyFilters();
+      });
+      this.els.autocomplete.appendChild(item);
+    });
+    this.els.autocomplete.classList.remove('hidden');
+    this._acFocusIdx = -1;
+  }
+
+  _navigateAutocomplete(dir) {
+    const items = this.els.autocomplete.querySelectorAll('.autocomplete-item');
+    if (!items.length) return;
+    items.forEach(i => i.classList.remove('focused'));
+    this._acFocusIdx = (this._acFocusIdx + dir + items.length) % items.length;
+    items[this._acFocusIdx].classList.add('focused');
+  }
+
+  _selectAutocompleteItem() {
+    const focused = this.els.autocomplete.querySelector('.autocomplete-item.focused');
+    if (focused) focused.click();
+    else { this.els.autocomplete.classList.add('hidden'); this._onSearch(); }
+  }
+
+  /* ─── Eval Click → Detail ───────────────────────────────────── */
+  _onEvalClick(e) {
+    const row = e.target.closest('.eval-row');
+    if (!row) return;
+    const id = parseInt(row.dataset.evalId);
+    this._selectEval(id);
+  }
+
+  _selectEval(id) {
+    this._selectedId = id;
+    this.els.evalScroll.querySelectorAll('.eval-row').forEach(r => r.classList.toggle('selected', parseInt(r.dataset.evalId) === id));
+    const ev = this._evals.find(e => e.id === id);
+    if (ev) this._openDetail(ev);
+  }
+
+  _openDetail(ev) {
+    this._detailOpen = true;
+    const panel = this.els.detailPanel;
+    panel.classList.remove('closed');
+
+    this.els.detailFlagName.textContent = ev.flagName;
+    const rc = ev.result ? 'true' : 'false';
+    const rs = ev.result ? '&#x2713; true' : '&#x2715; false';
+    this.els.detailResultBadge.innerHTML = `<span class="result-badge ${rc}">${rs}</span>`;
+
+    // Build detail cards
+    const def = FLAG_DEFS.find(f => f.name === ev.flagName);
+    const pathSteps = (def ? def.evalPath : ['Unknown']).map((step, i, arr) => {
+      let cls = 'eval-path-step';
+      if (i === arr.length - 1) cls += ev.result ? ' result-true' : ' result-false';
+      else if (i === arr.length - 2) cls += ' matched';
+      return `<span class="${cls}">${step === 'Result' ? (ev.result ? 'Result: true' : 'Result: false') : step}</span>`;
+    }).join('<span class="eval-path-arrow">&#x2192;</span>');
+
+    this.els.detailContent.innerHTML = `
+      <div class="detail-card">
+        <div class="detail-card-title">Context Parameters</div>
+        <div class="detail-card-body">
+          <div class="kv"><span class="kv-key">tenant</span><span class="kv-val">${ev.tenant}</span></div>
+          <div class="kv"><span class="kv-key">capacity</span><span class="kv-val">${ev.capacity}</span></div>
+          <div class="kv"><span class="kv-key">workspace</span><span class="kv-val">${ev.workspace}</span></div>
+        </div>
+      </div>
+      <div class="detail-card">
+        <div class="detail-card-title">Evaluation Path</div>
+        <div class="detail-card-body">
+          <div class="eval-path">${pathSteps}</div>
+        </div>
+      </div>
+      <div class="detail-card" style="max-width:160px">
+        <div class="detail-card-title">Duration</div>
+        <div class="detail-card-body" style="font-size:18px;font-weight:600;color:${ev.durationMs < 0.5 ? 'var(--green)' : 'var(--amber)'}">${ev.durationMs}ms</div>
+      </div>
+      ${ev.changed ? `<div class="detail-card" style="max-width:200px">
+        <div class="detail-card-title">Change Detected</div>
+        <div class="detail-card-body"><span style="text-decoration:line-through;opacity:0.5">${ev.prevResult ? 'true' : 'false'}</span> <span style="color:var(--amber);font-weight:700">&#x2192;</span> <span style="font-weight:600;color:${ev.result ? 'var(--green)' : 'var(--red)'}">${ev.result ? 'true' : 'false'}</span></div>
+      </div>` : ''}
+    `;
+  }
+
+  _closeDetail() {
+    this._detailOpen = false;
+    this._selectedId = null;
+    this.els.detailPanel.classList.add('closed');
+    this.els.evalScroll.querySelectorAll('.eval-row.selected').forEach(r => r.classList.remove('selected'));
+  }
+
+  _copySelected() {
+    const ev = this._evals.find(e => e.id === this._selectedId);
+    if (!ev) return;
+    const text = JSON.stringify(ev, null, 2);
+    navigator.clipboard.writeText(text).then(() => this._toast('Copied to clipboard'));
+  }
+
+  /* ─── Summary View ──────────────────────────────────────────── */
+  _toggleSummary() {
+    this._summaryMode = !this._summaryMode;
+    if (this._summaryMode) {
+      this.els.summaryView.classList.add('active');
+      this.els.streamWrapper.style.display = 'none';
+      this.els.summaryToggle.classList.add('active');
+      this._renderSummary();
+      // Update state controller buttons
+      document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-state="summary"]')?.classList.add('active');
+    } else {
+      this.els.summaryView.classList.remove('active');
+      this.els.streamWrapper.style.display = '';
+      this.els.summaryToggle.classList.remove('active');
+      document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-state="streaming"]')?.classList.add('active');
+      this._applyFilters();
+    }
+  }
+
+  _renderSummary() {
+    const body = this.els.summaryBody;
+    body.innerHTML = '';
+
+    const flagMap = {};
+    this._evals.forEach(ev => {
+      if (!flagMap[ev.flagName]) {
+        flagMap[ev.flagName] = { name: ev.flagName, evals: 0, trueCount: 0, falseCount: 0, changed: false, lastTime: '' };
+      }
+      const f = flagMap[ev.flagName];
+      f.evals++;
+      if (ev.result) f.trueCount++; else f.falseCount++;
+      if (ev.changed) f.changed = true;
+      f.lastTime = ev.timestamp;
+    });
+
+    const flags = Object.values(flagMap).sort((a, b) => b.evals - a.evals);
+
+    flags.forEach(f => {
+      const truePct = Math.round(f.trueCount / f.evals * 100);
+      const falsePct = 100 - truePct;
+
+      const row = document.createElement('div');
+      row.className = 'summary-row';
+      row.dataset.flagName = f.name;
+      row.innerHTML = `
+        <div class="cell flag-name">${f.name}</div>
+        <div class="cell eval-count">${f.evals}</div>
+        <div class="cell">
+          <div class="pct-bar"><div class="pct-fill-true" style="width:${truePct}%"></div><div class="pct-fill-false" style="width:${falsePct}%"></div></div>
+          <div class="pct-label">${truePct}% true</div>
+        </div>
+        <div class="cell">
+          <div class="pct-bar"><div class="pct-fill-false" style="width:${falsePct}%"></div><div class="pct-fill-true" style="width:${truePct}%"></div></div>
+          <div class="pct-label">${falsePct}% false</div>
+        </div>
+        <div class="cell"><span class="changed-indicator ${f.changed ? 'yes' : 'no'}">${f.changed ? 'Yes' : 'No'}</span></div>
+        <div class="cell last-time">${f.lastTime}</div>
+      `;
+
+      row.addEventListener('click', () => {
+        this._summaryMode = false;
+        this.els.summaryView.classList.remove('active');
+        this.els.streamWrapper.style.display = '';
+        this.els.summaryToggle.classList.remove('active');
+        this.els.searchInput.value = f.name;
+        this._searchQuery = f.name;
+        this.els.searchClear.style.display = '';
+        document.querySelectorAll('[data-state]').forEach(b => b.classList.remove('active'));
+        document.querySelector('[data-state="streaming"]')?.classList.add('active');
+        this._applyFilters();
+        this._toast(`Filtered to "${f.name}"`);
+      });
+
+      body.appendChild(row);
+    });
+  }
+
+  /* ─── Keyboard Navigation ───────────────────────────────────── */
+  _onKeyDown(e) {
+    // Ctrl+E → Export
+    if (e.ctrlKey && e.key === 'e') { e.preventDefault(); this.els.exportDropdown.classList.toggle('hidden'); return; }
+    // Esc
+    if (e.key === 'Escape') {
+      if (this._detailOpen) { this._closeDetail(); return; }
+      if (this._searchQuery) { this._clearSearch(); return; }
+      if (document.getElementById('stateController').classList.contains('open')) { document.getElementById('stateController').classList.remove('open'); return; }
+    }
+    // Ctrl+/ → focus search
+    if ((e.ctrlKey && e.key === '/') || (e.ctrlKey && e.key === 'k')) { e.preventDefault(); this.els.searchInput.focus(); return; }
+
+    // Arrow navigation in stream view
+    if (!this._summaryMode && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      if (document.activeElement === this.els.searchInput) return;
+      e.preventDefault();
+      const list = this._filteredEvals;
+      if (list.length === 0) return;
+      if (e.key === 'ArrowDown') this._focusedIdx = Math.min(this._focusedIdx + 1, list.length - 1);
+      else this._focusedIdx = Math.max(this._focusedIdx - 1, 0);
+      this._selectEval(list[this._focusedIdx].id);
+      // Scroll into view
+      const rows = this.els.evalScroll.querySelectorAll('.eval-row');
+      if (rows[this._focusedIdx]) rows[this._focusedIdx].scrollIntoView({ block: 'nearest' });
+    }
+
+    // Enter → open detail
+    if (e.key === 'Enter' && this._selectedId !== null && !this._summaryMode) {
+      const ev = this._evals.find(e2 => e2.id === this._selectedId);
+      if (ev) this._openDetail(ev);
+    }
+  }
+
+  /* ─── Detail Resize ──────────────────────────────────────────── */
+  _initDetailResize() {
+    const handle = document.getElementById('detailResize');
+    let startY, startH;
+    const onMove = e => {
+      const delta = startY - e.clientY;
+      this.els.detailPanel.style.height = Math.max(100, Math.min(500, startH + delta)) + 'px';
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    handle.addEventListener('mousedown', e => {
+      startY = e.clientY;
+      startH = this.els.detailPanel.offsetHeight;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  /* ─── Add Random Eval ───────────────────────────────────────── */
+  _addRandomEval() {
+    const def = FLAG_DEFS[Math.floor(Math.random() * FLAG_DEFS.length)];
+    const lastOfFlag = [...this._evals].reverse().find(e => e.flagName === def.name);
+    const result = lastOfFlag ? lastOfFlag.result : Math.random() > 0.5;
+    const lastMs = this._evals.length > 0 ? Math.max(...this._evals.map(e => e.timestampMs)) : 0;
+    const newMs = lastMs + Math.floor(Math.random() * 5000) + 1000;
+    const d = new Date(2026, 3, 12, 14, 39, 0);
+    d.setTime(d.getTime() + newMs);
+
+    const ev = {
+      id: this._evals.length > 0 ? Math.max(...this._evals.map(e => e.id)) + 1 : 0,
+      flagName: def.name,
+      tenant: 'FMLV08PPE',
+      capacity: 'SKU-F64',
+      workspace: WORKSPACES[Math.floor(Math.random() * WORKSPACES.length)],
+      result,
+      timestamp: fmtTime(d),
+      timestampMs: newMs,
+      durationMs: +(Math.random() * 0.8 + 0.1).toFixed(1),
+      evalPath: def.evalPath,
+      changed: false,
+      prevResult: null,
+    };
+
+    // Detect change
+    if (lastOfFlag && lastOfFlag.result !== result) {
+      ev.changed = true;
+      ev.prevResult = lastOfFlag.result;
+    }
+
+    this._evals.push(ev);
+    this.els.emptyState.classList.add('hidden');
+    this.els.tableHeader.style.display = '';
+
+    if (this._summaryMode) {
+      this._renderSummary();
+    } else {
+      this._applyFilters();
+      // Flash new row
+      requestAnimationFrame(() => {
+        const row = this.els.evalScroll.querySelector(`[data-eval-id="${ev.id}"]`);
+        if (row && ev.changed) {
+          row.classList.add('flash-change');
+          setTimeout(() => row.classList.remove('flash-change'), 600);
+        }
+        this.els.evalScroll.scrollTop = this.els.evalScroll.scrollHeight;
+      });
+    }
+
+    this._toast(`Eval: ${ev.flagName} = ${ev.result}${ev.changed ? ' (CHANGED!)' : ''}`);
+  }
+
+  /* ─── Flip Random Flag ──────────────────────────────────────── */
+  _flipRandomFlag() {
+    if (this._evals.length === 0) { this._toast('No evals to flip'); return; }
+
+    const flagNames = [...new Set(this._evals.map(e => e.flagName))];
+    const flagName = flagNames[Math.floor(Math.random() * flagNames.length)];
+    const lastOfFlag = [...this._evals].reverse().find(e => e.flagName === flagName);
+    const flippedResult = !lastOfFlag.result;
+    const def = FLAG_DEFS.find(f => f.name === flagName);
+
+    const lastMs = Math.max(...this._evals.map(e => e.timestampMs));
+    const newMs = lastMs + Math.floor(Math.random() * 3000) + 500;
+    const d = new Date(2026, 3, 12, 14, 39, 0);
+    d.setTime(d.getTime() + newMs);
+
+    const ev = {
+      id: Math.max(...this._evals.map(e => e.id)) + 1,
+      flagName,
+      tenant: 'FMLV08PPE',
+      capacity: 'SKU-F64',
+      workspace: 'EDOG-Dev-Workspace',
+      result: flippedResult,
+      timestamp: fmtTime(d),
+      timestampMs: newMs,
+      durationMs: +(Math.random() * 0.5 + 0.1).toFixed(1),
+      evalPath: def ? def.evalPath : ['Unknown'],
+      changed: true,
+      prevResult: lastOfFlag.result,
+    };
+
+    this._evals.push(ev);
+
+    if (this._summaryMode) {
+      this._renderSummary();
+    } else {
+      this._applyFilters();
+      requestAnimationFrame(() => {
+        const row = this.els.evalScroll.querySelector(`[data-eval-id="${ev.id}"]`);
+        if (row) {
+          row.classList.add('flash-change');
+          setTimeout(() => row.classList.remove('flash-change'), 600);
+        }
+        this.els.evalScroll.scrollTop = this.els.evalScroll.scrollHeight;
+      });
+    }
+
+    this._toast(`&#x26A1; FLIPPED: ${flagName} ${lastOfFlag.result} &#x2192; ${flippedResult}`);
+  }
+
+  /* ─── Clear All ─────────────────────────────────────────────── */
+  _clearAll() {
+    if (this._streamInterval) { clearInterval(this._streamInterval); this._streamInterval = null; }
+    this._evals = [];
+    this._filteredEvals = [];
+    this._selectedId = null;
+    this._closeDetail();
+    this.els.evalScroll.innerHTML = '';
+    this.els.emptyState.classList.remove('hidden');
+    this.els.tableHeader.style.display = 'none';
+    this._updateCounts();
+    if (this._summaryMode) {
+      this._summaryMode = false;
+      this.els.summaryView.classList.remove('active');
+      this.els.streamWrapper.style.display = '';
+      this.els.summaryToggle.classList.remove('active');
+    }
+    this._toast('Evaluations cleared');
+  }
+
+  /* ─── Export ────────────────────────────────────────────────── */
+  _export(format) {
+    if (format === 'json') {
+      const data = JSON.stringify(this._filteredEvals, null, 2);
+      this._downloadFile('flag-evals.json', data, 'application/json');
+    } else if (format === 'csv') {
+      let csv = 'FlagName,Tenant,Capacity,Workspace,Result,Timestamp,DurationMs,Changed\n';
+      this._filteredEvals.forEach(e => {
+        csv += `${e.flagName},${e.tenant},${e.capacity},${e.workspace},${e.result},${e.timestamp},${e.durationMs},${e.changed}\n`;
+      });
+      this._downloadFile('flag-evals.csv', csv, 'text/csv');
+    } else if (format === 'clipboard') {
+      const text = this._filteredEvals.map(e => `${e.timestamp} ${e.flagName} = ${e.result}${e.changed ? ' (CHANGED)' : ''}`).join('\n');
+      navigator.clipboard.writeText(text).then(() => this._toast('Copied to clipboard'));
+    }
+  }
+
+  _downloadFile(name, content, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this._toast(`Exported ${name}`);
+  }
+
+  /* ─── Theme ─────────────────────────────────────────────────── */
+  _toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    document.getElementById('themeToggle').textContent = next === 'dark' ? '\u263E' : '\u2600';
+    document.querySelectorAll('[data-theme]').forEach(b => {
+      b.classList.toggle('active', b.dataset.theme === next);
+    });
+  }
+
+  /* ─── Tab Underline ─────────────────────────────────────────── */
+  _updateTabUnderline() {
+    const active = document.querySelector('.tab.active');
+    if (!active) return;
+    const ul = this.els.tabUnderline;
+    ul.style.left = active.offsetLeft + 'px';
+    ul.style.width = active.offsetWidth + 'px';
+  }
+
+  /* ─── Toast ─────────────────────────────────────────────────── */
+  _toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = msg;
+    this.els.toastContainer.appendChild(t);
+    setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 200); }, 2500);
+  }
+
+  /* ─── Utility ───────────────────────────────────────────────── */
+  _escapeHtml(s) {
+    const el = document.createElement('span');
+    el.textContent = s;
+    return el.innerHTML;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════════ */
+const app = new FeatureFlagsMockApp();
+</script>
+</body>
+</html>
