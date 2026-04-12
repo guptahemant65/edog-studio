@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio &#x2014; Runtime View (Integrated Mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent:#6d5cff;--accent-dim:rgba(109,92,255,0.12);--accent-glow:rgba(109,92,255,0.25);
+  --green:#18a058;--amber:#e5940c;--red:#e5453b;--blue:#2d7ff9;
+  --purple:#a855f7;--teal:#0d9488;--gold:#f5a623;--cyan:#06b6d4;
+  --magenta:#ec4899;--lime:#84cc16;--coral:#fb7185;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Code','Consolas',monospace;
+  --r4:4px;--r6:6px;--r10:10px;--r16:16px;--r100:100px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:0 8px 32px rgba(0,0,0,0.12),0 4px 8px rgba(0,0,0,0.06);
+  --transition:160ms cubic-bezier(0.4,0,0.2,1);
+  --spring:cubic-bezier(0.34,1.56,0.64,1);
+}
+[data-theme="light"]{
+  --bg:#f8f9fc;--bg-2:#ffffff;--bg-3:#f0f1f5;--bg-4:#e8e9ee;
+  --text:#1a1d27;--text-2:#5c6070;--text-3:#9098a8;
+  --border:rgba(0,0,0,0.08);--border-bright:rgba(0,0,0,0.14);
+  --hover-bg:rgba(0,0,0,0.03);--selected-bg:rgba(109,92,255,0.08);
+  --toolbar-bg:#f2f3f7;--panel-bg:#ffffff;
+  --scrollbar-thumb:rgba(0,0,0,0.15);--scrollbar-track:transparent;
+  --badge-bg:rgba(0,0,0,0.06);
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--bg-2:#161923;--bg-3:#1e2230;--bg-4:#252a38;
+  --text:#e8eaf0;--text-2:#9aa0b2;--text-3:#5f6578;
+  --border:rgba(255,255,255,0.06);--border-bright:rgba(255,255,255,0.12);
+  --hover-bg:rgba(255,255,255,0.03);--selected-bg:rgba(109,92,255,0.10);
+  --toolbar-bg:#13151d;--panel-bg:#161923;
+  --scrollbar-thumb:rgba(255,255,255,0.12);--scrollbar-track:transparent;
+  --badge-bg:rgba(255,255,255,0.06);
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.3);--shadow-md:0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:0 8px 32px rgba(0,0,0,0.5);
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input{background:none;border:none;outline:none}
+
+/* APP */
+#app{display:flex;height:100vh;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{width:48px;flex-shrink:0;background:var(--bg-2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:4px;z-index:100}
+.sb-item{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:var(--r6);color:var(--text-3);cursor:pointer;position:relative;transition:all var(--transition);border-left:3px solid transparent;margin-left:-1px}
+.sb-item:hover{color:var(--text);background:var(--hover-bg)}
+.sb-item.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-dim)}
+.sb-item.disabled{opacity:0.3;cursor:not-allowed}
+.sb-item svg{width:20px;height:20px}
+.sb-dot{position:absolute;top:8px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 4px rgba(24,160,88,0.5);opacity:0;transition:opacity 300ms ease}
+.sb-dot.on{opacity:1}
+.sb-lock{position:absolute;bottom:3px;right:3px;width:12px;height:12px;opacity:0;transition:opacity 200ms ease}
+.sb-lock.on{opacity:0.5}
+.sb-lock svg{width:12px;height:12px}
+
+/* TOOLTIP */
+.tip{position:fixed;padding:4px 10px;border-radius:var(--r6);background:var(--text);color:var(--bg);font-size:11px;font-weight:500;white-space:nowrap;pointer-events:none;z-index:9999;opacity:0;transition:opacity 100ms ease;box-shadow:var(--shadow-md)}
+.tip.on{opacity:1}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* CONN BAR */
+.cbar{height:32px;display:flex;align-items:center;padding:0 16px;gap:10px;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0;transition:all 200ms ease}
+.cdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:all 200ms ease}
+.cdot.g{background:var(--green);box-shadow:0 0 6px rgba(24,160,88,0.4)}
+.cdot.a{background:var(--amber);box-shadow:0 0 6px rgba(229,148,12,0.4);animation:pdot 1.2s ease infinite}
+.cdot.r{background:var(--red);box-shadow:0 0 6px rgba(229,69,59,0.4)}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:0.4}}
+.clbl{font-size:12px;font-weight:500;transition:color 200ms ease}
+.clbl.g{color:var(--green)}.clbl.a{color:var(--amber)}.clbl.r{color:var(--red)}
+.cthr{font-family:var(--mono);font-size:11px;color:var(--text-2)}
+.cport{font-family:var(--mono);font-size:11px;color:var(--text-3);margin-left:auto}
+.csep{width:1px;height:16px;background:var(--border-bright)}
+
+/* TAB BAR */
+.tbar{display:flex;align-items:center;padding:0 12px;height:40px;background:var(--bg-2);border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
+.tbar-inner{display:flex;align-items:center;position:relative;height:100%}
+.ttab{padding:0 14px;height:40px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none;white-space:nowrap}
+.ttab:hover{color:var(--text)}
+.ttab.active{color:var(--text);font-weight:600}
+.tdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;opacity:0;transition:opacity 200ms ease}
+.tdot.on{opacity:1}
+.tchev{font-size:10px;opacity:0.5;transition:transform 200ms ease}
+.tchev.open{transform:rotate(180deg)}
+.tline{position:absolute;bottom:0;height:3px;background:var(--accent);border-radius:3px 3px 0 0;transition:left 200ms ease-out,width 200ms ease-out;z-index:2}
+
+/* DROPDOWN */
+.idd{position:absolute;top:100%;left:0;min-width:220px;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);z-index:200;padding:6px;opacity:0;transform:translateY(-4px) scale(0.98);pointer-events:none;transition:opacity 100ms var(--spring),transform 100ms var(--spring)}
+.idd.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+.idd.closing{opacity:0;transform:translateY(-4px) scale(0.98);transition-duration:80ms;transition-timing-function:ease-in;pointer-events:none}
+.ddi{display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:var(--r6);font-size:13px;color:var(--text-2);cursor:pointer;transition:all var(--transition)}
+.ddi:hover{background:var(--hover-bg);color:var(--text)}
+.ddi.active{color:var(--accent);background:var(--accent-dim)}
+.ddi svg{width:16px;height:16px;flex-shrink:0;opacity:0.6}
+.ddi:hover svg{opacity:1}
+
+/* CONTENT */
+.carea{flex:1;overflow:hidden;position:relative}
+.tc{position:absolute;inset:0;display:flex;flex-direction:column;overflow:hidden;opacity:0;pointer-events:none;transition:opacity 200ms ease}
+.tc.active{opacity:1;pointer-events:auto}
+
+/* OVERLAYS */
+.p1ov{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:var(--bg);z-index:50;transition:opacity 300ms ease}
+.p1ov.hidden{opacity:0;pointer-events:none}
+.p1ov svg{width:64px;height:64px;color:var(--text-3);opacity:0.3}
+.p1ov .p1t{font-size:16px;font-weight:600;color:var(--text)}
+.p1ov .p1d{font-size:13px;color:var(--text-2);max-width:360px;text-align:center;line-height:1.6}
+.p1ov .p1b{padding:8px 24px;border-radius:var(--r6);background:var(--accent);color:#fff;font-size:13px;font-weight:500;cursor:pointer;transition:opacity var(--transition)}
+.p1ov .p1b:hover{opacity:0.85}
+.stov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(229,148,12,0.06);z-index:40;pointer-events:none;opacity:0;transition:opacity 300ms ease}
+.stov.on{opacity:1;pointer-events:auto}
+.stbox{background:var(--bg-2);border:1px solid rgba(229,148,12,0.3);border-radius:var(--r10);padding:20px 32px;text-align:center;box-shadow:var(--shadow-md)}
+.stbox h4{font-size:14px;font-weight:600;color:var(--amber);margin-bottom:4px}
+.stbox p{font-size:12px;color:var(--text-2)}
+
+/* FOOTER */
+.foot{height:28px;display:flex;align-items:center;padding:0 16px;gap:14px;background:var(--bg-3);border-top:1px solid var(--border);box-shadow:0 -1px 4px rgba(0,0,0,0.04);flex-shrink:0;font-size:11px;color:var(--text-3)}
+.foot kbd{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;border-radius:3px;background:var(--bg-4);border:1px solid var(--border-bright);font-family:var(--mono);font-size:10px;color:var(--text-2)}
+.fsep{width:1px;height:14px;background:var(--border-bright)}
+
+/* STATE CTRL */
+.sctrl{position:fixed;top:8px;right:8px;z-index:9000}
+.scbtn{width:32px;height:32px;border-radius:var(--r6);background:var(--bg-2);border:1px solid var(--border-bright);display:flex;align-items:center;justify-content:center;color:var(--text-3);cursor:pointer;transition:all var(--transition);box-shadow:var(--shadow-sm)}
+.scbtn:hover{color:var(--text);background:var(--bg-3)}
+.scbtn svg{width:16px;height:16px}
+.scpan{position:absolute;top:40px;right:0;width:260px;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);padding:12px;opacity:0;transform:translateY(-4px);pointer-events:none;transition:all 150ms ease}
+.scpan.open{opacity:1;transform:translateY(0);pointer-events:auto}
+.scpan h3{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px}
+.sbtn{width:100%;text-align:left;padding:7px 10px;border-radius:var(--r6);font-size:12px;color:var(--text-2);cursor:pointer;transition:all var(--transition);display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.sbtn:hover{background:var(--hover-bg);color:var(--text)}
+.sbtn.cur{background:var(--accent-dim);color:var(--accent);font-weight:500}
+.sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.thtog{width:100%;text-align:left;padding:7px 10px;border-radius:var(--r6);font-size:12px;color:var(--text-2);cursor:pointer;transition:all var(--transition);display:flex;align-items:center;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:12px}
+.thtog:hover{background:var(--hover-bg);color:var(--text)}
+
+/* SHARED */
+.tctb{display:flex;flex-wrap:wrap;gap:8px;padding:8px 16px;background:var(--toolbar-bg);border-bottom:1px solid var(--border);align-items:center;flex-shrink:0}
+.tbsep{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:var(--r100);font-size:12px;font-weight:500;border:1px solid var(--border-bright);cursor:pointer;transition:all var(--transition);user-select:none;white-space:nowrap}
+.pill:hover{background:var(--hover-bg)}
+.pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill .pc{font-family:var(--mono);font-size:11px;opacity:0.7}
+.pv{color:var(--text-3)}.pv.on{background:var(--text-3);color:#fff;border-color:var(--text-3)}
+.pi{color:var(--blue)}.pi.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pw{color:var(--amber)}.pw.on{background:var(--amber);color:#fff;border-color:var(--amber)}
+.pe{color:var(--red)}.pe.on{background:var(--red);color:#fff;border-color:var(--red)}
+.tcsrch{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);min-width:180px;max-width:280px;flex:1;transition:all var(--transition)}
+.tcsrch:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+.tcsrch svg{width:14px;height:14px;color:var(--text-3);flex-shrink:0}
+.tcsrch input{flex:1;font-size:12px;min-width:0;background:transparent}
+.tcsrch input::placeholder{color:var(--text-3)}
+.tcbtn{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r6);font-size:12px;color:var(--text-2);cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.tcbtn:hover{background:var(--hover-bg);color:var(--text)}
+.tcbtn svg{width:14px;height:14px}
+.tcdd{display:flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--r6);border:1px solid var(--border-bright);font-size:12px;cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.tcdd:hover{border-color:var(--accent);background:var(--hover-bg)}
+
+/* TABLE */
+.dt{width:100%;border-collapse:collapse;font-size:12px}
+.dt th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.3px;border-bottom:1px solid var(--border-bright);background:var(--bg-3);position:sticky;top:0;z-index:1}
+.dt td{padding:6px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.dt tr:hover td{background:var(--hover-bg)}
+.dt tr.hl td{background:rgba(109,92,255,0.06)}
+
+/* BADGES */
+.b{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--r100);font-size:11px;font-weight:500;white-space:nowrap}
+.bg{background:rgba(24,160,88,0.1);color:var(--green)}
+.ba{background:rgba(229,148,12,0.1);color:var(--amber)}
+.br{background:rgba(229,69,59,0.1);color:var(--red)}
+.bb{background:rgba(45,127,249,0.1);color:var(--blue)}
+.bp{background:rgba(168,85,247,0.1);color:var(--purple)}
+.bt{background:rgba(13,148,136,0.1);color:var(--teal)}
+.bac{background:var(--accent-dim);color:var(--accent)}
+.bm{background:var(--badge-bg);color:var(--text-2)}
+.mb{font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 6px;border-radius:var(--r4)}
+.mg{color:var(--green)}.mp{color:var(--blue)}.mpu{color:var(--amber)}.md{color:var(--red)}
+.sp{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r100);font-size:11px;font-weight:500}
+.srun{background:rgba(45,127,249,0.1);color:var(--blue)}
+.ssuc{background:rgba(24,160,88,0.1);color:var(--green)}
+.sfail{background:rgba(229,69,59,0.1);color:var(--red)}
+.sdisp{background:var(--badge-bg);color:var(--text-3)}
+
+/* CARDS */
+.card{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r10);padding:12px 16px;transition:all var(--transition)}
+.card:hover{border-color:var(--border-bright);box-shadow:var(--shadow-sm)}
+.shdr{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;padding:12px 16px 6px;display:flex;align-items:center;gap:8px}
+.shdr .sc{font-family:var(--mono);font-size:10px;padding:1px 6px;border-radius:var(--r100);background:var(--badge-bg)}
+
+/* WATERFALL */
+.wf{height:8px;border-radius:4px;display:flex;overflow:hidden;width:100%}
+.wfs{height:100%}
+
+/* DURATION BAR */
+.dbar{height:3px;border-radius:2px;background:var(--bg-4);overflow:hidden;position:relative}
+.dbf{height:100%;border-radius:2px;background:var(--blue);animation:pind 1.5s ease infinite}
+@keyframes pind{0%{width:0;margin-left:0}50%{width:40%;margin-left:30%}100%{width:0;margin-left:100%}}
+
+/* RING GAUGE */
+.rg{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.rg svg{transform:rotate(-90deg)}
+.rg .rl{position:absolute;font-family:var(--mono);font-size:10px;font-weight:600}
+
+/* LOG ENTRY */
+.le{display:flex;align-items:flex-start;padding:2px 16px 2px 0;font-family:var(--mono);font-size:12px;line-height:1.5;cursor:pointer;transition:background 100ms ease;border-left:3px solid transparent}
+.le:hover{background:var(--hover-bg)}
+.le.sel{background:var(--selected-bg);border-left-color:var(--accent)}
+.le .g{width:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding-top:3px}
+.le .st{font-size:13px;color:var(--text-3);opacity:0.2;cursor:pointer;transition:all 100ms ease}
+.le:hover .st{opacity:0.6}
+.le .st.f{color:var(--gold);opacity:1}
+.le .ts{width:90px;flex-shrink:0;color:var(--text-3);font-size:11px;padding-top:3px;text-align:right;padding-right:8px}
+.le .lv{width:18px;flex-shrink:0;font-size:10px;font-weight:600;text-align:center;padding-top:4px;text-transform:uppercase}
+.le .lv.v{color:var(--text-3)}.le .lv.i{color:var(--blue)}.le .lv.w{color:var(--amber)}.le .lv.e{color:var(--red)}
+.le .cp{width:160px;flex-shrink:0;color:var(--text-2);padding:3px 8px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px}
+.le .ms{flex:1;color:var(--text);padding:3px 8px 3px 0;word-break:break-word}
+
+/* SPLIT VIEW */
+.spv{display:flex;height:100%}
+.spl{width:280px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto}
+.spr{flex:1;overflow-y:auto}
+.crow{padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition)}
+.crow:hover{background:var(--hover-bg)}
+.crow.act{background:var(--selected-bg);border-left:3px solid var(--accent)}
+.cn{font-size:13px;font-weight:500}.cs{font-size:11px;color:var(--text-3);margin-top:2px;display:flex;gap:12px}
+
+/* TOKEN CARD */
+.tkc{display:flex;align-items:center;gap:16px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background var(--transition)}
+.tkc:hover{background:var(--hover-bg)}
+.tki{flex:1}.tkn{font-size:13px;font-weight:600}.tkd{font-size:11px;color:var(--text-3);margin-top:2px}
+
+/* EVENT ITEM */
+.ei{padding:6px 16px;font-size:12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);transition:background var(--transition)}
+.ei:hover{background:var(--hover-bg)}
+.ets{font-family:var(--mono);font-size:10px;color:var(--text-3);flex-shrink:0}
+.etp{font-size:11px;font-weight:500}
+
+/* RETRY */
+.rtl{display:flex;align-items:center;gap:0;padding:8px 16px}
+.rtn{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;z-index:1}
+.rtln{height:2px;flex:1;min-width:24px}
+
+/* SPARK */
+.skc{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r10);padding:14px 16px;margin:0 16px 8px}
+.skh{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.skt{font-size:14px;font-weight:600;flex:1}
+.scmd{padding:6px 10px;background:var(--bg-3);border-radius:var(--r6);font-family:var(--mono);font-size:11px;color:var(--text-2);margin-top:4px}
+.pdots{display:flex;gap:4px;margin-top:6px}
+.pdots span{width:6px;height:6px;border-radius:50%;background:var(--accent);opacity:0.3}
+.pdots span.a{opacity:1;animation:dpul 1s ease infinite}
+@keyframes dpul{0%,100%{opacity:0.3}50%{opacity:1}}
+
+/* PERF SPARK */
+.pspark{display:inline-flex;align-items:end;gap:1px;height:16px;vertical-align:middle}
+.pspark span{width:3px;border-radius:1px;background:var(--accent);opacity:0.6}
+
+/* ACTIVITY CARD */
+.ac{background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r10);padding:12px 16px;margin:0 16px 8px}
+.ach{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.acn{font-size:13px;font-weight:600;flex:1}
+.acd{font-family:var(--mono);font-size:12px;color:var(--text-2)}
+.acdl{font-size:11px;color:var(--text-3);margin-top:4px}
+
+/* ANOMALY */
+.anom td{background:rgba(229,69,59,0.04)!important;border-left:3px solid var(--red)}
+.ffch{animation:famb 400ms ease}
+@keyframes famb{0%,100%{background:transparent}50%{background:rgba(229,148,12,0.12)}}
+
+/* ANIMATIONS */
+@keyframes tena{from{opacity:0.4;transform:translateY(2px)}to{opacity:1;transform:translateY(0)}}
+.ttab.enab{animation:tena 200ms ease-out both}
+@keyframes sbunl{0%{opacity:0.3;transform:scale(0.95)}60%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+.sb-item.unlock{animation:sbunl 300ms ease both}
+
+.countdown{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--amber)}
+</style>
+</head>
+<body>
+
+<div class="tip" id="tip"></div>
+<div class="sctrl">
+  <button class="scbtn" id="scbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></button>
+  <div class="scpan" id="scpan">
+    <h3>Connection State</h3>
+    <button class="sbtn cur" data-st="connected"><span class="sdot" style="background:var(--green)"></span>Connected</button>
+    <button class="sbtn" data-st="reconnecting"><span class="sdot" style="background:var(--amber)"></span>Reconnecting</button>
+    <button class="sbtn" data-st="failed"><span class="sdot" style="background:var(--red)"></span>Failed</button>
+    <button class="sbtn" data-st="stopped"><span class="sdot" style="background:var(--amber)"></span>Service Stopped</button>
+    <h3 style="margin-top:12px">Phase</h3>
+    <button class="sbtn" data-ph="1"><span class="sdot" style="background:var(--text-3)"></span>Phase 1 (Disconnected)</button>
+    <button class="sbtn cur" data-ph="2"><span class="sdot" style="background:var(--green)"></span>Phase 2 (Connected)</button>
+    <button class="thtog" id="thtog"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg> Toggle Dark Mode</button>
+  </div>
+</div>
+
+<div id="app">
+<nav class="sidebar" id="sb">
+  <div class="sb-item" data-v="workspace" data-tip="Workspace [1]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+  <div class="sb-item active" data-v="runtime" data-tip="Runtime [2]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="sb-dot on" id="sbdot"></span><span class="sb-lock" id="sblk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></span></div>
+  <div class="sb-item" data-v="api" data-tip="API Playground [3]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+  <div class="sb-item" data-v="env" data-tip="Environment [4]"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div>
+</nav>
+<div class="main" id="mn">
+
+<div class="cbar" id="cbar">
+  <span class="cdot g" id="cdot"></span>
+  <span class="clbl g" id="clbl">Connected</span>
+  <span class="csep"></span>
+  <span class="cthr"><span id="mrate">142</span> msg/s</span>
+  <span class="csep"></span>
+  <span class="cport">Port: 5557</span>
+</div>
+<div class="tbar" id="tbar">
+  <div class="tbar-inner" id="tbi">
+    <div class="ttab active" data-tab="logs"><span class="tdot on" style="background:var(--red)"></span>Logs</div>
+    <div class="ttab" data-tab="telemetry"><span class="tdot" style="background:var(--blue)"></span>Telemetry</div>
+    <div class="ttab" data-tab="sysfiles">System Files</div>
+    <div class="ttab" data-tab="spark">Spark Sessions</div>
+    <div class="ttab" data-tab="internals" id="itab" style="position:relative"><span id="ilbl">Internals</span> <span class="tchev" id="ichev">&#x25BE;</span>
+      <div class="idd" id="idd">
+        <div class="ddi" data-sub="tokens"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Tokens</div>
+        <div class="ddi" data-sub="caches"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>Caches</div>
+        <div class="ddi" data-sub="http"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>HTTP Pipeline</div>
+        <div class="ddi" data-sub="retries"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>Retries &amp; Throttling</div>
+        <div class="ddi" data-sub="flags"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>Feature Flags</div>
+        <div class="ddi" data-sub="di"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>DI Registry</div>
+        <div class="ddi" data-sub="perf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Perf Markers</div>
+      </div>
+    </div>
+    <div class="tline" id="tline"></div>
+  </div>
+</div>
+
+<div class="carea" id="carea">
+<div class="p1ov hidden" id="p1ov">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+  <div class="p1t">Runtime View requires a running FLT service</div>
+  <div class="p1d">Deploy to a lakehouse to enable logs, telemetry, Spark debugging, and all internal inspection tools.</div>
+  <button class="p1b" onclick="window._setPhase(2)">Go to Workspace Explorer</button>
+</div>
+<div class="stov" id="stov"><div class="stbox"><h4>&#x26A0; Service stopped &#x2014; data is stale</h4><p>Last data received at 10:47:32</p></div></div>
+
+<div class="tc active" id="tc-logs">
+  <div class="tctb">
+    <div class="pill on"><span class="pc">All</span> <span class="pc">8,947</span></div>
+    <div class="pill pv"><span>V</span> <span class="pc">2,104</span></div>
+    <div class="pill pi"><span>I</span> <span class="pc">5,632</span></div>
+    <div class="pill pw"><span>W</span> <span class="pc">847</span></div>
+    <div class="pill pe"><span>E</span> <span class="pc">364</span></div>
+    <div class="tbsep"></div>
+    <div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Search logs... (Ctrl+/)"></div>
+    <div class="tcdd">Component: All &#x25BE;</div>
+    <div class="tbsep"></div>
+    <div class="tcbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg> Breakpoints</div>
+    <div class="tcbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><span style="color:var(--gold)">&#9733;</span> 3</div>
+    <div class="tcbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:02.114</span><span class="lv v">V</span><span class="cp">CatalogProvider</span><span class="ms">Resolving workspace metadata for workspace_id=aef3c...</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:02.287</span><span class="lv i">I</span><span class="cp">DagEngine</span><span class="ms">Starting DAG execution: iteration_id=IT-4821, nodes=12, parallel_factor=4</span></div>
+    <div class="le"><span class="g"><span class="st f">&#9733;</span></span><span class="ts">10:47:02.445</span><span class="lv i">I</span><span class="cp">SparkClient</span><span class="ms">Session acquired: spark-session-7f2a, cluster=pool-west-3</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:02.891</span><span class="lv v">V</span><span class="cp">DagNode[Load_Raw]</span><span class="ms">Reading source table: Sales.RawTransactions (1.2M rows)</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:03.102</span><span class="lv w">W</span><span class="cp">SparkClient</span><span class="ms">Slow response from Spark cluster: 2,847ms (threshold: 2,000ms)</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:03.344</span><span class="lv i">I</span><span class="cp">DagNode[Transform]</span><span class="ms">Applying column mappings: 14 columns, 3 computed fields</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:03.556</span><span class="lv v">V</span><span class="cp">TokenManager</span><span class="ms">MWC token refresh queued, TTL remaining: 847s</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:03.712</span><span class="lv i">I</span><span class="cp">DagNode[Validate]</span><span class="ms">Schema validation passed: 14/14 columns match target</span></div>
+    <div class="le sel"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:04.001</span><span class="lv e">E</span><span class="cp">DagNode[Write_Delta]</span><span class="ms">Failed to write delta table: CONCURRENT_APPEND &#x2014; conflict on partition date=2024-01-15</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:04.102</span><span class="lv e">E</span><span class="cp">DagEngine</span><span class="ms">Node Write_Delta failed after 3 retries, marking iteration IT-4821 as FAILED</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:04.334</span><span class="lv i">I</span><span class="cp">TelemetryPipeline</span><span class="ms">Emitting failure telemetry: activity_id=ACT-9f3b, duration=2.22s</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:04.556</span><span class="lv w">W</span><span class="cp">RetryPolicy</span><span class="ms">Retry budget exhausted for Write_Delta: 3/3 attempts used in 4.1s</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:04.889</span><span class="lv v">V</span><span class="cp">CacheManager</span><span class="ms">Invalidating schema cache for Sales.DeltaOutput (stale after write failure)</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:05.012</span><span class="lv i">I</span><span class="cp">SparkClient</span><span class="ms">Releasing session spark-session-7f2a back to pool</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:05.234</span><span class="lv i">I</span><span class="cp">DagEngine</span><span class="ms">Iteration IT-4821 complete: 11 succeeded, 1 failed, duration=3.12s</span></div>
+    <div class="le"><span class="g"><span class="st">&#9734;</span></span><span class="ts">10:47:05.445</span><span class="lv v">V</span><span class="cp">FeatureFlighter</span><span class="ms">Evaluating flag: EnableParallelWrites=true (source: local override)</span></div>
+  </div>
+</div>
+
+<div class="tc" id="tc-telemetry">
+  <div class="tctb">
+    <div class="pill on">All</div><div class="pill">Running</div><div class="pill">Succeeded</div><div class="pill">Failed</div>
+    <div class="tbsep"></div>
+    <div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Search activities..."></div>
+  </div>
+  <div style="overflow-y:auto;flex:1;padding-top:4px">
+    <div class="shdr">Active <span class="sc">1</span></div>
+    <div class="ac"><div class="ach"><span class="sp srun">&#x25CF; Running</span><span class="acn">DAG Execution: IT-4822</span><span class="acd">1m 42s</span></div><div class="dbar"><div class="dbf"></div></div><div class="acdl">12 nodes &#x00B7; 8 completed &#x00B7; 1 running &#x00B7; 3 pending</div></div>
+    <div class="shdr">Completed <span class="sc">3</span></div>
+    <div class="ac"><div class="ach"><span class="sp ssuc">&#x2713; Succeeded</span><span class="acn">DAG Execution: IT-4821</span><span class="acd">3.12s</span></div><div class="acdl">12 nodes &#x00B7; 11 succeeded &#x00B7; 1 failed &#x00B7; Completed 10:47:05</div></div>
+    <div class="ac"><div class="ach"><span class="sp sfail">&#x2717; Failed</span><span class="acn">Token Refresh: MWC</span><span class="acd">0.8s</span></div><div class="acdl">Reason: 401 Unauthorized &#x00B7; Retry scheduled in 30s</div></div>
+    <div class="ac"><div class="ach"><span class="sp ssuc">&#x2713; Succeeded</span><span class="acn">Schema Validation</span><span class="acd">0.4s</span></div><div class="acdl">14 columns validated against target &#x00B7; Completed 10:46:51</div></div>
+  </div>
+</div>
+
+<div class="tc" id="tc-sysfiles">
+  <div class="tctb">
+    <div class="pill on">All Ops</div><div class="pill">Read</div><div class="pill">Write</div><div class="pill">Delete</div>
+    <div class="tbsep"></div>
+    <div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Filter by path..."></div>
+  </div>
+  <div style="overflow-y:auto;flex:1">
+    <table class="dt"><thead><tr><th>Timestamp</th><th>Operation</th><th>Path</th><th>Size</th><th>Status</th></tr></thead><tbody>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:05.1</td><td><span class="b bb">Read</span></td><td style="font-family:var(--mono);font-size:11px">/Tables/Sales.RawTransactions/_delta_log/00042.json</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">14.2 KB</td><td><span class="b bg">OK</span></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:04.8</td><td><span class="b ba">Write</span></td><td style="font-family:var(--mono);font-size:11px">/Tables/Sales.DeltaOutput/part-00014.parquet</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">2.1 MB</td><td><span class="b br">CONFLICT</span></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:04.2</td><td><span class="b bb">Read</span></td><td style="font-family:var(--mono);font-size:11px">/Tables/Sales.DeltaOutput/_delta_log/00089.json</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">8.7 KB</td><td><span class="b bg">OK</span></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:03.9</td><td><span class="b ba">Write</span></td><td style="font-family:var(--mono);font-size:11px">/Tables/Sales.Staging/checkpoint_0047.json</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">1.1 KB</td><td><span class="b bg">OK</span></td></tr>
+      <tr style="background:rgba(229,148,12,0.04)"><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:03.1</td><td><span class="b bp">Lock</span></td><td style="font-family:var(--mono);font-size:11px">/Tables/Sales.DeltaOutput/_lock/write.lock</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">64 B</td><td><span class="b ba">HELD</span></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:02.4</td><td><span class="b br">Delete</span></td><td style="font-family:var(--mono);font-size:11px">/Tables/Sales.Staging/tmp_partition_001.parquet</td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">&#x2014;</td><td><span class="b bg">OK</span></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<div class="tc" id="tc-spark">
+  <div style="overflow-y:auto;flex:1;padding:12px 0">
+    <div class="shdr">Active Sessions <span class="sc">1</span></div>
+    <div class="skc"><div class="skh"><span class="sp srun">&#x25CF; Active</span><span class="skt">spark-session-8a1c</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">pool-west-3</span></div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:8px">Uptime: 4m 22s &#x00B7; Commands: 7 &#x00B7; Memory: 2.4 GB / 8 GB</div>
+      <div class="scmd">spark.sql("SELECT * FROM Sales.RawTransactions WHERE date &gt;= '2024-01-01'")</div>
+      <div class="scmd" style="margin-top:4px">spark.sql("INSERT INTO Sales.DeltaOutput SELECT ...")</div>
+      <div class="pdots"><span class="a"></span><span class="a"></span><span class="a"></span><span></span><span></span></div>
+    </div>
+    <div class="shdr" style="margin-top:8px">Disposed Sessions <span class="sc">1</span></div>
+    <div class="skc" style="opacity:0.6"><div class="skh"><span class="sp sdisp">Disposed</span><span class="skt">spark-session-7f2a</span><span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">pool-west-3</span></div>
+      <div style="font-size:12px;color:var(--text-3)">Duration: 2m 58s &#x00B7; Commands: 5 &#x00B7; Released at 10:47:05</div>
+    </div>
+  </div>
+</div>
+
+<div class="tc" id="tc-tokens">
+  <div style="overflow-y:auto;flex:1">
+    <div class="tkc"><div class="rg" style="width:48px;height:48px"><svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="var(--bg-4)" stroke-width="4"/><circle cx="24" cy="24" r="20" fill="none" stroke="var(--green)" stroke-width="4" stroke-dasharray="125.66" stroke-dashoffset="31.42" stroke-linecap="round"/></svg><span class="rl" style="color:var(--green)">75%</span></div><div class="tki"><div class="tkn">MWC Token</div><div class="tkd">Expires in 14m 07s &#x00B7; Scope: OneLake.ReadWrite &#x00B7; Last refresh: 10:33:02</div></div><span class="b bg">Valid</span></div>
+    <div class="tkc"><div class="rg" style="width:48px;height:48px"><svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="var(--bg-4)" stroke-width="4"/><circle cx="24" cy="24" r="20" fill="none" stroke="var(--amber)" stroke-width="4" stroke-dasharray="125.66" stroke-dashoffset="100.53" stroke-linecap="round"/></svg><span class="rl" style="color:var(--amber)">20%</span></div><div class="tki"><div class="tkn">Fabric Auth Token</div><div class="tkd">Expires in 3m 41s &#x00B7; Scope: Fabric.Admin &#x00B7; Auto-refresh pending</div></div><span class="b ba">Expiring</span></div>
+    <div class="tkc"><div class="rg" style="width:48px;height:48px"><svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" fill="none" stroke="var(--bg-4)" stroke-width="4"/><circle cx="24" cy="24" r="20" fill="none" stroke="var(--red)" stroke-width="4" stroke-dasharray="125.66" stroke-dashoffset="125.66" stroke-linecap="round"/></svg><span class="rl" style="color:var(--red)">0%</span></div><div class="tki"><div class="tkn">Spark Livy Token</div><div class="tkd">Expired 2m ago &#x00B7; Scope: Spark.Execute &#x00B7; Refresh failed (401)</div></div><span class="b br">Expired</span></div>
+  </div>
+</div>
+
+<div class="tc" id="tc-caches">
+  <div class="spv">
+    <div class="spl">
+      <div class="crow act"><div class="cn">SchemaCache</div><div class="cs"><span>142 entries</span><span>Hit: 94%</span></div></div>
+      <div class="crow"><div class="cn">MetadataCache</div><div class="cs"><span>87 entries</span><span>Hit: 89%</span></div></div>
+      <div class="crow"><div class="cn">TokenCache</div><div class="cs"><span>3 entries</span><span>Hit: 100%</span></div></div>
+      <div class="crow"><div class="cn">SparkPlanCache</div><div class="cs"><span>24 entries</span><span>Hit: 71%</span></div></div>
+    </div>
+    <div class="spr" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="font-size:14px;font-weight:600">SchemaCache</span><span class="b bg">94% hit rate</span><span style="font-size:12px;color:var(--text-3)">142 / 500 capacity</span></div>
+      <div style="display:flex;gap:24px;margin-bottom:16px">
+        <div class="rg" style="width:64px;height:64px"><svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" fill="none" stroke="var(--bg-4)" stroke-width="5"/><circle cx="32" cy="32" r="28" fill="none" stroke="var(--green)" stroke-width="5" stroke-dasharray="175.93" stroke-dashoffset="10.56" stroke-linecap="round"/></svg><span class="rl" style="color:var(--green)">94%</span></div>
+        <div style="flex:1"><div style="font-size:12px;color:var(--text-2);margin-bottom:4px">Hits: 1,847 &#x00B7; Misses: 118 &#x00B7; Evictions: 23</div><div style="font-size:12px;color:var(--text-2)">Avg lookup: 0.3ms &#x00B7; Avg populate: 12ms</div></div>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Recent Events</div>
+      <div class="ei"><span class="ets">10:47:05</span><span class="etp" style="color:var(--amber)">INVALIDATE</span><span style="font-size:11px;color:var(--text-2)">Sales.DeltaOutput (stale after write failure)</span></div>
+      <div class="ei"><span class="ets">10:47:02</span><span class="etp" style="color:var(--green)">HIT</span><span style="font-size:11px;color:var(--text-2)">Sales.RawTransactions schema</span></div>
+      <div class="ei"><span class="ets">10:46:58</span><span class="etp" style="color:var(--blue)">POPULATE</span><span style="font-size:11px;color:var(--text-2)">Sales.Staging checkpoint metadata</span></div>
+      <div class="ei"><span class="ets">10:46:51</span><span class="etp" style="color:var(--green)">HIT</span><span style="font-size:11px;color:var(--text-2)">Workspace aef3c metadata</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="tc" id="tc-http">
+  <div class="tctb"><div class="pill on">All</div><div class="pill">2xx</div><div class="pill">4xx</div><div class="pill">5xx</div><div class="tbsep"></div><div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Filter by URL..."></div></div>
+  <div style="overflow-y:auto;flex:1">
+    <table class="dt"><thead><tr><th>Time</th><th>Method</th><th>URL</th><th>Status</th><th>Duration</th><th style="width:140px">Waterfall</th></tr></thead><tbody>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:05</td><td><span class="mb mg">GET</span></td><td style="font-family:var(--mono);font-size:11px">/v1/workspaces/aef3c/items</td><td><span class="b bg">200</span></td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">142ms</td><td><div class="wf"><div class="wfs" style="width:15%;background:var(--teal)"></div><div class="wfs" style="width:5%;background:var(--amber)"></div><div class="wfs" style="width:60%;background:var(--blue)"></div><div class="wfs" style="width:20%;background:var(--green)"></div></div></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:04</td><td><span class="mb mp">POST</span></td><td style="font-family:var(--mono);font-size:11px">/v1/lakehouses/delta/commit</td><td><span class="b br">409</span></td><td style="font-family:var(--mono);font-size:11px;color:var(--red)">2,847ms</td><td><div class="wf"><div class="wfs" style="width:5%;background:var(--teal)"></div><div class="wfs" style="width:3%;background:var(--amber)"></div><div class="wfs" style="width:87%;background:var(--red)"></div><div class="wfs" style="width:5%;background:var(--green)"></div></div></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:03</td><td><span class="mb mg">GET</span></td><td style="font-family:var(--mono);font-size:11px">/v1/spark/sessions/8a1c/status</td><td><span class="b bg">200</span></td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">89ms</td><td><div class="wf"><div class="wfs" style="width:20%;background:var(--teal)"></div><div class="wfs" style="width:10%;background:var(--amber)"></div><div class="wfs" style="width:50%;background:var(--blue)"></div><div class="wfs" style="width:20%;background:var(--green)"></div></div></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:02</td><td><span class="mb mp">POST</span></td><td style="font-family:var(--mono);font-size:11px">/v1/spark/sessions/8a1c/execute</td><td><span class="b bg">200</span></td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">1,204ms</td><td><div class="wf"><div class="wfs" style="width:8%;background:var(--teal)"></div><div class="wfs" style="width:2%;background:var(--amber)"></div><div class="wfs" style="width:82%;background:var(--blue)"></div><div class="wfs" style="width:8%;background:var(--green)"></div></div></td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:01</td><td><span class="mb mg">GET</span></td><td style="font-family:var(--mono);font-size:11px">/v1/auth/token?scope=OneLake.ReadWrite</td><td><span class="b bg">200</span></td><td style="font-family:var(--mono);font-size:11px;color:var(--text-2)">67ms</td><td><div class="wf"><div class="wfs" style="width:25%;background:var(--teal)"></div><div class="wfs" style="width:15%;background:var(--amber)"></div><div class="wfs" style="width:40%;background:var(--blue)"></div><div class="wfs" style="width:20%;background:var(--green)"></div></div></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<div class="tc" id="tc-retries">
+  <div style="overflow-y:auto;flex:1;padding:16px">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">Active Retry Chains</div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="b br">FAILING</span><span style="font-size:13px;font-weight:600">POST /v1/lakehouses/delta/commit</span></div>
+      <div class="rtl">
+        <div class="rtn" style="background:rgba(229,69,59,0.15);color:var(--red)">1</div><div class="rtln" style="background:var(--red)"></div>
+        <div class="rtn" style="background:rgba(229,69,59,0.15);color:var(--red)">2</div><div class="rtln" style="background:var(--red)"></div>
+        <div class="rtn" style="background:rgba(229,69,59,0.15);color:var(--red)">3</div><div class="rtln" style="background:var(--bg-4)"></div>
+        <div class="rtn" style="background:var(--bg-4);color:var(--text-3)">&#x2717;</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-2);margin-top:8px">409 Conflict &#x00B7; Backoff: 1s &#x2192; 2s &#x2192; 4s &#x00B7; Budget exhausted</div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="b ba">THROTTLED</span><span style="font-size:13px;font-weight:600">GET /v1/auth/token</span></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:8px"><span style="font-size:12px;color:var(--text-2)">429 Too Many Requests &#x00B7; Retry-After:</span><span class="countdown" id="tcd">28s</span></div>
+    </div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;margin-top:8px">Retry Budget</div>
+    <div style="display:flex;gap:24px">
+      <div><span style="font-size:11px;color:var(--text-3);display:block">Total Retries (1h)</span><span style="font-size:20px;font-weight:700">47</span></div>
+      <div><span style="font-size:11px;color:var(--text-3);display:block">Success Rate</span><span style="font-size:20px;font-weight:700;color:var(--green)">72%</span></div>
+      <div><span style="font-size:11px;color:var(--text-3);display:block">Avg Backoff</span><span style="font-size:20px;font-weight:700">2.1s</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="tc" id="tc-flags">
+  <div class="tctb"><div class="pill on">All Evals</div><div class="pill">Changed</div><div class="tbsep"></div><div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Filter flags..."></div></div>
+  <div style="overflow-y:auto;flex:1">
+    <table class="dt"><thead><tr><th>Time</th><th>Flag</th><th>Result</th><th>Source</th><th>Context</th></tr></thead><tbody>
+      <tr class="ffch" style="background:rgba(229,148,12,0.06)"><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:05</td><td style="font-weight:500">EnableParallelWrites</td><td><span class="b bg">true</span> <span style="color:var(--amber);font-size:11px;font-weight:600">&#x26A1; CHANGED</span></td><td><span class="b bac">Local Override</span></td><td style="font-size:11px;color:var(--text-3)">DagEngine</td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:04</td><td style="font-weight:500">UseNewSparkPooling</td><td><span class="b bg">true</span></td><td><span class="b bm">Service Default</span></td><td style="font-size:11px;color:var(--text-3)">SparkClient</td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:03</td><td style="font-weight:500">EnableDeltaV2</td><td><span class="b br">false</span></td><td><span class="b bm">Rollout: 40%</span></td><td style="font-size:11px;color:var(--text-3)">DagNode[Write]</td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:02</td><td style="font-weight:500">CacheWarmupOnStart</td><td><span class="b bg">true</span></td><td><span class="b bm">Service Default</span></td><td style="font-size:11px;color:var(--text-3)">CacheManager</td></tr>
+      <tr><td style="font-family:var(--mono);font-size:11px;color:var(--text-3)">10:47:01</td><td style="font-weight:500">EnableRetryBudget</td><td><span class="b bg">true</span></td><td><span class="b bp">Feature Ring</span></td><td style="font-size:11px;color:var(--text-3)">RetryPolicy</td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<div class="tc" id="tc-di">
+  <div class="tctb"><div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Filter services..."></div><div class="tbsep"></div><div class="pill on">All</div><div class="pill">Intercepted</div></div>
+  <div style="overflow-y:auto;flex:1">
+    <table class="dt"><thead><tr><th>Service</th><th>Implementation</th><th>Lifetime</th><th>EDOG</th></tr></thead><tbody>
+      <tr class="hl"><td style="font-weight:500">ILoggerProvider</td><td style="font-family:var(--mono);font-size:11px">EdogLogInterceptor</td><td><span class="b bb">Singleton</span></td><td><span class="b bac">&#x25CF; Intercepted</span></td></tr>
+      <tr class="hl"><td style="font-weight:500">ITelemetryChannel</td><td style="font-family:var(--mono);font-size:11px">EdogTelemetryInterceptor</td><td><span class="b bb">Singleton</span></td><td><span class="b bac">&#x25CF; Intercepted</span></td></tr>
+      <tr class="hl"><td style="font-weight:500">IFeatureFlighter</td><td style="font-family:var(--mono);font-size:11px">EdogFeatureFlighterWrapper</td><td><span class="b bb">Singleton</span></td><td><span class="b bac">&#x25CF; Intercepted</span></td></tr>
+      <tr><td style="font-weight:500">IDagEngine</td><td style="font-family:var(--mono);font-size:11px">DagExecutionEngine</td><td><span class="b bt">Scoped</span></td><td></td></tr>
+      <tr><td style="font-weight:500">ISparkClient</td><td style="font-family:var(--mono);font-size:11px">GTSBasedSparkClient</td><td><span class="b bt">Scoped</span></td><td></td></tr>
+      <tr><td style="font-weight:500">ICatalogProvider</td><td style="font-family:var(--mono);font-size:11px">FabricCatalogProvider</td><td><span class="b bb">Singleton</span></td><td></td></tr>
+      <tr><td style="font-weight:500">ITokenProvider</td><td style="font-family:var(--mono);font-size:11px">MWCTokenProvider</td><td><span class="b bb">Singleton</span></td><td></td></tr>
+      <tr><td style="font-weight:500">IRetryPolicy</td><td style="font-family:var(--mono);font-size:11px">ExponentialRetryPolicy</td><td><span class="b ba">Transient</span></td><td></td></tr>
+      <tr><td style="font-weight:500">ICacheManager</td><td style="font-family:var(--mono);font-size:11px">InMemoryCacheManager</td><td><span class="b bb">Singleton</span></td><td></td></tr>
+      <tr><td style="font-weight:500">ISchemaValidator</td><td style="font-family:var(--mono);font-size:11px">DeltaSchemaValidator</td><td><span class="b ba">Transient</span></td><td></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<div class="tc" id="tc-perf">
+  <div class="tctb"><div class="pill on">All</div><div class="pill pe">Anomalies</div><div class="tbsep"></div><div class="tcsrch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><input placeholder="Filter markers..."></div></div>
+  <div style="overflow-y:auto;flex:1">
+    <table class="dt"><thead><tr><th>Marker</th><th>Last (ms)</th><th>Avg (ms)</th><th>p95 (ms)</th><th>Count</th><th style="width:100px">Trend</th></tr></thead><tbody>
+      <tr><td style="font-weight:500">DagExecution.Total</td><td style="font-family:var(--mono);font-size:11px">3,120</td><td style="font-family:var(--mono);font-size:11px">2,847</td><td style="font-family:var(--mono);font-size:11px">4,102</td><td style="font-family:var(--mono);font-size:11px">142</td><td><div class="pspark"><span style="height:6px"></span><span style="height:8px"></span><span style="height:5px"></span><span style="height:10px"></span><span style="height:7px"></span><span style="height:9px"></span><span style="height:12px"></span><span style="height:8px"></span></div></td></tr>
+      <tr class="anom"><td style="font-weight:500;color:var(--red)">SparkClient.Execute &#x26A0;</td><td style="font-family:var(--mono);font-size:11px;color:var(--red)">2,847</td><td style="font-family:var(--mono);font-size:11px">890</td><td style="font-family:var(--mono);font-size:11px">1,540</td><td style="font-family:var(--mono);font-size:11px">47</td><td><div class="pspark"><span style="height:4px"></span><span style="height:5px"></span><span style="height:4px"></span><span style="height:6px"></span><span style="height:5px"></span><span style="height:4px"></span><span style="height:5px"></span><span style="height:16px;background:var(--red)"></span></div></td></tr>
+      <tr><td style="font-weight:500">TokenRefresh</td><td style="font-family:var(--mono);font-size:11px">234</td><td style="font-family:var(--mono);font-size:11px">189</td><td style="font-family:var(--mono);font-size:11px">412</td><td style="font-family:var(--mono);font-size:11px">18</td><td><div class="pspark"><span style="height:7px"></span><span style="height:6px"></span><span style="height:8px"></span><span style="height:6px"></span><span style="height:7px"></span><span style="height:7px"></span><span style="height:8px"></span><span style="height:7px"></span></div></td></tr>
+      <tr><td style="font-weight:500">SchemaValidation</td><td style="font-family:var(--mono);font-size:11px">12</td><td style="font-family:var(--mono);font-size:11px">14</td><td style="font-family:var(--mono);font-size:11px">28</td><td style="font-family:var(--mono);font-size:11px">142</td><td><div class="pspark"><span style="height:5px"></span><span style="height:5px"></span><span style="height:6px"></span><span style="height:5px"></span><span style="height:5px"></span><span style="height:5px"></span><span style="height:6px"></span><span style="height:5px"></span></div></td></tr>
+      <tr><td style="font-weight:500">CacheLookup</td><td style="font-family:var(--mono);font-size:11px">0.3</td><td style="font-family:var(--mono);font-size:11px">0.4</td><td style="font-family:var(--mono);font-size:11px">1.2</td><td style="font-family:var(--mono);font-size:11px">1,965</td><td><div class="pspark"><span style="height:4px"></span><span style="height:4px"></span><span style="height:4px"></span><span style="height:5px"></span><span style="height:4px"></span><span style="height:4px"></span><span style="height:4px"></span><span style="height:4px"></span></div></td></tr>
+      <tr><td style="font-weight:500">DeltaWrite.Commit</td><td style="font-family:var(--mono);font-size:11px">1,204</td><td style="font-family:var(--mono);font-size:11px">847</td><td style="font-family:var(--mono);font-size:11px">1,890</td><td style="font-family:var(--mono);font-size:11px">89</td><td><div class="pspark"><span style="height:6px"></span><span style="height:7px"></span><span style="height:8px"></span><span style="height:7px"></span><span style="height:9px"></span><span style="height:8px"></span><span style="height:10px"></span><span style="height:9px"></span></div></td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+</div><!-- /carea -->
+<div class="foot">
+  <kbd>&#x2191;&#x2193;</kbd> Navigate <div class="fsep"></div>
+  <kbd>Enter</kbd> Details <div class="fsep"></div>
+  <kbd>Esc</kbd> Close <div class="fsep"></div>
+  <kbd>Alt+1-5</kbd> Tabs <div class="fsep"></div>
+  <kbd>Space</kbd> Pause <div class="fsep"></div>
+  <kbd>1-4</kbd> Views
+</div>
+</div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+(function(){
+'use strict';
+var phase=2,conn='connected',atab='logs',asub=null,ddo=false,spo=false;
+var ids=[],TABS=['logs','telemetry','sysfiles','spark','internals'];
+var SUBS=['tokens','caches','http','retries','flags','di','perf'];
+var SUBNAMES={tokens:'Tokens',caches:'Caches',http:'HTTP Pipeline',retries:'Retries',flags:'Feature Flags',di:'DI Registry',perf:'Perf Markers'};
+var $=function(s,p){return(p||document).querySelector(s)};
+var $$=function(s,p){return[].slice.call((p||document).querySelectorAll(s))};
+var tip=$('#tip'),tbi=$('#tbi'),tline=$('#tline'),idd=$('#idd'),ilbl=$('#ilbl'),ichev=$('#ichev'),itab=$('#itab');
+var cbar=$('#cbar'),cdot=$('#cdot'),clbl=$('#clbl'),mrate=$('#mrate');
+var p1ov=$('#p1ov'),stov=$('#stov'),sbdot=$('#sbdot'),sblk=$('#sblk');
+var scpan=$('#scpan');
+
+// Tooltip
+document.addEventListener('mouseover',function(e){
+  var el=e.target.closest('[data-tip]');
+  if(!el){tip.classList.remove('on');return}
+  tip.textContent=el.dataset.tip;tip.classList.add('on');
+  var r=el.getBoundingClientRect();
+  tip.style.left=(r.right+8)+'px';tip.style.top=(r.top+r.height/2-12)+'px';
+});
+document.addEventListener('mouseout',function(e){if(e.target.closest('[data-tip]'))tip.classList.remove('on')});
+
+// Underline
+function uline(){
+  var tabs=$$('.ttab',tbi),t=null;
+  for(var i=0;i<tabs.length;i++)if(tabs[i].classList.contains('active')){t=tabs[i];break}
+  if(!t){tline.style.width='0';return}
+  var br=tbi.getBoundingClientRect(),tr=t.getBoundingClientRect();
+  tline.style.left=(tr.left-br.left)+'px';tline.style.width=tr.width+'px';
+}
+
+// Switch tab
+function stab(id){
+  if(phase===1)return;
+  if(SUBS.indexOf(id)>=0){asub=id;atab='internals';ilbl.textContent='Internals: '+SUBNAMES[id]}
+  else{atab=id;if(id!=='internals'){asub=null;ilbl.textContent='Internals'}}
+  var tid=SUBS.indexOf(id)>=0?'internals':id;
+  $$('.ttab',tbi).forEach(function(t){t.classList.toggle('active',t.dataset.tab===tid)});
+  $$('.tc').forEach(function(c){c.classList.remove('active')});
+  var target=$('#tc-'+(asub||atab));
+  if(target)requestAnimationFrame(function(){target.classList.add('active')});
+  var tab=$('[data-tab="'+atab+'"]',tbi);
+  if(tab){var d=$('.tdot',tab);if(d)d.classList.remove('on')}
+  $$('.ddi',idd).forEach(function(d){d.classList.toggle('active',d.dataset.sub===asub)});
+  cdd();uline();
+}
+
+// Dropdown
+function odd(){ddo=true;idd.classList.remove('closing');idd.classList.add('open');ichev.classList.add('open')}
+function cdd(){if(!ddo)return;ddo=false;idd.classList.add('closing');idd.classList.remove('open');ichev.classList.remove('open');setTimeout(function(){idd.classList.remove('closing')},80)}
+
+itab.addEventListener('click',function(e){if(e.target.closest('.ddi'))return;if(ddo)cdd();else{stab('internals');odd()}});
+$$('.ddi',idd).forEach(function(d){d.addEventListener('click',function(e){e.stopPropagation();stab(d.dataset.sub)})});
+document.addEventListener('click',function(e){
+  if(ddo&&!e.target.closest('#itab'))cdd();
+  if(spo&&!e.target.closest('.sctrl')){scpan.classList.remove('open');spo=false}
+});
+
+// Tab clicks
+$$('.ttab',tbi).forEach(function(t){if(t.id==='itab')return;t.addEventListener('click',function(){stab(t.dataset.tab)})});
+
+// Sidebar
+$$('.sb-item').forEach(function(i){i.addEventListener('click',function(){
+  if(i.dataset.v==='runtime'&&phase===1)return;
+  $$('.sb-item').forEach(function(x){x.classList.remove('active')});i.classList.add('active');
+})});
+
+// Connection state
+function sconn(s){
+  conn=s;
+  $$('.sbtn[data-st]',scpan).forEach(function(b){b.classList.toggle('cur',b.dataset.st===s)});
+  if(s==='connected'){cdot.className='cdot g';clbl.className='clbl g';clbl.textContent='Connected';sbdot.classList.add('on');stov.classList.remove('on')}
+  else if(s==='reconnecting'){cdot.className='cdot a';clbl.className='clbl a';clbl.textContent='Reconnecting...';sbdot.classList.remove('on');stov.classList.remove('on')}
+  else if(s==='failed'){cdot.className='cdot r';clbl.className='clbl r';clbl.textContent='Offline';sbdot.classList.remove('on');stov.classList.remove('on')}
+  else if(s==='stopped'){cdot.className='cdot a';clbl.className='clbl a';clbl.textContent='Stopped';sbdot.classList.remove('on');stov.classList.add('on')}
+}
+
+// Phase
+function sph(p){
+  phase=p;
+  $$('.sbtn[data-ph]',scpan).forEach(function(b){b.classList.toggle('cur',b.dataset.ph===String(p))});
+  var ri=$('[data-v="runtime"]');
+  if(p===1){ri.classList.add('disabled');ri.classList.remove('active');sblk.classList.add('on');sbdot.classList.remove('on');p1ov.classList.remove('hidden');cbar.style.display='none';$('#tbar').style.display='none';$('[data-v="workspace"]').classList.add('active')}
+  else{ri.classList.remove('disabled');sblk.classList.remove('on');p1ov.classList.add('hidden');cbar.style.display='';$('#tbar').style.display='';
+    $$('.ttab',tbi).forEach(function(t,i){t.classList.add('enab');t.style.animationDelay=(i*100)+'ms';setTimeout(function(){t.classList.remove('enab')},600)});
+    ri.classList.add('unlock');setTimeout(function(){ri.classList.remove('unlock')},300);
+    $$('.sb-item').forEach(function(x){x.classList.remove('active')});ri.classList.add('active');
+    sbdot.classList.add('on');sconn('connected');stab('logs');
+  }
+}
+window._setPhase=sph;
+
+// State controller
+$('#scbtn').addEventListener('click',function(e){e.stopPropagation();spo=!spo;scpan.classList.toggle('open',spo)});
+$$('.sbtn[data-st]',scpan).forEach(function(b){b.addEventListener('click',function(){sconn(b.dataset.st)})});
+$$('.sbtn[data-ph]',scpan).forEach(function(b){b.addEventListener('click',function(){sph(parseInt(b.dataset.ph))})});
+
+// Theme
+$('#thtog').addEventListener('click',function(){var h=document.documentElement;h.dataset.theme=h.dataset.theme==='dark'?'light':'dark'});
+
+// Keyboard
+document.addEventListener('keydown',function(e){
+  if(!e.altKey&&!e.ctrlKey&&!e.metaKey&&e.key>='1'&&e.key<='4'&&!e.target.matches('input')){
+    var vs=['workspace','runtime','api','env'],idx=parseInt(e.key)-1;
+    var it=$('[data-v="'+vs[idx]+'"]');
+    if(it&&!it.classList.contains('disabled')){$$('.sb-item').forEach(function(x){x.classList.remove('active')});it.classList.add('active');e.preventDefault()}
+  }
+  if(e.altKey&&e.key>='1'&&e.key<='4'){stab(TABS[parseInt(e.key)-1]);e.preventDefault()}
+  if(e.altKey&&e.key==='5'){if(ddo)cdd();else{stab('internals');odd()}e.preventDefault()}
+  if(e.key==='Escape'){cdd();if(spo){scpan.classList.remove('open');spo=false}}
+});
+
+// Throughput
+ids.push(setInterval(function(){
+  if(conn==='connected')mrate.textContent=120+Math.floor(Math.random()*60);
+  else mrate.textContent='0';
+},2000));
+
+// Throttle countdown
+var tsec=28;
+ids.push(setInterval(function(){tsec=Math.max(0,tsec-1);var el=$('#tcd');if(el)el.textContent=tsec+'s';if(tsec<=0)tsec=30},1000));
+
+// Log entry click
+$$('.le').forEach(function(e){e.addEventListener('click',function(){$$('.le').forEach(function(x){x.classList.remove('sel')});e.classList.add('sel')})});
+
+// Star toggle
+$$('.st').forEach(function(s){s.addEventListener('click',function(e){e.stopPropagation();s.classList.toggle('f');s.textContent=s.classList.contains('f')?'\u2605':'\u2606'})});
+
+// Pill toggle
+$$('.tctb .pill').forEach(function(p){p.addEventListener('click',function(){var sibs=p.parentElement.querySelectorAll('.pill');[].forEach.call(sibs,function(s){s.classList.remove('on')});p.classList.add('on')})});
+
+// Init
+requestAnimationFrame(uline);
+window.addEventListener('resize',uline);
+})();
+</script>
+</body>
+</html>
