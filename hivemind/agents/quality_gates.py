@@ -1,6 +1,6 @@
 # EDOG Studio Hivemind — Automated Quality Gates
 # Classification: INTERNAL
-# Owner: Ines Ferreira (QA Engineer)
+# Owner: Sentinel (QA Lead & Gatekeeper)
 
 """
 Quality gate checks for edog-studio.

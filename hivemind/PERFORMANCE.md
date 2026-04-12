@@ -10,14 +10,15 @@
 
 ### Why We Measure
 
-edog-studio is built by 9 AI agents channeled through Copilot. There's no Jira, no sprint velocity, no standup. We measure quality per deliverable — not output per time period.
+edog-studio is built by 4 AI agents channeled through Copilot. There's no Jira, no sprint velocity, no standup. We measure quality per deliverable — not output per time period.
 
 ### What We Believe
 
 1. **Outcomes over output** — Shipping broken code fast is worse than shipping quality code slower.
 2. **The Studio Bar is the bar** — "Would a senior FLT engineer choose this over their current workflow?"
-3. **Domain-specific metrics** — A CSS engineer is measured differently than a C# engineer.
+3. **Domain-specific metrics** — A frontend engineer is measured differently than a backend engineer.
 4. **Per-feature review, not time-based** — We evaluate when features ship, not on a calendar.
+5. **No commit without Sentinel** — Every change passes the 7-Gate Gauntlet before it ships.
 
 ---
 
@@ -50,7 +51,7 @@ Every agent is evaluated on 4 dimensions:
 
 ## Domain-Specific Metrics
 
-### Frontend: Zara Okonkwo + Mika Tanaka
+### Frontend: Pixel
 
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
@@ -66,20 +67,18 @@ Every agent is evaluated on 4 dimensions:
 | Keyboard accessibility | Every action via keyboard | Manual test: complete workflow without mouse |
 | No emoji in UI | 0 emoji characters | `check_no_emoji_in_frontend()` quality gate |
 | No framework imports | 0 React/Vue/Angular references | `check_no_frameworks_in_js()` quality gate |
-
-**Zara-specific:**
-- Virtual scroll renders 10,000 entries without jank
-- WebSocket reconnection works within 5 seconds
-- No synchronous DOM reads in loops (layout thrashing)
-
-**Mika-specific:**
-- All new CSS uses custom properties, not hardcoded values
-- Color contrast meets WCAG AA (OKLCH makes this measurable)
-- Transitions are ≤ 150ms ease-out or instant
+| Virtual scroll capacity | 10,000 entries without jank | Stress test with large dataset |
+| WebSocket reconnection | Recovers within 5 seconds | Disconnect/reconnect test |
+| No layout thrashing | 0 synchronous DOM reads in loops | Code review + Performance tab |
+| CSS custom properties | 100% — no hardcoded values in new CSS | Code review |
+| Color contrast | WCAG AA compliance | OKLCH lightness channel verification |
+| Transitions | ≤ 150ms ease-out or instant | Visual inspection + DevTools |
 
 ---
 
-### Backend (C#): Arjun Mehta
+### Backend: Vex
+
+#### C# Interceptors
 
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
@@ -96,9 +95,7 @@ Every agent is evaluated on 4 dimensions:
 **What "zero overhead" means:**
 The C# interceptors run inside the FLT service process. If they add latency to request processing or allocate on every log entry, they are degrading the developer's actual work. Interceptor overhead must be invisible.
 
----
-
-### Python: Elena Voronova
+#### Python CLI & Scripts
 
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
@@ -111,6 +108,11 @@ The C# interceptors run inside the FLT service process. If they add latency to r
 | Error message quality | Actionable, specific, suggests fix | Manual review per error path |
 | No bare `except` clauses | 0 | `grep "except:" *.py` |
 | pathlib usage | 100% (no `os.path.join`) | `grep "os.path" *.py` |
+| Build reproducibility | Same input → same output | Run `build-html.py` twice, diff outputs |
+| Install time | < 60s for first setup | `time install.ps1` |
+| CI pass rate | 100% on main branch | GitHub Actions history |
+| Single-file validity | Zero external references in output | `check_single_file_build()` quality gate |
+| Module order correctness | Dependencies before dependents | Build + verify all classes resolve |
 
 **What "good error messages" means:**
 ```python
@@ -125,10 +127,11 @@ print(f"  Try: Close browser windows and run: edog.cmd --refresh-token")
 
 ---
 
-### QA: Ines Ferreira
+### QA & Gatekeeper: Sentinel
 
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
+| Gate enforcement rate | 100% — no commit bypasses | Audit trail: every commit has APPROVED verdict |
 | Test coverage (Python critical paths) | 80%+ | `pytest --cov` |
 | Test coverage (C# public methods) | 80%+ | `dotnet test --collect:"Code Coverage"` |
 | Flaky test rate | 0% | Run suite 5x, all pass every time |
@@ -137,46 +140,39 @@ print(f"  Try: Close browser windows and run: edog.cmd --refresh-token")
 | Regression detection | Catch before ship | No regressions reach "done" state |
 | Test execution time | < 30s for full Python suite | `time pytest` |
 | No tests that test mocks | 0 | Code review — assertions must verify behavior |
+| 7-Gate Gauntlet completion | 100% per change | All 7 gates documented as passed |
+| Veto accuracy | 0 false negatives (bugs that slipped) | Post-ship defect tracking |
+
+**Sentinel's 7-Gate Gauntlet:**
+
+Every change must survive all 7 gates before receiving APPROVED:
+
+1. **PRE-FLIGHT** — Lint + format check (`make lint`)
+2. **UNIT** — All unit tests pass (`make test`)
+3. **INTEGRATION** — Cross-module interactions verified
+4. **SCENARIO** — Happy-path user workflows tested
+5. **ERROR** — Error states handled, messages actionable
+6. **EDGE CASES** — Boundary conditions, empty states, overflow
+7. **REGRESSION+BUILD** — `make build` succeeds, no regressions
 
 ---
 
-### UX: Kael Andersen
+### Architect & FLT Expert: Sana Reeves
 
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
-| Keyboard accessibility | 100% of actions | Complete workflow without mouse |
-| Information density score | High — no wasted space | The 100x100 pixel test (see CULTURE.md) |
-| Focus indicator visibility | All focusable elements | Tab through the UI, verify visible focus |
-| Tab order logic | Natural reading/usage order | Tab through, verify sequence makes sense |
-| Shortcut discoverability | All shortcuts shown somewhere | Command palette lists all, tooltips show key |
-| View consistency | All 6 views follow same layout pattern | Visual comparison |
-| Empty state quality | Helpful, not blank | Load with no data, verify guidance shown |
-| Error state quality | Actionable, not just "Error" | Trigger failures, verify messages help |
-
----
-
-### Build/DevOps: Ren Aoki
-
-| Metric | Target | How to Measure |
-|--------|--------|----------------|
-| Build reproducibility | Same input → same output | Run `build-html.py` twice, diff outputs |
-| Install time | < 60s for first setup | `time install.ps1` |
-| Build time | < 2s for frontend | `time python build-html.py` |
-| CI pass rate | 100% on main branch | GitHub Actions history |
-| Single-file validity | Zero external references in output | `check_single_file_build()` quality gate |
-| Module order correctness | Dependencies before dependents | Build + verify all classes resolve |
-
----
-
-### FLT Expert: Dev Patel
-
-| Metric | Target | How to Measure |
-|--------|--------|----------------|
+| Architecture quality | Clean boundaries, no circular deps | Code review + dependency analysis |
+| ADR currency | All decisions documented with rationale | Check `docs/adr/` for coverage |
+| Cross-cutting consistency | Shared patterns used uniformly | Code review across modules |
 | Patch maintenance | All patches apply cleanly to latest FLT | `python edog.py --dry-run` |
 | FLT API accuracy | Correct endpoint URLs, params, headers | Compare against FLT source |
 | Feature flag sync | All flags in UI match FeatureManagement repo | Diff against repo |
-| Domain documentation | Key FLT concepts documented for non-FLT agents | Check docs/ for coverage |
+| Domain documentation | Key FLT concepts documented for other agents | Check docs/ for coverage |
 | Integration test coverage | Happy path + auth failure + timeout | Test suite review |
+| Keyboard accessibility | 100% of actions | Complete workflow without mouse |
+| Information density | High — no wasted space | The 100x100 pixel test (see CULTURE.md) |
+| View consistency | All views follow same layout pattern | Visual comparison |
+| Empty/error state quality | Helpful and actionable, never blank | Load with no data / trigger failures |
 
 ---
 
@@ -190,23 +186,20 @@ We evaluate **per feature**, not on a calendar.
 Feature work starts
   → Agent claims ownership
   → Agent delivers
+  → Sentinel runs 7-Gate Gauntlet
   → Quality review against this rubric
   → Score recorded
-  → Feature ships or goes back for rework
+  → Feature ships (with APPROVED) or goes back for rework
 ```
 
 ### Who Evaluates
 
 | Agent | Primary Evaluator | Secondary |
 |-------|-------------------|-----------|
-| Sana | CEO (Hemant) | — |
-| Kael | CEO (Hemant) | — |
-| Zara, Mika | Kael (UX Lead) | Sana (architecture) |
-| Arjun | Sana (Tech Lead) | — |
-| Elena | Sana (Tech Lead) | — |
-| Dev | Sana (Tech Lead) | — |
-| Ines | Sana (Tech Lead) | — |
-| Ren | Sana (Tech Lead) | — |
+| Sana Reeves | CEO (Hemant) | — |
+| Vex | Sana (Architect) | Sentinel (quality) |
+| Pixel | Sana (Architect) | Sentinel (quality) |
+| Sentinel | Sana (Architect) | CEO (Hemant) |
 
 ### Evidence Sources
 
@@ -215,6 +208,7 @@ Feature work starts
 - Browser verification (does it work in Edge/Chrome?)
 - Performance profile (does it meet latency targets?)
 - Quality gate results (automated checks pass?)
+- Sentinel's APPROVED/REJECTED verdict with gate-by-gate results
 
 ---
 
@@ -249,6 +243,7 @@ Evidence:
 - [What I built]
 - [How I tested it]
 - [What quality gates pass]
+- [Sentinel's verdict: APPROVED / REJECTED + reason]
 - [What I'd do differently next time]
 ```
 
