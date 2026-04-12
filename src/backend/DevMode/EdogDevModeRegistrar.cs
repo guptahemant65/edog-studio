@@ -71,7 +71,18 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterPerfMarkerCallback()
         {
-            // TODO: Phase 2B — wrap IServiceMonitoringCallback with EdogPerfMarkerCallback
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<Microsoft.ServicePlatform.Telemetry.IServiceMonitoringCallback>();
+                if (inner is EdogPerfMarkerCallback) return;
+                var wrapper = new EdogPerfMarkerCallback(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<Microsoft.ServicePlatform.Telemetry.IServiceMonitoringCallback>(wrapper);
+                Console.WriteLine("[EDOG] ✓ PerfMarker interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ PerfMarker interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterTokenInterceptor()
@@ -81,7 +92,20 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterFileSystemInterceptor()
         {
-            // TODO: Phase 2B — wrap IFileSystemFactory with EdogFileSystemInterceptor
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.Persistence.Fs.IFileSystemFactory>();
+                if (inner is EdogFileSystemFactoryWrapper) return;
+                var wrapper = new EdogFileSystemFactoryWrapper(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.Persistence.Fs.IFileSystemFactory>(wrapper);
+                Console.WriteLine("[EDOG] ✓ FileSystemFactory interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ FileSystemFactory interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterHttpPipelineHandler()
