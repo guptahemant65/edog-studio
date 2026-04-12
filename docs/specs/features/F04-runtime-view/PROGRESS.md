@@ -34,14 +34,14 @@ Each mock is a standalone HTML file CEO reviews in browser before approval.
 
 | Task | Description | Status |
 |------|-------------|--------|
-| 1.1 | Add SignalR.Protocols.MessagePack NuGet | ⬜ PENDING |
-| 1.2 | Create EdogPlaygroundHub.cs (Subscribe/Unsubscribe groups) | ⬜ PENDING |
-| 1.3 | Migrate EdogLogServer from raw WS to SignalR hub | ⬜ PENDING |
-| 1.4 | Inline @microsoft/signalr JS client in build-html.py | ⬜ PENDING |
-| 1.5 | Replace websocket.js with SignalR client (group-aware) | ⬜ PENDING |
-| 1.6 | Verify existing logs + telemetry still stream correctly | ⬜ PENDING |
+| 1.1 | Add SignalR.Protocols.MessagePack NuGet | ✅ Switched to JSON (NuGet conflict) |
+| 1.2 | Create EdogPlaygroundHub.cs (Subscribe/Unsubscribe groups) | ✅ DONE |
+| 1.3 | Migrate EdogLogServer from raw WS to SignalR hub | ✅ DONE |
+| 1.4 | Inline @microsoft/signalr JS client in build-html.py | ✅ DONE (47KB) |
+| 1.5 | Replace websocket.js with SignalR client (group-aware) | ✅ DONE |
+| 1.6 | Verify existing logs + telemetry still stream correctly | ✅ VERIFIED via agent-browser |
 
-**Phase 1 gate:** Sentinel gauntlet + manual browser verify → proceed to Phase 2.
+**Phase 1 gate: ✅ Sentinel gauntlet passed + browser verified (3788→4570 logs in 5s) → proceed to Phase 2.**
 
 ---
 
