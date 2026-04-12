@@ -180,7 +180,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             logBuffer.Enqueue(entry);
             TrimBuffer(logBuffer, MaxLogEntries);
 
+            // Publish to TopicRouter (for ChannelReader streaming — Phase 3 frontend)
             EdogTopicRouter.Publish("log", entry);
+
+            // Also broadcast via SignalR groups (for current JS client compatibility)
+            if (hubContext != null)
+            {
+                _ = hubContext.Clients.Group("log").SendAsync("LogEntry", entry);
+            }
         }
         catch (Exception ex)
         {
@@ -201,7 +208,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             telemetryBuffer.Enqueue(telemetryEvent);
             TrimBuffer(telemetryBuffer, MaxTelemetryEvents);
 
+            // Publish to TopicRouter (for ChannelReader streaming — Phase 3 frontend)
             EdogTopicRouter.Publish("telemetry", telemetryEvent);
+
+            // Also broadcast via SignalR groups (for current JS client compatibility)
+            if (hubContext != null)
+            {
+                _ = hubContext.Clients.Group("telemetry").SendAsync("TelemetryEvent", telemetryEvent);
+            }
         }
         catch (Exception ex)
         {
