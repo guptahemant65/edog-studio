@@ -1,0 +1,411 @@
+/* ===== Runtime View Shell =====
+ * Tab bar, connection bar, phase overlays, Internals dropdown.
+ * Reference: f04-runtime-view-integrated.html (shell architecture)
+ */
+
+/* ── Runtime sidebar indicators ── */
+
+.rt-dot {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-1);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-succeeded);
+  box-shadow: 0 0 4px rgba(24, 160, 88, 0.5);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.rt-dot.on {
+  opacity: 1;
+}
+
+.rt-lock {
+  position: absolute;
+  bottom: 3px;
+  right: 3px;
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.rt-lock.on {
+  opacity: 0.5;
+}
+
+.rt-lock svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Connection status bar ── */
+
+.rt-connection-bar {
+  height: var(--space-8);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  gap: var(--space-3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  transition: all 200ms ease;
+}
+
+.rt-conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+  transition: all 200ms ease;
+}
+
+.rt-conn-dot.connected {
+  background: var(--status-succeeded);
+  box-shadow: 0 0 6px rgba(24, 160, 88, 0.4);
+}
+
+.rt-conn-dot.reconnecting {
+  background: var(--level-warning);
+  box-shadow: 0 0 6px rgba(229, 148, 12, 0.4);
+  animation: rt-pulse-dot 1.2s ease infinite;
+}
+
+.rt-conn-dot.failed {
+  background: var(--level-error);
+  box-shadow: 0 0 6px rgba(229, 69, 59, 0.4);
+}
+
+@keyframes rt-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.rt-conn-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: color 200ms ease;
+}
+
+.rt-conn-label.connected { color: var(--status-succeeded); }
+.rt-conn-label.reconnecting { color: var(--level-warning); }
+.rt-conn-label.failed { color: var(--level-error); }
+
+.rt-conn-sep {
+  width: 1px;
+  height: var(--space-4);
+  background: var(--border-bright);
+}
+
+.rt-conn-throughput {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.rt-conn-port {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ── Tab bar ── */
+
+.rt-tab-bar {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  height: 40px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rt-tab-bar-inner {
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 100%;
+}
+
+.rt-tab {
+  padding: 0 14px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  position: relative;
+  transition: color 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.rt-tab:hover {
+  color: var(--text);
+}
+
+.rt-tab.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Sliding indicator line */
+.rt-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  transition: left 200ms ease-out, width 200ms ease-out;
+  /* z-index: 2 — above tab bar border */
+  z-index: 2;
+}
+
+/* ── Internals dropdown ── */
+
+.rt-tab-internals {
+  position: relative;
+}
+
+.rt-internals-chevron {
+  font-size: 10px;
+  opacity: 0.5;
+  transition: transform 200ms ease;
+}
+
+.rt-internals-chevron.open {
+  transform: rotate(180deg);
+}
+
+.rt-internals-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  /* z-index: 200 — above content, below command palette */
+  z-index: 200;
+  padding: var(--space-1);
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 100ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 100ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.rt-internals-dropdown.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.rt-internals-dropdown.closing {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+  transition-duration: 80ms;
+  transition-timing-function: ease-in;
+  pointer-events: none;
+}
+
+.rt-dd-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 7px var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rt-dd-item:hover {
+  background: var(--accent-hover);
+  color: var(--text);
+}
+
+.rt-dd-item.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.rt-dd-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.rt-dd-item:hover svg {
+  opacity: 1;
+}
+
+/* ── Tab content area ── */
+
+.rt-content {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.rt-tab-content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.rt-tab-content.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── Phase 1 overlay ── */
+
+.rt-phase1-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--bg);
+  /* z-index: 50 — above tab content, below dropdown */
+  z-index: 50;
+  transition: opacity 300ms ease;
+}
+
+.rt-phase1-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rt-phase1-overlay svg {
+  width: 64px;
+  height: 64px;
+  color: var(--text-muted);
+  opacity: 0.3;
+}
+
+.rt-phase1-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rt-phase1-desc {
+  font-size: var(--text-md);
+  color: var(--text-dim);
+  max-width: 360px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.rt-phase1-btn {
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--text-md);
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: opacity 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rt-phase1-btn:hover {
+  opacity: 0.85;
+}
+
+/* ── Service stopped overlay ── */
+
+.rt-stopped-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(229, 148, 12, 0.06);
+  /* z-index: 40 — below phase1 overlay */
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.rt-stopped-overlay.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rt-stopped-box {
+  background: var(--surface);
+  border: 1px solid rgba(229, 148, 12, 0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-8);
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.rt-stopped-box h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--level-warning);
+  margin-bottom: var(--space-1);
+}
+
+.rt-stopped-box p {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+
+/* ── Tab enable animation ── */
+
+@keyframes rt-tab-enable {
+  from { opacity: 0.4; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.rt-tab.enabling {
+  animation: rt-tab-enable 200ms ease-out both;
+}
+
+/* ── Sidebar unlock animation ── */
+
+@keyframes rt-sidebar-unlock {
+  0% { opacity: 0.3; transform: scale(0.95); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.sidebar-slot[data-view="runtime"].unlocking .sidebar-icon {
+  animation: rt-sidebar-unlock 300ms ease both;
+}
+
+/* ── View panel layout for Runtime ── */
+
+#view-runtime {
+  display: flex;
+  flex-direction: column;
+}

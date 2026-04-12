@@ -43,6 +43,7 @@ CSS_MODULES = [
     "css/notebook.css",
     "css/environment.css",
     "css/token-inspector.css",
+    "css/runtime.css",
     "css/mock-components.css",
     "css/onboarding.css",
 ]
