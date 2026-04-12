@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Tokens Tab Mock (F04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --green-dim: rgba(24,160,88,0.12);
+  --amber: #e5940c;
+  --amber-dim: rgba(229,148,12,0.12);
+  --red: #e5453b;
+  --red-dim: rgba(229,69,59,0.12);
+  --blue: #2d7ff9;
+  --blue-dim: rgba(45,127,249,0.12);
+  --purple: #a855f7;
+  --purple-dim: rgba(168,85,247,0.12);
+  --teal: #0d9488;
+  --teal-dim: rgba(13,148,136,0.12);
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out: cubic-bezier(0.22,1,0.36,1);
+}
+[data-theme="light"] {
+  --bg: #f8f9fc; --bg-2: #ffffff; --bg-3: #f0f1f5; --bg-4: #e8e9ee;
+  --text: #1a1d27; --text-2: #5c6070; --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08); --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03); --selected-bg: rgba(109,92,255,0.08);
+  --toolbar-bg: #f2f3f7; --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15); --scrollbar-track: transparent;
+  --badge-bg: rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --card-bg: #ffffff;
+  --detail-bg: #fbfbfd;
+  --code-bg: #f4f5f8;
+  --sensitive-bg: #fff8f0;
+  --sensitive-border: #e5940c;
+}
+[data-theme="dark"] {
+  --bg: #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text: #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.03); --selected-bg: rgba(109,92,255,0.10);
+  --toolbar-bg: #13151d; --panel-bg: #161923;
+  --scrollbar-thumb: rgba(255,255,255,0.12); --scrollbar-track: transparent;
+  --badge-bg: rgba(255,255,255,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --card-bg: #1a1e2a;
+  --detail-bg: #13151d;
+  --code-bg: #1a1e2a;
+  --sensitive-bg: rgba(229,148,12,0.08);
+  --sensitive-border: #e5940c;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input{background:none;border:none;outline:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* TAB BAR */
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 16px;height:40px;background:var(--bg-2);border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
+.tab-bar-left{display:flex;align-items:center;gap:0;position:relative}
+.tab{padding:0 16px;height:40px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600}
+.tab-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+.tab-indicator{position:absolute;bottom:0;height:3px;background:var(--accent);border-radius:3px 3px 0 0;transition:left 200ms ease,width 200ms ease}
+.tab-bar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.theme-toggle{width:32px;height:32px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.theme-toggle:hover{background:var(--hover-bg)}
+.theme-toggle svg{width:16px;height:16px;fill:var(--text-3)}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--toolbar-bg);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r6);padding:0 10px;height:32px;min-width:200px;flex:0 1 280px;transition:border-color var(--transition),box-shadow var(--transition)}
+.search-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.search-box svg{width:14px;height:14px;fill:var(--text-3);flex-shrink:0}
+.search-box input{flex:1;height:100%;font-size:12px;color:var(--text)}
+.search-box input::placeholder{color:var(--text-3)}
+
+.type-pills{display:flex;gap:4px}
+.pill{padding:4px 12px;border-radius:var(--r100);font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition);border:1.5px solid var(--border);background:transparent;white-space:nowrap;user-select:none}
+.pill .pill-count{margin-left:4px;opacity:.7;font-weight:500}
+.pill:hover{border-color:var(--border-bright)}
+.pill.active-all{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pill.active-bearer{background:var(--blue);color:#fff;border-color:var(--blue)}
+.pill.active-mwc{background:var(--purple);color:#fff;border-color:var(--purple)}
+.pill.active-s2s{background:var(--teal);color:#fff;border-color:var(--teal)}
+.pill.active-obo{background:var(--amber);color:#fff;border-color:var(--amber)}
+
+.toolbar-separator{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+.toolbar-meta{font-size:11px;color:var(--text-3);font-family:var(--mono);white-space:nowrap}
+.toolbar-btn{display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:var(--r6);font-size:12px;font-weight:500;color:var(--text-2);transition:all var(--transition);border:1px solid var(--border)}
+.toolbar-btn:hover{background:var(--hover-bg);border-color:var(--border-bright);color:var(--text)}
+.toolbar-btn.active{background:var(--accent-dim);color:var(--accent);border-color:var(--accent)}
+.toolbar-btn svg{width:14px;height:14px;fill:currentColor}
+.export-wrap{position:relative}
+.export-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--card-bg);border:1px solid var(--border-bright);border-radius:var(--r6);box-shadow:var(--shadow-md);z-index:200;display:none;min-width:160px;overflow:hidden}
+.export-dropdown.show{display:block;animation:dropIn 120ms var(--ease-out)}
+.export-dropdown button{display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;transition:background var(--transition)}
+.export-dropdown button:hover{background:var(--hover-bg)}
+@keyframes dropIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN CONTENT AREA
+   ═══════════════════════════════════════════════════════════════════ */
+.main-content{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative;padding-bottom:32px}
+
+/* CARDS VIEW */
+.cards-container{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;display:flex;flex-direction:column;gap:8px}
+
+/* TOKEN CARD */
+.token-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r10);padding:14px 16px;cursor:pointer;transition:all var(--transition);position:relative;overflow:hidden}
+.token-card:hover{border-color:var(--border-bright);box-shadow:var(--shadow-sm);transform:translateY(-1px)}
+.token-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim)}
+.token-card.kb-focus{outline:2px solid var(--accent);outline-offset:2px}
+.token-card.expired{opacity:0.55}
+.token-card.expired:hover{opacity:0.75}
+.token-card.entering{animation:cardEnter 300ms var(--spring)}
+@keyframes cardEnter{from{opacity:0;transform:translateY(-12px) scale(.98)}to{opacity:1;transform:none}}
+
+/* Card pulse for <1m warning */
+.token-card.critical-pulse{animation:borderPulse 1.5s ease infinite}
+@keyframes borderPulse{0%,100%{border-color:var(--red);box-shadow:0 0 0 0 rgba(229,69,59,0)}50%{border-color:var(--red);box-shadow:0 0 0 4px rgba(229,69,59,0.15)}}
+
+.card-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.card-type-icon{width:32px;height:32px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-type-icon svg{width:18px;height:18px}
+.card-type-icon.bearer{background:var(--blue-dim);color:var(--blue)}
+.card-type-icon.bearer svg{fill:var(--blue)}
+.card-type-icon.mwc{background:var(--purple-dim);color:var(--purple)}
+.card-type-icon.mwc svg{fill:var(--purple)}
+.card-type-icon.s2s{background:var(--teal-dim);color:var(--teal)}
+.card-type-icon.s2s svg{fill:var(--teal)}
+.card-type-icon.obo{background:var(--amber-dim);color:var(--amber)}
+.card-type-icon.obo svg{fill:var(--amber)}
+
+.card-title-group{flex:1;min-width:0;overflow:hidden}
+.card-type-label{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+.card-type-label.bearer{color:var(--blue)}
+.card-type-label.mwc{color:var(--purple)}
+.card-type-label.s2s{color:var(--teal)}
+.card-type-label.obo{color:var(--amber)}
+.card-audience{font-size:11px;color:var(--text-2);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* TTL Ring */
+.ttl-ring-wrap{position:relative;width:44px;height:44px;flex-shrink:0}
+.ttl-ring-wrap svg{width:44px;height:44px;transform:rotate(-90deg)}
+.ttl-ring-bg{fill:none;stroke:var(--border);stroke-width:3}
+.ttl-ring-fill{fill:none;stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset 1s linear,stroke 2s ease}
+.ttl-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:-0.5px;overflow:hidden;text-overflow:ellipsis;max-width:44px;text-align:center}
+.ttl-text.green{color:var(--green)}
+.ttl-text.amber{color:var(--amber)}
+.ttl-text.red{color:var(--red)}
+.ttl-text.expired{color:var(--red);font-size:13px;letter-spacing:0}
+
+/* Card sparkline */
+.card-sparkline{display:flex;align-items:flex-end;gap:1px;height:24px;flex-shrink:0;margin-left:8px;opacity:0.5;transition:opacity var(--transition)}
+.token-card:hover .card-sparkline{opacity:1}
+.card-sparkline .bar{width:3px;background:var(--text-3);border-radius:1px;transition:height 200ms ease}
+.card-sparkline .bar.active{background:var(--accent)}
+
+/* Card progress bar */
+.card-progress{height:4px;background:var(--bg-4);border-radius:2px;overflow:hidden;margin:8px 0 6px}
+.card-progress-fill{height:100%;border-radius:2px;transition:width 1s linear,background-color 2s ease}
+.card-progress-fill.green{background:var(--green)}
+.card-progress-fill.amber{background:var(--amber)}
+.card-progress-fill.red{background:var(--red)}
+.card-progress-fill.grey{background:var(--text-3)}
+
+.card-meta{display:flex;align-items:center;gap:16px;font-size:11px;color:var(--text-2)}
+.card-meta span{white-space:nowrap}
+.card-meta .mono{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+.card-meta .warning-tag{color:var(--amber);font-weight:600;display:flex;align-items:center;gap:4px}
+.card-meta .expired-tag{color:var(--red);font-weight:600}
+.card-meta .replaced-tag{color:var(--text-3);font-style:italic}
+.card-meta .usage-tag{display:flex;align-items:center;gap:3px}
+.card-meta .usage-tag svg{width:12px;height:12px;fill:var(--text-3)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TIMELINE VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+.timeline-container{flex:1;overflow:auto;padding:20px 16px 16px;display:none}
+.timeline-container.active{display:block}
+.cards-container.hidden{display:none}
+
+.timeline-header{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.timeline-header .time-label{font-size:10px;font-family:var(--mono);color:var(--text-3)}
+
+.timeline-canvas{position:relative;min-height:200px}
+.timeline-axis{position:absolute;left:0;right:0;top:0;height:28px;border-bottom:1px solid var(--border)}
+.timeline-tick{position:absolute;top:0;font-size:9px;font-family:var(--mono);color:var(--text-3);transform:translateX(-50%);white-space:nowrap;overflow:hidden}
+.timeline-tick::after{content:'';position:absolute;top:16px;left:50%;width:1px;height:12px;background:var(--border)}
+.timeline-now{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:10;border-radius:1px}
+.timeline-now::before{content:'NOW';position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:8px;font-weight:700;color:var(--red);font-family:var(--mono);letter-spacing:0.5px}
+.timeline-bars{position:relative;margin-top:32px}
+.timeline-row{position:relative;height:36px;margin-bottom:4px;display:flex;align-items:center}
+.timeline-row-label{width:100px;font-size:11px;font-weight:600;flex-shrink:0;padding-right:8px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timeline-row-label.bearer{color:var(--blue)}
+.timeline-row-label.mwc{color:var(--purple)}
+.timeline-row-label.s2s{color:var(--teal)}
+.timeline-row-label.obo{color:var(--amber)}
+.timeline-row-track{flex:1;position:relative;height:24px}
+.timeline-bar{position:absolute;height:24px;border-radius:var(--r4);cursor:pointer;transition:filter var(--transition),transform var(--transition);display:flex;align-items:center;padding:0 8px;font-size:10px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.timeline-bar:hover{filter:brightness(1.1);transform:scaleY(1.15)}
+.timeline-bar.bearer{background:var(--blue)}
+.timeline-bar.mwc{background:var(--purple)}
+.timeline-bar.s2s{background:var(--teal)}
+.timeline-bar.obo{background:var(--amber)}
+.timeline-bar.expired{opacity:0.45}
+.timeline-bar.selected{outline:2px solid var(--text);outline-offset:1px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.detail-panel{position:absolute;bottom:32px;left:0;right:0;height:0;overflow:hidden;background:var(--detail-bg);border-top:2px solid var(--accent);z-index:50;transition:height 200ms var(--ease-out);display:flex;flex-direction:column}
+.detail-panel.open{height:340px}
+/* M4: Extra scroll space when detail panel is open */
+.cards-container.has-detail{padding-bottom:360px}
+.detail-resize{height:6px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.detail-resize::after{content:'';width:32px;height:3px;border-radius:2px;background:var(--border-bright)}
+.detail-header{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.detail-title{font-weight:700;font-size:13px}
+.detail-aud{font-size:11px;font-family:var(--mono);color:var(--text-2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-close{width:28px;height:28px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-3);transition:all var(--transition)}
+.detail-close:hover{background:var(--hover-bg);color:var(--text)}
+.detail-body{flex:1;overflow-y:auto;padding:12px 16px;display:flex;gap:16px}
+.detail-col{flex:1;min-width:0}
+
+/* JWT Panels */
+.jwt-panel{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--r6);overflow:hidden;margin-bottom:12px}
+.jwt-panel-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-3)}
+.jwt-panel-body{padding:8px 12px;font-family:var(--mono);font-size:11px;line-height:1.6}
+.jwt-row{display:flex;gap:8px;align-items:baseline}
+.jwt-key{color:var(--text-3);min-width:100px;flex-shrink:0}
+.jwt-val{color:var(--text);word-break:break-all}
+.jwt-val.highlight{background:var(--accent-dim);padding:1px 4px;border-radius:2px;color:var(--accent);font-weight:600}
+.jwt-val.roles{display:flex;flex-wrap:wrap;gap:4px}
+.jwt-role-tag{background:var(--accent-dim);color:var(--accent);padding:1px 6px;border-radius:var(--r4);font-size:10px;font-weight:600}
+
+/* Usage Stream */
+.usage-panel{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--r6);overflow:hidden;flex:1;display:flex;flex-direction:column}
+.usage-panel-header{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);padding:6px 12px;border-bottom:1px solid var(--border);background:var(--bg-3);display:flex;align-items:center;gap:6px}
+.usage-panel-body{flex:1;overflow-y:auto;padding:4px 0}
+.usage-row{display:flex;align-items:center;gap:8px;padding:3px 12px;font-size:11px;transition:background var(--transition)}
+.usage-row:hover{background:var(--hover-bg)}
+.usage-time{font-family:var(--mono);font-size:10px;color:var(--text-3);flex-shrink:0;width:56px}
+.usage-method{font-family:var(--mono);font-size:10px;font-weight:700;flex-shrink:0;width:36px}
+.usage-method.get{color:var(--green)}
+.usage-method.post{color:var(--blue)}
+.usage-method.put{color:var(--amber)}
+.usage-method.delete{color:var(--red)}
+.usage-method.patch{color:var(--purple)}
+.usage-path{font-family:var(--mono);font-size:11px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.usage-status{font-family:var(--mono);font-size:10px;font-weight:600;flex-shrink:0;width:32px}
+.usage-status.s2xx{color:var(--green)}
+.usage-status.s4xx{color:var(--amber)}
+.usage-status.s5xx{color:var(--red)}
+
+/* Detail footer */
+.detail-footer{display:flex;align-items:center;gap:8px;padding:8px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.detail-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:var(--r6);font-size:11px;font-weight:600;transition:all var(--transition);border:1px solid var(--border)}
+.detail-btn:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.detail-btn svg{width:13px;height:13px;fill:currentColor}
+.detail-btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.detail-btn.primary:hover{filter:brightness(1.1)}
+.sensitive-banner{margin-left:auto;font-size:10px;color:var(--amber);font-weight:600;display:flex;align-items:center;gap:4px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:12px;padding:40px;text-align:center;animation:fadeIn 300ms ease}
+.empty-icon{width:56px;height:56px;border-radius:50%;background:var(--bg-3);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.empty-icon svg{width:28px;height:28px;fill:var(--text-3)}
+.empty-title{font-size:15px;font-weight:700;color:var(--text)}
+.empty-hint{font-size:12px;color:var(--text-3);max-width:320px;line-height:1.5}
+.empty-state.fading{animation:fadeOut 150ms ease forwards}
+@keyframes fadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+@keyframes fadeOut{to{opacity:0;transform:scale(.97)}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOOLTIP (body-level, fixed)
+   ═══════════════════════════════════════════════════════════════════ */
+.hover-tooltip{position:fixed;z-index:500;background:var(--card-bg);border:1px solid var(--border-bright);border-radius:var(--r6);box-shadow:var(--shadow-md);padding:10px 12px;font-size:11px;pointer-events:none;display:none;opacity:0;transition:opacity 120ms ease;max-width:300px;line-height:1.5}
+.hover-tooltip .tip-row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}
+.hover-tooltip .tip-key{color:var(--text-3)}
+.hover-tooltip .tip-val{font-family:var(--mono);font-weight:600;color:var(--text)}
+
+/* Claim tooltip */
+.claim-tooltip{position:fixed;z-index:600;background:var(--card-bg);border:1px solid var(--border-bright);border-radius:var(--r6);box-shadow:var(--shadow-md);padding:8px 12px;font-size:11px;pointer-events:none;display:none;opacity:0;transition:opacity 120ms ease;max-width:260px;line-height:1.5;color:var(--text-2)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container{position:fixed;bottom:44px;right:16px;z-index:700;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.toast{background:var(--card-bg);border:1px solid var(--border-bright);border-radius:var(--r6);padding:8px 14px;font-size:12px;box-shadow:var(--shadow-md);animation:toastIn 200ms var(--spring);display:flex;align-items:center;gap:6px}
+.toast .toast-icon{font-weight:700;color:var(--accent)}
+.toast.leaving{animation:toastOut 200ms ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes toastOut{to{opacity:0;transform:translateY(4px) scale(.96)}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD FOOTER (fixed)
+   ═══════════════════════════════════════════════════════════════════ */
+.kbd-hint{position:fixed;bottom:0;left:0;right:0;z-index:150;font-size:10px;color:var(--text-2);display:flex;align-items:center;gap:16px;padding:6px 16px;height:32px;background:var(--bg-3);border-top:1px solid var(--border-bright);box-shadow:0 -2px 8px rgba(0,0,0,0.06)}
+kbd{padding:1px 5px;border:1px solid var(--border-bright);border-radius:3px;font-family:var(--mono);font-size:10px;background:var(--bg-2)}
+.kbd-hint .spacer{flex:1}
+.kbd-hint .state-ctrl{display:flex;align-items:center;gap:6px}
+.state-gear{width:22px;height:22px;border-radius:var(--r4);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--transition)}
+.state-gear:hover{background:var(--hover-bg)}
+.state-gear svg{width:14px;height:14px;fill:var(--text-3)}
+.state-menu{position:fixed;bottom:36px;right:16px;background:var(--card-bg);border:1px solid var(--border-bright);border-radius:var(--r6);box-shadow:var(--shadow-lg);z-index:600;display:none;min-width:210px;overflow:hidden;padding:4px 0}
+.state-menu.show{display:block;animation:dropIn 120ms var(--ease-out)}
+.state-menu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 14px;font-size:12px;transition:background var(--transition)}
+.state-menu button:hover{background:var(--hover-bg)}
+.state-menu button .sm-icon{width:16px;text-align:center;font-size:13px}
+.state-menu .divider{height:1px;background:var(--border);margin:4px 0}
+</style>
+</head>
+<body>
+<!-- ═══════════════════════════════════════════════════════════════════
+     DOM ELEMENTS (all dynamic elements BEFORE script)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="app">
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <div class="tab-bar-left">
+      <div class="tab" data-tab="logs">Logs</div>
+      <div class="tab" data-tab="telemetry">Telemetry</div>
+      <div class="tab" data-tab="sysfiles">System Files</div>
+      <div class="tab" data-tab="spark">Spark</div>
+      <div class="tab active" data-tab="internals"><span class="tab-dot"></span> Internals: Tokens</div>
+      <div class="tab-indicator" id="tabIndicator"></div>
+    </div>
+    <div class="tab-bar-right">
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme (Ctrl+Shift+T)">
+        <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar" id="toolbar">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+      <input type="text" id="filterInput" placeholder="Filter tokens by audience, claim..." autocomplete="off" spellcheck="false">
+    </div>
+    <span class="toolbar-meta" id="tokenCount"></span>
+
+    <div class="type-pills" id="typePills">
+      <button class="pill active-all" data-type="all">All<span class="pill-count" id="countAll"></span></button>
+      <button class="pill" data-type="bearer">Bearer<span class="pill-count" id="countBearer"></span></button>
+      <button class="pill" data-type="mwc">MWC<span class="pill-count" id="countMwc"></span></button>
+      <button class="pill" data-type="s2s">S2S<span class="pill-count" id="countS2s"></span></button>
+      <button class="pill" data-type="obo">OBO<span class="pill-count" id="countObo"></span></button>
+    </div>
+
+    <div class="toolbar-separator"></div>
+
+    <button class="toolbar-btn" id="timelineBtn">
+      <svg viewBox="0 0 24 24"><path d="M3 14h4v-4H3v4zm0 5h4v-4H3v4zM3 9h4V5H3v4zm5 5h13v-4H8v4zm0 5h13v-4H8v4zM8 5v4h13V5H8z"/></svg>
+      Timeline
+    </button>
+
+    <div class="export-wrap">
+      <button class="toolbar-btn" id="exportBtn">
+        <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+        Export
+      </button>
+      <div class="export-dropdown" id="exportDropdown">
+        <button data-format="json">Export as JSON</button>
+        <button data-format="csv">Export as CSV</button>
+        <button data-format="curl">Export all as cURL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content" id="mainContent">
+    <!-- Cards View -->
+    <div class="cards-container" id="cardsContainer"></div>
+    <!-- Timeline View -->
+    <div class="timeline-container" id="timelineContainer"></div>
+
+    <!-- Detail Panel -->
+    <div class="detail-panel" id="detailPanel">
+      <div class="detail-resize" id="detailResize"></div>
+      <div class="detail-header">
+        <span class="detail-title" id="detailTitle"></span>
+        <span class="detail-aud" id="detailAud"></span>
+        <button class="detail-close" id="detailClose">&#10005;</button>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+      <div class="detail-footer">
+        <button class="detail-btn primary" id="copyTokenBtn">
+          <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          Copy Token
+        </button>
+        <button class="detail-btn" id="copyCurlBtn">
+          <svg viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+          Copy as cURL
+        </button>
+        <span class="sensitive-banner">&#9888; Sensitive data &#8212; do not share tokens</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip elements (body-level, BEFORE script) -->
+<div class="hover-tooltip" id="hoverTooltip"></div>
+<div class="claim-tooltip" id="claimTooltip"></div>
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- State controller menu -->
+<div class="state-menu" id="stateMenu">
+  <button onclick="SC.loadDemoData()"><span class="sm-icon">&#9654;</span> Load demo tokens</button>
+  <button onclick="SC.addToken()"><span class="sm-icon">+</span> Add random token</button>
+  <button onclick="SC.expireNext()"><span class="sm-icon">&#9201;</span> Expire next token</button>
+  <div class="divider"></div>
+  <button onclick="SC.showEmpty()"><span class="sm-icon">&#9675;</span> Empty state</button>
+  <button onclick="SC.toggleTimeline()"><span class="sm-icon">&#9592;</span> Toggle timeline</button>
+  <button onclick="SC.toggleTheme()"><span class="sm-icon">&#9681;</span> Toggle theme</button>
+  <div class="divider"></div>
+  <button onclick="SC.clearAll()"><span class="sm-icon">&#8635;</span> Reset all</button>
+</div>
+
+<!-- Fixed Footer -->
+<div class="kbd-hint">
+  <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate</span>
+  <span><kbd>Enter</kbd> Inspect token</span>
+  <span><kbd>Esc</kbd> Close detail</span>
+  <span><kbd>Ctrl+E</kbd> Export</span>
+  <span><kbd>T</kbd> Timeline toggle</span>
+  <span class="spacer"></span>
+  <span class="state-ctrl">
+    <span class="state-gear" id="stateGear" title="State controller">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+    </span>
+  </span>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG Studio — Tokens Tab Interactive Mock
+   ═══════════════════════════════════════════════════════════════════ */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+/* ─── SVG Icons per token type ─── */
+const TOKEN_ICONS = {
+  bearer: '<svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>',
+  mwc: '<svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>',
+  s2s: '<svg viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>',
+  obo: '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/><path d="M19 11h-2l3 3 3-3h-2V8h-2v3z" opacity=".7"/></svg>'
+};
+
+const TOKEN_COLORS = { bearer:'var(--blue)', mwc:'var(--purple)', s2s:'var(--teal)', obo:'var(--amber)' };
+const TOKEN_DIMS = { bearer:'var(--blue-dim)', mwc:'var(--purple-dim)', s2s:'var(--teal-dim)', obo:'var(--amber-dim)' };
+
+/* ─── Claim descriptions for tooltips ─── */
+const CLAIM_DESCRIPTIONS = {
+  aud: 'Audience — the intended recipient of the token (API or resource)',
+  iss: 'Issuer — the identity provider that issued this token',
+  iat: 'Issued At — Unix timestamp of when the token was created',
+  nbf: 'Not Before — token is not valid before this time',
+  exp: 'Expiration — Unix timestamp when the token expires',
+  oid: 'Object ID — unique identifier for the user/principal in Azure AD',
+  tid: 'Tenant ID — the Azure AD tenant that issued the token',
+  preferred_username: 'Username — the human-readable identifier for the user',
+  roles: 'Roles — application-level permissions granted to this token',
+  scp: 'Scopes — delegated permissions granted via user consent',
+  sub: 'Subject — unique identifier for the token subject',
+  appid: 'Application ID — the client application that requested the token',
+  workspaceId: 'Fabric Workspace ID — the workspace this token is scoped to',
+  artifactId: 'Artifact ID — the specific lakehouse/artifact this token targets',
+  capacityId: 'Capacity ID — the Fabric capacity (compute tier) backing this workspace',
+  ver: 'Version — the version of the access token format'
+};
+
+const SECURITY_CLAIMS = new Set(['exp','aud','roles','scp','iss','tid']);
+
+/* ─── Mock Data ─── */
+const NOW = Date.now();
+function ts(minutesAgo) { return NOW - minutesAgo * 60000; }
+function tsF(minutesFuture) { return NOW + minutesFuture * 60000; }
+
+function makeToken(cfg) {
+  return {
+    id: cfg.id || ('tok-' + Math.random().toString(36).slice(2,8)),
+    type: cfg.type,
+    audience: cfg.audience,
+    issuedAt: cfg.issuedAt,
+    expiresAt: cfg.expiresAt,
+    usageCount: cfg.usageCount || 0,
+    replaced: cfg.replaced || false,
+    replacedBy: cfg.replacedBy || null,
+    jwtHeader: cfg.jwtHeader || { alg:'RS256', typ:'JWT', kid:'2ZQpJ6GnzQ2k4K8YN0LhXF3Cy8t_' + Math.random().toString(36).slice(2,6) },
+    jwtPayload: cfg.jwtPayload || {},
+    usage: cfg.usage || [],
+    sparkline: cfg.sparkline || []
+  };
+}
+
+const BEARER_USAGE = [
+  { time: ts(18.5), method:'GET', path:'/v1/workspaces', status:200 },
+  { time: ts(18.4), method:'GET', path:'/v1/workspaces/a1b2c3d4/lakehouses', status:200 },
+  { time: ts(18.3), method:'GET', path:'/v1/workspaces/a1b2c3d4/items', status:200 },
+  { time: ts(17), method:'GET', path:'/v1/workspaces/a1b2c3d4/lakehouses/lh-001/tables', status:200 },
+  { time: ts(16.5), method:'POST', path:'/v1/workspaces/a1b2c3d4/lakehouses/lh-001/jobs/instances', status:202 },
+  { time: ts(15), method:'GET', path:'/v1/workspaces/a1b2c3d4/lakehouses/lh-001/jobs/instances/job-42', status:200 },
+  { time: ts(14), method:'GET', path:'/v1/longRunningOperations/op-789', status:200 },
+  { time: ts(12), method:'GET', path:'/v1/capacities', status:200 },
+  { time: ts(10), method:'PATCH', path:'/v1/workspaces/a1b2c3d4/lakehouses/lh-001', status:200 },
+  { time: ts(8), method:'GET', path:'/v1/admin/tenantsettings', status:403 },
+];
+
+const MWC_USAGE = [
+  { time: ts(12), method:'POST', path:'/livyApi/versions/2023-12-01/sparkPools/pool-01/sessions', status:200 },
+  { time: ts(11), method:'GET', path:'/livyApi/versions/2023-12-01/sparkPools/pool-01/sessions/3', status:200 },
+  { time: ts(10), method:'POST', path:'/livyApi/versions/2023-12-01/sparkPools/pool-01/sessions/3/statements', status:200 },
+  { time: ts(9), method:'GET', path:'/livyApi/versions/2023-12-01/sparkPools/pool-01/sessions/3/statements/0', status:200 },
+  { time: ts(7), method:'PUT', path:'/webhdfs/v1/Tables/SalesData/_delta_log/00000.json', status:201 },
+  { time: ts(5), method:'GET', path:'/webhdfs/v1/Tables/SalesData/_delta_log/', status:200 },
+];
+
+const S2S_USAGE = [
+  { time: ts(65), method:'POST', path:'/api/internal/catalog/resolve', status:200 },
+  { time: ts(62), method:'POST', path:'/api/internal/catalog/resolve', status:200 },
+  { time: ts(58), method:'GET', path:'/api/internal/health', status:200 },
+  { time: ts(50), method:'POST', path:'/api/internal/tokens/exchange', status:200 },
+  { time: ts(45), method:'GET', path:'/api/internal/config/featureflags', status:200 },
+];
+
+const OBO_USAGE = [
+  { time: ts(4), method:'GET', path:'/v1.0/me', status:200 },
+  { time: ts(3.5), method:'GET', path:'/v1.0/me/memberOf', status:200 },
+  { time: ts(2), method:'GET', path:'/v1.0/groups/grp-abc/members', status:200 },
+];
+
+const MWC2_USAGE = [
+  { time: ts(3), method:'POST', path:'/livyApi/versions/2023-12-01/sparkPools/pool-02/sessions', status:200 },
+  { time: ts(2), method:'GET', path:'/livyApi/versions/2023-12-01/sparkPools/pool-02/sessions/1', status:200 },
+];
+
+const DEMO_TOKENS = [
+  makeToken({
+    id:'tok-bearer-1', type:'bearer',
+    audience:'api.fabric.microsoft.com',
+    issuedAt: ts(55), expiresAt: tsF(42.3),
+    usageCount:47,
+    jwtPayload:{
+      aud:'api.fabric.microsoft.com',
+      iss:'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0',
+      iat:Math.floor(ts(55)/1000), nbf:Math.floor(ts(55)/1000), exp:Math.floor(tsF(42.3)/1000),
+      oid:'8a4f2c1e-3b5d-4e6f-a7c8-9d0e1f2a3b4c',
+      tid:'72f988bf-86f1-41af-91ab-2d7cd011db47',
+      preferred_username:'hemant@microsoft.com',
+      roles:['Workspace.Read.All','Lakehouse.ReadWrite.All'],
+      scp:'user_impersonation',
+      ver:'2.0'
+    },
+    usage: BEARER_USAGE,
+    sparkline:[3,5,8,12,6,9,4,7,11,8,5,3,6,10,7,4,2,8,5,3]
+  }),
+  makeToken({
+    id:'tok-mwc-1', type:'mwc',
+    audience:'lakehouse-TestLH-01-capacity-SKU-F64',
+    issuedAt: ts(15), expiresAt: tsF(8.2),
+    usageCount:12,
+    jwtPayload:{
+      aud:'lakehouse-TestLH-01-capacity-SKU-F64',
+      iss:'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0',
+      iat:Math.floor(ts(15)/1000), nbf:Math.floor(ts(15)/1000), exp:Math.floor(tsF(8.2)/1000),
+      oid:'8a4f2c1e-3b5d-4e6f-a7c8-9d0e1f2a3b4c',
+      tid:'72f988bf-86f1-41af-91ab-2d7cd011db47',
+      workspaceId:'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      artifactId:'lh-001-TestLH-01',
+      capacityId:'cap-F64-westus2-prod',
+      ver:'2.0'
+    },
+    usage: MWC_USAGE,
+    sparkline:[1,2,1,3,2,1,2,4,2,1]
+  }),
+  makeToken({
+    id:'tok-s2s-1', type:'s2s',
+    audience:'internal-service-catalog',
+    issuedAt: ts(63), expiresAt: ts(3),
+    usageCount:23,
+    replaced:true, replacedBy:'tok-mwc-2',
+    jwtPayload:{
+      aud:'internal-service-catalog',
+      iss:'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0',
+      iat:Math.floor(ts(63)/1000), nbf:Math.floor(ts(63)/1000), exp:Math.floor(ts(3)/1000),
+      appid:'d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a',
+      tid:'72f988bf-86f1-41af-91ab-2d7cd011db47',
+      roles:['Service.Internal.All'],
+      sub:'d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a',
+      ver:'1.0'
+    },
+    usage: S2S_USAGE,
+    sparkline:[5,4,6,3,8,2,5,7,3,1]
+  }),
+  makeToken({
+    id:'tok-obo-1', type:'obo',
+    audience:'https://graph.microsoft.com',
+    issuedAt: ts(2), expiresAt: tsF(58),
+    usageCount:3,
+    jwtPayload:{
+      aud:'https://graph.microsoft.com',
+      iss:'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0',
+      iat:Math.floor(ts(2)/1000), nbf:Math.floor(ts(2)/1000), exp:Math.floor(tsF(58)/1000),
+      oid:'8a4f2c1e-3b5d-4e6f-a7c8-9d0e1f2a3b4c',
+      tid:'72f988bf-86f1-41af-91ab-2d7cd011db47',
+      preferred_username:'hemant@microsoft.com',
+      scp:'User.Read GroupMember.Read.All',
+      ver:'2.0'
+    },
+    usage: OBO_USAGE,
+    sparkline:[1,0,1,1,0,0,1,0,0,1]
+  }),
+  makeToken({
+    id:'tok-mwc-2', type:'mwc',
+    audience:'lakehouse-TestLH-01-capacity-SKU-F64',
+    issuedAt: ts(3), expiresAt: tsF(55),
+    usageCount:2,
+    jwtPayload:{
+      aud:'lakehouse-TestLH-01-capacity-SKU-F64',
+      iss:'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0',
+      iat:Math.floor(ts(3)/1000), nbf:Math.floor(ts(3)/1000), exp:Math.floor(tsF(55)/1000),
+      oid:'8a4f2c1e-3b5d-4e6f-a7c8-9d0e1f2a3b4c',
+      tid:'72f988bf-86f1-41af-91ab-2d7cd011db47',
+      workspaceId:'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+      artifactId:'lh-001-TestLH-01',
+      capacityId:'cap-F64-westus2-prod',
+      ver:'2.0'
+    },
+    usage: MWC2_USAGE,
+    sparkline:[0,0,0,0,0,0,0,1,0,1]
+  })
+];
+
+/* ─── State ─── */
+let tokens = [];
+let selectedId = null;
+let kbIndex = -1;
+let typeFilter = 'all';
+let filterText = '';
+let timelineMode = false;
+let detailOpen = false;
+let tickInterval = null;
+let isTicking = false;
+let detailHeight = 340;
+
+/* ─── Helpers ─── */
+function isExpired(tok) { return tok.expiresAt <= Date.now(); }
+function ttlMs(tok) { return Math.max(0, tok.expiresAt - Date.now()); }
+function ttlSec(tok) { return Math.floor(ttlMs(tok) / 1000); }
+function ttlMin(tok) { return Math.floor(ttlMs(tok) / 60000); }
+function ttlFrac(tok) {
+  const total = tok.expiresAt - tok.issuedAt;
+  if (total <= 0) return 0;
+  return Math.max(0, Math.min(1, (tok.expiresAt - Date.now()) / total));
+}
+function ttlColor(tok) {
+  if (isExpired(tok)) return 'grey';
+  const m = ttlMin(tok);
+  if (m >= 10) return 'green';
+  if (m >= 5) return 'amber';
+  return 'red';
+}
+function fmtTTL(tok) {
+  if (isExpired(tok)) {
+    const ago = Math.floor((Date.now() - tok.expiresAt) / 60000);
+    return ago < 1 ? 'EXPIRED <1m ago' : `EXPIRED ${ago}m ago`;
+  }
+  const s = ttlSec(tok);
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+/* Short TTL text for ring — "✕" for expired, mm:ss otherwise */
+function fmtTTLRing(tok) {
+  if (isExpired(tok)) return '\u2715';
+  const s = ttlSec(tok);
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+function fmtTime(ms) {
+  const d = new Date(ms);
+  return d.toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+function fmtTimestamp(unix) {
+  return new Date(unix * 1000).toLocaleString('en-US', { hour12:false, year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+/* ─── SVG TTL Ring ─── */
+const RING_R = 18, RING_C = 2 * Math.PI * RING_R;
+function ringSVG(tok) {
+  const frac = ttlFrac(tok);
+  const color = ttlColor(tok);
+  const strokeColor = color === 'green' ? 'var(--green)' : color === 'amber' ? 'var(--amber)' : color === 'red' ? 'var(--red)' : 'var(--text-3)';
+  const offset = RING_C * (1 - frac);
+  return `<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="${RING_R}" class="ttl-ring-bg"/><circle cx="22" cy="22" r="${RING_R}" class="ttl-ring-fill" stroke="${strokeColor}" stroke-dasharray="${RING_C}" stroke-dashoffset="${offset}"/></svg>`;
+}
+
+/* ─── Sparkline ─── */
+function sparklineHTML(data) {
+  if (!data || !data.length) return '';
+  const max = Math.max(...data, 1);
+  return '<div class="card-sparkline">' + data.map((v,i) => {
+    const h = Math.max(2, (v/max)*22);
+    const cls = i === data.length - 1 ? 'bar active' : 'bar';
+    return `<div class="${cls}" style="height:${h}px"></div>`;
+  }).join('') + '</div>';
+}
+
+/* ─── Tab Indicator ─── */
+function updateTabIndicator() {
+  const tab = document.querySelector('.tab.active');
+  const bar = $('#tabIndicator');
+  if (!tab || !bar) return;
+  const pr = tab.parentElement.getBoundingClientRect();
+  const r = tab.getBoundingClientRect();
+  bar.style.left = (r.left - pr.left) + 'px';
+  bar.style.width = r.width + 'px';
+}
+
+/* ─── Filtering ─── */
+function getVisible() {
+  return tokens.filter(tok => {
+    if (typeFilter !== 'all' && tok.type !== typeFilter) return false;
+    if (filterText) {
+      const ft = filterText.toLowerCase();
+      const searchable = (tok.type + ' ' + tok.audience + ' ' + JSON.stringify(tok.jwtPayload)).toLowerCase();
+      if (!searchable.includes(ft)) return false;
+    }
+    return true;
+  }).sort((a,b) => {
+    const aExp = isExpired(a), bExp = isExpired(b);
+    if (aExp !== bExp) return aExp ? 1 : -1;
+    return ttlSec(a) - ttlSec(b);
+  });
+}
+
+function updateCounts() {
+  const all = tokens.length;
+  const counts = { bearer:0, mwc:0, s2s:0, obo:0 };
+  tokens.forEach(t => counts[t.type] = (counts[t.type]||0) + 1);
+  $('#countAll').textContent = all ? ` ${all}` : '';
+  $('#countBearer').textContent = counts.bearer ? ` ${counts.bearer}` : '';
+  $('#countMwc').textContent = counts.mwc ? ` ${counts.mwc}` : '';
+  $('#countS2s').textContent = counts.s2s ? ` ${counts.s2s}` : '';
+  $('#countObo').textContent = counts.obo ? ` ${counts.obo}` : '';
+  const vis = getVisible().length;
+  $('#tokenCount').textContent = vis === all ? `${all} tokens` : `${vis} of ${all} tokens`;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CARD RENDERING
+   ═══════════════════════════════════════════════════════════════════ */
+function buildCardHTML(tok) {
+  const exp = isExpired(tok);
+  const color = ttlColor(tok);
+  const frac = ttlFrac(tok);
+  const pct = Math.round(frac * 100);
+  const critical = !exp && ttlMin(tok) < 1;
+  const warning = !exp && ttlMin(tok) < 10 && ttlMin(tok) >= 1;
+
+  let cls = 'token-card';
+  if (exp) cls += ' expired';
+  if (critical) cls += ' critical-pulse';
+  if (tok.id === selectedId) cls += ' selected';
+
+  let warningHTML = '';
+  if (warning) warningHTML = `<span class="warning-tag">&#9888; Expires in &lt; ${ttlMin(tok)+1} min</span>`;
+  if (exp && tok.replaced) warningHTML = `<span class="replaced-tag">(replaced by newer token)</span>`;
+  else if (exp) warningHTML = `<span class="expired-tag">EXPIRED ${fmtTTL(tok).replace('EXPIRED ','')}</span>`;
+
+  return `<div class="${cls}" data-id="${tok.id}" id="card-${tok.id}">
+    <div class="card-top">
+      <div class="card-type-icon ${tok.type}">${TOKEN_ICONS[tok.type]}</div>
+      <div class="card-title-group">
+        <div class="card-type-label ${tok.type}">${tok.type.toUpperCase()}</div>
+        <div class="card-audience" title="${tok.audience}">${tok.audience}</div>
+      </div>
+      ${sparklineHTML(tok.sparkline)}
+      <div class="ttl-ring-wrap" data-id="${tok.id}">
+        ${ringSVG(tok)}
+        <div class="ttl-text ${color}" data-ttl-id="${tok.id}">${fmtTTLRing(tok)}</div>
+      </div>
+    </div>
+    <div class="card-progress"><div class="card-progress-fill ${color}" style="width:${pct}%"></div></div>
+    <div class="card-meta">
+      <span class="mono">Issued ${fmtTime(tok.issuedAt)}</span>
+      <span class="mono">${exp ? 'Expired' : 'Expires'} ${fmtTime(tok.expiresAt)}</span>
+      <span class="usage-tag"><svg viewBox="0 0 24 24"><path d="M3.4 20.4l17.45-7.48c.81-.35.81-1.49 0-1.84L3.4 3.6c-.66-.29-1.39.2-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg> ${tok.usageCount} calls</span>
+      ${warningHTML}
+    </div>
+  </div>`;
+}
+
+function renderCards() {
+  const container = $('#cardsContainer');
+  const vis = getVisible();
+  updateCounts();
+
+  if (vis.length === 0 && tokens.length === 0) {
+    showEmptyState();
+    return;
+  }
+  if (vis.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" fill="var(--text-3)"/></svg></div><div class="empty-title">No matching tokens</div><div class="empty-hint">Try adjusting your filter or type selection</div></div>';
+    return;
+  }
+
+  container.innerHTML = vis.map(buildCardHTML).join('');
+
+  container.querySelectorAll('.token-card').forEach(el => {
+    el.addEventListener('click', () => selectToken(el.dataset.id));
+  });
+}
+
+function showEmptyState() {
+  const container = $('#cardsContainer');
+  container.innerHTML = `<div class="empty-state" id="emptyState">
+    <div class="empty-icon"><svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z" fill="var(--text-3)"/></svg></div>
+    <div class="empty-title">No tokens captured</div>
+    <div class="empty-hint">Tokens will appear here when your FLT service makes authenticated API calls. Deploy to a lakehouse to start capturing.</div>
+  </div>`;
+}
+
+/* ─── Live tick update (efficient — only TTL text + ring + progress) ─── */
+function tickCards() {
+  if (isTicking) return;
+  isTicking = true;
+  try {
+    let needsFullRender = false;
+    tokens.forEach(tok => {
+      const ttlEl = document.querySelector(`[data-ttl-id="${tok.id}"]`);
+      if (!ttlEl) return;
+      const exp = isExpired(tok);
+      const color = ttlColor(tok);
+      const newText = fmtTTLRing(tok);
+
+      if (ttlEl.textContent !== newText) {
+        ttlEl.textContent = newText;
+        ttlEl.className = 'ttl-text ' + (exp ? 'expired' : color);
+      }
+
+      const ringWrap = document.querySelector(`.ttl-ring-wrap[data-id="${tok.id}"]`);
+      if (ringWrap) {
+        const circle = ringWrap.querySelector('.ttl-ring-fill');
+        if (circle) {
+          const frac = ttlFrac(tok);
+          const offset = RING_C * (1 - frac);
+          circle.style.strokeDashoffset = offset;
+          const strokeColor = color === 'green' ? 'var(--green)' : color === 'amber' ? 'var(--amber)' : color === 'red' ? 'var(--red)' : 'var(--text-3)';
+          circle.style.stroke = strokeColor;
+        }
+      }
+
+      const card = document.getElementById('card-' + tok.id);
+      if (card) {
+        const fill = card.querySelector('.card-progress-fill');
+        if (fill) {
+          const pct = Math.round(ttlFrac(tok) * 100);
+          fill.style.width = pct + '%';
+          fill.className = 'card-progress-fill ' + color;
+        }
+        const critical = !exp && ttlMin(tok) < 1;
+        if (critical && !card.classList.contains('critical-pulse')) card.classList.add('critical-pulse');
+        if (!critical && card.classList.contains('critical-pulse')) card.classList.remove('critical-pulse');
+        if (exp && !card.classList.contains('expired')) {
+          card.classList.add('expired');
+          card.classList.remove('critical-pulse');
+          needsFullRender = true;
+        }
+      }
+    });
+    if (needsFullRender) {
+      /* Defer re-render to next frame to avoid recursive tick collision */
+      requestAnimationFrame(() => renderCards());
+    }
+  } finally {
+    isTicking = false;
+  }
+}
+
+function startTicking() {
+  stopTicking();
+  tickInterval = setInterval(tickCards, 1000);
+}
+function stopTicking() {
+  if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+function selectToken(id) {
+  selectedId = id;
+  $$('.token-card').forEach(c => c.classList.toggle('selected', c.dataset.id === id));
+  $$('.timeline-bar').forEach(b => b.classList.toggle('selected', b.dataset.id === id));
+
+  const tok = tokens.find(t => t.id === id);
+  if (!tok) return;
+
+  $('#detailTitle').innerHTML = `<span style="color:${TOKEN_COLORS[tok.type]}">${tok.type.toUpperCase()}</span>`;
+  $('#detailAud').textContent = tok.audience;
+
+  const body = $('#detailBody');
+  const exp = isExpired(tok);
+
+  /* JWT Header */
+  let headerRows = Object.entries(tok.jwtHeader).map(([k,v]) =>
+    `<div class="jwt-row"><span class="jwt-key">${k}</span><span class="jwt-val">${v}</span></div>`
+  ).join('');
+
+  /* JWT Payload */
+  let payloadRows = Object.entries(tok.jwtPayload).map(([k,v]) => {
+    const isSecurity = SECURITY_CLAIMS.has(k);
+    let valHTML;
+    if (k === 'roles' && Array.isArray(v)) {
+      valHTML = `<span class="jwt-val roles">${v.map(r => `<span class="jwt-role-tag">${r}</span>`).join('')}</span>`;
+    } else if (k === 'exp' || k === 'iat' || k === 'nbf') {
+      valHTML = `<span class="jwt-val${isSecurity?' highlight':''}">${v} <span style="color:var(--text-3);font-size:10px">(${fmtTimestamp(v)})</span></span>`;
+    } else {
+      valHTML = `<span class="jwt-val${isSecurity?' highlight':''}">${v}</span>`;
+    }
+    const desc = CLAIM_DESCRIPTIONS[k] || '';
+    return `<div class="jwt-row" ${desc ? `data-claim="${k}" title="${desc}"` : ''}><span class="jwt-key">${k}</span>${valHTML}</div>`;
+  }).join('');
+
+  /* Signature (truncated) */
+  const sigFake = 'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c' + Math.random().toString(36).slice(2,18) + '...';
+
+  /* Usage Stream */
+  let usageRows = tok.usage.map(u => {
+    const mc = u.method.toLowerCase();
+    const sc = u.status < 300 ? 's2xx' : u.status < 500 ? 's4xx' : 's5xx';
+    return `<div class="usage-row"><span class="usage-time">${fmtTime(u.time)}</span><span class="usage-method ${mc}">${u.method}</span><span class="usage-path">${u.path}</span><span class="usage-status ${sc}">${u.status}</span></div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div class="detail-col">
+      <div class="jwt-panel"><div class="jwt-panel-header">JWT Header</div><div class="jwt-panel-body">${headerRows}</div></div>
+      <div class="jwt-panel"><div class="jwt-panel-header">JWT Payload (${Object.keys(tok.jwtPayload).length} claims)</div><div class="jwt-panel-body">${payloadRows}</div></div>
+      <div class="jwt-panel"><div class="jwt-panel-header">Signature (truncated)</div><div class="jwt-panel-body"><div class="jwt-row"><span class="jwt-val" style="color:var(--text-3);font-size:10px;word-break:break-all">${sigFake}</span></div></div></div>
+    </div>
+    <div class="detail-col">
+      <div class="usage-panel">
+        <div class="usage-panel-header">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="var(--text-3)"><path d="M3.4 20.4l17.45-7.48c.81-.35.81-1.49 0-1.84L3.4 3.6c-.66-.29-1.39.2-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z"/></svg>
+          Usage Stream (${tok.usage.length} calls)
+        </div>
+        <div class="usage-panel-body">${usageRows || '<div style="padding:12px;color:var(--text-3);text-align:center">No API calls recorded</div>'}</div>
+      </div>
+    </div>`;
+
+  openDetail();
+
+  /* Claim hover tooltips */
+  body.querySelectorAll('[data-claim]').forEach(el => {
+    el.style.cursor = 'help';
+    el.addEventListener('mouseenter', e => {
+      const desc = CLAIM_DESCRIPTIONS[el.dataset.claim];
+      if (!desc) return;
+      const tip = $('#claimTooltip');
+      tip.textContent = desc;
+      const rect = el.getBoundingClientRect();
+      tip.style.left = (rect.left) + 'px';
+      tip.style.top = (rect.bottom + 6) + 'px';
+      tip.style.display = 'block';
+      requestAnimationFrame(() => tip.style.opacity = '1');
+    });
+    el.addEventListener('mouseleave', () => {
+      const tip = $('#claimTooltip');
+      tip.style.opacity = '0';
+      setTimeout(() => tip.style.display = 'none', 120);
+    });
+  });
+}
+
+function openDetail() {
+  const p = $('#detailPanel');
+  p.style.height = detailHeight + 'px';
+  p.classList.add('open');
+  detailOpen = true;
+  updateCardsPadding();
+}
+function closeDetail() {
+  const p = $('#detailPanel');
+  p.classList.remove('open');
+  p.style.height = '0';
+  detailOpen = false;
+  selectedId = null;
+  $$('.token-card').forEach(c => c.classList.remove('selected'));
+  $$('.timeline-bar').forEach(b => b.classList.remove('selected'));
+  updateCardsPadding();
+}
+function updateCardsPadding() {
+  const cc = $('#cardsContainer');
+  if (detailOpen) {
+    cc.classList.add('has-detail');
+    cc.style.paddingBottom = (detailHeight + 20) + 'px';
+  } else {
+    cc.classList.remove('has-detail');
+    cc.style.paddingBottom = '';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TIMELINE VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+function renderTimeline() {
+  const container = $('#timelineContainer');
+  const vis = getVisible();
+  if (!vis.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-title">No tokens to display</div></div>';
+    return;
+  }
+
+  const allTimes = vis.flatMap(t => [t.issuedAt, t.expiresAt]);
+  let minTime = Math.min(...allTimes);
+  let maxTime = Math.max(...allTimes, Date.now());
+  const pad = (maxTime - minTime) * 0.05;
+  minTime -= pad; maxTime += pad;
+  const span = maxTime - minTime;
+  const toX = t => ((t - minTime) / span) * 100;
+
+  /* Axis ticks — adaptive count based on available width */
+  const containerWidth = container.offsetWidth || window.innerWidth;
+  const tickCount = containerWidth < 600 ? 3 : containerWidth < 900 ? 5 : 8;
+  let ticksHTML = '';
+  for (let i = 0; i <= tickCount; i++) {
+    const t = minTime + (span * i / tickCount);
+    const x = toX(t);
+    ticksHTML += `<div class="timeline-tick" style="left:${x}%">${fmtTime(t)}</div>`;
+  }
+
+  /* Now line */
+  const nowX = toX(Date.now());
+
+  /* Bars */
+  let barsHTML = '';
+  vis.forEach(tok => {
+    const left = toX(tok.issuedAt);
+    const right = toX(Math.min(tok.expiresAt, maxTime));
+    const width = Math.max(1, right - left);
+    const exp = isExpired(tok);
+    barsHTML += `<div class="timeline-row">
+      <div class="timeline-row-label ${tok.type}">${tok.type.toUpperCase()}</div>
+      <div class="timeline-row-track">
+        <div class="timeline-bar ${tok.type}${exp ? ' expired' : ''}${tok.id === selectedId ? ' selected' : ''}" data-id="${tok.id}" style="left:${left}%;width:${width}%" title="${tok.audience} (${fmtTTL(tok)})">${tok.audience.length > 30 ? tok.audience.slice(0,28)+'..' : tok.audience}</div>
+      </div>
+    </div>`;
+  });
+
+  container.innerHTML = `
+    <div class="timeline-canvas">
+      <div class="timeline-axis">${ticksHTML}</div>
+      <div class="timeline-now" style="left:${nowX}%"></div>
+      <div class="timeline-bars">${barsHTML}</div>
+    </div>`;
+
+  container.querySelectorAll('.timeline-bar').forEach(el => {
+    el.addEventListener('click', () => selectToken(el.dataset.id));
+    el.addEventListener('mouseenter', e => showTimelineTooltip(e, el.dataset.id));
+    el.addEventListener('mouseleave', hideTimelineTooltip);
+  });
+}
+
+function showTimelineTooltip(e, id) {
+  const tok = tokens.find(t => t.id === id);
+  if (!tok) return;
+  const tip = $('#hoverTooltip');
+  const exp = isExpired(tok);
+  tip.innerHTML = `
+    <div class="tip-row"><span class="tip-key">Type</span><span class="tip-val" style="color:${TOKEN_COLORS[tok.type]}">${tok.type.toUpperCase()}</span></div>
+    <div class="tip-row"><span class="tip-key">Audience</span><span class="tip-val">${tok.audience}</span></div>
+    <div class="tip-row"><span class="tip-key">TTL</span><span class="tip-val">${fmtTTL(tok)}</span></div>
+    <div class="tip-row"><span class="tip-key">Issued</span><span class="tip-val">${fmtTime(tok.issuedAt)}</span></div>
+    <div class="tip-row"><span class="tip-key">Expires</span><span class="tip-val">${fmtTime(tok.expiresAt)}</span></div>
+    <div class="tip-row"><span class="tip-key">Calls</span><span class="tip-val">${tok.usageCount}</span></div>`;
+  const rect = e.target.getBoundingClientRect();
+  tip.style.left = (rect.left + rect.width / 2) + 'px';
+  tip.style.top = (rect.top - 8) + 'px';
+  tip.style.transform = 'translate(-50%, -100%)';
+  tip.style.display = 'block';
+  requestAnimationFrame(() => tip.style.opacity = '1');
+}
+function hideTimelineTooltip() {
+  const tip = $('#hoverTooltip');
+  tip.style.opacity = '0';
+  setTimeout(() => { tip.style.display = 'none'; tip.style.transform = ''; }, 120);
+}
+
+function toggleTimeline() {
+  timelineMode = !timelineMode;
+  $('#cardsContainer').classList.toggle('hidden', timelineMode);
+  $('#timelineContainer').classList.toggle('active', timelineMode);
+  $('#timelineBtn').classList.toggle('active', timelineMode);
+  if (timelineMode) renderTimeline();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EVENT HANDLERS
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Filter Input ─── */
+$('#filterInput').addEventListener('input', e => {
+  filterText = e.target.value;
+  renderCards();
+  if (timelineMode) renderTimeline();
+});
+
+/* ─── Type Pills ─── */
+$('#typePills').addEventListener('click', e => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  typeFilter = pill.dataset.type;
+  $$('#typePills .pill').forEach(p => {
+    p.className = 'pill';
+    if (p.dataset.type === typeFilter) p.classList.add('active-' + typeFilter);
+  });
+  renderCards();
+  if (timelineMode) renderTimeline();
+});
+
+/* ─── Timeline Toggle ─── */
+$('#timelineBtn').addEventListener('click', toggleTimeline);
+
+/* ─── Export ─── */
+$('#exportBtn').addEventListener('click', e => { e.stopPropagation(); $('#exportDropdown').classList.toggle('show'); });
+$('#exportDropdown').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const fmt = btn.dataset.format;
+  showToast(`Would export ${getVisible().length} tokens as ${fmt.toUpperCase()}`, '&#8615;');
+  $('#exportDropdown').classList.remove('show');
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.export-wrap')) $('#exportDropdown').classList.remove('show');
+  if (!e.target.closest('.state-menu') && !e.target.closest('.state-gear')) $('#stateMenu').classList.remove('show');
+});
+
+/* ─── Theme Toggle ─── */
+$('#themeToggle').addEventListener('click', () => SC.toggleTheme());
+
+/* ─── Detail Panel Close ─── */
+$('#detailClose').addEventListener('click', closeDetail);
+
+/* ─── Detail Resize ─── */
+(function() {
+  const handle = $('#detailResize');
+  const panel = $('#detailPanel');
+  let startY, startH;
+  handle.addEventListener('mousedown', e => {
+    startY = e.clientY; startH = panel.offsetHeight;
+    const onMove = ev => {
+      const newH = Math.max(120, startH + (startY - ev.clientY));
+      panel.style.height = newH + 'px';
+      detailHeight = newH;
+      updateCardsPadding();
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
+/* ─── Copy Token ─── */
+$('#copyTokenBtn').addEventListener('click', () => {
+  const tok = tokens.find(t => t.id === selectedId);
+  if (!tok) return;
+  const fakeJwt = btoa(JSON.stringify(tok.jwtHeader)) + '.' + btoa(JSON.stringify(tok.jwtPayload)) + '.SIGNATURE_MOCK';
+  navigator.clipboard.writeText(fakeJwt).then(() => showToast('Token copied to clipboard'));
+});
+
+/* ─── Copy as cURL ─── */
+$('#copyCurlBtn').addEventListener('click', () => {
+  const tok = tokens.find(t => t.id === selectedId);
+  if (!tok) return;
+  const curl = `curl -H "Authorization: Bearer <${tok.type.toUpperCase()}_TOKEN>" https://${tok.audience}/v1/resource`;
+  navigator.clipboard.writeText(curl).then(() => showToast('cURL command copied'));
+});
+
+/* ─── State Controller Gear ─── */
+$('#stateGear').addEventListener('click', e => { e.stopPropagation(); $('#stateMenu').classList.toggle('show'); });
+
+/* ─── Keyboard Navigation ─── */
+document.addEventListener('keydown', e => {
+  const cards = Array.from($$('.token-card'));
+
+  if (e.key === 'ArrowDown' && cards.length) {
+    e.preventDefault();
+    kbIndex = Math.min(kbIndex + 1, cards.length - 1);
+    cards.forEach(c => c.classList.remove('kb-focus'));
+    cards[kbIndex].classList.add('kb-focus');
+    cards[kbIndex].scrollIntoView({ block:'nearest', behavior:'smooth' });
+  } else if (e.key === 'ArrowUp' && cards.length) {
+    e.preventDefault();
+    kbIndex = Math.max(kbIndex - 1, 0);
+    cards.forEach(c => c.classList.remove('kb-focus'));
+    cards[kbIndex].classList.add('kb-focus');
+    cards[kbIndex].scrollIntoView({ block:'nearest', behavior:'smooth' });
+  } else if (e.key === 'Enter' && kbIndex >= 0 && kbIndex < cards.length) {
+    e.preventDefault();
+    selectToken(cards[kbIndex].dataset.id);
+  } else if (e.key === 'Escape') {
+    if (detailOpen) { closeDetail(); e.preventDefault(); }
+  } else if (e.ctrlKey && e.key === 'e') {
+    e.preventDefault();
+    $('#exportDropdown').classList.toggle('show');
+  } else if (e.key === 't' && !e.ctrlKey && !e.altKey && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault();
+    toggleTimeline();
+  }
+});
+
+/* ─── Tab clicks (visual only) ─── */
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    updateTabIndicator();
+    if (tab.dataset.tab !== 'internals') {
+      showToast(`Would switch to ${tab.textContent.trim()} tab`, '&#8594;');
+      setTimeout(() => {
+        $$('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('[data-tab="internals"]').classList.add('active');
+        updateTabIndicator();
+      }, 800);
+    }
+  });
+});
+
+/* ─── Toast ─── */
+function showToast(msg, icon) {
+  icon = icon || '&#10003;';
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="toast-icon">${icon}</span> ${msg}`;
+  $('#toastContainer').appendChild(el);
+  setTimeout(() => { el.classList.add('leaving'); setTimeout(() => el.remove(), 200); }, 2500);
+}
+
+/* ─── Hover tooltip for cards (body-level, fixed) ─── */
+(function() {
+  const tip = $('#hoverTooltip');
+  let currentId = null;
+
+  document.addEventListener('mousemove', function(e) {
+    if (timelineMode) return;
+    const card = e.target.closest('.token-card');
+    if (!card) { hideTip(); return; }
+    const id = card.dataset.id;
+    if (id === currentId) { positionTip(card); return; }
+
+    const tok = tokens.find(t => t.id === id);
+    if (!tok) { hideTip(); return; }
+
+    currentId = id;
+    const exp = isExpired(tok);
+    tip.innerHTML = `
+      <div class="tip-row"><span class="tip-key">Type</span><span class="tip-val" style="color:${TOKEN_COLORS[tok.type]}">${tok.type.toUpperCase()}</span></div>
+      <div class="tip-row"><span class="tip-key">TTL</span><span class="tip-val">${fmtTTL(tok)}</span></div>
+      <div class="tip-row"><span class="tip-key">Audience</span><span class="tip-val">${tok.audience}</span></div>
+      <div class="tip-row"><span class="tip-key">Calls</span><span class="tip-val">${tok.usageCount}</span></div>
+      ${tok.replaced ? '<div class="tip-row"><span class="tip-key">Status</span><span class="tip-val" style="color:var(--text-3)">Replaced</span></div>' : ''}`;
+    positionTip(card);
+    tip.style.display = 'block';
+    tip.offsetHeight;
+    tip.style.opacity = '1';
+  });
+
+  function positionTip(card) {
+    const rect = card.getBoundingClientRect();
+    tip.style.left = (rect.right + 12) + 'px';
+    tip.style.top = (rect.top + rect.height / 2) + 'px';
+    tip.style.transform = 'translateY(-50%)';
+    const tipW = tip.offsetWidth || 220;
+    if (rect.right + 12 + tipW > window.innerWidth - 8) {
+      tip.style.left = (rect.left - tipW - 12) + 'px';
+    }
+  }
+
+  function hideTip() {
+    if (!currentId) return;
+    currentId = null;
+    tip.style.opacity = '0';
+    setTimeout(() => { if (!currentId) tip.style.display = 'none'; }, 120);
+  }
+
+  const cc = $('#cardsContainer');
+  if (cc) cc.addEventListener('scroll', hideTip, { passive:true });
+})();
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATE CONTROLLER
+   ═══════════════════════════════════════════════════════════════════ */
+const SC = {
+  loadDemoData() {
+    tokens = JSON.parse(JSON.stringify(DEMO_TOKENS));
+    tokens.forEach(t => { t.issuedAt = DEMO_TOKENS.find(d=>d.id===t.id).issuedAt; t.expiresAt = DEMO_TOKENS.find(d=>d.id===t.id).expiresAt; t.usage = DEMO_TOKENS.find(d=>d.id===t.id).usage; });
+    selectedId = null;
+    kbIndex = -1;
+    closeDetail();
+    renderCards();
+    if (timelineMode) renderTimeline();
+    showToast(`Loaded ${tokens.length} demo tokens`, '&#9654;');
+    $('#stateMenu').classList.remove('show');
+  },
+
+  addToken() {
+    const types = ['bearer','mwc','s2s','obo'];
+    const type = types[Math.floor(Math.random()*types.length)];
+    const audiences = {
+      bearer:['api.fabric.microsoft.com','management.azure.com','api.powerbi.com'],
+      mwc:['lakehouse-Sales-capacity-F32','lakehouse-DataHub-capacity-F64'],
+      s2s:['internal-telemetry-ingest','internal-config-service'],
+      obo:['https://graph.microsoft.com','https://vault.azure.net']
+    };
+    const aud = audiences[type][Math.floor(Math.random()*audiences[type].length)];
+    const tok = makeToken({
+      type, audience: aud,
+      issuedAt: Date.now(),
+      expiresAt: Date.now() + (30 + Math.random()*30) * 60000,
+      usageCount: 0,
+      jwtPayload: { aud, iss:'https://login.microsoftonline.com/72f988bf/v2.0', iat:Math.floor(Date.now()/1000), exp:Math.floor((Date.now()+3600000)/1000), oid:'8a4f2c1e-...' },
+      usage: [],
+      sparkline: Array.from({length:10}, () => Math.floor(Math.random()*5))
+    });
+    tokens.unshift(tok);
+    renderCards();
+    if (timelineMode) renderTimeline();
+    showToast(`Added ${type.toUpperCase()} token for ${aud}`, '+');
+    requestAnimationFrame(() => {
+      const el = document.getElementById('card-' + tok.id);
+      if (el) el.classList.add('entering');
+    });
+    $('#stateMenu').classList.remove('show');
+  },
+
+  expireNext() {
+    const active = tokens.filter(t => !isExpired(t)).sort((a,b) => ttlSec(a) - ttlSec(b));
+    if (!active.length) { showToast('No active tokens to expire', '&#8212;'); return; }
+    const tok = active[0];
+    tok.expiresAt = Date.now() - 60000;
+    renderCards();
+    if (timelineMode) renderTimeline();
+    showToast(`Expired ${tok.type.toUpperCase()} token (${tok.audience})`, '&#9201;');
+    $('#stateMenu').classList.remove('show');
+  },
+
+  showEmpty() {
+    tokens = [];
+    selectedId = null;
+    kbIndex = -1;
+    closeDetail();
+    renderCards();
+    showToast('Showing empty state', '&#9675;');
+    $('#stateMenu').classList.remove('show');
+  },
+
+  toggleTimeline() {
+    toggleTimeline();
+    showToast(timelineMode ? 'Timeline view' : 'Card view', '&#9592;');
+    $('#stateMenu').classList.remove('show');
+  },
+
+  toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    const icon = $('#themeIcon');
+    icon.innerHTML = isDark
+      ? '<path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/>'
+      : '<path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37a.996.996 0 0 0-1.41 0 .996.996 0 0 0 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0a.996.996 0 0 0 0-1.41l-1.06-1.06zm1.06-10.96a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06zM7.05 18.36a.996.996 0 0 0 0-1.41.996.996 0 0 0-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06z"/>';
+    showToast(isDark ? 'Light theme' : 'Dark theme', '&#9681;');
+    $('#stateMenu').classList.remove('show');
+  },
+
+  clearAll() {
+    stopTicking();
+    tokens = [];
+    selectedId = null;
+    kbIndex = -1;
+    timelineMode = false;
+    $('#cardsContainer').classList.remove('hidden');
+    $('#timelineContainer').classList.remove('active');
+    $('#timelineBtn').classList.remove('active');
+    closeDetail();
+    renderCards();
+    startTicking();
+    showToast('Reset — showing empty state', '&#8635;');
+    $('#stateMenu').classList.remove('show');
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════════ */
+function init() {
+  updateTabIndicator();
+  showEmptyState();
+  startTicking();
+
+  setTimeout(() => {
+    SC.loadDemoData();
+  }, 1200);
+}
+
+window.addEventListener('load', init);
+window.addEventListener('resize', updateTabIndicator);
+</script>
+</body>
+</html>

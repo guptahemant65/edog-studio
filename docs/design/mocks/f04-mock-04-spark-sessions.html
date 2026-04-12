@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Spark Sessions Tab Mock (F04)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — Design Bible Tier 0
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --green-dim: rgba(24,160,88,0.12);
+  --amber: #e5940c;
+  --amber-dim: rgba(229,148,12,0.12);
+  --red: #e5453b;
+  --red-dim: rgba(229,69,59,0.12);
+  --blue: #2d7ff9;
+  --blue-dim: rgba(45,127,249,0.12);
+  --purple: #a855f7;
+  --purple-dim: rgba(168,85,247,0.12);
+  --teal: #0d9488;
+  --teal-dim: rgba(13,148,136,0.12);
+  --cyan: #06b6d4;
+  --cyan-dim: rgba(6,182,212,0.12);
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r8: 8px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out: cubic-bezier(0.22,1,0.36,1);
+}
+[data-theme="light"] {
+  --bg: #f8f9fc; --bg-2: #ffffff; --bg-3: #f0f1f5; --bg-4: #e8e9ee;
+  --text: #1a1d27; --text-2: #5c6070; --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08); --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03); --selected-bg: rgba(109,92,255,0.08);
+  --toolbar-bg: #f2f3f7; --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15); --scrollbar-track: transparent;
+  --badge-bg: rgba(0,0,0,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --card-bg: #ffffff;
+  --detail-bg: #fbfbfd;
+  --code-bg: #f6f7fa;
+  --swimlane-bg: rgba(0,0,0,0.02);
+}
+[data-theme="dark"] {
+  --bg: #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text: #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.03); --selected-bg: rgba(109,92,255,0.10);
+  --toolbar-bg: #13151d; --panel-bg: #161923;
+  --scrollbar-thumb: rgba(255,255,255,0.12); --scrollbar-track: transparent;
+  --badge-bg: rgba(255,255,255,0.06);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --card-bg: #1a1e2a;
+  --detail-bg: #13151d;
+  --code-bg: #12141c;
+  --swimlane-bg: rgba(255,255,255,0.02);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input{background:none;border:none;outline:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* TAB BAR */
+.tab-bar{display:flex;align-items:center;gap:0;padding:0 16px;height:40px;background:var(--bg-2);border-bottom:1px solid var(--border);position:relative;flex-shrink:0}
+.tab-bar-left{display:flex;align-items:center;gap:0;position:relative}
+.tab{padding:0 16px;height:40px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);font-weight:600}
+.tab-indicator{position:absolute;bottom:0;height:3px;background:var(--accent);border-radius:3px 3px 0 0;transition:left 200ms ease,width 200ms ease}
+.tab-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+.tab-bar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.theme-toggle{width:32px;height:32px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.theme-toggle:hover{background:var(--hover-bg)}
+.theme-toggle svg{width:16px;height:16px;fill:var(--text-3)}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--toolbar-bg);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.status-pills{display:flex;gap:4px}
+.pill{padding:4px 12px;border-radius:var(--r100);font-size:11px;font-weight:600;cursor:pointer;transition:all var(--transition);border:1.5px solid var(--border);background:transparent;white-space:nowrap;user-select:none}
+.pill .pill-count{margin-left:4px;opacity:.7;font-weight:500}
+.pill:hover{border-color:var(--border-bright)}
+.pill.active-all{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pill.active-active{background:var(--green);color:#fff;border-color:var(--green)}
+.pill.active-disposed{background:var(--badge-bg);color:var(--text-2);border-color:var(--border-bright)}
+.pill.active-errored{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.toolbar-sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.session-count{font-size:11px;color:var(--text-3);white-space:nowrap;font-weight:500}
+.toolbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.export-btn{display:flex;align-items:center;gap:6px;padding:4px 12px;border-radius:var(--r6);font-size:12px;font-weight:500;border:1px solid var(--border);transition:all var(--transition);position:relative}
+.export-btn:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.export-btn svg{width:14px;height:14px;fill:var(--text-2)}
+.export-dropdown{position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r6);box-shadow:var(--shadow-md);overflow:hidden;z-index:100;min-width:140px;display:none}
+.export-dropdown.show{display:block;animation:dropIn 120ms var(--ease-out)}
+.export-dropdown button{display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;transition:background var(--transition)}
+.export-dropdown button:hover{background:var(--hover-bg)}
+@keyframes dropIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN CONTENT
+   ═══════════════════════════════════════════════════════════════════ */
+.content-area{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.cards-container{flex:1;overflow-y:auto;padding:0 16px 40px;scroll-behavior:smooth}
+
+/* SWIMLANE */
+.swimlane-area{flex-shrink:0;padding:10px 16px 6px;background:var(--swimlane-bg);border-bottom:1px solid var(--border)}
+.swimlane-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);margin-bottom:6px}
+.swimlane{position:relative;height:64px;border-radius:var(--r6);overflow:hidden}
+.swimlane-track{position:absolute;top:0;left:0;right:0;bottom:0}
+.swimlane-axis{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-between;font-size:9px;color:var(--text-3);font-family:var(--mono);padding:0 2px}
+.swimlane-row{position:absolute;height:14px;border-radius:3px;display:flex;align-items:center;cursor:pointer;transition:filter var(--transition),transform var(--transition)}
+.swimlane-row:hover{filter:brightness(1.1);transform:scaleY(1.3)}
+.swimlane-row .reuse-marker{position:absolute;width:2px;height:100%;background:var(--cyan);top:0}
+.swimlane-label-text{font-size:8px;font-weight:600;color:#fff;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:14px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+
+/* EMPTY STATE */
+.empty-state{display:none;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;text-align:center;animation:fadeIn 400ms ease}
+.empty-state.visible{display:flex}
+.empty-icon{width:88px;height:88px;position:relative}
+.empty-icon .orbit{position:absolute;inset:0;border-radius:50%;border:1.5px dashed var(--border-bright);animation:spin 14s linear infinite}
+.empty-icon .orbit:nth-child(2){inset:14px;animation-duration:9s;animation-direction:reverse}
+.empty-icon .core{position:absolute;inset:26px;border-radius:50%;background:var(--accent-dim);display:flex;align-items:center;justify-content:center}
+.empty-icon .core svg{width:22px;height:22px;fill:var(--accent);opacity:.65}
+.empty-title{font-size:15px;font-weight:600;color:var(--text)}
+.empty-hint{font-size:12px;color:var(--text-3);max-width:340px;line-height:1.6}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* SECTION HEADERS */
+.section-header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:8px;padding:10px 0 6px;margin:4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text-3);background:var(--bg);user-select:none}
+.section-header::after{content:'';flex:1;height:1px;background:var(--border)}
+.section-dot{width:7px;height:7px;border-radius:50%}
+.section-dot.active-dot{background:var(--green);animation:pulse-dot 2s ease infinite}
+.section-dot.history-dot{background:var(--text-3)}
+.section-count{font-weight:500;color:var(--text-3);font-size:11px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SESSION CARDS
+   ═══════════════════════════════════════════════════════════════════ */
+.session-card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--r10);padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:all 200ms ease,transform 300ms var(--ease-out);position:relative;overflow:hidden;border-left:4px solid transparent}
+.session-card:hover{border-color:var(--border-bright);box-shadow:var(--shadow-sm)}
+.session-card.selected{box-shadow:0 0 0 2px var(--accent-dim);border-color:var(--accent) !important}
+.session-card.kb-focus{outline:2px solid var(--accent);outline-offset:2px}
+.session-card.entering{animation:cardSlideIn 300ms var(--spring) both}
+.session-card.status-created{border-left-color:var(--blue)}
+.session-card.status-active{border-left-color:var(--green)}
+.session-card.status-disposed{border-left-color:var(--text-3);opacity:.85}
+.session-card.status-timeout{border-left-color:var(--amber)}
+.session-card.status-error{border-left-color:var(--red)}
+.session-card.status-error:hover{box-shadow:0 0 12px rgba(229,69,59,.1)}
+@keyframes cardSlideIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+.card-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.card-session-id{font-size:13px;font-weight:600;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reused-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:var(--r100);color:var(--cyan);background:var(--cyan-dim);white-space:nowrap}
+.status-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:var(--r100);white-space:nowrap;flex-shrink:0}
+.status-badge.created{color:var(--blue);background:var(--blue-dim)}
+.status-badge.active{color:var(--green);background:var(--green-dim)}
+.status-badge .pulse-dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse-dot 1.5s ease infinite}
+.status-badge.disposed{color:var(--text-3);background:var(--badge-bg)}
+.status-badge.timeout{color:var(--amber);background:var(--amber-dim)}
+.status-badge.error{color:var(--red);background:var(--red-dim)}
+.card-elapsed{font-size:12px;font-weight:600;font-family:var(--mono);color:var(--text-2);margin-left:auto;white-space:nowrap}
+.card-elapsed.counting{color:var(--green)}
+
+.card-meta{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--text-3);margin-bottom:10px;flex-wrap:wrap}
+.card-meta .meta-tag{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;background:var(--badge-bg);border-radius:var(--r4);font-family:var(--mono);font-size:10px;white-space:nowrap}
+.progress-dots{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:500;color:var(--text-2)}
+.progress-dots .dot{width:5px;height:5px;border-radius:50%;background:var(--text-3);transition:background var(--transition)}
+.progress-dots .dot.done{background:var(--green)}
+.progress-dots .dot.running{background:var(--accent);animation:pulse-dot 1.2s ease infinite}
+.progress-dots .dot.pending{background:var(--border-bright)}
+
+/* Lifecycle bar */
+.lifecycle-bar{height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin-bottom:10px;position:relative;display:flex}
+.lifecycle-bar .seg{height:100%;transition:width 400ms ease}
+.lifecycle-bar .seg-creating{background:var(--blue)}
+.lifecycle-bar .seg-active{background:var(--green)}
+.lifecycle-bar .seg-idle{background:var(--amber-dim)}
+.lifecycle-bar .seg-timeout{background:var(--amber)}
+.lifecycle-bar .seg-error{background:var(--red)}
+.lifecycle-bar .seg-fill{background:linear-gradient(90deg,var(--green),var(--accent))}
+.lifecycle-bar .seg-fill.animating{animation:barShimmer 2s ease infinite}
+@keyframes barShimmer{0%{opacity:1}50%{opacity:.6}100%{opacity:1}}
+.lifecycle-bar .reuse-line{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);z-index:1}
+
+/* Command list */
+.command-list{display:flex;flex-direction:column;gap:3px}
+.command-row{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:var(--r4);font-size:11px;transition:background var(--transition);cursor:pointer}
+.command-row:hover{background:var(--hover-bg)}
+.command-row.selected-cmd{background:var(--selected-bg)}
+.cmd-index{width:16px;font-family:var(--mono);font-size:10px;color:var(--text-3);text-align:center;flex-shrink:0}
+.cmd-type{font-size:10px;font-weight:600;padding:1px 6px;border-radius:var(--r4);white-space:nowrap;flex-shrink:0;min-width:32px;text-align:center}
+.cmd-type.sql{background:var(--blue-dim);color:var(--blue)}
+.cmd-type.py{background:var(--purple-dim);color:var(--purple)}
+.cmd-snippet{flex:1;font-family:var(--mono);font-size:10px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmd-status{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:500;white-space:nowrap;flex-shrink:0}
+.cmd-status.done{color:var(--green)}
+.cmd-status.running{color:var(--accent)}
+.cmd-status.pending{color:var(--text-3)}
+.cmd-status.failed{color:var(--red)}
+.cmd-spinner{width:10px;height:10px;border:1.5px solid var(--accent-dim);border-top-color:var(--accent);border-radius:50%;animation:cmd-spin .6s linear infinite}
+@keyframes cmd-spin{to{transform:rotate(360deg)}}
+.cmd-duration{font-family:var(--mono);font-size:10px;color:var(--text-3);min-width:36px;text-align:right;flex-shrink:0}
+
+/* Expanded: waterfall */
+.command-waterfall{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:none}
+.session-card.expanded .command-waterfall{display:block}
+.waterfall-bar-wrap{display:flex;align-items:center;gap:6px;margin-bottom:3px;font-size:10px}
+.waterfall-label{width:50px;text-align:right;font-family:var(--mono);color:var(--text-3);flex-shrink:0}
+.waterfall-track{flex:1;height:10px;background:var(--bg-3);border-radius:2px;overflow:hidden;position:relative}
+.waterfall-fill{height:100%;border-radius:2px;min-width:2px;transition:width 300ms ease}
+.waterfall-fill.wf-done{background:var(--green)}
+.waterfall-fill.wf-running{background:var(--accent);animation:barShimmer 1.5s ease infinite}
+.waterfall-fill.wf-failed{background:var(--red)}
+.waterfall-fill.wf-pending{background:var(--border-bright)}
+.waterfall-time{width:40px;font-family:var(--mono);color:var(--text-3);font-size:10px;flex-shrink:0}
+
+/* Error summary on card */
+.card-error{font-size:11px;color:var(--red);margin-top:8px;padding:6px 10px;background:var(--red-dim);border-radius:var(--r4);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.card-error svg{width:12px;height:12px;fill:var(--red);flex-shrink:0}
+
+/* Card lived */
+.card-lived{font-size:11px;color:var(--text-3);font-style:italic;margin-top:4px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL PANEL (resizable)
+   ═══════════════════════════════════════════════════════════════════ */
+.detail-overlay{position:absolute;bottom:0;left:0;right:0;background:var(--detail-bg);border-top:1px solid var(--border);z-index:50;display:none;flex-direction:column;max-height:55%;box-shadow:0 -4px 16px rgba(0,0,0,.06)}
+.detail-overlay.open{display:flex;animation:detailIn 160ms ease-out}
+@keyframes detailIn{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+.detail-resize-handle{height:6px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.detail-resize-handle::after{content:'';width:40px;height:3px;border-radius:2px;background:var(--border-bright)}
+.detail-header{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border)}
+.detail-title{font-size:14px;font-weight:700;flex:1;font-family:var(--mono)}
+.detail-header .status-badge{font-size:10px}
+.detail-actions{display:flex;gap:6px}
+.detail-actions button{padding:4px 10px;border-radius:var(--r6);font-size:11px;font-weight:500;border:1px solid var(--border);transition:all var(--transition)}
+.detail-actions button:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.view-logs-btn{color:var(--accent) !important;border-color:var(--accent-dim) !important}
+.view-logs-btn:hover{background:var(--accent-dim) !important}
+.detail-close{width:28px;height:28px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;transition:background var(--transition)}
+.detail-close:hover{background:var(--hover-bg)}
+.detail-close svg{width:14px;height:14px;fill:var(--text-3)}
+
+.detail-body{overflow-y:auto;padding:12px 16px 40px;flex:1}
+.detail-meta{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:16px}
+.detail-meta-item .label{color:var(--text-3);font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.detail-meta-item .value{font-weight:500;font-family:var(--mono);font-size:12px}
+.detail-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);margin:14px 0 8px}
+
+/* Command detail table */
+.cmd-detail-table{width:100%;border-collapse:collapse;font-size:11px}
+.cmd-detail-table th{text-align:left;padding:6px 8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--text-3);border-bottom:1px solid var(--border);background:var(--bg-3)}
+.cmd-detail-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.cmd-detail-table tr:hover{background:var(--hover-bg)}
+.cmd-detail-table tr.active-cmd-row{background:var(--selected-bg)}
+
+/* Code block */
+.code-block{font-family:var(--mono);font-size:11px;line-height:1.7;background:var(--code-bg);border:1px solid var(--border);border-radius:var(--r6);padding:10px 14px;overflow-x:auto;white-space:pre;margin:8px 0}
+.code-block .kw{color:var(--blue);font-weight:500}
+.code-block .str{color:var(--green)}
+.code-block .num{color:var(--amber)}
+.code-block .fn{color:var(--purple)}
+.code-block .cmt{color:var(--text-3);font-style:italic}
+.code-block .op{color:var(--text-2)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOOTER (fixed)
+   ═══════════════════════════════════════════════════════════════════ */
+.footer{position:fixed;bottom:0;left:0;right:0;display:flex;align-items:center;gap:12px;padding:6px 16px;background:var(--bg-3);border-top:1px solid var(--border);font-size:11px;color:var(--text-3);z-index:200;box-shadow:0 -2px 8px rgba(0,0,0,.04)}
+.footer kbd{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:3px;font-size:10px;font-family:var(--mono);color:var(--text-2);margin:0 1px}
+.footer-sep{width:1px;height:14px;background:var(--border)}
+.footer-left{display:flex;align-items:center;gap:10px}
+.footer-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r8);padding:8px 16px;font-size:12px;font-weight:500;box-shadow:var(--shadow-md);z-index:999;opacity:0;transition:opacity 200ms ease,transform 200ms ease;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.toast.toast-accent{border-left:3px solid var(--accent)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOOLTIP (body-level fixed)
+   ═══════════════════════════════════════════════════════════════════ */
+.tooltip{position:fixed;background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r6);padding:6px 10px;box-shadow:var(--shadow-md);z-index:9999;font-size:11px;color:var(--text-2);pointer-events:none;opacity:0;transition:opacity 100ms ease;white-space:nowrap;max-width:300px}
+.tooltip.visible{opacity:1}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATE CONTROLLER
+   ═══════════════════════════════════════════════════════════════════ */
+.state-ctrl-btn{position:fixed;top:8px;right:56px;width:32px;height:32px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;z-index:300;transition:background var(--transition),transform var(--transition)}
+.state-ctrl-btn:hover{background:var(--hover-bg)}
+.state-ctrl-btn.active{background:var(--accent-dim);transform:rotate(60deg)}
+.state-ctrl-btn svg{width:16px;height:16px;fill:var(--text-3)}
+
+.state-panel{position:fixed;top:44px;right:8px;width:340px;max-height:calc(100vh - 90px);background:var(--bg-2);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);z-index:300;display:none;flex-direction:column;overflow:hidden}
+.state-panel.open{display:flex;animation:dropIn 120ms var(--ease-out)}
+.state-panel-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+.state-panel-header svg{width:14px;height:14px;fill:var(--accent)}
+.state-list{overflow-y:auto;padding:6px;flex:1}
+.state-item{padding:8px 10px;border-radius:var(--r6);font-size:12px;cursor:pointer;transition:background var(--transition);display:flex;align-items:center;gap:8px}
+.state-item:hover{background:var(--hover-bg)}
+.state-item.current{background:var(--accent-dim);font-weight:600}
+.state-item .state-id{font-family:var(--mono);font-size:10px;color:var(--text-3);min-width:72px}
+.state-item .state-name{flex:1}
+.state-item .state-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     DYNAMIC DOM (MUST be before <script>)
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="tooltip" class="tooltip"></div>
+<div id="toast" class="toast toast-accent"></div>
+
+<!-- STATE CONTROLLER -->
+<button class="state-ctrl-btn" id="stateCtrlBtn" aria-label="State controller">
+  <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 9.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.26.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.6 3.6 0 0112 15.6z"/></svg>
+</button>
+<div class="state-panel" id="statePanel">
+  <div class="state-panel-header">
+    <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 9.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.26.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58z"/></svg>
+    State Controller
+  </div>
+  <div class="state-list" id="stateList"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     APP
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="app">
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <div class="tab-bar-left" id="tabBarLeft">
+      <div class="tab" data-tab="logs">Logs</div>
+      <div class="tab" data-tab="telemetry">Telemetry</div>
+      <div class="tab" data-tab="sysfiles">System Files</div>
+      <div class="tab active" data-tab="spark">
+        <span class="tab-dot"></span>
+        Spark Sessions
+      </div>
+      <div class="tab" data-tab="internals">Internals &#9662;</div>
+      <div class="tab-indicator" id="tabIndicator"></div>
+    </div>
+    <div class="tab-bar-right">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg id="sunIcon" viewBox="0 0 24 24"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-4a1 1 0 011 1v1a1 1 0 01-2 0V4a1 1 0 011-1zm0 16a1 1 0 011 1v1a1 1 0 01-2 0v-1a1 1 0 011-1zm9-8a1 1 0 01-1 1h-1a1 1 0 010-2h1a1 1 0 011 1zM5 12a1 1 0 01-1 1H3a1 1 0 010-2h1a1 1 0 011 1zm13.07-5.07a1 1 0 010 1.41l-.71.71a1 1 0 01-1.41-1.41l.71-.71a1 1 0 011.41 0zM7.05 16.95a1 1 0 010 1.41l-.71.71a1 1 0 01-1.41-1.41l.71-.71a1 1 0 011.41 0zm9.9 0a1 1 0 011.41 0l.71.71a1 1 0 01-1.41 1.41l-.71-.71a1 1 0 010-1.41zM7.05 7.05a1 1 0 011.41 0l.71.71A1 1 0 017.76 9.17l-.71-.71a1 1 0 010-1.41z"/></svg>
+        <svg id="moonIcon" viewBox="0 0 24 24" style="display:none"><path d="M12 3a9 9 0 009 9c0 .25-.02.5-.04.75A9 9 0 1112.75 3.04c-.25.02-.5.04-.75.04z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar" id="toolbar">
+    <div class="status-pills" id="filterPills">
+      <button class="pill active-all" data-filter="all">All<span class="pill-count" id="countAll">6</span></button>
+      <button class="pill" data-filter="active">Active<span class="pill-count" id="countActive">2</span></button>
+      <button class="pill" data-filter="disposed">Disposed<span class="pill-count" id="countDisposed">2</span></button>
+      <button class="pill" data-filter="errored">Errored<span class="pill-count" id="countErrored">2</span></button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <span class="session-count" id="sessionCount">6 sessions</span>
+    <div class="toolbar-right">
+      <div style="position:relative">
+        <button class="export-btn" id="exportBtn">
+          <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Export &#9662;
+        </button>
+        <div class="export-dropdown" id="exportDropdown">
+          <button id="exportJson">Export as JSON</button>
+          <button id="exportCsv">Export as CSV</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content-area" id="contentArea">
+    <!-- SWIMLANE TIMELINE -->
+    <div class="swimlane-area" id="swimlaneArea">
+      <div class="swimlane-label">Session Timeline</div>
+      <div class="swimlane" id="swimlane"></div>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">
+        <div class="orbit"></div>
+        <div class="orbit"></div>
+        <div class="core">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+        </div>
+      </div>
+      <div class="empty-title">No Spark sessions active</div>
+      <div class="empty-hint">Sessions will appear when FLT creates notebook execution contexts. Deploy to a lakehouse to start.</div>
+    </div>
+
+    <!-- SESSION CARDS -->
+    <div class="cards-container" id="cardsContainer"></div>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-overlay" id="detailPanel">
+      <div class="detail-resize-handle" id="detailResizeHandle"></div>
+      <div class="detail-header">
+        <div class="detail-title" id="detailTitle">SESSION</div>
+        <div class="status-badge" id="detailStatus"></div>
+        <div class="detail-actions">
+          <button class="view-logs-btn" id="detailViewLogs">View in Logs</button>
+          <button id="detailCopyId">Copy Session ID</button>
+        </div>
+        <button class="detail-close" id="detailClose" aria-label="Close detail">
+          <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER (fixed) -->
+<div class="footer">
+  <div class="footer-left">
+    <span><kbd>&#8593;</kbd><kbd>&#8595;</kbd> Navigate</span>
+    <span><kbd>Enter</kbd> Expand</span>
+    <span><kbd>Esc</kbd> Close</span>
+    <div class="footer-sep"></div>
+    <span><kbd>Ctrl</kbd>+<kbd>E</kbd> Export</span>
+  </div>
+  <div class="footer-right">
+    <span>EDOG Studio — Spark Sessions Mock</span>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   SPARK SESSIONS TAB — All 14 states, 6 sessions
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+'use strict';
+
+/* ─── MOCK DATA ──────────────────────────────────────────────── */
+const SESSIONS = [
+  {
+    id: 'sess-abc-123', status: 'active', mlv: 'SalesAggregate', reused: false,
+    created: '10:38:19', elapsed: 252, cellRunning: 3, cellTotal: 7,
+    commands: [
+      { idx:1, type:'SQL', code:"SELECT * FROM raw_sales WHERE date >= '2026-01-01' AND region = 'US-West'", status:'done', duration:0.8, retries:0 },
+      { idx:2, type:'SQL', code:"CREATE TABLE transformed_sales AS SELECT product_id, SUM(quantity) as total_qty, AVG(unit_price) as avg_price FROM raw_sales GROUP BY product_id", status:'done', duration:2.1, retries:0 },
+      { idx:3, type:'PySpark', code:"df = spark.sql(\"SELECT product_id, SUM(quantity) as qty FROM raw_sales GROUP BY product_id\")\ndf.cache()\nprint(f\"Rows: {df.count()}\")", status:'running', duration:1.4, retries:0 },
+      { idx:4, type:'SQL', code:"INSERT INTO aggregated_sales SELECT product_id, total_qty, avg_price, current_timestamp() FROM transformed_sales", status:'pending', duration:0, retries:0 },
+      { idx:5, type:'SQL', code:"MERGE INTO dim_product t USING staged_products s ON t.id = s.id WHEN MATCHED THEN UPDATE SET *", status:'pending', duration:0, retries:0 },
+      { idx:6, type:'PySpark', code:"result = spark.sql(\"SELECT COUNT(*) as cnt FROM aggregated_sales\")\nresult.show()", status:'pending', duration:0, retries:0 },
+      { idx:7, type:'SQL', code:"OPTIMIZE aggregated_sales ZORDER BY (product_id, region)", status:'pending', duration:0, retries:0 }
+    ]
+  },
+  {
+    id: 'sess-def-456', status: 'active', mlv: 'InventoryFact', reused: true, reusedFrom: 'ProductDim',
+    created: '10:40:31', elapsed: 168, cellRunning: 2, cellTotal: 4, reuseBoundary: 2,
+    commands: [
+      { idx:1, type:'SQL', code:"SELECT p.*, c.category_name FROM products p JOIN categories c ON p.cat_id = c.id", status:'done', duration:1.2, retries:0 },
+      { idx:2, type:'PySpark', code:"inventory_df = spark.table(\"raw_inventory\")\njoined = inventory_df.join(product_df, \"product_id\")\njoined.write.mode(\"overwrite\").saveAsTable(\"enriched_inventory\")", status:'running', duration:0.9, retries:0 },
+      { idx:3, type:'SQL', code:"CREATE OR REPLACE VIEW inventory_summary AS SELECT warehouse_id, COUNT(*) as items, SUM(quantity) as total FROM enriched_inventory GROUP BY warehouse_id", status:'pending', duration:0, retries:0 },
+      { idx:4, type:'SQL', code:"INSERT INTO fact_inventory SELECT * FROM inventory_summary WHERE total > 0", status:'pending', duration:0, retries:0 }
+    ]
+  },
+  {
+    id: 'sess-ghi-789', status: 'disposed', mlv: 'SalesAggregate', reused: false,
+    created: '10:31:47', elapsed: 272, cellRunning: 0, cellTotal: 7, lived: '4m 32s',
+    commands: [
+      { idx:1, type:'SQL', code:"DROP TABLE IF EXISTS staging_sales", status:'done', duration:0.3, retries:0 },
+      { idx:2, type:'SQL', code:"CREATE TABLE staging_sales AS SELECT * FROM raw_sales WHERE date >= '2025-12-01'", status:'done', duration:1.8, retries:0 },
+      { idx:3, type:'PySpark', code:"df = spark.table(\"staging_sales\")\ncleaned = df.dropDuplicates([\"order_id\"]).filter(df.quantity > 0)\ncleaned.write.mode(\"overwrite\").saveAsTable(\"clean_sales\")", status:'done', duration:3.2, retries:1 },
+      { idx:4, type:'SQL', code:"SELECT COUNT(*) as total_rows, COUNT(DISTINCT order_id) as unique_orders FROM clean_sales", status:'done', duration:0.5, retries:0 },
+      { idx:5, type:'SQL', code:"INSERT INTO aggregated_sales SELECT product_id, SUM(quantity), AVG(unit_price), current_timestamp() FROM clean_sales GROUP BY product_id", status:'done', duration:2.4, retries:0 },
+      { idx:6, type:'PySpark', code:"spark.sql(\"ANALYZE TABLE aggregated_sales COMPUTE STATISTICS FOR ALL COLUMNS\")", status:'done', duration:1.1, retries:0 },
+      { idx:7, type:'SQL', code:"OPTIMIZE aggregated_sales ZORDER BY (product_id)", status:'done', duration:0.9, retries:0 }
+    ]
+  },
+  {
+    id: 'sess-jkl-012', status: 'timeout', mlv: 'InventoryFact', reused: false,
+    created: '10:28:05', elapsed: 312, cellRunning: 0, cellTotal: 4, idleDuration: '3m 02s',
+    commands: [
+      { idx:1, type:'SQL', code:"SELECT * FROM raw_inventory WHERE last_updated > '2026-01-01'", status:'done', duration:0.6, retries:0 },
+      { idx:2, type:'PySpark', code:"inv = spark.table(\"raw_inventory\")\ninv.cache()\nprint(f\"Cached {inv.count()} rows\")", status:'done', duration:1.8, retries:0 },
+      { idx:3, type:'SQL', code:"-- Session went idle here, waiting for next command", status:'timeout', duration:0, retries:0 },
+      { idx:4, type:'SQL', code:"INSERT INTO fact_inventory SELECT * FROM enriched_inventory", status:'pending', duration:0, retries:0 }
+    ]
+  },
+  {
+    id: 'sess-mno-345', status: 'error', mlv: 'CustomerDim', reused: false,
+    created: '10:35:12', elapsed: 98, cellRunning: 0, cellTotal: 6,
+    errorMsg: 'SparkException: OutOfMemoryError: Java heap space',
+    commands: [
+      { idx:1, type:'SQL', code:"SELECT * FROM raw_customers WHERE active = true", status:'done', duration:0.4, retries:0 },
+      { idx:2, type:'SQL', code:"CREATE TABLE customer_enriched AS SELECT c.*, o.total_orders FROM raw_customers c LEFT JOIN order_summary o ON c.customer_id = o.customer_id", status:'done', duration:1.6, retries:0 },
+      { idx:3, type:'PySpark', code:"customers = spark.table(\"customer_enriched\")\nfrom pyspark.ml.feature import StringIndexer\nindexer = StringIndexer(inputCol=\"segment\", outputCol=\"segment_idx\")\nindexed = indexer.fit(customers).transform(customers)", status:'done', duration:2.8, retries:0 },
+      { idx:4, type:'PySpark', code:"# This cell caused OOM\nhuge_cross = customers.crossJoin(spark.table(\"products\"))\nhuge_cross.cache()\nhuge_cross.count()", status:'failed', duration:4.2, retries:2, error:'java.lang.OutOfMemoryError: Java heap space\n  at java.util.Arrays.copyOf(Arrays.java:3236)\n  at org.apache.spark.unsafe.memory.HeapMemoryAllocator.allocate' },
+      { idx:5, type:'SQL', code:"INSERT INTO dim_customer SELECT * FROM customer_enriched", status:'pending', duration:0, retries:0 },
+      { idx:6, type:'SQL', code:"OPTIMIZE dim_customer ZORDER BY (customer_id)", status:'pending', duration:0, retries:0 }
+    ]
+  },
+  {
+    id: 'sess-pqr-678', status: 'disposed', mlv: 'ProductDim', reused: false,
+    created: '10:33:22', elapsed: 108, cellRunning: 0, cellTotal: 4, lived: '1m 48s',
+    commands: [
+      { idx:1, type:'SQL', code:"SELECT * FROM raw_products WHERE category IS NOT NULL", status:'done', duration:0.5, retries:0 },
+      { idx:2, type:'SQL', code:"CREATE TABLE product_staging AS SELECT id, name, category, price, updated_at FROM raw_products", status:'done', duration:0.8, retries:0 },
+      { idx:3, type:'PySpark', code:"prods = spark.table(\"product_staging\")\nprods = prods.withColumn(\"price_tier\", when(col(\"price\") > 100, \"premium\").otherwise(\"standard\"))\nprods.write.mode(\"overwrite\").saveAsTable(\"dim_product\")", status:'done', duration:1.3, retries:0 },
+      { idx:4, type:'SQL', code:"ANALYZE TABLE dim_product COMPUTE STATISTICS FOR ALL COLUMNS", status:'done', duration:0.6, retries:0 }
+    ]
+  }
+];
+
+const STATES = [
+  { id:'SPARK-001', name:'Empty', desc:'No Spark sessions active' },
+  { id:'SPARK-002', name:'First Session', desc:'Empty fades, first card animates in' },
+  { id:'SPARK-003', name:'Session Created', desc:'Session card with Created badge (blue)' },
+  { id:'SPARK-004', name:'Session Active', desc:'Active with pulsing dot, green border' },
+  { id:'SPARK-005', name:'Command Executing', desc:'Spinner + running cell + elapsed' },
+  { id:'SPARK-006', name:'Session Disposed', desc:'Grey, full duration, all done' },
+  { id:'SPARK-007', name:'Session Timeout', desc:'Amber, idle duration shown' },
+  { id:'SPARK-008', name:'Session Error', desc:'Red, error summary visible' },
+  { id:'SPARK-009', name:'Session Reuse', desc:'Cyan badge, reuse boundary' },
+  { id:'SPARK-010', name:'Card Expanded', desc:'Full command history + waterfall' },
+  { id:'SPARK-011', name:'Multiple Sessions', desc:'Active pinned, History below, filters' },
+  { id:'SPARK-012', name:'Command Detail', desc:'Code + metrics in detail panel' },
+  { id:'SPARK-013', name:'Cross-tab View Logs', desc:'Toast simulating tab switch' },
+  { id:'SPARK-014', name:'Export', desc:'JSON download' }
+];
+
+/* ─── DOM REFS ───────────────────────────────────────────────── */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const cardsContainer = $('#cardsContainer');
+const emptyState = $('#emptyState');
+const swimlane = $('#swimlane');
+const swimlaneArea = $('#swimlaneArea');
+const detailPanel = $('#detailPanel');
+const detailBody = $('#detailBody');
+const detailTitle = $('#detailTitle');
+const detailStatus = $('#detailStatus');
+const tooltipEl = $('#tooltip');
+const toastEl = $('#toast');
+
+let currentFilter = 'all';
+let selectedSession = null;
+let selectedCardEl = null;
+let expandedCards = new Set();
+let currentState = 'SPARK-011';
+let elapsedTimers = [];
+
+/* ─── THEME ──────────────────────────────────────────────────── */
+$('#themeToggle').addEventListener('click', () => {
+  const html = document.documentElement;
+  const isDark = html.dataset.theme === 'dark';
+  html.dataset.theme = isDark ? 'light' : 'dark';
+  $('#sunIcon').style.display = isDark ? '' : 'none';
+  $('#moonIcon').style.display = isDark ? 'none' : '';
+});
+
+/* ─── TAB INDICATOR ──────────────────────────────────────────── */
+function updateTabIndicator() {
+  const activeTab = $('.tab.active');
+  const indicator = $('#tabIndicator');
+  if (activeTab && indicator) {
+    const left = activeTab.offsetLeft;
+    const w = activeTab.offsetWidth;
+    indicator.style.left = left + 'px';
+    indicator.style.width = w + 'px';
+  }
+}
+$$('.tab').forEach(t => t.addEventListener('click', () => {
+  $$('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  updateTabIndicator();
+}));
+requestAnimationFrame(updateTabIndicator);
+
+/* ─── TOAST ──────────────────────────────────────────────────── */
+let toastTimeout;
+function showToast(msg, duration = 2500) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => toastEl.classList.remove('show'), duration);
+}
+
+/* ─── TOOLTIP (body-level fixed) ─────────────────────────────── */
+function showTooltip(text, x, y) {
+  tooltipEl.textContent = text;
+  tooltipEl.style.left = (x + 12) + 'px';
+  tooltipEl.style.top = (y - 8) + 'px';
+  tooltipEl.classList.add('visible');
+}
+function hideTooltip() { tooltipEl.classList.remove('visible'); }
+
+/* ─── FORMAT HELPERS ─────────────────────────────────────────── */
+function fmtElapsed(s) {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}m ${String(sec).padStart(2,'0')}s`;
+}
+function fmtDuration(d) {
+  if (d === 0) return '—';
+  return d < 1 ? `${(d*1000).toFixed(0)}ms` : `${d.toFixed(1)}s`;
+}
+
+/* ─── SYNTAX HIGHLIGHT ───────────────────────────────────────── */
+function highlight(code, type) {
+  let h = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Strings
+  h = h.replace(/(["'])(?:(?=(\\?))\2.)*?\1/g, '<span class="str">$&</span>');
+  // Comments
+  h = h.replace(/(--[^\n]*|#[^\n]*)/g, '<span class="cmt">$&</span>');
+  // Numbers
+  h = h.replace(/\b(\d+\.?\d*)\b/g, '<span class="num">$1</span>');
+  if (type === 'SQL') {
+    const kws = ['SELECT','FROM','WHERE','INSERT','INTO','CREATE','TABLE','AS','GROUP','BY','ORDER','JOIN','LEFT','ON','AND','OR','NOT','NULL','IF','EXISTS','DROP','MERGE','USING','WHEN','MATCHED','THEN','UPDATE','SET','REPLACE','VIEW','SUM','COUNT','AVG','DISTINCT','HAVING','OPTIMIZE','ZORDER','COMPUTE','STATISTICS','FOR','ALL','COLUMNS','ANALYZE','OVERWRITE','MODE','CURRENT_TIMESTAMP'];
+    kws.forEach(k => {
+      h = h.replace(new RegExp('\\b(' + k + ')\\b', 'gi'), '<span class="kw">$1</span>');
+    });
+  } else {
+    const kws = ['import','from','def','class','if','else','elif','return','for','in','as','with','print','spark','col','when','otherwise','True','False','None'];
+    kws.forEach(k => {
+      h = h.replace(new RegExp('\\b(' + k + ')\\b', 'g'), '<span class="kw">$1</span>');
+    });
+    // Functions
+    h = h.replace(/(\w+)\(/g, '<span class="fn">$1</span>(');
+  }
+  return h;
+}
+
+/* ─── SWIMLANE TIMELINE ──────────────────────────────────────── */
+function renderSwimlane(sessions) {
+  swimlane.innerHTML = '';
+  if (!sessions.length) { swimlaneArea.style.display = 'none'; return; }
+  swimlaneArea.style.display = '';
+
+  // Compute time range
+  const parseTime = t => { const [h,m,s] = t.split(':').map(Number); return h*3600+m*60+s; };
+  let minT = Infinity, maxT = -Infinity;
+  sessions.forEach(s => {
+    const start = parseTime(s.created);
+    const end = start + s.elapsed;
+    if (start < minT) minT = start;
+    if (end > maxT) maxT = end;
+  });
+  const range = maxT - minT || 1;
+  const pad = range * 0.05;
+  const totalRange = range + pad * 2;
+  const startBase = minT - pad;
+
+  // Rows
+  const colors = { active:'var(--green)', disposed:'var(--text-3)', timeout:'var(--amber)', error:'var(--red)', created:'var(--blue)' };
+  sessions.forEach((s, i) => {
+    const start = parseTime(s.created);
+    const end = start + s.elapsed;
+    const left = ((start - startBase) / totalRange * 100);
+    const width = ((end - start) / totalRange * 100);
+    const top = 2 + i * 8;
+    const row = document.createElement('div');
+    row.className = 'swimlane-row';
+    row.style.cssText = `left:${left}%;width:${Math.max(width, 1)}%;top:${top}px;background:${colors[s.status] || 'var(--accent)'};opacity:0.7;`;
+    row.innerHTML = `<span class="swimlane-label-text">${s.id.slice(-7)}</span>`;
+    if (s.reused && s.reuseBoundary) {
+      const cmdsDone = s.commands.filter(c => c.status === 'done').length;
+      const boundaryPct = (s.reuseBoundary / s.commands.length) * 100;
+      row.innerHTML += `<div class="reuse-marker" style="left:${boundaryPct}%"></div>`;
+    }
+    row.addEventListener('mouseenter', (e) => showTooltip(`${s.id} — ${s.status} — ${fmtElapsed(s.elapsed)}`, e.clientX, e.clientY));
+    row.addEventListener('mouseleave', hideTooltip);
+    row.addEventListener('click', () => selectSession(s.id));
+    swimlane.appendChild(row);
+  });
+
+  // Axis labels
+  const axis = document.createElement('div');
+  axis.className = 'swimlane-axis';
+  const fmtT = sec => { const h = Math.floor(sec/3600); const m = Math.floor((sec%3600)/60); const ss = Math.floor(sec%60); return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`; };
+  for (let i = 0; i <= 4; i++) {
+    const sp = document.createElement('span');
+    sp.textContent = fmtT(startBase + (totalRange / 4) * i);
+    axis.appendChild(sp);
+  }
+  swimlane.appendChild(axis);
+}
+
+/* ─── SESSION CARDS ──────────────────────────────────────────── */
+function getFilteredSessions() {
+  return SESSIONS.filter(s => {
+    if (currentFilter === 'all') return true;
+    if (currentFilter === 'active') return s.status === 'active' || s.status === 'created';
+    if (currentFilter === 'disposed') return s.status === 'disposed';
+    if (currentFilter === 'errored') return s.status === 'error' || s.status === 'timeout';
+    return true;
+  });
+}
+
+function buildCardHTML(s) {
+  const isActive = s.status === 'active' || s.status === 'created';
+  const statusClass = `status-${s.status}`;
+  const isExpanded = expandedCards.has(s.id);
+
+  // Status badge
+  let badgeHTML = '';
+  if (s.status === 'created') badgeHTML = '<span class="status-badge created">Created</span>';
+  else if (s.status === 'active') badgeHTML = '<span class="status-badge active"><span class="pulse-dot"></span> Active</span>';
+  else if (s.status === 'disposed') badgeHTML = '<span class="status-badge disposed">Disposed</span>';
+  else if (s.status === 'timeout') badgeHTML = '<span class="status-badge timeout">Timed Out &#9888;</span>';
+  else if (s.status === 'error') badgeHTML = '<span class="status-badge error">Error &#10005;</span>';
+
+  // Reuse badge
+  const reuseBadge = s.reused ? `<span class="reused-badge">&#8635; Reused</span>` : '';
+
+  // Elapsed
+  const elapsedClass = isActive ? 'counting' : '';
+
+  // Progress dots
+  let progressHTML = '';
+  if (s.commands.length) {
+    const dots = s.commands.map(c => {
+      if (c.status === 'done') return '<span class="dot done"></span>';
+      if (c.status === 'running') return '<span class="dot running"></span>';
+      return '<span class="dot pending"></span>';
+    }).join('');
+    const running = s.commands.find(c => c.status === 'running');
+    const label = running
+      ? `Cell ${running.idx} of ${s.cellTotal}`
+      : (s.status === 'disposed' ? `${s.cellTotal}/${s.cellTotal} cells completed` : `${s.commands.filter(c=>c.status==='done').length}/${s.cellTotal} cells`);
+    progressHTML = `<span class="progress-dots">${dots} ${label}</span>`;
+  }
+
+  // Lifecycle bar
+  let lifecycleHTML = '';
+  if (s.status === 'active') {
+    const pct = Math.min(((s.commands.filter(c=>c.status==='done').length + 0.5) / s.cellTotal) * 100, 95);
+    lifecycleHTML = `<div class="lifecycle-bar"><div class="seg seg-fill animating" style="width:${pct}%"></div></div>`;
+  } else if (s.status === 'disposed') {
+    lifecycleHTML = `<div class="lifecycle-bar"><div class="seg seg-active" style="width:100%"></div></div>`;
+  } else if (s.status === 'timeout') {
+    const activePct = 40;
+    const idlePct = 30;
+    const timeoutPct = 30;
+    lifecycleHTML = `<div class="lifecycle-bar"><div class="seg seg-active" style="width:${activePct}%"></div><div class="seg seg-idle" style="width:${idlePct}%"></div><div class="seg seg-timeout" style="width:${timeoutPct}%"></div></div>`;
+  } else if (s.status === 'error') {
+    const donePct = (s.commands.filter(c=>c.status==='done').length / s.cellTotal) * 100;
+    lifecycleHTML = `<div class="lifecycle-bar"><div class="seg seg-active" style="width:${donePct}%"></div><div class="seg seg-error" style="width:${100-donePct}%"></div></div>`;
+  } else if (s.status === 'created') {
+    lifecycleHTML = `<div class="lifecycle-bar"><div class="seg seg-creating" style="width:5%"></div></div>`;
+  }
+  // Reuse marker
+  if (s.reused && s.reuseBoundary) {
+    const markerPct = (s.reuseBoundary / s.commands.length) * 100;
+    lifecycleHTML = lifecycleHTML.replace('</div></div>', `</div><div class="reuse-line" style="left:${markerPct}%"></div></div>`);
+  }
+
+  // Command rows
+  let cmdRows = '';
+  if (isActive || isExpanded) {
+    s.commands.forEach(c => {
+      const typeClass = c.type === 'SQL' ? 'sql' : 'py';
+      const typeLabel = c.type === 'PySpark' ? 'Py' : c.type;
+      let statusHTML = '';
+      if (c.status === 'done') statusHTML = '<span class="cmd-status done">&#10003;</span>';
+      else if (c.status === 'running') statusHTML = '<span class="cmd-status running"><span class="cmd-spinner"></span></span>';
+      else if (c.status === 'pending') statusHTML = '<span class="cmd-status pending">&#9675;</span>';
+      else if (c.status === 'failed') statusHTML = '<span class="cmd-status failed">&#10005;</span>';
+      else if (c.status === 'timeout') statusHTML = '<span class="cmd-status" style="color:var(--amber)">&#9888;</span>';
+      const snippet = c.code.split('\n')[0].substring(0, 60);
+      cmdRows += `<div class="command-row" data-session="${s.id}" data-cmd="${c.idx}">
+        <span class="cmd-index">${c.idx}</span>
+        <span class="cmd-type ${typeClass}">${typeLabel}</span>
+        <span class="cmd-snippet">${snippet}</span>
+        ${statusHTML}
+        <span class="cmd-duration">${fmtDuration(c.duration)}</span>
+      </div>`;
+    });
+  }
+
+  // Waterfall (shown when expanded)
+  let waterfallHTML = '';
+  if (isExpanded) {
+    const maxDur = Math.max(...s.commands.map(c => c.duration), 1);
+    waterfallHTML = '<div class="command-waterfall">';
+    s.commands.forEach(c => {
+      const pct = (c.duration / maxDur) * 100;
+      let fillClass = 'wf-done';
+      if (c.status === 'running') fillClass = 'wf-running';
+      else if (c.status === 'failed') fillClass = 'wf-failed';
+      else if (c.status === 'pending' || c.status === 'timeout') fillClass = 'wf-pending';
+      waterfallHTML += `<div class="waterfall-bar-wrap">
+        <span class="waterfall-label">${c.type === 'PySpark' ? 'Py' : c.type} #${c.idx}</span>
+        <div class="waterfall-track"><div class="waterfall-fill ${fillClass}" style="width:${Math.max(pct, 3)}%"></div></div>
+        <span class="waterfall-time">${fmtDuration(c.duration)}</span>
+      </div>`;
+    });
+    waterfallHTML += '</div>';
+  }
+
+  // Error summary
+  let errorHTML = '';
+  if (s.status === 'error' && s.errorMsg) {
+    errorHTML = `<div class="card-error"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>${s.errorMsg}</div>`;
+  }
+
+  // Lived text
+  let livedHTML = '';
+  if (s.status === 'disposed' && s.lived) {
+    livedHTML = `<div class="card-lived">Lived ${s.lived}</div>`;
+  }
+  if (s.status === 'timeout' && s.idleDuration) {
+    livedHTML = `<div class="card-lived">Idle ${s.idleDuration} before timeout</div>`;
+  }
+
+  return `
+    <div class="card-header">
+      <span class="card-session-id">${s.id}</span>
+      ${reuseBadge}
+      ${badgeHTML}
+      <span class="card-elapsed ${elapsedClass}" data-session-id="${s.id}">${fmtElapsed(s.elapsed)}</span>
+    </div>
+    <div class="card-meta">
+      <span class="meta-tag">MLV: ${s.mlv}</span>
+      ${s.reused ? `<span class="meta-tag" style="color:var(--cyan)">from: ${s.reusedFrom}</span>` : ''}
+      ${progressHTML}
+    </div>
+    ${lifecycleHTML}
+    <div class="command-list">${cmdRows}</div>
+    ${waterfallHTML}
+    ${errorHTML}
+    ${livedHTML}
+  `;
+}
+
+function renderCards(sessions) {
+  cardsContainer.innerHTML = '';
+  stopElapsedTimers();
+
+  if (!sessions || sessions.length === 0) {
+    emptyState.classList.add('visible');
+    swimlaneArea.style.display = 'none';
+    return;
+  }
+  emptyState.classList.remove('visible');
+
+  const activeSessions = sessions.filter(s => s.status === 'active' || s.status === 'created');
+  const historySessions = sessions.filter(s => s.status !== 'active' && s.status !== 'created');
+
+  if (activeSessions.length > 0) {
+    const header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = `<span class="section-dot active-dot"></span> Active <span class="section-count">(${activeSessions.length})</span>`;
+    cardsContainer.appendChild(header);
+
+    activeSessions.forEach((s, i) => {
+      const card = createCardEl(s, i * 60);
+      cardsContainer.appendChild(card);
+    });
+  }
+
+  if (historySessions.length > 0) {
+    const header = document.createElement('div');
+    header.className = 'section-header';
+    header.innerHTML = `<span class="section-dot history-dot"></span> History <span class="section-count">(${historySessions.length})</span>`;
+    cardsContainer.appendChild(header);
+
+    historySessions.forEach((s, i) => {
+      const card = createCardEl(s, (activeSessions.length + i) * 60);
+      cardsContainer.appendChild(card);
+    });
+  }
+
+  renderSwimlane(sessions);
+  startElapsedTimers(sessions);
+}
+
+function createCardEl(s, delay) {
+  const card = document.createElement('div');
+  const isExpanded = expandedCards.has(s.id);
+  card.className = `session-card status-${s.status}${selectedSession === s.id ? ' selected' : ''}${isExpanded ? ' expanded' : ''}`;
+  card.dataset.sessionId = s.id;
+  card.innerHTML = buildCardHTML(s);
+  card.style.animationDelay = delay + 'ms';
+  card.classList.add('entering');
+
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.command-row')) return;
+    toggleExpand(s.id);
+  });
+
+  // Command row clicks
+  card.querySelectorAll('.command-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cmdIdx = parseInt(row.dataset.cmd);
+      showCommandDetail(s, cmdIdx);
+    });
+  });
+
+  return card;
+}
+
+function toggleExpand(sessionId) {
+  if (expandedCards.has(sessionId)) {
+    expandedCards.delete(sessionId);
+  } else {
+    expandedCards.add(sessionId);
+  }
+  selectedSession = sessionId;
+  const filtered = getFilteredSessions();
+  renderCards(filtered);
+  showSessionDetail(sessionId);
+}
+
+function selectSession(sessionId) {
+  selectedSession = sessionId;
+  const filtered = getFilteredSessions();
+  renderCards(filtered);
+  showSessionDetail(sessionId);
+}
+
+/* ─── ELAPSED TIMERS ─────────────────────────────────────────── */
+function startElapsedTimers(sessions) {
+  const activeSessions = sessions.filter(s => s.status === 'active');
+  activeSessions.forEach(s => {
+    const timer = setInterval(() => {
+      s.elapsed += 0.1;
+      const runningCmd = s.commands.find(c => c.status === 'running');
+      if (runningCmd) runningCmd.duration += 0.1;
+      const el = document.querySelector(`.card-elapsed[data-session-id="${s.id}"]`);
+      if (el) el.textContent = fmtElapsed(s.elapsed);
+    }, 100);
+    elapsedTimers.push(timer);
+  });
+}
+
+function stopElapsedTimers() {
+  elapsedTimers.forEach(id => clearInterval(id));
+  elapsedTimers = [];
+}
+
+/* ─── DETAIL PANEL ───────────────────────────────────────────── */
+function showSessionDetail(sessionId) {
+  const s = SESSIONS.find(x => x.id === sessionId);
+  if (!s) return;
+
+  detailTitle.textContent = s.id;
+  let badgeClass = s.status;
+  let badgeText = s.status.charAt(0).toUpperCase() + s.status.slice(1);
+  if (s.status === 'timeout') badgeText = 'Timed Out';
+  detailStatus.className = `status-badge ${badgeClass}`;
+  detailStatus.textContent = badgeText;
+
+  let metaHTML = `
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="label">Status</div><div class="value">${badgeText}</div></div>
+      <div class="detail-meta-item"><div class="label">Created</div><div class="value">${s.created}</div></div>
+      <div class="detail-meta-item"><div class="label">Elapsed</div><div class="value">${fmtElapsed(s.elapsed)}</div></div>
+      <div class="detail-meta-item"><div class="label">MLV</div><div class="value">${s.mlv}</div></div>
+      <div class="detail-meta-item"><div class="label">Reused</div><div class="value">${s.reused ? 'Yes (from ' + s.reusedFrom + ')' : 'No'}</div></div>
+      <div class="detail-meta-item"><div class="label">Commands</div><div class="value">${s.commands.filter(c=>c.status==='done').length} / ${s.cellTotal}</div></div>
+    </div>
+  `;
+
+  let tableHTML = `<div class="detail-section-title">Commands</div>
+    <table class="cmd-detail-table"><thead><tr>
+      <th>#</th><th>Type</th><th>Code</th><th>Status</th><th>Duration</th><th>Retries</th>
+    </tr></thead><tbody>`;
+  s.commands.forEach(c => {
+    const snippet = c.code.split('\n')[0].substring(0, 50);
+    let statusText = c.status;
+    if (c.status === 'done') statusText = '&#10003; Done';
+    else if (c.status === 'running') statusText = '&#9679; Running';
+    else if (c.status === 'pending') statusText = '&#9675; Pending';
+    else if (c.status === 'failed') statusText = '&#10005; Failed';
+    else if (c.status === 'timeout') statusText = '&#9888; Timeout';
+    tableHTML += `<tr data-detail-cmd="${c.idx}" style="cursor:pointer">
+      <td style="font-family:var(--mono)">${c.idx}</td>
+      <td><span class="cmd-type ${c.type==='SQL'?'sql':'py'}">${c.type==='PySpark'?'Py':c.type}</span></td>
+      <td style="font-family:var(--mono);font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${snippet}</td>
+      <td>${statusText}</td>
+      <td style="font-family:var(--mono)">${fmtDuration(c.duration)}</td>
+      <td style="font-family:var(--mono)">${c.retries}</td>
+    </tr>`;
+  });
+  tableHTML += '</tbody></table>';
+
+  detailBody.innerHTML = metaHTML + tableHTML;
+
+  // Command row clicks in detail
+  detailBody.querySelectorAll('tr[data-detail-cmd]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const idx = parseInt(tr.dataset.detailCmd);
+      showCommandDetail(s, idx);
+    });
+  });
+
+  detailPanel.classList.add('open');
+}
+
+function showCommandDetail(session, cmdIdx) {
+  const cmd = session.commands.find(c => c.idx === cmdIdx);
+  if (!cmd) return;
+
+  detailTitle.textContent = `${session.id} › Cell #${cmd.idx}`;
+  let badgeClass = cmd.type === 'SQL' ? 'sql' : 'py';
+  detailStatus.className = `cmd-type ${badgeClass}`;
+  detailStatus.textContent = cmd.type;
+  detailStatus.style.fontSize = '11px';
+
+  let metaHTML = `
+    <div class="detail-meta">
+      <div class="detail-meta-item"><div class="label">Cell</div><div class="value">#${cmd.idx} of ${session.cellTotal}</div></div>
+      <div class="detail-meta-item"><div class="label">Type</div><div class="value">${cmd.type}</div></div>
+      <div class="detail-meta-item"><div class="label">Status</div><div class="value">${cmd.status}</div></div>
+      <div class="detail-meta-item"><div class="label">Duration</div><div class="value">${fmtDuration(cmd.duration)}</div></div>
+      <div class="detail-meta-item"><div class="label">Retries</div><div class="value">${cmd.retries}</div></div>
+      <div class="detail-meta-item"><div class="label">Session</div><div class="value">${session.id}</div></div>
+    </div>
+  `;
+
+  const codeHTML = `<div class="detail-section-title">Code</div><div class="code-block">${highlight(cmd.code, cmd.type)}</div>`;
+
+  let errorHTML = '';
+  if (cmd.error) {
+    errorHTML = `<div class="detail-section-title">Error</div><div class="code-block" style="border-color:var(--red-dim);color:var(--red)">${cmd.error.replace(/</g,'&lt;')}</div>`;
+  }
+
+  const copyBtn = `<div style="margin-top:12px"><button id="copyCodeBtn" style="padding:6px 14px;border-radius:var(--r6);font-size:11px;font-weight:500;border:1px solid var(--border);cursor:pointer;transition:all var(--transition)">Copy Code</button></div>`;
+
+  detailBody.innerHTML = metaHTML + codeHTML + errorHTML + copyBtn;
+
+  const cb = detailBody.querySelector('#copyCodeBtn');
+  if (cb) {
+    cb.addEventListener('click', () => {
+      navigator.clipboard.writeText(cmd.code).then(() => showToast('Code copied to clipboard'));
+    });
+  }
+
+  detailPanel.classList.add('open');
+}
+
+/* ─── DETAIL PANEL RESIZE ────────────────────────────────────── */
+const resizeHandle = $('#detailResizeHandle');
+let isResizing = false;
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  document.addEventListener('mousemove', onResize);
+  document.addEventListener('mouseup', () => { isResizing = false; document.removeEventListener('mousemove', onResize); });
+});
+function onResize(e) {
+  if (!isResizing) return;
+  const contentRect = $('#contentArea').getBoundingClientRect();
+  const newHeight = contentRect.bottom - e.clientY;
+  detailPanel.style.height = Math.max(120, Math.min(newHeight, contentRect.height * 0.7)) + 'px';
+}
+
+/* ─── CLOSE DETAIL ───────────────────────────────────────────── */
+$('#detailClose').addEventListener('click', () => {
+  detailPanel.classList.remove('open');
+  detailPanel.style.height = '';
+});
+
+/* ─── VIEW IN LOGS ───────────────────────────────────────────── */
+$('#detailViewLogs').addEventListener('click', () => {
+  showToast('Switching to Logs tab filtered by session time range + Spark component');
+});
+
+/* ─── COPY SESSION ID ────────────────────────────────────────── */
+$('#detailCopyId').addEventListener('click', () => {
+  const id = detailTitle.textContent.split(' ')[0];
+  navigator.clipboard.writeText(id).then(() => showToast('Session ID copied'));
+});
+
+/* ─── FILTERS ────────────────────────────────────────────────── */
+$$('#filterPills .pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    currentFilter = pill.dataset.filter;
+    $$('#filterPills .pill').forEach(p => {
+      p.className = 'pill';
+      if (p.dataset.filter === currentFilter) {
+        p.classList.add('active-' + currentFilter);
+      }
+    });
+    const filtered = getFilteredSessions();
+    renderCards(filtered);
+    updateCounts();
+  });
+});
+
+function updateCounts() {
+  const all = SESSIONS.length;
+  const active = SESSIONS.filter(s => s.status === 'active' || s.status === 'created').length;
+  const disposed = SESSIONS.filter(s => s.status === 'disposed').length;
+  const errored = SESSIONS.filter(s => s.status === 'error' || s.status === 'timeout').length;
+  $('#countAll').textContent = all;
+  $('#countActive').textContent = active;
+  $('#countDisposed').textContent = disposed;
+  $('#countErrored').textContent = errored;
+  const filtered = getFilteredSessions();
+  $('#sessionCount').textContent = `${filtered.length} session${filtered.length !== 1 ? 's' : ''}`;
+}
+
+/* ─── EXPORT ─────────────────────────────────────────────────── */
+$('#exportBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('#exportDropdown').classList.toggle('show');
+});
+document.addEventListener('click', () => $('#exportDropdown').classList.remove('show'));
+$('#exportDropdown').addEventListener('click', (e) => e.stopPropagation());
+
+$('#exportJson').addEventListener('click', () => {
+  const data = JSON.stringify(SESSIONS, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'spark-sessions.json'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported as JSON');
+});
+
+$('#exportCsv').addEventListener('click', () => {
+  let csv = 'Session ID,Status,MLV,Elapsed,Commands,Errors\n';
+  SESSIONS.forEach(s => {
+    csv += `${s.id},${s.status},${s.mlv},${fmtElapsed(s.elapsed)},${s.cellTotal},${s.errorMsg||''}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'spark-sessions.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported as CSV');
+});
+
+/* ─── KEYBOARD ───────────────────────────────────────────────── */
+document.addEventListener('keydown', (e) => {
+  // Ctrl+E export
+  if (e.ctrlKey && e.key === 'e') { e.preventDefault(); $('#exportDropdown').classList.toggle('show'); return; }
+  // Escape
+  if (e.key === 'Escape') {
+    if ($('#statePanel').classList.contains('open')) { $('#statePanel').classList.remove('open'); $('#stateCtrlBtn').classList.remove('active'); return; }
+    if (detailPanel.classList.contains('open')) { detailPanel.classList.remove('open'); detailPanel.style.height = ''; return; }
+    if ($('#exportDropdown').classList.contains('show')) { $('#exportDropdown').classList.remove('show'); return; }
+  }
+  // Arrow Up/Down for session navigation
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    const cards = [...cardsContainer.querySelectorAll('.session-card')];
+    if (!cards.length) return;
+    let idx = cards.findIndex(c => c.dataset.sessionId === selectedSession);
+    if (e.key === 'ArrowDown') idx = Math.min(idx + 1, cards.length - 1);
+    else idx = Math.max(idx - 1, 0);
+    if (idx < 0) idx = 0;
+    const sid = cards[idx].dataset.sessionId;
+    selectedSession = sid;
+    cards.forEach(c => c.classList.toggle('selected', c.dataset.sessionId === sid));
+    cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    showSessionDetail(sid);
+  }
+  // Enter to expand
+  if (e.key === 'Enter' && selectedSession) {
+    toggleExpand(selectedSession);
+  }
+});
+
+/* ─── STATE CONTROLLER ───────────────────────────────────────── */
+const stateCtrlBtn = $('#stateCtrlBtn');
+const statePanel = $('#statePanel');
+const stateList = $('#stateList');
+
+stateCtrlBtn.addEventListener('click', () => {
+  statePanel.classList.toggle('open');
+  stateCtrlBtn.classList.toggle('active');
+});
+
+function renderStateList() {
+  const dotColors = {
+    'SPARK-001': 'var(--text-3)', 'SPARK-002': 'var(--blue)',
+    'SPARK-003': 'var(--blue)', 'SPARK-004': 'var(--green)',
+    'SPARK-005': 'var(--accent)', 'SPARK-006': 'var(--text-3)',
+    'SPARK-007': 'var(--amber)', 'SPARK-008': 'var(--red)',
+    'SPARK-009': 'var(--cyan)', 'SPARK-010': 'var(--accent)',
+    'SPARK-011': 'var(--green)', 'SPARK-012': 'var(--purple)',
+    'SPARK-013': 'var(--blue)', 'SPARK-014': 'var(--teal)'
+  };
+  stateList.innerHTML = '';
+  STATES.forEach(st => {
+    const item = document.createElement('div');
+    item.className = `state-item${st.id === currentState ? ' current' : ''}`;
+    item.innerHTML = `<span class="state-dot" style="background:${dotColors[st.id]}"></span><span class="state-id">${st.id}</span><span class="state-name">${st.name}</span>`;
+    item.addEventListener('click', () => applyState(st.id));
+    stateList.appendChild(item);
+  });
+}
+
+function applyState(stateId) {
+  currentState = stateId;
+  renderStateList();
+  stopElapsedTimers();
+  expandedCards.clear();
+  selectedSession = null;
+  detailPanel.classList.remove('open');
+  detailPanel.style.height = '';
+
+  switch (stateId) {
+    case 'SPARK-001': // Empty
+      renderCards([]);
+      break;
+
+    case 'SPARK-002': { // First session
+      renderCards([]);
+      setTimeout(() => {
+        emptyState.classList.remove('visible');
+        const first = SESSIONS[0];
+        const card = createCardEl(first, 0);
+        const header = document.createElement('div');
+        header.className = 'section-header';
+        header.innerHTML = `<span class="section-dot active-dot"></span> Active <span class="section-count">(1)</span>`;
+        cardsContainer.appendChild(header);
+        cardsContainer.appendChild(card);
+        swimlaneArea.style.display = '';
+        renderSwimlane([first]);
+        startElapsedTimers([first]);
+      }, 600);
+      break;
+    }
+
+    case 'SPARK-003': { // Session created
+      const mock = { ...SESSIONS[0], status: 'created', elapsed: 0, commands: SESSIONS[0].commands.map(c => ({...c, status:'pending', duration:0})) };
+      renderCards([mock]);
+      break;
+    }
+
+    case 'SPARK-004': // Session active
+      renderCards([SESSIONS[0]]);
+      break;
+
+    case 'SPARK-005': // Command executing
+      renderCards([SESSIONS[0]]);
+      break;
+
+    case 'SPARK-006': // Session disposed
+      renderCards([SESSIONS[2]]);
+      break;
+
+    case 'SPARK-007': // Session timeout
+      renderCards([SESSIONS[3]]);
+      break;
+
+    case 'SPARK-008': // Session error
+      renderCards([SESSIONS[4]]);
+      break;
+
+    case 'SPARK-009': // Session reuse
+      renderCards([SESSIONS[1]]);
+      break;
+
+    case 'SPARK-010': { // Card expanded
+      expandedCards.add(SESSIONS[0].id);
+      renderCards([SESSIONS[0]]);
+      break;
+    }
+
+    case 'SPARK-011': // Multiple sessions (default)
+      currentFilter = 'all';
+      $$('#filterPills .pill').forEach(p => { p.className = 'pill'; if (p.dataset.filter === 'all') p.classList.add('active-all'); });
+      renderCards(SESSIONS);
+      break;
+
+    case 'SPARK-012': { // Command detail
+      renderCards([SESSIONS[0]]);
+      setTimeout(() => showCommandDetail(SESSIONS[0], 3), 300);
+      break;
+    }
+
+    case 'SPARK-013': // Cross-tab view logs
+      renderCards(SESSIONS);
+      setTimeout(() => showToast('Switching to Logs tab ► filtered by sess-abc-123 time range + Spark component', 4000), 200);
+      break;
+
+    case 'SPARK-014': // Export
+      renderCards(SESSIONS);
+      setTimeout(() => {
+        const data = JSON.stringify(SESSIONS, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'spark-sessions-export.json'; a.click();
+        URL.revokeObjectURL(url);
+        showToast('Session data exported as JSON');
+      }, 300);
+      break;
+
+    default:
+      renderCards(SESSIONS);
+  }
+  updateCounts();
+}
+
+/* ─── INIT ───────────────────────────────────────────────────── */
+renderStateList();
+applyState('SPARK-011');
+
+})();
+</script>
+</body>
+</html>
