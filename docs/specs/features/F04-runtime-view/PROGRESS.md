@@ -15,18 +15,18 @@ Each mock is a standalone HTML file CEO reviews in browser before approval.
 | # | Tab | States | File | Status | Approved |
 |---|-----|--------|------|--------|----------|
 | 01 | **Logs** | 97 | `docs/design/mocks/f04-mock-01-logs.html` | ✅ DONE | ✅ 2026-04-12 |
-| 02 | **Telemetry** | 13 | `docs/design/mocks/f04-mock-02-telemetry.html` | ⬜ PENDING | — |
-| 03 | **System Files** | 14 | `docs/design/mocks/f04-mock-03-system-files.html` | ⬜ PENDING | — |
-| 04 | **Spark Sessions** | 14 | `docs/design/mocks/f04-mock-04-spark-sessions.html` | ⬜ PENDING | — |
-| 05 | **Tokens** | 6 | `docs/design/mocks/f04-mock-05-tokens.html` | ⬜ PENDING | — |
-| 06 | **Caches** | 5 | `docs/design/mocks/f04-mock-06-caches.html` | ⬜ PENDING | — |
-| 07 | **HTTP Pipeline** | 6 | `docs/design/mocks/f04-mock-07-http-pipeline.html` | ⬜ PENDING | — |
-| 08 | **Retries** | 5 | `docs/design/mocks/f04-mock-08-retries.html` | ⬜ PENDING | — |
-| 09 | **Feature Flags** | 6 | `docs/design/mocks/f04-mock-09-feature-flags.html` | ⬜ PENDING | — |
-| 10 | **DI Registry** | 5 | `docs/design/mocks/f04-mock-10-di-registry.html` | ⬜ PENDING | — |
-| 11 | **Perf Markers** | 7 | `docs/design/mocks/f04-mock-11-perf-markers.html` | ⬜ PENDING | — |
+| 02 | **Telemetry** | 13 | `docs/design/mocks/f04-mock-02-telemetry.html` | ✅ DONE | ✅ 2026-04-12 |
+| 03 | **System Files** | 14 | `docs/design/mocks/f04-mock-03-system-files.html` | ✅ DONE | ✅ 2026-04-12 |
+| 04 | **Spark Sessions** | 14 | `docs/design/mocks/f04-mock-04-spark-sessions.html` | ✅ DONE | ✅ 2026-04-12 |
+| 05 | **Tokens** | 6 | `docs/design/mocks/f04-mock-05-tokens.html` | ✅ DONE | ✅ 2026-04-12 |
+| 06 | **Caches** | 5 | `docs/design/mocks/f04-mock-06-caches.html` | ✅ DONE | ✅ 2026-04-12 |
+| 07 | **HTTP Pipeline** | 6 | `docs/design/mocks/f04-mock-07-http-pipeline.html` | ✅ DONE | ✅ 2026-04-12 |
+| 08 | **Retries** | 5 | `docs/design/mocks/f04-mock-08-retries.html` | ✅ DONE | ✅ 2026-04-12 |
+| 09 | **Feature Flags** | 6 | `docs/design/mocks/f04-mock-09-feature-flags.html` | ✅ DONE | ✅ 2026-04-12 |
+| 10 | **DI Registry** | 5 | `docs/design/mocks/f04-mock-10-di-registry.html` | ✅ DONE | ✅ 2026-04-12 |
+| 11 | **Perf Markers** | 7 | `docs/design/mocks/f04-mock-11-perf-markers.html` | ✅ DONE | ✅ 2026-04-12 |
 
-**Phase 0 gate:** All 11 mocks CEO-approved → proceed to Phase 1.
+**Phase 0 gate: ✅ ALL 11 MOCKS CEO-APPROVED → proceed to Phase 1.**
 
 ---
 
