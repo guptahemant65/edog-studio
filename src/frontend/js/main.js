@@ -95,7 +95,7 @@ class EdogLogViewer {
   constructor() {
     this.state = new LogViewerState();
     this.renderer = new Renderer(this.state);
-    this.ws = new WebSocketManager();
+    this.ws = new SignalRManager();
     this.filter = new FilterManager(this.state, this.renderer);
     this.detail = new DetailPanel();
     this.execSummary = new ExecutionSummary(this.state, this.renderer);
