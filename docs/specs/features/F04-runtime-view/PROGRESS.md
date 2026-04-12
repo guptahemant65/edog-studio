@@ -107,14 +107,51 @@ Each mock is a standalone HTML file CEO reviews in browser before approval.
 | 2026-04-12 | All 11 tabs in scope — no phasing out, ship everything | CEO |
 | 2026-04-12 | Agents may override Design Bible if they have more advanced ideas | CEO |
 | 2026-04-12 | Zero bugs mandate — ask before assuming, no exceptions | CEO |
+| 2026-04-12 | JSON protocol (MessagePack NuGet conflict with FLT) | Vex + CEO |
+| 2026-04-12 | Future-proof: zero hardcoding, auto-detect everything | CEO |
+| 2026-04-12 | ChannelReader streaming with snapshot hydration (replaces REST+groups) | CEO + Sana |
+| 2026-04-12 | Sidebar Option A: Runtime View as parent with internal tab bar | CEO |
+| 2026-04-12 | 9 interceptors (not 7) — includes DI Registry + Perf Markers | Sana |
+| 2026-04-12 | Caches tab: 2 real caches in FLT (not 10) — mock needs updating | Sana (audit) |
+| 2026-04-12 | DateTimeOffset.UtcNow for all new event models (not DateTime) | Audit finding |
+| 2026-04-12 | CORS restricted to localhost/127.0.0.1 only (not wildcard) | Audit finding |
+| 2026-04-12 | Interceptor idempotency guard: skip if already wrapped | Audit finding |
+| 2026-04-12 | Flat file layout for interceptors (no Interceptors/ subdir) | Plan decision |
+
+---
+
+## Audit Findings (2 audits, 2026-04-12)
+
+28 total findings (12 blocking, 16 non-blocking). Key fixes incorporated:
+
+| Finding | Status |
+|---------|--------|
+| No snapshot hydration | ✅ Fixed: ChannelReader streaming (SIGNALR_PROTOCOL.md v2) |
+| No batching/backpressure | ✅ Fixed: TopicBuffer + bounded channel + DropOldest |
+| Task.Run per event | ✅ Fixed: synchronous Publish to TopicRouter |
+| Event ordering | ✅ Fixed: monotonic sequenceId per topic |
+| Memory budget undefined | ✅ Fixed: per-topic sizes, 50MB total |
+| Security redaction | ✅ Fixed: per-field rules in protocol spec |
+| ADR-006 stale | ✅ Fixed: addendum added |
+| Single onMessage callback | ✅ Fixed: topic event bus in protocol spec v2 |
+| Interceptor stacking | Documented: idempotency guard pattern |
+| DateTime serialization | Documented: DateTimeOffset.UtcNow rule |
+| CORS too permissive | Documented: restrict to localhost |
+| Sidebar architecture | ✅ Decided: Option A (Runtime parent + sub-tabs) |
+| 7 vs 9 interceptors | Documented: 9 is correct |
+| Caches mock wrong (10 vs 2) | Documented: update mock before Phase 3 |
 
 ---
 
 ## Notes for Future Sessions
 
 - Master plan: `docs/superpowers/plans/2026-04-12-f04-runtime-view-master-plan.md`
+- Phase 2 plan: `docs/superpowers/plans/2026-04-12-phase2-interceptors.md`
+- SignalR protocol: `docs/specs/SIGNALR_PROTOCOL.md` (v2 — streaming architecture)
 - Authority hierarchy: `hivemind/AUTHORITY.md` (Design Bible = Tier 0 supreme)
 - State matrix: `docs/specs/features/F04-runtime-view/states.md` (200+ states)
 - Design Bible: `docs/design/design-bible-part{1,2,3,4a,4b,4c}.html`
-- ADR-006: `docs/adr/ADR-006-signalr-messagepack.md` (SignalR transport)
-- Mocks directory: `docs/design/mocks/`
+- ADR-006: `docs/adr/ADR-006-signalr-messagepack.md` (SignalR + JSON addendum)
+- Mocks directory: `docs/design/mocks/` (11 individual + 1 integrated)
+- FLT data audit: verified 9 interfaces, 11 data gaps, 7 LOW risk, 2 MEDIUM
+- Final audit: 28 findings (12 blocking → all addressed or documented)
