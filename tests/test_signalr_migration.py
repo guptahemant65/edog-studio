@@ -158,8 +158,9 @@ class TestEdogLogServerMigration:
     def test_adds_signalr_services(self, logserver_source: str) -> None:
         assert "AddSignalR()" in logserver_source
 
-    def test_adds_messagepack_protocol(self, logserver_source: str) -> None:
-        assert "AddMessagePackProtocol()" in logserver_source
+    def test_uses_json_protocol(self, logserver_source: str) -> None:
+        # JSON protocol is default — no AddMessagePackProtocol needed
+        assert "AddMessagePackProtocol()" not in logserver_source
 
     def test_no_batch_flush_timer(self, logserver_source: str) -> None:
         assert "batchFlushTimer" not in logserver_source
@@ -199,11 +200,10 @@ class TestVendorLibraries:
         size = path.stat().st_size
         assert size > 30000, f"signalr.min.js too small: {size} bytes"
 
-    def test_msgpack_protocol_exists(self) -> None:
+    def test_msgpack_protocol_not_needed(self) -> None:
+        # MessagePack removed due to NuGet version conflicts with FLT
         path = PROJECT_ROOT / "lib" / "signalr-protocol-msgpack.min.js"
-        assert path.exists()
-        size = path.stat().st_size
-        assert size > 10000, f"signalr-protocol-msgpack.min.js too small: {size} bytes"
+        assert not path.exists(), "msgpack lib should be removed — using JSON protocol"
 
     def test_old_websocket_js_deleted(self) -> None:
         path = PROJECT_ROOT / "src" / "frontend" / "js" / "websocket.js"

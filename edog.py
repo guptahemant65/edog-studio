@@ -1677,65 +1677,14 @@ def apply_log_viewer_files(repo_root):
 
 
 def ensure_signalr_nuget(repo_root):
-    """Ensure the FLT project has the SignalR MessagePack NuGet package reference.
+    """No-op: SignalR JSON protocol is built into ASP.NET Core — no extra NuGet needed.
 
-    Required for EdogPlaygroundHub SignalR hub (ADR-006).
-    FLT uses central package version management, so we must patch BOTH:
-    1. Directory.Packages.props — add PackageVersion with version
-    2. Microsoft.LiveTable.Service.csproj — add PackageReference without version
+    MessagePack protocol was attempted but caused version conflicts with FLT's
+    central package management (MessagePack.Annotations mismatch + NU1603).
+    JSON protocol works identically for localhost dev tool use. Upgrade to
+    MessagePack later if wire size becomes a concern at scale.
     """
-    import re
-
-    pkg = "Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
-    pkg_version = "8.0.8"  # Match .NET 8 SDK
-
-    # 1. Patch Directory.Packages.props (central version)
-    packages_props = repo_root / "Directory.Packages.props"
-    if packages_props.exists():
-        content = packages_props.read_text(encoding="utf-8")
-        if pkg not in content:
-            # Insert after the last PackageVersion line
-            matches = list(re.finditer(r'(\s*<PackageVersion\s[^/]*/>\s*\n)', content))
-            if matches:
-                insert_pos = matches[-1].end()
-                indent = "    "
-                new_line = f'{indent}<PackageVersion Include="{pkg}" Version="{pkg_version}" />\n'
-                content = content[:insert_pos] + new_line + content[insert_pos:]
-                packages_props.write_text(content, encoding="utf-8")
-                print(f"   ✅ Added {pkg} v{pkg_version} to Directory.Packages.props")
-            else:
-                print(f"   ⚠️  Could not find insertion point in Directory.Packages.props")
-                return False
-        else:
-            print(f"   ⏭️  {pkg} already in Directory.Packages.props")
-    else:
-        print(f"   ⚠️  Directory.Packages.props not found at {packages_props}")
-        return False
-
-    # 2. Patch csproj (reference without version — central management handles it)
-    csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
-    if csproj.exists():
-        content = csproj.read_text(encoding="utf-8")
-        if pkg not in content:
-            # Insert after the last PackageReference line
-            matches = list(re.finditer(r'(\s*<PackageReference\s[^/]*/>\s*\n)', content))
-            if matches:
-                insert_pos = matches[-1].end()
-                indent = "    "
-                new_line = f'{indent}<PackageReference Include="{pkg}" />\n'
-                content = content[:insert_pos] + new_line + content[insert_pos:]
-                csproj.write_text(content, encoding="utf-8")
-                print(f"   ✅ Added {pkg} PackageReference to csproj (no version — central)")
-            else:
-                print(f"   ⚠️  Could not find insertion point in csproj")
-                return False
-        else:
-            print(f"   ⏭️  {pkg} already in csproj")
-    else:
-        print(f"   ⚠️  csproj not found at {csproj}")
-        return False
-
-    return True
+    pass
 
 
 def revert_log_viewer_files(repo_root):

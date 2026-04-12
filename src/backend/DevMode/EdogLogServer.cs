@@ -75,8 +75,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             builder.WebHost.UseUrls($"http://localhost:{port}");
             builder.WebHost.UseKestrel(options => options.AllowSynchronousIO = true);
 
-            builder.Services.AddSignalR()
-                .AddMessagePackProtocol();
+            builder.Services.AddSignalR();
 
             app = builder.Build();
 

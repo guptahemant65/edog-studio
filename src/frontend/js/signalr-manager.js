@@ -55,13 +55,8 @@ class SignalRManager {
         .withUrl(hubUrl)
         .withAutomaticReconnect([0, 1000, 2000, 5000, 10000, 30000]);
 
-      // Use MessagePack if the protocol is available, otherwise fall back to JSON
-      if (typeof signalR.protocols !== 'undefined' &&
-          signalR.protocols.msgpack &&
-          signalR.protocols.msgpack.MessagePackHubProtocol) {
-        builder.withHubProtocol(new signalR.protocols.msgpack.MessagePackHubProtocol());
-      }
-
+      // JSON protocol (built-in, no extra dependencies)
+      // MessagePack can be added later for 30-50% wire size reduction
       this.connection = builder.build();
       this.setStatus('connecting');
 
