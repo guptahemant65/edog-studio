@@ -16,6 +16,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     public static class EdogDevModeRegistrar
     {
         private static bool _registered;
+        private static bool _httpClientFactoryWrapped;
 
         /// <summary>
         /// Registers all EDOG DevMode interceptors. Idempotent.
@@ -87,7 +88,14 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterTokenInterceptor()
         {
-            // TODO: Phase 2B — wrap IHttpClientFactory with EdogTokenInterceptor DelegatingHandler
+            try
+            {
+                EnsureHttpClientFactoryWrapped();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Token interceptor failed: {ex.Message}");
+            }
         }
 
         private static void RegisterFileSystemInterceptor()
@@ -110,7 +118,33 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterHttpPipelineHandler()
         {
-            // TODO: Phase 2B — add EdogHttpPipelineHandler to HttpClient pipeline
+            try
+            {
+                EnsureHttpClientFactoryWrapped();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ HTTP pipeline handler failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Shared registration for both EdogTokenInterceptor and EdogHttpPipelineHandler.
+        /// Wraps IHttpClientFactory with EdogHttpClientFactoryWrapper which injects both
+        /// DelegatingHandlers into every HttpClient pipeline. Idempotent.
+        /// </summary>
+        private static void EnsureHttpClientFactoryWrapped()
+        {
+            if (_httpClientFactoryWrapped) return;
+
+            var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                System.Net.Http.IHttpClientFactory>();
+            if (inner is EdogHttpClientFactoryWrapper) return;
+            var wrapper = new EdogHttpClientFactoryWrapper(inner);
+            Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                System.Net.Http.IHttpClientFactory>(wrapper);
+            _httpClientFactoryWrapped = true;
+            Console.WriteLine("[EDOG] ✓ HttpClientFactory interceptors registered (Token + HTTP pipeline)");
         }
 
         private static void RegisterRetryInterceptor()
