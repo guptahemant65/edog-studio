@@ -63,21 +63,38 @@ Each mock is a standalone HTML file CEO reviews in browser before approval.
 
 ## Phase 3: Frontend + Wiring (11 tabs)
 
-| Tab | JS Module | CSS Module | Wired to SignalR | Status |
-|-----|-----------|------------|------------------|--------|
-| Logs | renderer.js (modify) | logs.css (modify) | log group | ⬜ PENDING |
-| Telemetry | telemetry.js (modify) | telemetry.css (modify) | telemetry group | ⬜ PENDING |
-| System Files | system-files.js (new) | system-files.css (new) | fileop group | ⬜ PENDING |
-| Spark Sessions | spark-sessions.js (new) | spark.css (modify) | spark group | ⬜ PENDING |
-| Tokens | tokens.js (new) | token-inspector.css (modify) | token group | ⬜ PENDING |
-| Caches | caches.js (new) | caches.css (new) | cache group | ⬜ PENDING |
-| HTTP Pipeline | http-pipeline.js (new) | http-pipeline.css (new) | http group | ⬜ PENDING |
-| Retries | retries.js (new) | retries.css (new) | retry group | ⬜ PENDING |
-| Feature Flags | feature-flags.js (new) | feature-flags.css (new) | flag group | ⬜ PENDING |
-| DI Registry | di-registry.js (new) | di-registry.css (new) | di group | ⬜ PENDING |
-| Perf Markers | perf-markers.js (new) | perf-markers.css (new) | perf group | ⬜ PENDING |
+**Layer 1: DONE ✅** (shell infrastructure)
 
-**Phase 3 gate:** Full gauntlet per tab + CEO browser review → Phase 4.
+| Task | Description | Status |
+|------|-------------|--------|
+| 3.1 | Upgrade signalr-manager.js (event bus + stream API) | ✅ DONE |
+| 3.2 | Restructure index.html (sidebar Option A + 11 tab containers) | ✅ DONE |
+| 3.3 | Create runtime.css (shell styles) | ✅ DONE |
+| 3.4 | Create runtime-view.js (tab bar orchestrator) | ✅ DONE |
+| 3.5 | Update main.js + sidebar.js (wire RuntimeView, 4 views) | ✅ DONE |
+
+**Layer 2: PENDING** (11 tab modules — dispatch in fresh session)
+
+| Tab | JS Module | CSS Module | Reference Mock | Status |
+|-----|-----------|------------|----------------|--------|
+| Logs enhancements | renderer.js + filters.js (modify) | logs.css (modify) | f04-mock-01-logs.html (127KB) | ⬜ PENDING |
+| Telemetry | js/tab-telemetry.js (new) | css/tab-telemetry.css (new) | f04-mock-02-telemetry.html (66KB) | ⬜ PENDING |
+| System Files | js/tab-sysfiles.js (new) | css/tab-sysfiles.css (new) | f04-mock-03-system-files.html (88KB) | ⬜ PENDING |
+| Spark Sessions | js/tab-spark.js (new) | css/tab-spark.css (new) | f04-mock-04-spark-sessions.html (76KB) | ⬜ PENDING |
+| Tokens | js/tab-tokens.js (new) | css/tab-tokens.css (new) | f04-mock-05-tokens.html (76KB) | ⬜ PENDING |
+| Caches | js/tab-caches.js (new) | css/tab-caches.css (new) | f04-mock-06-caches.html (72KB) | ⬜ PENDING |
+| HTTP Pipeline | js/tab-http.js (new) | css/tab-http.css (new) | f04-mock-07-http-pipeline.html (83KB) | ⬜ PENDING |
+| Retries | js/tab-retries.js (new) | css/tab-retries.css (new) | f04-mock-08-retries.html (71KB) | ⬜ PENDING |
+| Feature Flags | js/tab-flags.js (new) | css/tab-flags.css (new) | f04-mock-09-feature-flags.html (68KB) | ⬜ PENDING |
+| DI Registry | js/tab-di.js (new) | css/tab-di.css (new) | f04-mock-10-di-registry.html (57KB) | ⬜ PENDING |
+| Perf Markers | js/tab-perf.js (new) | css/tab-perf.css (new) | f04-mock-11-perf-markers.html (66KB) | ⬜ PENDING |
+
+**Layer 3: PENDING** (integration)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| 3.17 | Update build-html.py (add 10 new JS + 10 new CSS modules) | ⬜ PENDING |
+| 3.18 | Build + deploy + verify all 11 tabs via agent-browser | ⬜ PENDING |
 
 ---
 
