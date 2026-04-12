@@ -509,15 +509,22 @@ def _handle_account_picker(username, timeout=45):
                     if is_login and ("edge" in title or "chrome" in title or "msedge" in title):
                         _deploy_log("Account picker detected — auto-selecting...", "info")
                         try:
+                            # Briefly focus to send keystrokes, then minimize
                             win.set_focus()
+                            time.sleep(0.3)
+                            send_keys("{TAB}{TAB}{ENTER}")
                             time.sleep(0.5)
+                            # Minimize/close the browser window so user doesn't see it
                             try:
-                                win.click_input()
-                                time.sleep(0.3)
+                                win.minimize()
                             except Exception:
                                 pass
-                            send_keys("{TAB}{TAB}{ENTER}")
-                            time.sleep(1)
+                            # Wait for redirect to complete, then close the window
+                            time.sleep(2)
+                            try:
+                                win.close()
+                            except Exception:
+                                pass
                             _deploy_log(f"Account selected: {username}", "success")
                             return True
                         except Exception as e:
