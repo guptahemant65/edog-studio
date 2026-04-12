@@ -16659,6 +16659,15 @@ class WorkspaceExplorer {
     } else if (state.status === 'stopped' || state.status === 'idle') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
       if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+      // Clear logs and telemetry — stale data from dead service
+      if (window.edogApp) {
+        window.edogApp.state.logBuffer.clear();
+        window.edogApp.state.telemetryBuffer = [];
+        window.edogApp.state.stats = { totalLogs: 0, totalEvents: 0, verbose: 0, message: 0, warning: 0, error: 0, succeeded: 0, failed: 0 };
+        window.edogApp.renderer.containerReady = false;
+        window.edogApp.renderer.scheduleRender();
+      }
+      if (window.edogWs) window.edogWs.disconnect();
       const btnEl = document.getElementById('ws-deploy-btn');
       if (btnEl) btnEl.style.display = '';
       // Remove undeploy button
@@ -16730,6 +16739,14 @@ class WorkspaceExplorer {
           } catch { /* best effort */ }
           // Disconnect WebSocket (prevent reconnect spam to dead service)
           if (window.edogWs) window.edogWs.disconnect();
+          // Clear logs and telemetry — stale data from dead service
+          if (window.edogApp) {
+            window.edogApp.state.logBuffer.clear();
+            window.edogApp.state.telemetryBuffer = [];
+            window.edogApp.state.stats = { totalLogs: 0, totalEvents: 0, verbose: 0, message: 0, warning: 0, error: 0, succeeded: 0, failed: 0 };
+            window.edogApp.renderer.containerReady = false;
+            window.edogApp.renderer.scheduleRender();
+          }
           // Reset UI to Phase 1
           if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
           if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
