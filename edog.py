@@ -65,6 +65,7 @@ FILES = {
 # DevMode log viewer files (created, not patched)
 DEVMODE_FILES = {
     "EdogLogServer": SERVICE_PATH / "DevMode/EdogLogServer.cs",
+    "EdogPlaygroundHub": SERVICE_PATH / "DevMode/EdogPlaygroundHub.cs",
     "EdogApiProxy": SERVICE_PATH / "DevMode/EdogApiProxy.cs",
     "EdogLogModels": SERVICE_PATH / "DevMode/EdogLogModels.cs",
     "EdogLogInterceptor": SERVICE_PATH / "DevMode/EdogLogInterceptor.cs", 
@@ -1675,6 +1676,46 @@ def apply_log_viewer_files(repo_root):
     return "already_applied", []
 
 
+def ensure_signalr_nuget(repo_root):
+    """Ensure the FLT project has the SignalR MessagePack NuGet package reference.
+
+    Required for EdogPlaygroundHub SignalR hub (ADR-006).
+    Adds PackageReference if not already present.
+    """
+    csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
+    if not csproj.exists():
+        print(f"   ⚠️  FLT csproj not found: {csproj}")
+        return False
+
+    content = csproj.read_text(encoding="utf-8")
+    pkg = "Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
+
+    if pkg in content:
+        return True  # Already present
+
+    # Insert the PackageReference after the last existing PackageReference
+    import re
+    # Find the last </PackageReference> or /> closing a PackageReference
+    pattern = r'(<PackageReference\s[^>]*/>\s*\n)'
+    matches = list(re.finditer(pattern, content))
+    if not matches:
+        # Try multi-line PackageReference
+        pattern2 = r'(</PackageReference>\s*\n)'
+        matches = list(re.finditer(pattern2, content))
+
+    if matches:
+        last_match = matches[-1]
+        insert_pos = last_match.end()
+        new_ref = f'    <PackageReference Include="{pkg}" Version="8.*" />\n'
+        content = content[:insert_pos] + new_ref + content[insert_pos:]
+        csproj.write_text(content, encoding="utf-8")
+        print(f"   ✅ Added {pkg} NuGet to FLT csproj")
+        return True
+    else:
+        print(f"   ⚠️  Could not find insertion point for NuGet in {csproj}")
+        return False
+
+
 def revert_log_viewer_files(repo_root):
     """Remove EDOG web log viewer files from FLT repo."""
     removed = False
@@ -1688,6 +1729,16 @@ def revert_log_viewer_files(repo_root):
     devmode_dir = repo_root / SERVICE_PATH / "DevMode"
     if devmode_dir.exists() and not any(devmode_dir.iterdir()):
         devmode_dir.rmdir()
+
+    # Remove SignalR NuGet from csproj if present
+    csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
+    if csproj.exists():
+        content = csproj.read_text(encoding="utf-8")
+        pkg_line = 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'
+        if pkg_line in content:
+            import re
+            content = re.sub(r'\s*<PackageReference\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', '\n', content)
+            csproj.write_text(content, encoding="utf-8")
     
     return removed
 
@@ -2124,6 +2175,9 @@ def apply_all_changes(token, repo_root):
         changes_made.append(f"✅ Web log viewer ({', '.join(files)})")
     elif status == "already_applied":
         changes_made.append(f"⏭️  Web log viewer (already)")
+
+    # 3b. Ensure SignalR MessagePack NuGet is in FLT project (ADR-006)
+    ensure_signalr_nuget(repo_root)
     
     # 4. Register log viewer interceptors (modify Program.cs and WorkloadApp.cs)
     # Program.cs registration
