@@ -514,15 +514,10 @@ def _handle_account_picker(username, timeout=45):
                             time.sleep(0.3)
                             send_keys("{TAB}{TAB}{ENTER}")
                             time.sleep(0.5)
-                            # Minimize/close the browser window so user doesn't see it
+                            # Minimize the browser window so user doesn't see it
+                            # Don't close — the tab opened in an existing window
                             try:
                                 win.minimize()
-                            except Exception:
-                                pass
-                            # Wait for redirect to complete, then close the window
-                            time.sleep(2)
-                            try:
-                                win.close()
                             except Exception:
                                 pass
                             _deploy_log(f"Account selected: {username}", "success")
