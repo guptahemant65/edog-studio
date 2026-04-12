@@ -1,536 +1,566 @@
-# Phase 2 Backend: Complete Implementation Plan
+# Phase 2 Backend — Palantir-Grade Implementation Plan
 
-> **For agentic workers:** Use superpowers:executing-plans. Each task is independent after Task 1.
-
-**Goal:** Build the complete backend infrastructure for all 11 Runtime View topics: TopicBuffer system, EdogTopicRouter, 9 new interceptors, EdogDevModeRegistrar, ChannelReader streaming in hub, and all edog.py patching.
-
-**Architecture:** SignalR ChannelReader streaming with snapshot hydration (SIGNALR_PROTOCOL.md v2). Interceptors write to TopicRouter → TopicBuffer. Hub streams from TopicBuffer (snapshot first, then live). Zero hardcoding. Auto-detect new services.
-
-**Prerequisites:** Phase 1 complete (SignalR hub + JS client working). FLT codebase at `C:\Users\guptahemant\newrepo\workload-fabriclivetable`.
+> **Classification:** IMPLEMENTATION SPEC — every line is actionable
+> **Owner:** Vex (Backend) + Sana (Architecture)
+> **Depends on:** Phase 1 SignalR ✅ complete
+> **Mandate:** Zero bugs. Zero hardcoding. Future-proof auto-detection.
 
 ---
 
-## Task Dependency Graph
+## The Big Picture: How Data Flows
 
 ```
-Task 1: Core Infrastructure (TopicBuffer + TopicRouter + Event Models)
-  │
-  ├──► Task 2: Upgrade EdogPlaygroundHub (ChannelReader streaming)
-  │
-  ├──► Task 3: Migrate existing Log + Telemetry to TopicRouter
-  │
-  ├──► Task 4: EdogDevModeRegistrar (orchestrator)
-  │     │
-  │     ├──► Task 5: EdogFeatureFlighterWrapper (simplest interceptor)
-  │     ├──► Task 6: EdogPerfMarkerCallback
-  │     ├──► Task 7: EdogTokenInterceptor
-  │     ├──► Task 8: EdogFileSystemInterceptor
-  │     ├──► Task 9: EdogHttpPipelineHandler
-  │     ├──► Task 10: EdogRetryInterceptor
-  │     ├──► Task 11: EdogCacheInterceptor
-  │     ├──► Task 12: EdogSparkSessionInterceptor
-  │     └──► Task 13: EdogDiRegistryCapture
-  │
-  └──► Task 14: edog.py patching (file copy + RegisterAll insertion + revert)
+FLT SERVICE PROCESS (port 5557)
+═══════════════════════════════════════════════════════════════════════
 
-Task 15: Integration test + build verification
+  ┌─ FLT Runtime Code ──────────────────────────────────────────────┐
+  │                                                                  │
+  │  IFeatureFlighter.IsEnabled("FLTDagV2", tenant, cap, ws)        │
+  │       │                                                          │
+  │       ▼                                                          │
+  │  ┌─ EdogFeatureFlighterWrapper ──────────────────────────┐      │
+  │  │  1. Call original: result = _inner.IsEnabled(...)     │      │
+  │  │  2. Snapshot data synchronously:                      │      │
+  │  │     eventData = { flagName, tenant, result, duration } │      │
+  │  │  3. Publish: EdogTopicRouter.Publish("flag", data)    │      │
+  │  │  4. Return original result unmodified                 │      │
+  │  └───────────────────────────────┬───────────────────────┘      │
+  │                                   │                              │
+  │  (same pattern × 9 interceptors)  │                              │
+  └───────────────────────────────────┼──────────────────────────────┘
+                                      │
+                                      ▼
+  ┌─ EdogTopicRouter (static, thread-safe) ─────────────────────────┐
+  │                                                                  │
+  │  Publish("flag", eventData)                                      │
+  │       │                                                          │
+  │       ▼                                                          │
+  │  TopicBuffer["flag"]                                             │
+  │  ┌──────────────────────────────────────────────────────────┐   │
+  │  │  Ring Buffer (max 1000)     │  Live Channel (unbounded)  │   │
+  │  │  [event1, event2, ... eventN] → Channel.Writer.TryWrite()│   │
+  │  │  (snapshot for new clients) │  (real-time for streams)   │   │
+  │  └──────────────────────────────────────────────────────────┘   │
+  │                                                                  │
+  │  (11 buffers: log, telemetry, fileop, spark, token,              │
+  │   cache, http, retry, flag, di, perf)                            │
+  └──────────────────────────────────┬───────────────────────────────┘
+                                     │
+                                     ▼
+  ┌─ SignalR Hub: EdogPlaygroundHub ─────────────────────────────────┐
+  │                                                                  │
+  │  Client calls: connection.stream("SubscribeToTopic", "flag")    │
+  │       │                                                          │
+  │       ▼                                                          │
+  │  SubscribeToTopic("flag", cancellationToken)                     │
+  │  ┌──────────────────────────────────────────────────────────┐   │
+  │  │  Returns: ChannelReader<TopicEvent>                      │   │
+  │  │                                                          │   │
+  │  │  Phase 1: yield snapshot[0..N] from ring buffer          │   │
+  │  │  Phase 2: yield live events from Channel.Reader          │   │
+  │  │                                                          │   │
+  │  │  Bounded output channel (1000, DropOldest)               │   │
+  │  │  CancellationToken cancels when client disconnects       │   │
+  │  └──────────────────────────────────────────────────────────┘   │
+  │                                                                  │
+  │  Hub endpoint: /hub/playground (Kestrel, CORS: localhost only)   │
+  └──────────────────────────────────┬───────────────────────────────┘
+                                     │
+                                     │ SignalR WebSocket (JSON protocol)
+                                     │ ws://localhost:5557/hub/playground
+                                     │
+═════════════════════════════════════╪═══════════════════════════════════
+
+BROWSER (served from dev-server port 5555)                           
+                                     │
+                                     ▼
+  ┌─ SignalRManager.js ──────────────────────────────────────────────┐
+  │                                                                  │
+  │  // User clicks Feature Flags tab                                │
+  │  const stream = connection.stream("SubscribeToTopic", "flag");  │
+  │  stream.subscribe({                                              │
+  │    next: (event) => {                                            │
+  │      // event.sequenceId = 42                                    │
+  │      // event.timestamp = "2026-04-12T10:42:31Z"                 │
+  │      // event.topic = "flag"                                     │
+  │      // event.data = { flagName, result, ... }                   │
+  │      listeners.get("flag").forEach(cb => cb(event));             │
+  │    }                                                             │
+  │  });                                                             │
+  │                                                                  │
+  │  // User leaves tab → stream.dispose() → server cancels          │
+  └──────────────────────────────────────────────────────────────────┘
 ```
-
-**Tasks 5-13 are independent** — can be parallelized after Tasks 1-4 are done.
 
 ---
 
-## Task 1: Core Infrastructure
+## What We're Building (Exact File List)
 
-**Create 3 new files** that form the backbone:
+### New C# Files (all in `src/backend/DevMode/`)
 
-### 1a. `src/backend/DevMode/TopicEvent.cs` — Universal event envelope
+| # | File | Purpose | Lines ~est |
+|---|------|---------|-----------|
+| 1 | `TopicEvent.cs` | Universal event envelope (sequenceId, timestamp, topic, data) | 20 |
+| 2 | `TopicBuffer.cs` | Per-topic ring buffer + live Channel for streaming | 60 |
+| 3 | `EdogTopicRouter.cs` | Static registry of all 11 topic buffers, Publish() method | 70 |
+| 4 | `EdogDevModeRegistrar.cs` | Single entry point, registers all 9 interceptors | 80 |
+| 5 | `EdogFeatureFlighterWrapper.cs` | Wraps `IFeatureFlighter.IsEnabled()` | 50 |
+| 6 | `EdogPerfMarkerCallback.cs` | Replaces `IServiceMonitoringCallback` | 60 |
+| 7 | `EdogTokenInterceptor.cs` | `DelegatingHandler` capturing auth headers on all HttpClients | 80 |
+| 8 | `EdogFileSystemInterceptor.cs` | Wraps `IFileSystemFactory` → decorates all `IFileSystem` instances | 120 |
+| 9 | `EdogHttpPipelineHandler.cs` | `DelegatingHandler` capturing request/response on all HttpClients | 100 |
+| 10 | `EdogRetryInterceptor.cs` | Wraps `RetryPolicyProviderV2` | 80 |
+| 11 | `EdogCacheInterceptor.cs` | Wraps `ISqlEndpointMetadataCache` | 70 |
+| 12 | `EdogSparkSessionInterceptor.cs` | Wraps `ISparkClientFactory` | 80 |
+| 13 | `EdogDiRegistryCapture.cs` | Enumerates WireUp registrations at startup | 60 |
 
-```csharp
-#nullable disable
-#pragma warning disable
+### Modified Files
 
-namespace Microsoft.LiveTable.Service.DevMode
-{
-    using System;
-
-    /// <summary>
-    /// Universal event envelope for all topic streams. Every event across all 11 topics
-    /// uses this wrapper with topic-specific data in the Data property.
-    /// </summary>
-    public sealed class TopicEvent
-    {
-        public long SequenceId { get; set; }
-        public DateTimeOffset Timestamp { get; set; }
-        public string Topic { get; set; }
-        public object Data { get; set; }
-    }
-}
-```
-
-### 1b. `src/backend/DevMode/TopicBuffer.cs` — Ring buffer + live channel per topic
-
-```csharp
-#nullable disable
-#pragma warning disable
-
-namespace Microsoft.LiveTable.Service.DevMode
-{
-    using System;
-    using System.Collections.Concurrent;
-    using System.Collections.Generic;
-    using System.Runtime.CompilerServices;
-    using System.Threading;
-    using System.Threading.Channels;
-    using System.Threading.Tasks;
-
-    /// <summary>
-    /// Bounded ring buffer per topic with snapshot + live stream support.
-    /// Thread-safe. Used by interceptors (write) and hub (read).
-    /// </summary>
-    public sealed class TopicBuffer
-    {
-        private readonly int _maxSize;
-        private readonly ConcurrentQueue<TopicEvent> _ring = new();
-        private readonly Channel<TopicEvent> _liveChannel;
-        private long _sequenceCounter;
-
-        public TopicBuffer(int maxSize)
-        {
-            _maxSize = maxSize;
-            // Unbounded writer (interceptors never block), bounded reader in hub stream
-            _liveChannel = Channel.CreateUnbounded<TopicEvent>(
-                new UnboundedChannelOptions { SingleWriter = false });
-        }
-
-        public long NextSequenceId() => Interlocked.Increment(ref _sequenceCounter);
-
-        public string Topic { get; set; }
-
-        /// <summary>
-        /// Called by interceptors via TopicRouter.Publish(). Thread-safe. Non-blocking.
-        /// </summary>
-        public void Write(TopicEvent evt)
-        {
-            // Ring buffer for snapshot history
-            _ring.Enqueue(evt);
-            while (_ring.Count > _maxSize && _ring.TryDequeue(out _)) { }
-
-            // Live channel for active streams
-            _liveChannel.Writer.TryWrite(evt);
-        }
-
-        /// <summary>Returns snapshot of current ring buffer (for hydration).</summary>
-        public TopicEvent[] GetSnapshot() => _ring.ToArray();
-
-        /// <summary>Async enumerable of live events (after snapshot).</summary>
-        public async IAsyncEnumerable<TopicEvent> ReadLiveAsync(
-            [EnumeratorCancellation] CancellationToken ct)
-        {
-            await foreach (var item in _liveChannel.Reader.ReadAllAsync(ct))
-            {
-                yield return item;
-            }
-        }
-
-        /// <summary>Current buffer count.</summary>
-        public int Count => _ring.Count;
-    }
-}
-```
-
-### 1c. `src/backend/DevMode/EdogTopicRouter.cs` — Central publish/subscribe registry
-
-```csharp
-#nullable disable
-#pragma warning disable
-
-namespace Microsoft.LiveTable.Service.DevMode
-{
-    using System;
-    using System.Collections.Concurrent;
-
-    /// <summary>
-    /// Central registry for all topic buffers. Interceptors publish here.
-    /// Hub reads from here. Thread-safe singleton.
-    /// </summary>
-    public static class EdogTopicRouter
-    {
-        private static readonly ConcurrentDictionary<string, TopicBuffer> Buffers = new(StringComparer.OrdinalIgnoreCase);
-
-        // Per-topic buffer sizes (from SIGNALR_PROTOCOL.md)
-        private static readonly (string topic, int size)[] TopicSizes = new[]
-        {
-            ("log", 10000),
-            ("telemetry", 5000),
-            ("fileop", 2000),
-            ("spark", 200),
-            ("token", 500),
-            ("cache", 2000),
-            ("http", 2000),
-            ("retry", 500),
-            ("flag", 1000),
-            ("di", 100),
-            ("perf", 5000),
-        };
-
-        /// <summary>Initialize all topic buffers. Called once at startup.</summary>
-        public static void Initialize()
-        {
-            foreach (var (topic, size) in TopicSizes)
-            {
-                var buffer = new TopicBuffer(size) { Topic = topic };
-                Buffers.TryAdd(topic, buffer);
-            }
-        }
-
-        /// <summary>Get buffer for a topic. Returns null for unknown topics.</summary>
-        public static TopicBuffer GetBuffer(string topic)
-        {
-            Buffers.TryGetValue(topic, out var buffer);
-            return buffer;
-        }
-
-        /// <summary>
-        /// Publish an event to a topic. Called by interceptors. Thread-safe. Non-blocking.
-        /// Silently drops if topic is unknown (future-proof: new topics auto-handled
-        /// once registered).
-        /// </summary>
-        public static void Publish(string topic, object eventData)
-        {
-            if (Buffers.TryGetValue(topic, out var buffer))
-            {
-                try
-                {
-                    buffer.Write(new TopicEvent
-                    {
-                        SequenceId = buffer.NextSequenceId(),
-                        Timestamp = DateTimeOffset.UtcNow,
-                        Topic = topic,
-                        Data = eventData
-                    });
-                }
-                catch
-                {
-                    // Never fail FLT code for debug tooling
-                }
-            }
-        }
-
-        /// <summary>Register a new topic dynamically (for future auto-detection).</summary>
-        public static void RegisterTopic(string topic, int maxSize)
-        {
-            var buffer = new TopicBuffer(maxSize) { Topic = topic };
-            Buffers.TryAdd(topic, buffer);
-        }
-    }
-}
-```
-
-- [ ] Create TopicEvent.cs
-- [ ] Create TopicBuffer.cs
-- [ ] Create EdogTopicRouter.cs
-- [ ] Add all 3 to DEVMODE_FILES in edog.py
-- [ ] Commit: `feat(runtime): add TopicBuffer + TopicRouter core infrastructure`
+| File | What Changes |
+|------|-------------|
+| `EdogPlaygroundHub.cs` | Add `SubscribeToTopic()` ChannelReader streaming method |
+| `EdogLogServer.cs` | Add `EdogTopicRouter.Initialize()` in Start(). Migrate AddLog/AddTelemetry to TopicRouter. Fix CORS to localhost-only. |
+| `edog.py` | Add 13 new files to DEVMODE_FILES. Add `RegisterAll()` to WorkloadApp.cs patch. Update revert. |
 
 ---
 
-## Task 2: Upgrade EdogPlaygroundHub to ChannelReader Streaming
+## SignalR Is The Transport — Here's Exactly How
 
-Replace the current Subscribe/Unsubscribe group methods with a `SubscribeToTopic` streaming method.
+### Current State (Phase 1)
 
-```csharp
-/// <summary>
-/// Client streams a topic: receives snapshot (history) then live events.
-/// Called when user activates a tab. Cancelled when user leaves tab.
-/// </summary>
-public ChannelReader<TopicEvent> SubscribeToTopic(
-    string topic,
-    CancellationToken cancellationToken)
-{
-    var buffer = EdogTopicRouter.GetBuffer(topic);
-    if (buffer == null)
-        throw new HubException($"Unknown topic: {topic}");
+```
+Interceptor → EdogLogServer.AddLog(entry)
+                  → hubContext.Clients.Group("log").SendAsync("LogEntry", entry)
+                      → JS connection.on("LogEntry", handler)
 
-    var channel = Channel.CreateBounded<TopicEvent>(
-        new BoundedChannelOptions(1000)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true
-        });
-
-    _ = Task.Run(async () =>
-    {
-        try
-        {
-            // Phase 1: Yield snapshot
-            foreach (var item in buffer.GetSnapshot())
-                await channel.Writer.WriteAsync(item, cancellationToken);
-
-            // Phase 2: Yield live events
-            await foreach (var item in buffer.ReadLiveAsync(cancellationToken))
-                await channel.Writer.WriteAsync(item, cancellationToken);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"EDOG stream error [{topic}]: {ex.Message}");
-        }
-        finally
-        {
-            channel.Writer.Complete();
-        }
-    }, cancellationToken);
-
-    return channel.Reader;
-}
+Problems:
+- No history (miss events before subscription)
+- No backpressure (fire-and-forget SendAsync)
+- No ordering guarantee (Task.Run per event)
+- Only works for 2 topics (log, telemetry)
 ```
 
-Keep existing `Subscribe`/`Unsubscribe` methods for backward compatibility during transition.
+### New State (Phase 2)
 
-- [ ] Add `using System.Threading.Channels;` to hub
-- [ ] Add `SubscribeToTopic` streaming method
-- [ ] Add `EdogTopicRouter.Initialize()` call in EdogLogServer.Start()
-- [ ] Commit: `feat(signalr): add ChannelReader streaming with snapshot hydration`
+```
+Interceptor → EdogTopicRouter.Publish("flag", data)
+                  → TopicBuffer.Write(event)
+                      → Ring buffer (history for snapshots)
+                      → Channel.Writer.TryWrite(event) (live stream)
+
+Client subscribes → Hub.SubscribeToTopic("flag")
+                      → returns ChannelReader<TopicEvent>
+                          → Phase 1: yield ring buffer snapshot
+                          → Phase 2: yield from Channel.Reader (live)
+                      → JS connection.stream("SubscribeToTopic", "flag")
+                          → stream.subscribe({ next: handler })
+
+Fixes:
+✅ History: snapshot hydrated on subscribe (ring buffer contents)
+✅ Backpressure: bounded ChannelReader (1000, DropOldest)
+✅ Ordering: monotonic sequenceId per topic
+✅ Works for all 11 topics
+✅ Zero gap between snapshot and live (atomic handoff)
+```
+
+### The Key SignalR API Used
+
+**Server (C#):** `ChannelReader<T>` — SignalR streaming method. Returns a channel the client reads from. Server pushes to channel writer. Client receives items as they're written. CancellationToken fires when client disconnects.
+
+```csharp
+// Hub method signature — SignalR recognizes ChannelReader<T> return type as streaming
+public ChannelReader<TopicEvent> SubscribeToTopic(string topic, CancellationToken ct)
+```
+
+**Client (JS):** `connection.stream()` — creates a streaming subscription. Returns an `IStreamResult` with `subscribe()`.
+
+```javascript
+// JS client starts streaming — receives snapshot then live events
+const stream = connection.stream("SubscribeToTopic", "flag");
+stream.subscribe({ next: (event) => { /* handle */ }, complete: () => {}, error: () => {} });
+
+// To stop streaming (user leaves tab):
+stream.dispose();  // sends cancellation to server
+```
+
+**This is native SignalR streaming API** — not a custom protocol on top of SignalR. It's the same mechanism Azure DevOps and VS Live Share use.
 
 ---
 
-## Task 3: Migrate Existing Log + Telemetry to TopicRouter
+## Execution Order (15 Tasks)
 
-Currently `EdogLogServer.AddLog()` directly calls `hubContext.Clients.Group("log").SendAsync()`. Migrate to TopicRouter pattern so ALL topics use the same infrastructure.
+### Phase A: Core Infrastructure (Tasks 1-4, sequential)
 
-In `EdogLogServer.AddLog()`:
-```csharp
-// OLD: _ = hubContext.Clients.Group("log").SendAsync("LogEntry", entry);
-// NEW:
-EdogTopicRouter.Publish("log", entry);
+These MUST be done first — everything else depends on them.
+
+```
+Task 1: TopicEvent.cs + TopicBuffer.cs + EdogTopicRouter.cs
+         ↓
+Task 2: Upgrade EdogPlaygroundHub → ChannelReader streaming
+         ↓
+Task 3: Migrate existing log+telemetry to TopicRouter
+         ↓
+Task 4: EdogDevModeRegistrar.cs (orchestrator with stub methods)
 ```
 
-In `EdogLogServer.AddTelemetry()`:
-```csharp
-// OLD: _ = hubContext.Clients.Group("telemetry").SendAsync("TelemetryEvent", telemetryEvent);
-// NEW:
-EdogTopicRouter.Publish("telemetry", telemetryEvent);
+**After Task 3:** Verify via agent-browser that existing logs still stream. This is the regression gate. If logs break here, we fix before proceeding.
+
+### Phase B: Interceptors (Tasks 5-13, parallel)
+
+All independent. Each wraps one FLT interface. Can dispatch 9 Opus agents simultaneously.
+
+```
+Task 5:  EdogFeatureFlighterWrapper   (IFeatureFlighter)
+Task 6:  EdogPerfMarkerCallback       (IServiceMonitoringCallback)
+Task 7:  EdogTokenInterceptor         (DelegatingHandler)
+Task 8:  EdogFileSystemInterceptor    (IFileSystemFactory)
+Task 9:  EdogHttpPipelineHandler      (DelegatingHandler)
+Task 10: EdogRetryInterceptor         (RetryPolicyProviderV2)
+Task 11: EdogCacheInterceptor         (ISqlEndpointMetadataCache)
+Task 12: EdogSparkSessionInterceptor  (ISparkClientFactory)
+Task 13: EdogDiRegistryCapture        (WireUp enumeration)
 ```
 
-Remove `hubContext` usage from AddLog/AddTelemetry (hub is only used by the streaming method now).
+### Phase C: Wiring + Verification (Tasks 14-15, sequential)
 
-- [ ] Migrate AddLog to EdogTopicRouter.Publish
-- [ ] Migrate AddTelemetry to EdogTopicRouter.Publish
-- [ ] Verify existing logs still stream via agent-browser
-- [ ] Commit: `refactor(signalr): migrate log+telemetry to TopicRouter`
+```
+Task 14: edog.py patching
+          - Add 13 files to DEVMODE_FILES
+          - Add RegisterAll() to WorkloadApp.cs patch
+          - Fix CORS to localhost-only
+          - Update revert
+         ↓
+Task 15: Integration test
+          - make build + make test
+          - Deploy to FLT
+          - agent-browser: verify all topics stream data
+```
 
 ---
 
-## Task 4: EdogDevModeRegistrar
+## Per-Interceptor Spec (Tasks 5-13)
 
-Single entry point for all interceptor DI registration. Called from WorkloadApp.cs patch.
+### Every Interceptor Follows This Exact Pattern
 
 ```csharp
-#nullable disable
-#pragma warning disable
+// STEP 1: Call original (interceptor is transparent)
+var result = _inner.OriginalMethod(args);
 
-namespace Microsoft.LiveTable.Service.DevMode
-{
-    using System;
+// STEP 2: Snapshot data SYNCHRONOUSLY (objects may be disposed later)
+var eventData = new {
+    flagName = featureName,     // copy all needed fields NOW
+    result = originalResult,     // not references — values
+    durationMs = sw.Elapsed.TotalMilliseconds
+};
 
-    /// <summary>
-    /// Single entry point for all EDOG DevMode interceptor registrations.
-    /// Called after FLT completes its own DI setup. Wraps/replaces FLT
-    /// services with EDOG interceptor decorators.
-    /// </summary>
-    public static class EdogDevModeRegistrar
-    {
-        private static bool _registered;
+// STEP 3: Publish to TopicRouter (non-blocking, thread-safe)
+EdogTopicRouter.Publish("flag", eventData);
 
-        public static void RegisterAll()
-        {
-            // Idempotency guard — prevent double-wrapping on redeploy
-            if (_registered) return;
-            _registered = true;
-
-            try
-            {
-                // Initialize topic buffers
-                EdogTopicRouter.Initialize();
-
-                // Register each interceptor (order doesn't matter — all independent)
-                RegisterFeatureFlighterWrapper();
-                RegisterPerfMarkerCallback();
-                RegisterTokenInterceptor();
-                RegisterFileSystemInterceptor();
-                RegisterHttpPipelineHandler();
-                RegisterRetryInterceptor();
-                RegisterCacheInterceptor();
-                RegisterSparkSessionInterceptor();
-                RegisterDiRegistryCapture();
-
-                Console.WriteLine("[EDOG] All 9 interceptors registered");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] Interceptor registration failed: {ex.Message}");
-                // Non-fatal — FLT continues without some/all interceptors
-            }
-        }
-
-        // Each method wraps one FLT service. Implemented in Tasks 5-13.
-        private static void RegisterFeatureFlighterWrapper() { /* Task 5 */ }
-        private static void RegisterPerfMarkerCallback() { /* Task 6 */ }
-        private static void RegisterTokenInterceptor() { /* Task 7 */ }
-        private static void RegisterFileSystemInterceptor() { /* Task 8 */ }
-        private static void RegisterHttpPipelineHandler() { /* Task 9 */ }
-        private static void RegisterRetryInterceptor() { /* Task 10 */ }
-        private static void RegisterCacheInterceptor() { /* Task 11 */ }
-        private static void RegisterSparkSessionInterceptor() { /* Task 12 */ }
-        private static void RegisterDiRegistryCapture() { /* Task 13 */ }
-    }
-}
+// STEP 4: Return original result UNMODIFIED
+return result;
 ```
 
-- [ ] Create EdogDevModeRegistrar.cs with stub methods
-- [ ] Add to DEVMODE_FILES
-- [ ] Commit: `feat(runtime): add EdogDevModeRegistrar orchestrator`
+**Rules:**
+- Original FIRST, broadcast SECOND — never change call order
+- Snapshot SYNCHRONOUSLY — HTTP streams, tokens, file content may be disposed after return
+- Publish is non-blocking — `Channel.Writer.TryWrite()` returns immediately
+- No try/catch needed around Publish — TopicRouter handles errors internally
+- Use `DateTimeOffset.UtcNow` (never `DateTime.Now`)
+- Idempotency: `if (WireUp.Resolve<IFeatureFlighter>() is EdogFeatureFlighterWrapper) return;`
+
+### Task 5: EdogFeatureFlighterWrapper
+
+```
+WRAPS:    IFeatureFlighter (single method: IsEnabled)
+FLT FILE: FeatureFlightProvider/IFeatureFlighter.cs
+DI LINE:  WorkloadApp.cs:110 — WireUp.RegisterSingletonType<IFeatureFlighter, FeatureFlighter>()
+TOPIC:    "flag"
+EVENT:    { flagName, tenantId, capacityId, workspaceId, result: bool, durationMs }
+```
+
+### Task 6: EdogPerfMarkerCallback
+
+```
+WRAPS:    IServiceMonitoringCallback (called by every CodeMarker scope completion)
+FLT FILE: Monitoring/MonitoredCodeMarkerBase.cs → resolves IServiceMonitoringCallback
+DI LINE:  WorkloadApp.cs:99 — WireUp.RegisterSingletonType<IServiceMonitoringCallback, LiveTableServiceMonitoringCallback>()
+TOPIC:    "perf"
+EVENT:    { operationName, durationMs, result, dimensions, correlationId }
+PATTERN:  Replace callback, chain to original for telemetry continuity
+```
+
+### Task 7: EdogTokenInterceptor
+
+```
+WRAPS:    IHttpClientFactory (wraps the factory returned by HttpClientFactoryRegistry)
+FLT FILE: HttpClients/HttpClientFactoryRegistry.cs
+DI LINE:  WorkloadApp.cs:147 — WireUp.RegisterInstance(HttpClientFactoryRegistry.CreateHttpClientFactoryWithNamedClients())
+TOPIC:    "token"
+EVENT:    { tokenType, scheme, audience, expiryUtc, httpClientName, endpoint }
+PATTERN:  Wrap IHttpClientFactory → all 6 named HttpClients auto-get our DelegatingHandler
+SECURITY: NEVER send raw token string. Extract metadata from JWT header only. Redact Authorization header value.
+AUTO-DETECT: New named HttpClients added to the factory are automatically intercepted.
+```
+
+### Task 8: EdogFileSystemInterceptor
+
+```
+WRAPS:    IFileSystemFactory (wraps factory → all IFileSystem instances get decorator)
+FLT FILE: Persistence/Fs/IFileSystem.cs (13 async methods)
+DI LINE:  WorkloadApp.cs:139 — WireUp.RegisterSingletonType<IFileSystemFactory, OnelakeFileSystemFactory>()
+TOPIC:    "fileop"
+EVENT:    { operation, path, contentSizeBytes, durationMs, hasContent, contentPreview (4KB max), ttlSeconds }
+PATTERN:  Factory decorator — wrap every IFileSystem instance created through factory
+AUTO-DETECT: New IFileSystem usage through factory is auto-captured.
+```
+
+### Task 9: EdogHttpPipelineHandler
+
+```
+WRAPS:    Same IHttpClientFactory as Task 7 (shared wrapper — adds second DelegatingHandler)
+TOPIC:    "http"
+EVENT:    { method, url, statusCode, durationMs, requestHeaders, responseHeaders, responseBodyPreview (4KB max), httpClientName, correlationId }
+PATTERN:  DelegatingHandler.SendAsync() override — captures full request/response cycle
+SECURITY: Redact Authorization header. Strip SAS tokens from URLs. Truncate bodies to 4KB.
+NOTE:     Tasks 7 and 9 share the same IHttpClientFactory wrapper. Two handlers in the chain.
+```
+
+### Task 10: EdogRetryInterceptor
+
+```
+WRAPS:    RetryPolicyProviderV2 (creates RetryExecutor instances)
+FLT FILE: RetryPolicy/V2/Framework/RetryExecutor.cs
+DI LINE:  WorkloadApp.cs:134 — WireUp.RegisterSingletonType<RetryPolicyProviderV2>()
+TOPIC:    "retry"
+EVENT:    { endpoint, statusCode, retryAttempt, totalAttempts, waitDurationMs, strategyName, reason, isThrottle, retryAfterMs }
+PATTERN:  Wrap provider → track all retry executor usage
+AUTO-DETECT: New retry strategies registered through provider are auto-captured.
+```
+
+### Task 11: EdogCacheInterceptor
+
+```
+WRAPS:    ISqlEndpointMetadataCache (primary cache — GetOrResolveAsync + Evict)
+FLT FILE: SqlEndpoint/SqlEndpointMetadataCache.cs
+DI LINE:  WorkloadApp.cs:118 — WireUp.RegisterSingletonType<ISqlEndpointMetadataCache, SqlEndpointMetadataCache>()
+TOPIC:    "cache"
+EVENT:    { cacheName, operation (Get/Set/Evict), key, hitOrMiss, valueSizeBytes, ttlSeconds, durationMs }
+NOTE:     FLT has 2 real caches (SqlEndpointMetadata + TokenBucketRateLimiter), not 10. Mock needs updating.
+```
+
+### Task 12: EdogSparkSessionInterceptor
+
+```
+WRAPS:    ISparkClientFactory (CreateSparkClientAsync)
+FLT FILE: SparkHttp/ISparkClientFactory.cs + GTSBasedSparkClient.cs
+DI LINE:  WorkloadApp.cs:126 — WireUp.RegisterSingletonType<ISparkClientFactory, GTSBasedSparkClientFactory>()
+TOPIC:    "spark"
+EVENT:    { sessionTrackingId (generated), event (Created/Active/Disposed/Error), tenantId, workspaceId, artifactId, iterationId, tokenType }
+NOTE:     FLT has no Spark session ID — we generate our own tracking ID per factory call. No cell-level hooks — map DAG nodes to "cells" in frontend.
+AUTO-DETECT: All Spark clients created through factory are auto-captured.
+```
+
+### Task 13: EdogDiRegistryCapture
+
+```
+WRAPS:    Nothing — reads WireUp registrations after all DI setup completes
+FLT FILE: WorkloadApp.cs (30+ registrations in constructor + RunAsync)
+TOPIC:    "di"
+EVENT:    { serviceType, implementationType, lifetime, isEdogIntercepted, originalImplementation, registrationPhase }
+PATTERN:  Called at end of RegisterAll() — enumerates known registrations from WorkloadApp.cs patterns. Also captures our own wrapper registrations.
+NOTE:     WireUp is proprietary — no runtime enumeration API. We build the registry from our knowledge of what we wrapped + static knowledge of WorkloadApp patterns.
+```
 
 ---
 
-## Tasks 5-13: Individual Interceptors (can parallel after 1-4)
+## edog.py Patching (Task 14)
 
-Each interceptor follows the same pattern:
-1. Create `.cs` file in `src/backend/DevMode/`
-2. Implement decorator/wrapper using FLT interface
-3. Call `EdogTopicRouter.Publish(topic, eventData)` to broadcast
-4. Snapshot data SYNCHRONOUSLY before publish (avoid disposed objects)
-5. Idempotency: check if already wrapped before wrapping
-6. Fill in the stub method in `EdogDevModeRegistrar.cs`
-7. Add file to `DEVMODE_FILES` in `edog.py`
+### What Gets Patched in the FLT Repo
 
-See `docs/superpowers/plans/2026-04-12-phase2-interceptors.md` for per-interceptor details:
-- **Task 5:** EdogFeatureFlighterWrapper — `IFeatureFlighter` decorator
-- **Task 6:** EdogPerfMarkerCallback — `IServiceMonitoringCallback` replacement  
-- **Task 7:** EdogTokenInterceptor — `DelegatingHandler` + `IHttpClientFactory` wrapper
-- **Task 8:** EdogFileSystemInterceptor — `IFileSystemFactory` decorator
-- **Task 9:** EdogHttpPipelineHandler — `DelegatingHandler` on all HttpClients
-- **Task 10:** EdogRetryInterceptor — `RetryPolicyProviderV2` wrapper
-- **Task 11:** EdogCacheInterceptor — `ISqlEndpointMetadataCache` decorator
-- **Task 12:** EdogSparkSessionInterceptor — `ISparkClientFactory` wrapper
-- **Task 13:** EdogDiRegistryCapture — WireUp enumeration at startup
+```
+workload-fabriclivetable/
+├── Service/Microsoft.LiveTable.Service/
+│   ├── DevMode/                           ← 21 files copied here (8 existing + 13 new)
+│   │   ├── EdogLogServer.cs               (existing, updated)
+│   │   ├── EdogPlaygroundHub.cs           (existing, updated)
+│   │   ├── EdogApiProxy.cs               (existing)
+│   │   ├── EdogLogModels.cs              (existing)
+│   │   ├── EdogLogInterceptor.cs         (existing)
+│   │   ├── EdogTelemetryInterceptor.cs   (existing)
+│   │   ├── TopicEvent.cs                  ← NEW
+│   │   ├── TopicBuffer.cs                 ← NEW
+│   │   ├── EdogTopicRouter.cs             ← NEW
+│   │   ├── EdogDevModeRegistrar.cs        ← NEW
+│   │   ├── EdogFeatureFlighterWrapper.cs  ← NEW
+│   │   ├── EdogPerfMarkerCallback.cs      ← NEW
+│   │   ├── EdogTokenInterceptor.cs        ← NEW
+│   │   ├── EdogFileSystemInterceptor.cs   ← NEW
+│   │   ├── EdogHttpPipelineHandler.cs     ← NEW
+│   │   ├── EdogRetryInterceptor.cs        ← NEW
+│   │   ├── EdogCacheInterceptor.cs        ← NEW
+│   │   ├── EdogSparkSessionInterceptor.cs ← NEW
+│   │   ├── EdogDiRegistryCapture.cs       ← NEW
+│   │   ├── edog-logs.html                (existing)
+│   │   └── .editorconfig                 (existing)
+│   │
+│   ├── WorkloadApp.cs                     ← PATCHED (add RegisterAll() call)
+│   └── Microsoft.LiveTable.Service.csproj ← PATCHED (SignalR NuGet — already done)
+│
+├── Service/Microsoft.LiveTable.Service.EntryPoint/
+│   └── Program.cs                         ← PATCHED (existing — EdogLogServer.Start())
+```
 
----
+### WorkloadApp.cs Patch — RegisterAll() Insertion
 
-## Task 14: edog.py Patching
-
-### 14a. Add all new files to DEVMODE_FILES
+Current patch replaces telemetry reporter line. NEW: add RegisterAll() after it.
 
 ```python
-DEVMODE_FILES = {
-    # Existing
-    "EdogLogServer": ...,
-    "EdogPlaygroundHub": ...,
-    "EdogApiProxy": ...,
-    "EdogLogModels": ...,
-    "EdogLogInterceptor": ...,
-    "EdogTelemetryInterceptor": ...,
-    "EdogLogsHtml": ...,
-    "EditorConfig": ...,
-    # Phase 2 - Core
-    "TopicEvent": SERVICE_PATH / "DevMode/TopicEvent.cs",
-    "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
-    "EdogTopicRouter": SERVICE_PATH / "DevMode/EdogTopicRouter.cs",
-    "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
-    # Phase 2 - Interceptors (flat in DevMode/, no subdirectory)
-    "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
-    "EdogPerfMarkerCallback": SERVICE_PATH / "DevMode/EdogPerfMarkerCallback.cs",
-    "EdogTokenInterceptor": SERVICE_PATH / "DevMode/EdogTokenInterceptor.cs",
-    "EdogFileSystemInterceptor": SERVICE_PATH / "DevMode/EdogFileSystemInterceptor.cs",
-    "EdogHttpPipelineHandler": SERVICE_PATH / "DevMode/EdogHttpPipelineHandler.cs",
-    "EdogRetryInterceptor": SERVICE_PATH / "DevMode/EdogRetryInterceptor.cs",
-    "EdogCacheInterceptor": SERVICE_PATH / "DevMode/EdogCacheInterceptor.cs",
-    "EdogSparkSessionInterceptor": SERVICE_PATH / "DevMode/EdogSparkSessionInterceptor.cs",
-    "EdogDiRegistryCapture": SERVICE_PATH / "DevMode/EdogDiRegistryCapture.cs",
-}
-```
-
-### 14b. Add RegisterAll() to WorkloadApp.cs patch
-
-Insert AFTER the existing telemetry interceptor patch:
-
-```python
-# In apply_log_viewer_registration_workloadapp_cs():
-# After the existing EdogTelemetryInterceptor replacement, add:
-registrar_line = (
+# In edog.py apply_log_viewer_registration_workloadapp_cs():
+replacement = (
+    "// EDOG DevMode - Wrap telemetry reporter with web log viewer interceptor\n"
+    "            WireUp.RegisterInstance<ICustomLiveTableTelemetryReporter>(\n"
+    "                new Microsoft.LiveTable.Service.DevMode.EdogTelemetryInterceptor(\n"
+    "                    new CustomLiveTableTelemetryReporter(),\n"
+    "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
     "\n"
-    "            // EDOG DevMode - Register all runtime interceptors\n"
-    "            Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();\n"
+    "            // EDOG DevMode - Re-set Tracer test logger after platform init\n"
+    "            Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
+    "                new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
+    "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
+    "\n"
+    "            // EDOG DevMode - Register all runtime interceptors (Phase 2)\n"   # ← NEW
+    "            Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();\n"  # ← NEW
 )
 ```
 
-Anchor: insert after `EdogTelemetryInterceptor` block (we control this exact text).
+**Anchor:** This replaces the SAME line as before (`WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, ...>()`). We control the full replacement text. RegisterAll() goes at the end.
 
-### 14c. Update revert
-
-`revert_log_viewer_registration_workloadapp_cs()` must also remove the `RegisterAll()` line.
-
-### 14d. Update CORS
-
-Fix `SetIsOriginAllowed(_ => true)` to check for localhost only:
-
-```csharp
-policy.SetIsOriginAllowed(origin =>
-    origin.Contains("localhost", StringComparison.OrdinalIgnoreCase) ||
-    origin.Contains("127.0.0.1"))
-```
-
-### 14e. Fix DateTime rule
-
-Add to `EdogLogServer.cs` JsonOptions:
-```csharp
-private static readonly JsonSerializerOptions JsonOptions = new()
-{
-    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-};
-```
-
-All new event models use `DateTimeOffset` (not `DateTime`).
-
-- [ ] Add all files to DEVMODE_FILES
-- [ ] Add RegisterAll() insertion to WorkloadApp patch
-- [ ] Add RegisterAll() removal to revert
-- [ ] Fix CORS
-- [ ] Commit: `feat(deploy): add Phase 2 interceptor files to DEVMODE_FILES + patching`
+**Revert:** Remove the entire EDOG block including the RegisterAll() line. Restore original telemetry reporter line.
 
 ---
 
-## Task 15: Build Verification
+## Safety Rules (Non-Negotiable)
 
-- [ ] `python scripts/build-html.py` — HTML builds under 800KB
-- [ ] `python -m pytest tests/ -v` — all tests pass
-- [ ] Deploy to FLT: `edog --revert && edog` — builds, service starts
-- [ ] agent-browser: verify log streaming still works through TopicRouter
-- [ ] agent-browser: verify new topic data flows (at least feature flags, perf markers)
-- [ ] Commit: `test(runtime): Phase 2 backend integration verified`
+### 1. Interceptor Safety
+
+```
+RULE: Interceptor failures NEVER propagate to FLT.
+HOW:  TopicRouter.Publish() wraps in try/catch internally.
+      Interceptors call original FIRST, publish SECOND.
+      If Publish fails, original result still returned.
+```
+
+### 2. Thread Safety
+
+```
+RULE: All interceptors must be safe for concurrent calls.
+HOW:  TopicBuffer uses ConcurrentQueue + Channel (both thread-safe).
+      TopicRouter.Publish() is stateless — just enqueue.
+      Interceptors snapshot data synchronously — no shared mutable state.
+      sequenceId uses Interlocked.Increment (atomic).
+```
+
+### 3. Memory Budget
+
+```
+RULE: Total buffer memory < 50MB.
+HOW:  Per-topic sizes defined in EdogTopicRouter:
+      log=10K, telemetry=5K, fileop=2K, spark=200, token=500,
+      cache=2K, http=2K, retry=500, flag=1K, di=100, perf=5K
+      Average event ~1KB → 28,300 events × 1KB ≈ 28MB typical.
+      Large events (http bodies, file content) capped at 4KB preview.
+```
+
+### 4. Idempotency
+
+```
+RULE: RegisterAll() is safe to call multiple times (redeploy).
+HOW:  Static bool _registered flag. Check before wrapping.
+      Each interceptor checks: if (resolved is EdogWrapper) skip.
+      Prevents Wrapper(Wrapper(Original)) stacking.
+```
+
+### 5. Security
+
+```
+RULE: Never send raw tokens, passwords, or full PII.
+HOW:  Authorization header → "[redacted]"
+      Raw JWT → never sent (only metadata: type, audience, expiry)
+      SAS tokens in URLs → stripped
+      File content → 4KB preview max
+      HTTP bodies → 4KB preview max
+      userId → truncated
+```
+
+### 6. DateTime
+
+```
+RULE: All timestamps use DateTimeOffset.UtcNow (never DateTime.Now).
+WHY:  DateTime.Now serializes without timezone → JS parses as local time.
+      DateTimeOffset always includes timezone → always correct.
+```
+
+### 7. CORS
+
+```
+RULE: Only accept origins from localhost / 127.0.0.1.
+HOW:  Replace SetIsOriginAllowed(_ => true) with explicit check.
+WHY:  Any website could read SignalR data (token claims, file contents)
+      if CORS is wildcard. Localhost-only eliminates this.
+```
+
+---
+
+## Verification Checklist (Task 15)
+
+```
+□ python scripts/build-html.py — HTML < 800KB
+□ python -m pytest tests/ -v — all tests pass
+□ edog --revert (clean FLT repo)
+□ Deploy from browser (Workspace Explorer → Deploy to Lakehouse)
+□ Build succeeds (all 21 DevMode files compile with FLT)
+□ Service starts (port 5557)
+□ agent-browser: open http://127.0.0.1:5555
+□ agent-browser: press 2 (Runtime View)
+□ agent-browser: Logs tab shows streaming entries (TopicRouter path)
+□ agent-browser: check console — no JS errors
+□ For each interceptor: verify data appears in FLT console output
+  □ Feature flags: "[EDOG] flag: FLTDagV2 = true"
+  □ Perf markers: "[EDOG] perf: PingApi 8ms"
+  □ Token events: "[EDOG] token: Bearer api.fabric"
+  □ File ops: "[EDOG] fileop: Write dag.json 4KB"
+  □ HTTP requests: "[EDOG] http: POST /gts/sessions 200 1240ms"
+  □ Retries: "[EDOG] retry: 429 attempt 2/3"
+  □ Cache events: "[EDOG] cache: GetOrResolve HIT"
+  □ Spark sessions: "[EDOG] spark: Created edog-spark-001"
+  □ DI registry: "[EDOG] di: 30 registrations captured"
+```
 
 ---
 
 ## Execution Strategy
 
-**Recommended:** Tasks 1-4 sequentially (foundation), then Tasks 5-13 via parallel subagents (one Opus per interceptor), then Task 14-15.
+```
+PHASE A (sequential, ~30 min):
+  Task 1  → Task 2 → Task 3 → Task 4
+  Core infra → Hub upgrade → Migrate existing → Registrar
 
-**Estimated:** Tasks 1-4 (~30 min), Tasks 5-13 parallel (~20 min), Tasks 14-15 (~15 min). Total ~1 hour.
+  ══ GATE: agent-browser verify logs still stream ══
+
+PHASE B (parallel, ~20 min):
+  Tasks 5-13 → 9 Opus agents, one per interceptor
+
+  ══ GATE: all 13 new .cs files compile standalone ══
+
+PHASE C (sequential, ~15 min):
+  Task 14 → Task 15
+  edog.py patching → Deploy + Integration test
+
+  ══ GATE: full verification checklist ══
+
+TOTAL: ~1 hour
+```
 
 ---
 
-## Audit Fixes Embedded in This Plan
-
-| Audit Finding | Where Fixed |
-|---|---|
-| No snapshot hydration | Task 2: ChannelReader streaming |
-| No backpressure | Task 1: TopicBuffer bounded channel |
-| Task.Run per event | Task 1: TopicRouter.Publish (synchronous enqueue) |
-| No ordering | Task 1: monotonic sequenceId per TopicBuffer |
-| Interceptor stacking | Task 4: `_registered` idempotency guard |
-| CORS too permissive | Task 14d: localhost-only check |
-| DateTime serialization | Task 14e: DateTimeOffset rule |
-| Flat file layout | Task 14a: all files in DevMode/ (no subdirs) |
-| Memory budget | Task 1c: per-topic sizes defined (50MB total) |
+*"Every byte has a path. Every event has a sequence. Every interceptor has a safety net. Every topic has a buffer. One hub. One stream. Zero bugs."*
