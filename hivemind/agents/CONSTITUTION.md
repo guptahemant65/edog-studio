@@ -66,72 +66,16 @@ This is not a courtesy review. This is a hard gate. No code enters the repositor
 
 ## Sentinel's 7-Gate Gauntlet
 
-Every change — no matter how small, no matter how "obvious" — passes through all 7 gates. There are no exceptions. There are no shortcuts. "It's just a one-liner" is not a valid reason to skip gates.
+> **Canonical source: `hivemind/QUALITY_BAR.md ## The 7-Gate Gauntlet`**
+>
+> The full gauntlet (Gates 0–7) with detailed requirements, templates, and examples lives in QUALITY_BAR.md.
+> Read that section when running the gauntlet. Do not duplicate it here.
 
-### Gate 0: PRE-FLIGHT
+**Quick reference:** PRE-FLIGHT → UNIT → INTEGRATION → SCENARIO → ERROR → EDGE CASES → REGRESSION+BUILD → SENTINEL SIGN-OFF
 
-Before writing code:
-- The implementing agent describes their approach in plain language.
-- Sana reviews the approach for architectural soundness.
-- Sentinel writes a test plan covering expected behavior, error cases, and edge cases.
-- If Sana flags an architectural concern, **stop**. Redesign before proceeding.
-
-### Gate 1: UNIT TESTS
-
-- Every function gets tested.
-- Every branch gets tested — if/else, try/catch, early returns, all of them.
-- Every error path gets tested — what happens when it fails?
-- Test names describe behavior, not implementation: `test_deploy_fails_when_workspace_not_found`, not `test_deploy_3`.
-
-### Gate 2: INTEGRATION TESTS
-
-- Components that communicate must be tested communicating.
-- Backend serves data, frontend consumes it — test the contract.
-- WebSocket messages, REST endpoints, IPC commands — test the handshake.
-- Mock boundaries are at external systems (Fabric APIs, FLT service), not between our own components.
-
-### Gate 3: SCENARIO TESTS
-
-- Full user journeys, end-to-end.
-- "User opens Studio, browses workspaces, selects a lakehouse, deploys" — that's a scenario.
-- Scenarios test what the user experiences, not what the code does internally.
-- Every feature in the spec gets at least one happy-path scenario and one failure scenario.
-
-### Gate 4: ERROR HANDLING
-
-- Every failure mode has been identified and handled.
-- No silent failures. Every `catch` must log, display a message, or propagate.
-- Network failures, auth expiry, malformed data, missing config — all handled.
-- Error messages are actionable: tell the user what happened AND what to do about it.
-
-### Gate 5: EDGE CASES
-
-- Boundary values: empty lists, single items, maximum lengths.
-- Extremes: zero, negative numbers, very large inputs.
-- Rapid input: double-clicks, fast navigation, interrupted operations.
-- Timing: race conditions, stale data, concurrent modifications.
-- Encoding: Unicode in workspace names, special characters in paths.
-
-### Gate 6: REGRESSION + BUILD
-
-All three must pass. No exceptions.
-
-```bash
-make lint     # Ruff lint + format check
-make test     # pytest — full suite, not just new tests
-make build    # build-html.py produces valid output
-```
-
-If any command fails, the change is not ready. Fix it. Don't comment out the failing test.
-
-### Gate 7: SENTINEL SIGN-OFF
-
-Sentinel reviews the complete change — code, tests, documentation — and issues a verdict:
-
-- **APPROVED** — Change meets all quality standards. Proceed to commit.
-- **BLOCKED** — Change has deficiencies. Specific issues listed. Fix and re-submit from the failed gate.
-
-A `BLOCKED` verdict is not a suggestion to improve. It is a hard stop.
+- Every change passes all 7 gates. No exceptions. No shortcuts.
+- `make lint && make test && make build` must all pass (Gate 6).
+- Sentinel issues APPROVED or BLOCKED. BLOCKED is a hard stop.
 
 ---
 
