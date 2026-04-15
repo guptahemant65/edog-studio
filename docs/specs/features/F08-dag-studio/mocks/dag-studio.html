@@ -1,0 +1,1950 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAG Studio — EDOG Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Studio Interactive Mockup
+   Design: Pixel (Frontend Engineer)
+   All 5 components: Graph Canvas, Gantt, Controls, History, Detail
+   ═══════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  /* ── Light Theme ── */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-glow: rgba(109,92,255,0.15);
+  --text-on-accent: #ffffff;
+  --canvas-bg: #fafbfc;
+  --canvas-dot: rgba(0,0,0,0.06);
+  --node-surface: #ffffff;
+  --node-shadow: rgba(0,0,0,0.08);
+  --edge-color: rgba(0,0,0,0.15);
+  --minimap-bg: rgba(255,255,255,0.85);
+  --minimap-viewport: rgba(109,92,255,0.25);
+  --gantt-bg: #f9fafb;
+  --gantt-grid: rgba(0,0,0,0.04);
+  --status-succeeded: #18a058;
+  --status-failed: #e5453b;
+  --status-cancelled: #e5940c;
+  --status-pending: #8e95a5;
+  --status-running: #6d5cff;
+  --status-skipped: #b4bac6;
+  --amber: #d97706;
+  --type-sql: #2d7ff9;
+  --type-pyspark: #a855f7;
+  --layer-source: #cd7f32;
+  --layer-transform: #c0c0c0;
+  --layer-output: #ffd700;
+  --layer-metrics: #0d9488;
+  /* Font */
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  /* Spacing */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  /* Radius */
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px; --radius-full: 100px;
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+}
+
+[data-theme="dark"] {
+  --bg: #0a0b10;
+  --surface: #12141c;
+  --surface-2: #1a1d27;
+  --surface-3: #242833;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-glow: rgba(133,119,255,0.20);
+  --text-on-accent: #ffffff;
+  --canvas-bg: #0d0f16;
+  --canvas-dot: rgba(255,255,255,0.04);
+  --node-surface: #181b24;
+  --node-shadow: rgba(0,0,0,0.3);
+  --edge-color: rgba(255,255,255,0.08);
+  --minimap-bg: rgba(18,20,28,0.9);
+  --minimap-viewport: rgba(133,119,255,0.3);
+  --gantt-bg: #10121a;
+  --gantt-grid: rgba(255,255,255,0.03);
+  --status-succeeded: #34d399;
+  --status-failed: #ff6b6b;
+  --status-cancelled: #f0b429;
+  --status-pending: #555d70;
+  --status-running: #8577ff;
+  --status-skipped: #3a3f4e;
+  --amber: #f59e0b;
+  --type-sql: #5b9bff;
+  --type-pyspark: #c084fc;
+  --layer-source: #d4915e;
+  --layer-transform: #8a91a3;
+  --layer-output: #fbbf24;
+  --layer-metrics: #2dd4bf;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+html, body { height:100%; overflow:hidden; font-family:var(--font-body); background:var(--bg); color:var(--text); font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+/* ── App Shell ── */
+#app { display:flex; height:100vh; }
+
+/* Simulated sidebar */
+.sidebar { width:60px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:8px; flex-shrink:0; }
+.sidebar-icon { width:36px; height:36px; border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; color:var(--text-muted); cursor:pointer; transition:all 150ms ease; }
+.sidebar-icon:hover { background:var(--accent-dim); color:var(--accent); }
+.sidebar-icon.active { background:var(--accent-dim); color:var(--accent); }
+.sidebar-icon svg { width:20px; height:20px; }
+.sidebar-spacer { flex:1; }
+.sidebar-divider { width:28px; height:1px; background:var(--border); }
+
+/* Main content area */
+.main-content { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+
+/* ── Execution Controls Toolbar ── */
+.toolbar { height:44px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 16px; gap:8px; flex-shrink:0; z-index:10; }
+.toolbar-left { display:flex; align-items:center; gap:8px; }
+.toolbar-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+
+.btn { height:30px; padding:0 14px; border-radius:var(--radius-md); font-family:var(--font-body); font-size:12px; font-weight:500; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px; transition:all 150ms ease; white-space:nowrap; }
+.btn:active { transform:scale(0.97); }
+.btn-primary { background:var(--accent); color:var(--text-on-accent); }
+.btn-primary:hover { filter:brightness(1.1); box-shadow:0 0 0 3px var(--accent-glow); }
+.btn-primary:disabled { opacity:0.4; cursor:not-allowed; filter:none; box-shadow:none; }
+.btn-ghost { background:transparent; color:var(--text-dim); border:1px solid var(--border); }
+.btn-ghost:hover { background:var(--surface-2); border-color:var(--border-bright); color:var(--text); }
+.btn-ghost:disabled { opacity:0.3; cursor:not-allowed; }
+.btn-warning { background:color-mix(in srgb, var(--amber) 10%, transparent); color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 30%, transparent); }
+.btn-warning:hover { background:color-mix(in srgb, var(--amber) 20%, transparent); }
+.btn-sm { height:26px; padding:0 8px; font-size:11px; }
+.toolbar-sep { width:1px; height:20px; background:var(--border-bright); margin:0 4px; flex-shrink:0; }
+
+/* ── Lock Check Button ── */
+.lock-check-btn { width:26px; padding:0; justify-content:center; }
+.lock-check-btn .lock-spinner { animation:lockSpin 700ms linear infinite; }
+@keyframes lockSpin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* ── Toolbar Locked State ── */
+.toolbar.toolbar-locked { border-top:2px solid transparent; border-image:linear-gradient(90deg, color-mix(in srgb, var(--amber) 0%, transparent) 0%, var(--amber) 50%, color-mix(in srgb, var(--amber) 0%, transparent) 100%) 1; }
+
+/* ── Lock Banner ── */
+.lock-banner {
+  height:36px; background:color-mix(in srgb, var(--amber) 5%, var(--surface));
+  border-bottom:1px solid color-mix(in srgb, var(--amber) 18%, transparent);
+  display:flex; align-items:center; padding:0 16px; gap:10px;
+  font-size:12px; flex-shrink:0; overflow:hidden;
+  animation:lockBannerIn 250ms cubic-bezier(0.4,0,0.2,1);
+}
+.lock-banner-icon { color:var(--amber); flex-shrink:0; display:flex; align-items:center; }
+.lock-banner-label { font-weight:500; color:var(--amber); white-space:nowrap; }
+.lock-banner-sep { width:1px; height:16px; background:color-mix(in srgb, var(--amber) 20%, transparent); flex-shrink:0; }
+.lock-banner-iter {
+  font-family:var(--font-mono); font-size:10px; color:var(--text-muted);
+  max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  cursor:pointer; padding:2px 8px; border-radius:var(--radius-sm);
+  background:var(--surface-2); transition:all 150ms ease;
+}
+.lock-banner-iter:hover { background:var(--surface-3); color:var(--text-dim); }
+.lock-banner-age { font-family:var(--font-mono); font-size:11px; font-weight:600; color:var(--amber); letter-spacing:0.3px; }
+.lock-banner-spacer { flex:1; }
+.lock-banner-unlock {
+  height:26px; padding:0 14px; border-radius:var(--radius-md);
+  background:var(--amber); color:#fff; border:none;
+  font-family:var(--font-body); font-size:11px; font-weight:600;
+  cursor:pointer; transition:all 150ms ease; white-space:nowrap;
+}
+.lock-banner-unlock:hover { filter:brightness(1.1); box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 25%, transparent); }
+.lock-banner-unlock:active { transform:scale(0.97); }
+.lock-banner-dismiss {
+  width:24px; height:24px; border-radius:var(--radius-sm);
+  background:transparent; border:none; color:var(--text-muted);
+  font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  transition:all 150ms ease; flex-shrink:0;
+}
+.lock-banner-dismiss:hover { background:color-mix(in srgb, var(--amber) 12%, transparent); color:var(--amber); }
+@keyframes lockBannerIn { from{opacity:0;max-height:0} to{opacity:1;max-height:36px} }
+
+/* ── Graph Lock Overlay ── */
+.lock-overlay { position:absolute; inset:0; background:color-mix(in srgb, var(--amber) 2%, transparent); pointer-events:none; z-index:1; animation:fadeIn 300ms ease; }
+
+/* ── Lock Confirmation Modal ── */
+.lock-modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.5);
+  display:flex; align-items:center; justify-content:center;
+  z-index:100; /* modal sits above everything */ animation:fadeIn 150ms ease;
+  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+}
+.lock-modal {
+  width:400px; background:var(--surface); border:1px solid var(--border-bright);
+  border-radius:var(--radius-lg); box-shadow:var(--shadow-lg), 0 0 40px rgba(0,0,0,0.2);
+  padding:24px; animation:lockModalIn 200ms cubic-bezier(0.34,1.56,0.64,1);
+}
+.lock-modal-icon {
+  width:40px; height:40px; border-radius:var(--radius-md);
+  background:color-mix(in srgb, var(--amber) 10%, transparent);
+  color:var(--amber); display:flex; align-items:center; justify-content:center; margin-bottom:16px;
+}
+.lock-modal-title { font-size:15px; font-weight:600; color:var(--text); margin-bottom:12px; }
+.lock-modal-details {
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:var(--radius-md); padding:10px 12px; margin-bottom:12px; font-size:12px;
+}
+.lock-modal-row { display:flex; justify-content:space-between; padding:3px 0; }
+.lock-modal-label { color:var(--text-dim); }
+.lock-modal-val { font-family:var(--font-mono); font-size:11px; color:var(--text); font-weight:500; text-align:right; max-width:220px; overflow:hidden; text-overflow:ellipsis; }
+.lock-modal-warning {
+  font-size:11px; color:var(--status-failed); line-height:1.5;
+  margin-bottom:16px; padding:8px 10px;
+  background:rgba(229,69,59,0.06); border-radius:var(--radius-sm);
+  border:1px solid rgba(229,69,59,0.12);
+}
+.lock-modal-actions { display:flex; justify-content:flex-end; gap:8px; }
+.lock-modal-confirm {
+  height:30px; padding:0 16px; border-radius:var(--radius-md);
+  background:var(--amber); color:#fff; border:none;
+  font-family:var(--font-body); font-size:12px; font-weight:600;
+  cursor:pointer; transition:all 150ms ease;
+}
+.lock-modal-confirm:hover { filter:brightness(1.1); box-shadow:0 0 0 3px color-mix(in srgb, var(--amber) 25%, transparent); }
+.lock-modal-confirm:active { transform:scale(0.97); }
+@keyframes lockModalIn { from{opacity:0;transform:scale(0.95) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+.btn-danger { background:transparent; color:var(--status-failed); border:1px solid rgba(229,69,59,0.2); }
+.btn-danger:hover { background:rgba(229,69,59,0.08); }
+.btn-danger:disabled { opacity:0.3; cursor:not-allowed; }
+
+.status-indicator { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim); }
+.status-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.status-dot.idle { background:var(--status-pending); }
+.status-dot.running { background:var(--status-running); animation:pulse 1.5s ease-in-out infinite; }
+.status-dot.succeeded { background:var(--status-succeeded); }
+.status-dot.failed { background:var(--status-failed); }
+.status-dot.locked { background:var(--amber); animation:pulse 2s ease-in-out infinite; box-shadow:0 0 8px color-mix(in srgb, var(--amber) 50%, transparent); }
+.status-timer { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); letter-spacing:0.5px; }
+
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+/* ── Layout: Graph + Detail + Bottom ── */
+.workspace { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.top-area { flex:1; display:flex; min-height:0; position:relative; }
+
+/* ── DAG Canvas ── */
+.graph-panel { flex:1; position:relative; background:var(--canvas-bg); overflow:hidden; min-width:0; }
+.graph-panel canvas { display:block; width:100%; height:100%; cursor:grab; }
+.graph-panel canvas:active { cursor:grabbing; }
+
+/* Canvas zoom controls */
+.canvas-controls { position:absolute; bottom:16px; right:16px; display:flex; flex-direction:column; gap:4px; z-index:5; }
+.canvas-ctrl-btn { width:32px; height:32px; border-radius:var(--radius-md); background:var(--surface); border:1px solid var(--border); color:var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px; font-weight:600; transition:all 150ms ease; }
+.canvas-ctrl-btn:hover { background:var(--surface-2); color:var(--text); border-color:var(--border-bright); }
+
+/* ── Node Detail Panel ── */
+.detail-panel { width:0; overflow:hidden; background:var(--surface); border-left:1px solid var(--border); transition:width 200ms cubic-bezier(0.4,0,0.2,1); flex-shrink:0; display:flex; flex-direction:column; }
+.detail-panel.open { width:340px; }
+.detail-header { padding:16px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.detail-title-row { display:flex; align-items:center; gap:8px; }
+.detail-status-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.detail-name { font-size:15px; font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.detail-type-badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:var(--radius-full); letter-spacing:0.5px; flex-shrink:0; }
+.detail-type-badge.sql { background:rgba(45,127,249,0.12); color:var(--type-sql); }
+.detail-type-badge.pyspark { background:rgba(168,85,247,0.12); color:var(--type-pyspark); }
+.detail-close { width:28px; height:28px; border-radius:var(--radius-sm); background:transparent; border:none; color:var(--text-muted); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; transition:all 120ms ease; }
+.detail-close:hover { background:var(--surface-2); color:var(--text); }
+.detail-meta { font-size:11px; color:var(--text-dim); margin-top:6px; display:flex; align-items:center; gap:6px; }
+.detail-meta .dot { width:4px; height:4px; border-radius:50%; background:var(--text-muted); }
+
+/* Detail tabs */
+.detail-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; position:relative; }
+.detail-tab { padding:8px 14px; font-size:11px; font-weight:500; color:var(--text-muted); cursor:pointer; border:none; background:none; transition:color 150ms ease; position:relative; }
+.detail-tab:hover { color:var(--text-dim); }
+.detail-tab.active { color:var(--accent); }
+.tab-indicator { position:absolute; bottom:0; height:2px; background:var(--accent); border-radius:1px; transition:left 200ms cubic-bezier(0.4,0,0.2,1), width 200ms cubic-bezier(0.4,0,0.2,1); }
+
+/* Detail body */
+.detail-body { flex:1; overflow-y:auto; padding:16px; }
+.detail-section { margin-bottom:16px; }
+.detail-section-title { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); margin-bottom:8px; }
+.detail-row { display:flex; justify-content:space-between; padding:4px 0; font-size:12px; border-bottom:1px solid var(--border); }
+.detail-row:last-child { border-bottom:none; }
+.detail-label { color:var(--text-dim); }
+.detail-value { color:var(--text); font-weight:500; text-align:right; font-family:var(--font-mono); font-size:11px; }
+.detail-value.green { color:var(--status-succeeded); }
+.detail-value.red { color:var(--status-failed); }
+.detail-value.amber { color:var(--status-cancelled); }
+
+/* Error banner */
+.error-banner { background:rgba(229,69,59,0.08); border:1px solid rgba(229,69,59,0.2); border-radius:var(--radius-md); padding:10px 12px; margin:12px 0 0; }
+.error-banner-title { font-size:11px; font-weight:600; color:var(--status-failed); display:flex; align-items:center; gap:6px; }
+.error-banner-msg { font-size:11px; color:var(--text-dim); margin-top:4px; font-family:var(--font-mono); }
+
+/* Code block inside detail */
+.code-block { background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); padding:12px; font-family:var(--font-mono); font-size:11px; line-height:1.6; overflow-x:auto; white-space:pre; color:var(--text-dim); }
+.code-keyword { color:var(--type-sql); }
+.code-string { color:var(--status-succeeded); }
+.code-comment { color:var(--text-muted); font-style:italic; }
+
+/* Dep list */
+.dep-item { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; transition:background 120ms ease; }
+.dep-item:hover { background:var(--accent-dim); }
+.dep-arrow { color:var(--text-muted); font-size:10px; }
+
+/* ── Resize Handle ── */
+.resize-handle { height:8px; background:var(--surface); border-top:1px solid var(--border); border-bottom:1px solid var(--border); cursor:row-resize; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:background 120ms ease; }
+.resize-handle:hover { background:var(--accent-dim); }
+.resize-handle::after { content:''; width:32px; height:3px; border-radius:2px; background:var(--border-bright); }
+
+/* ── Bottom Panel (Gantt + History) ── */
+.bottom-panel { height:220px; background:var(--surface); display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; }
+.bottom-tabs { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; padding:0 12px; }
+.bottom-tab { padding:8px 14px; font-size:11px; font-weight:500; color:var(--text-muted); cursor:pointer; border:none; background:none; position:relative; transition:color 150ms ease; }
+.bottom-tab:hover { color:var(--text-dim); }
+.bottom-tab.active { color:var(--accent); }
+.bottom-tab.active::after { content:''; position:absolute; bottom:0; left:8px; right:8px; height:2px; background:var(--accent); border-radius:1px; }
+
+.bottom-content { flex:1; overflow:hidden; position:relative; }
+
+/* ── Gantt Chart ── */
+.gantt-container { display:flex; height:100%; overflow:hidden; }
+.gantt-labels { width:140px; flex-shrink:0; border-right:1px solid var(--border); overflow-y:auto; padding-top:24px; }
+.gantt-label { height:28px; display:flex; align-items:center; padding:0 12px; font-size:11px; color:var(--text-dim); cursor:pointer; transition:all 120ms ease; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gantt-label:hover { background:var(--accent-dim); color:var(--text); }
+.gantt-label.highlight { background:var(--accent-dim); color:var(--accent); }
+.gantt-chart-area { flex:1; position:relative; overflow:auto; }
+.gantt-time-axis { height:24px; position:sticky; top:0; background:var(--surface); border-bottom:1px solid var(--border); z-index:2; display:flex; align-items:flex-end; padding-bottom:4px; font-size:10px; color:var(--text-muted); font-family:var(--font-mono); }
+.gantt-time-tick { position:absolute; bottom:4px; transform:translateX(-50%); }
+.gantt-bars { position:relative; min-height:calc(100% - 24px); }
+.gantt-row { height:28px; position:relative; border-bottom:1px solid var(--gantt-grid); }
+.gantt-bar { position:absolute; height:20px; top:4px; border-radius:var(--radius-sm); min-width:3px; transition:width 300ms ease-out; }
+.gantt-bar.succeeded { background:var(--status-succeeded); opacity:0.85; }
+.gantt-bar.failed { background:var(--status-failed); opacity:0.85; background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,0.1) 3px,rgba(0,0,0,0.1) 6px); }
+.gantt-bar.running { background:var(--status-running); opacity:0.85; animation:ganttPulse 1.5s ease-in-out infinite; }
+.gantt-bar.pending { background:var(--status-pending); opacity:0.3; border:1px dashed var(--status-pending); }
+.gantt-bar.skipped { background:var(--status-skipped); opacity:0.4; }
+.gantt-bar.cancelled { background:var(--status-cancelled); opacity:0.7; }
+.gantt-bar-label { position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:9px; font-weight:500; color:white; white-space:nowrap; pointer-events:none; text-shadow:0 1px 2px rgba(0,0,0,0.3); }
+.gantt-now-line { position:absolute; top:0; bottom:0; width:2px; background:var(--accent); z-index:3; opacity:0.6; }
+.gantt-now-line::before { content:'Now'; position:absolute; top:-20px; left:50%; transform:translateX(-50%); font-size:9px; color:var(--accent); font-weight:500; }
+
+@keyframes ganttPulse { 0%,100%{opacity:0.85} 50%{opacity:0.5} }
+
+.gantt-summary { height:28px; border-top:1px solid var(--border); display:flex; align-items:center; padding:0 12px; gap:16px; font-size:11px; color:var(--text-dim); flex-shrink:0; }
+.gantt-summary span { display:flex; align-items:center; gap:4px; }
+
+/* ── Execution History ── */
+.history-container { height:100%; display:flex; flex-direction:column; }
+.history-header { display:flex; align-items:center; padding:8px 12px; gap:8px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.history-header .btn { height:26px; font-size:11px; padding:0 10px; }
+.history-list { flex:1; overflow-y:auto; }
+.history-row { height:36px; display:flex; align-items:center; padding:0 12px; gap:12px; border-bottom:1px solid var(--border); cursor:pointer; transition:background 120ms ease; font-size:12px; }
+.history-row:hover { background:var(--accent-dim); }
+.history-row.selected { background:var(--accent-dim); }
+.history-row.active-run { border-left:3px solid var(--accent); }
+.history-check { width:16px; height:16px; border-radius:3px; border:1.5px solid var(--border-bright); flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 120ms ease; }
+.history-check.checked { background:var(--accent); border-color:var(--accent); }
+.history-check.checked::after { content:''; display:block; width:6px; height:3px; border-left:2px solid white; border-bottom:2px solid white; transform:rotate(-45deg) translateY(-1px); }
+.history-status { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.history-id { font-family:var(--font-mono); font-size:11px; color:var(--text-dim); width:72px; flex-shrink:0; }
+.history-time { color:var(--text-muted); font-size:11px; width:64px; flex-shrink:0; }
+.history-dur { font-family:var(--font-mono); font-size:11px; width:56px; flex-shrink:0; }
+.history-nodes { font-size:11px; width:80px; flex-shrink:0; }
+.history-type { font-size:10px; padding:2px 6px; border-radius:var(--radius-full); background:var(--surface-2); color:var(--text-dim); flex-shrink:0; }
+.history-error { font-family:var(--font-mono); font-size:10px; color:var(--status-failed); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ── State Switcher (bottom bar) ── */
+.state-bar { height:36px; background:var(--surface); border-top:1px solid var(--border); display:flex; align-items:center; justify-content:center; gap:8px; flex-shrink:0; z-index:20; }
+.state-btn { height:26px; padding:0 12px; border-radius:var(--radius-full); font-size:11px; font-weight:500; border:1px solid var(--border); background:transparent; color:var(--text-dim); cursor:pointer; transition:all 150ms ease; }
+.state-btn:hover { border-color:var(--accent); color:var(--accent); }
+.state-btn.active { background:var(--accent); color:var(--text-on-accent); border-color:var(--accent); }
+.theme-toggle { position:absolute; right:16px; width:26px; height:26px; border-radius:var(--radius-sm); background:transparent; border:1px solid var(--border); color:var(--text-dim); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; }
+.theme-toggle:hover { background:var(--surface-2); }
+
+/* Animations */
+@keyframes shakeNode { 0%,100%{transform:translateX(0)} 10%,30%,50%,70%,90%{transform:translateX(-3px)} 20%,40%,60%,80%{transform:translateX(3px)} }
+@keyframes slideInRight { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+@keyframes completeBurst { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.15);opacity:0.8} 100%{transform:scale(1);opacity:1} }
+
+.slide-in { animation:slideInRight 200ms cubic-bezier(0.4,0,0.2,1); }
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border-bright); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--text-muted); }
+
+/* Utility */
+.hidden { display:none !important; }
+.mono { font-family:var(--font-mono); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-icon" title="Workspace Explorer">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M3 8h14M8 8v9"/></svg>
+    </div>
+    <div class="sidebar-icon" title="Log Monitor">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5h14M3 10h10M3 15h6"/></svg>
+    </div>
+    <div class="sidebar-icon active" title="DAG Studio">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="5" cy="5" r="2"/><circle cx="15" cy="5" r="2"/><circle cx="10" cy="15" r="2"/><path d="M7 5h6M6 6.5l3 7M14 6.5l-3 7"/></svg>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-icon" title="Feature Flags">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 3v14M4 3l10 4-10 4"/></svg>
+    </div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-icon" title="Settings">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="3"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.05 5.05l1.41 1.41M13.54 13.54l1.41 1.41M5.05 14.95l1.41-1.41M13.54 6.46l1.41-1.41"/></svg>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Execution Controls Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button class="btn btn-primary" id="btnRun">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="2,1 11,6 2,11"/></svg>
+          <span id="btnRunLabel">Run DAG</span>
+        </button>
+        <button class="btn btn-danger" id="btnCancel" disabled>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4.5"/><path d="M4 4l4 4M8 4l-4 4"/></svg>
+          Cancel
+        </button>
+        <button class="btn btn-ghost" id="btnRefresh" title="Refresh DAG">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.5 6a4.5 4.5 0 0 1 8.5-1.8M10.5 6a4.5 4.5 0 0 1-8.5 1.8"/><polyline points="10,1 10,4.5 6.5,4.5"/><polyline points="2,11 2,7.5 5.5,7.5"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-ghost" id="btnSettings" title="DAG Settings">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="2"/><path d="M6 1v1.5M6 9.5V11M1 6h1.5M9.5 6H11M2.6 2.6l1 1M8.4 8.4l1 1M2.6 9.4l1-1M8.4 3.6l1-1"/></svg>
+          Settings
+        </button>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-ghost btn-sm lock-check-btn" id="btnLockCheck" title="Check execution lock">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </button>
+        <div class="toolbar-sep"></div>
+        <div class="status-indicator">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusLabel">Idle</span>
+          <span class="status-timer" id="statusTimer"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lock Banner (between toolbar and workspace — hidden by default) -->
+    <div class="lock-banner" id="lockBanner" style="display:none">
+      <div class="lock-banner-icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <span class="lock-banner-label">Execution locked</span>
+      <div class="lock-banner-sep"></div>
+      <span class="lock-banner-iter" id="lockBannerIter" title="Click to copy">iter-abc123</span>
+      <span class="lock-banner-age" id="lockBannerAge">5m 12s</span>
+      <div class="lock-banner-spacer"></div>
+      <button class="lock-banner-unlock" id="btnBannerUnlock">Unlock</button>
+      <button class="lock-banner-dismiss" id="btnBannerDismiss" title="Dismiss">&#10005;</button>
+    </div>
+
+    <!-- Workspace -->
+    <div class="workspace">
+      <!-- Top: Graph + Detail -->
+      <div class="top-area">
+        <div class="graph-panel" id="graphPanel">
+          <canvas id="dagCanvas"></canvas>
+          <div class="canvas-controls">
+            <button class="canvas-ctrl-btn" id="btnZoomIn" title="Zoom In (+)">+</button>
+            <button class="canvas-ctrl-btn" id="btnZoomOut" title="Zoom Out (-)">−</button>
+            <button class="canvas-ctrl-btn" id="btnFit" title="Fit to Screen (F)" style="font-size:11px;">⊡</button>
+          </div>
+        </div>
+        <div class="detail-panel" id="detailPanel">
+          <div class="detail-header">
+            <div class="detail-title-row">
+              <div class="detail-status-dot" id="detailStatusDot"></div>
+              <div class="detail-name" id="detailName">—</div>
+              <span class="detail-type-badge" id="detailTypeBadge">SQL</span>
+              <button class="detail-close" id="detailClose">✕</button>
+            </div>
+            <div class="detail-meta" id="detailMeta">
+              <span id="detailStatus">—</span>
+              <div class="dot"></div>
+              <span id="detailDuration">—</span>
+              <div class="dot"></div>
+              <span id="detailTime">—</span>
+            </div>
+            <div class="error-banner hidden" id="detailError">
+              <div class="error-banner-title">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M6 1L1 11h10L6 1zM6 4.5v3M6 8.5v1"/></svg>
+                <span id="detailErrorCode">MLV_RUNTIME_ERROR</span>
+              </div>
+              <div class="error-banner-msg" id="detailErrorMsg">—</div>
+            </div>
+          </div>
+          <div class="detail-tabs" id="detailTabs">
+            <button class="detail-tab active" data-tab="overview">Overview</button>
+            <button class="detail-tab" data-tab="metrics">Metrics</button>
+            <button class="detail-tab" data-tab="logs">Logs</button>
+            <button class="detail-tab" data-tab="code">Code</button>
+            <button class="detail-tab" data-tab="deps">Deps</button>
+            <button class="detail-tab" data-tab="history">History</button>
+            <div class="tab-indicator" id="tabIndicator"></div>
+          </div>
+          <div class="detail-body" id="detailBody"></div>
+        </div>
+      </div>
+
+      <!-- Resize Handle -->
+      <div class="resize-handle" id="resizeHandle"></div>
+
+      <!-- Bottom Panel -->
+      <div class="bottom-panel" id="bottomPanel">
+        <div class="bottom-tabs">
+          <button class="bottom-tab active" data-panel="gantt">Gantt</button>
+          <button class="bottom-tab" data-panel="history">History</button>
+        </div>
+        <div class="bottom-content">
+          <!-- Gantt -->
+          <div class="gantt-container" id="ganttPanel">
+            <div class="gantt-labels" id="ganttLabels"></div>
+            <div class="gantt-chart-area" id="ganttChartArea">
+              <div class="gantt-time-axis" id="ganttTimeAxis"></div>
+              <div class="gantt-bars" id="ganttBars"></div>
+            </div>
+          </div>
+          <!-- History -->
+          <div class="history-container hidden" id="historyPanel">
+            <div class="history-header">
+              <span style="font-size:11px;font-weight:500;color:var(--text-dim)">Execution History</span>
+              <div style="flex:1"></div>
+              <button class="btn btn-ghost" style="height:24px;font-size:10px;padding:0 8px" id="btnCompare" disabled>Compare (0)</button>
+            </div>
+            <div class="history-list" id="historyList"></div>
+          </div>
+        </div>
+        <div class="gantt-summary" id="ganttSummary">
+          <span id="summaryDuration">—</span>
+          <span id="summaryNodes">—</span>
+          <span id="summaryParallel">—</span>
+          <span id="summaryStatus">—</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- State Switcher -->
+<div class="state-bar">
+  <button class="state-btn active" data-state="idle">Idle</button>
+  <button class="state-btn" data-state="running">Running</button>
+  <button class="state-btn" data-state="completed">Completed</button>
+  <button class="state-btn" data-state="failed">Failed</button>
+  <button class="state-btn" data-state="locked">Locked</button>
+  <button class="theme-toggle" id="themeToggle" title="Toggle theme">◐</button>
+</div>
+
+<!-- Lock Confirmation Modal -->
+<div class="lock-modal-overlay" id="lockModalOverlay" style="display:none">
+  <div class="lock-modal">
+    <div class="lock-modal-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div class="lock-modal-title">Force unlock DAG execution?</div>
+    <div class="lock-modal-details">
+      <div class="lock-modal-row"><span class="lock-modal-label">Iteration ID</span><span class="lock-modal-val" id="modalIterValue">—</span></div>
+      <div class="lock-modal-row"><span class="lock-modal-label">Lock age</span><span class="lock-modal-val" id="modalAgeValue">—</span></div>
+      <div class="lock-modal-row"><span class="lock-modal-label">Locked since</span><span class="lock-modal-val" id="modalSinceValue">—</span></div>
+    </div>
+    <div class="lock-modal-warning">This will release the execution lock. If another process is actively using it, data corruption may occur.</div>
+    <div class="lock-modal-actions">
+      <button class="btn btn-ghost" id="btnModalCancel">Cancel</button>
+      <button class="lock-modal-confirm" id="btnModalConfirm">Force Unlock</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DAG STUDIO — Interactive Mockup Engine
+   ═══════════════════════════════════════════════════════════════ */
+
+// ── Theme Toggle ──
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('click', () => {
+  const html = document.documentElement;
+  html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+  requestAnimationFrame(() => dag.dirty = true);
+});
+
+// ── Mock Data: 12-Node FLT DAG ──
+const NODES = [
+  // Layer 0 — Sources
+  { id:'n1', name:'SalesRaw', kind:'sql', layer:0, executable:false, tableType:'Source', abfsPath:'abfss://sales@lakehouse.dfs.fabric.microsoft.com/Tables/SalesRaw', format:'Delta', lastRefresh:'2026-04-14T08:30:00Z' },
+  { id:'n2', name:'CustomerDim', kind:'sql', layer:0, executable:false, tableType:'Source', abfsPath:'abfss://customers@lakehouse.dfs.fabric.microsoft.com/Tables/CustomerDim', format:'Delta', lastRefresh:'2026-04-14T07:00:00Z' },
+  { id:'n3', name:'ProductCatalog', kind:'pyspark', layer:0, executable:false, tableType:'Source', abfsPath:'abfss://products@lakehouse.dfs.fabric.microsoft.com/Tables/ProductCatalog', format:'Delta', lastRefresh:'2026-04-13T22:00:00Z' },
+  // Layer 1 — Transforms
+  { id:'n4', name:'CleanSales', kind:'sql', layer:1, executable:true, tableType:'MLV', abfsPath:'abfss://sales@lakehouse.dfs.fabric.microsoft.com/Tables/CleanSales', format:'Delta', lastRefresh:'2026-04-14T08:35:00Z' },
+  { id:'n5', name:'EnrichCustomer', kind:'pyspark', layer:1, executable:true, tableType:'MLV', abfsPath:'abfss://customers@lakehouse.dfs.fabric.microsoft.com/Tables/EnrichCustomer', format:'Delta', lastRefresh:'2026-04-14T08:34:00Z' },
+  // Layer 2 — Joins
+  { id:'n6', name:'SalesEnriched', kind:'sql', layer:2, executable:true, tableType:'MLV', abfsPath:'abfss://analytics@lakehouse.dfs.fabric.microsoft.com/Tables/SalesEnriched', format:'Delta', lastRefresh:'2026-04-14T08:38:00Z' },
+  { id:'n7', name:'CustomerProduct', kind:'sql', layer:2, executable:true, tableType:'MLV', abfsPath:'abfss://analytics@lakehouse.dfs.fabric.microsoft.com/Tables/CustomerProduct', format:'Delta', lastRefresh:'2026-04-14T08:37:00Z' },
+  // Layer 3 — Materialized Views
+  { id:'n8', name:'mv_SalesSummary', kind:'sql', layer:3, executable:true, tableType:'MLV', abfsPath:'abfss://analytics@lakehouse.dfs.fabric.microsoft.com/Tables/mv_SalesSummary', format:'Delta', lastRefresh:'2026-04-14T08:42:00Z' },
+  { id:'n9', name:'mv_CustomerInsights', kind:'pyspark', layer:3, executable:true, tableType:'MLV', abfsPath:'abfss://analytics@lakehouse.dfs.fabric.microsoft.com/Tables/mv_CustomerInsights', format:'Delta', lastRefresh:'2026-04-14T08:43:00Z' },
+  { id:'n10', name:'mv_ProductMetrics', kind:'sql', layer:3, executable:true, tableType:'MLV', abfsPath:'abfss://analytics@lakehouse.dfs.fabric.microsoft.com/Tables/mv_ProductMetrics', format:'Delta', lastRefresh:'2026-04-14T08:41:00Z' },
+  // Layer 4 — System Metrics
+  { id:'n11', name:'sys_dag_metrics', kind:'sql', layer:4, executable:true, tableType:'System', abfsPath:'abfss://system@lakehouse.dfs.fabric.microsoft.com/Tables/sys_dag_metrics', format:'Delta', lastRefresh:'2026-04-14T08:45:00Z' },
+  { id:'n12', name:'sys_dq_metrics', kind:'sql', layer:4, executable:true, tableType:'System', abfsPath:'abfss://system@lakehouse.dfs.fabric.microsoft.com/Tables/sys_dq_metrics', format:'Delta', lastRefresh:'2026-04-14T08:45:00Z' },
+];
+
+const EDGES = [
+  { from:'n1', to:'n4' }, { from:'n2', to:'n5' }, { from:'n3', to:'n5' },
+  { from:'n1', to:'n6' }, { from:'n4', to:'n6' }, { from:'n5', to:'n6' },
+  { from:'n5', to:'n7' }, { from:'n3', to:'n7' },
+  { from:'n6', to:'n8' }, { from:'n6', to:'n9' },
+  { from:'n7', to:'n9' }, { from:'n7', to:'n10' },
+  { from:'n8', to:'n11' }, { from:'n9', to:'n11' }, { from:'n10', to:'n11' },
+  { from:'n8', to:'n12' }, { from:'n10', to:'n12' },
+];
+
+const MOCK_METRICS = {
+  n1:{rows:1450000,added:23400,dropped:0,dqViolations:0,duration:0.8},
+  n2:{rows:340000,added:1200,dropped:0,dqViolations:0,duration:0.5},
+  n3:{rows:89000,added:450,dropped:12,dqViolations:3,duration:1.2},
+  n4:{rows:1420000,added:23100,dropped:300,dqViolations:42,duration:3.4, errorCode:'MLV_STALE_METADATA', errorMsg:'Stale metadata detected on source table SalesRaw. The source schema has changed since the last successful refresh. Column "discount_pct" was added.'},
+  n5:{rows:338000,added:1180,dropped:20,dqViolations:0,duration:2.8},
+  n6:{rows:1380000,added:22800,dropped:200,dqViolations:7,duration:5.1},
+  n7:{rows:295000,added:980,dropped:15,dqViolations:0,duration:3.2},
+  n8:{rows:45000,added:1200,dropped:0,dqViolations:0,duration:4.7},
+  n9:{rows:28000,added:340,dropped:0,dqViolations:0,duration:6.3},
+  n10:{rows:12000,added:89,dropped:0,dqViolations:0,duration:2.9},
+  n11:{rows:150,added:12,dropped:0,dqViolations:0,duration:1.1},
+  n12:{rows:80,added:5,dropped:0,dqViolations:0,duration:0.9},
+};
+
+const MOCK_HISTORY = [
+  { id:'a1b2c3d4', status:'running', ago:'now', duration:'—', nodes:'4/12', type:'Manual', error:null },
+  { id:'e5f6a7b8', status:'succeeded', ago:'2m ago', duration:'34s', nodes:'12/12', type:'Manual', error:null },
+  { id:'c9d0e1f2', status:'failed', ago:'15m ago', duration:'12s', nodes:'5/12 (1\u2715)', type:'Sched', error:'MLV_STALE_METADATA' },
+  { id:'f3a4b5c6', status:'succeeded', ago:'1h ago', duration:'41s', nodes:'12/12', type:'Manual', error:null },
+  { id:'d7e8f9a0', status:'cancelled', ago:'3h ago', duration:'8s', nodes:'3/12', type:'API', error:null },
+];
+
+// ── Layout Constants ──
+const SPACING_X = 220;
+const SPACING_Y = 80;
+const NODE_W = 150;
+const NODE_H = 56;
+
+// ── Color Helpers ──
+function getCS(prop) { return getComputedStyle(document.documentElement).getPropertyValue(prop).trim(); }
+function statusColor(s) {
+  const m = { pending:'--status-pending', running:'--status-running', succeeded:'--status-succeeded', failed:'--status-failed', cancelled:'--status-cancelled', skipped:'--status-skipped', locked:'--amber' };
+  return getCS(m[s] || '--status-pending');
+}
+function layerColor(l) {
+  const m = [getCS('--layer-source'), getCS('--layer-transform'), getCS('--layer-transform'), getCS('--layer-output'), getCS('--layer-metrics')];
+  return m[l] || m[0];
+}
+function kindColor(k) { return k === 'pyspark' ? getCS('--type-pyspark') : getCS('--type-sql'); }
+
+// ── DAG Renderer (Canvas 2D) ──
+class DagRenderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.camera = { x:0, y:0, scale:1 };
+    this.dirty = true;
+    this.animating = false;
+    this.selectedNode = null;
+    this.hoveredNode = null;
+    this.nodes = [];
+    this.edges = [];
+    this.nodeMap = {};
+    this.nodeStates = {};
+    this.edgeFlowing = {};
+    this.dashOffset = 0;
+    this.time = 0;
+    this._dragging = false;
+    this._lastMouse = { x:0, y:0 };
+    this._setupLayout();
+    this._bindEvents();
+    this._resize();
+    this._loop();
+  }
+
+  _setupLayout() {
+    // Sugiyama-style layered layout
+    const layers = {};
+    NODES.forEach(n => {
+      if (!layers[n.layer]) layers[n.layer] = [];
+      layers[n.layer].push(n);
+    });
+    const maxLayer = Math.max(...Object.keys(layers).map(Number));
+    const maxInLayer = Math.max(...Object.values(layers).map(l => l.length));
+    const totalH = maxInLayer * SPACING_Y;
+
+    NODES.forEach(n => {
+      const layerNodes = layers[n.layer];
+      const layerH = layerNodes.length * SPACING_Y;
+      const yOff = (totalH - layerH) / 2;
+      const idx = layerNodes.indexOf(n);
+      n.x = n.layer * SPACING_X + 80;
+      n.y = yOff + idx * SPACING_Y + 40;
+      this.nodeMap[n.id] = n;
+      this.nodeStates[n.id] = 'pending';
+    });
+    this.nodes = NODES;
+    this.edges = EDGES;
+  }
+
+  _resize() {
+    const panel = document.getElementById('graphPanel');
+    const rect = panel.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = rect.width * dpr;
+    this.canvas.height = rect.height * dpr;
+    this.canvas.style.width = rect.width + 'px';
+    this.canvas.style.height = rect.height + 'px';
+    this.width = rect.width;
+    this.height = rect.height;
+    this.dpr = dpr;
+    this.dirty = true;
+  }
+
+  fitToScreen() {
+    if (this.nodes.length === 0) return;
+    const pad = 80;
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    this.nodes.forEach(n => {
+      minX = Math.min(minX, n.x - NODE_W/2);
+      minY = Math.min(minY, n.y - NODE_H/2);
+      maxX = Math.max(maxX, n.x + NODE_W/2);
+      maxY = Math.max(maxY, n.y + NODE_H/2);
+    });
+    const gw = maxX - minX + pad*2;
+    const gh = maxY - minY + pad*2;
+    const scale = Math.min(this.width / gw, this.height / gh, 1.5);
+    this.camera.scale = scale;
+    this.camera.x = (this.width - (maxX + minX) * scale) / 2;
+    this.camera.y = (this.height - (maxY + minY) * scale) / 2;
+    this.dirty = true;
+  }
+
+  _bindEvents() {
+    const c = this.canvas;
+    window.addEventListener('resize', () => { this._resize(); this.fitToScreen(); });
+    new ResizeObserver(() => { this._resize(); this.fitToScreen(); }).observe(document.getElementById('graphPanel'));
+
+    c.addEventListener('wheel', e => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.08 : 0.92;
+      const rect = c.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const newScale = Math.max(0.15, Math.min(3, this.camera.scale * factor));
+      const ds = newScale / this.camera.scale;
+      this.camera.x = mx - (mx - this.camera.x) * ds;
+      this.camera.y = my - (my - this.camera.y) * ds;
+      this.camera.scale = newScale;
+      this.dirty = true;
+    }, {passive:false});
+
+    c.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const hit = this._hitTest(e);
+      if (hit) {
+        this.selectedNode = hit;
+        openDetailPanel(hit);
+        highlightGanttNode(hit.id);
+        this.dirty = true;
+        return;
+      }
+      this._dragging = true;
+      this._lastMouse = { x:e.clientX, y:e.clientY };
+      this.selectedNode = null;
+      closeDetailPanel();
+      highlightGanttNode(null);
+      this.dirty = true;
+    });
+
+    c.addEventListener('mousemove', e => {
+      if (this._dragging) {
+        const dx = e.clientX - this._lastMouse.x;
+        const dy = e.clientY - this._lastMouse.y;
+        this.camera.x += dx;
+        this.camera.y += dy;
+        this._lastMouse = { x:e.clientX, y:e.clientY };
+        this.dirty = true;
+      } else {
+        const hit = this._hitTest(e);
+        if (hit !== this.hoveredNode) {
+          this.hoveredNode = hit;
+          c.style.cursor = hit ? 'pointer' : 'grab';
+          this.dirty = true;
+        }
+      }
+    });
+
+    c.addEventListener('mouseup', () => { this._dragging = false; });
+    c.addEventListener('mouseleave', () => { this._dragging = false; this.hoveredNode = null; this.dirty = true; });
+  }
+
+  _hitTest(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const wx = (mx - this.camera.x) / this.camera.scale;
+    const wy = (my - this.camera.y) / this.camera.scale;
+    for (let i = this.nodes.length - 1; i >= 0; i--) {
+      const n = this.nodes[i];
+      if (wx >= n.x - NODE_W/2 && wx <= n.x + NODE_W/2 && wy >= n.y - NODE_H/2 && wy <= n.y + NODE_H/2) return n;
+    }
+    return null;
+  }
+
+  _loop(ts) {
+    requestAnimationFrame(t => this._loop(t));
+    this.time = ts || 0;
+    const anyRunning = Object.values(this.nodeStates).some(s => s === 'running');
+    const anyFlowing = Object.values(this.edgeFlowing).some(Boolean);
+    if (!this.dirty && !anyRunning && !anyFlowing) return;
+    this._render();
+    this.dirty = false;
+  }
+
+  _render() {
+    const ctx = this.ctx;
+    const dpr = this.dpr;
+    const w = this.width;
+    const h = this.height;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Background
+    ctx.fillStyle = getCS('--canvas-bg');
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.translate(this.camera.x, this.camera.y);
+    ctx.scale(this.camera.scale, this.camera.scale);
+
+    // Dot grid
+    this._drawGrid(ctx);
+    // Edges
+    this._drawEdges(ctx);
+    // Nodes
+    this._drawNodes(ctx);
+
+    ctx.restore();
+
+    // Minimap
+    this._drawMinimap(ctx, w, h);
+  }
+
+  _drawGrid(ctx) {
+    const spacing = 24;
+    const cam = this.camera;
+    const vl = -cam.x / cam.scale;
+    const vt = -cam.y / cam.scale;
+    const vr = (this.width - cam.x) / cam.scale;
+    const vb = (this.height - cam.y) / cam.scale;
+    const dotSize = Math.max(0.8, 1.2 / cam.scale);
+    ctx.fillStyle = getCS('--canvas-dot');
+    const startX = Math.floor(vl / spacing) * spacing;
+    const startY = Math.floor(vt / spacing) * spacing;
+    for (let x = startX; x < vr; x += spacing) {
+      for (let y = startY; y < vb; y += spacing) {
+        ctx.fillRect(x - dotSize/2, y - dotSize/2, dotSize, dotSize);
+      }
+    }
+  }
+
+  _drawEdges(ctx) {
+    this.dashOffset = (this.time / 30) % 20;
+
+    this.edges.forEach(e => {
+      const from = this.nodeMap[e.from];
+      const to = this.nodeMap[e.to];
+      if (!from || !to) return;
+
+      const x1 = from.x + NODE_W/2;
+      const y1 = from.y;
+      const x2 = to.x - NODE_W/2;
+      const y2 = to.y;
+      const mx = (x1 + x2) / 2;
+
+      const isSelectedPath = this.selectedNode && (e.from === this.selectedNode.id || e.to === this.selectedNode.id);
+      const isFlowing = this.edgeFlowing[e.from + '-' + e.to];
+      const fromState = this.nodeStates[e.from];
+      const toState = this.nodeStates[e.to];
+      const isFailed = fromState === 'failed' || toState === 'failed';
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(mx, y1, mx, y2, x2, y2);
+
+      if (isFlowing) {
+        ctx.strokeStyle = getCS('--accent');
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 6]);
+        ctx.lineDashOffset = -this.dashOffset;
+        ctx.globalAlpha = 0.7;
+      } else if (isSelectedPath) {
+        ctx.strokeStyle = getCS('--accent');
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.8;
+        ctx.setLineDash([]);
+      } else if (isFailed) {
+        ctx.strokeStyle = getCS('--status-failed');
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 4]);
+        ctx.globalAlpha = 0.4;
+      } else {
+        ctx.strokeStyle = getCS('--edge-color');
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.5;
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+
+      // Arrowhead
+      const angle = Math.atan2(y2 - y1, x2 - mx);
+      const aSize = 6;
+      ctx.setLineDash([]);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - aSize * Math.cos(angle - 0.4), y2 - aSize * Math.sin(angle - 0.4));
+      ctx.lineTo(x2 - aSize * Math.cos(angle + 0.4), y2 - aSize * Math.sin(angle + 0.4));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  _drawNodes(ctx) {
+    this.nodes.forEach(n => {
+      const state = this.nodeStates[n.id];
+      const isSelected = this.selectedNode && this.selectedNode.id === n.id;
+      const isHovered = this.hoveredNode && this.hoveredNode.id === n.id;
+      const x = n.x - NODE_W/2;
+      const y = n.y - NODE_H/2;
+      const r = 8;
+
+      // Shadow + glow for running/failed
+      ctx.save();
+      if (state === 'running') {
+        const pulse = (Math.sin(this.time / 400) + 1) / 2;
+        ctx.shadowColor = getCS('--status-running');
+        ctx.shadowBlur = 12 + pulse * 8;
+      } else if (state === 'failed') {
+        ctx.shadowColor = getCS('--status-failed');
+        ctx.shadowBlur = 10;
+      } else if (isSelected) {
+        ctx.shadowColor = getCS('--accent');
+        ctx.shadowBlur = 12;
+      } else if (isHovered) {
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.shadowColor = getCS('--node-shadow');
+        ctx.shadowBlur = 4;
+      }
+
+      // Node body
+      ctx.beginPath();
+      ctx.roundRect(x, y, NODE_W, NODE_H, r);
+      const alpha = state === 'skipped' ? 0.4 : 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = getCS('--node-surface');
+      ctx.fill();
+
+      // Border
+      if (isSelected) {
+        ctx.strokeStyle = getCS('--accent');
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = getCS('--border-bright');
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+
+      // Left color bar (layer-based)
+      const barColor = layerColor(n.layer);
+      ctx.fillStyle = barColor;
+      ctx.beginPath();
+      ctx.roundRect(x, y, 4, NODE_H, [r, 0, 0, r]);
+      ctx.fill();
+
+      // Status indicator strip at bottom
+      const sc = statusColor(state);
+      ctx.fillStyle = sc;
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillRect(x + 4, y + NODE_H - 3, NODE_W - 4, 3);
+      ctx.globalAlpha = alpha;
+
+      // Node name
+      ctx.font = '500 12px Inter, sans-serif';
+      ctx.fillStyle = getCS('--text');
+      ctx.textBaseline = 'middle';
+      const nameText = n.name.length > 16 ? n.name.slice(0, 15) + '\u2026' : n.name;
+      ctx.fillText(nameText, x + 12, y + 18);
+
+      // Type badge
+      const badge = n.kind.toUpperCase();
+      ctx.font = '600 9px Inter, sans-serif';
+      const bw = ctx.measureText(badge).width + 8;
+      const bx = x + NODE_W - bw - 8;
+      const by = y + 10;
+      ctx.fillStyle = n.kind === 'pyspark' ? 'rgba(168,85,247,0.12)' : 'rgba(45,127,249,0.12)';
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, 16, 8);
+      ctx.fill();
+      ctx.fillStyle = kindColor(n.kind);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(badge, bx + 4, by + 8);
+
+      // Duration/status text
+      ctx.font = '400 10px "JetBrains Mono", monospace';
+      ctx.fillStyle = getCS('--text-muted');
+      let subText = state;
+      const met = MOCK_METRICS[n.id];
+      if (met && (state === 'succeeded' || state === 'failed')) subText = met.duration.toFixed(1) + 's';
+      else if (state === 'running') subText = 'running\u2026';
+      ctx.fillText(subText, x + 12, y + 38);
+
+      // Status dot
+      ctx.fillStyle = sc;
+      ctx.beginPath();
+      ctx.arc(x + NODE_W - 14, y + 38, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    });
+  }
+
+  _drawMinimap(ctx, w, h) {
+    const mmW = 160, mmH = 90;
+    const mmX = 16, mmY = h - mmH - 16;
+
+    // Background with glass effect
+    ctx.save();
+    ctx.fillStyle = getCS('--minimap-bg');
+    ctx.beginPath();
+    ctx.roundRect(mmX, mmY, mmW, mmH, 8);
+    ctx.fill();
+    ctx.strokeStyle = getCS('--border');
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Calculate node bounds
+    let minX=Infinity, minY=Infinity, maxX=-Infinity, maxY=-Infinity;
+    this.nodes.forEach(n => {
+      minX = Math.min(minX, n.x - NODE_W/2);
+      minY = Math.min(minY, n.y - NODE_H/2);
+      maxX = Math.max(maxX, n.x + NODE_W/2);
+      maxY = Math.max(maxY, n.y + NODE_H/2);
+    });
+    const pad = 20;
+    const gw = maxX - minX + pad*2;
+    const gh = maxY - minY + pad*2;
+    const scale = Math.min((mmW - 12) / gw, (mmH - 12) / gh);
+
+    // Draw mini nodes
+    this.nodes.forEach(n => {
+      const nx = mmX + 6 + (n.x - minX + pad) * scale;
+      const ny = mmY + 6 + (n.y - minY + pad) * scale;
+      ctx.fillStyle = statusColor(this.nodeStates[n.id]);
+      ctx.beginPath();
+      ctx.arc(nx, ny, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Viewport rectangle
+    const vl = -this.camera.x / this.camera.scale;
+    const vt = -this.camera.y / this.camera.scale;
+    const vr = (w - this.camera.x) / this.camera.scale;
+    const vb = (h - this.camera.y) / this.camera.scale;
+    const vrx = mmX + 6 + (vl - minX + pad) * scale;
+    const vry = mmY + 6 + (vt - minY + pad) * scale;
+    const vrw = (vr - vl) * scale;
+    const vrh = (vb - vt) * scale;
+
+    ctx.strokeStyle = getCS('--minimap-viewport');
+    ctx.lineWidth = 1.5;
+    ctx.fillStyle = getCS('--minimap-viewport');
+    ctx.globalAlpha = 0.15;
+    ctx.beginPath();
+    ctx.roundRect(Math.max(mmX, vrx), Math.max(mmY, vry), Math.min(vrw, mmW), Math.min(vrh, mmH), 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  setAllStates(state) {
+    this.nodes.forEach(n => { this.nodeStates[n.id] = state; });
+    this.edgeFlowing = {};
+    this.dirty = true;
+  }
+}
+
+// ── Initialize Canvas ──
+const canvas = document.getElementById('dagCanvas');
+const dag = new DagRenderer(canvas);
+setTimeout(() => dag.fitToScreen(), 100);
+
+// ── Zoom Controls ──
+document.getElementById('btnZoomIn').addEventListener('click', () => {
+  dag.camera.scale = Math.min(3, dag.camera.scale * 1.25);
+  dag.camera.x = dag.width/2 - (dag.width/2 - dag.camera.x) * 1.25;
+  dag.camera.y = dag.height/2 - (dag.height/2 - dag.camera.y) * 1.25;
+  dag.dirty = true;
+});
+document.getElementById('btnZoomOut').addEventListener('click', () => {
+  dag.camera.scale = Math.max(0.15, dag.camera.scale * 0.8);
+  dag.camera.x = dag.width/2 - (dag.width/2 - dag.camera.x) * 0.8;
+  dag.camera.y = dag.height/2 - (dag.height/2 - dag.camera.y) * 0.8;
+  dag.dirty = true;
+});
+document.getElementById('btnFit').addEventListener('click', () => dag.fitToScreen());
+
+// ── Gantt Chart ──
+function renderGantt(execNodes, totalDuration, isLive) {
+  const labels = document.getElementById('ganttLabels');
+  const bars = document.getElementById('ganttBars');
+  const timeAxis = document.getElementById('ganttTimeAxis');
+  labels.innerHTML = '';
+  bars.innerHTML = '';
+  timeAxis.innerHTML = '';
+
+  if (!execNodes || execNodes.length === 0) {
+    labels.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:11px">No execution data</div>';
+    return;
+  }
+
+  const chartWidth = Math.max(600, document.getElementById('ganttChartArea').clientWidth - 20);
+  const pxPerSec = (chartWidth - 40) / Math.max(totalDuration, 1);
+
+  // Time axis ticks
+  const tickInterval = totalDuration <= 15 ? 2 : totalDuration <= 60 ? 5 : 10;
+  for (let t = 0; t <= totalDuration; t += tickInterval) {
+    const tick = document.createElement('div');
+    tick.className = 'gantt-time-tick';
+    tick.style.left = (20 + t * pxPerSec) + 'px';
+    tick.textContent = t + 's';
+    timeAxis.appendChild(tick);
+  }
+
+  execNodes.forEach((en, i) => {
+    // Label
+    const label = document.createElement('div');
+    label.className = 'gantt-label';
+    label.textContent = en.name;
+    label.dataset.nodeId = en.id;
+    label.addEventListener('click', () => {
+      const node = dag.nodeMap[en.id];
+      if (node) { dag.selectedNode = node; openDetailPanel(node); highlightGanttNode(en.id); dag.dirty = true; }
+    });
+    labels.appendChild(label);
+
+    // Bar row
+    const row = document.createElement('div');
+    row.className = 'gantt-row';
+    const bar = document.createElement('div');
+    bar.className = 'gantt-bar ' + en.status;
+    bar.style.left = (20 + en.start * pxPerSec) + 'px';
+    bar.style.width = Math.max(3, en.duration * pxPerSec) + 'px';
+    bar.dataset.nodeId = en.id;
+
+    if (en.duration > 1.5) {
+      const barLabel = document.createElement('span');
+      barLabel.className = 'gantt-bar-label';
+      barLabel.textContent = en.duration.toFixed(1) + 's';
+      bar.appendChild(barLabel);
+    }
+    row.appendChild(bar);
+    bars.appendChild(row);
+  });
+
+  // Now line for running state
+  if (isLive) {
+    const nowLine = document.createElement('div');
+    nowLine.className = 'gantt-now-line';
+    nowLine.style.left = (20 + totalDuration * pxPerSec) + 'px';
+    bars.appendChild(nowLine);
+  }
+}
+
+function highlightGanttNode(nodeId) {
+  document.querySelectorAll('.gantt-label').forEach(l => l.classList.toggle('highlight', l.dataset.nodeId === nodeId));
+}
+
+// ── Gantt Mock Data by State ──
+function ganttDataForState(state) {
+  const nodes = NODES.map(n => ({ ...n }));
+  const met = MOCK_METRICS;
+  if (state === 'idle') return { nodes:[], total:0 };
+  if (state === 'completed') {
+    let t = 0;
+    const layers = [0,0,1,1,2,2,3,3,3,4,4];
+    const execOrder = ['n1','n2','n3','n4','n5','n6','n7','n8','n9','n10','n11','n12'];
+    const starts = {};
+    const layerStart = { 0:0 };
+    execOrder.forEach(id => {
+      const n = dag.nodeMap[id];
+      const deps = EDGES.filter(e => e.to === id).map(e => e.from);
+      const depEnd = deps.length ? Math.max(...deps.map(d => starts[d] + met[d].duration)) : 0;
+      starts[id] = depEnd;
+    });
+    const maxEnd = Math.max(...execOrder.map(id => starts[id] + met[id].duration));
+    return {
+      nodes: execOrder.map(id => ({ id, name: dag.nodeMap[id].name, status:'succeeded', start:starts[id], duration:met[id].duration })),
+      total: Math.ceil(maxEnd)
+    };
+  }
+  if (state === 'failed') {
+    let t = 0;
+    const execOrder = ['n1','n2','n3','n4','n5','n6','n7','n8','n9','n10','n11','n12'];
+    const starts = {};
+    const statuses = {};
+    execOrder.forEach(id => {
+      const deps = EDGES.filter(e => e.to === id).map(e => e.from);
+      const depEnd = deps.length ? Math.max(...deps.map(d => (starts[d] || 0) + (met[d]?.duration || 0))) : 0;
+      starts[id] = depEnd;
+      if (id === 'n4') statuses[id] = 'failed';
+      else if (['n6','n8','n9','n11','n12'].includes(id)) statuses[id] = 'skipped';
+      else statuses[id] = 'succeeded';
+    });
+    const maxEnd = Math.max(...execOrder.filter(id => statuses[id] !== 'skipped').map(id => starts[id] + met[id].duration));
+    return {
+      nodes: execOrder.map(id => ({
+        id, name: dag.nodeMap[id].name,
+        status: statuses[id],
+        start: starts[id],
+        duration: statuses[id] === 'skipped' ? 0 : met[id].duration
+      })),
+      total: Math.ceil(maxEnd) + 2
+    };
+  }
+  return { nodes:[], total:0 };
+}
+
+// ── Node Detail Panel ──
+function openDetailPanel(node) {
+  const panel = document.getElementById('detailPanel');
+  panel.classList.add('open');
+  const state = dag.nodeStates[node.id];
+  document.getElementById('detailName').textContent = node.name;
+  document.getElementById('detailTypeBadge').textContent = node.kind.toUpperCase();
+  document.getElementById('detailTypeBadge').className = 'detail-type-badge ' + node.kind;
+  const dot = document.getElementById('detailStatusDot');
+  dot.style.background = statusColor(state);
+  document.getElementById('detailStatus').textContent = state.charAt(0).toUpperCase() + state.slice(1);
+  const met = MOCK_METRICS[node.id];
+  document.getElementById('detailDuration').textContent = met ? met.duration.toFixed(1) + 's' : '—';
+  document.getElementById('detailTime').textContent = node.lastRefresh ? '2m ago' : '—';
+
+  // Error
+  const errBanner = document.getElementById('detailError');
+  if (state === 'failed' && met?.errorCode) {
+    errBanner.classList.remove('hidden');
+    document.getElementById('detailErrorCode').textContent = met.errorCode;
+    document.getElementById('detailErrorMsg').textContent = met.errorMsg;
+  } else {
+    errBanner.classList.add('hidden');
+  }
+
+  // Reset tab
+  setDetailTab('overview');
+  renderDetailContent(node, 'overview');
+
+  // Trigger resize for canvas
+  setTimeout(() => { dag._resize(); dag.dirty = true; }, 220);
+}
+
+function closeDetailPanel() {
+  const panel = document.getElementById('detailPanel');
+  panel.classList.remove('open');
+  setTimeout(() => { dag._resize(); dag.dirty = true; }, 220);
+}
+
+document.getElementById('detailClose').addEventListener('click', () => {
+  closeDetailPanel();
+  dag.selectedNode = null;
+  dag.dirty = true;
+});
+
+// Tab switching
+function setDetailTab(tab) {
+  document.querySelectorAll('.detail-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  // Move indicator
+  const activeTab = document.querySelector('.detail-tab.active');
+  const indicator = document.getElementById('tabIndicator');
+  if (activeTab) {
+    indicator.style.left = activeTab.offsetLeft + 'px';
+    indicator.style.width = activeTab.offsetWidth + 'px';
+  }
+}
+
+document.querySelectorAll('.detail-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    setDetailTab(tab.dataset.tab);
+    if (dag.selectedNode) renderDetailContent(dag.selectedNode, tab.dataset.tab);
+  });
+});
+
+function renderDetailContent(node, tab) {
+  const body = document.getElementById('detailBody');
+  const met = MOCK_METRICS[node.id];
+  const state = dag.nodeStates[node.id];
+
+  if (tab === 'overview') {
+    body.innerHTML = `
+      <div class="detail-section">
+        <div class="detail-section-title">Identity</div>
+        <div class="detail-row"><span class="detail-label">Node ID</span><span class="detail-value">${node.id.slice(0,8)}</span></div>
+        <div class="detail-row"><span class="detail-label">Kind</span><span class="detail-value">${node.kind.toUpperCase()}</span></div>
+        <div class="detail-row"><span class="detail-label">Table Type</span><span class="detail-value">${node.tableType}</span></div>
+        <div class="detail-row"><span class="detail-label">Executable</span><span class="detail-value">${node.executable ? 'Yes' : 'No'}</span></div>
+        <div class="detail-row"><span class="detail-label">Format</span><span class="detail-value">${node.format}</span></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">ABFS Path</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);word-break:break-all;padding:8px;background:var(--surface-2);border-radius:var(--radius-sm);cursor:pointer" title="Click to copy">${node.abfsPath}</div>
+      </div>
+      ${met ? `
+      <div class="detail-section">
+        <div class="detail-section-title">Execution</div>
+        <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" style="color:${statusColor(state)}">${state}</span></div>
+        <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">${met.duration.toFixed(1)}s</span></div>
+        <div class="detail-row"><span class="detail-label">Refresh Policy</span><span class="detail-value">Incremental</span></div>
+      </div>` : ''}
+      <div class="detail-section">
+        <div class="detail-section-title">Parents</div>
+        ${EDGES.filter(e => e.to === node.id).map(e => {
+          const p = dag.nodeMap[e.from];
+          return `<div class="dep-item" onclick="selectNodeById('${e.from}')"><span class="dep-arrow">&#9666;</span>${p.name}</div>`;
+        }).join('') || '<div style="color:var(--text-muted);font-size:11px;padding:4px">None (root node)</div>'}
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Children</div>
+        ${EDGES.filter(e => e.from === node.id).map(e => {
+          const c = dag.nodeMap[e.to];
+          return `<div class="dep-item" onclick="selectNodeById('${e.to}')"><span class="dep-arrow">&#9656;</span>${c.name}</div>`;
+        }).join('') || '<div style="color:var(--text-muted);font-size:11px;padding:4px">None (leaf node)</div>'}
+      </div>
+    `;
+  } else if (tab === 'metrics') {
+    if (!met) { body.innerHTML = '<div style="padding:20px;color:var(--text-muted);font-size:11px;text-align:center">No execution data.<br>Run the DAG or select a historical execution.</div>'; return; }
+    body.innerHTML = `
+      <div class="detail-section">
+        <div class="detail-section-title">Row Counts</div>
+        <div class="detail-row"><span class="detail-label">Total Rows</span><span class="detail-value">${met.rows.toLocaleString()}</span></div>
+        <div class="detail-row"><span class="detail-label">Rows Added</span><span class="detail-value green">${met.added > 0 ? '+' : ''}${met.added.toLocaleString()}</span></div>
+        <div class="detail-row"><span class="detail-label">Rows Dropped</span><span class="detail-value ${met.dropped>0?'amber':''}">${met.dropped.toLocaleString()}</span></div>
+        <div class="detail-row"><span class="detail-label">DQ Violations</span><span class="detail-value ${met.dqViolations>0?'red':''}">${met.dqViolations}</span></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Spark Session</div>
+        <div class="detail-row"><span class="detail-label">Session ID</span><span class="detail-value">f8e2...4a1c</span></div>
+        <div class="detail-row"><span class="detail-label">Request ID</span><span class="detail-value">b3c7...9d2e</span></div>
+        <div class="detail-row"><span class="detail-label">REPL ID</span><span class="detail-value">1a5f...7b3c</span></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Data Size</div>
+        <div class="detail-row"><span class="detail-label">Input</span><span class="detail-value">${(met.rows * 0.42 / 1024).toFixed(1)} MB</span></div>
+        <div class="detail-row"><span class="detail-label">Output</span><span class="detail-value">${(met.rows * 0.38 / 1024).toFixed(1)} MB</span></div>
+      </div>
+    `;
+  } else if (tab === 'logs') {
+    body.innerHTML = `
+      <div style="font-family:var(--font-mono);font-size:10px;line-height:1.8;color:var(--text-dim)">
+        <div>[08:35:01.234] <span style="color:var(--type-sql)">INFO</span> Starting node <b>${node.name}</b></div>
+        <div>[08:35:01.240] <span style="color:var(--text-muted)">VERBOSE</span> Resolving source tables...</div>
+        <div>[08:35:01.892] <span style="color:var(--type-sql)">INFO</span> Source metadata loaded (${met ? met.rows.toLocaleString() : 0} rows)</div>
+        <div>[08:35:02.100] <span style="color:var(--text-muted)">VERBOSE</span> Submitting Spark job...</div>
+        ${state === 'failed' ? `
+        <div>[08:35:04.560] <span style="color:var(--status-failed)">ERROR</span> ${met?.errorCode || 'UNKNOWN'}: ${met?.errorMsg?.slice(0,80) || 'Unknown error'}</div>
+        <div>[08:35:04.561] <span style="color:var(--status-failed)">ERROR</span> Node execution failed after ${met?.duration || 0}s</div>
+        ` : `
+        <div>[08:35:03.400] <span style="color:var(--type-sql)">INFO</span> Spark job completed</div>
+        <div>[08:35:03.500] <span style="color:var(--status-succeeded)">INFO</span> Node completed in ${met?.duration || 0}s</div>
+        `}
+      </div>
+    `;
+  } else if (tab === 'code') {
+    const sql = node.kind === 'sql' ? `<span class="code-comment">-- MLV: ${node.name}</span>
+<span class="code-keyword">CREATE OR ALTER</span> <span class="code-keyword">MATERIALIZED VIEW</span> ${node.name}
+<span class="code-keyword">AS</span>
+<span class="code-keyword">SELECT</span>
+    ${node.layer <= 1 ? `t.*, <span class="code-keyword">CURRENT_TIMESTAMP</span> <span class="code-keyword">AS</span> refresh_ts` : `a.*, b.category, b.segment`}
+<span class="code-keyword">FROM</span> ${EDGES.filter(e=>e.to===node.id).map(e=>dag.nodeMap[e.from].name).join(', ') || 'source_table'} t
+${node.layer >= 2 ? `<span class="code-keyword">LEFT JOIN</span> dim_table b <span class="code-keyword">ON</span> a.key = b.key` : ''}
+<span class="code-keyword">WHERE</span> t.is_valid = <span class="code-string">1</span>;` :
+`<span class="code-comment"># PySpark MLV: ${node.name}</span>
+<span class="code-keyword">df</span> = spark.read.table(<span class="code-string">"${EDGES.filter(e=>e.to===node.id).map(e=>dag.nodeMap[e.from].name)[0] || 'source'}"</span>)
+<span class="code-keyword">result</span> = df.filter(df.is_valid == <span class="code-string">True</span>) \\
+    .withColumn(<span class="code-string">"refresh_ts"</span>, current_timestamp())
+result.write.mode(<span class="code-string">"overwrite"</span>).saveAsTable(<span class="code-string">"${node.name}"</span>)`;
+    body.innerHTML = `<div class="code-block">${sql}</div>`;
+  } else if (tab === 'deps') {
+    const parents = EDGES.filter(e => e.to === node.id).map(e => dag.nodeMap[e.from]);
+    const children = EDGES.filter(e => e.from === node.id).map(e => dag.nodeMap[e.to]);
+    body.innerHTML = `
+      <div class="detail-section">
+        <div class="detail-section-title">Parents (${parents.length})</div>
+        ${parents.map(p => `<div class="dep-item" onclick="selectNodeById('${p.id}')">
+          <div style="width:8px;height:8px;border-radius:50%;background:${statusColor(dag.nodeStates[p.id])};flex-shrink:0"></div>
+          ${p.name} <span style="color:var(--text-muted);font-size:10px;margin-left:auto">${p.kind.toUpperCase()}</span>
+        </div>`).join('') || '<div style="color:var(--text-muted);font-size:11px;padding:8px">No parents</div>'}
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Children (${children.length})</div>
+        ${children.map(c => `<div class="dep-item" onclick="selectNodeById('${c.id}')">
+          <div style="width:8px;height:8px;border-radius:50%;background:${statusColor(dag.nodeStates[c.id])};flex-shrink:0"></div>
+          ${c.name} <span style="color:var(--text-muted);font-size:10px;margin-left:auto">${c.kind.toUpperCase()}</span>
+        </div>`).join('') || '<div style="color:var(--text-muted);font-size:11px;padding:8px">No children</div>'}
+      </div>
+    `;
+  } else if (tab === 'history') {
+    body.innerHTML = `
+      <div class="detail-section">
+        <div class="detail-section-title">Node Execution History</div>
+        ${['2m ago — 3.4s — Succeeded','15m ago — 3.1s — Failed','1h ago — 2.9s — Succeeded','3h ago — 3.6s — Succeeded','6h ago — 3.2s — Succeeded'].map((h,i) => {
+          const parts = h.split(' — ');
+          const isF = parts[2] === 'Failed';
+          return `<div class="dep-item" style="cursor:default"><div style="width:6px;height:6px;border-radius:50%;background:${isF ? getCS('--status-failed') : getCS('--status-succeeded')};flex-shrink:0"></div><span style="flex:1">${parts[0]}</span><span class="mono" style="font-size:10px;color:var(--text-dim)">${parts[1]}</span></div>`;
+        }).join('')}
+      </div>
+    `;
+  }
+}
+
+function selectNodeById(id) {
+  const node = dag.nodeMap[id];
+  if (!node) return;
+  dag.selectedNode = node;
+  openDetailPanel(node);
+  highlightGanttNode(id);
+  dag.dirty = true;
+}
+
+// ── Execution History Panel ──
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  list.innerHTML = '';
+  MOCK_HISTORY.forEach((h, i) => {
+    const row = document.createElement('div');
+    row.className = 'history-row' + (i === 0 && currentState === 'running' ? ' active-run' : '');
+    row.style.animation = `fadeIn 200ms ease ${i * 50}ms both`;
+    row.innerHTML = `
+      <div class="history-check" data-idx="${i}"></div>
+      <div class="history-status" style="background:${statusColor(h.status)}${h.status === 'running' ? ';animation:pulse 1.5s infinite' : ''}"></div>
+      <div class="history-id">${h.id}</div>
+      <div class="history-time">${h.ago}</div>
+      <div class="history-dur">${h.duration}</div>
+      <div class="history-nodes">${h.nodes}</div>
+      <div class="history-type">${h.type}</div>
+      ${h.error ? `<div class="history-error">${h.error}</div>` : ''}
+    `;
+    list.appendChild(row);
+  });
+
+  // Compare checkboxes
+  let checked = [];
+  list.querySelectorAll('.history-check').forEach(ck => {
+    ck.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(ck.dataset.idx);
+      if (ck.classList.contains('checked')) {
+        ck.classList.remove('checked');
+        checked = checked.filter(i => i !== idx);
+      } else if (checked.length < 2) {
+        ck.classList.add('checked');
+        checked.push(idx);
+      }
+      document.getElementById('btnCompare').textContent = `Compare (${checked.length})`;
+      document.getElementById('btnCompare').disabled = checked.length < 2;
+    });
+  });
+}
+
+// ── Bottom Panel Tab Switching ──
+document.querySelectorAll('.bottom-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.bottom-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('ganttPanel').classList.toggle('hidden', tab.dataset.panel !== 'gantt');
+    document.getElementById('historyPanel').classList.toggle('hidden', tab.dataset.panel !== 'history');
+  });
+});
+
+// ── Resize Handle ──
+let resizing = false;
+const resizeHandle = document.getElementById('resizeHandle');
+resizeHandle.addEventListener('mousedown', () => { resizing = true; document.body.style.cursor = 'row-resize'; document.body.style.userSelect = 'none'; });
+document.addEventListener('mousemove', e => {
+  if (!resizing) return;
+  const workspace = document.querySelector('.workspace');
+  const rect = workspace.getBoundingClientRect();
+  const bottomH = Math.max(100, Math.min(400, rect.bottom - e.clientY));
+  document.getElementById('bottomPanel').style.height = bottomH + 'px';
+  dag._resize();
+  dag.dirty = true;
+});
+document.addEventListener('mouseup', () => { resizing = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; });
+
+// ── Execution States ──
+let currentState = 'idle';
+let execTimer = null;
+let execStartTime = 0;
+
+function setState(state) {
+  currentState = state;
+  // Update state buttons
+  document.querySelectorAll('.state-btn').forEach(b => b.classList.toggle('active', b.dataset.state === state));
+  // Stop any running animation
+  if (execTimer) { clearInterval(execTimer); execTimer = null; }
+  // Clear lock visuals when transitioning away from locked
+  if (state !== 'locked') clearLockState();
+
+  const btnRun = document.getElementById('btnRun');
+  const btnCancel = document.getElementById('btnCancel');
+  const statusDot = document.getElementById('statusDot');
+  const statusLabel = document.getElementById('statusLabel');
+  const statusTimer = document.getElementById('statusTimer');
+  const btnRunLabel = document.getElementById('btnRunLabel');
+
+  if (state === 'idle') {
+    dag.setAllStates('pending');
+    btnRun.disabled = false;
+    btnCancel.disabled = true;
+    btnRunLabel.textContent = 'Run DAG';
+    statusDot.className = 'status-dot idle';
+    statusDot.style.background = '';
+    statusDot.style.boxShadow = '';
+    statusLabel.textContent = 'Idle';
+    statusLabel.style.color = '';
+    statusTimer.textContent = '';
+    renderGantt([], 0, false);
+    updateSummary('—', '0/12 nodes', '—', 'Idle');
+  } else if (state === 'running') {
+    runExecution();
+  } else if (state === 'completed') {
+    setCompletedState();
+  } else if (state === 'failed') {
+    setFailedState();
+  } else if (state === 'locked') {
+    mockLockActive = true;
+    dag.setAllStates('pending');
+    btnRun.disabled = true;
+    btnCancel.disabled = true;
+    btnRunLabel.textContent = 'Run DAG';
+    showLockState();
+    renderGantt([], 0, false);
+    updateSummary('—', 'Execution locked', '—', 'Locked');
+  }
+  renderHistory();
+}
+
+// ── Lock Management ──
+let mockLockActive = true; // Toggled by unlock/lock for demo
+
+const LOCK_MOCK = {
+  iterationId: 'iter-7f3a9b2c-d4e5-4812-a3b1-6c8d9e0f1234',
+};
+
+const lockState = {
+  detected: false,
+  bannerVisible: false,
+  timer: null,
+  age: 312,
+};
+
+function showLockState() {
+  lockState.detected = true;
+  lockState.age = 312;
+
+  // Banner
+  const banner = document.getElementById('lockBanner');
+  banner.style.display = 'flex';
+  lockState.bannerVisible = true;
+  document.getElementById('lockBannerIter').textContent = LOCK_MOCK.iterationId.slice(0, 24) + '\u2026';
+  document.getElementById('lockBannerIter').title = 'Click to copy: ' + LOCK_MOCK.iterationId;
+
+  // Toolbar amber glow
+  document.querySelector('.toolbar').classList.add('toolbar-locked');
+
+  // Status indicator → locked
+  const statusDot = document.getElementById('statusDot');
+  statusDot.className = 'status-dot locked';
+  statusDot.style.background = 'var(--amber)';
+  statusDot.style.boxShadow = '0 0 8px color-mix(in srgb, var(--amber) 50%, transparent)';
+  document.getElementById('statusLabel').textContent = 'Locked';
+  document.getElementById('statusLabel').style.color = 'var(--amber)';
+
+  // Disable Run DAG with tooltip
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('btnRun').title = 'Execution is locked';
+
+  // Graph amber tint overlay
+  if (!document.getElementById('lockOverlay')) {
+    const overlay = document.createElement('div');
+    overlay.className = 'lock-overlay';
+    overlay.id = 'lockOverlay';
+    document.getElementById('graphPanel').appendChild(overlay);
+  }
+
+  // Start age counter
+  _updateLockTimer();
+  if (lockState.timer) clearInterval(lockState.timer);
+  lockState.timer = setInterval(() => { lockState.age++; _updateLockTimer(); }, 1000);
+}
+
+function _updateLockTimer() {
+  const m = Math.floor(lockState.age / 60);
+  const s = lockState.age % 60;
+  const str = m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+  const bannerAge = document.getElementById('lockBannerAge');
+  const statusTimer = document.getElementById('statusTimer');
+  if (bannerAge) bannerAge.textContent = str;
+  if (statusTimer) statusTimer.textContent = str;
+}
+
+function clearLockState() {
+  if (!lockState.detected) return;
+  lockState.detected = false;
+  lockState.bannerVisible = false;
+  if (lockState.timer) { clearInterval(lockState.timer); lockState.timer = null; }
+
+  document.getElementById('lockBanner').style.display = 'none';
+  document.querySelector('.toolbar').classList.remove('toolbar-locked');
+  const overlay = document.getElementById('lockOverlay');
+  if (overlay) overlay.remove();
+
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnRun').title = '';
+  const statusDot = document.getElementById('statusDot');
+  statusDot.style.background = '';
+  statusDot.style.boxShadow = '';
+  document.getElementById('statusLabel').style.color = '';
+}
+
+function showUnlockModal() {
+  const m = Math.floor(lockState.age / 60);
+  const s = lockState.age % 60;
+  const ageStr = m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+  const since = new Date(Date.now() - lockState.age * 1000);
+  const sinceStr = since.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  document.getElementById('modalIterValue').textContent = LOCK_MOCK.iterationId;
+  document.getElementById('modalAgeValue').textContent = ageStr;
+  document.getElementById('modalSinceValue').textContent = sinceStr;
+  document.getElementById('lockModalOverlay').style.display = 'flex';
+}
+
+function hideUnlockModal() {
+  document.getElementById('lockModalOverlay').style.display = 'none';
+}
+
+function performUnlock() {
+  hideUnlockModal();
+  mockLockActive = false;
+  clearLockState();
+  setState('idle');
+}
+
+function _restoreLockCheckBtn() {
+  document.getElementById('btnLockCheck').innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+}
+
+function updateSummary(dur, nodes, parallel, status) {
+  document.getElementById('summaryDuration').innerHTML = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="5" cy="5" r="4"/><path d="M5 3v2.5l1.5 1"/></svg> ${dur}`;
+  document.getElementById('summaryNodes').textContent = nodes;
+  document.getElementById('summaryParallel').textContent = parallel;
+  document.getElementById('summaryStatus').innerHTML = `<div style="width:6px;height:6px;border-radius:50%;background:${statusColor(status.toLowerCase())}"></div> ${status}`;
+}
+
+function setCompletedState() {
+  dag.nodes.forEach(n => { dag.nodeStates[n.id] = 'succeeded'; });
+  dag.edgeFlowing = {};
+  dag.dirty = true;
+
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnCancel').disabled = true;
+  document.getElementById('btnRunLabel').textContent = 'Run DAG';
+  document.getElementById('statusDot').className = 'status-dot succeeded';
+  document.getElementById('statusLabel').textContent = 'Completed';
+  document.getElementById('statusTimer').textContent = '34.2s';
+
+  const gd = ganttDataForState('completed');
+  renderGantt(gd.nodes, gd.total, false);
+  updateSummary('\u03A3 34.2s', '12/12 nodes', 'max \u2225 3', 'Completed');
+}
+
+function setFailedState() {
+  const failedDownstream = ['n6','n8','n9','n11','n12'];
+  dag.nodes.forEach(n => {
+    if (n.id === 'n4') dag.nodeStates[n.id] = 'failed';
+    else if (failedDownstream.includes(n.id)) dag.nodeStates[n.id] = 'skipped';
+    else if (['n1','n2','n3','n5','n7','n10'].includes(n.id)) dag.nodeStates[n.id] = 'succeeded';
+    else dag.nodeStates[n.id] = 'pending';
+  });
+  dag.edgeFlowing = {};
+  dag.dirty = true;
+
+  document.getElementById('btnRun').disabled = false;
+  document.getElementById('btnCancel').disabled = true;
+  document.getElementById('btnRunLabel').textContent = 'Run DAG';
+  document.getElementById('statusDot').className = 'status-dot failed';
+  document.getElementById('statusLabel').textContent = 'Failed';
+  document.getElementById('statusTimer').textContent = '12.4s';
+
+  const gd = ganttDataForState('failed');
+  renderGantt(gd.nodes, gd.total, false);
+  updateSummary('\u03A3 12.4s', '5/12 (1\u2715)', 'max \u2225 2', 'Failed');
+}
+
+// ── Execution Animation ──
+function runExecution() {
+  const btnRun = document.getElementById('btnRun');
+  const btnCancel = document.getElementById('btnCancel');
+  const btnRunLabel = document.getElementById('btnRunLabel');
+  const statusDot = document.getElementById('statusDot');
+  const statusLabel = document.getElementById('statusLabel');
+  const statusTimer = document.getElementById('statusTimer');
+
+  btnRun.disabled = true;
+  btnCancel.disabled = false;
+  btnRunLabel.textContent = 'Running\u2026';
+  statusDot.className = 'status-dot running';
+  statusLabel.textContent = 'Running';
+
+  // Reset all nodes
+  dag.setAllStates('pending');
+  dag.edgeFlowing = {};
+
+  execStartTime = performance.now();
+  execTimer = setInterval(() => {
+    const elapsed = ((performance.now() - execStartTime) / 1000).toFixed(1);
+    statusTimer.textContent = elapsed + 's';
+  }, 100);
+
+  // Animation schedule: execute layers in topological order
+  const schedule = [
+    { t:200, nodes:['n1','n2','n3'], state:'running' },
+    { t:200, flowEdges:[] },
+    { t:1400, nodes:['n1','n2','n3'], state:'succeeded' },
+    { t:1500, nodes:['n4','n5'], state:'running' },
+    { t:1500, flowEdges:[{from:'n1',to:'n4'},{from:'n2',to:'n5'},{from:'n3',to:'n5'}] },
+    // n4 FAILS
+    { t:3500, nodes:['n4'], state:'failed' },
+    { t:3600, nodes:['n5'], state:'succeeded' },
+    { t:3700, nodes:['n6','n8','n9','n11','n12'], state:'skipped' },
+    { t:3800, nodes:['n7'], state:'running' },
+    { t:3800, flowEdges:[{from:'n5',to:'n7'},{from:'n3',to:'n7'}] },
+    { t:5600, nodes:['n7'], state:'succeeded' },
+    { t:5700, nodes:['n10'], state:'running' },
+    { t:5700, flowEdges:[{from:'n7',to:'n10'}] },
+    { t:7200, nodes:['n10'], state:'succeeded' },
+    { t:7400, done:true },
+  ];
+
+  const ganttExecData = [];
+  const ganttStartTimes = {};
+
+  schedule.forEach(step => {
+    setTimeout(() => {
+      if (currentState !== 'running') return;
+
+      if (step.nodes) {
+        step.nodes.forEach(id => {
+          dag.nodeStates[id] = step.state;
+          if (step.state === 'running') ganttStartTimes[id] = (performance.now() - execStartTime) / 1000;
+          if (step.state === 'failed') {
+            // Shake animation for failed node — just mark for canvas redraw
+          }
+        });
+        dag.dirty = true;
+      }
+      if (step.flowEdges) {
+        // Clear previous flowing
+        dag.edgeFlowing = {};
+        step.flowEdges.forEach(e => { dag.edgeFlowing[e.from + '-' + e.to] = true; });
+        dag.animating = true;
+        dag.dirty = true;
+      }
+      if (step.done) {
+        dag.edgeFlowing = {};
+        dag.animating = false;
+        dag.dirty = true;
+        if (execTimer) { clearInterval(execTimer); execTimer = null; }
+
+        // Final state
+        const hasFailure = Object.values(dag.nodeStates).some(s => s === 'failed');
+        statusDot.className = hasFailure ? 'status-dot failed' : 'status-dot succeeded';
+        statusLabel.textContent = hasFailure ? 'Failed' : 'Completed';
+        btnRun.disabled = false;
+        btnCancel.disabled = true;
+        btnRunLabel.textContent = 'Run DAG';
+
+        // Render final Gantt
+        const gd = ganttDataForState(hasFailure ? 'failed' : 'completed');
+        renderGantt(gd.nodes, gd.total, false);
+        updateSummary(hasFailure ? '\u03A3 12.4s' : '\u03A3 34.2s', hasFailure ? '5/12 (1\u2715)' : '12/12 nodes', 'max \u2225 3', hasFailure ? 'Failed' : 'Completed');
+        currentState = hasFailure ? 'failed' : 'completed';
+        document.querySelectorAll('.state-btn').forEach(b => b.classList.toggle('active', b.dataset.state === currentState));
+      }
+
+      // Live Gantt update during execution
+      if (!step.done) {
+        const elapsed = (performance.now() - execStartTime) / 1000;
+        const liveGantt = NODES.map(n => {
+          const ns = dag.nodeStates[n.id];
+          const start = ganttStartTimes[n.id] || 0;
+          const dur = ns === 'running' ? elapsed - start :
+                      (ns === 'succeeded' || ns === 'failed') ? (MOCK_METRICS[n.id]?.duration || 1) : 0;
+          return { id:n.id, name:n.name, status:ns === 'pending' ? 'pending' : ns, start, duration: Math.max(0, dur) };
+        }).filter(n => n.status !== 'pending' || ganttStartTimes[n.id]);
+        renderGantt(liveGantt, Math.max(elapsed + 2, 8), true);
+        const running = Object.values(dag.nodeStates).filter(s => s === 'running').length;
+        const done = Object.values(dag.nodeStates).filter(s => s === 'succeeded').length;
+        const failed = Object.values(dag.nodeStates).filter(s => s === 'failed').length;
+        updateSummary(elapsed.toFixed(1) + 's', `${done + failed}/${NODES.length}${failed ? ' ('+failed+'\u2715)' : ''}`, `\u2225 ${running}`, 'Running');
+      }
+    }, step.t);
+  });
+}
+
+// ── Button Handlers ──
+document.getElementById('btnRun').addEventListener('click', () => {
+  if (lockState.detected) return;
+  // Auto-detect: if mock lock is active, simulate run attempt → lock discovery
+  if (mockLockActive) {
+    const btnRunLabel = document.getElementById('btnRunLabel');
+    const btnRun = document.getElementById('btnRun');
+    btnRun.disabled = true;
+    btnRunLabel.textContent = 'Starting\u2026';
+    setTimeout(() => {
+      btnRunLabel.textContent = 'Run DAG';
+      dag.setAllStates('pending');
+      showLockState();
+      currentState = 'locked';
+      document.querySelectorAll('.state-btn').forEach(b => b.classList.toggle('active', b.dataset.state === 'locked'));
+      renderGantt([], 0, false);
+      updateSummary('—', 'Execution locked', '—', 'Locked');
+    }, 800);
+    return;
+  }
+  setState('running');
+});
+document.getElementById('btnCancel').addEventListener('click', () => {
+  if (execTimer) { clearInterval(execTimer); execTimer = null; }
+  currentState = 'idle';
+  setState('idle');
+});
+// ── Lock Check Button ──
+document.getElementById('btnLockCheck').addEventListener('click', () => {
+  if (lockState.detected) return;
+  const btn = document.getElementById('btnLockCheck');
+  // Spinner while checking
+  btn.innerHTML = '<svg class="lock-spinner" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';
+  btn.disabled = true;
+  setTimeout(() => {
+    btn.disabled = false;
+    if (mockLockActive) {
+      _restoreLockCheckBtn();
+      dag.setAllStates('pending');
+      showLockState();
+      currentState = 'locked';
+      document.querySelectorAll('.state-btn').forEach(b => b.classList.toggle('active', b.dataset.state === 'locked'));
+      renderGantt([], 0, false);
+      updateSummary('—', 'Execution locked', '—', 'Locked');
+    } else {
+      // No lock — green checkmark flash
+      btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="color:var(--status-succeeded)"><polyline points="20 6 9 17 4 12"/></svg>';
+      setTimeout(() => _restoreLockCheckBtn(), 800);
+    }
+  }, 600);
+});
+
+// ── Lock Banner Actions ──
+document.getElementById('btnBannerUnlock').addEventListener('click', showUnlockModal);
+document.getElementById('btnBannerDismiss').addEventListener('click', () => {
+  document.getElementById('lockBanner').style.display = 'none';
+  lockState.bannerVisible = false;
+});
+
+// ── Lock Modal Actions ──
+document.getElementById('btnModalCancel').addEventListener('click', hideUnlockModal);
+document.getElementById('btnModalConfirm').addEventListener('click', performUnlock);
+document.getElementById('lockModalOverlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) hideUnlockModal();
+});
+
+// ── Click-to-copy Iteration ID ──
+document.getElementById('lockBannerIter').addEventListener('click', () => {
+  navigator.clipboard?.writeText(LOCK_MOCK.iterationId);
+  const el = document.getElementById('lockBannerIter');
+  const orig = el.textContent;
+  el.textContent = 'Copied!';
+  el.style.color = 'var(--status-succeeded)';
+  setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1000);
+});
+
+// ── State Switcher ──
+document.querySelectorAll('.state-btn').forEach(btn => {
+  btn.addEventListener('click', () => setState(btn.dataset.state));
+});
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('lockModalOverlay').style.display === 'flex') { hideUnlockModal(); return; }
+    closeDetailPanel(); dag.selectedNode = null; dag.dirty = true;
+  }
+  if (e.key === 'f' || e.key === 'F') { if (!e.ctrlKey && !e.metaKey && document.activeElement === document.body) dag.fitToScreen(); }
+  if (e.key === '=' && e.ctrlKey) { e.preventDefault(); document.getElementById('btnZoomIn').click(); }
+  if (e.key === '-' && e.ctrlKey) { e.preventDefault(); document.getElementById('btnZoomOut').click(); }
+});
+
+// ── Initial Render ──
+setState('idle');
+renderHistory();
+
+// Fit after fonts load
+document.fonts.ready.then(() => setTimeout(() => { dag.fitToScreen(); dag.dirty = true; }, 50));
+</script>
+</body>
+</html>
