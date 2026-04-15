@@ -1,6 +1,6 @@
 # F08: DAG Studio — Master Spec
 
-> **Status:** P0–P3 COMPLETE — P4 (Interactive Mocks) next
+> **Status:** ALL PREP COMPLETE (P0–P4) — Ready for implementation
 > **Owner:** Sana Reeves (Architecture) + Pixel (Frontend) + Vex (Backend)
 > **CEO:** Hemant Gupta
 > **Rule:** Smallest unit possible. No implementation until every prep item is DONE.
@@ -599,9 +599,9 @@ CEO reviews and approves before ANY implementation begins.
 
 | # | Mock | Output | Depends On | Status |
 |---|------|--------|-----------|--------|
-| P4.1 | DAG Studio Shell | `mocks/dag-studio-shell.html` | P3.1, P3.2 | ⬜ |
-| P4.2 | DAG Graph (Canvas 2D) | `mocks/dag-graph.html` | P3.1 | ⬜ |
-| P4.3 | Gantt Chart | `mocks/gantt-chart.html` | P3.3 | ⬜ |
+| P4.1 | DAG Studio Shell | `mocks/dag-studio-shell.html` | P3.1, P3.2 | ✅ DONE |
+| P4.2 | DAG Graph (Canvas 2D) | `mocks/dag-graph.html` | P3.1 | ✅ DONE |
+| P4.3 | Gantt Chart | `mocks/gantt-chart.html` | P3.3 | ✅ DONE |
 
 ---
 

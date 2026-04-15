@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAG Graph Canvas — EDOG Studio (F08)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Graph Canvas Mock (F08)
+   Designer: Pixel (Senior Frontend Engineer)
+   Renderer: Canvas 2D with 3-level LOD, Sugiyama layout
+   Quality: Palantir Foundry x Bloomberg Terminal x NASA Mission Control
+   ═══════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --amber: #e5940c;
+  --red: #e5453b;
+  --blue: #2d7ff9;
+  --purple: #a855f7;
+  --teal: #0d9488;
+  --gold: #f5a623;
+  --cyan: #06b6d4;
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out-expo: cubic-bezier(0.16,1,0.3,1);
+
+  /* Status colors */
+  --status-succeeded: #34d399;
+  --status-failed: #ff6b6b;
+  --status-running: #8577ff;
+  --status-pending: #555d70;
+  --status-skipped: #3a3f4e;
+
+  /* Layer colors */
+  --layer-source: #d4915e;
+  --layer-clean: #8a91a3;
+  --layer-transform: #5b9bff;
+  --layer-aggregate: #2dd4bf;
+  --layer-metrics: #c084fc;
+  --layer-output: #fbbf24;
+  --layer-final: #34d399;
+
+  /* Type badge colors */
+  --type-sql: #5b9bff;
+  --type-pyspark: #c084fc;
+}
+
+[data-theme="dark"] {
+  --bg: #0a0c12;
+  --bg-2: #10131b;
+  --bg-3: #181c28;
+  --bg-4: #222838;
+  --text: #e8eaf0;
+  --text-2: #9aa0b2;
+  --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.04);
+  --selected-bg: rgba(109,92,255,0.10);
+  --canvas-bg: #0d0f16;
+  --canvas-dot: rgba(255,255,255,0.035);
+  --node-surface: #181b25;
+  --node-border: rgba(255,255,255,0.08);
+  --edge-color: rgba(255,255,255,0.10);
+  --minimap-bg: rgba(16,18,27,0.88);
+  --minimap-viewport: rgba(133,119,255,0.35);
+  --hud-bg: rgba(16,18,27,0.82);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+  --scrollbar-thumb: rgba(255,255,255,0.12);
+}
+
+[data-theme="light"] {
+  --bg: #f4f5f8;
+  --bg-2: #ffffff;
+  --bg-3: #eef0f4;
+  --bg-4: #e2e5eb;
+  --text: #1a1d27;
+  --text-2: #5c6070;
+  --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08);
+  --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03);
+  --selected-bg: rgba(109,92,255,0.08);
+  --canvas-bg: #f8f9fc;
+  --canvas-dot: rgba(0,0,0,0.05);
+  --node-surface: #ffffff;
+  --node-border: rgba(0,0,0,0.10);
+  --edge-color: rgba(0,0,0,0.12);
+  --minimap-bg: rgba(255,255,255,0.88);
+  --minimap-viewport: rgba(109,92,255,0.25);
+  --hud-bg: rgba(255,255,255,0.82);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.15);
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+
+  --status-succeeded: #18a058;
+  --status-failed: #e5453b;
+  --status-running: #6d5cff;
+  --status-pending: #8e95a5;
+  --status-skipped: #b4bac6;
+  --layer-source: #cd7f32;
+  --layer-clean: #6b7080;
+  --layer-transform: #2d7ff9;
+  --layer-aggregate: #0d9488;
+  --layer-metrics: #a855f7;
+  --layer-output: #d97706;
+  --layer-final: #18a058;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html, body { height:100%; overflow:hidden; }
+body {
+  font-family: var(--font); font-size: 13px; color: var(--text);
+  background: var(--bg); line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-thumb { background:var(--scrollbar-thumb); border-radius:3px; }
+::-webkit-scrollbar-track { background:transparent; }
+button { cursor:pointer; border:none; background:none; color:var(--text); font-family:inherit; }
+button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:var(--r4); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+/* TOPBAR */
+.topbar {
+  height:44px; background:var(--bg-2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; gap:12px; flex-shrink:0;
+  z-index:10;
+}
+.topbar-brand {
+  font-weight:700; font-size:13px; letter-spacing:-0.3px;
+  display:flex; align-items:center; gap:8px;
+}
+.topbar-brand .logo {
+  width:20px; height:20px; border-radius:var(--r4);
+  background:linear-gradient(135deg, var(--accent), #a78bfa);
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:11px; font-weight:700;
+}
+.topbar-sep { width:1px; height:20px; background:var(--border-bright); }
+.topbar-tab {
+  padding:0 12px; height:44px; display:flex; align-items:center; gap:6px;
+  font-size:12px; font-weight:500; color:var(--text-2); cursor:pointer;
+  position:relative; transition:color var(--transition); user-select:none;
+}
+.topbar-tab:hover { color:var(--text); }
+.topbar-tab.active { color:var(--text); font-weight:600; }
+.topbar-tab.active::after {
+  content:''; position:absolute; bottom:0; left:8px; right:8px;
+  height:3px; background:var(--accent); border-radius:3px 3px 0 0;
+}
+.topbar-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+
+/* TOOLBAR */
+.toolbar {
+  height:40px; background:var(--bg-2); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 16px; gap:8px; flex-shrink:0;
+}
+.toolbar-left { display:flex; align-items:center; gap:8px; }
+.toolbar-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.toolbar-sep { width:1px; height:20px; background:var(--border-bright); flex-shrink:0; }
+
+.btn {
+  height:28px; padding:0 12px; border-radius:var(--r6);
+  font-size:12px; font-weight:500; display:inline-flex;
+  align-items:center; gap:6px; transition:all var(--transition);
+  white-space:nowrap; user-select:none;
+}
+.btn:active { transform:scale(0.97); }
+.btn-primary {
+  background:linear-gradient(135deg, var(--accent) 0%, #8577ff 100%);
+  color:#fff; box-shadow:0 1px 4px rgba(109,92,255,0.3);
+}
+.btn-primary:hover {
+  filter:brightness(1.1);
+  box-shadow:0 2px 12px rgba(109,92,255,0.4), 0 0 0 3px var(--accent-glow);
+}
+.btn-ghost {
+  background:transparent; color:var(--text-2);
+  border:1px solid var(--border-bright);
+}
+.btn-ghost:hover {
+  background:var(--hover-bg); border-color:var(--border-bright);
+  color:var(--text);
+}
+.btn-danger {
+  background:rgba(255,107,107,0.1); color:var(--red);
+  border:1px solid rgba(255,107,107,0.25);
+}
+.btn-danger:hover { background:rgba(255,107,107,0.18); }
+
+/* CANVAS CONTAINER */
+.canvas-wrap {
+  flex:1; position:relative; overflow:hidden; background:var(--canvas-bg);
+  cursor:grab;
+}
+.canvas-wrap.grabbing { cursor:grabbing; }
+.canvas-wrap canvas {
+  display:block; width:100%; height:100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HUD OVERLAYS (glassmorphic panels)
+   ═══════════════════════════════════════════════════════════════════ */
+.hud {
+  position:absolute; pointer-events:none; z-index:5;
+}
+.hud > * { pointer-events:auto; }
+
+/* Status counters — top right */
+.hud-status {
+  position:absolute; top:12px; right:12px;
+  display:flex; gap:6px; z-index:5;
+}
+.status-pill {
+  display:flex; align-items:center; gap:5px;
+  padding:4px 10px; border-radius:var(--r100);
+  background:var(--hud-bg);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border);
+  font-size:11px; font-weight:600; font-family:var(--mono);
+  box-shadow:var(--shadow-sm);
+  transition:all var(--transition);
+}
+.status-pill .dot {
+  width:7px; height:7px; border-radius:50%; flex-shrink:0;
+}
+.status-pill .dot.succeeded { background:var(--status-succeeded); box-shadow:0 0 6px rgba(52,211,153,0.4); }
+.status-pill .dot.failed { background:var(--status-failed); box-shadow:0 0 6px rgba(255,107,107,0.4); }
+.status-pill .dot.running { background:var(--status-running); box-shadow:0 0 6px rgba(133,119,255,0.4); animation:pulse-glow 1.5s ease infinite; }
+.status-pill .dot.pending { background:var(--status-pending); }
+.status-pill .dot.skipped { background:var(--status-skipped); }
+.status-pill .count { min-width:14px; text-align:center; }
+.status-pill .count.pulse { animation:count-pulse 350ms var(--spring); }
+@keyframes count-pulse { 0%{transform:scale(1)} 50%{transform:scale(1.3)} 100%{transform:scale(1)} }
+@keyframes pulse-glow {
+  0%,100%{ box-shadow:0 0 6px rgba(133,119,255,0.3); opacity:1; }
+  50%{ box-shadow:0 0 12px rgba(133,119,255,0.6); opacity:0.7; }
+}
+
+/* LOD indicator — top center */
+.hud-lod {
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  padding:4px 14px; border-radius:var(--r100);
+  background:var(--hud-bg);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border);
+  font-size:11px; font-weight:500; font-family:var(--mono);
+  box-shadow:var(--shadow-sm);
+  color:var(--text-2);
+  transition:all 250ms var(--ease-out-expo);
+}
+
+/* FPS counter — top left */
+.hud-fps {
+  position:absolute; top:12px; left:12px;
+  padding:3px 10px; border-radius:var(--r4);
+  background:var(--hud-bg);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border);
+  font-size:10px; font-family:var(--mono); color:var(--text-3);
+  box-shadow:var(--shadow-sm);
+  opacity:0; transition:opacity 200ms ease;
+}
+.hud-fps.visible { opacity:1; }
+
+/* Zoom controls — bottom right */
+.hud-zoom {
+  position:absolute; bottom:12px; right:12px;
+  display:flex; align-items:center; gap:0;
+  background:var(--hud-bg);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border);
+  border-radius:var(--r10);
+  box-shadow:var(--shadow-md);
+  overflow:hidden;
+}
+.zoom-btn {
+  width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+  font-size:16px; color:var(--text-2); transition:all var(--transition);
+  position:relative;
+}
+.zoom-btn:hover { background:var(--hover-bg); color:var(--text); }
+.zoom-btn:active { transform:scale(0.92); }
+.zoom-btn::after {
+  content:''; position:absolute;
+}
+.zoom-sep { width:1px; height:20px; background:var(--border-bright); }
+.zoom-pct {
+  padding:0 10px; font-size:11px; font-family:var(--mono);
+  color:var(--text-2); min-width:48px; text-align:center;
+  user-select:none;
+}
+
+/* Keyboard hints — bottom center */
+.hud-hints {
+  position:absolute; bottom:12px; left:50%; transform:translateX(-50%);
+  padding:4px 14px; border-radius:var(--r100);
+  background:var(--hud-bg);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);
+  font-size:10px; color:var(--text-3);
+  box-shadow:var(--shadow-sm);
+  display:flex; gap:12px; white-space:nowrap;
+}
+.hud-hints kbd {
+  padding:1px 5px; border-radius:3px;
+  background:var(--bg-4); border:1px solid var(--border-bright);
+  font-family:var(--mono); font-size:10px; color:var(--text-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MINIMAP
+   ═══════════════════════════════════════════════════════════════════ */
+.minimap-container {
+  position:absolute; bottom:12px; left:12px;
+  width:180px; height:120px;
+  background:var(--minimap-bg);
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  border:1px solid var(--border);
+  border-radius:var(--r10);
+  box-shadow:var(--shadow-md);
+  overflow:hidden; cursor:pointer;
+}
+.minimap-container canvas {
+  display:block; width:100%; height:100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOOLTIP (glassmorphic)
+   ═══════════════════════════════════════════════════════════════════ */
+.node-tooltip {
+  position:absolute; pointer-events:none; z-index:20;
+  padding:10px 14px; border-radius:var(--r10);
+  background:var(--hud-bg);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border-bright);
+  box-shadow:var(--shadow-lg);
+  font-size:12px; min-width:200px; max-width:280px;
+  opacity:0; transform:translateY(4px);
+  transition:opacity 150ms ease, transform 150ms ease;
+}
+.node-tooltip.visible {
+  opacity:1; transform:translateY(0);
+}
+.tooltip-name {
+  font-weight:600; font-size:13px; margin-bottom:6px;
+  display:flex; align-items:center; gap:6px;
+}
+.tooltip-row {
+  display:flex; align-items:center; gap:6px;
+  padding:2px 0; font-size:11px; color:var(--text-2);
+}
+.tooltip-row .label { color:var(--text-3); min-width:56px; }
+.tooltip-row .value { font-family:var(--mono); font-weight:500; }
+.tooltip-status-dot {
+  width:8px; height:8px; border-radius:50%; flex-shrink:0;
+}
+.tooltip-divider {
+  height:1px; background:var(--border); margin:6px 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTEXT MENU (spring entrance)
+   ═══════════════════════════════════════════════════════════════════ */
+.context-menu {
+  position:fixed; min-width:200px;
+  background:var(--bg-3);
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border-bright);
+  border-radius:var(--r10);
+  box-shadow:var(--shadow-lg);
+  padding:4px 0; z-index:30;
+  animation:ctx-appear 120ms var(--spring);
+  font-size:12px;
+  display:none;
+}
+.context-menu.open { display:block; }
+@keyframes ctx-appear {
+  from { opacity:0; transform:scale(0.92) translateY(-4px); }
+  to   { opacity:1; transform:scale(1) translateY(0); }
+}
+.ctx-item {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 14px; cursor:pointer;
+  transition:background 80ms ease-out;
+  color:var(--text);
+}
+.ctx-item:hover { background:var(--hover-bg); }
+.ctx-item .ctx-icon { width:16px; text-align:center; color:var(--text-3); font-size:13px; }
+.ctx-item .ctx-label { flex:1; }
+.ctx-item .ctx-shortcut { font-size:10px; color:var(--text-3); font-family:var(--mono); }
+.ctx-item.danger { color:var(--red); }
+.ctx-item.danger:hover { background:rgba(255,107,107,0.08); }
+.ctx-sep { height:1px; background:var(--border); margin:4px 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container {
+  position:fixed; bottom:60px; right:16px; z-index:40;
+  display:flex; flex-direction:column-reverse; gap:8px;
+}
+.toast {
+  padding:8px 16px; border-radius:var(--r6);
+  background:var(--bg-3);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border-bright);
+  box-shadow:var(--shadow-md);
+  font-size:12px; color:var(--text);
+  animation:toast-in 250ms var(--ease-out-expo);
+  display:flex; align-items:center; gap:8px;
+  max-width:340px;
+}
+.toast .toast-icon { font-size:14px; flex-shrink:0; }
+.toast.success .toast-icon { color:var(--status-succeeded); }
+.toast.error .toast-icon { color:var(--status-failed); }
+.toast.info .toast-icon { color:var(--accent); }
+@keyframes toast-in {
+  from { opacity:0; transform:translateX(20px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+.toast.out { animation:toast-out 200ms ease-in forwards; }
+@keyframes toast-out {
+  to { opacity:0; transform:translateX(20px); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME TOGGLE
+   ═══════════════════════════════════════════════════════════════════ */
+.theme-toggle {
+  width:28px; height:28px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; cursor:pointer; color:var(--text-2);
+  transition:all var(--transition);
+}
+.theme-toggle:hover { background:var(--hover-bg); color:var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIMULATION PROGRESS BAR
+   ═══════════════════════════════════════════════════════════════════ */
+.sim-progress {
+  position:absolute; top:0; left:0; right:0; height:3px;
+  background:transparent; z-index:6; overflow:hidden;
+  opacity:0; transition:opacity 200ms ease;
+}
+.sim-progress.active { opacity:1; }
+.sim-progress-bar {
+  height:100%; width:0%;
+  background:linear-gradient(90deg, var(--accent), #a78bfa, var(--status-succeeded));
+  transition:width 300ms ease-out;
+  box-shadow:0 0 8px rgba(109,92,255,0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes shimmer-sweep {
+  0%   { background-position:-200% 0; }
+  100% { background-position:200% 0; }
+}
+@keyframes node-shake {
+  0%,100% { transform:translateX(0); }
+  20%     { transform:translateX(-2px); }
+  40%     { transform:translateX(2px); }
+  60%     { transform:translateX(-1px); }
+  80%     { transform:translateX(1px); }
+}
+@keyframes border-glow-pulse {
+  0%,100% { box-shadow:0 0 4px var(--accent-glow); }
+  50%     { box-shadow:0 0 16px var(--accent-glow); }
+}
+@keyframes fade-in {
+  from { opacity:0; }
+  to   { opacity:1; }
+}
+@keyframes slide-up {
+  from { opacity:0; transform:translateY(8px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes rotate-spin {
+  from { transform:rotate(0deg); }
+  to   { transform:rotate(360deg); }
+}
+@keyframes dash-flow {
+  0%   { stroke-dashoffset:20; }
+  100% { stroke-dashoffset:0; }
+}
+@keyframes glow-breathe {
+  0%,100% { opacity:0.4; }
+  50%     { opacity:1; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <span class="logo">E</span>
+      EDOG Studio
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-tab">Logs</div>
+    <div class="topbar-tab active">DAG Studio</div>
+    <div class="topbar-tab">Telemetry</div>
+    <div class="topbar-right">
+      <span style="font-size:11px;color:var(--text-3);font-family:var(--mono);">SalesLakehouse_v3</span>
+      <div class="topbar-sep"></div>
+      <button class="theme-toggle" id="themeToggle" title="Toggle theme">&#9790;</button>
+    </div>
+  </div>
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="btn btn-primary" id="btnSimulate">
+        <span>&#9654;</span> Simulate Execution
+      </button>
+      <button class="btn btn-ghost" id="btnReset">
+        <span>&#8634;</span> Reset
+      </button>
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-ghost" id="btnFit" title="Fit to screen (F)">
+        <span>&#11036;</span> Fit
+      </button>
+      <button class="btn btn-ghost" id="btnCenter" title="Center graph">
+        &#8982; Center
+      </button>
+    </div>
+    <div class="toolbar-right">
+      <span style="font-size:11px;color:var(--text-3);">27 nodes &middot; 7 layers</span>
+      <div class="toolbar-sep"></div>
+      <button class="btn btn-ghost" id="btnToggleFps" title="Toggle FPS (D)">FPS</button>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="dagCanvas" tabindex="0"></canvas>
+
+    <!-- Simulation progress bar -->
+    <div class="sim-progress" id="simProgress">
+      <div class="sim-progress-bar" id="simProgressBar"></div>
+    </div>
+
+    <!-- HUD -->
+    <div class="hud">
+      <!-- Status counters -->
+      <div class="hud-status" id="hudStatus">
+        <div class="status-pill"><span class="dot succeeded"></span><span class="count" id="countSucceeded">0</span></div>
+        <div class="status-pill"><span class="dot running"></span><span class="count" id="countRunning">0</span></div>
+        <div class="status-pill"><span class="dot failed"></span><span class="count" id="countFailed">0</span></div>
+        <div class="status-pill"><span class="dot pending"></span><span class="count" id="countPending">27</span></div>
+        <div class="status-pill"><span class="dot skipped"></span><span class="count" id="countSkipped">0</span></div>
+      </div>
+
+      <!-- LOD indicator -->
+      <div class="hud-lod" id="hudLod">LOD 2 &#8212; Detail</div>
+
+      <!-- FPS -->
+      <div class="hud-fps" id="hudFps">-- fps</div>
+
+      <!-- Zoom controls -->
+      <div class="hud-zoom">
+        <button class="zoom-btn" id="zoomOut" title="Zoom out (-)">&#8722;</button>
+        <div class="zoom-sep"></div>
+        <span class="zoom-pct" id="zoomPct">100%</span>
+        <div class="zoom-sep"></div>
+        <button class="zoom-btn" id="zoomIn" title="Zoom in (+)">+</button>
+        <div class="zoom-sep"></div>
+        <button class="zoom-btn" id="zoomFit" title="Fit to screen (F)">&#9634;</button>
+      </div>
+
+      <!-- Hints -->
+      <div class="hud-hints">
+        <span>Scroll to zoom</span>
+        <span>Drag to pan</span>
+        <span><kbd>F</kbd> Fit</span>
+        <span><kbd>D</kbd> FPS</span>
+        <span><kbd>Esc</kbd> Deselect</span>
+      </div>
+    </div>
+
+    <!-- Minimap -->
+    <div class="minimap-container" id="minimapContainer">
+      <canvas id="minimapCanvas"></canvas>
+    </div>
+
+    <!-- Tooltip -->
+    <div class="node-tooltip" id="nodeTooltip"></div>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu">
+  <div class="ctx-item" data-action="zoom-to"><span class="ctx-icon">&#8982;</span><span class="ctx-label">Zoom to Node</span><span class="ctx-shortcut">Dbl-click</span></div>
+  <div class="ctx-item" data-action="select-path"><span class="ctx-icon">&#8644;</span><span class="ctx-label">Select Full Path</span></div>
+  <div class="ctx-item" data-action="select-upstream"><span class="ctx-icon">&#8592;</span><span class="ctx-label">Select Upstream</span></div>
+  <div class="ctx-item" data-action="select-downstream"><span class="ctx-icon">&#8594;</span><span class="ctx-label">Select Downstream</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy-name"><span class="ctx-icon">&#9112;</span><span class="ctx-label">Copy Node Name</span><span class="ctx-shortcut">Ctrl+C</span></div>
+  <div class="ctx-item" data-action="inspect"><span class="ctx-icon">&#9432;</span><span class="ctx-label">Inspect in Detail Panel</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="rerun"><span class="ctx-icon">&#9654;</span><span class="ctx-label">Rerun This Node</span></div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   DAG GRAPH CANVAS RENDERER
+   Full Canvas 2D renderer with 3-level LOD, Sugiyama layout,
+   pan/zoom camera, minimap, execution simulation.
+   ═══════════════════════════════════════════════════════════════════ */
+'use strict';
+
+// ── DAG DATA ──────────────────────────────────────────────────────
+const LAYER_NAMES = ['Source','Clean','Transform','Aggregate','Metrics','Output','Final'];
+const LAYER_COLORS_KEYS = [
+  '--layer-source','--layer-clean','--layer-transform',
+  '--layer-aggregate','--layer-metrics','--layer-output','--layer-final'
+];
+
+const NODE_DEFS = [
+  // Layer 0 — Sources
+  { id:'n01', name:'LoadSalesRaw',      layer:0, type:'SQL',     parents:[] },
+  { id:'n02', name:'LoadCustomersRaw',  layer:0, type:'SQL',     parents:[] },
+  { id:'n03', name:'LoadProductsRaw',   layer:0, type:'SQL',     parents:[] },
+  { id:'n04', name:'LoadInventoryRaw',  layer:0, type:'PySpark', parents:[] },
+  { id:'n05', name:'LoadReturnsRaw',    layer:0, type:'SQL',     parents:[] },
+  // Layer 1 — Clean
+  { id:'n06', name:'CleanSales',        layer:1, type:'PySpark', parents:['n01'] },
+  { id:'n07', name:'CleanCustomers',    layer:1, type:'PySpark', parents:['n02'] },
+  { id:'n08', name:'CleanProducts',     layer:1, type:'SQL',     parents:['n03'] },
+  { id:'n09', name:'CleanInventory',    layer:1, type:'PySpark', parents:['n04'] },
+  // Layer 2 — Transform
+  { id:'n10', name:'JoinSalesCustomers',layer:2, type:'PySpark', parents:['n06','n07'] },
+  { id:'n11', name:'EnrichProducts',    layer:2, type:'SQL',     parents:['n08','n09'] },
+  { id:'n12', name:'CalcReturnRate',    layer:2, type:'PySpark', parents:['n06','n05'] },
+  // Layer 3 — Aggregate
+  { id:'n13', name:'AggregateMonthlySales', layer:3, type:'SQL',     parents:['n10'] },
+  { id:'n14', name:'RegionalSummary',       layer:3, type:'PySpark', parents:['n10','n11'] },
+  { id:'n15', name:'InventoryForecast',     layer:3, type:'PySpark', parents:['n09','n11'] },
+  // Layer 4 — Metrics
+  { id:'n16', name:'CalcKPIs',          layer:4, type:'SQL',     parents:['n13','n14'] },
+  { id:'n17', name:'TrendAnalysis',     layer:4, type:'PySpark', parents:['n13'] },
+  { id:'n18', name:'AnomalyDetection',  layer:4, type:'PySpark', parents:['n14','n15'] },
+  { id:'n19', name:'ReturnMetrics',     layer:4, type:'SQL',     parents:['n12'] },
+  // Layer 5 — Output
+  { id:'n20', name:'PublishDashboard',    layer:5, type:'SQL',     parents:['n16','n17'] },
+  { id:'n21', name:'ExportToOneLake',     layer:5, type:'PySpark', parents:['n16','n18'] },
+  { id:'n22', name:'NotifyStakeholders',  layer:5, type:'SQL',     parents:['n16'] },
+  { id:'n23', name:'ReturnReport',        layer:5, type:'SQL',     parents:['n19'] },
+  // Layer 6 — Final
+  { id:'n24', name:'ValidatePipeline', layer:6, type:'PySpark', parents:['n20','n21'] },
+  { id:'n25', name:'ArchiveRun',       layer:6, type:'SQL',     parents:['n20','n21','n22'] },
+  { id:'n26', name:'SendAlerts',       layer:6, type:'SQL',     parents:['n24'] },
+  { id:'n27', name:'CleanupStaging',   layer:6, type:'PySpark', parents:['n25'] },
+];
+
+// Build edges
+const EDGES = [];
+for (const n of NODE_DEFS) {
+  for (const pid of n.parents) {
+    EDGES.push({ from: pid, to: n.id });
+  }
+}
+
+// ── CONSTANTS ─────────────────────────────────────────────────────
+const SPACING_X = 220;
+const SPACING_Y = 82;
+const NODE_W2 = 200, NODE_H2 = 68;     // LOD 2 detail
+const NODE_W1 = 120, NODE_H1 = 36;     // LOD 1 mini
+const DOT_R = 5;                        // LOD 0 dot radius
+const PADDING = 60;
+const LOD_THRESH_01 = 0.30;  // below → LOD 0
+const LOD_THRESH_12 = 0.80;  // below → LOD 1, above → LOD 2
+const LOD_BLEND = 0.06;      // transition blend zone
+const ZOOM_MIN = 0.10;
+const ZOOM_MAX = 3.0;
+const ZOOM_SPEED = 0.0015;
+const GRID_SIZE = 24;
+
+// ── THEME HELPER ──────────────────────────────────────────────────
+function getCSSVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function hexToRGBA(hex, a) {
+  if (hex.startsWith('rgba') || hex.startsWith('rgb')) return hex;
+  hex = hex.replace('#','');
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  const r = parseInt(hex.substring(0,2),16);
+  const g = parseInt(hex.substring(2,4),16);
+  const b = parseInt(hex.substring(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// ── SUGIYAMA LAYOUT ───────────────────────────────────────────────
+class DagLayout {
+  constructor(nodes, edges) {
+    this._nodes = nodes;
+    this._edges = edges;
+    this.positions = new Map();
+    this._compute();
+  }
+
+  _compute() {
+    // Group by layer
+    const layers = new Map();
+    for (const n of this._nodes) {
+      if (!layers.has(n.layer)) layers.set(n.layer, []);
+      layers.get(n.layer).push(n);
+    }
+
+    // Build parent/child maps
+    const parentMap = new Map();
+    const childMap = new Map();
+    for (const n of this._nodes) {
+      parentMap.set(n.id, new Set(n.parents));
+      if (!childMap.has(n.id)) childMap.set(n.id, new Set());
+      for (const pid of n.parents) {
+        if (!childMap.has(pid)) childMap.set(pid, new Set());
+        childMap.get(pid).add(n.id);
+      }
+    }
+
+    // Order nodes within each layer alphabetically first
+    for (const [, list] of layers) {
+      list.sort((a,b) => a.name.localeCompare(b.name));
+    }
+
+    // Barycenter crossing minimization — 4 bidirectional passes
+    const sortedLayerKeys = [...layers.keys()].sort((a,b)=>a-b);
+    const layerOrder = new Map();
+    for (const lk of sortedLayerKeys) {
+      const list = layers.get(lk);
+      for (let i = 0; i < list.length; i++) layerOrder.set(list[i].id, i);
+    }
+
+    for (let pass = 0; pass < 4; pass++) {
+      if (pass % 2 === 0) {
+        // Forward sweep
+        for (let li = 1; li < sortedLayerKeys.length; li++) {
+          this._reorderLayer(layers.get(sortedLayerKeys[li]), layers.get(sortedLayerKeys[li-1]), parentMap, layerOrder);
+        }
+      } else {
+        // Backward sweep
+        for (let li = sortedLayerKeys.length - 2; li >= 0; li--) {
+          this._reorderLayer(layers.get(sortedLayerKeys[li]), layers.get(sortedLayerKeys[li+1]), childMap, layerOrder);
+        }
+      }
+    }
+
+    // Assign coordinates
+    let maxNodesInLayer = 0;
+    for (const [, list] of layers) {
+      if (list.length > maxNodesInLayer) maxNodesInLayer = list.length;
+    }
+    const totalHeight = maxNodesInLayer * SPACING_Y;
+
+    for (const [layerIdx, list] of layers) {
+      const layerHeight = list.length * SPACING_Y;
+      const yOffset = (totalHeight - layerHeight) / 2;
+      for (let i = 0; i < list.length; i++) {
+        this.positions.set(list[i].id, {
+          x: layerIdx * SPACING_X + PADDING,
+          y: yOffset + i * SPACING_Y + PADDING,
+          layer: layerIdx,
+          order: i,
+        });
+      }
+    }
+  }
+
+  _reorderLayer(currentLayer, adjLayer, connectionMap, orderMap) {
+    const adjPos = new Map();
+    for (let i = 0; i < adjLayer.length; i++) adjPos.set(adjLayer[i].id, i);
+
+    const barycenters = new Map();
+    for (const node of currentLayer) {
+      const conns = connectionMap.get(node.id);
+      if (!conns || conns.size === 0) {
+        barycenters.set(node.id, orderMap.get(node.id) || 0);
+        continue;
+      }
+      let sum = 0, cnt = 0;
+      for (const cid of conns) {
+        if (adjPos.has(cid)) { sum += adjPos.get(cid); cnt++; }
+      }
+      barycenters.set(node.id, cnt > 0 ? sum / cnt : (orderMap.get(node.id) || 0));
+    }
+
+    currentLayer.sort((a,b) => barycenters.get(a.id) - barycenters.get(b.id));
+    for (let i = 0; i < currentLayer.length; i++) orderMap.set(currentLayer[i].id, i);
+  }
+
+  getBounds() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [, p] of this.positions) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + NODE_W2);
+      maxY = Math.max(maxY, p.y + NODE_H2);
+    }
+    return { minX, minY, maxX, maxY, width: maxX-minX, height: maxY-minY };
+  }
+}
+
+// ── MAIN RENDERER ─────────────────────────────────────────────────
+class DagCanvasRenderer {
+  constructor() {
+    this._canvas = document.getElementById('dagCanvas');
+    this._ctx = this._canvas.getContext('2d');
+    this._wrap = document.getElementById('canvasWrap');
+
+    this._miniCanvas = document.getElementById('minimapCanvas');
+    this._miniCtx = this._miniCanvas.getContext('2d');
+    this._miniWrap = document.getElementById('minimapContainer');
+
+    this._dpr = window.devicePixelRatio || 1;
+    this._width = 0;
+    this._height = 0;
+
+    // Camera
+    this._camera = { x: 0, y: 0, scale: 1 };
+    this._targetCamera = null; // for animated transitions
+    this._cameraAnimStart = 0;
+    this._cameraAnimDuration = 500;
+
+    // State
+    this._nodes = NODE_DEFS.map(n => ({
+      ...n,
+      status: 'pending',  // pending, running, succeeded, failed, skipped
+      duration: null,
+      progress: 0,
+      runStart: 0,
+    }));
+    this._nodeMap = new Map();
+    for (const n of this._nodes) this._nodeMap.set(n.id, n);
+
+    this._edges = EDGES.map(e => ({
+      ...e,
+      status: 'default',  // default, flowing, succeeded, failed
+    }));
+
+    // Layout
+    this._layout = new DagLayout(this._nodes, this._edges);
+    this._positions = this._layout.positions;
+    this._bounds = this._layout.getBounds();
+
+    // Interaction state
+    this._selectedId = null;
+    this._hoveredId = null;
+    this._isPanning = false;
+    this._panStart = { x:0, y:0 };
+    this._panCameraStart = { x:0, y:0 };
+    this._showFps = false;
+    this._fpsFrames = 0;
+    this._fpsTime = 0;
+    this._fpsValue = 0;
+
+    // Animation state
+    this._dirty = true;
+    this._animating = false;
+    this._time = 0;
+    this._dashOffset = 0;
+    this._runningPulse = 0;
+
+    // Simulation
+    this._simulating = false;
+    this._simQueue = [];
+    this._simTimers = [];
+
+    // Theme cache
+    this._themeCache = {};
+
+    this._init();
+  }
+
+  _init() {
+    this._resize();
+    this._cacheTheme();
+    this._bindEvents();
+    this._fitToScreen(false);
+    requestAnimationFrame(t => this._frameLoop(t));
+  }
+
+  _cacheTheme() {
+    const c = this._themeCache;
+    c.canvasBg = getCSSVar('--canvas-bg');
+    c.canvasDot = getCSSVar('--canvas-dot');
+    c.nodeSurface = getCSSVar('--node-surface');
+    c.nodeBorder = getCSSVar('--node-border');
+    c.edgeColor = getCSSVar('--edge-color');
+    c.text = getCSSVar('--text');
+    c.text2 = getCSSVar('--text-2');
+    c.text3 = getCSSVar('--text-3');
+    c.accent = getCSSVar('--accent');
+    c.accentGlow = getCSSVar('--accent-glow');
+    c.statusSucceeded = getCSSVar('--status-succeeded');
+    c.statusFailed = getCSSVar('--status-failed');
+    c.statusRunning = getCSSVar('--status-running');
+    c.statusPending = getCSSVar('--status-pending');
+    c.statusSkipped = getCSSVar('--status-skipped');
+    c.typeSql = getCSSVar('--type-sql') || '#5b9bff';
+    c.typePyspark = getCSSVar('--type-pyspark') || '#c084fc';
+    c.bg3 = getCSSVar('--bg-3');
+    c.bg4 = getCSSVar('--bg-4');
+
+    // Layer colors
+    c.layerColors = LAYER_COLORS_KEYS.map(k => getCSSVar(k));
+  }
+
+  _resize() {
+    const rect = this._wrap.getBoundingClientRect();
+    this._width = rect.width;
+    this._height = rect.height;
+    this._canvas.width = Math.round(rect.width * this._dpr);
+    this._canvas.height = Math.round(rect.height * this._dpr);
+    this._canvas.style.width = rect.width + 'px';
+    this._canvas.style.height = rect.height + 'px';
+
+    // Minimap
+    const mr = this._miniWrap.getBoundingClientRect();
+    this._miniCanvas.width = Math.round(mr.width * this._dpr);
+    this._miniCanvas.height = Math.round(mr.height * this._dpr);
+
+    this._dirty = true;
+  }
+
+  // ── CAMERA ────────────────────────────────────────────────────
+  _screenToWorld(sx, sy) {
+    return {
+      x: (sx - this._camera.x) / this._camera.scale,
+      y: (sy - this._camera.y) / this._camera.scale,
+    };
+  }
+
+  _worldToScreen(wx, wy) {
+    return {
+      x: wx * this._camera.scale + this._camera.x,
+      y: wy * this._camera.scale + this._camera.y,
+    };
+  }
+
+  _fitToScreen(animate = true) {
+    const b = this._bounds;
+    const padX = 80, padY = 60;
+    const scaleX = (this._width - padX * 2) / b.width;
+    const scaleY = (this._height - padY * 2) / b.height;
+    const scale = Math.min(scaleX, scaleY, 2.0);
+    const cx = b.minX + b.width / 2;
+    const cy = b.minY + b.height / 2;
+    const tx = this._width / 2 - cx * scale;
+    const ty = this._height / 2 - cy * scale;
+
+    if (animate) {
+      this._animateCamera(tx, ty, scale);
+    } else {
+      this._camera.x = tx;
+      this._camera.y = ty;
+      this._camera.scale = scale;
+      this._dirty = true;
+    }
+  }
+
+  _zoomToNode(nodeId) {
+    const pos = this._positions.get(nodeId);
+    if (!pos) return;
+    const scale = 1.2;
+    const cx = pos.x + NODE_W2 / 2;
+    const cy = pos.y + NODE_H2 / 2;
+    const tx = this._width / 2 - cx * scale;
+    const ty = this._height / 2 - cy * scale;
+    this._animateCamera(tx, ty, scale);
+  }
+
+  _animateCamera(tx, ty, scale) {
+    this._targetCamera = { x: tx, y: ty, scale: scale };
+    this._cameraAnimStart = performance.now();
+    this._cameraAnimFrom = { ...this._camera };
+    this._animating = true;
+  }
+
+  _updateCameraAnimation(now) {
+    if (!this._targetCamera) return;
+    const t = Math.min((now - this._cameraAnimStart) / this._cameraAnimDuration, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    this._camera.x = this._cameraAnimFrom.x + (this._targetCamera.x - this._cameraAnimFrom.x) * ease;
+    this._camera.y = this._cameraAnimFrom.y + (this._targetCamera.y - this._cameraAnimFrom.y) * ease;
+    this._camera.scale = this._cameraAnimFrom.scale + (this._targetCamera.scale - this._cameraAnimFrom.scale) * ease;
+    if (t >= 1) {
+      this._targetCamera = null;
+    }
+    this._dirty = true;
+  }
+
+  // ── LOD ───────────────────────────────────────────────────────
+  _getLOD() {
+    const z = this._camera.scale;
+    if (z < LOD_THRESH_01) return 0;
+    if (z < LOD_THRESH_12) return 1;
+    return 2;
+  }
+
+  _getLODBlend() {
+    const z = this._camera.scale;
+    // Blend factor for smooth LOD transition
+    if (z >= LOD_THRESH_01 - LOD_BLEND && z <= LOD_THRESH_01 + LOD_BLEND) {
+      return { from: 0, to: 1, t: (z - (LOD_THRESH_01 - LOD_BLEND)) / (LOD_BLEND * 2) };
+    }
+    if (z >= LOD_THRESH_12 - LOD_BLEND && z <= LOD_THRESH_12 + LOD_BLEND) {
+      return { from: 1, to: 2, t: (z - (LOD_THRESH_12 - LOD_BLEND)) / (LOD_BLEND * 2) };
+    }
+    return null;
+  }
+
+  // ── HIT TESTING ───────────────────────────────────────────────
+  _hitTest(sx, sy) {
+    const world = this._screenToWorld(sx, sy);
+    const lod = this._getLOD();
+    const nw = lod === 2 ? NODE_W2 : lod === 1 ? NODE_W1 : DOT_R * 4;
+    const nh = lod === 2 ? NODE_H2 : lod === 1 ? NODE_H1 : DOT_R * 4;
+
+    for (const node of this._nodes) {
+      const pos = this._positions.get(node.id);
+      if (!pos) continue;
+      let nx = pos.x, ny = pos.y;
+      // Center offset for lower LODs
+      if (lod < 2) {
+        nx = pos.x + (NODE_W2 - nw) / 2;
+        ny = pos.y + (NODE_H2 - nh) / 2;
+      }
+      if (world.x >= nx && world.x <= nx + nw && world.y >= ny && world.y <= ny + nh) {
+        return node;
+      }
+    }
+    return null;
+  }
+
+  // ── VIEWPORT CULLING ──────────────────────────────────────────
+  _isVisible(pos, w, h) {
+    const s = this._camera.scale;
+    const sx = pos.x * s + this._camera.x;
+    const sy = pos.y * s + this._camera.y;
+    const sw = w * s;
+    const sh = h * s;
+    return sx + sw > -50 && sx < this._width + 50 && sy + sh > -50 && sy < this._height + 50;
+  }
+
+  // ── RENDERING ─────────────────────────────────────────────────
+  _frameLoop(timestamp) {
+    requestAnimationFrame(t => this._frameLoop(t));
+
+    this._time = timestamp;
+
+    // FPS
+    this._fpsFrames++;
+    if (timestamp - this._fpsTime >= 1000) {
+      this._fpsValue = this._fpsFrames;
+      this._fpsFrames = 0;
+      this._fpsTime = timestamp;
+      if (this._showFps) {
+        document.getElementById('hudFps').textContent = this._fpsValue + ' fps';
+      }
+    }
+
+    // Camera animation
+    if (this._targetCamera) this._updateCameraAnimation(timestamp);
+
+    // Running pulse & dash
+    const hasRunning = this._nodes.some(n => n.status === 'running');
+    if (hasRunning) {
+      this._animating = true;
+      this._runningPulse = (Math.sin(timestamp * 0.004) + 1) / 2;
+      this._dashOffset = (timestamp * 0.03) % 20;
+    }
+
+    if (!this._dirty && !this._animating) return;
+
+    this._render(timestamp);
+    this._renderMinimap();
+    this._updateHUD();
+    this._dirty = false;
+    if (!this._targetCamera && !hasRunning) this._animating = false;
+  }
+
+  _render(ts) {
+    const ctx = this._ctx;
+    const dpr = this._dpr;
+    const cam = this._camera;
+    const tc = this._themeCache;
+    const lod = this._getLOD();
+
+    // Clear
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = tc.canvasBg;
+    ctx.fillRect(0, 0, this._width, this._height);
+
+    // Grid dots
+    this._drawGrid(ctx, cam, tc);
+
+    // Apply camera
+    ctx.save();
+    ctx.translate(cam.x, cam.y);
+    ctx.scale(cam.scale, cam.scale);
+
+    // Draw edges
+    this._drawEdges(ctx, lod, ts, tc);
+
+    // Draw nodes
+    this._drawNodes(ctx, lod, ts, tc);
+
+    ctx.restore();
+  }
+
+  _drawGrid(ctx, cam, tc) {
+    const gridWorld = GRID_SIZE;
+    const gridScreen = gridWorld * cam.scale;
+    if (gridScreen < 8) return; // too dense
+
+    const dotSize = Math.max(1, cam.scale * 1.2);
+    ctx.fillStyle = tc.canvasDot;
+
+    const startX = (-cam.x / cam.scale);
+    const startY = (-cam.y / cam.scale);
+    const endX = startX + this._width / cam.scale;
+    const endY = startY + this._height / cam.scale;
+
+    const gx0 = Math.floor(startX / gridWorld) * gridWorld;
+    const gy0 = Math.floor(startY / gridWorld) * gridWorld;
+
+    for (let wx = gx0; wx <= endX; wx += gridWorld) {
+      for (let wy = gy0; wy <= endY; wy += gridWorld) {
+        const sx = wx * cam.scale + cam.x;
+        const sy = wy * cam.scale + cam.y;
+        ctx.fillRect(sx - dotSize/2, sy - dotSize/2, dotSize, dotSize);
+      }
+    }
+  }
+
+  _drawEdges(ctx, lod, ts, tc) {
+    for (const edge of this._edges) {
+      const fromPos = this._positions.get(edge.from);
+      const toPos = this._positions.get(edge.to);
+      if (!fromPos || !toPos) continue;
+
+      // Culling: skip if both endpoints are off-screen
+      if (!this._isVisible(fromPos, NODE_W2, NODE_H2) && !this._isVisible(toPos, NODE_W2, NODE_H2)) continue;
+
+      const fromNode = this._nodeMap.get(edge.from);
+      const toNode = this._nodeMap.get(edge.to);
+
+      // Anchor points
+      const sx = fromPos.x + NODE_W2;
+      const sy = fromPos.y + NODE_H2 / 2;
+      const ex = toPos.x;
+      const ey = toPos.y + NODE_H2 / 2;
+      const midX = (sx + ex) / 2;
+
+      // Style based on status
+      ctx.save();
+      let lineWidth = lod === 0 ? 0.8 : lod === 1 ? 1.2 : 1.8;
+      let color = tc.edgeColor;
+      let dash = [];
+
+      if (edge.status === 'succeeded') {
+        color = hexToRGBA(tc.statusSucceeded, 0.35);
+        lineWidth = lod === 2 ? 2 : 1.5;
+      } else if (edge.status === 'failed') {
+        color = hexToRGBA(tc.statusFailed, 0.5);
+        dash = [6, 4];
+        lineWidth = lod === 2 ? 2 : 1.5;
+      } else if (edge.status === 'flowing') {
+        color = hexToRGBA(tc.accent, 0.6);
+        dash = [8, 4];
+        lineWidth = lod === 2 ? 2.5 : 2;
+        ctx.lineDashOffset = -this._dashOffset;
+      }
+
+      // Highlight if selected node's edge
+      if (this._selectedId && (edge.from === this._selectedId || edge.to === this._selectedId)) {
+        color = hexToRGBA(tc.accent, 0.7);
+        lineWidth += 0.8;
+        if (lod === 2) {
+          ctx.shadowColor = tc.accentGlow;
+          ctx.shadowBlur = 8;
+        }
+      }
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash(dash);
+
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.bezierCurveTo(midX, sy, midX, ey, ex, ey);
+      ctx.stroke();
+
+      // Arrow head
+      if (lod >= 1) {
+        const arrowSize = lod === 2 ? 7 : 5;
+        // Tangent at endpoint
+        const t = 0.98;
+        const dt = 1 - t;
+        const tangentX = 3 * dt * dt * (midX - sx) + 6 * dt * t * (midX - midX) + 3 * t * t * (ex - midX);
+        const tangentY = 3 * dt * dt * (sy - sy) + 6 * dt * t * (ey - sy) + 3 * t * t * (ey - ey);
+        // Simplified: arrow always points right with slight vertical
+        const angle = Math.atan2(ey - sy, ex - midX) * 0.3; // subtle angle
+
+        ctx.setLineDash([]);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - arrowSize, ey - arrowSize / 2);
+        ctx.lineTo(ex - arrowSize, ey + arrowSize / 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  _drawNodes(ctx, lod, ts, tc) {
+    const blend = this._getLODBlend();
+
+    for (const node of this._nodes) {
+      const pos = this._positions.get(node.id);
+      if (!pos) continue;
+      if (!this._isVisible(pos, NODE_W2, NODE_H2)) continue;
+
+      const isSelected = node.id === this._selectedId;
+      const isHovered = node.id === this._hoveredId;
+      const layerColor = tc.layerColors[node.layer] || tc.text3;
+
+      if (lod === 0) {
+        this._drawNodeLOD0(ctx, node, pos, tc, layerColor, isSelected, isHovered, ts);
+      } else if (lod === 1) {
+        this._drawNodeLOD1(ctx, node, pos, tc, layerColor, isSelected, isHovered, ts);
+      } else {
+        this._drawNodeLOD2(ctx, node, pos, tc, layerColor, isSelected, isHovered, ts);
+      }
+    }
+  }
+
+  // LOD 0: Colored dots
+  _drawNodeLOD0(ctx, node, pos, tc, layerColor, isSelected, isHovered, ts) {
+    const cx = pos.x + NODE_W2 / 2;
+    const cy = pos.y + NODE_H2 / 2;
+    const r = isHovered ? DOT_R + 2 : DOT_R;
+
+    ctx.save();
+
+    // Status-based color
+    let color = layerColor;
+    if (node.status === 'succeeded') color = tc.statusSucceeded;
+    else if (node.status === 'failed') color = tc.statusFailed;
+    else if (node.status === 'running') color = tc.statusRunning;
+    else if (node.status === 'skipped') color = tc.statusSkipped;
+
+    if (isSelected) {
+      ctx.shadowColor = tc.accentGlow;
+      ctx.shadowBlur = 12;
+    }
+
+    if (node.status === 'running') {
+      const pulse = 1 + this._runningPulse * 0.4;
+      ctx.globalAlpha = 0.7 + this._runningPulse * 0.3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * pulse, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = node.status === 'skipped' ? hexToRGBA(color, 0.4) : color;
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // LOD 1: Mini rectangles with name
+  _drawNodeLOD1(ctx, node, pos, tc, layerColor, isSelected, isHovered, ts) {
+    const x = pos.x + (NODE_W2 - NODE_W1) / 2;
+    const y = pos.y + (NODE_H2 - NODE_H1) / 2;
+    const r = 6;
+
+    ctx.save();
+
+    // Shadow for selected
+    if (isSelected) {
+      ctx.shadowColor = tc.accentGlow;
+      ctx.shadowBlur = 14;
+    } else if (isHovered) {
+      ctx.shadowColor = 'rgba(0,0,0,0.15)';
+      ctx.shadowBlur = 8;
+    }
+
+    // Background
+    ctx.fillStyle = tc.nodeSurface;
+    if (node.status === 'skipped') ctx.globalAlpha = 0.5;
+    this._roundRect(ctx, x, y, NODE_W1, NODE_H1, r);
+    ctx.fill();
+
+    // Border
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = isSelected ? tc.accent : tc.nodeBorder;
+    ctx.lineWidth = isSelected ? 2 : 1;
+    this._roundRect(ctx, x, y, NODE_W1, NODE_H1, r);
+    ctx.stroke();
+
+    // Layer color bar (left)
+    ctx.fillStyle = layerColor;
+    this._roundRect(ctx, x, y, 3, NODE_H1, [r, 0, 0, r]);
+    ctx.fill();
+
+    // Status indicator dot
+    let statusColor = tc.statusPending;
+    if (node.status === 'succeeded') statusColor = tc.statusSucceeded;
+    else if (node.status === 'failed') statusColor = tc.statusFailed;
+    else if (node.status === 'running') statusColor = tc.statusRunning;
+    else if (node.status === 'skipped') statusColor = tc.statusSkipped;
+
+    ctx.beginPath();
+    ctx.arc(x + 12, y + NODE_H1 / 2, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = statusColor;
+    ctx.fill();
+
+    // Running pulse
+    if (node.status === 'running') {
+      ctx.beginPath();
+      ctx.arc(x + 12, y + NODE_H1 / 2, 3.5 + this._runningPulse * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRGBA(statusColor, 0.3);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Name
+    ctx.fillStyle = node.status === 'skipped' ? tc.text3 : tc.text;
+    ctx.font = '500 11px Inter, system-ui';
+    ctx.textBaseline = 'middle';
+    const maxTextW = NODE_W1 - 24;
+    let displayName = node.name;
+    if (ctx.measureText(displayName).width > maxTextW) {
+      while (ctx.measureText(displayName + '...').width > maxTextW && displayName.length > 3) {
+        displayName = displayName.slice(0, -1);
+      }
+      displayName += '...';
+    }
+    ctx.fillText(displayName, x + 20, y + NODE_H1 / 2);
+
+    ctx.restore();
+  }
+
+  // LOD 2: Full detail card
+  _drawNodeLOD2(ctx, node, pos, tc, layerColor, isSelected, isHovered, ts) {
+    const x = pos.x, y = pos.y;
+    const w = NODE_W2, h = NODE_H2;
+    const r = 8;
+
+    ctx.save();
+
+    // Shadow
+    if (node.status === 'failed') {
+      ctx.shadowColor = hexToRGBA(tc.statusFailed, 0.35);
+      ctx.shadowBlur = 18;
+    } else if (isSelected) {
+      ctx.shadowColor = tc.accentGlow;
+      ctx.shadowBlur = 16;
+    } else if (isHovered) {
+      ctx.shadowColor = 'rgba(0,0,0,0.18)';
+      ctx.shadowBlur = 12;
+    } else {
+      ctx.shadowColor = 'rgba(0,0,0,0.12)';
+      ctx.shadowBlur = 6;
+    }
+
+    // Background
+    const surfaceColor = isHovered ? tc.bg4 : tc.nodeSurface;
+    ctx.fillStyle = node.status === 'skipped' ? hexToRGBA(surfaceColor, 0.6) : surfaceColor;
+    this._roundRect(ctx, x, y, w, h, r);
+    ctx.fill();
+
+    // Running shimmer overlay
+    if (node.status === 'running') {
+      ctx.save();
+      ctx.globalAlpha = 0.08;
+      const shimmerX = ((ts * 0.1) % (w * 3)) - w;
+      const grad = ctx.createLinearGradient(x + shimmerX, y, x + shimmerX + w * 0.6, y);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(0.5, tc.accent);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      this._roundRect(ctx, x, y, w, h, r);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Border
+    ctx.shadowBlur = 0;
+    let borderColor = tc.nodeBorder;
+    let borderWidth = 1;
+    if (isSelected) {
+      borderColor = tc.accent;
+      borderWidth = 2;
+    } else if (node.status === 'running') {
+      const alpha = 0.4 + this._runningPulse * 0.4;
+      borderColor = hexToRGBA(tc.statusRunning, alpha);
+      borderWidth = 1.5;
+    } else if (node.status === 'failed') {
+      borderColor = hexToRGBA(tc.statusFailed, 0.5);
+      borderWidth = 1.5;
+    }
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = borderWidth;
+    this._roundRect(ctx, x, y, w, h, r);
+    ctx.stroke();
+
+    // Layer color bar (left edge)
+    ctx.fillStyle = layerColor;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x, y, x, y + r, r);
+    ctx.lineTo(x, y + h - r);
+    ctx.arcTo(x, y + h, x + r, y + h, r);
+    ctx.lineTo(x + 4, y + h);
+    ctx.lineTo(x + 4, y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Status icon
+    let statusColor = tc.statusPending;
+    let statusChar = '\u25CF'; // ●
+    if (node.status === 'succeeded') statusColor = tc.statusSucceeded;
+    else if (node.status === 'failed') statusColor = tc.statusFailed;
+    else if (node.status === 'running') statusColor = tc.statusRunning;
+    else if (node.status === 'skipped') { statusColor = tc.statusSkipped; }
+
+    ctx.fillStyle = statusColor;
+    ctx.font = '12px Inter';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(statusChar, x + 14, y + 18);
+
+    // Running pulse ring
+    if (node.status === 'running') {
+      ctx.beginPath();
+      ctx.arc(x + 17, y + 18, 5 + this._runningPulse * 4, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRGBA(statusColor, 0.2 + this._runningPulse * 0.15);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Node name
+    const nameAlpha = node.status === 'skipped' ? 0.5 : 1;
+    ctx.globalAlpha = nameAlpha;
+    ctx.fillStyle = tc.text;
+    ctx.font = '600 12px Inter, system-ui';
+    ctx.textBaseline = 'middle';
+    const maxNameW = w - 70;
+    let dName = node.name;
+    if (ctx.measureText(dName).width > maxNameW) {
+      while (ctx.measureText(dName + '\u2026').width > maxNameW && dName.length > 3) {
+        dName = dName.slice(0, -1);
+      }
+      dName += '\u2026';
+    }
+    ctx.fillText(dName, x + 28, y + 18);
+
+    // Type badge (top-right)
+    const badgeText = node.type;
+    ctx.font = '600 9px Inter, system-ui';
+    const badgeW = ctx.measureText(badgeText).width + 10;
+    const badgeX = x + w - badgeW - 8;
+    const badgeY = y + 8;
+    const badgeColor = node.type === 'SQL' ? tc.typeSql : tc.typePyspark;
+    ctx.fillStyle = hexToRGBA(badgeColor, 0.15);
+    this._roundRect(ctx, badgeX, badgeY, badgeW, 16, 8);
+    ctx.fill();
+    ctx.fillStyle = badgeColor;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, badgeX + 5, badgeY + 8);
+
+    // Second row: layer name + duration
+    ctx.font = '400 10px Inter, system-ui';
+    ctx.fillStyle = tc.text3;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(LAYER_NAMES[node.layer], x + 14, y + 38);
+
+    // Duration
+    if (node.duration !== null) {
+      ctx.fillStyle = tc.text2;
+      ctx.font = '500 10px "JetBrains Mono", monospace';
+      const durText = node.duration >= 60 ? Math.floor(node.duration/60)+'m '+Math.round(node.duration%60)+'s' : node.duration.toFixed(1) + 's';
+      ctx.fillText(durText, x + 80, y + 38);
+    }
+
+    // Progress bar for running nodes
+    if (node.status === 'running' && node.progress > 0) {
+      const pbX = x + 14, pbY = y + h - 14, pbW = w - 28, pbH = 4;
+      ctx.fillStyle = hexToRGBA(tc.text3, 0.15);
+      this._roundRect(ctx, pbX, pbY, pbW, pbH, 2);
+      ctx.fill();
+      ctx.fillStyle = tc.accent;
+      this._roundRect(ctx, pbX, pbY, pbW * node.progress, pbH, 2);
+      ctx.fill();
+    }
+
+    // Dependency counts (bottom row)
+    const parentCount = node.parents.length;
+    const childCount = this._nodes.filter(n => n.parents.includes(node.id)).length;
+    if (parentCount > 0 || childCount > 0) {
+      ctx.font = '400 9px "JetBrains Mono", monospace';
+      ctx.fillStyle = tc.text3;
+      const depText = (parentCount > 0 ? '\u25C2 ' + parentCount : '') +
+                      (parentCount > 0 && childCount > 0 ? '  ' : '') +
+                      (childCount > 0 ? '\u25B8 ' + childCount : '');
+      ctx.fillText(depText, x + w - ctx.measureText(depText).width - 10, y + h - 12);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // ── MINIMAP ───────────────────────────────────────────────────
+  _renderMinimap() {
+    const ctx = this._miniCtx;
+    const dpr = this._dpr;
+    const mw = 180, mh = 120;
+    const tc = this._themeCache;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, mw, mh);
+
+    const b = this._bounds;
+    const pad = 12;
+    const scaleX = (mw - pad * 2) / b.width;
+    const scaleY = (mh - pad * 2) / b.height;
+    const sc = Math.min(scaleX, scaleY);
+
+    const offsetX = (mw - b.width * sc) / 2 - b.minX * sc;
+    const offsetY = (mh - b.height * sc) / 2 - b.minY * sc;
+
+    // Draw nodes as dots
+    for (const node of this._nodes) {
+      const pos = this._positions.get(node.id);
+      if (!pos) continue;
+      const nx = pos.x * sc + offsetX + (NODE_W2 * sc) / 2;
+      const ny = pos.y * sc + offsetY + (NODE_H2 * sc) / 2;
+
+      let color = tc.layerColors[node.layer] || tc.text3;
+      if (node.status === 'succeeded') color = tc.statusSucceeded;
+      else if (node.status === 'failed') color = tc.statusFailed;
+      else if (node.status === 'running') color = tc.statusRunning;
+
+      ctx.beginPath();
+      ctx.arc(nx, ny, 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = node.status === 'skipped' ? hexToRGBA(color, 0.3) : color;
+      ctx.fill();
+    }
+
+    // Draw edges as thin lines
+    ctx.strokeStyle = hexToRGBA(tc.edgeColor, 1);
+    ctx.lineWidth = 0.5;
+    for (const edge of this._edges) {
+      const fp = this._positions.get(edge.from);
+      const tp = this._positions.get(edge.to);
+      if (!fp || !tp) continue;
+      const sx = (fp.x + NODE_W2) * sc + offsetX;
+      const sy = (fp.y + NODE_H2/2) * sc + offsetY;
+      const ex = tp.x * sc + offsetX;
+      const ey = (tp.y + NODE_H2/2) * sc + offsetY;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+
+    // Viewport rectangle
+    const cam = this._camera;
+    const vx = (-cam.x / cam.scale) * sc + offsetX;
+    const vy = (-cam.y / cam.scale) * sc + offsetY;
+    const vw = (this._width / cam.scale) * sc;
+    const vh = (this._height / cam.scale) * sc;
+
+    ctx.strokeStyle = getCSSVar('--minimap-viewport');
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vx, vy, vw, vh);
+    ctx.fillStyle = hexToRGBA(getCSSVar('--accent'), 0.06);
+    ctx.fillRect(vx, vy, vw, vh);
+
+    // Store minimap transform for click-to-jump
+    this._miniTransform = { sc, offsetX, offsetY };
+  }
+
+  // ── ROUNDED RECT ──────────────────────────────────────────────
+  _roundRect(ctx, x, y, w, h, r) {
+    if (typeof r === 'number') r = [r, r, r, r];
+    ctx.beginPath();
+    ctx.moveTo(x + r[0], y);
+    ctx.lineTo(x + w - r[1], y);
+    ctx.arcTo(x + w, y, x + w, y + r[1], r[1]);
+    ctx.lineTo(x + w, y + h - r[2]);
+    ctx.arcTo(x + w, y + h, x + w - r[2], y + h, r[2]);
+    ctx.lineTo(x + r[3], y + h);
+    ctx.arcTo(x, y + h, x, y + h - r[3], r[3]);
+    ctx.lineTo(x, y + r[0]);
+    ctx.arcTo(x, y, x + r[0], y, r[0]);
+    ctx.closePath();
+  }
+
+  // ── HUD UPDATES ───────────────────────────────────────────────
+  _updateHUD() {
+    // Zoom
+    const pct = Math.round(this._camera.scale * 100);
+    document.getElementById('zoomPct').textContent = pct + '%';
+
+    // LOD
+    const lod = this._getLOD();
+    const lodNames = ['LOD 0 \u2014 Dot', 'LOD 1 \u2014 Mini', 'LOD 2 \u2014 Detail'];
+    document.getElementById('hudLod').textContent = lodNames[lod];
+
+    // Status counters
+    this._updateStatusCounts();
+  }
+
+  _updateStatusCounts() {
+    const counts = { succeeded:0, running:0, failed:0, pending:0, skipped:0 };
+    for (const n of this._nodes) counts[n.status] = (counts[n.status] || 0) + 1;
+
+    const ids = { succeeded:'countSucceeded', running:'countRunning', failed:'countFailed', pending:'countPending', skipped:'countSkipped' };
+    for (const [status, elId] of Object.entries(ids)) {
+      const el = document.getElementById(elId);
+      const newVal = '' + counts[status];
+      if (el.textContent !== newVal) {
+        el.textContent = newVal;
+        el.classList.remove('pulse');
+        void el.offsetWidth;
+        el.classList.add('pulse');
+      }
+    }
+  }
+
+  // ── TOOLTIP ───────────────────────────────────────────────────
+  _showTooltip(node, sx, sy) {
+    const tip = document.getElementById('nodeTooltip');
+    const layerColor = this._themeCache.layerColors[node.layer] || '#888';
+
+    let statusLabel = node.status.charAt(0).toUpperCase() + node.status.slice(1);
+    let statusColor = this._themeCache['status' + statusLabel.replace(/^\w/, c => c.toUpperCase())] || '#888';
+    if (node.status === 'succeeded') statusColor = this._themeCache.statusSucceeded;
+    else if (node.status === 'failed') statusColor = this._themeCache.statusFailed;
+    else if (node.status === 'running') statusColor = this._themeCache.statusRunning;
+    else if (node.status === 'pending') statusColor = this._themeCache.statusPending;
+    else if (node.status === 'skipped') statusColor = this._themeCache.statusSkipped;
+
+    const parentCount = node.parents.length;
+    const childCount = this._nodes.filter(n => n.parents.includes(node.id)).length;
+    const durText = node.duration !== null
+      ? (node.duration >= 60 ? Math.floor(node.duration/60)+'m '+Math.round(node.duration%60)+'s' : node.duration.toFixed(1) + 's')
+      : '\u2014';
+
+    tip.innerHTML = `
+      <div class="tooltip-name">
+        <span style="color:${layerColor};">\u25C6</span>
+        ${node.name}
+      </div>
+      <div class="tooltip-row">
+        <span class="label">Status</span>
+        <span class="tooltip-status-dot" style="background:${statusColor};"></span>
+        <span class="value">${statusLabel}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="label">Type</span>
+        <span class="value" style="color:${node.type==='SQL'?this._themeCache.typeSql:this._themeCache.typePyspark};">${node.type}</span>
+      </div>
+      <div class="tooltip-divider"></div>
+      <div class="tooltip-row">
+        <span class="label">Layer</span>
+        <span class="value">${LAYER_NAMES[node.layer]} (${node.layer})</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="label">Duration</span>
+        <span class="value">${durText}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="label">Parents</span>
+        <span class="value">${parentCount}</span>
+      </div>
+      <div class="tooltip-row">
+        <span class="label">Children</span>
+        <span class="value">${childCount}</span>
+      </div>
+    `;
+
+    // Position
+    let tx = sx + 16, ty = sy - 10;
+    if (tx + 280 > this._width) tx = sx - 260;
+    if (ty + 220 > this._height) ty = this._height - 230;
+    if (ty < 10) ty = 10;
+
+    tip.style.left = tx + 'px';
+    tip.style.top = ty + 'px';
+    tip.classList.add('visible');
+  }
+
+  _hideTooltip() {
+    document.getElementById('nodeTooltip').classList.remove('visible');
+  }
+
+  // ── CONTEXT MENU ──────────────────────────────────────────────
+  _showContextMenu(x, y, nodeId) {
+    const menu = document.getElementById('contextMenu');
+    menu.classList.add('open');
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.dataset.nodeId = nodeId;
+
+    // Adjust if off-screen
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) menu.style.left = (x - rect.width) + 'px';
+      if (rect.bottom > window.innerHeight) menu.style.top = (y - rect.height) + 'px';
+    });
+  }
+
+  _hideContextMenu() {
+    document.getElementById('contextMenu').classList.remove('open');
+  }
+
+  // ── TOAST ─────────────────────────────────────────────────────
+  _toast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const icons = { info:'\u2139', success:'\u2713', error:'\u2717' };
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.innerHTML = `<span class="toast-icon">${icons[type] || '\u2139'}</span>${message}`;
+    container.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 250);
+    }, 3000);
+  }
+
+  // ── EXECUTION SIMULATION ──────────────────────────────────────
+  _startSimulation() {
+    if (this._simulating) return;
+    this._simulating = true;
+    this._animating = true;
+
+    // Reset all
+    for (const n of this._nodes) {
+      n.status = 'pending';
+      n.duration = null;
+      n.progress = 0;
+    }
+    for (const e of this._edges) e.status = 'default';
+    this._dirty = true;
+
+    document.getElementById('simProgress').classList.add('active');
+    document.getElementById('btnSimulate').disabled = true;
+    this._toast('Execution simulation started', 'info');
+
+    // Build execution order by layers
+    const layers = new Map();
+    for (const n of this._nodes) {
+      if (!layers.has(n.layer)) layers.set(n.layer, []);
+      layers.get(n.layer).push(n);
+    }
+    const sortedKeys = [...layers.keys()].sort((a,b) => a-b);
+
+    // Track failed node's descendants for skipping
+    const failNodeId = 'n12'; // CalcReturnRate will fail
+    const failDescendants = new Set();
+    const findDescendants = (id) => {
+      for (const n of this._nodes) {
+        if (n.parents.includes(id) && !failDescendants.has(n.id)) {
+          failDescendants.add(n.id);
+          findDescendants(n.id);
+        }
+      }
+    };
+    findDescendants(failNodeId);
+
+    let totalDelay = 0;
+    const totalLayers = sortedKeys.length;
+
+    for (let li = 0; li < sortedKeys.length; li++) {
+      const layerKey = sortedKeys[li];
+      const nodesInLayer = layers.get(layerKey);
+
+      for (const node of nodesInLayer) {
+        const nodeDelay = totalDelay;
+        const isFailNode = node.id === failNodeId;
+        const isSkipped = failDescendants.has(node.id);
+
+        // Check if all parents succeeded (or skipped check if no fail ancestor)
+        this._simTimers.push(setTimeout(() => {
+          if (isSkipped) {
+            // Check if upstream of failed node
+            node.status = 'skipped';
+            node.duration = null;
+            // Mark edges to this node
+            for (const e of this._edges) {
+              if (e.to === node.id) e.status = 'failed';
+            }
+            this._dirty = true;
+            return;
+          }
+
+          // Start running
+          node.status = 'running';
+          node.runStart = performance.now();
+          // Mark incoming edges as flowing
+          for (const e of this._edges) {
+            if (e.to === node.id) e.status = 'flowing';
+          }
+          this._dirty = true;
+          this._animating = true;
+
+          // Duration for this node
+          const runDuration = isFailNode ? 1500 : (1200 + Math.random() * 2200);
+
+          // Progress animation
+          const progressInterval = setInterval(() => {
+            const elapsed = performance.now() - node.runStart;
+            node.progress = Math.min(elapsed / runDuration, 1);
+            this._dirty = true;
+          }, 50);
+
+          // Complete
+          this._simTimers.push(setTimeout(() => {
+            clearInterval(progressInterval);
+            if (isFailNode) {
+              node.status = 'failed';
+              node.duration = runDuration / 1000;
+              node.progress = 0.65;
+              for (const e of this._edges) {
+                if (e.to === node.id) e.status = 'failed';
+                if (e.from === node.id) e.status = 'failed';
+              }
+              this._toast(`Node "${node.name}" failed after ${(runDuration/1000).toFixed(1)}s`, 'error');
+            } else {
+              node.status = 'succeeded';
+              node.duration = runDuration / 1000;
+              node.progress = 1;
+              for (const e of this._edges) {
+                if (e.to === node.id) e.status = 'succeeded';
+              }
+            }
+            this._dirty = true;
+          }, runDuration));
+
+          this._simTimers.push(progressInterval);
+        }, nodeDelay + Math.random() * 200));
+      }
+
+      // Layer duration: wait for all nodes to finish
+      const layerDuration = li === Math.floor(sortedKeys.indexOf(layers.get(2) ? 2 : 0))
+        ? 3500 : (2000 + Math.random() * 1500);
+      totalDelay += layerDuration;
+
+      // Update progress bar
+      this._simTimers.push(setTimeout(() => {
+        const progress = ((li + 1) / totalLayers) * 100;
+        document.getElementById('simProgressBar').style.width = progress + '%';
+      }, totalDelay - 500));
+    }
+
+    // Simulation complete
+    this._simTimers.push(setTimeout(() => {
+      this._simulating = false;
+      document.getElementById('btnSimulate').disabled = false;
+      document.getElementById('simProgress').classList.remove('active');
+      document.getElementById('simProgressBar').style.width = '0%';
+
+      const failed = this._nodes.filter(n => n.status === 'failed').length;
+      const skipped = this._nodes.filter(n => n.status === 'skipped').length;
+      if (failed > 0) {
+        this._toast(`Execution complete: ${failed} failed, ${skipped} skipped`, 'error');
+      } else {
+        this._toast('Execution complete: all nodes succeeded', 'success');
+      }
+    }, totalDelay + 1000));
+  }
+
+  _resetSimulation() {
+    // Clear all timers
+    for (const t of this._simTimers) {
+      clearTimeout(t);
+      clearInterval(t);
+    }
+    this._simTimers = [];
+    this._simulating = false;
+
+    for (const n of this._nodes) {
+      n.status = 'pending';
+      n.duration = null;
+      n.progress = 0;
+    }
+    for (const e of this._edges) e.status = 'default';
+
+    document.getElementById('btnSimulate').disabled = false;
+    document.getElementById('simProgress').classList.remove('active');
+    document.getElementById('simProgressBar').style.width = '0%';
+    this._dirty = true;
+    this._toast('Simulation reset', 'info');
+  }
+
+  // ── EVENTS ────────────────────────────────────────────────────
+  _bindEvents() {
+    const canvas = this._canvas;
+    const wrap = this._wrap;
+
+    // Resize
+    const ro = new ResizeObserver(() => this._resize());
+    ro.observe(wrap);
+
+    // Mouse: pan
+    canvas.addEventListener('mousedown', e => {
+      if (e.button === 2) return; // right-click handled separately
+      this._hideContextMenu();
+
+      const hit = this._hitTest(e.offsetX, e.offsetY);
+      if (hit) {
+        this._selectedId = hit.id;
+        this._dirty = true;
+
+        const pos = this._positions.get(hit.id);
+        const sp = this._worldToScreen(pos.x + NODE_W2/2, pos.y + NODE_H2/2);
+        this._showTooltip(hit, sp.x, sp.y);
+        return;
+      }
+
+      this._selectedId = null;
+      this._hideTooltip();
+      this._isPanning = true;
+      this._panStart = { x: e.clientX, y: e.clientY };
+      this._panCameraStart = { x: this._camera.x, y: this._camera.y };
+      wrap.classList.add('grabbing');
+    });
+
+    window.addEventListener('mousemove', e => {
+      if (this._isPanning) {
+        this._camera.x = this._panCameraStart.x + (e.clientX - this._panStart.x);
+        this._camera.y = this._panCameraStart.y + (e.clientY - this._panStart.y);
+        this._dirty = true;
+        return;
+      }
+
+      // Hover detection
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const hit = this._hitTest(mx, my);
+      const newHover = hit ? hit.id : null;
+
+      if (newHover !== this._hoveredId) {
+        this._hoveredId = newHover;
+        canvas.style.cursor = newHover ? 'pointer' : (this._isPanning ? 'grabbing' : 'grab');
+        this._dirty = true;
+
+        if (hit && this._selectedId !== hit.id) {
+          const pos = this._positions.get(hit.id);
+          const sp = this._worldToScreen(pos.x + NODE_W2/2, pos.y + NODE_H2/2);
+          this._showTooltip(hit, sp.x, sp.y);
+        } else if (!hit && !this._selectedId) {
+          this._hideTooltip();
+        }
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (this._isPanning) {
+        this._isPanning = false;
+        wrap.classList.remove('grabbing');
+      }
+    });
+
+    // Double-click: zoom to node
+    canvas.addEventListener('dblclick', e => {
+      const hit = this._hitTest(e.offsetX, e.offsetY);
+      if (hit) {
+        this._selectedId = hit.id;
+        this._zoomToNode(hit.id);
+      }
+    });
+
+    // Wheel: zoom toward cursor
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const delta = -e.deltaY * ZOOM_SPEED;
+      const newScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camera.scale * (1 + delta)));
+      const ratio = newScale / this._camera.scale;
+
+      // Zoom toward cursor
+      this._camera.x = e.offsetX - (e.offsetX - this._camera.x) * ratio;
+      this._camera.y = e.offsetY - (e.offsetY - this._camera.y) * ratio;
+      this._camera.scale = newScale;
+      this._dirty = true;
+    }, { passive: false });
+
+    // Right-click context menu
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const hit = this._hitTest(e.offsetX, e.offsetY);
+      if (hit) {
+        this._selectedId = hit.id;
+        this._dirty = true;
+        this._showContextMenu(e.clientX, e.clientY, hit.id);
+      } else {
+        this._hideContextMenu();
+      }
+    });
+
+    // Context menu item clicks
+    document.getElementById('contextMenu').addEventListener('click', e => {
+      const item = e.target.closest('.ctx-item');
+      if (!item) return;
+      const action = item.dataset.action;
+      const nodeId = document.getElementById('contextMenu').dataset.nodeId;
+      this._hideContextMenu();
+
+      if (action === 'zoom-to') this._zoomToNode(nodeId);
+      else if (action === 'copy-name') {
+        const node = this._nodeMap.get(nodeId);
+        if (node) navigator.clipboard.writeText(node.name).then(() => this._toast('Copied: ' + node.name, 'success'));
+      }
+      else if (action === 'select-upstream') this._selectPath(nodeId, 'upstream');
+      else if (action === 'select-downstream') this._selectPath(nodeId, 'downstream');
+      else if (action === 'select-path') {
+        this._selectPath(nodeId, 'upstream');
+        this._selectPath(nodeId, 'downstream');
+      }
+    });
+
+    // Close context menu on click outside
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.context-menu')) this._hideContextMenu();
+    });
+
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        this._selectedId = null;
+        this._hideTooltip();
+        this._hideContextMenu();
+        this._dirty = true;
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        if (e.target.tagName === 'INPUT') return;
+        this._fitToScreen(true);
+      }
+      if (e.key === 'd' || e.key === 'D') {
+        if (e.target.tagName === 'INPUT') return;
+        this._showFps = !this._showFps;
+        document.getElementById('hudFps').classList.toggle('visible', this._showFps);
+      }
+      // Arrow navigation
+      if (e.key === 'ArrowRight' && this._selectedId) {
+        this._navigateNode('downstream');
+      }
+      if (e.key === 'ArrowLeft' && this._selectedId) {
+        this._navigateNode('upstream');
+      }
+    });
+
+    // Minimap click-to-jump
+    this._miniWrap.addEventListener('click', e => {
+      if (!this._miniTransform) return;
+      const rect = this._miniWrap.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const { sc, offsetX, offsetY } = this._miniTransform;
+      const worldX = (mx - offsetX) / sc;
+      const worldY = (my - offsetY) / sc;
+      const tx = this._width / 2 - worldX * this._camera.scale;
+      const ty = this._height / 2 - worldY * this._camera.scale;
+      this._animateCamera(tx, ty, this._camera.scale);
+    });
+
+    // Buttons
+    document.getElementById('btnSimulate').addEventListener('click', () => this._startSimulation());
+    document.getElementById('btnReset').addEventListener('click', () => this._resetSimulation());
+    document.getElementById('btnFit').addEventListener('click', () => this._fitToScreen(true));
+    document.getElementById('btnCenter').addEventListener('click', () => this._fitToScreen(true));
+    document.getElementById('zoomIn').addEventListener('click', () => this._zoomStep(1.25));
+    document.getElementById('zoomOut').addEventListener('click', () => this._zoomStep(0.8));
+    document.getElementById('zoomFit').addEventListener('click', () => this._fitToScreen(true));
+    document.getElementById('btnToggleFps').addEventListener('click', () => {
+      this._showFps = !this._showFps;
+      document.getElementById('hudFps').classList.toggle('visible', this._showFps);
+    });
+
+    // Theme toggle
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      document.getElementById('themeToggle').textContent = next === 'dark' ? '\u263E' : '\u2600';
+      this._cacheTheme();
+      this._dirty = true;
+    });
+  }
+
+  _zoomStep(factor) {
+    const newScale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this._camera.scale * factor));
+    const cx = this._width / 2;
+    const cy = this._height / 2;
+    const ratio = newScale / this._camera.scale;
+    const tx = cx - (cx - this._camera.x) * ratio;
+    const ty = cy - (cy - this._camera.y) * ratio;
+    this._animateCamera(tx, ty, newScale);
+  }
+
+  _navigateNode(direction) {
+    const current = this._nodeMap.get(this._selectedId);
+    if (!current) return;
+
+    let nextId = null;
+    if (direction === 'downstream') {
+      // Find first child
+      for (const n of this._nodes) {
+        if (n.parents.includes(current.id)) { nextId = n.id; break; }
+      }
+    } else {
+      // Find first parent
+      if (current.parents.length > 0) nextId = current.parents[0];
+    }
+
+    if (nextId) {
+      this._selectedId = nextId;
+      const pos = this._positions.get(nextId);
+      const sp = this._worldToScreen(pos.x + NODE_W2/2, pos.y + NODE_H2/2);
+      this._showTooltip(this._nodeMap.get(nextId), sp.x, sp.y);
+      this._dirty = true;
+    }
+  }
+
+  _selectPath(nodeId, direction) {
+    // Highlight upstream or downstream edges
+    const visited = new Set();
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const id = queue.shift();
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const node = this._nodeMap.get(id);
+      if (!node) continue;
+
+      if (direction === 'upstream') {
+        for (const pid of node.parents) queue.push(pid);
+      } else {
+        for (const n of this._nodes) {
+          if (n.parents.includes(id)) queue.push(n.id);
+        }
+      }
+    }
+
+    // Highlight edges on path
+    for (const e of this._edges) {
+      if (visited.has(e.from) && visited.has(e.to)) {
+        if (e.status === 'default') e.status = 'flowing';
+      }
+    }
+    this._dirty = true;
+    this._toast(`Selected ${direction} path (${visited.size} nodes)`, 'info');
+  }
+}
+
+// ── INIT ────────────────────────────────────────────────────────
+const renderer = new DagCanvasRenderer();
+</script>
+</body>
+</html>

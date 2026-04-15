@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAG Studio Shell — EDOG Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Studio Shell
+   Design: Pixel (Senior Frontend Engineer)
+   Quality: Palantir Foundry x Linear x Vercel
+   All 5 zones: Toolbar, Canvas, Split Handle, Bottom Panel, Node Detail
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── DESIGN TOKENS ── */
+:root {
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --accent-hover: rgba(109,92,255,0.18);
+  --green: #18a058;
+  --green-glow: rgba(24,160,88,0.35);
+  --amber: #e5940c;
+  --amber-glow: rgba(229,148,12,0.35);
+  --red: #e5453b;
+  --red-glow: rgba(229,69,59,0.35);
+  --blue: #2d7ff9;
+  --purple: #a855f7;
+  --teal: #0d9488;
+  --gold: #f5a623;
+  --cyan: #06b6d4;
+  --type-sql: #2d7ff9;
+  --type-pyspark: #a855f7;
+  --layer-source: #cd7f32;
+  --layer-transform: #c0c0c0;
+  --layer-output: #ffd700;
+  --layer-metrics: #0d9488;
+  --r4: 4px; --r6: 6px; --r8: 8px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out: cubic-bezier(0.0,0,0.2,1);
+  --ease-in: cubic-bezier(0.4,0,1,1);
+}
+
+/* ── DARK THEME ── */
+[data-theme="dark"] {
+  --bg: #0a0b10;
+  --bg-2: #0f1117;
+  --bg-3: #161923;
+  --bg-4: #1e2230;
+  --bg-5: #252a38;
+  --text: #e8eaf0;
+  --text-2: #9aa0b2;
+  --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+  --border-accent: rgba(109,92,255,0.25);
+  --hover-bg: rgba(255,255,255,0.04);
+  --selected-bg: rgba(109,92,255,0.10);
+  --surface: #12141c;
+  --surface-glow: #181b24;
+  --canvas-bg: #0d0f16;
+  --canvas-dot: rgba(255,255,255,0.035);
+  --node-bg: #181b24;
+  --node-border: rgba(255,255,255,0.08);
+  --edge-color: rgba(255,255,255,0.08);
+  --minimap-bg: rgba(15,17,23,0.92);
+  --minimap-vp: rgba(109,92,255,0.30);
+  --gantt-grid: rgba(255,255,255,0.03);
+  --scrollbar-thumb: rgba(255,255,255,0.12);
+  --scrollbar-track: transparent;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.6);
+  --frost-bg: rgba(15,17,23,0.80);
+  --frost-border: rgba(255,255,255,0.08);
+  --toolbar-glow: linear-gradient(180deg, rgba(109,92,255,0.04) 0%, transparent 100%);
+  --accent-d: #8577ff;
+  --green-d: #34d399;
+  --red-d: #ff6b6b;
+  --amber-d: #f0b429;
+  --blue-d: #5b9bff;
+  --purple-d: #c084fc;
+}
+
+/* ── LIGHT THEME ── */
+[data-theme="light"] {
+  --bg: #f4f5f8;
+  --bg-2: #ffffff;
+  --bg-3: #f0f1f5;
+  --bg-4: #e8e9ee;
+  --bg-5: #dfe0e5;
+  --text: #1a1d27;
+  --text-2: #5c6070;
+  --text-3: #9098a8;
+  --border: rgba(0,0,0,0.07);
+  --border-bright: rgba(0,0,0,0.12);
+  --border-accent: rgba(109,92,255,0.20);
+  --hover-bg: rgba(0,0,0,0.03);
+  --selected-bg: rgba(109,92,255,0.08);
+  --surface: #ffffff;
+  --surface-glow: #f8f9fc;
+  --canvas-bg: #fafbfc;
+  --canvas-dot: rgba(0,0,0,0.05);
+  --node-bg: #ffffff;
+  --node-border: rgba(0,0,0,0.08);
+  --edge-color: rgba(0,0,0,0.12);
+  --minimap-bg: rgba(255,255,255,0.92);
+  --minimap-vp: rgba(109,92,255,0.20);
+  --gantt-grid: rgba(0,0,0,0.04);
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+  --scrollbar-track: transparent;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.10);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.12);
+  --frost-bg: rgba(255,255,255,0.82);
+  --frost-border: rgba(0,0,0,0.06);
+  --toolbar-glow: linear-gradient(180deg, rgba(109,92,255,0.03) 0%, transparent 100%);
+  --accent-d: #6d5cff;
+  --green-d: #18a058;
+  --red-d: #e5453b;
+  --amber-d: #e5940c;
+  --blue-d: #2d7ff9;
+  --purple-d: #a855f7;
+}
+
+/* ── BASE ── */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+
+/* ── SCROLLBARS ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb, var(--scrollbar-thumb) 100%, var(--accent) 30%)}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+a{color:var(--accent-d);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS (12+)
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.3)}}
+@keyframes pulse-glow{0%,100%{box-shadow:0 0 4px var(--accent-glow)}50%{box-shadow:0 0 12px var(--accent-glow),0 0 24px rgba(109,92,255,0.10)}}
+@keyframes running-border{0%{border-color:color-mix(in srgb, var(--accent-d) 60%, transparent)}50%{border-color:var(--accent-d)}100%{border-color:color-mix(in srgb, var(--accent-d) 60%, transparent)}}
+@keyframes dash-flow{to{stroke-dashoffset:-20}}
+@keyframes slide-in-right{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slide-in-up{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes spring-in{from{opacity:0;transform:scale(0.92) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes ctx-appear{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+@keyframes toast-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toast-out{to{opacity:0;transform:translateX(20px) scale(0.95)}}
+@keyframes cancel-slide{from{width:0;opacity:0;padding:0;margin:0}to{width:auto;opacity:1;padding:0 14px;margin:0}}
+@keyframes flash-red{0%,100%{background:transparent}50%{background:rgba(229,69,59,0.12)}}
+@keyframes flash-green{0%,100%{background:transparent}50%{background:rgba(24,160,88,0.12)}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes node-succeed{0%{box-shadow:0 0 0 0 var(--green-glow)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:none}}
+@keyframes node-fail{0%{box-shadow:0 0 0 0 var(--red-glow)}50%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 6px var(--red-glow)}}
+@keyframes tab-underline-move{from{opacity:0.5}to{opacity:1}}
+@keyframes timer-tick{from{opacity:1}to{opacity:0.7}}
+@keyframes minimap-fade{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
+@keyframes hud-appear{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes gantt-bar-grow{from{width:0}to{width:var(--bar-w)}}
+@keyframes now-marker-glow{0%,100%{opacity:0.6}50%{opacity:1}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   APP SHELL
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ZONE 1 — EXECUTION CONTROLS TOOLBAR
+   ═══════════════════════════════════════════════════════════════════ */
+.toolbar{
+  height:44px;flex-shrink:0;display:flex;align-items:center;padding:0 16px;gap:8px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  position:relative;z-index:20;
+}
+.toolbar::after{
+  content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent-glow),transparent);
+  opacity:0.5;pointer-events:none;
+}
+.toolbar-left{display:flex;align-items:center;gap:8px}
+.toolbar-center{display:flex;align-items:center;gap:8px;flex:1;justify-content:center}
+.toolbar-right{display:flex;align-items:center;gap:10px;margin-left:auto}
+
+/* Run Button (split) */
+.run-btn-group{display:flex;border-radius:var(--r6);overflow:hidden;box-shadow:var(--shadow-sm)}
+.run-btn{
+  height:30px;padding:0 16px;display:flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;letter-spacing:0.3px;
+  background:linear-gradient(135deg, var(--accent-d) 0%, color-mix(in srgb, var(--accent-d) 85%, #fff) 100%);
+  color:#fff;cursor:pointer;transition:all var(--transition);position:relative;overflow:hidden;
+}
+.run-btn::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+  pointer-events:none;
+}
+.run-btn:hover{filter:brightness(1.12);box-shadow:0 0 0 3px var(--accent-glow)}
+.run-btn:active{transform:scale(0.97);filter:brightness(0.95)}
+.run-btn:disabled{opacity:0.4;cursor:not-allowed;filter:none;box-shadow:none;transform:none}
+.run-btn .icon{font-size:11px}
+
+.mlv-dropdown-trigger{
+  height:30px;width:28px;display:flex;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--accent-d) 85%, #000 15%);
+  color:rgba(255,255,255,0.8);cursor:pointer;transition:all var(--transition);
+  border-left:1px solid rgba(255,255,255,0.15);font-size:10px;
+}
+.mlv-dropdown-trigger:hover{background:color-mix(in srgb, var(--accent-d) 75%, #000 25%);color:#fff}
+
+/* Cancel Button */
+.cancel-btn{
+  height:30px;padding:0 14px;border-radius:var(--r6);
+  background:color-mix(in srgb, var(--red-d) 12%, transparent);
+  color:var(--red-d);border:1px solid color-mix(in srgb, var(--red-d) 25%, transparent);
+  font-size:12px;font-weight:500;display:none;align-items:center;gap:5px;
+  cursor:pointer;transition:all var(--transition);
+  animation:cancel-slide 200ms var(--spring) forwards;
+}
+.cancel-btn:hover{background:color-mix(in srgb, var(--red-d) 20%, transparent);border-color:color-mix(in srgb, var(--red-d) 40%, transparent)}
+.cancel-btn:active{transform:scale(0.97)}
+.cancel-btn.visible{display:flex}
+
+/* Ghost Buttons */
+.ghost-btn{
+  height:30px;padding:0 12px;border-radius:var(--r6);
+  background:transparent;border:1px solid var(--border);
+  font-size:12px;font-weight:500;color:var(--text-2);
+  display:flex;align-items:center;gap:5px;
+  cursor:pointer;transition:all var(--transition);white-space:nowrap;
+}
+.ghost-btn:hover{background:var(--hover-bg);border-color:var(--border-bright);color:var(--text)}
+.ghost-btn:active{transform:scale(0.97)}
+.ghost-btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--accent-glow)}
+.ghost-btn.warning{color:var(--amber-d);border-color:color-mix(in srgb, var(--amber-d) 25%, transparent)}
+.ghost-btn.warning:hover{background:color-mix(in srgb, var(--amber-d) 8%, transparent)}
+.ghost-btn .icon{font-size:13px;line-height:1}
+
+.toolbar-sep{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+
+/* Status Indicator */
+.status-indicator{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);padding:0 4px}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:all var(--transition)}
+.status-dot.idle{background:var(--text-3)}
+.status-dot.running{background:var(--accent-d);animation:pulse-dot 1.5s ease-in-out infinite;box-shadow:0 0 6px var(--accent-glow)}
+.status-dot.succeeded{background:var(--green-d);box-shadow:0 0 4px var(--green-glow)}
+.status-dot.failed{background:var(--red-d);box-shadow:0 0 4px var(--red-glow)}
+.status-dot.cancelled{background:var(--amber-d);box-shadow:0 0 4px var(--amber-glow)}
+.status-text{font-weight:500}
+.status-timer{font-family:var(--mono);font-size:11px;color:var(--text-3);letter-spacing:0.5px;min-width:48px}
+
+/* MLV Dropdown */
+.mlv-dropdown{
+  position:absolute;top:calc(100% + 4px);left:0;min-width:240px;
+  background:var(--bg-3);border:1px solid var(--border-bright);border-radius:var(--r10);
+  box-shadow:var(--shadow-lg);padding:4px 0;z-index:30;
+  animation:ctx-appear 120ms var(--spring);display:none;
+}
+.mlv-dropdown.open{display:block}
+.mlv-dropdown-item{
+  display:flex;align-items:center;gap:8px;padding:8px 14px;
+  font-size:12px;cursor:pointer;transition:background 80ms ease-out;
+}
+.mlv-dropdown-item:hover{background:var(--hover-bg)}
+.mlv-dropdown-item.active{color:var(--accent-d);font-weight:500}
+.mlv-dropdown-item .mlv-check{width:14px;color:var(--accent-d);font-size:13px}
+.mlv-dropdown-sep{height:1px;background:var(--border);margin:4px 0}
+
+/* Theme Toggle */
+.theme-toggle{
+  width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:14px;cursor:pointer;color:var(--text-3);transition:all var(--transition);
+}
+.theme-toggle:hover{background:var(--hover-bg);color:var(--text);transform:rotate(15deg)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   WORKSPACE (Canvas + Split + Bottom)
+   ═══════════════════════════════════════════════════════════════════ */
+.workspace{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.top-row{display:flex;flex:1;min-height:0;position:relative}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ZONE 2 — DAG CANVAS
+   ═══════════════════════════════════════════════════════════════════ */
+.canvas-area{
+  flex:1;position:relative;background:var(--canvas-bg);overflow:hidden;min-width:0;
+  background-image:
+    radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px);
+  background-size:24px 24px;
+}
+.canvas-area::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 30% 40%, color-mix(in srgb, var(--accent-d) 3%, transparent) 0%, transparent 70%);
+  z-index:0;
+}
+
+/* SVG DAG */
+.dag-svg{width:100%;height:100%;position:relative;z-index:1}
+.dag-svg .edge{fill:none;stroke:var(--edge-color);stroke-width:1.5;transition:stroke var(--transition)}
+.dag-svg .edge.active{stroke:var(--accent-d);stroke-width:2;stroke-dasharray:6 4;animation:dash-flow 0.8s linear infinite}
+.dag-svg .edge.error{stroke:var(--red-d);stroke-width:1.5;stroke-dasharray:4 3;opacity:0.7}
+.dag-svg .edge.highlight{stroke:var(--accent-d);stroke-width:2.5;opacity:0.9}
+.dag-svg .edge.skipped{stroke:var(--text-3);stroke-width:1;stroke-dasharray:2 4;opacity:0.3}
+
+/* DAG Nodes */
+.dag-node{
+  position:absolute;width:148px;height:54px;
+  background:var(--node-bg);border:1px solid var(--node-border);
+  border-radius:var(--r8);cursor:pointer;
+  display:flex;align-items:stretch;overflow:hidden;
+  transition:all var(--transition);z-index:2;
+  box-shadow:var(--shadow-sm);
+}
+.dag-node:hover{
+  border-color:var(--border-bright);
+  box-shadow:var(--shadow-md);
+  transform:translateY(-1px);
+}
+.dag-node:focus-visible{outline:none;box-shadow:0 0 0 2px var(--accent-glow)}
+.dag-node.selected{
+  border-color:var(--accent-d);
+  box-shadow:0 0 0 2px var(--accent-glow), var(--shadow-md);
+}
+.dag-node.running{animation:running-border 2s ease infinite;border-color:var(--accent-d)}
+.dag-node.running .node-status-icon{animation:pulse-dot 1.5s ease infinite}
+.dag-node.succeeded{border-color:color-mix(in srgb, var(--green-d) 40%, transparent)}
+.dag-node.failed{border-color:color-mix(in srgb, var(--red-d) 40%, transparent);box-shadow:0 0 8px var(--red-glow)}
+.dag-node.skipped{opacity:0.4;border-style:dashed}
+.dag-node.cancelled{border-color:color-mix(in srgb, var(--amber-d) 30%, transparent)}
+
+.node-layer-bar{width:4px;flex-shrink:0;border-radius:var(--r8) 0 0 var(--r8)}
+.node-layer-bar.source{background:var(--layer-source)}
+.node-layer-bar.transform{background:var(--layer-transform)}
+.node-layer-bar.output{background:var(--layer-output)}
+.node-layer-bar.metrics{background:var(--layer-metrics)}
+
+.node-body{flex:1;padding:6px 10px;display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
+.node-header{display:flex;align-items:center;gap:5px}
+.node-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.node-status-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:all var(--transition)}
+.node-status-icon.pending{background:var(--text-3)}
+.node-status-icon.running{background:var(--accent-d);box-shadow:0 0 6px var(--accent-glow)}
+.node-status-icon.succeeded{background:var(--green-d);box-shadow:0 0 4px rgba(24,160,88,0.3)}
+.node-status-icon.failed{background:var(--red-d);box-shadow:0 0 4px rgba(229,69,59,0.3)}
+.node-status-icon.skipped{background:var(--text-3);opacity:0.5}
+.node-status-icon.cancelled{background:var(--amber-d)}
+
+.node-meta{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text-3)}
+.node-type-badge{
+  font-size:9px;font-weight:600;letter-spacing:0.5px;
+  padding:1px 5px;border-radius:var(--r100);text-transform:uppercase;
+}
+.node-type-badge.sql{background:color-mix(in srgb, var(--type-sql) 15%, transparent);color:var(--type-sql)}
+.node-type-badge.pyspark{background:color-mix(in srgb, var(--type-pyspark) 15%, transparent);color:var(--type-pyspark)}
+.node-duration{font-family:var(--mono);font-size:10px}
+
+/* Minimap */
+.minimap{
+  position:absolute;bottom:16px;left:16px;width:180px;height:100px;
+  background:var(--minimap-bg);border:1px solid var(--frost-border);
+  border-radius:var(--r8);overflow:hidden;z-index:5;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:var(--shadow-md);cursor:pointer;
+  animation:minimap-fade 300ms var(--ease-out);
+  transition:opacity var(--transition);
+}
+.minimap:hover{border-color:var(--border-bright)}
+.minimap canvas{width:100%;height:100%}
+.minimap-viewport{
+  position:absolute;border:1.5px solid var(--accent-d);
+  background:var(--minimap-vp);border-radius:2px;
+  pointer-events:none;transition:all 50ms linear;
+}
+
+/* Zoom HUD */
+.zoom-hud{
+  position:absolute;bottom:16px;right:16px;
+  display:flex;flex-direction:column;gap:4px;z-index:5;
+  animation:hud-appear 300ms var(--ease-out);
+}
+.zoom-btn{
+  width:32px;height:32px;border-radius:var(--r6);
+  background:var(--frost-bg);border:1px solid var(--frost-border);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  color:var(--text-2);display:flex;align-items:center;justify-content:center;
+  font-size:16px;font-weight:600;cursor:pointer;
+  transition:all var(--transition);box-shadow:var(--shadow-sm);
+}
+.zoom-btn:hover{background:var(--hover-bg);color:var(--text);border-color:var(--border-bright);transform:scale(1.05)}
+.zoom-btn:active{transform:scale(0.95)}
+.zoom-btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--accent-glow)}
+.zoom-level{
+  text-align:center;font-family:var(--mono);font-size:10px;color:var(--text-3);
+  padding:2px 0;user-select:none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ZONE 3 — SPLIT HANDLE
+   ═══════════════════════════════════════════════════════════════════ */
+.split-handle{
+  height:6px;flex-shrink:0;cursor:ns-resize;position:relative;z-index:10;
+  background:var(--border);transition:background var(--transition);
+}
+.split-handle::before{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:32px;height:3px;border-radius:2px;
+  background:var(--text-3);opacity:0.3;transition:all var(--transition);
+}
+.split-handle:hover{background:var(--accent-d)}
+.split-handle:hover::before{opacity:0.8;background:var(--text);width:48px}
+.split-handle:active{background:var(--accent-d)}
+.split-handle:active::before{background:#fff}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ZONE 4 — BOTTOM PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.bottom-panel{
+  height:30%;min-height:120px;max-height:60%;
+  background:var(--surface);border-top:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+}
+
+/* Tab Bar */
+.panel-tabs{
+  display:flex;align-items:center;gap:0;padding:0 16px;height:36px;
+  background:var(--bg-2);border-bottom:1px solid var(--border);
+  flex-shrink:0;position:relative;
+}
+.panel-tab{
+  padding:0 14px;height:36px;display:flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:500;color:var(--text-3);cursor:pointer;
+  position:relative;transition:color var(--transition);user-select:none;white-space:nowrap;
+}
+.panel-tab:hover{color:var(--text-2)}
+.panel-tab.active{color:var(--text);font-weight:600}
+.panel-tab .tab-count{
+  font-family:var(--mono);font-size:10px;padding:1px 5px;
+  border-radius:var(--r100);background:var(--bg-4);color:var(--text-3);
+}
+.panel-tab-underline{
+  position:absolute;bottom:0;height:2px;background:var(--accent-d);
+  border-radius:2px 2px 0 0;transition:left 220ms var(--ease-out), width 220ms var(--ease-out);
+}
+.panel-tabs-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+
+/* Panel Content */
+.panel-content{flex:1;overflow:hidden;position:relative}
+.panel-view{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none}
+.panel-view.active{display:block}
+
+/* ── Gantt Tab ── */
+.gantt-container{padding:12px 16px;height:100%;display:flex;flex-direction:column}
+.gantt-header{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-shrink:0}
+.gantt-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)}
+.gantt-time-axis{font-family:var(--mono);font-size:10px;color:var(--text-3)}
+.gantt-body{flex:1;overflow-y:auto;position:relative}
+
+.gantt-row{
+  display:flex;align-items:center;height:28px;gap:0;
+  border-bottom:1px solid var(--gantt-grid);transition:background 80ms ease;
+}
+.gantt-row:hover{background:var(--hover-bg)}
+.gantt-label{
+  width:140px;flex-shrink:0;font-size:11px;padding:0 8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2);
+}
+.gantt-track{flex:1;position:relative;height:20px}
+.gantt-bar{
+  position:absolute;height:16px;top:2px;border-radius:3px;
+  transition:all var(--transition);cursor:pointer;min-width:4px;
+}
+.gantt-bar:hover{filter:brightness(1.15);transform:scaleY(1.15)}
+.gantt-bar.succeeded{background:var(--green-d);opacity:0.8}
+.gantt-bar.running{background:var(--accent-d);opacity:0.8;animation:shimmer 1.5s infinite linear;background-size:200% 100%;background-image:linear-gradient(90deg,var(--accent-d) 0%,color-mix(in srgb,var(--accent-d) 60%,#fff) 50%,var(--accent-d) 100%)}
+.gantt-bar.failed{background:var(--red-d);opacity:0.8;background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.15) 3px,rgba(255,255,255,0.15) 6px)}
+.gantt-bar.cancelled{background:var(--amber-d);opacity:0.6;background-image:repeating-linear-gradient(90deg,transparent,transparent 4px,rgba(255,255,255,0.1) 4px,rgba(255,255,255,0.1) 8px)}
+.gantt-bar.skipped{background:var(--text-3);opacity:0.2;border:1px dashed var(--text-3)}
+
+.gantt-now-marker{
+  position:absolute;top:0;bottom:0;width:2px;background:var(--accent-d);z-index:3;
+  box-shadow:0 0 6px var(--accent-glow);animation:now-marker-glow 2s ease infinite;
+}
+.gantt-now-marker::before{
+  content:'NOW';position:absolute;top:-14px;left:50%;transform:translateX(-50%);
+  font-size:9px;font-weight:600;color:var(--accent-d);letter-spacing:0.5px;
+  font-family:var(--mono);white-space:nowrap;
+}
+
+/* ── History Tab ── */
+.history-table{width:100%;border-collapse:collapse}
+.history-table thead{position:sticky;top:0;z-index:2;background:var(--bg-2)}
+.history-table th{
+  padding:8px 12px;font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.5px;color:var(--text-3);text-align:left;
+  border-bottom:1px solid var(--border);cursor:pointer;
+  transition:color var(--transition);white-space:nowrap;user-select:none;
+}
+.history-table th:hover{color:var(--text-2)}
+.history-table th .sort-arrow{font-size:9px;margin-left:3px;opacity:0.5}
+.history-table td{
+  padding:6px 12px;font-size:12px;border-bottom:1px solid var(--gantt-grid);
+  transition:background 80ms ease;white-space:nowrap;
+}
+.history-table tbody tr{cursor:pointer;transition:background 80ms ease}
+.history-table tbody tr:hover{background:var(--hover-bg)}
+.history-table tbody tr.selected{background:var(--selected-bg)}
+
+.status-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:2px 10px;border-radius:var(--r100);
+  font-size:11px;font-weight:500;
+}
+.status-pill.succeeded{background:color-mix(in srgb, var(--green-d) 12%, transparent);color:var(--green-d)}
+.status-pill.failed{background:color-mix(in srgb, var(--red-d) 12%, transparent);color:var(--red-d)}
+.status-pill.cancelled{background:color-mix(in srgb, var(--amber-d) 12%, transparent);color:var(--amber-d)}
+.status-pill.running{background:color-mix(in srgb, var(--accent-d) 12%, transparent);color:var(--accent-d)}
+.status-pill .pill-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.status-pill.running .pill-dot{animation:pulse-dot 1.5s ease infinite}
+
+.iter-id{font-family:var(--mono);font-size:11px;color:var(--text-2);cursor:pointer;padding:2px 6px;border-radius:var(--r4);transition:all var(--transition)}
+.iter-id:hover{background:var(--hover-bg);color:var(--accent-d)}
+
+.node-count{font-family:var(--mono);font-size:11px}
+.node-count .failed-count{color:var(--red-d);margin-left:4px}
+.error-code{font-family:var(--mono);font-size:10px;color:var(--red-d);padding:2px 6px;background:color-mix(in srgb, var(--red-d) 8%, transparent);border-radius:var(--r4)}
+
+/* ── Compare Tab ── */
+.compare-placeholder{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;gap:12px;color:var(--text-3);
+}
+.compare-placeholder .compare-icon{font-size:36px;opacity:0.3}
+.compare-placeholder .compare-text{font-size:13px;font-weight:500;color:var(--text-2)}
+.compare-placeholder .compare-hint{font-size:11px;max-width:280px;text-align:center;line-height:1.5}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ZONE 5 — NODE DETAIL PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.detail-panel{
+  width:0;overflow:hidden;background:var(--surface);
+  border-left:1px solid var(--border);
+  transition:width 280ms var(--spring);flex-shrink:0;
+  display:flex;flex-direction:column;position:relative;z-index:8;
+}
+.detail-panel.open{width:340px}
+.detail-panel::before{
+  content:'';position:absolute;top:0;left:-8px;bottom:0;width:8px;
+  background:linear-gradient(90deg, transparent, color-mix(in srgb, var(--bg) 50%, transparent));
+  pointer-events:none;opacity:0;transition:opacity 200ms ease;
+}
+.detail-panel.open::before{opacity:1}
+
+.detail-header{
+  padding:16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--surface);
+}
+.detail-title-row{display:flex;align-items:center;gap:8px}
+.detail-name{font-size:15px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-type-badge{
+  font-size:10px;font-weight:600;padding:2px 8px;border-radius:var(--r100);
+  letter-spacing:0.5px;flex-shrink:0;
+}
+.detail-type-badge.sql{background:color-mix(in srgb, var(--type-sql) 14%, transparent);color:var(--type-sql)}
+.detail-type-badge.pyspark{background:color-mix(in srgb, var(--type-pyspark) 14%, transparent);color:var(--type-pyspark)}
+.detail-close{
+  width:28px;height:28px;border-radius:var(--r4);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--text-3);cursor:pointer;
+  transition:all var(--transition);flex-shrink:0;
+}
+.detail-close:hover{background:var(--hover-bg);color:var(--text)}
+.detail-close:active{transform:scale(0.9)}
+.detail-status-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+
+/* Detail Tabs */
+.detail-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;position:relative;padding:0 8px}
+.detail-tab{
+  padding:8px 12px;font-size:11px;font-weight:500;color:var(--text-3);
+  cursor:pointer;transition:color var(--transition);position:relative;
+}
+.detail-tab:hover{color:var(--text-2)}
+.detail-tab.active{color:var(--accent-d)}
+.detail-tab-line{
+  position:absolute;bottom:0;height:2px;background:var(--accent-d);
+  border-radius:2px 2px 0 0;transition:left 200ms var(--ease-out), width 200ms var(--ease-out);
+}
+
+/* Detail Body */
+.detail-body{flex:1;overflow-y:auto;padding:16px}
+.detail-section{margin-bottom:16px}
+.detail-section-title{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.8px;color:var(--text-3);margin-bottom:8px;
+}
+.detail-row{
+  display:flex;justify-content:space-between;padding:5px 0;font-size:12px;
+  border-bottom:1px solid var(--gantt-grid);
+}
+.detail-row:last-child{border-bottom:none}
+.detail-label{color:var(--text-2)}
+.detail-value{color:var(--text);font-weight:500;text-align:right;font-family:var(--mono);font-size:11px}
+.detail-value.green{color:var(--green-d)}
+.detail-value.red{color:var(--red-d)}
+
+/* Error Banner */
+.error-banner{
+  background:color-mix(in srgb, var(--red-d) 8%, transparent);
+  border:1px solid color-mix(in srgb, var(--red-d) 20%, transparent);
+  border-radius:var(--r6);padding:10px 12px;margin:0 0 12px;
+}
+.error-banner-title{font-size:11px;font-weight:600;color:var(--red-d);display:flex;align-items:center;gap:6px}
+.error-banner-msg{font-size:11px;color:var(--text-2);margin-top:4px;font-family:var(--mono);line-height:1.5}
+
+/* Navigation Links */
+.nav-links{display:flex;flex-direction:column;gap:4px}
+.nav-link{
+  display:flex;align-items:center;gap:6px;padding:4px 8px;
+  border-radius:var(--r4);font-size:11px;color:var(--text-2);
+  cursor:pointer;transition:all var(--transition);
+}
+.nav-link:hover{background:var(--hover-bg);color:var(--accent-d)}
+.nav-link .nav-icon{font-size:10px;color:var(--text-3)}
+.nav-link .nav-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* Code Block */
+.code-block{
+  font-family:var(--mono);font-size:11px;line-height:1.6;
+  padding:10px 12px;background:var(--bg-3);border-radius:var(--r6);
+  white-space:pre-wrap;word-break:break-word;
+  border:1px solid var(--border);max-height:200px;overflow-y:auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONTEXT MENU
+   ═══════════════════════════════════════════════════════════════════ */
+.context-menu{
+  position:fixed;min-width:220px;background:var(--bg-3);
+  border:1px solid var(--border-bright);border-radius:var(--r10);
+  box-shadow:var(--shadow-lg);padding:4px 0;z-index:50;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  animation:ctx-appear 100ms var(--spring);display:none;font-size:12px;
+}
+.context-menu.open{display:block}
+.ctx-item{
+  display:flex;align-items:center;gap:8px;padding:7px 14px;
+  cursor:pointer;transition:background 80ms ease;
+}
+.ctx-item:hover{background:var(--hover-bg)}
+.ctx-item .ctx-icon{width:16px;text-align:center;font-size:13px;color:var(--text-3)}
+.ctx-item .ctx-label{flex:1}
+.ctx-item .ctx-shortcut{font-size:10px;color:var(--text-3);font-family:var(--mono)}
+.ctx-sep{height:1px;background:var(--border);margin:4px 0}
+.ctx-item.danger{color:var(--red-d)}
+.ctx-item.danger .ctx-icon{color:var(--red-d)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container{
+  position:fixed;bottom:24px;right:24px;z-index:60;
+  display:flex;flex-direction:column-reverse;gap:8px;
+}
+.toast{
+  padding:10px 16px;border-radius:var(--r8);
+  background:var(--bg-3);border:1px solid var(--border-bright);
+  box-shadow:var(--shadow-md);font-size:12px;color:var(--text);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  animation:toast-in 200ms var(--ease-out);max-width:320px;
+  display:flex;align-items:center;gap:8px;
+}
+.toast .toast-icon{font-size:14px}
+.toast.success .toast-icon{color:var(--green-d)}
+.toast.error .toast-icon{color:var(--red-d)}
+.toast.out{animation:toast-out 180ms var(--ease-in) forwards}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATE CONTROLLER (Demo Controls)
+   ═══════════════════════════════════════════════════════════════════ */
+.sc-toggle{
+  position:fixed;bottom:16px;left:16px;width:36px;height:36px;
+  border-radius:50%;background:var(--bg-3);border:1px solid var(--border-bright);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  z-index:40;box-shadow:var(--shadow-md);font-size:15px;
+  transition:all var(--transition);color:var(--text-2);
+}
+.sc-toggle:hover{background:var(--bg-4);transform:scale(1.1);color:var(--text)}
+.state-controller{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--bg-2);border-top:2px solid var(--accent-d);
+  z-index:39;transform:translateY(100%);transition:transform 250ms var(--ease-out);
+  max-height:200px;overflow-y:auto;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.state-controller.open{transform:translateY(0)}
+.sc-header{
+  display:flex;align-items:center;padding:8px 16px;
+  border-bottom:1px solid var(--border);position:sticky;top:0;
+  background:var(--bg-2);z-index:1;
+}
+.sc-header h3{
+  font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:0.5px;color:var(--accent-d);flex:1;
+}
+.sc-header .sc-close{font-size:16px;color:var(--text-3);cursor:pointer;padding:4px}
+.sc-header .sc-close:hover{color:var(--text)}
+.sc-body{display:flex;gap:24px;padding:12px 16px;flex-wrap:wrap}
+.sc-group{display:flex;flex-direction:column;gap:6px}
+.sc-group label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)}
+.sc-buttons{display:flex;gap:4px;flex-wrap:wrap}
+.sc-btn{
+  padding:4px 12px;border-radius:var(--r4);border:1px solid var(--border-bright);
+  font-size:11px;cursor:pointer;transition:all var(--transition);white-space:nowrap;
+  color:var(--text-2);
+}
+.sc-btn:hover{background:var(--hover-bg);border-color:var(--border-bright);color:var(--text)}
+.sc-btn.active{background:var(--accent-d);border-color:var(--accent-d);color:#fff}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYBOARD HINTS
+   ═══════════════════════════════════════════════════════════════════ */
+kbd{
+  display:inline-block;padding:1px 5px;border-radius:3px;
+  background:var(--bg-4);border:1px solid var(--border-bright);
+  font-family:var(--mono);font-size:10px;color:var(--text-3);
+  line-height:1.4;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════════════════ */
+.hidden{display:none!important}
+.mono{font-family:var(--mono)}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fade-in{animation:spring-in 200ms var(--spring)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ADDITIONAL DEPTH — MICRO-INTERACTIONS & POLISH
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Node selection ring pulse */
+.dag-node.selected::after{
+  content:'';position:absolute;inset:-3px;border-radius:calc(var(--r8) + 3px);
+  border:2px solid var(--accent-d);opacity:0;
+  animation:selection-ring 1.5s ease-in-out infinite;pointer-events:none;
+}
+@keyframes selection-ring{0%,100%{opacity:0;transform:scale(1)}50%{opacity:0.3;transform:scale(1.02)}}
+
+/* Failed node persistent glow */
+.dag-node.failed::before{
+  content:'';position:absolute;inset:-6px;border-radius:calc(var(--r8) + 6px);
+  background:radial-gradient(ellipse, color-mix(in srgb, var(--red-d) 15%, transparent) 0%, transparent 70%);
+  pointer-events:none;z-index:-1;
+}
+
+/* Running node gradient sweep */
+.dag-node.running::after{
+  content:'';position:absolute;inset:0;border-radius:var(--r8);
+  background:linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent-d) 6%, transparent) 50%, transparent 100%);
+  background-size:200% 100%;animation:shimmer 2s infinite linear;pointer-events:none;
+}
+
+/* Succeeded node brief flash */
+.dag-node.just-succeeded{animation:node-succeed 600ms ease forwards}
+.dag-node.just-failed{animation:node-fail 600ms ease forwards}
+
+/* Toolbar ambient glow during execution */
+.toolbar.executing{
+  background:color-mix(in srgb, var(--surface) 96%, var(--accent-d));
+  border-bottom-color:color-mix(in srgb, var(--border) 70%, var(--accent-d));
+}
+.toolbar.executing::after{opacity:1}
+
+/* Button icon hover rotation */
+.ghost-btn .icon{transition:transform var(--transition)}
+.ghost-btn:hover .icon{transform:rotate(15deg)}
+#refreshBtn:hover .icon{transform:rotate(180deg)}
+
+/* Run button inner shimmer on hover */
+.run-btn:hover::before{
+  background:linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
+}
+
+/* Split handle double-click indicator */
+.split-handle::after{
+  content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:4px;height:4px;border-radius:50%;background:var(--text-3);
+  opacity:0;transition:opacity var(--transition);
+}
+.split-handle:hover::after{opacity:0.5}
+
+/* Gantt bar tooltip-like label on hover */
+.gantt-bar::after{
+  content:attr(title);position:absolute;top:-22px;left:0;
+  padding:2px 6px;border-radius:var(--r4);background:var(--bg-4);
+  border:1px solid var(--border);font-size:10px;font-family:var(--mono);
+  color:var(--text);white-space:nowrap;pointer-events:none;
+  opacity:0;transform:translateY(4px);
+  transition:all 120ms var(--ease-out);z-index:5;
+}
+.gantt-bar:hover::after{opacity:1;transform:translateY(0)}
+
+/* History row flash on select */
+.history-table tbody tr.selected{animation:flash-green 300ms ease}
+
+/* Detail panel frosted edge */
+.detail-panel.open .detail-header{
+  background:color-mix(in srgb, var(--surface) 97%, var(--accent-d));
+}
+
+/* Minimap hover brightening */
+.minimap:hover canvas{filter:brightness(1.15)}
+
+/* Zoom HUD hover group effect */
+.zoom-hud:hover .zoom-btn{border-color:color-mix(in srgb, var(--border-bright) 50%, var(--accent-d))}
+
+/* Focus visible ring system */
+button:focus-visible,
+.dag-node:focus-visible,
+.panel-tab:focus-visible,
+.detail-tab:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 2px var(--accent-glow);
+}
+
+/* Status dot glow for each state */
+.status-dot.succeeded{box-shadow:0 0 6px var(--green-glow),0 0 12px color-mix(in srgb, var(--green-glow) 30%, transparent)}
+.status-dot.failed{box-shadow:0 0 6px var(--red-glow),0 0 12px color-mix(in srgb, var(--red-glow) 30%, transparent)}
+
+/* Bottom panel subtle top glow */
+.bottom-panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;z-index:2;
+  background:linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-d) 15%, transparent), transparent);
+  pointer-events:none;
+}
+.bottom-panel{position:relative}
+
+/* Panel tab hover pill effect */
+.panel-tab::before{
+  content:'';position:absolute;inset:4px 2px;border-radius:var(--r4);
+  background:transparent;transition:background var(--transition);z-index:-1;
+}
+.panel-tab:hover::before{background:var(--hover-bg)}
+
+/* Context menu item icon colorization */
+.ctx-item:hover .ctx-icon{color:var(--accent-d)}
+.ctx-item.danger:hover .ctx-icon{color:var(--red-d)}
+
+/* Toast success left accent */
+.toast.success{border-left:3px solid var(--green-d)}
+.toast.error{border-left:3px solid var(--red-d)}
+.toast.info{border-left:3px solid var(--blue-d)}
+
+/* State controller button pressed state */
+.sc-btn:active{transform:scale(0.95)}
+
+/* Empty compare icon float animation */
+.compare-icon{animation:compare-float 3s ease-in-out infinite}
+@keyframes compare-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+/* Canvas area subtle vignette */
+.canvas-area::after{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at center, transparent 50%, color-mix(in srgb, var(--bg) 30%, transparent) 100%);
+}
+
+/* Error banner pulse on appear */
+.error-banner{animation:spring-in 300ms var(--spring)}
+
+/* Nav links hover indent */
+.nav-link:hover{padding-left:12px}
+
+/* Code block line numbers effect */
+.code-block{counter-reset:line}
+.code-block .line::before{
+  counter-increment:line;content:counter(line);
+  display:inline-block;width:24px;margin-right:12px;
+  text-align:right;color:var(--text-3);font-size:10px;user-select:none;
+}
+
+/* Detail section animated reveal */
+.detail-section{animation:spring-in 200ms var(--spring) both}
+.detail-section:nth-child(2){animation-delay:50ms}
+.detail-section:nth-child(3){animation-delay:100ms}
+.detail-section:nth-child(4){animation-delay:150ms}
+
+/* Metrics bars for detail panel */
+.metric-bar-container{margin-top:4px}
+.metric-bar-row{display:flex;align-items:center;gap:8px;padding:3px 0}
+.metric-bar-label{font-size:11px;color:var(--text-2);width:80px;flex-shrink:0}
+.metric-bar-track{flex:1;height:6px;background:var(--bg-4);border-radius:3px;overflow:hidden}
+.metric-bar-fill{height:100%;border-radius:3px;transition:width 600ms var(--ease-out)}
+.metric-bar-fill.cpu{background:linear-gradient(90deg, var(--blue-d), var(--purple-d))}
+.metric-bar-fill.memory{background:linear-gradient(90deg, var(--teal), var(--green-d))}
+.metric-bar-fill.io{background:linear-gradient(90deg, var(--amber-d), var(--gold))}
+.metric-bar-value{font-family:var(--mono);font-size:10px;color:var(--text-3);width:40px;text-align:right}
+
+/* Sparkline container */
+.sparkline-container{display:flex;align-items:end;gap:1px;height:24px;padding:4px 0}
+.sparkline-bar{flex:1;background:var(--accent-dim);border-radius:1px 1px 0 0;transition:height 300ms var(--ease-out);min-width:3px}
+.sparkline-bar:hover{background:var(--accent-d)}
+
+/* Log lines in detail */
+.detail-log-lines{font-family:var(--mono);font-size:11px;line-height:1.7;padding:8px 10px;background:var(--bg-3);border-radius:var(--r6);max-height:160px;overflow-y:auto;border:1px solid var(--border)}
+.detail-log-line{display:flex;gap:8px;padding:1px 0}
+.detail-log-line .log-ts{color:var(--text-3);flex-shrink:0;font-size:10px}
+.detail-log-line .log-level{font-weight:600;flex-shrink:0;width:32px;font-size:10px;text-transform:uppercase}
+.detail-log-line .log-level.info{color:var(--blue-d)}
+.detail-log-line .log-level.warn{color:var(--amber-d)}
+.detail-log-line .log-level.error{color:var(--red-d)}
+.detail-log-line .log-msg{color:var(--text);word-break:break-word}
+
+/* Execution progress bar (in toolbar for running state) */
+.exec-progress{
+  position:absolute;bottom:0;left:0;height:2px;
+  background:linear-gradient(90deg, var(--accent-d), color-mix(in srgb, var(--accent-d) 60%, var(--green-d)));
+  border-radius:0 2px 2px 0;transition:width 500ms var(--ease-out);
+  box-shadow:0 0 8px var(--accent-glow);
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══════════════════ ZONE 1: TOOLBAR ═══════════════════ -->
+  <div class="toolbar" id="toolbar">
+    <div class="exec-progress" id="execProgress" style="width:0%"></div>
+    <div class="toolbar-left">
+      <!-- Run Button Group -->
+      <div class="run-btn-group" style="position:relative">
+        <button class="run-btn" id="runBtn" title="Run DAG (Space)">
+          <span class="icon">&#x25B6;</span> Run DAG
+        </button>
+        <button class="mlv-dropdown-trigger" id="mlvTrigger" title="Select execution definition">&#x25BE;</button>
+        <div class="mlv-dropdown" id="mlvDropdown">
+          <div class="mlv-dropdown-item active" data-def="full"><span class="mlv-check">&#x2713;</span> Full DAG</div>
+          <div class="mlv-dropdown-item" data-def="sales"><span class="mlv-check" style="visibility:hidden">&#x2713;</span> Sales Tables Only</div>
+          <div class="mlv-dropdown-item" data-def="finance"><span class="mlv-check" style="visibility:hidden">&#x2713;</span> Finance Subset</div>
+          <div class="mlv-dropdown-sep"></div>
+          <div class="mlv-dropdown-item" style="color:var(--text-3)"><span class="mlv-check" style="visibility:hidden">&#x2713;</span> Create new...</div>
+        </div>
+      </div>
+      <button class="cancel-btn" id="cancelBtn" title="Cancel execution"><span>&#x2715;</span> Cancel</button>
+      <div class="toolbar-sep"></div>
+      <button class="ghost-btn" id="refreshBtn" title="Refresh DAG definition"><span class="icon">&#x21BB;</span> Refresh</button>
+      <button class="ghost-btn warning" id="unlockBtn" title="Force unlock stuck execution"><span class="icon">&#x26BF;</span> Force Unlock</button>
+      <button class="ghost-btn" id="settingsBtn" title="DAG settings"><span class="icon">&#x2699;</span></button>
+    </div>
+    <div class="toolbar-right">
+      <div class="status-indicator" id="statusIndicator">
+        <div class="status-dot idle" id="statusDot"></div>
+        <span class="status-text" id="statusText">Idle</span>
+        <span class="status-timer" id="statusTimer"></span>
+      </div>
+      <div class="toolbar-sep"></div>
+      <div class="theme-toggle" id="themeToggle" title="Toggle theme (T)">&#x263E;</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ WORKSPACE ═══════════════════ -->
+  <div class="workspace">
+    <div class="top-row">
+
+      <!-- ═══════════════════ ZONE 2: CANVAS ═══════════════════ -->
+      <div class="canvas-area" id="canvasArea">
+
+        <!-- SVG Edges Layer -->
+        <svg class="dag-svg" id="dagSvg" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--edge-color)" opacity="0.5"/>
+            </marker>
+            <marker id="arrowhead-active" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--accent-d)" opacity="0.8"/>
+            </marker>
+            <marker id="arrowhead-error" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="var(--red-d)" opacity="0.6"/>
+            </marker>
+          </defs>
+          <!-- Edges rendered by JS -->
+        </svg>
+
+        <!-- DAG Nodes Layer -->
+        <div id="nodesLayer">
+          <!-- Nodes rendered by JS -->
+        </div>
+
+        <!-- Minimap -->
+        <div class="minimap" id="minimap">
+          <canvas id="minimapCanvas" width="360" height="200"></canvas>
+          <div class="minimap-viewport" id="minimapVp" style="left:10%;top:15%;width:30%;height:35%"></div>
+        </div>
+
+        <!-- Zoom HUD -->
+        <div class="zoom-hud">
+          <button class="zoom-btn" id="zoomIn" title="Zoom in (+)">+</button>
+          <div class="zoom-level" id="zoomLevel">100%</div>
+          <button class="zoom-btn" id="zoomOut" title="Zoom out (-)">&#x2212;</button>
+          <div style="height:4px"></div>
+          <button class="zoom-btn" id="zoomFit" title="Fit to screen (F)" style="font-size:12px">&#x2922;</button>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ ZONE 5: NODE DETAIL ═══════════════════ -->
+      <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+          <div class="detail-title-row">
+            <span class="detail-name" id="detailName">RefreshSalesData</span>
+            <span class="detail-type-badge sql" id="detailType">SQL</span>
+            <button class="detail-close" id="detailClose" title="Close (Esc)">&#x2715;</button>
+          </div>
+          <div class="detail-status-row" id="detailStatusRow">
+            <span class="status-pill succeeded" id="detailStatusPill">
+              <span class="pill-dot"></span>
+              <span id="detailStatusLabel">Succeeded</span>
+            </span>
+            <span style="font-size:11px;color:var(--text-3)" id="detailDuration">12.4s</span>
+          </div>
+        </div>
+
+        <!-- Detail Tabs -->
+        <div class="detail-tabs" id="detailTabs">
+          <div class="detail-tab active" data-dtab="overview">Overview</div>
+          <div class="detail-tab" data-dtab="metrics">Metrics</div>
+          <div class="detail-tab" data-dtab="logs">Logs</div>
+          <div class="detail-tab" data-dtab="code">Code</div>
+          <div class="detail-tab" data-dtab="deps">Deps</div>
+          <div class="detail-tab-line" id="detailTabLine"></div>
+        </div>
+
+        <!-- Detail Body -->
+        <div class="detail-body" id="detailBody">
+          <!-- Error Banner (shown for failed nodes) -->
+          <div class="error-banner hidden" id="errorBanner">
+            <div class="error-banner-title">&#x26A0; MLV_STALE_METADATA</div>
+            <div class="error-banner-msg">Source table schema changed. Expected 12 columns, found 14. Refresh source metadata to resolve.</div>
+          </div>
+
+          <!-- Overview Section -->
+          <div class="detail-section">
+            <div class="detail-section-title">Node Properties</div>
+            <div class="detail-row"><span class="detail-label">Node ID</span><span class="detail-value">a3f8c...</span></div>
+            <div class="detail-row"><span class="detail-label">Table Type</span><span class="detail-value">MaterializedView</span></div>
+            <div class="detail-row"><span class="detail-label">Executable</span><span class="detail-value green">Yes</span></div>
+            <div class="detail-row"><span class="detail-label">Layer</span><span class="detail-value">Transform (L2)</span></div>
+            <div class="detail-row"><span class="detail-label">Last Refresh</span><span class="detail-value">2m ago</span></div>
+            <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">12.4s</span></div>
+          </div>
+
+          <!-- Metrics -->
+          <div class="detail-section">
+            <div class="detail-section-title">Performance Metrics</div>
+            <div class="metric-bar-container">
+              <div class="metric-bar-row">
+                <span class="metric-bar-label">CPU</span>
+                <div class="metric-bar-track"><div class="metric-bar-fill cpu" style="width:72%"></div></div>
+                <span class="metric-bar-value">72%</span>
+              </div>
+              <div class="metric-bar-row">
+                <span class="metric-bar-label">Memory</span>
+                <div class="metric-bar-track"><div class="metric-bar-fill memory" style="width:45%"></div></div>
+                <span class="metric-bar-value">1.2 GB</span>
+              </div>
+              <div class="metric-bar-row">
+                <span class="metric-bar-label">I/O Read</span>
+                <div class="metric-bar-track"><div class="metric-bar-fill io" style="width:88%"></div></div>
+                <span class="metric-bar-value">340 MB</span>
+              </div>
+            </div>
+            <div style="margin-top:8px">
+              <div class="detail-section-title" style="margin-bottom:4px">Throughput (last 60s)</div>
+              <div class="sparkline-container" id="sparkline"></div>
+            </div>
+          </div>
+
+          <!-- Dependencies -->
+          <div class="detail-section">
+            <div class="detail-section-title">Parents (2)</div>
+            <div class="nav-links">
+              <div class="nav-link" onclick="selectNode('n1')"><span class="nav-icon">&#x25C0;</span><span class="nav-dot" style="background:var(--layer-source)"></span> RawSalesOrders <span style="margin-left:auto;font-size:10px;color:var(--green-d)">&#x2713;</span></div>
+              <div class="nav-link" onclick="selectNode('n2')"><span class="nav-icon">&#x25C0;</span><span class="nav-dot" style="background:var(--layer-source)"></span> DimCustomers <span style="margin-left:auto;font-size:10px;color:var(--green-d)">&#x2713;</span></div>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">Children (2)</div>
+            <div class="nav-links">
+              <div class="nav-link" onclick="selectNode('n11')"><span class="nav-icon">&#x25B6;</span><span class="nav-dot" style="background:var(--layer-output)"></span> SalesAggDaily</div>
+              <div class="nav-link" onclick="selectNode('n15')"><span class="nav-icon">&#x25B6;</span><span class="nav-dot" style="background:var(--layer-output)"></span> SalesDashboard</div>
+            </div>
+          </div>
+
+          <!-- Log Preview -->
+          <div class="detail-section">
+            <div class="detail-section-title">Recent Logs</div>
+            <div class="detail-log-lines">
+              <div class="detail-log-line"><span class="log-ts">14:23:01</span><span class="log-level info">INFO</span><span class="log-msg">Starting node execution: RefreshSalesData</span></div>
+              <div class="detail-log-line"><span class="log-ts">14:23:02</span><span class="log-level info">INFO</span><span class="log-msg">Reading source: RawSalesOrders (1.2M rows)</span></div>
+              <div class="detail-log-line"><span class="log-ts">14:23:05</span><span class="log-level info">INFO</span><span class="log-msg">Join with DimCustomers complete (980K matched)</span></div>
+              <div class="detail-log-line"><span class="log-ts">14:23:09</span><span class="log-level warn">WARN</span><span class="log-msg">Slow query detected: aggregation took 4.2s</span></div>
+              <div class="detail-log-line"><span class="log-ts">14:23:12</span><span class="log-level info">INFO</span><span class="log-msg">Write complete: 245K rows to OneLake</span></div>
+              <div class="detail-log-line"><span class="log-ts">14:23:13</span><span class="log-level info">INFO</span><span class="log-msg">Node succeeded in 12.4s</span></div>
+            </div>
+          </div>
+
+          <!-- ABFS Path -->
+          <div class="detail-section">
+            <div class="detail-section-title">Storage</div>
+            <div class="detail-row"><span class="detail-label">ABFS Path</span><span class="detail-value truncate" style="max-width:180px;cursor:pointer" title="Click to copy">abfss://ws@onelake.../Tables/RefreshSalesData</span></div>
+            <div class="detail-row"><span class="detail-label">Format</span><span class="detail-value">Delta</span></div>
+            <div class="detail-row"><span class="detail-label">Rows Written</span><span class="detail-value">245,182</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════ ZONE 3: SPLIT HANDLE ═══════════════════ -->
+    <div class="split-handle" id="splitHandle" title="Drag to resize"></div>
+
+    <!-- ═══════════════════ ZONE 4: BOTTOM PANEL ═══════════════════ -->
+    <div class="bottom-panel" id="bottomPanel">
+      <div class="panel-tabs" id="panelTabs">
+        <div class="panel-tab active" data-ptab="gantt">Gantt</div>
+        <div class="panel-tab" data-ptab="history">History <span class="tab-count">8</span></div>
+        <div class="panel-tab" data-ptab="compare">Compare</div>
+        <div class="panel-tab-underline" id="panelTabLine"></div>
+        <div class="panel-tabs-right">
+          <span style="font-size:11px;color:var(--text-3)">Execution: <span class="mono" style="color:var(--text-2)" id="execId">a1b2c3d4</span></span>
+        </div>
+      </div>
+
+      <div class="panel-content">
+        <!-- Gantt View -->
+        <div class="panel-view active" data-pview="gantt">
+          <div class="gantt-container">
+            <div class="gantt-header">
+              <span class="gantt-title">Execution Timeline</span>
+              <span style="flex:1"></span>
+              <span class="gantt-time-axis" id="ganttTimeAxis">0s &#x2500;&#x2500;&#x2500; 15s &#x2500;&#x2500;&#x2500; 30s &#x2500;&#x2500;&#x2500; 45s &#x2500;&#x2500;&#x2500; 60s</span>
+            </div>
+            <div class="gantt-body" id="ganttBody">
+              <!-- Gantt rows rendered by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- History View -->
+        <div class="panel-view" data-pview="history">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Iteration ID</th>
+                <th>Started <span class="sort-arrow">&#x25BC;</span></th>
+                <th>Duration</th>
+                <th>Nodes</th>
+                <th>Invoked By</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <!-- History rows rendered by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Compare View -->
+        <div class="panel-view" data-pview="compare">
+          <div class="compare-placeholder">
+            <div class="compare-icon">&#x21C6;</div>
+            <div class="compare-text">Select two executions to compare</div>
+            <div class="compare-hint">In the History tab, select two execution rows then click Compare to see a side-by-side diff of timing, status changes, and regressions.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ CONTEXT MENU ═══════════════════ -->
+<div class="context-menu" id="contextMenu">
+  <div class="ctx-item" data-action="select"><span class="ctx-icon">&#x25CB;</span><span class="ctx-label">Select Node</span><span class="ctx-shortcut">Click</span></div>
+  <div class="ctx-item" data-action="run-from"><span class="ctx-icon">&#x25B6;</span><span class="ctx-label">Run from here</span></div>
+  <div class="ctx-item" data-action="run-to"><span class="ctx-icon">&#x25C0;</span><span class="ctx-label">Run up to here</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="copy-name"><span class="ctx-icon">&#x2398;</span><span class="ctx-label">Copy node name</span><span class="ctx-shortcut">Ctrl+C</span></div>
+  <div class="ctx-item" data-action="copy-id"><span class="ctx-icon">&#x2398;</span><span class="ctx-label">Copy node ID</span></div>
+  <div class="ctx-item" data-action="view-logs"><span class="ctx-icon">&#x2261;</span><span class="ctx-label">View logs</span></div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="highlight-path"><span class="ctx-icon">&#x2500;</span><span class="ctx-label">Highlight path</span></div>
+  <div class="ctx-item" data-action="isolate"><span class="ctx-icon">&#x25C7;</span><span class="ctx-label">Isolate subgraph</span></div>
+</div>
+
+<!-- ═══════════════════ TOAST CONTAINER ═══════════════════ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════ STATE CONTROLLER ═══════════════════ -->
+<div class="sc-toggle" id="scToggle" title="Demo Controls">&#x2699;</div>
+<div class="state-controller" id="stateController">
+  <div class="sc-header">
+    <h3>DAG Studio — Demo Controls</h3>
+    <span class="sc-close" id="scClose">&#x2715;</span>
+  </div>
+  <div class="sc-body">
+    <div class="sc-group">
+      <label>Execution State</label>
+      <div class="sc-buttons">
+        <button class="sc-btn active" data-state="idle">Idle</button>
+        <button class="sc-btn" data-state="running">Running</button>
+        <button class="sc-btn" data-state="succeeded">Succeeded</button>
+        <button class="sc-btn" data-state="failed">Failed</button>
+        <button class="sc-btn" data-state="cancelled">Cancelled</button>
+      </div>
+    </div>
+    <div class="sc-group">
+      <label>Actions</label>
+      <div class="sc-buttons">
+        <button class="sc-btn" id="scRunSim">&#x25B6; Simulate Run</button>
+        <button class="sc-btn" id="scReset">&#x21BB; Reset All</button>
+        <button class="sc-btn" id="scToggleDetail">Detail Panel</button>
+      </div>
+    </div>
+    <div class="sc-group">
+      <label>Shortcuts</label>
+      <div style="font-size:11px;color:var(--text-3);line-height:1.8">
+        <kbd>Space</kbd> Run/Pause &nbsp; <kbd>Esc</kbd> Close detail &nbsp; <kbd>F</kbd> Fit canvas &nbsp; <kbd>T</kbd> Toggle theme &nbsp; <kbd>&#x2190;&#x2191;&#x2192;&#x2193;</kbd> Navigate nodes
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Studio Shell — Interactive Logic
+   Pixel — All vanilla JS, class-free for mock simplicity
+   ═══════════════════════════════════════════════════════════════════ */
+
+// ── DAG DATA ──
+const NODES = [
+  // Layer 0 — Sources
+  { id:'n1',  name:'RawSalesOrders',   type:'sql',     layer:'source',    x:40,  y:30,  status:'pending', duration:null },
+  { id:'n2',  name:'DimCustomers',     type:'sql',     layer:'source',    x:40,  y:100, status:'pending', duration:null },
+  { id:'n3',  name:'DimProducts',      type:'sql',     layer:'source',    x:40,  y:170, status:'pending', duration:null },
+  { id:'n4',  name:'RawInventory',     type:'pyspark', layer:'source',    x:40,  y:240, status:'pending', duration:null },
+  { id:'n5',  name:'ExchangeRates',    type:'sql',     layer:'source',    x:40,  y:310, status:'pending', duration:null },
+  // Layer 1 — Transforms
+  { id:'n6',  name:'RefreshSalesData', type:'sql',     layer:'transform', x:250, y:30,  status:'pending', duration:null },
+  { id:'n7',  name:'CustomerEnrich',   type:'pyspark', layer:'transform', x:250, y:100, status:'pending', duration:null },
+  { id:'n8',  name:'ProductMetrics',   type:'sql',     layer:'transform', x:250, y:170, status:'pending', duration:null },
+  { id:'n9',  name:'InventoryCalc',    type:'pyspark', layer:'transform', x:250, y:240, status:'pending', duration:null },
+  { id:'n10', name:'CurrencyConvert',  type:'sql',     layer:'transform', x:250, y:310, status:'pending', duration:null },
+  // Layer 2 — Aggregations
+  { id:'n11', name:'SalesAggDaily',    type:'sql',     layer:'transform', x:460, y:60,  status:'pending', duration:null },
+  { id:'n12', name:'CustomerSegments', type:'pyspark', layer:'transform', x:460, y:140, status:'pending', duration:null },
+  { id:'n13', name:'StockLevels',      type:'sql',     layer:'transform', x:460, y:220, status:'pending', duration:null },
+  { id:'n14', name:'RevenueForecast',  type:'pyspark', layer:'transform', x:460, y:300, status:'pending', duration:null },
+  // Layer 3 — Output
+  { id:'n15', name:'SalesDashboard',   type:'sql',     layer:'output',    x:670, y:60,  status:'pending', duration:null },
+  { id:'n16', name:'CustomerReport',   type:'sql',     layer:'output',    x:670, y:140, status:'pending', duration:null },
+  { id:'n17', name:'InventoryAlert',   type:'pyspark', layer:'output',    x:670, y:220, status:'pending', duration:null },
+  { id:'n18', name:'ExecutiveSummary', type:'sql',     layer:'output',    x:670, y:300, status:'pending', duration:null },
+];
+
+const EDGES = [
+  {from:'n1',to:'n6'},{from:'n2',to:'n6'},{from:'n2',to:'n7'},{from:'n3',to:'n8'},
+  {from:'n4',to:'n9'},{from:'n5',to:'n10'},{from:'n1',to:'n10'},
+  {from:'n6',to:'n11'},{from:'n7',to:'n11'},{from:'n7',to:'n12'},
+  {from:'n8',to:'n12'},{from:'n8',to:'n13'},{from:'n9',to:'n13'},
+  {from:'n10',to:'n14'},{from:'n6',to:'n14'},
+  {from:'n11',to:'n15'},{from:'n12',to:'n15'},{from:'n12',to:'n16'},
+  {from:'n13',to:'n17'},{from:'n14',to:'n18'},{from:'n11',to:'n18'},
+];
+
+const EXEC_ORDER = [
+  ['n1','n2','n3','n4','n5'],       // Layer 0
+  ['n6','n7','n8','n9','n10'],      // Layer 1
+  ['n11','n12','n13','n14'],        // Layer 2
+  ['n15','n16','n17','n18'],        // Layer 3
+];
+
+const HISTORY = [
+  {id:'a1b2c3d4',status:'succeeded',started:'2m ago',duration:'1m 12s',nodes:'18/18',by:'Manual',error:null},
+  {id:'e5f6g7h8',status:'failed',started:'28m ago',duration:'45s',nodes:'12/18',by:'Scheduled',error:'MLV_STALE_METADATA'},
+  {id:'i9j0k1l2',status:'succeeded',started:'1h ago',duration:'1m 05s',nodes:'18/18',by:'Manual',error:null},
+  {id:'m3n4o5p6',status:'cancelled',started:'2h ago',duration:'32s',nodes:'8/18',by:'API',error:null},
+  {id:'q7r8s9t0',status:'succeeded',started:'3h ago',duration:'58s',nodes:'18/18',by:'Scheduled',error:null},
+  {id:'u1v2w3x4',status:'succeeded',started:'5h ago',duration:'1m 03s',nodes:'18/18',by:'Scheduled',error:null},
+  {id:'y5z6a7b8',status:'failed',started:'8h ago',duration:'1m 22s',nodes:'15/18',by:'Manual',error:'MLV_RUNTIME_ERROR'},
+  {id:'c9d0e1f2',status:'succeeded',started:'1d ago',duration:'55s',nodes:'18/18',by:'Scheduled',error:null},
+];
+
+// ── STATE ──
+let state = { exec:'idle', timer:0, timerInterval:null, selectedNode:null, zoom:100 };
+
+// ── DOM REFS ──
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+// ── RENDER NODES ──
+function renderNodes() {
+  const layer = $('#nodesLayer');
+  layer.innerHTML = '';
+  NODES.forEach(n => {
+    const el = document.createElement('div');
+    el.className = `dag-node ${n.status}`;
+    el.dataset.id = n.id;
+    el.tabIndex = 0;
+    el.style.left = n.x + 'px';
+    el.style.top = n.y + 'px';
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', n.name);
+    el.innerHTML = `
+      <div class="node-layer-bar ${n.layer}"></div>
+      <div class="node-body">
+        <div class="node-header">
+          <span class="node-name">${n.name}</span>
+          <span class="node-status-icon ${n.status}"></span>
+        </div>
+        <div class="node-meta">
+          <span class="node-type-badge ${n.type}">${n.type.toUpperCase()}</span>
+          ${n.duration ? `<span class="node-duration">${n.duration}</span>` : ''}
+        </div>
+      </div>`;
+    el.addEventListener('click', e => { e.stopPropagation(); selectNode(n.id); });
+    el.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, n); });
+    layer.appendChild(el);
+  });
+}
+
+// ── RENDER EDGES ──
+function renderEdges() {
+  const svg = $('#dagSvg');
+  svg.querySelectorAll('.edge').forEach(e => e.remove());
+  EDGES.forEach(edge => {
+    const fromN = NODES.find(n => n.id === edge.from);
+    const toN = NODES.find(n => n.id === edge.to);
+    if (!fromN || !toN) return;
+    const x1 = fromN.x + 148, y1 = fromN.y + 27;
+    const x2 = toN.x, y2 = toN.y + 27;
+    const mx = (x1 + x2) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+
+    let cls = 'edge';
+    if (fromN.status === 'running' || toN.status === 'running') cls += ' active';
+    else if (fromN.status === 'failed' || toN.status === 'failed') cls += ' error';
+    else if (fromN.status === 'skipped' || toN.status === 'skipped') cls += ' skipped';
+    if (state.selectedNode && (edge.from === state.selectedNode || edge.to === state.selectedNode)) cls += ' highlight';
+    path.setAttribute('class', cls);
+
+    let marker = 'url(#arrowhead)';
+    if (cls.includes('active')) marker = 'url(#arrowhead-active)';
+    else if (cls.includes('error')) marker = 'url(#arrowhead-error)';
+    path.setAttribute('marker-end', marker);
+
+    svg.appendChild(path);
+  });
+}
+
+// ── RENDER GANTT ──
+function renderGantt() {
+  const body = $('#ganttBody');
+  body.innerHTML = '';
+  const maxDur = 60;
+  let timeOffset = 0;
+  EXEC_ORDER.flat().forEach(nid => {
+    const n = NODES.find(x => x.id === nid);
+    const row = document.createElement('div');
+    row.className = 'gantt-row';
+    const dur = n.duration ? parseFloat(n.duration) : 0;
+    const startPct = (timeOffset / maxDur * 100).toFixed(1);
+    const widthPct = Math.max((dur / maxDur * 100), 1).toFixed(1);
+    row.innerHTML = `
+      <div class="gantt-label">${n.name}</div>
+      <div class="gantt-track">
+        ${dur > 0 ? `<div class="gantt-bar ${n.status}" style="left:${startPct}%;width:${widthPct}%;--bar-w:${widthPct}%" title="${n.name}: ${n.duration}"></div>` : ''}
+      </div>`;
+    body.appendChild(row);
+    timeOffset += dur * 0.6 + Math.random() * 2;
+  });
+}
+
+// ── RENDER HISTORY ──
+function renderHistory() {
+  const body = $('#historyBody');
+  body.innerHTML = '';
+  HISTORY.forEach(h => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="status-pill ${h.status}"><span class="pill-dot"></span>${h.status.charAt(0).toUpperCase()+h.status.slice(1)}</span></td>
+      <td><span class="iter-id" title="Click to copy ${h.id}">${h.id}</span></td>
+      <td style="color:var(--text-2)">${h.started}</td>
+      <td><span class="mono" style="font-size:11px">${h.duration}</span></td>
+      <td><span class="node-count">${h.nodes}${h.error ? '<span class="failed-count">3 &#x2717;</span>':''}</span></td>
+      <td style="color:var(--text-3)">${h.by}</td>
+      <td>${h.error ? `<span class="error-code">${h.error}</span>` : ''}</td>`;
+    tr.addEventListener('click', () => {
+      $$('.history-table tbody tr').forEach(r => r.classList.remove('selected'));
+      tr.classList.add('selected');
+    });
+    body.appendChild(tr);
+  });
+}
+
+// ── RENDER MINIMAP ──
+function renderMinimap() {
+  const canvas = $('#minimapCanvas');
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const scale = 0.22;
+  NODES.forEach(n => {
+    const colors = {
+      pending:'#5f6578', running:'#6d5cff', succeeded:'#18a058',
+      failed:'#e5453b', skipped:'#3a3f4e', cancelled:'#e5940c'
+    };
+    ctx.fillStyle = colors[n.status] || '#5f6578';
+    ctx.fillRect(n.x * scale + 8, n.y * scale + 8, 148 * scale, 54 * scale);
+  });
+  EDGES.forEach(edge => {
+    const fromN = NODES.find(x => x.id === edge.from);
+    const toN = NODES.find(x => x.id === edge.to);
+    if (!fromN || !toN) return;
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.moveTo((fromN.x + 148) * scale + 8, (fromN.y + 27) * scale + 8);
+    ctx.lineTo(toN.x * scale + 8, (toN.y + 27) * scale + 8);
+    ctx.stroke();
+  });
+}
+
+// ── SELECT NODE ──
+function selectNode(id) {
+  state.selectedNode = id;
+  $$('.dag-node').forEach(el => el.classList.toggle('selected', el.dataset.id === id));
+  const n = NODES.find(x => x.id === id);
+  if (n) {
+    $('#detailName').textContent = n.name;
+    $('#detailType').className = `detail-type-badge ${n.type}`;
+    $('#detailType').textContent = n.type.toUpperCase();
+    const pill = $('#detailStatusPill');
+    pill.className = `status-pill ${n.status}`;
+    $('#detailStatusLabel').textContent = n.status.charAt(0).toUpperCase() + n.status.slice(1);
+    $('#detailDuration').textContent = n.duration || '--';
+    const eb = $('#errorBanner');
+    if (n.status === 'failed') eb.classList.remove('hidden');
+    else eb.classList.add('hidden');
+    $('#detailPanel').classList.add('open');
+    updateDetailTabLine();
+  }
+  renderEdges();
+}
+
+function deselectNode() {
+  state.selectedNode = null;
+  $$('.dag-node').forEach(el => el.classList.remove('selected'));
+  $('#detailPanel').classList.remove('open');
+  renderEdges();
+}
+
+// ── CONTEXT MENU ──
+function showContextMenu(e, node) {
+  const menu = $('#contextMenu');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top = e.clientY + 'px';
+  menu.classList.add('open');
+  selectNode(node.id);
+}
+document.addEventListener('click', () => $('#contextMenu').classList.remove('open'));
+
+// ── THEME TOGGLE ──
+$('#themeToggle').addEventListener('click', () => {
+  const html = document.documentElement;
+  const isDark = html.getAttribute('data-theme') === 'dark';
+  html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  $('#themeToggle').textContent = isDark ? '\u2600' : '\u263E';
+  renderMinimap();
+});
+
+// ── MLV DROPDOWN ──
+$('#mlvTrigger').addEventListener('click', e => {
+  e.stopPropagation();
+  $('#mlvDropdown').classList.toggle('open');
+});
+document.addEventListener('click', () => $('#mlvDropdown').classList.remove('open'));
+$$('.mlv-dropdown-item[data-def]').forEach(item => {
+  item.addEventListener('click', () => {
+    $$('.mlv-dropdown-item').forEach(i => {
+      i.classList.remove('active');
+      i.querySelector('.mlv-check').style.visibility = 'hidden';
+    });
+    item.classList.add('active');
+    item.querySelector('.mlv-check').style.visibility = 'visible';
+    $('#mlvDropdown').classList.remove('open');
+    showToast('success', `Switched to: ${item.textContent.trim()}`);
+  });
+});
+
+// ── TAB SYSTEMS ──
+function setupTabs(containerSel, lineSel, viewAttr) {
+  const container = $(containerSel);
+  const line = $(lineSel);
+  const tabs = container.querySelectorAll('[data-ptab],[data-dtab]');
+  function update() {
+    const active = container.querySelector('.active');
+    if (active && line) {
+      line.style.left = active.offsetLeft + 'px';
+      line.style.width = active.offsetWidth + 'px';
+    }
+  }
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      update();
+      if (viewAttr) {
+        const val = tab.dataset.ptab || tab.dataset.dtab;
+        $$(`[data-pview],[data-dview]`).forEach(v => v.classList.remove('active'));
+        const view = document.querySelector(`[data-pview="${val}"]`) || document.querySelector(`[data-dview="${val}"]`);
+        if (view) view.classList.add('active');
+      }
+    });
+  });
+  requestAnimationFrame(update);
+  return update;
+}
+
+const updatePanelTabLine = setupTabs('#panelTabs', '#panelTabLine', true);
+const updateDetailTabLine = setupTabs('#detailTabs', '#detailTabLine', false);
+
+// ── SPLIT HANDLE ──
+const splitHandle = $('#splitHandle');
+const bottomPanel = $('#bottomPanel');
+let splitDragging = false;
+splitHandle.addEventListener('mousedown', e => {
+  splitDragging = true;
+  document.body.style.cursor = 'ns-resize';
+  document.body.style.userSelect = 'none';
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (!splitDragging) return;
+  const appRect = $('#app').getBoundingClientRect();
+  const toolbarH = 44;
+  const available = appRect.height - toolbarH;
+  const fromBottom = appRect.bottom - e.clientY;
+  const pct = Math.max(15, Math.min(65, (fromBottom / available) * 100));
+  bottomPanel.style.height = pct + '%';
+});
+document.addEventListener('mouseup', () => {
+  if (splitDragging) {
+    splitDragging = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  }
+});
+
+// ── DETAIL PANEL CLOSE ──
+$('#detailClose').addEventListener('click', deselectNode);
+
+// ── ZOOM CONTROLS ──
+$('#zoomIn').addEventListener('click', () => { state.zoom = Math.min(200, state.zoom + 15); $('#zoomLevel').textContent = state.zoom + '%'; });
+$('#zoomOut').addEventListener('click', () => { state.zoom = Math.max(30, state.zoom - 15); $('#zoomLevel').textContent = state.zoom + '%'; });
+$('#zoomFit').addEventListener('click', () => { state.zoom = 100; $('#zoomLevel').textContent = '100%'; showToast('success', 'Canvas fitted to view'); });
+
+// ── TOAST SYSTEM ──
+function showToast(type, message) {
+  const container = $('#toastContainer');
+  const toast = document.createElement('div');
+  const icons = { success:'\u2713', error:'\u2717', info:'\u24D8' };
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<span class="toast-icon">${icons[type]||''}</span>${message}`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('out');
+    setTimeout(() => toast.remove(), 200);
+  }, 2500);
+}
+
+// ── STATE CONTROLLER ──
+$('#scToggle').addEventListener('click', () => $('#stateController').classList.toggle('open'));
+$('#scClose').addEventListener('click', () => $('#stateController').classList.remove('open'));
+$('#scToggleDetail').addEventListener('click', () => {
+  if ($('#detailPanel').classList.contains('open')) deselectNode();
+  else selectNode('n6');
+});
+
+// State buttons
+$$('.sc-btn[data-state]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    $$('.sc-btn[data-state]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyGlobalState(btn.dataset.state);
+  });
+});
+
+function applyGlobalState(st) {
+  state.exec = st;
+  const dot = $('#statusDot');
+  const text = $('#statusText');
+  const timer = $('#statusTimer');
+  dot.className = 'status-dot ' + st;
+  const labels = { idle:'Idle', running:'Running', succeeded:'Completed', failed:'Failed', cancelled:'Cancelled' };
+  text.textContent = labels[st] || st;
+  if (st === 'running') {
+    $('#cancelBtn').classList.add('visible');
+    startTimer();
+  } else {
+    $('#cancelBtn').classList.remove('visible');
+    stopTimer();
+    if (st === 'succeeded') timer.textContent = '1m 12s';
+    else if (st === 'failed') timer.textContent = '45s';
+    else timer.textContent = '';
+  }
+  NODES.forEach(n => {
+    if (st === 'idle') { n.status = 'pending'; n.duration = null; }
+    else if (st === 'succeeded') { n.status = 'succeeded'; n.duration = (2 + Math.random() * 18).toFixed(1) + 's'; }
+    else if (st === 'failed') {
+      n.status = Math.random() > 0.3 ? 'succeeded' : (Math.random() > 0.5 ? 'failed' : 'skipped');
+      n.duration = n.status !== 'skipped' ? (2 + Math.random() * 18).toFixed(1) + 's' : null;
+    }
+    else if (st === 'cancelled') {
+      n.status = Math.random() > 0.5 ? 'succeeded' : 'cancelled';
+      n.duration = n.status === 'succeeded' ? (2 + Math.random() * 10).toFixed(1) + 's' : null;
+    }
+    else if (st === 'running') { n.status = 'pending'; n.duration = null; }
+  });
+  renderNodes(); renderEdges(); renderGantt(); renderMinimap();
+  if (state.selectedNode) selectNode(state.selectedNode);
+}
+
+// Timer
+function startTimer() {
+  state.timer = 0;
+  stopTimer();
+  const timerEl = $('#statusTimer');
+  state.timerInterval = setInterval(() => {
+    state.timer++;
+    const m = Math.floor(state.timer / 60);
+    const s = state.timer % 60;
+    timerEl.textContent = m > 0 ? `${m}m ${s.toString().padStart(2,'0')}s` : `${s}s`;
+  }, 1000);
+}
+function stopTimer() {
+  if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
+}
+
+// ── EXECUTION SIMULATION ──
+$('#runBtn').addEventListener('click', startExecution);
+$('#scRunSim').addEventListener('click', startExecution);
+$('#cancelBtn').addEventListener('click', () => {
+  applyGlobalState('cancelled');
+  showToast('info', 'Execution cancelled');
+  $$('.sc-btn[data-state]').forEach(b => b.classList.remove('active'));
+  document.querySelector('.sc-btn[data-state="cancelled"]')?.classList.add('active');
+});
+
+function startExecution() {
+  applyGlobalState('running');
+  $$('.sc-btn[data-state]').forEach(b => b.classList.remove('active'));
+  document.querySelector('.sc-btn[data-state="running"]')?.classList.add('active');
+  $('#toolbar').classList.add('executing');
+  $('#execProgress').style.width = '0%';
+
+  const FAIL_NODE = 'n13';
+  let layerIdx = 0;
+  const totalLayers = EXEC_ORDER.length;
+
+  function processLayer() {
+    if (layerIdx >= EXEC_ORDER.length) {
+      finishExecution();
+      return;
+    }
+    $('#execProgress').style.width = ((layerIdx + 0.5) / totalLayers * 100).toFixed(0) + '%';
+    const layer = EXEC_ORDER[layerIdx];
+    layer.forEach(nid => {
+      const n = NODES.find(x => x.id === nid);
+      if (n.status === 'skipped') return;
+      n.status = 'running';
+    });
+    renderNodes(); renderEdges(); renderMinimap();
+
+    setTimeout(() => {
+      layer.forEach(nid => {
+        const n = NODES.find(x => x.id === nid);
+        if (n.status !== 'running') return;
+        if (nid === FAIL_NODE) {
+          n.status = 'failed';
+          n.duration = (5 + Math.random() * 10).toFixed(1) + 's';
+          markDownstreamSkipped(nid);
+        } else {
+          n.status = 'succeeded';
+          n.duration = (2 + Math.random() * 15).toFixed(1) + 's';
+        }
+      });
+      $('#execProgress').style.width = ((layerIdx + 1) / totalLayers * 100).toFixed(0) + '%';
+      renderNodes(); renderEdges(); renderGantt(); renderMinimap();
+      layerIdx++;
+      setTimeout(processLayer, 600);
+    }, 1200 + Math.random() * 800);
+  }
+
+  processLayer();
+}
+
+function markDownstreamSkipped(nodeId) {
+  EDGES.filter(e => e.from === nodeId).forEach(e => {
+    const child = NODES.find(n => n.id === e.to);
+    if (child && child.status === 'pending') {
+      child.status = 'skipped';
+      markDownstreamSkipped(child.id);
+    }
+  });
+}
+
+function finishExecution() {
+  const hasFailed = NODES.some(n => n.status === 'failed');
+  const newState = hasFailed ? 'failed' : 'succeeded';
+  state.exec = newState;
+  const dot = $('#statusDot');
+  const text = $('#statusText');
+  dot.className = 'status-dot ' + newState;
+  text.textContent = hasFailed ? 'Failed' : 'Completed';
+  $('#cancelBtn').classList.remove('visible');
+  $('#toolbar').classList.remove('executing');
+  $('#execProgress').style.width = '100%';
+  setTimeout(() => { $('#execProgress').style.width = '0%'; }, 1000);
+  stopTimer();
+  $$('.sc-btn[data-state]').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.sc-btn[data-state="${newState}"]`)?.classList.add('active');
+  showToast(hasFailed ? 'error' : 'success', hasFailed ? 'Execution failed at StockLevels' : 'DAG execution completed successfully');
+  renderGantt();
+}
+
+// Reset
+$('#scReset').addEventListener('click', () => {
+  applyGlobalState('idle');
+  deselectNode();
+  $$('.sc-btn[data-state]').forEach(b => b.classList.remove('active'));
+  document.querySelector('.sc-btn[data-state="idle"]')?.classList.add('active');
+  showToast('info', 'Reset to idle state');
+});
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    if (state.exec === 'running') $('#cancelBtn').click();
+    else $('#runBtn').click();
+  }
+  if (e.key === 'Escape') deselectNode();
+  if (e.key === 'f' || e.key === 'F') { e.preventDefault(); $('#zoomFit').click(); }
+  if (e.key === 't' || e.key === 'T') { e.preventDefault(); $('#themeToggle').click(); }
+
+  // Arrow key navigation
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && state.selectedNode) {
+    e.preventDefault();
+    const curr = NODES.find(n => n.id === state.selectedNode);
+    if (!curr) return;
+    let candidates;
+    if (e.key === 'ArrowRight') {
+      candidates = EDGES.filter(ed => ed.from === curr.id).map(ed => NODES.find(n => n.id === ed.to));
+    } else if (e.key === 'ArrowLeft') {
+      candidates = EDGES.filter(ed => ed.to === curr.id).map(ed => NODES.find(n => n.id === ed.from));
+    } else {
+      const sameCol = NODES.filter(n => Math.abs(n.x - curr.x) < 20 && n.id !== curr.id);
+      if (e.key === 'ArrowUp') candidates = sameCol.filter(n => n.y < curr.y).sort((a,b) => b.y - a.y);
+      else candidates = sameCol.filter(n => n.y > curr.y).sort((a,b) => a.y - b.y);
+    }
+    if (candidates && candidates.length > 0 && candidates[0]) selectNode(candidates[0].id);
+  }
+});
+
+// ── ITER ID COPY ──
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('iter-id')) {
+    const text = e.target.title.replace('Click to copy ', '');
+    navigator.clipboard?.writeText(text);
+    showToast('success', 'Copied iteration ID');
+  }
+});
+
+// ── Refresh btn ──
+$('#refreshBtn').addEventListener('click', () => showToast('info', 'DAG definition refreshed'));
+$('#settingsBtn').addEventListener('click', () => showToast('info', 'Settings panel (not in mock)'));
+$('#unlockBtn').addEventListener('click', () => showToast('info', 'Force unlock requested'));
+
+// ── CANVAS CLICK TO DESELECT ──
+$('#canvasArea').addEventListener('click', e => {
+  if (e.target === $('#canvasArea') || e.target.classList.contains('dag-svg') || e.target === $('#dagSvg')) {
+    deselectNode();
+  }
+});
+
+// ── INITIAL RENDER ──
+renderNodes();
+renderEdges();
+renderGantt();
+renderHistory();
+renderMinimap();
+renderSparkline();
+
+// Sparkline
+function renderSparkline() {
+  const container = $('#sparkline');
+  if (!container) return;
+  container.innerHTML = '';
+  const values = [3,5,8,12,15,18,14,10,16,20,22,18,15,12,8,6,10,14,18,22,25,20,16,12];
+  const max = Math.max(...values);
+  values.forEach(v => {
+    const bar = document.createElement('div');
+    bar.className = 'sparkline-bar';
+    bar.style.height = ((v / max) * 100) + '%';
+    container.appendChild(bar);
+  });
+}
+
+// Position tab underlines after DOM paint
+requestAnimationFrame(() => {
+  updatePanelTabLine();
+  updateDetailTabLine();
+});
+</script>
+</body>
+</html>

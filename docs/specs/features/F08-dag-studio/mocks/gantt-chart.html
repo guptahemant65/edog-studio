@@ -1,0 +1,2444 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DAG Gantt Chart — EDOG Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Gantt Chart Interactive Mockup
+   Designed by Pixel (Senior Frontend Engineer)
+   Quality target: Bloomberg Terminal x Figma x NASA Mission Control
+   Canvas 2D bars, execution playback, history table, comparison view
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── DESIGN TOKENS ── */
+:root {
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --red: #e5453b;
+  --amber: #e5940c;
+  --blue: #2d7ff9;
+  --teal: #0d9488;
+  --cyan: #06b6d4;
+  --magenta: #ec4899;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-expo: cubic-bezier(0.7, 0, 0.84, 0);
+  --row-h: 32px;
+  --bar-h: 22px;
+  --label-w: 200px;
+  --axis-h: 32px;
+  --footer-h: 36px;
+  --tab-h: 40px;
+  --toolbar-h: 44px;
+}
+
+/* ── DARK THEME (default) ── */
+[data-theme="dark"] {
+  --bg: #0a0c12;
+  --bg-2: #11141c;
+  --bg-3: #191d28;
+  --bg-4: #222836;
+  --bg-5: #2c3348;
+  --text: #e4e8f0;
+  --text-2: #8a92a8;
+  --text-3: #4e5568;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.10);
+  --border-accent: rgba(109,92,255,0.3);
+  --hover-bg: rgba(255,255,255,0.03);
+  --selected-bg: rgba(109,92,255,0.10);
+  --active-bg: rgba(109,92,255,0.18);
+  --canvas-bg: #0d0f16;
+  --grid-major: rgba(255,255,255,0.06);
+  --grid-minor: rgba(255,255,255,0.025);
+  --surface: #14171f;
+  --panel-bg: #11141c;
+  --scrollbar-thumb: rgba(255,255,255,0.12);
+  --scrollbar-thumb-hover: rgba(255,255,255,0.22);
+  --scrollbar-track: transparent;
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+  --shadow-xl: 0 12px 48px rgba(0,0,0,0.6), 0 6px 12px rgba(0,0,0,0.35);
+  --status-ok: #34d399;
+  --status-fail: #ff6b6b;
+  --status-cancel: #f0b429;
+  --status-skip: #3e4556;
+  --status-run: #8577ff;
+  --status-pend: #3a4050;
+  --layer-source: #d4915e;
+  --layer-transform: #8a91a3;
+  --layer-output: #fbbf24;
+  --layer-metrics: #2dd4bf;
+  --layer-validate: #c084fc;
+  --layer-sink: #5b9bff;
+  --layer-aggregate: #fb7185;
+  --tooltip-bg: rgba(18,21,30,0.82);
+  --tooltip-border: rgba(255,255,255,0.08);
+  --bar-text: #ffffff;
+  --now-glow: rgba(133,119,255,0.5);
+  --parallelism-fill: rgba(133,119,255,0.08);
+  --parallelism-stroke: rgba(133,119,255,0.3);
+  --bottleneck-tint: rgba(240,180,41,0.08);
+  --bottleneck-border: #d97706;
+  --danger-tint: rgba(255,107,107,0.06);
+  --success-tint: rgba(52,211,153,0.06);
+  --overlay-bg: rgba(0,0,0,0.4);
+}
+
+/* ── LIGHT THEME ── */
+[data-theme="light"] {
+  --bg: #f4f5f8;
+  --bg-2: #ffffff;
+  --bg-3: #f0f1f5;
+  --bg-4: #e5e7ec;
+  --bg-5: #d8dae0;
+  --text: #1a1d27;
+  --text-2: #5c6070;
+  --text-3: #9098a8;
+  --border: rgba(0,0,0,0.07);
+  --border-bright: rgba(0,0,0,0.12);
+  --border-accent: rgba(109,92,255,0.2);
+  --hover-bg: rgba(0,0,0,0.03);
+  --selected-bg: rgba(109,92,255,0.08);
+  --active-bg: rgba(109,92,255,0.14);
+  --canvas-bg: #fafbfd;
+  --grid-major: rgba(0,0,0,0.06);
+  --grid-minor: rgba(0,0,0,0.025);
+  --surface: #ffffff;
+  --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15);
+  --scrollbar-thumb-hover: rgba(0,0,0,0.28);
+  --scrollbar-track: transparent;
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+  --shadow-xl: 0 12px 48px rgba(0,0,0,0.16);
+  --status-ok: #18a058;
+  --status-fail: #e5453b;
+  --status-cancel: #d97706;
+  --status-skip: #c0c5d0;
+  --status-run: #6d5cff;
+  --status-pend: #d0d4de;
+  --layer-source: #cd7f32;
+  --layer-transform: #6b7280;
+  --layer-output: #d4a017;
+  --layer-metrics: #0d9488;
+  --layer-validate: #7c3aed;
+  --layer-sink: #2d7ff9;
+  --layer-aggregate: #e11d48;
+  --tooltip-bg: rgba(255,255,255,0.88);
+  --tooltip-border: rgba(0,0,0,0.08);
+  --bar-text: #ffffff;
+  --now-glow: rgba(109,92,255,0.4);
+  --parallelism-fill: rgba(109,92,255,0.06);
+  --parallelism-stroke: rgba(109,92,255,0.25);
+  --bottleneck-tint: rgba(229,148,12,0.06);
+  --bottleneck-border: #b45309;
+  --danger-tint: rgba(229,69,59,0.05);
+  --success-tint: rgba(24,160,88,0.05);
+  --overlay-bg: rgba(0,0,0,0.25);
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.08);
+  --accent-glow: rgba(109,92,255,0.18);
+  --green: #18a058;
+  --red: #e5453b;
+  --amber: #d97706;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BASE TYPOGRAPHY & SCROLLBARS
+   ═══════════════════════════════════════════════════════════════════════ */
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+  transition: background var(--transition);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+input, button, select { font-family: inherit; font-size: inherit; color: inherit; }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--text);
+  transition: all var(--transition);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   APP LAYOUT
+   ═══════════════════════════════════════════════════════════════════════ */
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HEADER BAR
+   ═══════════════════════════════════════════════════════════════════════ */
+.header {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: -0.3px;
+  user-select: none;
+}
+.header-brand svg { width: 18px; height: 18px; flex-shrink: 0; }
+.header-sep { width: 1px; height: 20px; background: var(--border-bright); flex-shrink: 0; }
+.header-title { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.header-subtitle {
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.header-stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.header-stat .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px currentColor;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all var(--transition);
+  color: var(--text-2);
+  position: relative;
+  overflow: hidden;
+}
+.theme-toggle:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+  transform: rotate(15deg);
+}
+.theme-toggle:active { transform: rotate(15deg) scale(0.92); }
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TAB BAR — animated underline that moves between tabs
+   ═══════════════════════════════════════════════════════════════════════ */
+.tab-bar {
+  display: flex;
+  align-items: center;
+  height: var(--tab-h);
+  padding: 0 16px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+.tab-bar-left {
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 100%;
+}
+.tab {
+  padding: 0 16px;
+  height: var(--tab-h);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  position: relative;
+  transition: color var(--transition);
+  user-select: none;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r4); }
+.tab.active { color: var(--text); font-weight: 600; }
+.tab .tab-icon { font-size: 14px; opacity: 0.6; transition: opacity var(--transition); }
+.tab:hover .tab-icon { opacity: 0.9; }
+.tab.active .tab-icon { opacity: 1; color: var(--accent); }
+.tab .tab-count {
+  font-size: 10px;
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border-radius: var(--r100);
+  background: var(--bg-4);
+  color: var(--text-3);
+  min-width: 18px;
+  text-align: center;
+  transition: all var(--transition);
+}
+.tab:hover .tab-count { background: var(--bg-5); }
+.tab.active .tab-count { background: var(--accent-dim); color: var(--accent); }
+
+/* Sliding underline indicator */
+.tab-underline {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+  transition: left 280ms var(--ease-out-expo), width 280ms var(--ease-out-expo);
+  will-change: left, width;
+  box-shadow: 0 -1px 6px var(--accent-glow);
+}
+
+.tab-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shortcuts-hint {
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.2px;
+  opacity: 0.8;
+}
+.shortcuts-hint kbd {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-4);
+  font-family: var(--mono);
+  font-size: 9px;
+  border: 1px solid var(--border-bright);
+  color: var(--text-2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOOLBAR — playback controls, scrubber, speed
+   ═══════════════════════════════════════════════════════════════════════ */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  height: var(--toolbar-h);
+  transition: background var(--transition);
+}
+.toolbar.playing-tint {
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent));
+  border-bottom-color: var(--border-accent);
+}
+.toolbar-group { display: flex; align-items: center; gap: 4px; }
+.toolbar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border-bright);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Tool buttons */
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--r6);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  border: 1px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+.tool-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+  border-color: var(--border);
+}
+.tool-btn:active { transform: scale(0.96); }
+.tool-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tool-btn.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(109,92,255,0.15);
+}
+.tool-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.tool-btn.primary:hover {
+  opacity: 0.92;
+  box-shadow: 0 2px 12px var(--accent-glow);
+}
+.tool-btn.primary:active { transform: scale(0.95); opacity: 0.85; }
+.tool-btn.primary.playing {
+  background: var(--bg-4);
+  color: var(--text);
+  border-color: var(--border-bright);
+}
+.tool-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Speed selector */
+.speed-select {
+  padding: 3px 8px;
+  border-radius: var(--r4);
+  border: 1px solid var(--border-bright);
+  background: var(--bg-3);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: all var(--transition);
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 20px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%238a92a8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+.speed-select:hover { border-color: var(--border-bright); background-color: var(--bg-4); }
+.speed-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Scrubber / progress slider */
+.scrubber-wrap {
+  flex: 1;
+  max-width: 260px;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.scrubber-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  min-width: 40px;
+  text-align: right;
+  user-select: none;
+}
+.scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg-4);
+  outline: none;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.scrubber:hover { background: var(--bg-5); }
+.scrubber::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+}
+.scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  margin-top: -5px;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+  transition: transform 120ms var(--spring), box-shadow var(--transition);
+}
+.scrubber::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 5px var(--accent-glow);
+}
+.scrubber::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+}
+.scrubber:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 0 0 5px var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTENT AREA
+   ═══════════════════════════════════════════════════════════════════════ */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GANTT PANEL — grid layout with labels, axis, canvas
+   ═══════════════════════════════════════════════════════════════════════ */
+.gantt-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: fade-in 200ms ease;
+}
+.gantt-panel.hidden { display: none; }
+
+.gantt-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--label-w) 1fr;
+  grid-template-rows: var(--axis-h) 1fr;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Axis corner (top-left) */
+.axis-corner {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 10px 5px;
+  z-index: 3;
+}
+.axis-corner-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-3);
+}
+
+/* Time axis header */
+.time-axis {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+}
+.time-axis canvas { display: block; }
+
+/* Node label column */
+.label-col {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  position: relative;
+  z-index: 2;
+}
+.label-col::-webkit-scrollbar { display: none; }
+
+.label-row {
+  display: flex;
+  align-items: center;
+  height: var(--row-h);
+  padding: 0 10px 0 0;
+  gap: 6px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background var(--transition), border-color 200ms var(--ease-out-expo);
+  position: relative;
+}
+.label-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(90deg, var(--accent-dim), transparent);
+  transition: opacity var(--transition);
+  pointer-events: none;
+}
+.label-row:hover { background: var(--hover-bg); }
+.label-row:hover::before { opacity: 0.5; }
+.label-row.selected {
+  background: var(--selected-bg);
+  border-left-color: var(--accent);
+}
+.label-row.selected::before { opacity: 1; }
+.label-row.hovered { background: var(--hover-bg); }
+.label-row.bottleneck {
+  background: var(--bottleneck-tint);
+}
+.label-row .layer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 8px;
+  transition: transform 120ms var(--spring), box-shadow var(--transition);
+}
+.label-row:hover .layer-dot {
+  transform: scale(1.5);
+  box-shadow: 0 0 6px currentColor;
+}
+.label-row .status-icon {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  flex-shrink: 0;
+  transition: transform var(--transition);
+}
+.label-row:hover .status-icon { transform: scale(1.1); }
+.label-row .node-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--transition);
+}
+.label-row:hover .node-name { color: var(--text); }
+.label-row.selected .node-name { color: var(--accent); font-weight: 600; }
+.label-row .duration {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+  margin-right: 4px;
+  transition: color var(--transition);
+}
+.label-row:hover .duration { color: var(--text-2); }
+.layer-sep {
+  height: 1px;
+  background: var(--border-bright);
+  margin: 0;
+}
+
+/* Canvas wrapper */
+.canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background: var(--canvas-bg);
+  transition: background var(--transition);
+}
+.canvas-wrap canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   NOW MARKER — accent pill with animated glow
+   ═══════════════════════════════════════════════════════════════════════ */
+.now-pill {
+  position: absolute;
+  top: -1px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 0 0 var(--r4) var(--r4);
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: 0.5px;
+  z-index: 5;
+  box-shadow: 0 2px 8px var(--now-glow);
+  animation: now-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+  user-select: none;
+}
+.now-pill.hidden { display: none; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FOOTER — summary stats with count-pulse animation
+   ═══════════════════════════════════════════════════════════════════════ */
+.gantt-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--footer-h);
+  padding: 0 16px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.footer-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.footer-stat .stat-val {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+}
+.footer-stat .stat-val.count-pulse { animation: count-pulse 400ms ease; }
+.footer-sep { width: 1px; height: 16px; background: var(--border-bright); flex-shrink: 0; }
+.footer-stat .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px currentColor;
+}
+.footer-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ZOOM HUD — glassmorphic floating panel
+   ═══════════════════════════════════════════════════════════════════════ */
+.zoom-hud {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: var(--r10);
+  background: var(--tooltip-bg);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--tooltip-border);
+  box-shadow: var(--shadow-md);
+  z-index: 6;
+  transition: opacity var(--transition);
+}
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.zoom-btn:hover { background: var(--hover-bg); color: var(--text); }
+.zoom-btn:active { transform: scale(0.9); }
+.zoom-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.zoom-level {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  min-width: 42px;
+  text-align: center;
+  user-select: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GLASSMORPHIC TOOLTIP
+   ═══════════════════════════════════════════════════════════════════════ */
+.gantt-tooltip {
+  position: fixed;
+  padding: 10px 14px;
+  border-radius: var(--r10);
+  background: var(--tooltip-bg);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--tooltip-border);
+  box-shadow: var(--shadow-xl);
+  z-index: 20;
+  pointer-events: none;
+  max-width: 290px;
+  animation: tooltip-in 120ms var(--ease-out-expo);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.gantt-tooltip.hidden { opacity: 0; pointer-events: none; }
+.tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.tooltip-header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 4px currentColor;
+}
+.tooltip-header .name { font-weight: 600; color: var(--text); }
+.tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11px;
+  padding: 1px 0;
+}
+.tooltip-row .label { color: var(--text-3); }
+.tooltip-row .value { font-family: var(--mono); color: var(--text-2); text-align: right; }
+.tooltip-warn {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: var(--r4);
+  background: color-mix(in srgb, var(--bg-3) 82%, var(--amber));
+  color: var(--amber);
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, transparent 80%, var(--amber));
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CONTEXT MENU — spring entrance animation
+   ═══════════════════════════════════════════════════════════════════════ */
+.context-menu {
+  position: fixed;
+  min-width: 220px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--r10);
+  box-shadow: var(--shadow-xl);
+  padding: 4px 0;
+  z-index: 25;
+  animation: ctx-spring 180ms var(--spring);
+  font-size: 12px;
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+}
+.context-menu.hidden { display: none; }
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 80ms ease-out, color var(--transition);
+  color: var(--text-2);
+  border-radius: 0;
+}
+.ctx-item:hover { background: var(--hover-bg); color: var(--text); }
+.ctx-item:active { background: var(--active-bg); }
+.ctx-item .ctx-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.ctx-item:hover .ctx-icon { opacity: 1; }
+.ctx-item .ctx-label { flex: 1; }
+.ctx-item .ctx-shortcut {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--mono);
+  padding: 1px 5px;
+  border-radius: var(--r4);
+  background: var(--bg-4);
+}
+.ctx-sep { height: 1px; background: var(--border); margin: 4px 8px; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed;
+  bottom: 56px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  pointer-events: none;
+}
+.toast {
+  padding: 8px 14px;
+  border-radius: var(--r6);
+  background: var(--bg-3);
+  border: 1px solid var(--border-bright);
+  box-shadow: var(--shadow-md);
+  font-size: 12px;
+  color: var(--text);
+  animation: toast-in 220ms var(--ease-out-expo);
+  max-width: 300px;
+  pointer-events: auto;
+  backdrop-filter: blur(10px) saturate(1.2);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.toast .toast-icon { font-size: 13px; flex-shrink: 0; opacity: 0.7; }
+.toast.success { border-color: color-mix(in srgb, transparent 70%, var(--green)); }
+.toast.success .toast-icon { color: var(--green); }
+.toast.error { border-color: color-mix(in srgb, transparent 70%, var(--red)); }
+.toast.error .toast-icon { color: var(--red); }
+.toast.out { animation: toast-out 150ms ease-in forwards; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HISTORY TABLE — sortable columns, compare checkboxes
+   ═══════════════════════════════════════════════════════════════════════ */
+.history-panel {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  display: none;
+  flex-direction: column;
+  animation: slide-up 200ms var(--ease-out-expo);
+}
+.history-panel.visible { display: flex; }
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+.history-toolbar .compare-btn {
+  display: none;
+  padding: 5px 14px;
+  border-radius: var(--r6);
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  animation: btn-appear 220ms var(--spring);
+  gap: 6px;
+  align-items: center;
+  border: none;
+}
+.history-toolbar .compare-btn.visible { display: flex; }
+.history-toolbar .compare-btn:hover {
+  box-shadow: 0 2px 12px var(--accent-glow);
+  transform: translateY(-1px);
+}
+.history-toolbar .compare-btn:active { transform: scale(0.96); }
+
+.history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.history-table thead { position: sticky; top: 0; z-index: 2; }
+.history-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-3);
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+  user-select: none;
+  white-space: nowrap;
+}
+.history-table th:hover { color: var(--text); background: var(--hover-bg); }
+.history-table th .sort-arrow { font-size: 9px; margin-left: 3px; opacity: 0.4; transition: opacity var(--transition); }
+.history-table th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+.history-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  transition: background var(--transition);
+}
+.history-table tr:nth-child(even) td { background: var(--hover-bg); }
+.history-table tbody tr {
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.history-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--bg-2) 90%, var(--accent));
+}
+.history-table tbody tr.selected td {
+  background: var(--selected-bg);
+}
+.history-table tbody tr:active td {
+  background: var(--active-bg);
+}
+
+/* Table cell elements */
+.run-id { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform var(--transition);
+}
+.status-pill:hover { transform: scale(1.04); }
+.status-pill.ok { background: color-mix(in srgb, transparent 84%, var(--status-ok)); color: var(--status-ok); }
+.status-pill.fail { background: color-mix(in srgb, transparent 84%, var(--status-fail)); color: var(--status-fail); }
+.status-pill.cancel { background: color-mix(in srgb, transparent 84%, var(--status-cancel)); color: var(--status-cancel); }
+.status-pill .pill-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.trigger-badge {
+  padding: 2px 8px;
+  border-radius: var(--r4);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: var(--bg-4);
+  color: var(--text-3);
+  transition: all var(--transition);
+}
+.trigger-badge.scheduled { color: var(--cyan); background: color-mix(in srgb, transparent 88%, var(--cyan)); }
+.trigger-badge.manual { color: var(--amber); background: color-mix(in srgb, transparent 88%, var(--amber)); }
+.compare-check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+.compare-check:hover { transform: scale(1.15); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COMPARE VIEW — split panels with delta summary
+   ═══════════════════════════════════════════════════════════════════════ */
+.compare-panel {
+  flex: 1;
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  animation: fade-in 200ms ease;
+}
+.compare-panel.visible { display: flex; }
+
+.compare-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.compare-delta { display: flex; gap: 8px; flex: 1; flex-wrap: wrap; }
+.delta-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--r100);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--mono);
+  transition: transform var(--transition);
+}
+.delta-chip:hover { transform: scale(1.05); }
+.delta-chip.slower { background: color-mix(in srgb, transparent 86%, var(--red)); color: var(--status-fail); }
+.delta-chip.faster { background: color-mix(in srgb, transparent 86%, var(--green)); color: var(--status-ok); }
+.delta-chip.neutral { background: var(--bg-4); color: var(--text-3); }
+.compare-exit {
+  padding: 4px 12px;
+  border-radius: var(--r6);
+  border: 1px solid var(--border-bright);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.compare-exit:hover { background: var(--hover-bg); color: var(--text); border-color: var(--border-bright); }
+.compare-exit:active { transform: scale(0.96); }
+.compare-exit:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.compare-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border-bright);
+  overflow: hidden;
+}
+.compare-side { background: var(--bg-2); display: flex; flex-direction: column; overflow: hidden; }
+.compare-side-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.compare-side-header .run-label {
+  padding: 2px 8px;
+  border-radius: var(--r4);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+.compare-side-header .run-label.a { background: color-mix(in srgb, transparent 84%, var(--blue)); color: var(--blue); }
+.compare-side-header .run-label.b { background: color-mix(in srgb, transparent 84%, var(--accent)); color: var(--accent); }
+.compare-canvas-wrap { flex: 1; position: relative; overflow: auto; }
+.compare-canvas-wrap canvas { display: block; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS (14 distinct)
+   ═══════════════════════════════════════════════════════════════════════ */
+@keyframes now-pulse {
+  0%, 100% { box-shadow: 0 2px 8px var(--now-glow); }
+  50% { box-shadow: 0 2px 18px var(--now-glow), 0 0 30px var(--now-glow); }
+}
+@keyframes count-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.22); color: var(--accent); }
+  100% { transform: scale(1); }
+}
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ctx-spring {
+  from { opacity: 0; transform: scale(0.88) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px) scale(0.94); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateX(20px) scale(0.94); }
+}
+@keyframes btn-appear {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+@keyframes sweep-gradient {
+  0% { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes bar-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   UTILITY CLASSES
+   ═══════════════════════════════════════════════════════════════════════ */
+.hidden { display: none !important; }
+.mono { font-family: var(--mono); }
+.focus-ring:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r4); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ HEADER ═══ -->
+  <div class="header">
+    <div class="header-brand">
+      <svg viewBox="0 0 18 18" fill="none"><path d="M9 1L2 5v8l7 4 7-4V5L9 1z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 5l7 4m0 0l7-4M9 9v8" stroke="currentColor" stroke-width="1.2" opacity="0.5"/></svg>
+      EDOG Studio
+    </div>
+    <div class="header-sep"></div>
+    <div class="header-title">DAG Gantt Chart</div>
+    <div class="header-subtitle">Execution #2847 ▸ Sales Pipeline v3</div>
+    <div class="header-right">
+      <div class="header-stat"><span class="dot" style="background:var(--status-ok);box-shadow:0 0 6px var(--status-ok)"></span> 20 ok</div>
+      <div class="header-stat"><span class="dot" style="background:var(--status-fail);box-shadow:0 0 6px var(--status-fail)"></span> 2 fail</div>
+      <div class="header-stat"><span class="dot" style="background:var(--status-cancel);box-shadow:0 0 6px var(--status-cancel)"></span> 1 cancel</div>
+      <div class="header-sep"></div>
+      <button class="theme-toggle focus-ring" id="themeToggle" title="Toggle theme (T)" aria-label="Toggle theme">◐</button>
+    </div>
+  </div>
+
+  <!-- ═══ TAB BAR ═══ -->
+  <div class="tab-bar">
+    <div class="tab-bar-left" id="tabBarLeft">
+      <div class="tab active" data-tab="gantt" tabindex="0" role="tab" aria-selected="true"><span class="tab-icon">▤</span> Gantt</div>
+      <div class="tab" data-tab="history" tabindex="0" role="tab" aria-selected="false"><span class="tab-icon">◷</span> History <span class="tab-count">8</span></div>
+      <div class="tab" data-tab="compare" tabindex="0" role="tab" aria-selected="false"><span class="tab-icon">⇄</span> Compare</div>
+      <div class="tab-underline" id="tabUnderline"></div>
+    </div>
+    <div class="tab-bar-right">
+      <span class="shortcuts-hint"><kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>Esc</kbd> exit compare · <kbd>+</kbd>/<kbd>-</kbd> zoom</span>
+    </div>
+  </div>
+
+  <!-- ═══ TOOLBAR ═══ -->
+  <div class="toolbar" id="ganttToolbar">
+    <div class="toolbar-group">
+      <button class="tool-btn primary" id="playBtn" title="Play execution (Space)" aria-label="Play execution">
+        <svg viewBox="0 0 14 14" fill="currentColor"><polygon points="3,1 12,7 3,13"/></svg>
+        Play
+      </button>
+      <button class="tool-btn" id="resetBtn" title="Reset (R)" aria-label="Reset">
+        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 7a6 6 0 1 1 1.5 4"/><path d="M1 11V7h4"/></svg>
+        Reset
+      </button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <label for="speedSelect" style="font-size:11px;color:var(--text-3);cursor:pointer">Speed</label>
+      <select class="speed-select" id="speedSelect" aria-label="Playback speed">
+        <option value="1">1×</option>
+        <option value="2">2×</option>
+        <option value="5">5×</option>
+        <option value="10" selected>10×</option>
+        <option value="20">20×</option>
+      </select>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="scrubber-wrap">
+      <span class="scrubber-time" id="scrubTime">0:00</span>
+      <input type="range" class="scrubber" id="scrubber" min="0" max="100" value="100" aria-label="Execution progress">
+      <span class="scrubber-time" id="scrubTotal">1:42</span>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button class="tool-btn" id="fitBtn" title="Fit to execution (0)" aria-label="Fit to execution">⊞ Fit</button>
+    </div>
+  </div>
+
+  <!-- ═══ CONTENT ═══ -->
+  <div class="content">
+
+    <!-- GANTT PANEL -->
+    <div class="gantt-panel" id="ganttPanel">
+      <div class="gantt-grid" id="ganttGrid">
+        <div class="axis-corner"><span class="axis-corner-label">Nodes</span></div>
+        <div class="time-axis" id="timeAxis"><canvas id="axisCanvas"></canvas></div>
+        <div class="label-col" id="labelCol"></div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="barCanvas"></canvas>
+          <div class="now-pill hidden" id="nowPill">NOW</div>
+        </div>
+      </div>
+      <!-- Zoom HUD -->
+      <div class="zoom-hud" id="zoomHud">
+        <button class="zoom-btn focus-ring" id="zoomOut" title="Zoom out (-)" aria-label="Zoom out">−</button>
+        <span class="zoom-level" id="zoomLevel">100%</span>
+        <button class="zoom-btn focus-ring" id="zoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
+        <button class="zoom-btn focus-ring" id="zoomFit" title="Fit (0)" aria-label="Fit">⊞</button>
+      </div>
+      <!-- Footer -->
+      <div class="gantt-footer" id="ganttFooter">
+        <div class="footer-stat">Σ <span class="stat-val mono" id="fTotalDuration">1m 42s</span></div>
+        <div class="footer-sep"></div>
+        <div class="footer-stat"><span class="dot" style="background:var(--status-ok)"></span> <span class="stat-val" id="fSucceeded">20</span> succeeded</div>
+        <div class="footer-stat"><span class="dot" style="background:var(--status-fail)"></span> <span class="stat-val" id="fFailed">2</span> failed</div>
+        <div class="footer-stat"><span class="dot" style="background:var(--status-cancel)"></span> <span class="stat-val" id="fCancelled">1</span> cancelled</div>
+        <div class="footer-sep"></div>
+        <div class="footer-stat">Max ∥ <span class="stat-val" id="fParallel">5</span></div>
+        <div class="footer-right">
+          <span style="font-size:10px;color:var(--text-3);font-family:var(--mono)">25 nodes · 7 layers</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY PANEL -->
+    <div class="history-panel" id="historyPanel">
+      <div class="history-toolbar">
+        <span style="font-size:12px;color:var(--text-2)">Select up to 2 runs to compare</span>
+        <button class="compare-btn" id="compareBtn" aria-label="Compare selected runs">⇄ Compare Selected</button>
+        <div style="flex:1"></div>
+        <span style="font-size:11px;color:var(--text-3);font-family:var(--mono)">8 executions</span>
+      </div>
+      <div style="flex:1;overflow:auto">
+        <table class="history-table" id="historyTable" role="grid">
+          <thead><tr>
+            <th style="width:36px" aria-label="Compare checkbox"></th>
+            <th class="sorted">Run ID <span class="sort-arrow">▾</span></th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Nodes</th>
+            <th>Trigger</th>
+          </tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- COMPARE PANEL -->
+    <div class="compare-panel" id="comparePanel">
+      <div class="compare-header">
+        <div class="compare-delta">
+          <span class="delta-chip slower">▴ +2m 15s slower</span>
+          <span class="delta-chip slower">+3 failures</span>
+          <span class="delta-chip faster">▾ −12s on Transform layer</span>
+        </div>
+        <button class="compare-exit focus-ring" id="compareExit" title="Exit compare (Esc)" aria-label="Exit compare">✕ Exit Compare</button>
+      </div>
+      <div class="compare-body">
+        <div class="compare-side">
+          <div class="compare-side-header">
+            <span class="run-label a">A</span>
+            <span>Run #2846</span>
+            <span class="status-pill ok"><span class="pill-dot"></span> Succeeded</span>
+            <span class="mono" style="font-size:11px;color:var(--text-2)">1m 42s</span>
+          </div>
+          <div class="compare-canvas-wrap"><canvas id="compareCanvasA"></canvas></div>
+        </div>
+        <div class="compare-side">
+          <div class="compare-side-header">
+            <span class="run-label b">B</span>
+            <span>Run #2847</span>
+            <span class="status-pill fail"><span class="pill-dot"></span> Failed</span>
+            <span class="mono" style="font-size:11px;color:var(--text-2)">3m 57s</span>
+          </div>
+          <div class="compare-canvas-wrap"><canvas id="compareCanvasB"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<!-- TOOLTIP (floating) -->
+<div class="gantt-tooltip hidden" id="tooltip" role="tooltip"></div>
+<!-- CONTEXT MENU (floating) -->
+<div class="context-menu hidden" id="ctxMenu" role="menu"></div>
+<!-- TOASTS -->
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Gantt Chart Engine
+   Pixel · Canvas 2D · 25 nodes · 7 layers · execution playback
+   ═══════════════════════════════════════════════════════════════════════ */
+'use strict';
+
+/* ────────────────────────────────────────────────────────────────────
+   MOCK DATA — 25 nodes across 7 layers with realistic timing
+   ──────────────────────────────────────────────────────────────────── */
+const LAYERS = [
+  { id: 'source',    name: 'Source',    color: '--layer-source' },
+  { id: 'validate',  name: 'Validate',  color: '--layer-validate' },
+  { id: 'transform', name: 'Transform', color: '--layer-transform' },
+  { id: 'aggregate', name: 'Aggregate', color: '--layer-aggregate' },
+  { id: 'output',    name: 'Output',    color: '--layer-output' },
+  { id: 'metrics',   name: 'Metrics',   color: '--layer-metrics' },
+  { id: 'sink',      name: 'Sink',      color: '--layer-sink' },
+];
+
+const NODES = [
+  // Layer 0: Source (5 nodes, staggered start 0-2s)
+  { id:'n01', name:'Sales_CRM_Extract',     layer:0, start:0,    dur:8.2,  status:'succeeded' },
+  { id:'n02', name:'Inventory_API_Pull',     layer:0, start:0.5,  dur:12.4, status:'succeeded' },
+  { id:'n03', name:'Customer_DB_Snapshot',   layer:0, start:1.0,  dur:6.8,  status:'succeeded' },
+  { id:'n04', name:'Product_Catalog_Fetch',  layer:0, start:0.3,  dur:9.5,  status:'succeeded' },
+  { id:'n05', name:'Exchange_Rates_API',     layer:0, start:1.5,  dur:3.2,  status:'succeeded' },
+  // Layer 1: Validate (4 nodes)
+  { id:'n06', name:'Schema_Validation',      layer:1, start:8.5,  dur:4.2,  status:'succeeded' },
+  { id:'n07', name:'Null_Check_Pass',        layer:1, start:9.0,  dur:3.8,  status:'succeeded' },
+  { id:'n08', name:'Type_Coercion',          layer:1, start:13.0, dur:5.1,  status:'succeeded' },
+  { id:'n09', name:'Referential_Integrity',  layer:1, start:10.0, dur:6.5,  status:'failed' },
+  // Layer 2: Transform (5 nodes)
+  { id:'n10', name:'Currency_Normalize',     layer:2, start:16.5, dur:7.3,  status:'succeeded' },
+  { id:'n11', name:'Date_Standardize',       layer:2, start:17.0, dur:4.8,  status:'succeeded' },
+  { id:'n12', name:'Join_Sales_Inventory',   layer:2, start:18.2, dur:11.5, status:'succeeded', bottleneck:true },
+  { id:'n13', name:'Dedup_Customers',        layer:2, start:16.8, dur:5.2,  status:'succeeded' },
+  { id:'n14', name:'Calc_Unit_Prices',       layer:2, start:21.8, dur:6.1,  status:'succeeded' },
+  // Layer 3: Aggregate (3 nodes)
+  { id:'n15', name:'Revenue_By_Region',      layer:3, start:30.0, dur:9.8,  status:'succeeded' },
+  { id:'n16', name:'Top_Products_Rank',      layer:3, start:30.5, dur:8.2,  status:'succeeded' },
+  { id:'n17', name:'Customer_Segmentation',  layer:3, start:29.8, dur:12.4, status:'failed' },
+  // Layer 4: Output (3 nodes)
+  { id:'n18', name:'Dashboard_Materialized', layer:4, start:42.5, dur:8.5,  status:'succeeded' },
+  { id:'n19', name:'Executive_Summary_View', layer:4, start:43.0, dur:6.2,  status:'succeeded' },
+  { id:'n20', name:'Alert_Thresholds_Check', layer:4, start:40.0, dur:5.5,  status:'succeeded' },
+  // Layer 5: Metrics (3 nodes)
+  { id:'n21', name:'DQ_Score_Compute',       layer:5, start:51.0, dur:7.8,  status:'succeeded' },
+  { id:'n22', name:'Lineage_Metadata_Write', layer:5, start:49.5, dur:4.3,  status:'succeeded' },
+  { id:'n23', name:'Perf_Counters_Emit',     layer:5, start:50.0, dur:3.1,  status:'cancelled' },
+  // Layer 6: Sink (2 nodes)
+  { id:'n24', name:'OneLake_Delta_Write',    layer:6, start:59.0, dur:10.2, status:'succeeded' },
+  { id:'n25', name:'Notification_Dispatch',  layer:6, start:58.5, dur:3.5,  status:'succeeded' },
+];
+
+const TOTAL_DURATION = 102;
+const PARALLEL_LIMIT = 5;
+
+/* ── HISTORY DATA ── */
+const HISTORY = [
+  { id:'#2847', status:'failed',    started:'2 min ago',   dur:'1m 42s', nodes:'22/25', trigger:'manual' },
+  { id:'#2846', status:'succeeded', started:'1 hr ago',    dur:'1m 28s', nodes:'25/25', trigger:'scheduled' },
+  { id:'#2845', status:'succeeded', started:'3 hr ago',    dur:'1m 31s', nodes:'25/25', trigger:'scheduled' },
+  { id:'#2844', status:'cancelled', started:'6 hr ago',    dur:'0m 45s', nodes:'12/25', trigger:'manual' },
+  { id:'#2843', status:'succeeded', started:'12 hr ago',   dur:'1m 35s', nodes:'25/25', trigger:'scheduled' },
+  { id:'#2842', status:'succeeded', started:'1 day ago',   dur:'1m 22s', nodes:'25/25', trigger:'scheduled' },
+  { id:'#2841', status:'failed',    started:'1 day ago',   dur:'2m 05s', nodes:'19/25', trigger:'manual' },
+  { id:'#2840', status:'succeeded', started:'2 days ago',  dur:'1m 18s', nodes:'25/25', trigger:'scheduled' },
+];
+
+/* ────────────────────────────────────────────────────────────────────
+   DOM REFERENCES
+   ──────────────────────────────────────────────────────────────────── */
+const $ = (s, p) => (p || document).querySelector(s);
+const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
+const barCanvas = $('#barCanvas');
+const barCtx = barCanvas.getContext('2d');
+const axisCanvas = $('#axisCanvas');
+const axisCtx = axisCanvas.getContext('2d');
+const labelCol = $('#labelCol');
+const canvasWrap = $('#canvasWrap');
+const tooltip = $('#tooltip');
+const ctxMenu = $('#ctxMenu');
+const toastContainer = $('#toastContainer');
+const nowPill = $('#nowPill');
+
+/* ────────────────────────────────────────────────────────────────────
+   STATE
+   ──────────────────────────────────────────────────────────────────── */
+let currentTab = 'gantt';
+let selectedNodeId = null;
+let hoveredNodeId = null;
+let zoomLevel = 1.0;
+let scrollX = 0;
+let pxPerSec = 0;
+let canvasW = 0, canvasH = 0;
+let isPlaying = false;
+let playProgress = 1.0;
+let playSpeed = 10;
+let playRafId = null;
+let playLastTime = 0;
+let dpr = window.devicePixelRatio || 1;
+let checkedRuns = new Set();
+const ROW_H = 32;
+const BAR_H = 22;
+const BAR_PAD = (ROW_H - BAR_H) / 2;
+const BAR_RADIUS = 4;
+
+/* ────────────────────────────────────────────────────────────────────
+   OFFSCREEN PATTERNS — hatch, stripe, dot (created via Canvas API)
+   ──────────────────────────────────────────────────────────────────── */
+let hatchPattern = null;
+let stripePattern = null;
+let dotPattern = null;
+
+function createPatterns() {
+  // Failed: diagonal hatch (45 degrees)
+  const hc = document.createElement('canvas');
+  hc.width = 8; hc.height = 8;
+  const hx = hc.getContext('2d');
+  hx.strokeStyle = 'rgba(255,255,255,0.25)';
+  hx.lineWidth = 1.2;
+  hx.beginPath(); hx.moveTo(0, 8); hx.lineTo(8, 0); hx.stroke();
+  hx.beginPath(); hx.moveTo(-2, 2); hx.lineTo(2, -2); hx.stroke();
+  hx.beginPath(); hx.moveTo(6, 10); hx.lineTo(10, 6); hx.stroke();
+  hatchPattern = barCtx.createPattern(hc, 'repeat');
+
+  // Cancelled: vertical stripes
+  const sc = document.createElement('canvas');
+  sc.width = 8; sc.height = 8;
+  const sx = sc.getContext('2d');
+  sx.strokeStyle = 'rgba(255,255,255,0.2)';
+  sx.lineWidth = 2;
+  sx.beginPath(); sx.moveTo(2, 0); sx.lineTo(2, 8); sx.stroke();
+  sx.beginPath(); sx.moveTo(6, 0); sx.lineTo(6, 8); sx.stroke();
+  stripePattern = barCtx.createPattern(sc, 'repeat');
+
+  // Skipped: dotted grid
+  const dc = document.createElement('canvas');
+  dc.width = 6; dc.height = 6;
+  const dx = dc.getContext('2d');
+  dx.fillStyle = 'rgba(255,255,255,0.18)';
+  dx.beginPath(); dx.arc(3, 3, 1, 0, Math.PI * 2); dx.fill();
+  dotPattern = barCtx.createPattern(dc, 'repeat');
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   THEME UTILITIES
+   ──────────────────────────────────────────────────────────────────── */
+function getVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function isDark() { return document.documentElement.dataset.theme === 'dark'; }
+
+$('#themeToggle').onclick = () => {
+  const html = document.documentElement;
+  html.dataset.theme = isDark() ? 'light' : 'dark';
+  $('#themeToggle').textContent = isDark() ? '◐' : '◑';
+  createPatterns();
+  fullRender();
+  showToast(isDark() ? '◐ Dark theme' : '◑ Light theme');
+};
+
+function statusColor(status) {
+  const m = {
+    'succeeded': '--status-ok', 'failed': '--status-fail', 'cancelled': '--status-cancel',
+    'skipped': '--status-skip', 'running': '--status-run', 'pending': '--status-pend'
+  };
+  return getVar(m[status] || '--text-3');
+}
+
+function layerColor(layerIdx) { return getVar(LAYERS[layerIdx].color); }
+
+function statusIcon(status) {
+  return { 'succeeded':'●', 'failed':'✕', 'cancelled':'◆', 'skipped':'◇', 'running':'◉', 'pending':'○' }[status] || '○';
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   TAB SYSTEM — animated sliding underline
+   ──────────────────────────────────────────────────────────────────── */
+function initTabs() {
+  const tabs = $$('.tab', $('#tabBarLeft'));
+  const underline = $('#tabUnderline');
+
+  function activateTab(tabName) {
+    currentTab = tabName;
+    tabs.forEach(t => {
+      const isActive = t.dataset.tab === tabName;
+      t.classList.toggle('active', isActive);
+      t.setAttribute('aria-selected', isActive);
+    });
+    updateUnderline();
+
+    $('#ganttPanel').classList.toggle('hidden', tabName !== 'gantt');
+    $('#ganttToolbar').style.display = tabName === 'gantt' ? '' : 'none';
+    $('#historyPanel').style.display = tabName === 'history' ? 'flex' : 'none';
+    $('#historyPanel').classList.toggle('visible', tabName === 'history');
+    $('#comparePanel').style.display = tabName === 'compare' ? 'flex' : 'none';
+    $('#comparePanel').classList.toggle('visible', tabName === 'compare');
+
+    if (tabName === 'gantt') { resizeCanvas(); fullRender(); }
+    if (tabName === 'compare') requestAnimationFrame(renderCompare);
+  }
+
+  function updateUnderline() {
+    const active = $('.tab.active', $('#tabBarLeft'));
+    if (!active) return;
+    underline.style.left = active.offsetLeft + 'px';
+    underline.style.width = active.offsetWidth + 'px';
+  }
+
+  tabs.forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
+  requestAnimationFrame(updateUnderline);
+  window.addEventListener('resize', updateUnderline);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   FORMAT HELPERS
+   ──────────────────────────────────────────────────────────────────── */
+function formatDur(s) {
+  if (s < 60) return s.toFixed(1) + 's';
+  return Math.floor(s / 60) + 'm ' + Math.round(s % 60).toString().padStart(2, '0') + 's';
+}
+
+function formatTime(s) {
+  return Math.floor(s / 60) + ':' + Math.floor(s % 60).toString().padStart(2, '0');
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   NODE LABEL COLUMN
+   ──────────────────────────────────────────────────────────────────── */
+function buildLabels() {
+  labelCol.innerHTML = '';
+  let lastLayer = -1;
+  NODES.forEach(n => {
+    if (n.layer !== lastLayer && lastLayer !== -1) {
+      const sep = document.createElement('div');
+      sep.className = 'layer-sep';
+      labelCol.appendChild(sep);
+    }
+    lastLayer = n.layer;
+    const row = document.createElement('div');
+    row.className = 'label-row' + (n.bottleneck ? ' bottleneck' : '');
+    row.dataset.nodeId = n.id;
+    const lc = layerColor(n.layer);
+    row.innerHTML = `
+      <span class="layer-dot" style="background:${lc};color:${lc}"></span>
+      <span class="status-icon" style="color:${statusColor(n.status)}">${statusIcon(n.status)}</span>
+      <span class="node-name" title="${n.name.replace(/_/g, ' ')}">${n.name.replace(/_/g, ' ')}</span>
+      <span class="duration">${formatDur(n.dur)}</span>
+    `;
+    row.addEventListener('click', () => selectNode(n.id));
+    row.addEventListener('mouseenter', () => hoverNode(n.id));
+    row.addEventListener('mouseleave', () => hoverNode(null));
+    labelCol.appendChild(row);
+  });
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   SELECTION / HOVER STATE
+   ──────────────────────────────────────────────────────────────────── */
+function selectNode(id) {
+  selectedNodeId = selectedNodeId === id ? null : id;
+  $$('.label-row').forEach(r => r.classList.toggle('selected', r.dataset.nodeId === selectedNodeId));
+  render();
+  if (selectedNodeId) showToast(`Selected: ${NODES.find(x => x.id === id).name.replace(/_/g, ' ')}`, '▸');
+}
+
+function hoverNode(id) {
+  hoveredNodeId = id;
+  $$('.label-row').forEach(r => r.classList.toggle('hovered', r.dataset.nodeId === hoveredNodeId && r.dataset.nodeId !== selectedNodeId));
+  render();
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   CANVAS SIZING (HiDPI aware)
+   ──────────────────────────────────────────────────────────────────── */
+function resizeCanvas() {
+  canvasW = canvasWrap.clientWidth;
+  canvasH = Math.max(NODES.length * ROW_H + 20, canvasWrap.clientHeight);
+  barCanvas.width = canvasW * dpr;
+  barCanvas.height = canvasH * dpr;
+  barCanvas.style.width = canvasW + 'px';
+  barCanvas.style.height = canvasH + 'px';
+  barCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const axisW = canvasW;
+  axisCanvas.width = axisW * dpr;
+  axisCanvas.height = 32 * dpr;
+  axisCanvas.style.width = axisW + 'px';
+  axisCanvas.style.height = '32px';
+  axisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  pxPerSec = (canvasW - 20) / (TOTAL_DURATION / zoomLevel);
+  createPatterns();
+}
+
+function fullRender() { render(); renderAxis(); }
+
+/* ────────────────────────────────────────────────────────────────────
+   TIME AXIS RENDERING
+   ──────────────────────────────────────────────────────────────────── */
+function getTickInterval() {
+  const vis = TOTAL_DURATION / zoomLevel;
+  if (vis < 30) return 2;
+  if (vis < 60) return 5;
+  if (vis < 180) return 10;
+  if (vis < 600) return 30;
+  return 60;
+}
+
+function renderAxis() {
+  const ctx = axisCtx;
+  const w = canvasW, h = 32;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = getVar('--surface');
+  ctx.fillRect(0, 0, w, h);
+
+  const tick = getTickInterval();
+  const minor = tick / 2;
+  const vis = TOTAL_DURATION / zoomLevel;
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+
+  // Minor ticks
+  for (let t = 0; t <= TOTAL_DURATION; t += minor) {
+    const x = (t - scrollX) * pxPerSec + 10;
+    if (x < -10 || x > w + 10) continue;
+    if (t % tick !== 0) {
+      ctx.beginPath();
+      ctx.strokeStyle = getVar('--grid-minor');
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([2, 2]);
+      ctx.moveTo(x, h - 4);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // Major ticks + labels
+  for (let t = 0; t <= TOTAL_DURATION; t += tick) {
+    const x = (t - scrollX) * pxPerSec + 10;
+    if (x < -10 || x > w + 10) continue;
+    ctx.beginPath();
+    ctx.strokeStyle = getVar('--grid-major');
+    ctx.lineWidth = 1;
+    ctx.moveTo(x, h - 8);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+
+    ctx.font = '500 11px ' + getVar('--mono');
+    ctx.fillStyle = getVar('--text-3');
+    ctx.fillText(vis < 120 ? t + 's' : formatTime(t), x, h - 10);
+  }
+
+  // Bottom line
+  ctx.beginPath();
+  ctx.strokeStyle = getVar('--border');
+  ctx.lineWidth = 0.5;
+  ctx.moveTo(0, h - 0.5);
+  ctx.lineTo(w, h - 0.5);
+  ctx.stroke();
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   MAIN BAR CANVAS RENDERING
+   ──────────────────────────────────────────────────────────────────── */
+function render() {
+  const ctx = barCtx;
+  const w = canvasW, h = canvasH;
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  ctx.fillStyle = getVar('--canvas-bg');
+  ctx.fillRect(0, 0, w, h);
+
+  const visibleEnd = playProgress * TOTAL_DURATION;
+  const tick = getTickInterval();
+  const minor = tick / 2;
+
+  // Major gridlines
+  ctx.lineWidth = 0.5;
+  for (let t = 0; t <= TOTAL_DURATION; t += tick) {
+    const x = (t - scrollX) * pxPerSec + 10;
+    if (x < 0 || x > w) continue;
+    ctx.strokeStyle = getVar('--grid-major');
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+
+  // Minor gridlines
+  ctx.setLineDash([2, 3]);
+  for (let t = 0; t <= TOTAL_DURATION; t += minor) {
+    if (t % tick === 0) continue;
+    const x = (t - scrollX) * pxPerSec + 10;
+    if (x < 0 || x > w) continue;
+    ctx.strokeStyle = getVar('--grid-minor');
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Layer separators
+  let lastLayer = -1;
+  NODES.forEach((n, i) => {
+    if (n.layer !== lastLayer && lastLayer !== -1) {
+      const y = i * ROW_H;
+      ctx.strokeStyle = getVar('--border-bright');
+      ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    lastLayer = n.layer;
+  });
+
+  // Parallelism area fill
+  drawParallelismArea(ctx, w, visibleEnd);
+
+  // Parallel limit dashed line
+  const limitY = PARALLEL_LIMIT * ROW_H;
+  ctx.strokeStyle = getVar('--parallelism-stroke');
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath(); ctx.moveTo(0, limitY); ctx.lineTo(w, limitY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '500 10px ' + getVar('--mono');
+  ctx.fillStyle = getVar('--text-3');
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('∥ limit: ' + PARALLEL_LIMIT, w - 8, limitY);
+  ctx.textAlign = 'left';
+
+  // Draw each node bar
+  NODES.forEach((n, i) => {
+    const rowY = i * ROW_H;
+    const y = rowY + BAR_PAD;
+    let barStart = n.start;
+    let barDur = n.dur;
+
+    // During playback, clip to visible time
+    if (playProgress < 1) {
+      if (barStart > visibleEnd) return;
+      barDur = Math.min(barDur, visibleEnd - barStart);
+      if (barDur <= 0) return;
+    }
+
+    const x = (barStart - scrollX) * pxPerSec + 10;
+    const bw = Math.max(barDur * pxPerSec, 3);
+    if (x + bw < 0 || x > w) return;
+
+    // Row tints
+    if (n.bottleneck) { ctx.fillStyle = getVar('--bottleneck-tint'); ctx.fillRect(0, rowY, w, ROW_H); }
+    if (n.status === 'failed') { ctx.fillStyle = getVar('--danger-tint'); ctx.fillRect(0, rowY, w, ROW_H); }
+    if (hoveredNodeId === n.id) { ctx.fillStyle = getVar('--hover-bg'); ctx.fillRect(0, rowY, w, ROW_H); }
+    if (selectedNodeId === n.id) { ctx.fillStyle = getVar('--selected-bg'); ctx.fillRect(0, rowY, w, ROW_H); }
+
+    // Layer color left edge
+    ctx.fillStyle = layerColor(n.layer);
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(0, rowY, 3, ROW_H);
+    ctx.globalAlpha = 1;
+
+    ctx.save();
+
+    if (n.status === 'pending') {
+      // Dashed outline
+      ctx.strokeStyle = getVar('--status-pend');
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      roundRect(ctx, x, y, bw, BAR_H, BAR_RADIUS);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (n.status === 'skipped') {
+      ctx.fillStyle = getVar('--status-skip');
+      ctx.globalAlpha = 0.4;
+      roundRect(ctx, x, y, bw, BAR_H, BAR_RADIUS);
+      ctx.fill();
+      if (dotPattern) { ctx.fillStyle = dotPattern; ctx.fill(); }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = getVar('--text-3');
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // Gradient fill (darker at bottom)
+      const col = statusColor(n.status);
+      const grad = ctx.createLinearGradient(x, y, x, y + BAR_H);
+      grad.addColorStop(0, col);
+      grad.addColorStop(1, shadeColor(col, -18));
+      ctx.fillStyle = grad;
+
+      // Running bars: pulsing opacity
+      const isGrowing = playProgress < 1 && barStart + barDur >= visibleEnd - 0.3;
+      ctx.globalAlpha = isGrowing ? (0.68 + 0.32 * Math.sin(Date.now() / 750 * Math.PI)) : 0.88;
+
+      roundRect(ctx, x, y, bw, BAR_H, BAR_RADIUS);
+      ctx.fill();
+
+      // Pattern overlays
+      ctx.globalAlpha = 1;
+      if (n.status === 'failed' && hatchPattern) { ctx.fillStyle = hatchPattern; ctx.fill(); }
+      if (n.status === 'cancelled' && stripePattern) { ctx.fillStyle = stripePattern; ctx.fill(); }
+
+      // Bottleneck left border (warm orange)
+      if (n.bottleneck) {
+        ctx.strokeStyle = getVar('--bottleneck-border');
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(x + 1, y + 2);
+        ctx.lineTo(x + 1, y + BAR_H - 2);
+        ctx.stroke();
+      }
+
+      // Selected: accent outline with glow
+      if (selectedNodeId === n.id) {
+        ctx.strokeStyle = getVar('--accent');
+        ctx.lineWidth = 2;
+        ctx.shadowColor = getVar('--accent-glow');
+        ctx.shadowBlur = 10;
+        roundRect(ctx, x - 1, y - 1, bw + 2, BAR_H + 2, BAR_RADIUS + 1);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Hover: subtle glow ring
+      if (hoveredNodeId === n.id && selectedNodeId !== n.id) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        ctx.shadowColor = col;
+        ctx.shadowBlur = 8;
+        roundRect(ctx, x, y, bw, BAR_H, BAR_RADIUS);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+      }
+
+      // Text inside bar (adaptive sizing)
+      if (bw >= 22) {
+        ctx.fillStyle = getVar('--bar-text');
+        ctx.font = '600 11px ' + getVar('--mono');
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 2;
+        ctx.shadowOffsetY = 1;
+        let text = '';
+        if (bw >= 130) text = n.name.replace(/_/g, ' ').substring(0, Math.floor((bw - 40) / 6.8)) + '  ' + formatDur(n.dur);
+        else if (bw >= 60) text = formatDur(n.dur);
+        else text = Math.round(n.dur) + 's';
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x + 2, y, bw - 6, BAR_H);
+        ctx.clip();
+        ctx.fillText(text, x + 6, y + BAR_H / 2);
+        ctx.restore();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+      }
+    }
+    ctx.restore();
+  });
+
+  // NOW marker
+  if (playProgress < 1) {
+    const nowX = (visibleEnd - scrollX) * pxPerSec + 10;
+    // Glow line (two passes for depth)
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = getVar('--accent');
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, h); ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = getVar('--now-glow');
+    ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.moveTo(nowX, 0); ctx.lineTo(nowX, h); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    nowPill.classList.remove('hidden');
+    const wrapRect = canvasWrap.getBoundingClientRect();
+    const gridRect = canvasWrap.parentElement.getBoundingClientRect();
+    nowPill.style.left = (nowX + wrapRect.left - gridRect.left) + 'px';
+  } else {
+    nowPill.classList.add('hidden');
+  }
+}
+
+/* ── Parallelism area chart ── */
+function drawParallelismArea(ctx, w, visibleEnd) {
+  ctx.fillStyle = getVar('--parallelism-fill');
+  ctx.beginPath();
+  ctx.moveTo(10, 0);
+  for (let t = 0; t <= Math.min(TOTAL_DURATION, visibleEnd); t += 0.5) {
+    let count = 0;
+    NODES.forEach(n => {
+      if (n.start <= t && n.start + n.dur > t && n.status !== 'skipped' && n.status !== 'pending') count++;
+    });
+    ctx.lineTo((t - scrollX) * pxPerSec + 10, count * 4);
+  }
+  const lastX = (Math.min(TOTAL_DURATION, visibleEnd) - scrollX) * pxPerSec + 10;
+  ctx.lineTo(lastX, 0);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/* ── Canvas helpers ── */
+function roundRect(ctx, x, y, w, h, r) {
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function shadeColor(color, percent) {
+  const num = parseInt(color.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = Math.max(0, Math.min(255, (num >> 16) + amt));
+  const G = Math.max(0, Math.min(255, ((num >> 8) & 0xFF) + amt));
+  const B = Math.max(0, Math.min(255, (num & 0xFF) + amt));
+  return '#' + (0x1000000 + R * 0x10000 + G * 0x100 + B).toString(16).slice(1);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   HIT TESTING — O(n) scan, but n=25 so irrelevant
+   ──────────────────────────────────────────────────────────────────── */
+function hitTest(mx, my) {
+  const rect = barCanvas.getBoundingClientRect();
+  const x = mx - rect.left;
+  const y = my - rect.top;
+  for (let i = 0; i < NODES.length; i++) {
+    const n = NODES[i];
+    const barX = (n.start - scrollX) * pxPerSec + 10;
+    const barW = n.dur * pxPerSec;
+    const barY = i * ROW_H + BAR_PAD;
+    if (x >= barX && x <= barX + barW && y >= barY && y <= barY + BAR_H) {
+      return { node: n, index: i };
+    }
+  }
+  return null;
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   CANVAS MOUSE EVENTS
+   ──────────────────────────────────────────────────────────────────── */
+barCanvas.addEventListener('mousemove', (e) => {
+  const hit = hitTest(e.clientX, e.clientY);
+  if (hit) {
+    barCanvas.style.cursor = 'pointer';
+    hoverNode(hit.node.id);
+    showTooltip(e.clientX, e.clientY, hit.node);
+  } else {
+    barCanvas.style.cursor = 'default';
+    hoverNode(null);
+    hideTooltip();
+  }
+});
+
+barCanvas.addEventListener('mouseleave', () => { hoverNode(null); hideTooltip(); });
+
+barCanvas.addEventListener('click', (e) => {
+  const hit = hitTest(e.clientX, e.clientY);
+  selectNode(hit ? hit.node.id : null);
+});
+
+barCanvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const hit = hitTest(e.clientX, e.clientY);
+  if (hit) {
+    selectNode(hit.node.id);
+    showContextMenu(e.clientX, e.clientY, hit.node);
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────────
+   GLASSMORPHIC TOOLTIP
+   ──────────────────────────────────────────────────────────────────── */
+function showTooltip(mx, my, node) {
+  const warn = node.bottleneck
+    ? `<div class="tooltip-warn">◆ Bottleneck — blocked pipeline for ${formatDur(node.dur)}</div>`
+    : '';
+  tooltip.innerHTML = `
+    <div class="tooltip-header">
+      <span class="dot" style="background:${statusColor(node.status)};box-shadow:0 0 6px ${statusColor(node.status)}"></span>
+      <span class="name">${node.name.replace(/_/g, ' ')}</span>
+    </div>
+    <div class="tooltip-row"><span class="label">Status</span><span class="value">${node.status}</span></div>
+    <div class="tooltip-row"><span class="label">Start</span><span class="value">${formatTime(node.start)}</span></div>
+    <div class="tooltip-row"><span class="label">End</span><span class="value">${formatTime(node.start + node.dur)}</span></div>
+    <div class="tooltip-row"><span class="label">Duration</span><span class="value">${formatDur(node.dur)}</span></div>
+    <div class="tooltip-row"><span class="label">Layer</span><span class="value" style="color:${layerColor(node.layer)}">${LAYERS[node.layer].name}</span></div>
+    ${warn}
+  `;
+  tooltip.classList.remove('hidden');
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let tx = mx + 14, ty = my - th - 8;
+  if (tx + tw > window.innerWidth - 12) tx = mx - tw - 14;
+  if (ty < 8) ty = my + 18;
+  tooltip.style.left = tx + 'px';
+  tooltip.style.top = ty + 'px';
+}
+
+function hideTooltip() { tooltip.classList.add('hidden'); }
+
+/* ────────────────────────────────────────────────────────────────────
+   CONTEXT MENU — spring animation entrance
+   ──────────────────────────────────────────────────────────────────── */
+function showContextMenu(mx, my, node) {
+  ctxMenu.innerHTML = `
+    <div class="ctx-item" data-action="inspect"><span class="ctx-icon">▸</span><span class="ctx-label">Inspect ${node.name.replace(/_/g, ' ')}</span></div>
+    <div class="ctx-item" data-action="logs"><span class="ctx-icon">◷</span><span class="ctx-label">View Logs</span><span class="ctx-shortcut">L</span></div>
+    <div class="ctx-item" data-action="rerun"><span class="ctx-icon">↻</span><span class="ctx-label">Re-run Node</span></div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="copy-id"><span class="ctx-icon">⎘</span><span class="ctx-label">Copy Node ID</span><span class="ctx-shortcut">Ctrl+C</span></div>
+    <div class="ctx-item" data-action="copy-dur"><span class="ctx-icon">⏱</span><span class="ctx-label">Copy Duration</span></div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" data-action="highlight"><span class="ctx-icon">◆</span><span class="ctx-label">Highlight Dependencies</span></div>
+    <div class="ctx-item" data-action="compare"><span class="ctx-icon">⇄</span><span class="ctx-label">Compare with Previous Run</span></div>
+  `;
+  ctxMenu.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    const cw = ctxMenu.offsetWidth, ch = ctxMenu.offsetHeight;
+    ctxMenu.style.left = (mx + cw > window.innerWidth - 8 ? mx - cw : mx) + 'px';
+    ctxMenu.style.top = (my + ch > window.innerHeight - 8 ? my - ch : my) + 'px';
+  });
+  $$('.ctx-item', ctxMenu).forEach(item => {
+    item.addEventListener('click', () => {
+      ctxMenu.classList.add('hidden');
+      showToast(`${item.dataset.action}: ${node.name.replace(/_/g, ' ')}`, '▸');
+    });
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (!ctxMenu.contains(e.target)) ctxMenu.classList.add('hidden');
+});
+
+/* ────────────────────────────────────────────────────────────────────
+   TOAST NOTIFICATIONS
+   ──────────────────────────────────────────────────────────────────── */
+function showToast(msg, icon, cls) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (cls ? ' ' + cls : '');
+  t.innerHTML = `<span class="toast-icon">${icon || '◆'}</span> ${msg}`;
+  toastContainer.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 200); }, 2400);
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   EXECUTION PLAYBACK
+   ──────────────────────────────────────────────────────────────────── */
+function startPlayback() {
+  if (isPlaying) return;
+  isPlaying = true;
+  playProgress = 0;
+  playLastTime = performance.now();
+  updatePlayBtn(true);
+  $('#ganttToolbar').classList.add('playing-tint');
+  nowPill.classList.remove('hidden');
+  showToast('Playback started', '▸');
+  playLoop();
+}
+
+function pausePlayback() {
+  isPlaying = false;
+  cancelAnimationFrame(playRafId);
+  updatePlayBtn(false);
+  $('#ganttToolbar').classList.remove('playing-tint');
+}
+
+function resetPlayback() {
+  pausePlayback();
+  playProgress = 1.0;
+  nowPill.classList.add('hidden');
+  fullRender();
+  updateScrubber();
+  updateFooterCounters();
+  showToast('Reset to full view', '↻');
+}
+
+function updatePlayBtn(playing) {
+  const btn = $('#playBtn');
+  btn.innerHTML = playing
+    ? '<svg viewBox="0 0 14 14" fill="currentColor"><rect x="2" y="1" width="4" height="12" rx="1"/><rect x="8" y="1" width="4" height="12" rx="1"/></svg> Pause'
+    : '<svg viewBox="0 0 14 14" fill="currentColor"><polygon points="3,1 12,7 3,13"/></svg> Play';
+  btn.classList.toggle('playing', playing);
+}
+
+function playLoop() {
+  if (!isPlaying) return;
+  const now = performance.now();
+  const dt = (now - playLastTime) / 1000;
+  playLastTime = now;
+  playProgress = Math.min(1, playProgress + (dt * playSpeed) / TOTAL_DURATION);
+
+  if (playProgress >= 1) {
+    playProgress = 1;
+    isPlaying = false;
+    updatePlayBtn(false);
+    $('#ganttToolbar').classList.remove('playing-tint');
+    nowPill.classList.add('hidden');
+    showToast('Playback complete', '●', 'success');
+  }
+
+  render();
+  updateScrubber();
+  updateFooterCounters();
+  if (isPlaying) playRafId = requestAnimationFrame(playLoop);
+}
+
+function updateScrubber() {
+  $('#scrubber').value = playProgress * 100;
+  $('#scrubTime').textContent = formatTime(playProgress * TOTAL_DURATION);
+}
+
+function updateFooterCounters() {
+  const t = playProgress * TOTAL_DURATION;
+  let ok = 0, fail = 0, cancel = 0;
+  NODES.forEach(n => {
+    if (n.start + n.dur <= t) {
+      if (n.status === 'succeeded') ok++;
+      else if (n.status === 'failed') fail++;
+      else if (n.status === 'cancelled') cancel++;
+    }
+  });
+  pulseUpdate('#fSucceeded', ok);
+  pulseUpdate('#fFailed', fail);
+  pulseUpdate('#fCancelled', cancel);
+}
+
+function pulseUpdate(sel, val) {
+  const el = $(sel);
+  if (parseInt(el.textContent) !== val) {
+    el.textContent = val;
+    el.classList.add('count-pulse');
+    setTimeout(() => el.classList.remove('count-pulse'), 400);
+  }
+}
+
+$('#playBtn').onclick = () => isPlaying ? pausePlayback() : startPlayback();
+$('#resetBtn').onclick = resetPlayback;
+$('#speedSelect').onchange = (e) => { playSpeed = parseInt(e.target.value); showToast(`Speed: ${playSpeed}×`); };
+$('#scrubber').oninput = (e) => {
+  if (isPlaying) pausePlayback();
+  playProgress = parseInt(e.target.value) / 100;
+  render();
+  updateScrubber();
+  updateFooterCounters();
+};
+
+/* ────────────────────────────────────────────────────────────────────
+   ZOOM
+   ──────────────────────────────────────────────────────────────────── */
+function zoom(delta) {
+  zoomLevel = Math.max(0.2, Math.min(5, zoomLevel + delta));
+  pxPerSec = (canvasW - 20) / (TOTAL_DURATION / zoomLevel);
+  fullRender();
+  $('#zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
+}
+
+$('#zoomIn').onclick = () => { zoom(0.2); showToast(`Zoom: ${Math.round(zoomLevel * 100)}%`); };
+$('#zoomOut').onclick = () => { zoom(-0.2); showToast(`Zoom: ${Math.round(zoomLevel * 100)}%`); };
+$('#zoomFit').onclick = () => { zoomLevel = 1; zoom(0); showToast('Fit to execution'); };
+$('#fitBtn').onclick = () => { zoomLevel = 1; zoom(0); showToast('Fit to execution'); };
+
+canvasWrap.addEventListener('wheel', (e) => {
+  if (e.ctrlKey || e.metaKey) {
+    e.preventDefault();
+    zoom(e.deltaY > 0 ? -0.12 : 0.12);
+  }
+}, { passive: false });
+
+/* ────────────────────────────────────────────────────────────────────
+   KEYBOARD SHORTCUTS
+   ──────────────────────────────────────────────────────────────────── */
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  switch (e.code) {
+    case 'Space': e.preventDefault(); isPlaying ? pausePlayback() : startPlayback(); break;
+    case 'KeyR': resetPlayback(); break;
+    case 'Equal': case 'NumpadAdd': zoom(0.2); break;
+    case 'Minus': case 'NumpadSubtract': zoom(-0.2); break;
+    case 'Digit0': zoomLevel = 1; zoom(0); break;
+    case 'KeyT': $('#themeToggle').click(); break;
+    case 'Escape':
+      ctxMenu.classList.add('hidden');
+      if (currentTab === 'compare') { $$('.tab')[0].click(); showToast('Exited comparison'); }
+      break;
+  }
+});
+
+/* ────────────────────────────────────────────────────────────────────
+   HISTORY TABLE — sortable, compare checkboxes
+   ──────────────────────────────────────────────────────────────────── */
+function buildHistory() {
+  const tbody = $('#historyBody');
+  tbody.innerHTML = '';
+  HISTORY.forEach((h, i) => {
+    const sc = h.status === 'succeeded' ? 'ok' : h.status === 'failed' ? 'fail' : 'cancel';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="checkbox" class="compare-check focus-ring" data-idx="${i}" aria-label="Select for comparison"></td>
+      <td><span class="run-id">${h.id}</span></td>
+      <td><span class="status-pill ${sc}"><span class="pill-dot"></span> ${h.status}</span></td>
+      <td style="font-size:11px;color:var(--text-2)">${h.started}</td>
+      <td><span class="mono" style="font-size:12px">${h.dur}</span></td>
+      <td style="font-size:11px;color:var(--text-2)">${h.nodes}</td>
+      <td><span class="trigger-badge ${h.trigger}">${h.trigger}</span></td>
+    `;
+    tr.addEventListener('click', (e) => {
+      if (e.target.type === 'checkbox') return;
+      $$('#historyBody tr').forEach(r => r.classList.remove('selected'));
+      tr.classList.add('selected');
+      showToast(`Loaded execution ${h.id}`, '▸');
+    });
+    tbody.appendChild(tr);
+  });
+
+  $$('.compare-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) {
+        if (checkedRuns.size >= 2) { cb.checked = false; showToast('Max 2 runs for comparison', '◆'); return; }
+        checkedRuns.add(cb.dataset.idx);
+      } else {
+        checkedRuns.delete(cb.dataset.idx);
+      }
+      $('#compareBtn').classList.toggle('visible', checkedRuns.size === 2);
+    });
+  });
+
+  $('#compareBtn').onclick = () => { $$('.tab')[2].click(); showToast('Comparing 2 executions', '⇄'); };
+}
+
+/* ────────────────────────────────────────────────────────────────────
+   COMPARE VIEW — dual canvas rendering
+   ──────────────────────────────────────────────────────────────────── */
+function renderCompare() {
+  [{ canvas: '#compareCanvasA', side: 0 }, { canvas: '#compareCanvasB', side: 1 }].forEach(({ canvas, side }) => {
+    const c = $(canvas);
+    if (!c) return;
+    const wrap = c.parentElement;
+    const w = wrap.clientWidth || 400;
+    const h = NODES.length * ROW_H + 16;
+    c.width = w * dpr;
+    c.height = h * dpr;
+    c.style.width = w + 'px';
+    c.style.height = h + 'px';
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = getVar('--canvas-bg');
+    ctx.fillRect(0, 0, w, h);
+
+    const lps = (w - 20) / TOTAL_DURATION;
+
+    // Gridlines
+    ctx.strokeStyle = getVar('--grid-major');
+    ctx.lineWidth = 0.5;
+    for (let t = 0; t <= TOTAL_DURATION; t += 10) {
+      const x = t * lps + 10;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+
+    // Bars
+    NODES.forEach((n, i) => {
+      const jitter = side === 1 ? Math.sin(i * 7.3) * 3 : 0;
+      const durJitter = side === 1 ? Math.sin(i * 4.1) * 2 : 0;
+      const x = (n.start + jitter) * lps + 10;
+      const bw = Math.max((n.dur + durJitter) * lps, 3);
+      const y = i * ROW_H + BAR_PAD;
+
+      // Layer edge
+      ctx.fillStyle = layerColor(n.layer);
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(0, i * ROW_H, 3, ROW_H);
+      ctx.globalAlpha = 1;
+
+      // Flip some succeeded to failed on side B for demo
+      const effectiveStatus = (side === 1 && n.status === 'succeeded' && i % 8 === 3) ? 'failed' : n.status;
+      const col = statusColor(effectiveStatus);
+
+      ctx.globalAlpha = side === 0 ? 0.7 : 0.88;
+      const grad = ctx.createLinearGradient(x, y, x, y + BAR_H);
+      grad.addColorStop(0, col);
+      grad.addColorStop(1, shadeColor(col, -15));
+      ctx.fillStyle = grad;
+      roundRect(ctx, x, y, bw, BAR_H, BAR_RADIUS);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Pattern overlay
+      if (effectiveStatus === 'failed' && hatchPattern) { ctx.fillStyle = hatchPattern; ctx.fill(); }
+
+      // Delta indicator on side B
+      if (side === 1 && bw > 35) {
+        const delta = jitter + durJitter;
+        if (Math.abs(delta) > 1.2) {
+          ctx.font = '600 9px ' + getVar('--mono');
+          ctx.fillStyle = delta > 0 ? getVar('--status-fail') : getVar('--status-ok');
+          ctx.fillText((delta > 0 ? '▴+' : '▾') + Math.abs(delta).toFixed(1) + 's', x + bw + 4, y + BAR_H / 2 + 3);
+        }
+      }
+    });
+  });
+}
+
+$('#compareExit').onclick = () => { $$('.tab')[0].click(); showToast('Exited comparison view'); };
+
+/* ────────────────────────────────────────────────────────────────────
+   RESIZE OBSERVER
+   ──────────────────────────────────────────────────────────────────── */
+new ResizeObserver(() => {
+  if (currentTab === 'gantt') { resizeCanvas(); fullRender(); }
+  if (currentTab === 'compare') requestAnimationFrame(renderCompare);
+}).observe(canvasWrap);
+
+/* ────────────────────────────────────────────────────────────────────
+   INIT
+   ──────────────────────────────────────────────────────────────────── */
+(function init() {
+  initTabs();
+  buildLabels();
+  buildHistory();
+  resizeCanvas();
+  createPatterns();
+  fullRender();
+  updateScrubber();
+  updateFooterCounters();
+  setTimeout(() => showToast('DAG Gantt Chart loaded — 25 nodes, 7 layers', '▤'), 100);
+})();
+
+</script>
+</body>
+</html>
