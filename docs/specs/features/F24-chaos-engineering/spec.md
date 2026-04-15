@@ -329,7 +329,7 @@ Each spec must contain per scenario:
 | P1.3 | Traffic Control | `categories/C03-traffic-control.md` | 10 | P0.1, P0.2 | ✅ DONE |
 | P1.4 | Security Probing | `categories/C04-security-probing.md` | 8 | P0.1, P0.2 | ⬜ |
 | P1.5 | Observability | `categories/C05-observability.md` | 8 | P0.1, P0.2 | ⬜ |
-| P1.6 | Advanced | `categories/C06-advanced.md` | 8 | P0.1-P1.5 | ⬜ |
+| P1.6 | Advanced | `categories/C06-advanced.md` | 8 | P0.1-P1.5 | ✅ DONE |
 
 ### Phase 2: Engine Architecture
 
@@ -339,7 +339,7 @@ Each spec must contain per scenario:
 | P2.2 | Rule Evaluation Engine | Sana | `engine-design.md` § 3 | P2.1 | ⬜ |
 | P2.3 | Rule Store (CRUD, persistence, hot-reload) | Vex | `engine-design.md` § 4 | P2.1 | ⬜ |
 | P2.4 | Safety Mechanisms | Sana | `engine-design.md` § 5 | P2.2 | ⬜ |
-| P2.5 | SignalR Protocol (messages, topics, events) | Vex | `signalr-protocol.md` | P2.1 | ⬜ |
+| P2.5 | SignalR Protocol (messages, topics, events) | Vex | `signalr-protocol.md` | P2.1 | ✅ DONE |
 
 ### Phase 3: State Matrices
 
@@ -347,11 +347,11 @@ Each matrix lists: every state, every transition, every trigger, every visual, e
 
 | # | Component | Output | States (est.) | Depends On | Status |
 |---|-----------|--------|---------------|-----------|--------|
-| P3.1 | Panel Shell | `states/panel-shell.md` | 8-10 | P2.5 | ⬜ |
+| P3.1 | Panel Shell | `states/panel-shell.md` | 15 | P2.5 | ✅ DONE |
 | P3.2 | Rule Builder | `states/rule-builder.md` | 15-20 | P2.1 | ⬜ |
 | P3.3 | Rule List | `states/rule-list.md` | 10-12 | P2.1 | ⬜ |
 | P3.4 | Traffic Monitor | `states/traffic-monitor.md` | 10-12 | P2.5 | ⬜ |
-| P3.5 | Recording | `states/recording.md` | 8-10 | P2.5 | ⬜ |
+| P3.5 | Recording | `states/recording.md` | 8-10 | P2.5 | ✅ |
 
 ### Phase 4: Interactive Mocks
 
