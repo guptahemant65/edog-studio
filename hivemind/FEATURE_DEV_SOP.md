@@ -112,6 +112,135 @@ Every feature failure traces back to skipping a phase — guessing instead of re
 
 ---
 
+## Design Philosophy — "The F16 Standard"
+
+> Established after the F16 Infra Wizard mock achieved first-take CEO approval.
+> Every mock and implementation must embody these principles.
+
+### 1. Layered Token Architecture
+
+Don't use raw colors. Build a **semantic token system** with depth layers:
+
+```
+Surfaces:   surface → surface-2 → surface-3          (white → off-white → light gray)
+Borders:    border (0.06 opacity) → border-bright (0.12)
+Text:       text → text-dim → text-muted             (near-black → gray → light gray)
+Accent:     accent → accent-dim (0.07) → accent-hover (0.04) → accent-glow (0.15) → accent-soft (0.10)
+Elevation:  shadow-sm → shadow-md → shadow-lg → shadow-xl → shadow-dialog
+```
+
+Every element lives at a **specific semantic layer**. Surfaces create depth without borders. Borders separate when surfaces can't. Accent is used **sparingly** — a whisper, not a shout.
+
+### 2. Physics-Based Motion
+
+Three timing curves, each with a purpose:
+
+| Curve | Value | When |
+|-------|-------|------|
+| `--ease` | `cubic-bezier(0.4, 0, 0.2, 1)` | Standard transitions (hover, focus, state change) |
+| `--spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | Scale animations — overshoots 1.0 slightly, feels alive |
+| `--ease-out` | `cubic-bezier(0, 0, 0.2, 1)` | Exit animations — starts fast, decelerates |
+
+Three speed tiers:
+
+| Speed | Value | When |
+|-------|-------|------|
+| `--t-fast` | `80ms` | Hover/focus feedback (near-instant) |
+| `--t-normal` | `150ms` | State transitions (button press, toggle) |
+| `--t-page` | `360ms` | Page/panel transitions (dramatic but not slow) |
+
+**Rule:** Every animated property has an explicit duration + curve. No `transition: all 0.3s ease` shortcuts.
+
+### 3. Purposeful Animation Vocabulary
+
+Name every animation. If you can't name it, you don't need it.
+
+| Pattern | What It Does | CSS |
+|---------|-------------|-----|
+| `dialogIn` | Modal entrance — scale(0.94) + translateY(16px) → normal | Combined transform feels like it "rises into place" |
+| `overlayIn` | Backdrop — blur(0→8px) + opacity fade | Creates depth, not just dimming |
+| `slideLeft/Right` | Page transitions — 60px lateral slide + fade | Direction indicates forward/backward navigation |
+| `scaleSpring` | Element entrance — scale(0.85) with spring curve | The spring overshoot adds life |
+| `checkPop` | Completion indicator — scale(0→1.2→1) | The 1.2 overshoot creates satisfaction |
+| `pulseAccent` | Active/in-progress — box-shadow breathe (0→6px→0) | Subtle breathing = "I'm alive" |
+| `flowDash` | Connection lines — stroke-dashoffset animation | Shows data flow direction |
+
+**Target:** 20-30 named animations per complex mock. Each serves UX, not decoration.
+
+### 4. Hover That Teaches
+
+Every interactive element must teach affordance through hover:
+
+```css
+/* Cards lift + shadow deepens = "I'm clickable" */
+.card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+/* Buttons lift subtly = "I'm about to do something" */
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(accent,0.3); }
+
+/* Circles scale = "I'm a small target, let me help" */
+.step-circle:hover { transform: scale(1.1); }
+
+/* Icons change color + get background = "I have a function" */
+.icon-btn:hover { background: var(--surface-3); color: var(--accent); }
+```
+
+**Rule:** `-1px` lift for buttons. `-2px` lift for cards/panels. `scale(1.1)` for small targets. Never more.
+
+### 5. Typography Precision
+
+Six deliberate size stops — not arbitrary pixel values:
+
+| Token | Size | Usage |
+|-------|------|-------|
+| `--text-xs` | 10px | Badges, timestamps, fine print |
+| `--text-sm` | 12px | Labels, hints, secondary info |
+| `--text-md` | 13px | Body text, inputs, default |
+| `--text-lg` | 15px | Section titles, dialog titles |
+| `--text-xl` | 18px | Page headings |
+| `--text-2xl` | 22px | Feature names, hero text |
+
+Form labels: `font-size: xs; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em` — this pattern creates authority without shouting.
+
+### 6. Compound Elevation
+
+Every shadow is **two shadows** — ambient (wide, soft) + key light (tight, sharp):
+
+```css
+--shadow-sm:     0 1px 2px rgba(0,0,0,0.04);
+--shadow-md:     0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+--shadow-lg:     0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+--shadow-xl:     0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+--shadow-dialog: 0 24px 80px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08);
+```
+
+The `dialog` level is reserved for modals only. The jump from `xl` to `dialog` creates real depth hierarchy.
+
+### 7. Accent Restraint
+
+Accent color (#6d5cff) appears in exactly these contexts:
+- Active step indicators (circle border + label)
+- Focused input glow ring
+- Primary buttons (solid fill)
+- Selected card borders
+- Code syntax highlights
+- Status indicators (but use status-ok green, not accent, for "done")
+
+**Accent is never a background fill** except on primary buttons. For surfaces, use `accent-dim` (7% opacity) or `accent-hover` (4% opacity).
+
+### 8. Context-Saturated Agent Prompt
+
+The mock agent must **absorb all research before touching CSS**. The prompt includes:
+1. ALL P0 research docs (code audit, industry research, UX research, canvas research)
+2. Complete design bible / design system
+3. Previous approved mocks as quality benchmark
+4. Full spec with requirements, edge cases, and user flows
+5. Explicit instruction: "Read every document. Internalize the design language. Then — and only then — write."
+
+**This is not optional.** The difference between a generic mock and an extraordinary one is the 180KB of context that preceded it.
+
+---
+
 ## Phase 4: Interactive Mocks
 
 **Goal:** CEO opens it in a browser, clicks everything, says "build this."
@@ -122,17 +251,21 @@ Every feature failure traces back to skipping a phase — guessing instead of re
 
 **Requirements:**
 - Self-contained single HTML file (inline CSS + JS, Google Fonts only)
-- Interactive — all states from P3 switchable
-- Light + dark theme
-- Realistic mock data (not "Lorem ipsum")
-- CSS interactions that delight (animations, transitions, hover states)
-- State switcher bar at bottom for CEO review
-- Production-quality CSS — this should look shippable
+- Interactive — all states clickable and transition-animated
+- Realistic mock data (themed to the feature, not "Lorem ipsum")
+- Full token system from Design Philosophy §1 (surfaces, borders, text, accent, elevation)
+- Physics-based motion from Design Philosophy §2 (spring curves, three speed tiers)
+- 20-30 named keyframe animations per complex mock (Design Philosophy §3)
+- Hover affordance on every interactive element (Design Philosophy §4)
+- Typography precision with 6-stop scale (Design Philosophy §5)
+- Compound elevation shadows (Design Philosophy §6)
+- Production-quality CSS — this should look shippable, not prototypical
 
 **Rules:**
 - ONE agent per mock (not a swarm — needs one cohesive vision)
-- Agent reads ALL of P0-P3 for context
-- Agent reads Design Bible + variables.css for design language
+- Agent reads ALL of P0-P3 for context (Design Philosophy §8 — non-negotiable)
+- Agent reads Design Bible + previous approved mocks for quality benchmark
+- Agent absorbs 100-200KB of context before writing a single line of CSS
 - Iterate: CEO reviews → feedback → agent refines (use `write_agent`)
 
 **Gate:** CEO approves mock before implementation starts.

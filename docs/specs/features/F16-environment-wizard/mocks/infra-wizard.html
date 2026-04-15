@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — New Infra Wizard (F16 Mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — EDOG Studio Design System (Light Theme)
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  /* Surfaces */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+
+  /* Borders */
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  /* Text */
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+
+  /* Accent */
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --accent-soft: rgba(109,92,255,0.10);
+
+  /* Status */
+  --status-ok: #18a058;
+  --status-ok-dim: rgba(24,160,88,0.08);
+  --status-ok-glow: rgba(24,160,88,0.15);
+  --status-fail: #e5453b;
+  --status-fail-dim: rgba(229,69,59,0.08);
+  --status-warn: #e5940c;
+  --status-warn-dim: rgba(229,148,12,0.08);
+  --status-pending: #8e95a5;
+
+  /* Schema colors */
+  --bronze: #b87333;
+  --bronze-dim: rgba(184,115,51,0.08);
+  --silver: #7b8794;
+  --silver-dim: rgba(123,135,148,0.08);
+  --gold: #c5a038;
+  --gold-dim: rgba(197,160,56,0.08);
+  --dbo: #5a6070;
+  --dbo-dim: rgba(90,96,112,0.08);
+
+  /* Typography */
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+
+  /* Spacing (4px grid) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* Radius */
+  --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-xl: 14px; --r-full: 100px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08);
+
+  /* Transitions */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --t-fast: 80ms;
+  --t-normal: 150ms;
+  --t-page: 360ms;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font); font-size: var(--text-md); color: var(--text);
+  background: var(--bg); line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+input, select, textarea { font: inherit; color: inherit; background: none; border: none; outline: none; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS (25+)
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideLeft { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideRight { from { opacity: 0; transform: translateX(-60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes scaleSpring { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes pulseAccent { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes pulseGreen { 0%, 100% { box-shadow: 0 0 0 0 var(--status-ok-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes pulseNode { 0%, 100% { box-shadow: 0 2px 8px rgba(109,92,255,0.12); } 50% { box-shadow: 0 2px 16px rgba(109,92,255,0.25); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes checkPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes lineGrow { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes flowDash { to { stroke-dashoffset: -20; } }
+@keyframes badgeSlide { from { opacity: 0; transform: translateY(20px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes dotPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+@keyframes timerTick { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+@keyframes nodeHover { from { transform: translateY(0); } to { transform: translateY(-2px); } }
+@keyframes expandPanel { from { max-height: 0; opacity: 0; } to { max-height: 200px; opacity: 1; } }
+@keyframes overlayIn { from { backdrop-filter: blur(0px); background: rgba(0,0,0,0); } to { backdrop-filter: blur(8px); background: rgba(0,0,0,0.18); } }
+@keyframes dialogIn { from { opacity: 0; transform: scale(0.94) translateY(16px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes progressFill { from { width: 0; } }
+@keyframes cardStagger1 { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes cardStagger2 { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   OVERLAY
+   ═══════════════════════════════════════════════════════════════════ */
+.overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px); background: rgba(0,0,0,0.18);
+  animation: overlayIn 400ms var(--ease) both;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DIALOG
+   ═══════════════════════════════════════════════════════════════════ */
+.dialog {
+  width: min(920px, 88vw); height: min(680px, 88vh);
+  background: var(--surface); border-radius: var(--r-xl);
+  box-shadow: var(--shadow-dialog);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: dialogIn 450ms var(--spring) both;
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+/* Title bar */
+.dialog-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-4) var(--sp-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0; min-height: 56px;
+  cursor: default; user-select: none;
+}
+.dialog-header .drag-hint {
+  width: 36px; height: 4px; border-radius: 2px; background: var(--surface-3);
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+}
+.dialog-title {
+  font-size: var(--text-lg); font-weight: 700; letter-spacing: -0.01em;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.dialog-title svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+.close-btn {
+  width: 32px; height: 32px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 16px;
+  transition: all var(--t-fast) var(--ease);
+}
+.close-btn:hover { background: var(--surface-3); color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   STEP INDICATOR
+   ═══════════════════════════════════════════════════════════════════ */
+.stepper {
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--sp-5) var(--sp-8); gap: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.step-item {
+  display: flex; align-items: center; gap: 0; cursor: default;
+}
+.step-circle {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--text-sm); font-weight: 600;
+  border: 2px solid var(--surface-3); color: var(--text-muted);
+  background: var(--surface); transition: all 300ms var(--ease);
+  position: relative; flex-shrink: 0;
+}
+.step-circle .check { display: none; }
+.step-item.completed .step-circle {
+  border-color: var(--status-ok); background: var(--status-ok); color: white;
+  cursor: pointer;
+}
+.step-item.completed .step-circle:hover { transform: scale(1.1); }
+.step-item.completed .step-circle .num { display: none; }
+.step-item.completed .step-circle .check { display: block; animation: checkPop 300ms var(--spring) both; }
+.step-item.active .step-circle {
+  border-color: var(--accent); color: var(--accent); background: var(--accent-dim);
+  animation: pulseAccent 2s ease-in-out infinite;
+}
+.step-label {
+  font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px;
+  text-align: center; font-weight: 500; letter-spacing: 0.02em;
+  transition: color var(--t-fast) var(--ease);
+}
+.step-item.active .step-label { color: var(--accent); font-weight: 600; }
+.step-item.completed .step-label { color: var(--status-ok); }
+.step-connector {
+  width: 56px; height: 2px; background: var(--surface-3);
+  margin: 0 var(--sp-1); position: relative; overflow: hidden;
+  border-radius: 1px; flex-shrink: 0;
+}
+.step-connector .fill {
+  position: absolute; inset: 0; background: var(--status-ok);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 500ms var(--ease);
+}
+.step-connector.filled .fill { transform: scaleX(1); }
+.step-group { display: flex; flex-direction: column; align-items: center; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE CONTAINER
+   ═══════════════════════════════════════════════════════════════════ */
+.page-container {
+  flex: 1; overflow: hidden; position: relative;
+}
+.page {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none;
+  transition: opacity 300ms var(--ease), transform 360ms var(--ease);
+  transform: translateX(60px);
+  overflow-y: auto;
+}
+.page.active {
+  opacity: 1; pointer-events: all;
+  transform: translateX(0);
+}
+.page.exit-left {
+  transform: translateX(-60px); opacity: 0;
+}
+.page-content {
+  flex: 1; padding: var(--sp-6) var(--sp-8);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════════ */
+.dialog-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.btn {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); border-radius: var(--r-md);
+  font-size: var(--text-md); font-weight: 600;
+  transition: all var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent); color: white;
+  padding: var(--sp-2) var(--sp-5);
+  box-shadow: 0 1px 3px rgba(109,92,255,0.2);
+}
+.btn-primary:hover { background: #5e4de6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(109,92,255,0.3); }
+.btn-primary:active { transform: translateY(0); }
+.btn-ghost {
+  color: var(--text-dim); border: 1px solid var(--border-bright);
+}
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); border-color: rgba(0,0,0,0.18); }
+.btn-accent-outline {
+  color: var(--accent); border: 1px solid var(--accent);
+  background: var(--accent-dim);
+}
+.btn-accent-outline:hover { background: var(--accent-soft); }
+.btn-create {
+  background: var(--accent); color: white;
+  padding: var(--sp-3) var(--sp-6);
+  font-size: var(--text-md); font-weight: 700;
+  border-radius: var(--r-md);
+  box-shadow: 0 2px 8px rgba(109,92,255,0.25);
+}
+.btn-create:hover { background: #5e4de6; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(109,92,255,0.35); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   FORM ELEMENTS
+   ═══════════════════════════════════════════════════════════════════ */
+.form-group { margin-bottom: var(--sp-5); }
+.form-label {
+  display: block; font-size: var(--text-xs); font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.08em; margin-bottom: var(--sp-2);
+}
+.form-input {
+  width: 100%; height: 40px;
+  padding: 0 var(--sp-3);
+  background: var(--surface-2); border: 1px solid var(--border-bright);
+  border-radius: var(--r-md); font-size: var(--text-md);
+  color: var(--text); transition: all var(--t-fast) var(--ease);
+}
+.form-input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.form-input::placeholder { color: var(--text-muted); }
+.form-input.mono { font-family: var(--mono); font-size: var(--text-sm); }
+.input-wrapper {
+  position: relative; display: flex; align-items: center;
+}
+.input-wrapper .form-input { padding-right: 36px; }
+.input-icon {
+  position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 14px;
+  transition: all var(--t-fast) var(--ease);
+}
+.input-icon:hover { background: var(--surface-3); color: var(--accent); }
+.input-icon.valid { color: var(--status-ok); }
+.form-hint {
+  font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--sp-1);
+  display: flex; align-items: center; gap: var(--sp-1);
+}
+.form-hint .dot { color: var(--status-ok); }
+.form-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5);
+}
+.select-wrapper { position: relative; }
+.form-select {
+  width: 100%; height: 40px; padding: 0 var(--sp-3);
+  background: var(--surface-2); border: 1px solid var(--border-bright);
+  border-radius: var(--r-md); font-size: var(--text-md);
+  color: var(--text); appearance: none; cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.form-select:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.select-arrow {
+  position: absolute; right: var(--sp-3); top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); pointer-events: none; font-size: 11px;
+}
+.coming-soon-link {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--text-xs); color: var(--text-muted); margin-top: var(--sp-2);
+}
+.coming-soon-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  padding: 1px 6px; border-radius: var(--r-full);
+  background: var(--surface-3); color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE 2: THEME CARDS
+   ═══════════════════════════════════════════════════════════════════ */
+.theme-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-3);
+}
+.theme-card {
+  padding: var(--sp-4); border-radius: var(--r-lg);
+  border: 2px solid var(--border-bright); background: var(--surface);
+  cursor: pointer; transition: all 200ms var(--ease);
+  position: relative; overflow: hidden;
+}
+.theme-card:hover {
+  border-color: rgba(109,92,255,0.3); background: var(--accent-hover);
+  transform: translateY(-2px); box-shadow: var(--shadow-md);
+}
+.theme-card.selected {
+  border-color: var(--accent); background: var(--accent-dim);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.theme-card.selected::after {
+  content: ''; position: absolute; top: var(--sp-2); right: var(--sp-2);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent); display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 11px; font-weight: 700;
+}
+.theme-icon {
+  width: 36px; height: 36px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; margin-bottom: var(--sp-2);
+  background: var(--surface-2); color: var(--accent);
+}
+.theme-name {
+  font-size: var(--text-md); font-weight: 600; margin-bottom: var(--sp-1);
+}
+.theme-tables {
+  font-family: var(--mono); font-size: var(--text-xs); color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* Schema section */
+.schema-section { margin-top: var(--sp-6); }
+.schema-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.chip {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-3); border-radius: var(--r-full);
+  font-size: var(--text-xs); font-weight: 600;
+  font-family: var(--mono); letter-spacing: 0.02em;
+}
+.chip-dbo { background: var(--dbo-dim); color: var(--dbo); }
+.chip-bronze { background: var(--bronze-dim); color: var(--bronze); }
+.chip-silver { background: var(--silver-dim); color: var(--silver); }
+.chip-gold { background: var(--gold-dim); color: var(--gold); }
+.toggle-track {
+  width: 38px; height: 22px; border-radius: 11px;
+  background: var(--surface-3); cursor: pointer;
+  position: relative; transition: background 200ms var(--ease);
+  flex-shrink: 0;
+}
+.toggle-track.on { background: var(--accent); }
+.toggle-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: white; position: absolute; top: 2px; left: 2px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform 200ms var(--spring);
+}
+.toggle-track.on .toggle-thumb { transform: translateX(16px); }
+.toggle-label {
+  font-size: var(--text-sm); color: var(--text-dim); font-weight: 500;
+}
+.medallion-chips {
+  display: flex; gap: var(--sp-2); margin-top: var(--sp-3);
+  overflow: hidden; max-height: 0; opacity: 0;
+  transition: all 300ms var(--ease);
+}
+.medallion-chips.show { max-height: 50px; opacity: 1; }
+.medallion-chip {
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md);
+  font-size: var(--text-sm); font-weight: 500; cursor: pointer;
+  border: 1.5px solid var(--border-bright); background: var(--surface);
+  transition: all var(--t-fast) var(--ease);
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.medallion-chip:hover { border-color: rgba(0,0,0,0.2); }
+.medallion-chip.active { border-color: currentColor; }
+.medallion-chip[data-schema="bronze"] { color: var(--bronze); }
+.medallion-chip[data-schema="bronze"].active { background: var(--bronze-dim); border-color: var(--bronze); }
+.medallion-chip[data-schema="silver"] { color: var(--silver); }
+.medallion-chip[data-schema="silver"].active { background: var(--silver-dim); border-color: var(--silver); }
+.medallion-chip[data-schema="gold"] { color: var(--gold); }
+.medallion-chip[data-schema="gold"].active { background: var(--gold-dim); border-color: var(--gold); }
+.medallion-check {
+  width: 16px; height: 16px; border-radius: 3px;
+  border: 1.5px solid currentColor; display: flex;
+  align-items: center; justify-content: center; font-size: 10px;
+  transition: all var(--t-fast) var(--ease);
+}
+.medallion-chip.active .medallion-check { background: currentColor; color: white; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE 3: DAG CANVAS
+   ═══════════════════════════════════════════════════════════════════ */
+.dag-layout {
+  display: flex; height: 100%; overflow: hidden;
+}
+.dag-toolbar {
+  width: 180px; flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: var(--sp-4); display: flex; flex-direction: column;
+  gap: var(--sp-3); background: var(--surface);
+}
+.toolbar-title {
+  font-size: var(--text-xs); font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.toolbar-node {
+  padding: var(--sp-3); border-radius: var(--r-md);
+  border: 1.5px dashed var(--border-bright);
+  background: var(--surface); cursor: grab;
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: var(--text-sm); font-weight: 500;
+  transition: all var(--t-fast) var(--ease);
+}
+.toolbar-node:hover { border-color: var(--accent); background: var(--accent-hover); border-style: solid; }
+.toolbar-node:active { cursor: grabbing; transform: scale(0.97); }
+.node-type-icon {
+  width: 24px; height: 24px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+}
+.node-type-icon.sql-table { background: rgba(45,127,249,0.08); color: #2d7ff9; }
+.node-type-icon.sql-mlv { background: rgba(109,92,255,0.08); color: var(--accent); }
+.node-type-icon.pyspark { background: rgba(229,148,12,0.08); color: var(--status-warn); }
+
+.toolbar-actions {
+  margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.toolbar-action-btn {
+  padding: var(--sp-2); border-radius: var(--r-sm);
+  font-size: var(--text-xs); font-weight: 600;
+  color: var(--text-dim); background: var(--surface-2);
+  display: flex; align-items: center; gap: var(--sp-2);
+  transition: all var(--t-fast) var(--ease);
+}
+.toolbar-action-btn:hover { background: var(--surface-3); color: var(--text); }
+.toolbar-action-btn svg { width: 14px; height: 14px; }
+
+/* Canvas */
+.dag-canvas-wrapper {
+  flex: 1; position: relative; overflow: hidden;
+  background: var(--surface);
+}
+.dag-canvas {
+  width: 100%; height: 100%; position: relative;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.06) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.dag-canvas svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none;
+}
+.dag-canvas svg path {
+  fill: none; stroke: var(--text-muted); stroke-width: 1.5;
+  opacity: 0.5;
+}
+.dag-canvas svg path.active-path { stroke: var(--accent); opacity: 0.8; stroke-width: 2; }
+.dag-canvas svg .arrow-flow {
+  fill: none; stroke-width: 2; stroke-dasharray: 6 4;
+  animation: flowDash 1.5s linear infinite;
+}
+
+/* DAG Nodes */
+.dag-node {
+  position: absolute; min-width: 140px;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface); border-radius: var(--r-lg);
+  border: 1.5px solid var(--border-bright);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  cursor: pointer; user-select: none;
+  transition: all 200ms var(--ease);
+  display: flex; flex-direction: column; gap: var(--sp-1);
+}
+.dag-node:hover {
+  border-color: rgba(0,0,0,0.18); box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.dag-node.selected {
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow), var(--shadow-md);
+  animation: pulseNode 2.5s ease-in-out infinite;
+}
+.dag-node-header {
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.dag-node-name {
+  font-size: var(--text-sm); font-weight: 600; font-family: var(--mono);
+}
+.dag-node-meta {
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.dag-node-type-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  padding: 1px 5px; border-radius: var(--r-full);
+  letter-spacing: 0.04em;
+}
+.dag-node-type-badge.sql-table { background: rgba(45,127,249,0.08); color: #2d7ff9; }
+.dag-node-type-badge.sql-mlv { background: rgba(109,92,255,0.08); color: var(--accent); }
+.dag-node-type-badge.pyspark { background: rgba(229,148,12,0.08); color: var(--status-warn); }
+.dag-node-schema {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  padding: 1px 5px; border-radius: var(--r-full);
+  letter-spacing: 0.04em;
+}
+.port {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-muted); border: 1.5px solid var(--surface);
+  position: absolute;
+}
+.port-in { top: -4px; left: 50%; transform: translateX(-50%); }
+.port-out { bottom: -4px; left: 50%; transform: translateX(-50%); }
+.dag-node:hover .port { background: var(--accent); }
+
+/* Node popover */
+.node-popover {
+  position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border-bright);
+  border-radius: var(--r-lg); padding: var(--sp-3);
+  box-shadow: var(--shadow-lg); min-width: 180px; z-index: 10;
+  animation: scaleSpring 250ms var(--spring) both;
+}
+.popover-item {
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm);
+  font-size: var(--text-sm); color: var(--text-dim);
+  display: flex; align-items: center; gap: var(--sp-2);
+  cursor: pointer; transition: all var(--t-fast) var(--ease);
+}
+.popover-item:hover { background: var(--surface-2); color: var(--text); }
+.popover-item.danger { color: var(--status-fail); }
+.popover-item.danger:hover { background: var(--status-fail-dim); }
+
+/* Zoom controls */
+.zoom-controls {
+  position: absolute; bottom: var(--sp-4); right: var(--sp-4);
+  display: flex; gap: var(--sp-1); background: var(--surface);
+  border: 1px solid var(--border-bright); border-radius: var(--r-md);
+  padding: var(--sp-1); box-shadow: var(--shadow-md);
+}
+.zoom-btn {
+  width: 30px; height: 30px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--text-sm); color: var(--text-dim); font-weight: 600;
+  transition: all var(--t-fast) var(--ease);
+}
+.zoom-btn:hover { background: var(--surface-2); color: var(--text); }
+
+/* Code preview panel */
+.code-panel {
+  width: 260px; flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--surface); display: flex; flex-direction: column;
+  transition: width 300ms var(--ease), opacity 200ms var(--ease);
+  overflow: hidden;
+}
+.code-panel.collapsed { width: 0; opacity: 0; border: none; }
+.code-panel-header {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.code-panel-title {
+  font-size: var(--text-xs); font-weight: 700;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.code-panel-body {
+  flex: 1; overflow-y: auto; padding: var(--sp-3);
+}
+.code-block {
+  font-family: var(--mono); font-size: var(--text-xs); line-height: 1.7;
+  color: var(--text-dim); white-space: pre-wrap; word-break: break-all;
+}
+.code-block .kw { color: var(--accent); font-weight: 500; }
+.code-block .str { color: var(--status-ok); }
+.code-block .fn { color: #2d7ff9; }
+.code-block .cm { color: var(--text-muted); font-style: italic; }
+.code-panel-toggle {
+  position: absolute; right: 260px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 40px; background: var(--surface);
+  border: 1px solid var(--border-bright); border-right: none;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 10px; cursor: pointer;
+  transition: all var(--t-fast) var(--ease); z-index: 5;
+}
+.code-panel-toggle:hover { background: var(--surface-2); color: var(--text); }
+.code-panel.collapsed + .code-panel-toggle,
+.code-panel-toggle.collapsed-pos { right: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE 4: REVIEW
+   ═══════════════════════════════════════════════════════════════════ */
+.review-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-6);
+}
+.review-section { margin-bottom: var(--sp-5); }
+.review-section-title {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin-bottom: var(--sp-3); padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+.review-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--sp-2) 0; font-size: var(--text-sm);
+}
+.review-label { color: var(--text-muted); }
+.review-value { font-weight: 600; font-family: var(--mono); font-size: var(--text-sm); }
+.review-value .badge { margin-left: var(--sp-1); }
+.review-mini-dag {
+  background: var(--surface-2); border-radius: var(--r-lg);
+  border: 1px solid var(--border); padding: var(--sp-4);
+  height: 280px; position: relative; overflow: hidden;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+.review-confirm {
+  margin-top: var(--sp-5); padding: var(--sp-4);
+  background: var(--accent-dim); border-radius: var(--r-lg);
+  border: 1px solid rgba(109,92,255,0.12);
+  font-size: var(--text-sm); color: var(--text-dim);
+  line-height: 1.6;
+}
+.review-confirm strong { color: var(--text); font-weight: 600; }
+.review-confirm .count {
+  font-family: var(--mono); font-weight: 700; color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE 5: EXECUTION PIPELINE
+   ═══════════════════════════════════════════════════════════════════ */
+.pipeline { padding: var(--sp-4) 0; }
+.pipeline-step {
+  display: flex; align-items: flex-start; gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  transition: background var(--t-fast) var(--ease);
+  position: relative; margin-bottom: 2px;
+}
+.pipeline-step:hover { background: var(--surface-2); }
+.pipeline-step::before {
+  content: ''; position: absolute; left: 30px; top: 38px;
+  width: 1.5px; height: calc(100% - 8px); background: var(--border-bright);
+}
+.pipeline-step:last-child::before { display: none; }
+.step-status {
+  width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; position: relative; z-index: 1;
+}
+.step-status.done { background: var(--status-ok-dim); color: var(--status-ok); }
+.step-status.running {
+  background: var(--accent-dim); color: var(--accent);
+  animation: pulseAccent 1.5s ease-in-out infinite;
+}
+.step-status.running .spinner {
+  width: 14px; height: 14px; border: 2px solid var(--accent-glow);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.step-status.pending { background: var(--surface-3); color: var(--text-muted); }
+.step-info { flex: 1; }
+.step-name { font-size: var(--text-md); font-weight: 600; }
+.step-time {
+  font-family: var(--mono); font-size: var(--text-xs); color: var(--text-muted);
+  margin-top: 2px;
+}
+.step-time.counting { animation: timerTick 1s ease-in-out infinite; color: var(--accent); }
+.step-expand {
+  color: var(--text-muted); font-size: 11px; padding: var(--sp-1);
+  border-radius: var(--r-sm); transition: all var(--t-fast) var(--ease);
+}
+.step-expand:hover { background: var(--surface-3); color: var(--text); }
+.step-detail {
+  margin-top: var(--sp-2); padding: var(--sp-3);
+  background: var(--surface-2); border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  font-family: var(--mono); font-size: var(--text-xs);
+  color: var(--text-dim); line-height: 1.7;
+  max-height: 0; overflow: hidden; opacity: 0;
+  transition: all 300ms var(--ease);
+}
+.step-detail.open { max-height: 200px; opacity: 1; margin-top: var(--sp-2); }
+
+/* Floating badge */
+.floating-badge-preview {
+  margin-top: var(--sp-6); padding: var(--sp-4);
+  background: var(--surface-2); border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+}
+.floating-badge-label {
+  font-size: var(--text-xs); font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--sp-3);
+}
+.floating-badge {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--surface); border: 1px solid var(--border-bright);
+  border-radius: var(--r-full); box-shadow: var(--shadow-lg);
+  font-size: var(--text-sm); font-weight: 500;
+  animation: badgeSlide 500ms var(--spring) both;
+  cursor: pointer; transition: all var(--t-fast) var(--ease);
+}
+.floating-badge:hover { box-shadow: var(--shadow-xl); transform: translateY(-2px); }
+.floating-badge .badge-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+.floating-badge .badge-progress {
+  width: 32px; height: 4px; border-radius: 2px; background: var(--surface-3);
+  overflow: hidden;
+}
+.floating-badge .badge-progress-fill {
+  height: 100%; width: 50%; background: var(--accent);
+  border-radius: 2px; animation: progressFill 600ms var(--ease) both;
+}
+
+/* Mini DAG nodes (for review + badge) */
+.mini-node {
+  position: absolute; padding: var(--sp-1) var(--sp-2);
+  background: var(--surface); border-radius: var(--r-sm);
+  border: 1px solid var(--border-bright); font-family: var(--mono);
+  font-size: 9px; font-weight: 600; white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+.mini-node .mini-badge {
+  font-size: 7px; padding: 0 3px; border-radius: var(--r-full);
+  margin-left: 2px; font-weight: 700; text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS ON ELEMENTS
+   ═══════════════════════════════════════════════════════════════════ */
+.page.active .form-group:nth-child(1) { animation: slideUp 400ms var(--ease) 50ms both; }
+.page.active .form-group:nth-child(2) { animation: slideUp 400ms var(--ease) 100ms both; }
+.page.active .form-group:nth-child(3) { animation: slideUp 400ms var(--ease) 150ms both; }
+.page.active .form-group:nth-child(4) { animation: slideUp 400ms var(--ease) 200ms both; }
+.page.active .form-group:nth-child(5) { animation: slideUp 400ms var(--ease) 250ms both; }
+
+.page.active .theme-card:nth-child(1) { animation: cardStagger1 350ms var(--ease) 50ms both; }
+.page.active .theme-card:nth-child(2) { animation: cardStagger1 350ms var(--ease) 100ms both; }
+.page.active .theme-card:nth-child(3) { animation: cardStagger1 350ms var(--ease) 150ms both; }
+.page.active .theme-card:nth-child(4) { animation: cardStagger2 350ms var(--ease) 200ms both; }
+.page.active .theme-card:nth-child(5) { animation: cardStagger2 350ms var(--ease) 250ms both; }
+.page.active .theme-card:nth-child(6) { animation: cardStagger2 350ms var(--ease) 300ms both; }
+
+.page.active .pipeline-step:nth-child(1) { animation: slideUp 300ms var(--ease) 50ms both; }
+.page.active .pipeline-step:nth-child(2) { animation: slideUp 300ms var(--ease) 100ms both; }
+.page.active .pipeline-step:nth-child(3) { animation: slideUp 300ms var(--ease) 150ms both; }
+.page.active .pipeline-step:nth-child(4) { animation: slideUp 300ms var(--ease) 200ms both; }
+.page.active .pipeline-step:nth-child(5) { animation: slideUp 300ms var(--ease) 250ms both; }
+.page.active .pipeline-step:nth-child(6) { animation: slideUp 300ms var(--ease) 300ms both; }
+
+.page.active .review-section { animation: fadeIn 400ms var(--ease) 100ms both; }
+.page.active .review-mini-dag { animation: scaleIn 500ms var(--ease) 200ms both; }
+</style>
+</head>
+
+<body>
+<!-- ═══════════════════════════════════════════════════════════════════
+     SIMULATED BACKGROUND (EDOG Studio shell)
+     ═══════════════════════════════════════════════════════════════════ -->
+<div style="position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;">
+  <div style="text-align:center;color:var(--text-muted);font-size:var(--text-sm);">
+    <div style="font-family:var(--mono);font-size:var(--text-xs);letter-spacing:0.12em;text-transform:uppercase;opacity:0.5;margin-bottom:var(--sp-2);">EDOG Studio</div>
+    <div style="opacity:0.3;">Background content blurred behind wizard</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     OVERLAY + DIALOG
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="overlay" id="overlay">
+<div class="dialog" id="dialog">
+
+  <!-- Drag hint -->
+  <div class="dialog-header">
+    <div class="drag-hint"></div>
+    <div class="dialog-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      New Infrastructure
+    </div>
+    <button class="close-btn" title="Close">✕</button>
+  </div>
+
+  <!-- Step indicator -->
+  <div class="stepper" id="stepper">
+    <div class="step-group">
+      <div class="step-item active" data-step="0">
+        <div class="step-circle"><span class="num">1</span><span class="check">✓</span></div>
+      </div>
+      <div class="step-label">Setup</div>
+    </div>
+    <div class="step-connector" data-conn="0"><div class="fill"></div></div>
+    <div class="step-group">
+      <div class="step-item" data-step="1">
+        <div class="step-circle"><span class="num">2</span><span class="check">✓</span></div>
+      </div>
+      <div class="step-label">Theme</div>
+    </div>
+    <div class="step-connector" data-conn="1"><div class="fill"></div></div>
+    <div class="step-group">
+      <div class="step-item" data-step="2">
+        <div class="step-circle"><span class="num">3</span><span class="check">✓</span></div>
+      </div>
+      <div class="step-label">Build</div>
+    </div>
+    <div class="step-connector" data-conn="2"><div class="fill"></div></div>
+    <div class="step-group">
+      <div class="step-item" data-step="3">
+        <div class="step-circle"><span class="num">4</span><span class="check">✓</span></div>
+      </div>
+      <div class="step-label">Review</div>
+    </div>
+    <div class="step-connector" data-conn="3"><div class="fill"></div></div>
+    <div class="step-group">
+      <div class="step-item" data-step="4">
+        <div class="step-circle"><span class="num">5</span><span class="check">✓</span></div>
+      </div>
+      <div class="step-label">Deploy</div>
+    </div>
+  </div>
+
+  <!-- Page container -->
+  <div class="page-container" id="pageContainer">
+
+    <!-- ═══════ PAGE 1: Infrastructure Setup ═══════ -->
+    <div class="page active" id="page0">
+      <div class="page-content">
+        <div class="form-group">
+          <label class="form-label">Workspace Name</label>
+          <div class="input-wrapper">
+            <input class="form-input mono" id="wsName" value="brave_turing_42" spellcheck="false">
+            <button class="input-icon" id="randomizeBtn" title="Randomize name">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            </button>
+          </div>
+          <div class="form-hint"><span class="dot">●</span> Unique name, underscores allowed</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Capacity</label>
+          <div class="select-wrapper">
+            <select class="form-select" id="capacitySelect">
+              <option value="" disabled>Select capacity...</option>
+              <option value="f4-east" selected>F4 — East US (Running)</option>
+              <option value="f8-west">F8 — West US 2 (Running)</option>
+              <option value="f16-eu">F16 — North Europe (Paused)</option>
+              <option value="f2-sea">F2 — Southeast Asia (Running)</option>
+            </select>
+            <span class="select-arrow">▾</span>
+          </div>
+          <div class="coming-soon-link">
+            <span>Create New Capacity</span>
+            <span class="coming-soon-badge">Coming Soon</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Lakehouse Name</label>
+            <div class="input-wrapper">
+              <input class="form-input mono" id="lhName" value="brave_turing_42_lh" spellcheck="false">
+              <span class="input-icon valid">✓</span>
+            </div>
+            <div class="form-hint"><span class="dot">●</span> Schema-enabled (always)</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notebook Name</label>
+            <div class="input-wrapper">
+              <input class="form-input mono" id="nbName" value="brave_turing_42_nb" spellcheck="false">
+              <span class="input-icon valid">✓</span>
+            </div>
+            <div class="form-hint"><span class="dot">●</span> Auto-generated from workspace</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE 2: Theme & Schema ═══════ -->
+    <div class="page" id="page1">
+      <div class="page-content">
+        <div class="form-group">
+          <label class="form-label">Data Theme</label>
+          <div class="theme-grid" id="themeGrid">
+            <div class="theme-card selected" data-theme="ecommerce">
+              <div class="theme-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+              </div>
+              <div class="theme-name">E-Commerce</div>
+              <div class="theme-tables">orders, customers, products, categories, reviews</div>
+            </div>
+            <div class="theme-card" data-theme="sales">
+              <div class="theme-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </div>
+              <div class="theme-name">Sales & Marketing</div>
+              <div class="theme-tables">leads, campaigns, deals, accounts, activities</div>
+            </div>
+            <div class="theme-card" data-theme="iot">
+              <div class="theme-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+              </div>
+              <div class="theme-name">IoT / Sensors</div>
+              <div class="theme-tables">devices, readings, alerts, locations, thresholds</div>
+            </div>
+            <div class="theme-card" data-theme="hr">
+              <div class="theme-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <div class="theme-name">HR & People</div>
+              <div class="theme-tables">employees, departments, payroll, attendance, reviews</div>
+            </div>
+            <div class="theme-card" data-theme="finance">
+              <div class="theme-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              </div>
+              <div class="theme-name">Finance</div>
+              <div class="theme-tables">transactions, accounts, invoices, payments, budgets</div>
+            </div>
+            <div class="theme-card" data-theme="healthcare">
+              <div class="theme-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </div>
+              <div class="theme-name">Healthcare</div>
+              <div class="theme-tables">patients, appointments, prescriptions, labs, providers</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="schema-section">
+          <label class="form-label">Schemas</label>
+          <div class="schema-row">
+            <span class="chip chip-dbo">● dbo</span>
+            <span style="font-size:var(--text-xs);color:var(--text-muted);">Always included</span>
+          </div>
+          <div class="schema-row" style="margin-top:var(--sp-3);">
+            <div class="toggle-track on" id="medallionToggle">
+              <div class="toggle-thumb"></div>
+            </div>
+            <span class="toggle-label">Add medallion schemas</span>
+          </div>
+          <div class="medallion-chips show" id="medallionChips">
+            <div class="medallion-chip active" data-schema="bronze">
+              <div class="medallion-check">✓</div>
+              Bronze
+            </div>
+            <div class="medallion-chip active" data-schema="silver">
+              <div class="medallion-check">✓</div>
+              Silver
+            </div>
+            <div class="medallion-chip active" data-schema="gold">
+              <div class="medallion-check">✓</div>
+              Gold
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE 3: DAG Canvas ═══════ -->
+    <div class="page" id="page2">
+      <div class="dag-layout">
+        <!-- Sidebar palette -->
+        <div class="dag-toolbar">
+          <div class="toolbar-title">Node Palette</div>
+          <div class="toolbar-node" data-type="sql-table">
+            <div class="node-type-icon sql-table">◇</div>
+            SQL Table
+          </div>
+          <div class="toolbar-node" data-type="sql-mlv">
+            <div class="node-type-icon sql-mlv">◆</div>
+            SQL MLV
+          </div>
+          <div class="toolbar-node" data-type="pyspark">
+            <div class="node-type-icon pyspark">◆</div>
+            PySpark MLV
+          </div>
+
+          <div class="toolbar-actions">
+            <button class="toolbar-action-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+              Auto Arrange
+            </button>
+            <div style="display:flex;gap:var(--sp-1);">
+              <button class="toolbar-action-btn" style="flex:1;" title="Undo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10h10a5 5 0 015 5v2"/><path d="M3 10l4-4"/><path d="M3 10l4 4"/></svg>
+                Undo
+              </button>
+              <button class="toolbar-action-btn" style="flex:1;" title="Redo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:scaleX(-1)"><path d="M3 10h10a5 5 0 015 5v2"/><path d="M3 10l4-4"/><path d="M3 10l4 4"/></svg>
+                Redo
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Canvas area -->
+        <div class="dag-canvas-wrapper">
+          <div class="dag-canvas" id="dagCanvas">
+            <!-- SVG for connections -->
+            <svg id="dagSvg" viewBox="0 0 800 500">
+              <defs>
+                <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="rgba(142,149,165,0.5)"/>
+                </marker>
+                <marker id="arrowhead-active" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <polygon points="0 0, 8 3, 0 6" fill="rgba(109,92,255,0.7)"/>
+                </marker>
+              </defs>
+              <!-- Connection: orders → order_summary -->
+              <path d="M 120,105 C 120,160, 200,160, 200,200" marker-end="url(#arrowhead)" />
+              <!-- Connection: customers → order_summary -->
+              <path d="M 280,105 C 280,160, 240,160, 240,200" marker-end="url(#arrowhead)" />
+              <!-- Connection: products → product_metrics -->
+              <path d="M 440,105 C 440,160, 420,160, 420,200" marker-end="url(#arrowhead)" />
+              <!-- Connection: order_summary → customer_360 (active) -->
+              <path d="M 220,260 C 220,320, 300,320, 300,350" class="active-path" marker-end="url(#arrowhead-active)" />
+              <!-- Connection: product_metrics → customer_360 -->
+              <path d="M 420,260 C 420,320, 340,320, 340,350" marker-end="url(#arrowhead)" />
+              <!-- Flow animation line -->
+              <path d="M 220,260 C 220,320, 300,320, 300,350" class="arrow-flow" stroke="rgba(109,92,255,0.25)" />
+            </svg>
+
+            <!-- Source nodes (bronze) -->
+            <div class="dag-node" style="left:60px;top:50px;" id="nodeOrders">
+              <div class="port port-out"></div>
+              <div class="dag-node-header">
+                <div class="node-type-icon sql-table" style="width:18px;height:18px;font-size:10px;">◇</div>
+                <span class="dag-node-name">orders</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="dag-node-type-badge sql-table">SQL Table</span>
+                <span class="dag-node-schema" style="background:var(--bronze-dim);color:var(--bronze);">bronze</span>
+              </div>
+            </div>
+
+            <div class="dag-node" style="left:220px;top:50px;">
+              <div class="port port-out"></div>
+              <div class="dag-node-header">
+                <div class="node-type-icon sql-table" style="width:18px;height:18px;font-size:10px;">◇</div>
+                <span class="dag-node-name">customers</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="dag-node-type-badge sql-table">SQL Table</span>
+                <span class="dag-node-schema" style="background:var(--bronze-dim);color:var(--bronze);">bronze</span>
+              </div>
+            </div>
+
+            <div class="dag-node" style="left:380px;top:50px;">
+              <div class="port port-out"></div>
+              <div class="dag-node-header">
+                <div class="node-type-icon sql-table" style="width:18px;height:18px;font-size:10px;">◇</div>
+                <span class="dag-node-name">products</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="dag-node-type-badge sql-table">SQL Table</span>
+                <span class="dag-node-schema" style="background:var(--bronze-dim);color:var(--bronze);">bronze</span>
+              </div>
+            </div>
+
+            <!-- Silver MLV nodes -->
+            <div class="dag-node selected" style="left:140px;top:200px;" id="nodeOrderSummary">
+              <div class="port port-in"></div>
+              <div class="port port-out"></div>
+              <div class="dag-node-header">
+                <div class="node-type-icon sql-mlv" style="width:18px;height:18px;font-size:10px;">◆</div>
+                <span class="dag-node-name">order_summary</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="dag-node-type-badge sql-mlv">SQL MLV</span>
+                <span class="dag-node-schema" style="background:var(--silver-dim);color:var(--silver);">silver</span>
+              </div>
+              <!-- Popover for selected node -->
+              <div class="node-popover" id="nodePopover">
+                <div class="popover-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  Rename
+                </div>
+                <div class="popover-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 14.899A7 7 0 1115.71 8h1.79a4.5 4.5 0 012.5 8.242"/></svg>
+                  Change Type
+                </div>
+                <div class="popover-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                  Change Schema
+                </div>
+                <div style="height:1px;background:var(--border);margin:var(--sp-1) 0;"></div>
+                <div class="popover-item danger">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                  Delete Node
+                </div>
+              </div>
+            </div>
+
+            <div class="dag-node" style="left:360px;top:200px;">
+              <div class="port port-in"></div>
+              <div class="port port-out"></div>
+              <div class="dag-node-header">
+                <div class="node-type-icon sql-mlv" style="width:18px;height:18px;font-size:10px;">◆</div>
+                <span class="dag-node-name">product_metrics</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="dag-node-type-badge sql-mlv">SQL MLV</span>
+                <span class="dag-node-schema" style="background:var(--silver-dim);color:var(--silver);">silver</span>
+              </div>
+            </div>
+
+            <!-- Gold PySpark MLV node -->
+            <div class="dag-node" style="left:240px;top:350px;">
+              <div class="port port-in"></div>
+              <div class="dag-node-header">
+                <div class="node-type-icon pyspark" style="width:18px;height:18px;font-size:10px;">◆</div>
+                <span class="dag-node-name">customer_360</span>
+              </div>
+              <div class="dag-node-meta">
+                <span class="dag-node-type-badge pyspark">PySpark</span>
+                <span class="dag-node-schema" style="background:var(--gold-dim);color:var(--gold);">gold</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zoom controls -->
+          <div class="zoom-controls">
+            <button class="zoom-btn" title="Zoom out">−</button>
+            <button class="zoom-btn" title="Zoom in">+</button>
+            <button class="zoom-btn" title="Fit to view" style="font-size:10px;">⊞</button>
+          </div>
+
+          <!-- Code panel toggle -->
+          <button class="code-panel-toggle" id="codePanelToggle" title="Toggle code preview">◂</button>
+        </div>
+
+        <!-- Code preview panel -->
+        <div class="code-panel" id="codePanel">
+          <div class="code-panel-header">
+            <span class="code-panel-title">Code Preview</span>
+            <button class="btn" style="font-size:var(--text-xs);padding:2px 8px;background:var(--surface-2);border-radius:var(--r-sm);">Refresh</button>
+          </div>
+          <div class="code-panel-body">
+            <pre class="code-block"><span class="cm">-- Cell 1: orders (bronze)</span>
+<span class="kw">%%sql</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span>
+  bronze.orders (
+    id <span class="fn">INT</span>,
+    customer_id <span class="fn">INT</span>,
+    total <span class="fn">DECIMAL</span>(10,2),
+    status <span class="fn">STRING</span>,
+    created_at <span class="fn">TIMESTAMP</span>
+);
+
+<span class="cm">-- Cell 2: customers (bronze)</span>
+<span class="kw">%%sql</span>
+<span class="kw">CREATE TABLE IF NOT EXISTS</span>
+  bronze.customers (
+    id <span class="fn">INT</span>,
+    name <span class="fn">STRING</span>,
+    email <span class="fn">STRING</span>,
+    tier <span class="fn">STRING</span>
+);
+
+<span class="cm">-- Cell 3: order_summary (silver)</span>
+<span class="kw">%%sql</span>
+<span class="kw">CREATE MATERIALIZED LAKE VIEW</span>
+  silver.order_summary <span class="kw">AS</span>
+<span class="kw">SELECT</span> o.id, o.total,
+       c.name, c.tier
+<span class="kw">FROM</span> bronze.orders o
+<span class="kw">JOIN</span> bronze.customers c
+  <span class="kw">ON</span> o.customer_id = c.id;
+
+<span class="cm">-- Cell 4: customer_360 (gold)</span>
+<span class="kw">import</span> fmlv
+<span class="kw">@fmlv.materialized_lake_view</span>(
+    name=<span class="str">"gold.customer_360"</span>
+)
+<span class="kw">def</span> <span class="fn">customer_360</span>():
+    <span class="cm"># Combines order_summary</span>
+    <span class="cm"># + product_metrics</span>
+    ...</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE 4: Review Summary ═══════ -->
+    <div class="page" id="page3">
+      <div class="page-content">
+        <div class="review-grid">
+          <!-- Left column: Config summary -->
+          <div>
+            <div class="review-section">
+              <div class="review-section-title">Infrastructure</div>
+              <div class="review-row">
+                <span class="review-label">Workspace</span>
+                <span class="review-value">brave_turing_42</span>
+              </div>
+              <div class="review-row">
+                <span class="review-label">Capacity</span>
+                <span class="review-value">F4 — East US</span>
+              </div>
+              <div class="review-row">
+                <span class="review-label">Lakehouse</span>
+                <span class="review-value">brave_turing_42_lh <span class="chip chip-dbo" style="font-size:8px;padding:0 4px;">schema ✓</span></span>
+              </div>
+              <div class="review-row">
+                <span class="review-label">Notebook</span>
+                <span class="review-value">brave_turing_42_nb</span>
+              </div>
+            </div>
+
+            <div class="review-section">
+              <div class="review-section-title">Configuration</div>
+              <div class="review-row">
+                <span class="review-label">Theme</span>
+                <span class="review-value" style="color:var(--accent);">E-Commerce</span>
+              </div>
+              <div class="review-row">
+                <span class="review-label">Schemas</span>
+                <span style="display:flex;gap:4px;flex-wrap:wrap;">
+                  <span class="chip chip-dbo" style="font-size:9px;">dbo</span>
+                  <span class="chip chip-bronze" style="font-size:9px;">Bronze</span>
+                  <span class="chip chip-silver" style="font-size:9px;">Silver</span>
+                  <span class="chip chip-gold" style="font-size:9px;">Gold</span>
+                </span>
+              </div>
+              <div class="review-row">
+                <span class="review-label">Nodes</span>
+                <span class="review-value">3 SQL Tables, 2 SQL MLVs, 1 PySpark MLV</span>
+              </div>
+            </div>
+
+            <div class="review-confirm">
+              You're about to create: <strong><span class="count">1</span> workspace</strong>, <strong><span class="count">1</span> capacity assignment</strong>, <strong><span class="count">1</span> lakehouse</strong>, <strong><span class="count">1</span> notebook with <span class="count">6</span> cells</strong>, forming a <strong><span class="count">6</span>-node DAG</strong>.
+            </div>
+
+            <div style="margin-top:var(--sp-4);">
+              <button class="btn btn-accent-outline">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save as Template
+              </button>
+            </div>
+          </div>
+
+          <!-- Right column: Mini DAG -->
+          <div>
+            <div class="review-section">
+              <div class="review-section-title">DAG Topology</div>
+              <div class="review-mini-dag" id="miniDag">
+                <svg width="100%" height="100%" viewBox="0 0 340 250" style="position:absolute;inset:0;">
+                  <path d="M 55,52 C 55,85 95,85 95,110" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1.5" marker-end="url(#mini-arrow)"/>
+                  <path d="M 140,52 C 140,85 115,85 115,110" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1.5" marker-end="url(#mini-arrow)"/>
+                  <path d="M 225,52 C 225,85 215,85 215,110" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="1.5" marker-end="url(#mini-arrow)"/>
+                  <path d="M 105,150 C 105,175 155,175 155,195" fill="none" stroke="rgba(109,92,255,0.2)" stroke-width="1.5" marker-end="url(#mini-arrow-accent)"/>
+                  <path d="M 215,150 C 215,175 175,175 175,195" fill="none" stroke="rgba(109,92,255,0.2)" stroke-width="1.5" marker-end="url(#mini-arrow-accent)"/>
+                  <defs>
+                    <marker id="mini-arrow" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="rgba(0,0,0,0.12)"/></marker>
+                    <marker id="mini-arrow-accent" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><polygon points="0 0, 6 2, 0 4" fill="rgba(109,92,255,0.3)"/></marker>
+                  </defs>
+                </svg>
+                <div class="mini-node" style="left:20px;top:30px;">◇ orders <span class="mini-badge" style="background:var(--bronze-dim);color:var(--bronze);">brz</span></div>
+                <div class="mini-node" style="left:105px;top:30px;">◇ customers <span class="mini-badge" style="background:var(--bronze-dim);color:var(--bronze);">brz</span></div>
+                <div class="mini-node" style="left:200px;top:30px;">◇ products <span class="mini-badge" style="background:var(--bronze-dim);color:var(--bronze);">brz</span></div>
+                <div class="mini-node" style="left:50px;top:110px;">◆ order_summary <span class="mini-badge" style="background:var(--silver-dim);color:var(--silver);">slv</span></div>
+                <div class="mini-node" style="left:175px;top:110px;">◆ product_metrics <span class="mini-badge" style="background:var(--silver-dim);color:var(--silver);">slv</span></div>
+                <div class="mini-node" style="left:110px;top:195px;">◆ customer_360 <span class="mini-badge" style="background:var(--gold-dim);color:var(--gold);">gld</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ PAGE 5: Execution Pipeline ═══════ -->
+    <div class="page" id="page4">
+      <div class="page-content">
+        <div class="pipeline" id="pipeline">
+          <div class="pipeline-step">
+            <div class="step-status done">✓</div>
+            <div class="step-info">
+              <div class="step-name">Create Workspace</div>
+              <div class="step-time">2.1s</div>
+            </div>
+            <button class="step-expand" onclick="toggleStepDetail(this)">▸</button>
+          </div>
+          <div class="pipeline-step">
+            <div class="step-status done">✓</div>
+            <div class="step-info">
+              <div class="step-name">Assign Capacity</div>
+              <div class="step-time">1.4s</div>
+            </div>
+            <button class="step-expand" onclick="toggleStepDetail(this)">▸</button>
+          </div>
+          <div class="pipeline-step">
+            <div class="step-status running"><div class="spinner"></div></div>
+            <div class="step-info">
+              <div class="step-name">Create Lakehouse</div>
+              <div class="step-time counting" id="runningTimer">3.2s</div>
+              <div class="step-detail open" id="step3Detail">
+<span style="color:var(--text-muted)">POST</span> /v1/workspaces/{wsId}/lakehouses
+<span style="color:var(--status-ok)">200 OK</span> — Provisioning...
+{
+  "id": "a7b2c3d4-e5f6-...",
+  "displayName": "brave_turing_42_lh",
+  "enableSchemas": true,
+  "status": "provisioning"
+}</div>
+            </div>
+            <button class="step-expand" onclick="toggleStepDetail(this)" style="transform:rotate(90deg);">▸</button>
+          </div>
+          <div class="pipeline-step">
+            <div class="step-status pending">◇</div>
+            <div class="step-info">
+              <div class="step-name" style="color:var(--text-muted);">Create Notebook</div>
+              <div class="step-time">—</div>
+            </div>
+            <button class="step-expand" style="opacity:0.3;">▸</button>
+          </div>
+          <div class="pipeline-step">
+            <div class="step-status pending">◇</div>
+            <div class="step-info">
+              <div class="step-name" style="color:var(--text-muted);">Write Cells</div>
+              <div class="step-time">—</div>
+            </div>
+            <button class="step-expand" style="opacity:0.3;">▸</button>
+          </div>
+          <div class="pipeline-step">
+            <div class="step-status pending">◇</div>
+            <div class="step-info">
+              <div class="step-name" style="color:var(--text-muted);">Run Notebook</div>
+              <div class="step-time">—</div>
+            </div>
+            <button class="step-expand" style="opacity:0.3;">▸</button>
+          </div>
+        </div>
+
+        <!-- Floating badge preview -->
+        <div class="floating-badge-preview">
+          <div class="floating-badge-label">Minimized Preview</div>
+          <div class="floating-badge">
+            <span class="badge-dot"></span>
+            <span>Step 3/6 — Creating Lakehouse</span>
+            <span class="badge-progress"><span class="badge-progress-fill"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-container -->
+
+  <!-- Footer -->
+  <div class="dialog-footer" id="dialogFooter">
+    <button class="btn btn-ghost" id="backBtn" style="visibility:hidden;">← Back</button>
+    <div></div>
+    <button class="btn btn-primary" id="nextBtn">Next →</button>
+  </div>
+
+</div><!-- /dialog -->
+</div><!-- /overlay -->
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     JAVASCRIPT — Interactions
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  let currentPage = 0;
+  const totalPages = 5;
+  const pages = Array.from(document.querySelectorAll('.page'));
+  const stepItems = document.querySelectorAll('.step-item');
+  const connectors = document.querySelectorAll('.step-connector');
+  const nextBtn = document.getElementById('nextBtn');
+  const backBtn = document.getElementById('backBtn');
+  const footer = document.getElementById('dialogFooter');
+
+  /* ─── Names for randomizer ─── */
+  const adjectives = ['brave','calm','swift','keen','bold','wise','fair','pure','warm','cool','deep','bright','quick','sharp','clear'];
+  const names = ['turing','lovelace','hopper','dijkstra','knuth','ritchie','thompson','gosling','torvalds','kernighan','pike','matsumoto','hejlsberg','stroustrup','mccarthy'];
+
+  function randomName() {
+    const a = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const n = names[Math.floor(Math.random() * names.length)];
+    const d = Math.floor(Math.random() * 90) + 10;
+    return `${a}_${n}_${d}`;
+  }
+
+  /* ─── Randomize button ─── */
+  document.getElementById('randomizeBtn').addEventListener('click', function() {
+    const name = randomName();
+    document.getElementById('wsName').value = name;
+    document.getElementById('lhName').value = name + '_lh';
+    document.getElementById('nbName').value = name + '_nb';
+    this.style.transform = 'translateY(-50%) rotate(180deg)';
+    setTimeout(() => { this.style.transform = 'translateY(-50%)'; }, 300);
+  });
+
+  /* ─── Workspace name sync ─── */
+  document.getElementById('wsName').addEventListener('input', function() {
+    const v = this.value.replace(/[^a-zA-Z0-9_]/g, '');
+    this.value = v;
+    document.getElementById('lhName').value = v + '_lh';
+    document.getElementById('nbName').value = v + '_nb';
+  });
+
+  /* ─── Page navigation ─── */
+  function goToPage(target) {
+    if (target < 0 || target >= totalPages || target === currentPage) return;
+    const direction = target > currentPage ? 1 : -1;
+    const leaving = pages[currentPage];
+    const entering = pages[target];
+
+    // Exit animation
+    leaving.classList.remove('active');
+    leaving.classList.add(direction > 0 ? 'exit-left' : '');
+    leaving.style.transform = direction > 0 ? 'translateX(-60px)' : 'translateX(60px)';
+    leaving.style.opacity = '0';
+
+    // Enter animation
+    entering.style.transform = direction > 0 ? 'translateX(60px)' : 'translateX(-60px)';
+    entering.style.opacity = '0';
+
+    requestAnimationFrame(() => {
+      entering.classList.add('active');
+      entering.style.transform = 'translateX(0)';
+      entering.style.opacity = '1';
+    });
+
+    // Update stepper
+    stepItems.forEach((item, i) => {
+      item.classList.remove('active', 'completed');
+      if (i < target) item.classList.add('completed');
+      if (i === target) item.classList.add('active');
+    });
+
+    connectors.forEach((conn, i) => {
+      const fill = conn.querySelector('.fill');
+      if (i < target) { conn.classList.add('filled'); }
+      else { conn.classList.remove('filled'); }
+    });
+
+    currentPage = target;
+    updateFooter();
+  }
+
+  function updateFooter() {
+    backBtn.style.visibility = currentPage > 0 ? 'visible' : 'hidden';
+
+    if (currentPage === 3) {
+      nextBtn.className = 'btn btn-create';
+      nextBtn.innerHTML = 'Lock In & Create ▶';
+    } else if (currentPage === 4) {
+      footer.style.display = 'none';
+    } else {
+      footer.style.display = '';
+      nextBtn.className = 'btn btn-primary';
+      nextBtn.innerHTML = 'Next →';
+    }
+  }
+
+  nextBtn.addEventListener('click', () => goToPage(currentPage + 1));
+  backBtn.addEventListener('click', () => goToPage(currentPage - 1));
+
+  /* ─── Clickable completed steps ─── */
+  stepItems.forEach((item, i) => {
+    item.addEventListener('click', () => {
+      if (item.classList.contains('completed')) goToPage(i);
+    });
+  });
+
+  /* ─── Theme selection ─── */
+  document.getElementById('themeGrid').addEventListener('click', function(e) {
+    const card = e.target.closest('.theme-card');
+    if (!card) return;
+    this.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+  });
+
+  /* ─── Medallion toggle ─── */
+  document.getElementById('medallionToggle').addEventListener('click', function() {
+    this.classList.toggle('on');
+    const chips = document.getElementById('medallionChips');
+    chips.classList.toggle('show');
+  });
+
+  /* ─── Medallion chips ─── */
+  document.querySelectorAll('.medallion-chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+
+  /* ─── DAG node selection ─── */
+  document.querySelectorAll('.dag-node').forEach(node => {
+    node.addEventListener('click', function(e) {
+      if (e.target.closest('.node-popover')) return;
+      const wasSelected = this.classList.contains('selected');
+      document.querySelectorAll('.dag-node').forEach(n => {
+        n.classList.remove('selected');
+        const pop = n.querySelector('.node-popover');
+        if (pop) pop.style.display = 'none';
+      });
+      if (!wasSelected) {
+        this.classList.add('selected');
+        const pop = this.querySelector('.node-popover');
+        if (pop) pop.style.display = '';
+      }
+    });
+  });
+
+  /* ─── Code panel toggle ─── */
+  const codePanel = document.getElementById('codePanel');
+  const codePanelToggle = document.getElementById('codePanelToggle');
+  codePanelToggle.addEventListener('click', function() {
+    codePanel.classList.toggle('collapsed');
+    this.innerHTML = codePanel.classList.contains('collapsed') ? '▸' : '◂';
+    if (codePanel.classList.contains('collapsed')) {
+      this.style.right = '0';
+    } else {
+      this.style.right = '260px';
+    }
+  });
+
+  /* ─── Pipeline expand/collapse ─── */
+  window.toggleStepDetail = function(btn) {
+    const step = btn.closest('.pipeline-step');
+    let detail = step.querySelector('.step-detail');
+    if (!detail) {
+      // Create detail for completed steps
+      detail = document.createElement('div');
+      detail.className = 'step-detail';
+      detail.innerHTML = '<span style="color:var(--text-muted)">Response logged</span>\n<span style="color:var(--status-ok)">200 OK</span> — Completed successfully';
+      step.querySelector('.step-info').appendChild(detail);
+    }
+    const isOpen = detail.classList.contains('open');
+    detail.classList.toggle('open');
+    btn.style.transform = isOpen ? '' : 'rotate(90deg)';
+  };
+
+  /* ─── Running timer simulation ─── */
+  let timerValue = 3.2;
+  setInterval(() => {
+    if (currentPage === 4) {
+      timerValue += 0.1;
+      const el = document.getElementById('runningTimer');
+      if (el) el.textContent = timerValue.toFixed(1) + 's';
+    }
+  }, 100);
+
+  /* ─── Initialize ─── */
+  updateFooter();
+
+  // Show popover on initial selected node
+  const initialPop = document.getElementById('nodePopover');
+  if (initialPop) initialPop.style.display = '';
+
+})();
+</script>
+</body>
+</html>
