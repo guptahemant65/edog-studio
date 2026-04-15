@@ -95,6 +95,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 // RunAsync callback registrations (after platform init)
                 count += PublishRegistration("ICustomLiveTableTelemetryReporter", "EdogTelemetryInterceptor", "Instance", "RunAsync");
+                count += PublishRegistration("IWorkloadResourceMetricsReporter", "EdogCapacityDataInterceptor", "Instance", "RunAsync");
                 count += PublishRegistration("IAuthContextProvider", "AuthContextProvider", "Singleton", "RunAsync");
                 count += PublishRegistration("IMwcV2PermissionsValidator", "MwcV2PermissionsValidator", "Singleton", "RunAsync");
 
@@ -154,6 +155,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "ISqlEndpointMetadataCache" => true,
                 "ISparkClientFactory" => true,
                 "ICustomLiveTableTelemetryReporter" => true,
+                "IWorkloadResourceMetricsReporter" => true,
                 _ => false,
             };
         }
@@ -169,6 +171,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "ISqlEndpointMetadataCache" => "EdogCacheInterceptor",
                 "ISparkClientFactory" => "EdogSparkSessionInterceptor",
                 "ICustomLiveTableTelemetryReporter" => "EdogTelemetryInterceptor",
+                "IWorkloadResourceMetricsReporter" => "EdogCapacityDataInterceptor",
                 _ => "Unknown",
             };
         }

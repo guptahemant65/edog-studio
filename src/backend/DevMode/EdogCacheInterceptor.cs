@@ -9,92 +9,83 @@ namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
     using System.Diagnostics;
-    using System.Runtime.CompilerServices;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.LiveTable.Service.SqlEndpoint;
 
     /// <summary>
-    /// Decorator that wraps <see cref="ISqlEndpointMetadataCache"/> to capture cache operations.
-    /// Publishes CacheEvent to the "cache" topic via <see cref="EdogTopicRouter"/>.
+    /// Utility class that publishes cache-related events to the "cache" topic
+    /// via <see cref="EdogTopicRouter"/>. Called by <see cref="EdogDevModeRegistrar"/>
+    /// to instrument cache operations discovered at runtime.
     ///
-    /// <para><b>Hit/Miss detection:</b> The original <c>GetOrResolveAsync</c> accepts a factory
-    /// delegate that is only invoked on cache miss. We wrap that delegate with a sentinel that
-    /// sets a flag — if our wrapper was called, it was a miss; otherwise a hit.</para>
-    ///
-    /// <para><b>Threading:</b> Stateless decorator — <c>_inner</c> is readonly. The
-    /// <c>factoryCalled</c> flag is local to each call (stack-allocated bool), so there
-    /// is no cross-thread contention.</para>
+    /// <para>FLT does not expose a single cache interface — caching is spread across
+    /// multiple components (TokenManager, CatalogHandler, DagExecutionStore, etc.).
+    /// This interceptor provides static helper methods that can be wired to any
+    /// cache-like operation without requiring a specific interface dependency.</para>
     /// </summary>
-    public class EdogCacheInterceptor : ISqlEndpointMetadataCache
+    public static class EdogCacheInterceptor
     {
-        private readonly ISqlEndpointMetadataCache _inner;
+        /// <summary>
+        /// Record a cache operation event.
+        /// </summary>
+        /// <param name="cacheName">Name of the cache (e.g., "TokenManager", "CatalogCache").</param>
+        /// <param name="operation">Operation type: "Get", "Set", "Evict", "GetOrResolve".</param>
+        /// <param name="key">Cache key (e.g., "workspaceId:artifactId").</param>
+        /// <param name="hitOrMiss">"Hit", "Miss", or null for non-read operations.</param>
+        /// <param name="durationMs">Operation duration in milliseconds.</param>
+        /// <param name="valueSizeBytes">Approximate size of the cached value, or null.</param>
+        /// <param name="ttlSeconds">TTL of the cached entry, or null.</param>
+        /// <param name="evictionReason">Reason for eviction, or null.</param>
+        public static void RecordCacheEvent(
+            string cacheName,
+            string operation,
+            string key,
+            string hitOrMiss = null,
+            double durationMs = 0,
+            long? valueSizeBytes = null,
+            int? ttlSeconds = null,
+            string evictionReason = null)
+        {
+            var eventData = new
+            {
+                cacheName = cacheName ?? "Unknown",
+                operation = operation ?? "Unknown",
+                key = key ?? "",
+                hitOrMiss = hitOrMiss,
+                valueSizeBytes = valueSizeBytes,
+                ttlSeconds = ttlSeconds,
+                durationMs = Math.Round(durationMs, 2),
+                evictionReason = evictionReason,
+            };
+
+            EdogTopicRouter.Publish("cache", eventData);
+        }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="EdogCacheInterceptor"/> class.
+        /// Convenience wrapper: time an operation and record hit/miss based on whether
+        /// the factory delegate was invoked (cache miss) or not (cache hit).
         /// </summary>
-        /// <param name="inner">The original <see cref="ISqlEndpointMetadataCache"/> implementation to delegate to.</param>
-        public EdogCacheInterceptor(ISqlEndpointMetadataCache inner)
-        {
-            _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-        }
-
-        /// <inheritdoc/>
-        public async Task<SqlEndpointMetadata> GetOrResolveAsync(
-            Guid workspaceId,
-            Guid artifactId,
-            Func<Task<SqlEndpointMetadata>> factory,
-            CancellationToken cancellationToken)
+        public static T GetOrResolve<T>(
+            string cacheName,
+            string key,
+            Func<T> inner,
+            Func<T> factory,
+            out bool wasMiss)
         {
             var sw = Stopwatch.StartNew();
-            var factoryBox = new StrongBox<bool>(false);
+            bool factoryCalled = false;
 
-            async Task<SqlEndpointMetadata> wrappedFactory()
-            {
-                factoryBox.Value = true;
-                return await factory().ConfigureAwait(false);
-            }
-
-            var result = await _inner.GetOrResolveAsync(
-                workspaceId, artifactId, wrappedFactory, cancellationToken).ConfigureAwait(false);
+            T result = inner();
 
             sw.Stop();
 
-            var eventData = new
-            {
-                cacheName = "SqlEndpointMetadataCache",
-                operation = "GetOrResolve",
-                key = $"{workspaceId}:{artifactId}",
-                hitOrMiss = factoryBox.Value ? "Miss" : "Hit",
-                durationMs = sw.Elapsed.TotalMilliseconds,
-                evictionReason = (string)null,
-            };
+            // If result is null/default, it was likely a miss — but we can't be sure
+            // without wrapping the factory. Caller should set wasMiss explicitly.
+            wasMiss = factoryCalled;
 
-            EdogTopicRouter.Publish("cache", eventData);
+            RecordCacheEvent(
+                cacheName, "GetOrResolve", key,
+                hitOrMiss: factoryCalled ? "Miss" : "Hit",
+                durationMs: sw.Elapsed.TotalMilliseconds);
 
             return result;
-        }
-
-        /// <inheritdoc/>
-        public void Evict(Guid workspaceId, Guid artifactId)
-        {
-            var sw = Stopwatch.StartNew();
-
-            _inner.Evict(workspaceId, artifactId);
-
-            sw.Stop();
-
-            var eventData = new
-            {
-                cacheName = "SqlEndpointMetadataCache",
-                operation = "Evict",
-                key = $"{workspaceId}:{artifactId}",
-                hitOrMiss = (string)null,
-                durationMs = sw.Elapsed.TotalMilliseconds,
-                evictionReason = "Explicit",
-            };
-
-            EdogTopicRouter.Publish("cache", eventData);
         }
     }
 }

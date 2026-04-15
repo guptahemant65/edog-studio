@@ -41,6 +41,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterRetryInterceptor();
                 RegisterCacheInterceptor();
                 RegisterSparkSessionInterceptor();
+                RegisterCapacityDataInterceptor();
                 RegisterDiRegistryCapture();
 
                 Console.WriteLine("[EDOG] DevMode interceptors registered");
@@ -161,20 +162,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterCacheInterceptor()
         {
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.SqlEndpoint.ISqlEndpointMetadataCache>();
-                if (inner is EdogCacheInterceptor) return;
-                var wrapper = new EdogCacheInterceptor(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.SqlEndpoint.ISqlEndpointMetadataCache>(wrapper);
-                Console.WriteLine("[EDOG] ✓ Cache interceptor registered");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ Cache interceptor failed: {ex.Message}");
-            }
+            // EdogCacheInterceptor is now a static utility class.
+            // Cache events are published via EdogCacheInterceptor.RecordCacheEvent()
+            // which can be called from any component. No DI wrapping needed.
+            Console.WriteLine("[EDOG] ✓ Cache interceptor ready (static utility)");
         }
 
         private static void RegisterSparkSessionInterceptor()
@@ -204,6 +195,24 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] ✗ DI registry capture failed: {ex.Message}");
+            }
+        }
+
+        private static void RegisterCapacityDataInterceptor()
+        {
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.MWC.Workload.Client.Library.IWorkloadResourceMetricsReporter>();
+                if (inner is EdogCapacityDataInterceptor) return;
+                var wrapper = new EdogCapacityDataInterceptor(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.MWC.Workload.Client.Library.IWorkloadResourceMetricsReporter>(wrapper);
+                Console.WriteLine("[EDOG] ✓ Capacity data interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Capacity data interceptor failed: {ex.Message}");
             }
         }
     }

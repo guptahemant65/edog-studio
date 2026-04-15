@@ -1206,13 +1206,20 @@ class WorkspaceExplorer {
     const envLabel = this._getEnvironmentLabel(ws);
     const health = this._getHealthStatus(ws);
     const lastMod = lh.lastUpdatedDate ? this._formatDate(lh.lastUpdatedDate) : null;
+    const truncGuid = lh.id.length > 12 ? lh.id.slice(0, 8) + '\u2026' + lh.id.slice(-4) : lh.id;
 
-    let html = '<div class="ws-content-header">';
-    html += `<div class="ws-content-name">${this._esc(lh.displayName)}</div>`;
-    html += '<div class="ws-content-meta">';
-    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID">${this._esc(lh.id)}</span>`;
+    // V2 Header — icon + name + status pill + meta row
+    let html = '<div class="ws-lh-header">';
+    html += '<div class="ws-lh-header-icon">';
+    html += '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
     html += '</div>';
-    html += '<div class="ws-header-badges">';
+    html += '<div class="ws-lh-header-info">';
+    html += '<div class="ws-lh-name-row">';
+    html += `<div class="ws-content-name">${this._esc(lh.displayName)}</div>`;
+    html += '<span class="ws-status-pill ws-pill-hidden" id="ws-status-pill"></span>';
+    html += '</div>';
+    html += '<div class="ws-content-meta">';
+    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID: ${this._esc(lh.id)}">${this._esc(truncGuid)}</span>`;
     html += `<span class="ws-badge ws-badge-env">${this._esc(envLabel)}</span>`;
     if (ws._region) {
       html += `<span class="ws-badge ws-badge-region">${this._esc(ws._region)}</span>`;
@@ -1220,21 +1227,43 @@ class WorkspaceExplorer {
     if (lastMod) {
       html += `<span class="ws-modified">Modified ${lastMod}</span>`;
     }
-    html += `<span class="ws-badge ws-badge-health" style="color:${health.color}">● ${this._esc(health.status)}</span>`;
+    html += '</div>';
     html += '</div></div>';
 
-    html += '<div class="ws-content-actions" id="ws-content-actions">';
-    html += '<button class="ws-deploy-btn" id="ws-deploy-btn">\u25B6 Deploy to this Lakehouse</button>';
-    html += '<button class="ws-action-btn" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
-    html += '<button class="ws-action-btn" data-action="rename-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
-    html += '<button class="ws-action-btn" data-action="clone-env"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Clone Environment</button>';
+    // V2 Action Bar — primary left, secondary right
+    html += '<div class="ws-v2-actions" id="ws-content-actions">';
+    html += '<div class="ws-v2-actions-left">';
+    html += '<button class="ws-btn-primary" id="ws-deploy-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg> Deploy</button>';
     html += '</div>';
+    html += '<div class="ws-v2-actions-right">';
+    html += '<button class="ws-btn-ghost" data-action="open-fabric-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open in Fabric</button>';
+    html += '<button class="ws-btn-ghost" data-action="rename-lh"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>Rename</button>';
+    html += '<button class="ws-btn-ghost" data-action="clone-env"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Clone</button>';
+    html += '</div></div>';
 
+    // Deploy progress container
     html += '<div id="ws-deploy-progress" class="ws-deploy-progress" style="display:none"></div>';
+
+    // Tables section
     html += '<div class="ws-section"><div class="ws-section-title">Tables</div>';
     html += '<div id="ws-tables-list">Loading tables...</div></div>';
 
     this._contentEl.innerHTML = html;
+
+    // Bind GUID click-to-copy
+    const guidEl = this._contentEl.querySelector('.ws-guid[data-copy-id]');
+    if (guidEl) {
+      guidEl.addEventListener('click', () => {
+        const fullId = guidEl.dataset.copyId;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(fullId).then(() => {
+            guidEl.classList.add('copied');
+            this._toast('ID copied to clipboard', 'success');
+            setTimeout(() => guidEl.classList.remove('copied'), 2000);
+          });
+        }
+      });
+    }
 
     // Sync deploy button state from studio status
     this._syncDeployButtons(lh, ws);
@@ -1289,9 +1318,11 @@ class WorkspaceExplorer {
       for (const t of tables) {
         const tType = t.tableType || t.type || '';
         const tFormat = t.tableFormat || t.format || 'delta';
+        const iconCls = this._tableIconClass(tType);
+        const iconChar = this._tableIconChar(tType);
         tableHtml += `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}">`;
-        tableHtml += `<td class="ws-table-name">${this._esc(t.name)}</td>`;
-        tableHtml += `<td><span class="ws-type-badge">${this._esc(this._tableTypeBadge(tType))}</span></td>`;
+        tableHtml += `<td class="ws-table-name"><span class="ws-table-icon ${iconCls}">${iconChar}</span>${this._esc(t.name)}</td>`;
+        tableHtml += `<td><span class="ws-type-badge ${iconCls}">${this._esc(this._tableTypeBadge(tType))}</span></td>`;
         tableHtml += `<td>${this._esc(tFormat)}</td>`;
         tableHtml += '<td class="num">\u2014</td>';
         tableHtml += '<td class="num">\u2014</td>';
@@ -1337,29 +1368,33 @@ class WorkspaceExplorer {
         for (const t of tables) {
           this._api.getTableStats(ws.id, lh.id, t.name)
             .then(stats => {
-              if (!stats || stats.rowCount == null) return;
+              if (!stats) return;
+              // Update even if only one of rowCount/sizeBytes is available
+              const hasRows = stats.rowCount != null;
+              const hasSize = stats.sizeBytes != null;
+              if (!hasRows && !hasSize) return;
               // Update stored table
               const stored = (this._currentTables || []).find(x => x.name === t.name);
               if (stored) {
-                stored.rowCount = stats.rowCount;
-                stored.sizeInBytes = stats.sizeBytes;
+                if (hasRows) stored.rowCount = stats.rowCount;
+                if (hasSize) stored.sizeInBytes = stats.sizeBytes;
               }
               // Update DOM
               const row = document.querySelector(`.ws-table-row[data-table-name="${CSS.escape(t.name)}"]`);
               if (row) {
                 const rowsCell = row.children[3];
                 const sizeCell = row.children[4];
-                if (rowsCell) {
+                if (rowsCell && hasRows) {
                   rowsCell.className = 'num';
-                  rowsCell.textContent = stats.rowCount != null ? this._numFmt.format(stats.rowCount) : '\u2014';
+                  rowsCell.textContent = this._numFmt.format(stats.rowCount);
                 }
-                if (sizeCell) {
+                if (sizeCell && hasSize) {
                   sizeCell.className = 'num';
                   sizeCell.textContent = this._formatSize(stats.sizeBytes);
                 }
               }
             })
-            .catch(() => {}); // silently degrade
+            .catch(() => {}); // silently degrade — enrichTableRows already set dashes
         }
       }
     } catch (err) {
@@ -1492,6 +1527,34 @@ class WorkspaceExplorer {
   }
 
   /**
+   * Map a table type to a CSS class for the colored icon badge.
+   * @param {string} type
+   * @returns {string} CSS class name (mlv, managed, external)
+   */
+  _tableIconClass(type) {
+    const map = {
+      'MATERIALIZED_LAKE_VIEW': 'mlv',
+      'EXTERNAL': 'external',
+      'MANAGED': 'managed',
+    };
+    return map[type] || '';
+  }
+
+  /**
+   * Map a table type to a single-character icon.
+   * @param {string} type
+   * @returns {string}
+   */
+  _tableIconChar(type) {
+    const map = {
+      'MATERIALIZED_LAKE_VIEW': 'M',
+      'EXTERNAL': 'E',
+      'MANAGED': 'T',
+    };
+    return map[type] || 'T';
+  }
+
+  /**
    * Format byte counts to human-readable size strings.
    * @param {number} bytes
    * @returns {string} e.g. "156 MB", "1.2 GB"
@@ -1556,23 +1619,20 @@ class WorkspaceExplorer {
           typeBadge.textContent = this._tableTypeBadge(detail.result.type);
         }
 
-        // Rows
-        if (rowsCell) {
-          const count = detail.result.rowCount;
+        // Rows — only overwrite if we have actual data OR cell is still placeholder
+        if (rowsCell && detail.result.rowCount != null) {
           rowsCell.className = 'num';
-          rowsCell.textContent = count != null ? this._numFmt.format(count) : '\u2014';
+          rowsCell.textContent = this._numFmt.format(detail.result.rowCount);
         }
+        // If null, leave cell as-is (getTableStats may have already populated it)
 
-        // Size
-        if (sizeCell) {
+        // Size — same: only overwrite with real data
+        if (sizeCell && detail.result.sizeInBytes != null) {
           sizeCell.className = 'num';
           sizeCell.textContent = this._formatSize(detail.result.sizeInBytes);
         }
-      } else {
-        // No detail for this table — clear shimmer with dash
-        if (rowsCell) { rowsCell.className = 'num'; rowsCell.textContent = '\u2014'; }
-        if (sizeCell) { sizeCell.className = 'num'; sizeCell.textContent = '\u2014'; }
       }
+      // If no detail at all, leave cells as-is — getTableStats handles them
     });
 
     // If inspector is showing a table that just got enriched, refresh it
@@ -2093,22 +2153,51 @@ class WorkspaceExplorer {
   }
 
   _onDeployUpdate(state, lh, ws) {
+    const pill = document.getElementById('ws-status-pill');
     if (state.status === 'deploying') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('deploying');
+      if (pill) {
+        pill.className = 'ws-status-pill deploying';
+        pill.innerHTML = '<span class="ws-pill-dot"></span> Deploying\u2026';
+      }
+      // Update deploy button to deploying state
+      const btnEl = document.getElementById('ws-deploy-btn');
+      if (btnEl) {
+        btnEl.className = 'ws-btn-deploying';
+        btnEl.innerHTML = '<span class="ws-spinner"></span> Deploying\u2026';
+      }
     } else if (state.status === 'running') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('connected');
       if (window.edogSidebar) window.edogSidebar.setPhase('connected');
       if (state.fltPort && window.edogWs) window.edogWs.setPort(state.fltPort);
       if (window.edogApp && window.edogApp.loadInitialData) window.edogApp.loadInitialData();
       this._toast('Connected to ' + (lh.displayName || lh.id), 'success');
-      // Only show undeploy button if this lakehouse's content panel is still displayed
+      // Set status pill to running
+      if (pill) {
+        pill.className = 'ws-status-pill running';
+        const portHtml = state.fltPort ? ' <span class="ws-port-badge">:' + state.fltPort + '</span>' : '';
+        pill.innerHTML = '<span class="ws-pill-dot"></span> Running' + portHtml;
+      }
+      // Show undeploy button if this lakehouse's content panel is still displayed
       if (document.getElementById('ws-deploy-btn')) {
         this._showUndeployButton(lh);
       }
+      // Show deploy summary (collapsed success state)
+      this._showDeploySummary(state);
+      // Fire completion burst
+      this._fireCompletionBurst();
     } else if (state.status === 'stopped' && state.error) {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('failed');
+      if (pill) {
+        pill.className = 'ws-status-pill failed';
+        pill.innerHTML = '<span class="ws-pill-dot"></span> Deploy Failed';
+      }
       const btnEl = document.getElementById('ws-deploy-btn');
-      if (btnEl) btnEl.style.display = '';
+      if (btnEl) {
+        btnEl.className = 'ws-btn-primary';
+        btnEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg> Retry Deploy';
+        btnEl.style.display = '';
+      }
     } else if (state.status === 'stopped' || state.status === 'idle') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
       if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
@@ -2121,13 +2210,70 @@ class WorkspaceExplorer {
         window.edogApp.renderer.scheduleRender();
       }
       if (window.edogWs) window.edogWs.disconnect();
+      if (pill) {
+        pill.className = 'ws-status-pill stopped';
+        pill.innerHTML = '<span class="ws-pill-dot"></span> Stopped';
+      }
       const btnEl = document.getElementById('ws-deploy-btn');
-      if (btnEl) btnEl.style.display = '';
+      if (btnEl) {
+        btnEl.className = 'ws-btn-primary';
+        btnEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg> Deploy';
+        btnEl.style.display = '';
+      }
       // Remove undeploy button
       const undeployBtn = document.getElementById('ws-undeploy-btn');
       if (undeployBtn) undeployBtn.remove();
     } else if (state.status === 'crashed') {
       if (window.edogTopBar) window.edogTopBar.setDeployStatus('crashed');
+    }
+  }
+
+  /**
+   * Show the collapsed deploy summary line after successful deploy.
+   */
+  _showDeploySummary(state) {
+    const progressEl = document.getElementById('ws-deploy-progress');
+    if (!progressEl) return;
+    const elapsed = this._deployFlow?._startTime
+      ? Math.floor((Date.now() - this._deployFlow._startTime) / 1000)
+      : 0;
+    const portStr = state.fltPort ? ' \u00B7 :' + state.fltPort : '';
+
+    progressEl.innerHTML =
+      '<div class="ws-deploy-summary" id="ws-deploy-summary">' +
+        '<span class="ws-check-icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg></span>' +
+        '<span class="ws-summary-text"><strong>Deployed</strong> ' + elapsed + 's' + portStr + '</span>' +
+        '<span class="ws-expand-hint"><span class="ws-summary-chevron" style="font-size:10px;">\u25B6</span> Logs</span>' +
+      '</div>';
+    progressEl.style.display = 'block';
+  }
+
+  /**
+   * Fire completion burst particles (V2 celebration animation).
+   */
+  _fireCompletionBurst() {
+    let container = document.querySelector('.ws-completion-burst');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'ws-completion-burst';
+      document.body.appendChild(container);
+    }
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const colors = ['#6d5cff','#8577ff','#34d399','#a78bfa','#22c55e','#f0b429','#5b9bff'];
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.className = 'ws-burst-particle';
+      const angle = (Math.PI * 2 * i) / 30 + (Math.random() - 0.5) * 0.5;
+      const dist = 80 + Math.random() * 150;
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist - 60;
+      const sz = 3 + Math.random() * 4;
+      p.style.cssText = 'left:' + cx + 'px;top:' + cy + 'px;background:' + colors[i % colors.length] +
+        ';width:' + sz + 'px;height:' + sz + 'px;--dx:' + dx + 'px;--dy:' + dy +
+        'px;animation-duration:' + (0.6 + Math.random() * 0.8) + 's;';
+      container.appendChild(p);
+      setTimeout(() => p.remove(), 1500);
     }
   }
 
@@ -2151,8 +2297,17 @@ class WorkspaceExplorer {
         state.deployTarget.artifactId !== lh.id;
 
       if (deployedToThis) {
-        // This lakehouse is currently deployed — show re-deploy + stop
+        // Set status pill to running
+        const pill = document.getElementById('ws-status-pill');
+        if (pill) {
+          const portHtml = state.fltPort ? ' <span class="ws-port-badge">:' + state.fltPort + '</span>' : '';
+          pill.className = 'ws-status-pill running';
+          pill.innerHTML = '<span class="ws-pill-dot"></span> Running' + portHtml;
+        }
+        // Show re-deploy + stop buttons
         this._showUndeployButton(lh);
+        // Show deploy summary
+        this._showDeploySummary(state);
         // Also attach DeployFlow for undeploy capability
         const progressEl = document.getElementById('ws-deploy-progress');
         if (!this._deployFlow && progressEl) {
@@ -2160,30 +2315,32 @@ class WorkspaceExplorer {
           this._deployFlow.onUpdate = (s) => this._onDeployUpdate(s, lh, ws);
         }
       } else if (deployedToOther) {
-        // Different lakehouse is deployed — show "Deploy (switch from X)"
+        // Different lakehouse is deployed — indicate switch
         const otherName = state.deployTarget.lakehouseName || state.deployTarget.artifactId || '';
-        btnEl.textContent = '\u25B6 Deploy (switch from ' + otherName + ')';
+        btnEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg> Deploy (switch from ' + this._esc(otherName) + ')';
         btnEl.title = 'Currently deployed to ' + otherName + '. Click to switch.';
       }
-      // else: nothing deployed — default "Deploy to this Lakehouse" button is fine
+      // else: nothing deployed — default button is fine
     } catch {
       // Studio status not available — keep default button
     }
   }
 
   _showUndeployButton(lh) {
-    // Replace deploy button with re-deploy + stop pair
+    // Replace deploy button with re-deploy styling
     const btnEl = document.getElementById('ws-deploy-btn');
-    if (btnEl) btnEl.textContent = '\u21BB Re-deploy';
+    if (btnEl) {
+      btnEl.className = 'ws-btn-primary';
+      btnEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Re-deploy';
+    }
     // Add stop button if not exists
     if (!document.getElementById('ws-undeploy-btn')) {
-      const actions = document.querySelector('.ws-content-actions');
-      if (actions) {
+      const actionsLeft = this._contentEl.querySelector('.ws-v2-actions-left');
+      if (actionsLeft) {
         const stopBtn = document.createElement('button');
         stopBtn.id = 'ws-undeploy-btn';
-        stopBtn.className = 'ws-action-btn';
-        stopBtn.innerHTML = '\u25A0 Stop Service';
-        stopBtn.style.color = 'var(--status-failed)';
+        stopBtn.className = 'ws-btn-danger';
+        stopBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg> Stop Service';
         stopBtn.addEventListener('click', async () => {
           stopBtn.disabled = true;
           stopBtn.textContent = 'Stopping\u2026';
@@ -2203,6 +2360,12 @@ class WorkspaceExplorer {
           // Reset UI to Phase 1
           if (window.edogTopBar) window.edogTopBar.setDeployStatus('stopped');
           if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+          // Update status pill
+          const pill = document.getElementById('ws-status-pill');
+          if (pill) {
+            pill.className = 'ws-status-pill stopped';
+            pill.innerHTML = '<span class="ws-pill-dot"></span> Stopped';
+          }
           // Clean up deploy flow if exists
           if (this._deployFlow) {
             this._deployFlow.destroy();
@@ -2211,14 +2374,15 @@ class WorkspaceExplorer {
           // Reset buttons
           stopBtn.remove();
           if (btnEl) {
-            btnEl.textContent = '\u25B6 Deploy to this Lakehouse';
+            btnEl.className = 'ws-btn-primary';
+            btnEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg> Deploy';
             btnEl.style.display = '';
           }
           const progressEl = document.getElementById('ws-deploy-progress');
           if (progressEl) { progressEl.style.display = 'none'; progressEl.innerHTML = ''; }
           this._toast('Service stopped', 'info');
         });
-        actions.insertBefore(stopBtn, actions.children[1] || null);
+        actionsLeft.appendChild(stopBtn);
       }
     }
   }

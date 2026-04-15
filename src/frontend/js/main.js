@@ -110,6 +110,25 @@ class EdogLogViewer {
     this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
     this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
 
+    // Runtime View tab modules
+    this.telemetryTab = new TelemetryTab(document.getElementById('rt-tab-telemetry'), this.ws);
+    this.sysfilesTab = new SystemFilesTab(document.getElementById('rt-tab-sysfiles'), this.ws);
+    this.sparkTab = new SparkSessionsTab(document.getElementById('rt-tab-spark'), this.ws);
+    this.tokensTab = new TokensTab(document.getElementById('rt-tab-tokens'), this.ws);
+    this.cachesTab = new CachesTab(document.getElementById('rt-tab-caches'), this.ws);
+    this.httpTab = new HttpPipelineTab(document.getElementById('rt-tab-http'), this.ws);
+    this.retriesTab = new RetriesTab(document.getElementById('rt-tab-retries'), this.ws);
+    this.flagsTab = new FeatureFlagsTab(document.getElementById('rt-tab-flags'), this.ws);
+    this.diTab = new DiRegistryTab(document.getElementById('rt-tab-di'), this.ws);
+    this.perfTab = new PerfMarkersTab(document.getElementById('rt-tab-perf'), this.ws);
+    this.logsEnhancements = new LogsEnhancements({
+      logsContainer: document.getElementById('logs-container'),
+      breakpointsBar: document.getElementById('breakpoints-bar'),
+      bookmarksDrawer: document.getElementById('bookmarks-drawer'),
+      state: this.state,
+      renderer: this.renderer
+    });
+
     // Smart feature modules
     this.autoDetector = new AutoDetector(this.state);
     this.smartContext = new SmartContextBar(this.autoDetector);
@@ -182,6 +201,21 @@ class EdogLogViewer {
       },
       deactivate: () => { /* Logs stay in buffer, just stop rendering */ }
     });
+
+    // Register Runtime View tab modules
+    this.runtimeView.registerTab('telemetry', this.telemetryTab);
+    this.runtimeView.registerTab('sysfiles', this.sysfilesTab);
+    this.runtimeView.registerTab('spark', this.sparkTab);
+    this.runtimeView.registerTab('tokens', this.tokensTab);
+    this.runtimeView.registerTab('caches', this.cachesTab);
+    this.runtimeView.registerTab('http', this.httpTab);
+    this.runtimeView.registerTab('retries', this.retriesTab);
+    this.runtimeView.registerTab('flags', this.flagsTab);
+    this.runtimeView.registerTab('di', this.diTab);
+    this.runtimeView.registerTab('perf', this.perfTab);
+
+    // Initialize logs enhancements (breakpoints, bookmarks, error clustering)
+    if (this.logsEnhancements) this.logsEnhancements.init();
 
     // Expose globals for deploy phase sync
     window.edogTopBar = this.topbar;
@@ -541,6 +575,12 @@ class EdogLogViewer {
     }
     // Wire to RuntimeView connection bar
     if (this.runtimeView) this.runtimeView.setConnectionStatus(status);
+
+    // Phase transition: when SignalR connects, unlock Runtime View
+    if (status === 'connected') {
+      this.sidebar.setPhase('connected');
+      if (this.runtimeView) this.runtimeView.setPhase('connected');
+    }
   }
   
   loadInitialData = async () => {
@@ -707,6 +747,11 @@ class EdogLogViewer {
     if (viewId === 'runtime') {
       // RuntimeView handles its own tab switching
       this.runtimeView.switchTab(this.runtimeView._activeTab);
+
+      // Sync sidebar sub-tab highlight with runtime's active tab
+      if (this.sidebar.setActiveSubTab) {
+        this.sidebar.setActiveSubTab(this.runtimeView._activeTab);
+      }
 
       // If current tab is logs, ensure data is loaded
       if (this.runtimeView._activeTab === 'logs') {

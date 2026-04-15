@@ -199,31 +199,66 @@ class DeployFlow {
     const elapsed = this._startTime ? Math.floor((Date.now() - this._startTime) / 1000) : 0;
     const pct = status === 'running' ? 100 : status === 'stopped' && !error ? 0 : Math.min(((step + (status === 'deploying' ? 0.5 : 0)) / total) * 100, 100);
 
+    // V2 Cinematic Deploy Card
     let html = '<div class="deploy-stepper">';
 
-    // Step circles
+    // Cinema header
+    html += '<div class="deploy-cinema-header">';
+    if (status === 'deploying') {
+      html += '<span class="deploy-cinema-title"><span class="deploy-pulse-ring"></span> Deploying\u2026</span>';
+    } else if (status === 'running') {
+      html += '<span class="deploy-cinema-title" style="color:var(--status-succeeded);">Deploy complete</span>';
+    } else if (status === 'stopped' && error) {
+      html += '<span class="deploy-cinema-title" style="color:var(--status-failed);">Deploy failed after ' + elapsed + 's</span>';
+    } else {
+      html += '<span class="deploy-cinema-title">' + this._esc(message) + '</span>';
+    }
+    html += '<span style="display:flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:12px;color:var(--text-muted);">';
+    if (this._active) {
+      html += '<span class="deploy-elapsed">' + elapsed + 's</span>';
+      html += '<button class="deploy-cancel-btn" id="deploy-cancel">Cancel</button>';
+    }
+    if (status === 'stopped' && error) {
+      html += '<button class="deploy-retry-btn" id="deploy-retry">Retry</button>';
+    }
+    html += '</span>';
+    html += '</div>';
+
+    // Step icons row with unique icons per step
     html += '<div class="deploy-steps">';
+    const stepIcons = [
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/></svg>',
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    ];
+    const checkIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    const xIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
     for (let i = 0; i < DeployFlow.STEPS.length; i++) {
       const s = DeployFlow.STEPS[i];
       let cls = 'deploy-step';
-      let dot = String(i + 1);
+      let icon = stepIcons[i] || String(i + 1);
 
       if (status === 'running') {
-        cls = 'deploy-step done';
-        dot = '\u2713';
+        cls += ' done';
+        icon = checkIcon;
       } else if (i < step) {
         cls += ' done';
-        dot = '\u2713';
+        icon = checkIcon;
       } else if (i === step && status === 'deploying') {
         cls += ' active';
       } else if (i === step && status === 'stopped' && error) {
         cls += ' failed';
-        dot = '\u2715';
+        icon = xIcon;
       }
 
+      const connector = i < DeployFlow.STEPS.length - 1 ? '<span class="step-connector"></span>' : '';
       html += '<div class="' + cls + '">';
-      html += '<div class="deploy-step-dot">' + dot + '</div>';
-      html += '<span class="deploy-step-label">' + this._esc(s.label) + '</span>';
+      html += '<div class="step-icon-wrap">' + icon + '</div>';
+      html += '<span class="step-label">' + this._esc(s.label) + '</span>';
+      html += connector;
       html += '</div>';
     }
     html += '</div>';
@@ -232,32 +267,44 @@ class DeployFlow {
     const barCls = status === 'running' ? 'done' : (status === 'stopped' && error) ? 'failed' : '';
     html += '<div class="deploy-progress-bar"><div class="deploy-progress-fill ' + barCls + '" style="width:' + pct + '%"></div></div>';
 
-    // Status row
+    // Status message
     html += '<div class="deploy-status">';
     html += '<span class="deploy-status-msg">' + this._esc(message) + '</span>';
-    html += '<div class="deploy-status-actions">';
-    if (this._active) {
-      html += '<span class="deploy-elapsed">' + elapsed + 's</span>';
-      html += '<button class="deploy-cancel-btn" id="deploy-cancel">Cancel</button>';
+    html += '</div>';
+
+    // Toggle details button
+    if (this._logs.length > 0 || this._active) {
+      html += '<button class="deploy-toggle-details' + (this._terminalOpen ? ' open' : '') + '" id="deploy-toggle">';
+      html += '<span class="deploy-chevron">\u25B6</span> Build output';
+      html += '</button>';
     }
-    if (status === 'stopped' && error) {
-      html += '<button class="deploy-retry-btn" id="deploy-retry">Retry</button>';
+
+    // V2 Terminal with titlebar, gutter line numbers, color-coded output
+    html += '<div class="deploy-terminal' + (this._terminalOpen ? ' open' : '') + '" id="deploy-terminal">';
+    html += '<div class="deploy-terminal-titlebar">';
+    html += '<span class="deploy-terminal-dot r"></span><span class="deploy-terminal-dot y"></span><span class="deploy-terminal-dot g"></span>';
+    html += '<span class="deploy-terminal-bar-title">edog deploy</span>';
+    html += '</div>';
+    html += '<div class="deploy-terminal-body">';
+    for (let i = 0; i < this._logs.length; i++) {
+      const l = this._logs[i];
+      const lvlCls = l.level === 'error' ? ' error' : l.level === 'warn' ? ' warn' : l.level === 'success' ? ' success' : l.level === 'dim' ? ' dim' : '';
+      html += '<div class="deploy-terminal-line' + lvlCls + '">';
+      html += '<span class="term-gutter">' + (i + 1) + '</span>';
+      html += '<span class="term-content"><span class="ts">' + this._esc(l.ts || '') + '</span> ' + this._esc(l.msg || '') + '</span>';
+      html += '</div>';
     }
     html += '</div></div>';
 
-    // Toggle details
-    if (this._logs.length > 0 || this._active) {
-      const arrow = this._terminalOpen ? '\u25B4' : '\u25BE';
-      html += '<button class="deploy-toggle-details" id="deploy-toggle">' + (this._terminalOpen ? 'Hide' : 'Show') + ' details ' + arrow + '</button>';
+    // Error banner (V2 dramatic style)
+    if (status === 'stopped' && error) {
+      html += '<div class="deploy-error-banner" style="margin-top:var(--space-3);">';
+      html += '<span class="deploy-error-icon-wrap"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="9" x2="12" y2="13"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg></span>';
+      html += '<div class="deploy-error-content">';
+      html += '<div class="deploy-error-title">Deploy failed at step ' + (step + 1) + '</div>';
+      html += '<div class="deploy-error-detail">' + this._esc(error) + '</div>';
+      html += '</div></div>';
     }
-
-    // Terminal
-    html += '<div class="deploy-terminal' + (this._terminalOpen ? ' open' : '') + '" id="deploy-terminal">';
-    for (const l of this._logs) {
-      const lvlCls = l.level === 'error' ? ' error' : l.level === 'warn' ? ' warn' : l.level === 'success' ? ' success' : '';
-      html += '<div class="deploy-terminal-line' + lvlCls + '"><span class="ts">[' + this._esc(l.ts || '') + ']</span> ' + this._esc(l.msg || '') + '</div>';
-    }
-    html += '</div>';
 
     // Success banner
     if (status === 'running') {
@@ -265,14 +312,6 @@ class DeployFlow {
       html += '<span>\u2713 Deployed successfully</span>';
       html += '<span class="deploy-success-meta">' + elapsed + 's</span>';
       if (fltPort) html += '<span class="deploy-success-meta">:' + fltPort + '</span>';
-      html += '</div>';
-    }
-
-    // Error card
-    if (status === 'stopped' && error) {
-      html += '<div class="deploy-error">';
-      html += '<div class="deploy-error-title">Deploy failed at step ' + (step + 1) + '</div>';
-      html += '<div class="deploy-error-detail">' + this._esc(error) + '</div>';
       html += '</div>';
     }
 
@@ -324,7 +363,7 @@ class DeployFlow {
         term.classList.toggle('open', this._terminalOpen);
         if (this._terminalOpen) term.scrollTop = term.scrollHeight;
       }
-      toggle.textContent = (this._terminalOpen ? 'Hide' : 'Show') + ' details ' + (this._terminalOpen ? '\u25B4' : '\u25BE');
+      toggle.classList.toggle('open', this._terminalOpen);
     });
   }
 
@@ -422,14 +461,18 @@ class DeployFlow {
   }
 
   _appendLog(log) {
-    const term = document.getElementById('deploy-terminal');
-    if (!term) return;
-    const cls = log.level === 'error' ? ' error' : log.level === 'warn' ? ' warn' : log.level === 'success' ? ' success' : '';
+    const body = this._el.querySelector('.deploy-terminal-body');
+    if (!body) return;
+    const cls = log.level === 'error' ? ' error' : log.level === 'warn' ? ' warn' : log.level === 'success' ? ' success' : log.level === 'dim' ? ' dim' : '';
+    const lineNum = body.children.length + 1;
     const line = document.createElement('div');
     line.className = 'deploy-terminal-line' + cls;
-    line.innerHTML = '<span class="ts">[' + this._esc(log.ts || '') + ']</span> ' + this._esc(log.msg || '');
-    term.appendChild(line);
-    if (this._terminalOpen) term.scrollTop = term.scrollHeight;
+    line.innerHTML = '<span class="term-gutter">' + lineNum + '</span><span class="term-content"><span class="ts">' + this._esc(log.ts || '') + '</span> ' + this._esc(log.msg || '') + '</span>';
+    body.appendChild(line);
+    if (this._terminalOpen) {
+      const term = document.getElementById('deploy-terminal');
+      if (term) term.scrollTop = term.scrollHeight;
+    }
   }
 
   _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }

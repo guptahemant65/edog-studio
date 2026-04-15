@@ -24,12 +24,13 @@ body {
 .smart-context-bar:empty, .api-toast:empty, .error-alert:empty, .anomaly-warning:empty { display: none; }
 
 .cockpit-body {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  display: flex;
   overflow: hidden;
 }
 
 .content-area {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   position: relative;
 }

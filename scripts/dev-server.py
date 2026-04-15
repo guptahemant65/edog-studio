@@ -555,6 +555,97 @@ def _handle_account_picker(username, timeout=45):
     return False
 
 
+def _inject_devmode_token(config):
+    """Acquire a bearer token via Silent CBA and inject into workload-dev-mode.json.
+
+    Uses the MwcFrontendBaseEndpoint as the token audience — this is what
+    DevConnection's InteractiveBrowserCredential would request. By pre-populating
+    UserAuthorizationToken, the WCL SDK skips the browser popup entirely.
+
+    Returns True if token was injected, False otherwise (graceful fallback).
+    """
+    try:
+        username = config.get("username", "")
+        flt_repo = config.get("flt_repo_path", "")
+        if not username or not flt_repo:
+            _deploy_log("Skipping token injection — username or flt_repo_path not set", "warn")
+            return False
+
+        # Find workload-dev-mode.json
+        sys.path.insert(0, str(PROJECT_DIR))
+        try:
+            from edog import get_workload_dev_mode_path, _find_cert_thumbprint
+            devmode_path = get_workload_dev_mode_path(flt_repo)
+        except Exception as e:
+            _deploy_log(f"Could not locate workload-dev-mode.json: {e}", "warn")
+            return False
+        finally:
+            if str(PROJECT_DIR) in sys.path:
+                sys.path.remove(str(PROJECT_DIR))
+
+        if not devmode_path or not Path(devmode_path).exists():
+            _deploy_log("workload-dev-mode.json not found — skipping token injection", "warn")
+            return False
+
+        # Read MwcFrontendBaseEndpoint from config — this is the token audience
+        devmode = json.loads(Path(devmode_path).read_text())
+        mwc_endpoint = devmode.get("MwcFrontendBaseEndpoint", "")
+        if not mwc_endpoint:
+            _deploy_log("No MwcFrontendBaseEndpoint in config — skipping", "warn")
+            return False
+
+        # Strip trailing port/slash for the resource URI
+        resource = mwc_endpoint.rstrip("/")
+        if resource.endswith(":443"):
+            resource = resource[:-4]
+
+        # Get cert thumbprint
+        cert_cn = username.replace("@", ".")
+        thumbprint = _find_cert_thumbprint(cert_cn)
+        if not thumbprint:
+            _deploy_log(f"No cert found for {cert_cn} — skipping token injection", "warn")
+            return False
+
+        # Find token-helper executable
+        helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net8.0" / "token-helper.exe"
+        if not helper.exists():
+            helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
+        if not helper.exists():
+            _deploy_log("token-helper not built — skipping token injection", "warn")
+            return False
+
+        # Acquire token with the CORRECT audience (MwcFrontendBaseEndpoint)
+        _deploy_log(f"Acquiring DevMode token (audience: {resource})...", "info")
+        client_id = "ea0616ba-638b-4df5-95b9-636659ae5121"
+        authority = "https://login.windows-ppe.net/organizations"
+
+        result = subprocess.run(
+            [str(helper), thumbprint, username, client_id, authority, resource],
+            capture_output=True, text=True, timeout=30,
+        )
+
+        if result.returncode != 0 or not result.stdout.strip().startswith("eyJ"):
+            stderr_msg = (result.stderr or "").strip().split("\n")[-1][:100] if result.stderr else "unknown"
+            _deploy_log(f"Token acquisition failed: {stderr_msg}", "warn")
+            return False
+
+        token = result.stdout.strip()
+        _deploy_log(f"DevMode token acquired ({len(token)} chars) — zero-popup auth!", "success")
+
+        # Inject into workload-dev-mode.json
+        devmode["UserAuthorizationToken"] = token
+        _atomic_write(Path(devmode_path), json.dumps(devmode, indent=4))
+        _deploy_log("Injected UserAuthorizationToken — no browser popup needed", "success")
+        return True
+
+    except subprocess.TimeoutExpired:
+        _deploy_log("Token acquisition timed out — falling back to browser", "warn")
+        return False
+    except Exception as e:
+        _deploy_log(f"Token injection failed: {e} — falling back to browser", "warn")
+        return False
+
+
 def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
     """Real deploy pipeline. Runs on background thread."""
     global _flt_process
@@ -674,6 +765,10 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             env = dict(os.environ)
             env["EDOG_STUDIO_PORT"] = str(FLT_INTERNAL_PORT)
 
+            # Zero-popup auth: inject Silent CBA token into workload-dev-mode.json
+            # so DevConnection uses it directly instead of opening a browser
+            token_injected = _inject_devmode_token(config)
+
             _flt_process = subprocess.Popen(
                 ["dotnet", "run", "--no-build"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -691,11 +786,12 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 target=_drain_flt_stdout, args=(_flt_process, deploy_id), daemon=True
             ).start()
 
-            # Auto-handle DevMode account picker (silent, uses logged-in username)
-            username = config.get("username", "")
-            threading.Thread(
-                target=_handle_account_picker, args=(username,), daemon=True
-            ).start()
+            # Fallback: account picker automation if token injection failed
+            if not token_injected:
+                username = config.get("username", "")
+                threading.Thread(
+                    target=_handle_account_picker, args=(username,), daemon=True
+                ).start()
 
         except Exception as e:
             _deploy_log(f"Launch failed: {e}", "error")

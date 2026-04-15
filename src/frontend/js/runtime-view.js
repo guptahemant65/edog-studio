@@ -237,11 +237,15 @@ class RuntimeView {
   setPhase(phase) {
     this._phase = phase;
 
+    // Always re-query overlay DOM in case init() hasn't run or bailed early
+    const overlay = this._phase1Overlay || document.getElementById('rt-phase1-overlay');
+    const lock = this._sidebarLock || document.getElementById('rt-sidebar-lock');
+
     if (phase === 'connected') {
       // Hide Phase 1 overlay
-      if (this._phase1Overlay) this._phase1Overlay.classList.add('hidden');
+      if (overlay) overlay.classList.add('hidden');
       // Hide lock on sidebar
-      if (this._sidebarLock) this._sidebarLock.classList.remove('on');
+      if (lock) lock.classList.remove('on');
       // Animate tab labels enabling with stagger
       this._tabEls.forEach((el, i) => {
         setTimeout(() => {
@@ -251,9 +255,9 @@ class RuntimeView {
       });
     } else {
       // Show Phase 1 overlay
-      if (this._phase1Overlay) this._phase1Overlay.classList.remove('hidden');
+      if (overlay) overlay.classList.remove('hidden');
       // Show lock on sidebar
-      if (this._sidebarLock) this._sidebarLock.classList.add('on');
+      if (lock) lock.classList.add('on');
       // Hide stopped overlay
       if (this._stoppedOverlay) this._stoppedOverlay.classList.remove('on');
     }

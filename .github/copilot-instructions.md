@@ -15,8 +15,7 @@ Announce who is working. Adopt persona from `hivemind/agents/prompts.py`. Cross-
 
 ## Non-Negotiable Rules
 
-- Vanilla JS only — no React/Vue/Angular. Class-based modules.
-- OKLCH colors only. 4px spacing grid. CSS custom properties.
+- The existing design + design bible (`docs/design/design-bible-*.html`) is the supreme reference for all UI/UX decisions. Follow the established patterns, tokens, and components.
 - Single HTML output via `python scripts/build-html.py`. All CSS/JS inlined.
 - Python: PEP 8, type hints, pathlib, no bare except, ruff.
 - C#: `#nullable disable` + `#pragma warning disable` for DevMode files.

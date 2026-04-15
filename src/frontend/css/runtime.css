@@ -291,14 +291,15 @@
   justify-content: center;
   gap: var(--space-4);
   background: var(--bg);
-  /* z-index: 50 — above tab content, below dropdown */
-  z-index: 50;
+  /* z-index: 150 — above toolbar (90) and log z-indices, below dropdown (200) */
+  z-index: 150;
   transition: opacity 300ms ease;
 }
 
 .rt-phase1-overlay.hidden {
   opacity: 0;
   pointer-events: none;
+  display: none;
 }
 
 .rt-phase1-overlay svg {
@@ -347,8 +348,8 @@
   align-items: center;
   justify-content: center;
   background: rgba(229, 148, 12, 0.06);
-  /* z-index: 40 — below phase1 overlay */
-  z-index: 40;
+  /* z-index: 140 — above toolbar (90), below phase1 overlay (150) */
+  z-index: 140;
   pointer-events: none;
   opacity: 0;
   transition: opacity 300ms ease;
@@ -404,8 +405,8 @@
 }
 
 /* ── View panel layout for Runtime ── */
+/* Only set flex-direction; display is controlled by .view-panel / .view-panel.active in layout.css */
 
-#view-runtime {
-  display: flex;
+#view-runtime.active {
   flex-direction: column;
 }

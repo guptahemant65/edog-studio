@@ -17,7 +17,7 @@ using Microsoft.IdentityModel.Abstractions;
 /// Acquires a user-delegated bearer token via Silent CBA (Certificate-Based Auth).
 /// Uses the same mechanism as FabricSparkCST CI/CD — zero browser interaction.
 ///
-/// Usage: token-helper.exe &lt;thumbprint&gt; &lt;username&gt; [clientId] [authority] [resource]
+/// Usage: token-helper.exe &lt;thumbprint&gt; &lt;username&gt; [clientId] [authority] [resource] [redirectUri]
 /// Outputs the bearer token to stdout (for Python to capture via subprocess).
 /// </summary>
 class Program
@@ -55,7 +55,7 @@ class Program
 
         if (args.Length < 2)
         {
-            Console.Error.WriteLine("Usage: token-helper <thumbprint> <username> [clientId] [authority] [resource]");
+            Console.Error.WriteLine("Usage: token-helper <thumbprint> <username> [clientId] [authority] [resource] [redirectUri]");
             Console.Error.WriteLine("       token-helper --list-certs");
             Console.Error.WriteLine("Example: token-helper 6921EC59... Admin1CBA@FabricFMLV08PPE.ccsctp.net");
             Environment.Exit(1);
@@ -66,6 +66,7 @@ class Program
         string clientId = args.Length > 2 ? args[2] : DefaultClientId;
         string authority = args.Length > 3 ? args[3] : DefaultAuthority;
         string resource = args.Length > 4 ? args[4] : DefaultResource;
+        string redirectUri = args.Length > 5 ? args[5] : DefaultRedirectUri;
 
         // Load certificate from Windows cert store (supports non-exportable CNG keys)
         X509Certificate2 cert = null;
@@ -88,7 +89,7 @@ class Program
         var app = PublicClientApplicationBuilder
             .Create(clientId)
             .WithAuthority(authority)
-            .WithRedirectUri(DefaultRedirectUri)
+            .WithRedirectUri(redirectUri)
             .Build();
 
         try

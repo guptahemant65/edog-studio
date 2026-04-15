@@ -20,7 +20,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static readonly ConcurrentDictionary<string, TopicBuffer> _buffers = new();
 
         /// <summary>
-        /// Initializes all 11 topic buffers with sizes from the SignalR Protocol Spec.
+        /// Initializes all 12 topic buffers with sizes from the SignalR Protocol Spec.
         /// Safe to call multiple times — TryAdd is idempotent.
         /// </summary>
         public static void Initialize()
@@ -36,6 +36,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("flag", 1000);
             RegisterTopic("di", 100);
             RegisterTopic("perf", 5000);
+            RegisterTopic("capacity", 500);
         }
 
         /// <summary>

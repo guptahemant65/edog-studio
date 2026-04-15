@@ -83,6 +83,7 @@ DEVMODE_FILES = {
     "EdogCacheInterceptor": SERVICE_PATH / "DevMode/EdogCacheInterceptor.cs",
     "EdogSparkSessionInterceptor": SERVICE_PATH / "DevMode/EdogSparkSessionInterceptor.cs",
     "EdogDiRegistryCapture": SERVICE_PATH / "DevMode/EdogDiRegistryCapture.cs",
+    "EdogAuthDiagnostic": SERVICE_PATH / "DevMode/EdogAuthDiagnostic.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
@@ -1772,6 +1773,9 @@ def apply_log_viewer_registration_program_cs(content):
         "\n"
         "            // Store server for telemetry interceptor registration later\n"
         "            Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance(edogServer);\n"
+        "\n"
+        "            // EDOG: Log auth diagnostic info for DevMode token debugging\n"
+        "            Microsoft.LiveTable.Service.DevMode.EdogAuthDiagnostic.CaptureDevModeToken();\n"
         "\n"
     )
     
