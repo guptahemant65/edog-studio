@@ -1,6 +1,6 @@
 # Feature 09: API Playground
 
-> **Status:** P0-P3 COMPLETE — P4 (Interactive Mocks) NEXT
+> **Status:** P0-P4 PREP COMPLETE — Ready for P5 (Implementation)
 > **Phase:** V1.1
 > **Owner:** Pixel (JS/CSS), Vex (proxy/backend)
 > **Design Ref:** `docs/specs/design-spec-v2.md` §8
@@ -122,7 +122,7 @@ A built-in API playground with request builder, response viewer, pre-configured 
 
 | # | Mock | Output | Depends On | Status |
 |---|------|--------|-----------|--------|
-| P4.1 | API Playground (full view) | `mocks/api-playground.html` | P3 | ⬜ |
+| P4.1 | API Playground (full view) | `mocks/api-playground.html` (87KB) | P3 | ✅ DONE |
 
 ### Phase 5: Implementation Checklist
 
