@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Concept C: The Morphing Nav</title>
+<style>
+/* ============================================================
+   EDOG Studio · Concept C: "The Morphing Nav"
+   Design mockup — Pixel (Frontend Engineer)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cascadia+Code&display=swap');
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --accent: #6d5cff;
+    --accent-soft: rgba(109, 92, 255, 0.12);
+    --accent-med: rgba(109, 92, 255, 0.22);
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --text: #1a1d23;
+    --text-dim: #5a6070;
+    --text-muted: #8e95a5;
+    --border: rgba(0,0,0,0.06);
+    --border-strong: rgba(0,0,0,0.10);
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'Cascadia Code', 'Fira Code', monospace;
+    --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+    --spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    --spring-soft: 400ms cubic-bezier(0.22, 1.2, 0.36, 1);
+    --green: #18a058;
+    --amber: #e5940c;
+    --red: #e5453b;
+    --sidebar-w-rail: 56px;
+    --sidebar-w-expanded: 232px;
+    --topbar-h: 0px;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+}
+
+[data-theme="dark"] {
+    --bg: #0f1117;
+    --surface: #161923;
+    --text: #e8eaf0;
+    --text-dim: #9ca3b4;
+    --text-muted: #5c6478;
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.10);
+    --accent: #8577ff;
+    --accent-soft: rgba(133, 119, 255, 0.12);
+    --accent-med: rgba(133, 119, 255, 0.22);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.4);
+}
+
+html, body {
+    height: 100%;
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Layout ---- */
+.app {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* ============================================================
+   SIDEBAR — The Morphing Nav
+   ============================================================ */
+.sidebar {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    transition: width var(--spring);
+    overflow: hidden;
+    flex-shrink: 0;
+    z-index: 10; /* sidebar above content */
+}
+
+.sidebar[data-mode="rail"] {
+    width: var(--sidebar-w-rail);
+}
+
+.sidebar[data-mode="expanded"] {
+    width: var(--sidebar-w-expanded);
+}
+
+/* ---- Sidebar Header / Breadcrumb Zone ---- */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0 8px;
+    min-height: 52px;
+    position: relative;
+}
+
+/* Logo dot — always visible */
+.logo-mark {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all var(--spring);
+    cursor: default;
+    position: relative;
+}
+.logo-mark svg { width: 14px; height: 14px; fill: #fff; }
+
+/* Breadcrumb dots — visible when expanded (Runtime) */
+.breadcrumb-nav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 10px;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 250ms ease, transform 250ms ease;
+    pointer-events: none;
+}
+
+.sidebar[data-mode="expanded"] .breadcrumb-nav {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.breadcrumb-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative;
+}
+.breadcrumb-dot:hover {
+    background: var(--accent);
+    transform: scale(1.4);
+}
+.breadcrumb-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Breadcrumb tooltip */
+.breadcrumb-dot::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 8px);
+    transform: translateX(-50%) translateY(-2px);
+    background: var(--text);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease, transform 120ms ease;
+    z-index: 100;
+}
+.breadcrumb-dot:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Nav Rail Icons ---- */
+.nav-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 0;
+    position: relative;
+}
+
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--text-dim);
+    flex-shrink: 0;
+    overflow: visible;
+}
+.nav-item:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.nav-item.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+.nav-item svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    transition: all var(--transition);
+}
+
+/* Tooltip for rail items */
+.nav-item::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%) translateX(-4px);
+    background: var(--text);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease, transform 120ms ease;
+    z-index: 100;
+}
+.sidebar[data-mode="rail"] .nav-item:hover::after {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0);
+}
+
+/* Keyboard hint */
+.nav-item .kbd-hint {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity var(--transition);
+}
+.nav-item:hover .kbd-hint { opacity: 1; }
+
+/* Rail morph: compress items to mini when expanded */
+.sidebar[data-mode="expanded"] .nav-rail {
+    transform: scale(0);
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 200ms cubic-bezier(0.4,0,1,1);
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+}
+
+/* ---- Divider ---- */
+.nav-divider {
+    width: 24px;
+    height: 1px;
+    background: var(--border);
+    margin: 4px auto;
+    transition: all var(--transition);
+}
+.sidebar[data-mode="expanded"] .nav-divider {
+    opacity: 0;
+    height: 0;
+    margin: 0;
+}
+
+/* ============================================================
+   RUNTIME SUB-TABS (The Morph Target)
+   ============================================================ */
+.subtab-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(12px);
+    pointer-events: none;
+    transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.sidebar[data-mode="expanded"] .subtab-panel {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+    transition: opacity 300ms ease 120ms, transform 300ms cubic-bezier(0.22, 1.2, 0.36, 1) 120ms;
+}
+
+.subtab-header {
+    padding: 8px 14px 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.subtab-header-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+.subtab-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px 8px;
+    position: relative;
+}
+
+/* Scrollbar */
+.subtab-list::-webkit-scrollbar { width: 3px; }
+.subtab-list::-webkit-scrollbar-track { background: transparent; }
+.subtab-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+/* Sliding pill indicator */
+.subtab-pill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 36px;
+    background: var(--accent-soft);
+    border-radius: 8px;
+    transition: top var(--spring), height 200ms ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Sub-tab item */
+.subtab-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 450;
+    color: var(--text-dim);
+    transition: color var(--transition);
+    z-index: 1;
+    user-select: none;
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+.sidebar[data-mode="expanded"] .subtab-item {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.subtab-item:hover { color: var(--text); }
+.subtab-item.active { color: var(--accent); font-weight: 550; }
+
+.subtab-item svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    opacity: 0.65;
+    transition: opacity var(--transition);
+}
+.subtab-item.active svg { opacity: 1; }
+
+.subtab-item .subtab-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Badges */
+.subtab-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 100px;
+    line-height: 1.5;
+    flex-shrink: 0;
+    font-family: var(--mono);
+    letter-spacing: -0.02em;
+}
+.subtab-badge.red { background: rgba(229,69,59,0.12); color: var(--red); }
+.subtab-badge.amber { background: rgba(229,148,12,0.12); color: var(--amber); }
+.subtab-badge.green { background: rgba(24,160,88,0.10); color: var(--green); }
+.subtab-badge.muted { background: var(--border); color: var(--text-muted); font-weight: 500; }
+
+/* Staggered cascade animation */
+.subtab-item:nth-child(1)  { transition-delay: 60ms; }
+.subtab-item:nth-child(2)  { transition-delay: 85ms; }
+.subtab-item:nth-child(3)  { transition-delay: 110ms; }
+.subtab-item:nth-child(4)  { transition-delay: 135ms; }
+.subtab-item:nth-child(5)  { transition-delay: 160ms; }
+.subtab-item:nth-child(6)  { transition-delay: 185ms; }
+.subtab-item:nth-child(7)  { transition-delay: 210ms; }
+.subtab-item:nth-child(8)  { transition-delay: 235ms; }
+.subtab-item:nth-child(9)  { transition-delay: 260ms; }
+.subtab-item:nth-child(10) { transition-delay: 285ms; }
+.subtab-item:nth-child(11) { transition-delay: 310ms; }
+
+/* Keyboard shortcut hint inline */
+.subtab-kbd {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity var(--transition);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.subtab-item:hover .subtab-kbd { opacity: 0.7; }
+
+/* ============================================================
+   LOCKED STATE (Disconnected)
+   ============================================================ */
+.locked-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(8px);
+    z-index: 5;
+    opacity: 1;
+    transition: opacity 350ms ease;
+    pointer-events: auto;
+}
+.locked-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.lock-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--border);
+    margin-bottom: 12px;
+    transition: all var(--spring);
+}
+.lock-icon svg { width: 22px; height: 22px; color: var(--text-muted); }
+
+.lock-icon.shattering {
+    transform: scale(1.3) rotate(8deg);
+    opacity: 0;
+    background: var(--accent-soft);
+}
+
+.locked-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* ============================================================
+   SIDEBAR FOOTER — Status Bar
+   ============================================================ */
+.sidebar-footer {
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 44px;
+    transition: all var(--transition);
+}
+
+/* Connection status */
+.status-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: background var(--transition);
+}
+.status-dot.connected { background: var(--green); box-shadow: 0 0 6px rgba(24,160,88,0.4); }
+.status-dot.disconnected { background: var(--text-muted); }
+
+.status-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-meta {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+/* Token ring */
+.token-ring-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 4px;
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+    transition: all var(--transition);
+}
+.token-ring-row.visible {
+    opacity: 1;
+    height: 18px;
+}
+
+.token-ring {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    position: relative;
+}
+.token-ring svg { width: 14px; height: 14px; }
+.token-ring circle {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+}
+.token-ring .track { stroke: var(--border); }
+.token-ring .fill { stroke: var(--green); transition: stroke-dashoffset 1s linear, stroke var(--transition); transform: rotate(-90deg); transform-origin: center; }
+
+.token-ttl {
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 500;
+    color: var(--text-dim);
+}
+
+/* Theme toggle in footer */
+.theme-toggle {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: all var(--transition);
+    z-index: 20;
+}
+.theme-toggle:hover { background: var(--accent-soft); color: var(--accent); }
+.theme-toggle svg { width: 16px; height: 16px; }
+
+/* Connect button */
+.connect-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all var(--transition);
+    box-shadow: 0 2px 8px rgba(109,92,255,0.25);
+}
+.connect-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(109,92,255,0.35);
+}
+.connect-btn:active {
+    transform: translateY(0);
+}
+
+/* ============================================================
+   CONTENT AREA
+   ============================================================ */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--bg);
+}
+
+.content-header {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.content-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.content-subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.content-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Placeholder pattern for content area */
+.content-placeholder {
+    text-align: center;
+    max-width: 400px;
+}
+.content-placeholder .big-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    border-radius: 16px;
+    background: var(--accent-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.content-placeholder .big-icon svg { width: 28px; height: 28px; color: var(--accent); }
+.content-placeholder h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--text);
+}
+.content-placeholder p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+
+/* ============================================================
+   PARTICLE CANVAS (Lock shatter effect)
+   ============================================================ */
+#particle-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUTS OVERLAY
+   ============================================================ */
+.shortcuts-hint {
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    box-shadow: var(--shadow-sm);
+    z-index: 50;
+    opacity: 0.7;
+    transition: opacity var(--transition);
+}
+.shortcuts-hint:hover { opacity: 1; }
+.shortcuts-hint kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text-dim);
+}
+
+/* ============================================================
+   Notification Toast
+   ============================================================ */
+.toast {
+    position: fixed;
+    bottom: 48px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    padding: 8px 16px;
+    background: var(--text);
+    color: var(--bg);
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 250ms ease;
+    z-index: 200;
+    white-space: nowrap;
+}
+.toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar" id="sidebar" data-mode="rail">
+        <!-- Header: Logo + Breadcrumbs -->
+        <div class="sidebar-header">
+            <div class="logo-mark">
+                <svg viewBox="0 0 16 16"><path d="M8 1L14.928 5.5V12.5L8 15 1.072 12.5V5.5L8 1z"/></svg>
+            </div>
+            <div class="breadcrumb-nav" id="breadcrumbs">
+                <!-- Filled by JS -->
+            </div>
+        </div>
+
+        <!-- Nav Rail (visible in rail mode) -->
+        <nav class="nav-rail" id="nav-rail">
+            <div class="nav-item active" data-view="workspace" data-tooltip="Workspace" tabindex="0">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="16" height="14" rx="2"/>
+                    <path d="M2 7h16"/><path d="M7 7v10"/>
+                </svg>
+                <span class="kbd-hint">1</span>
+            </div>
+            <div class="nav-item" data-view="runtime" data-tooltip="Runtime" tabindex="0">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 3v14"/><path d="M6 10h8l-4-4"/><path d="M10 14l4-4"/>
+                    <circle cx="15" cy="5" r="2"/><circle cx="15" cy="15" r="2"/>
+                </svg>
+                <span class="kbd-hint">2</span>
+            </div>
+            <div class="nav-item" data-view="api" data-tooltip="API Playground" tabindex="0">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 6l4 4-4 4"/><path d="M10 14h6"/>
+                </svg>
+                <span class="kbd-hint">3</span>
+            </div>
+            <div class="nav-item" data-view="environment" data-tooltip="Environment" tabindex="0">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="10" cy="10" r="3"/><path d="M10 2v3m0 10v3M2 10h3m10 0h3"/>
+                    <path d="M4.22 4.22l2.12 2.12m7.32 7.32l2.12 2.12M4.22 15.78l2.12-2.12m7.32-7.32l2.12-2.12"/>
+                </svg>
+                <span class="kbd-hint">4</span>
+            </div>
+        </nav>
+
+        <div class="nav-divider"></div>
+
+        <!-- Sub-tab panel (visible in expanded mode) -->
+        <div class="subtab-panel" id="subtab-panel">
+            <div class="subtab-header">
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="var(--text-muted)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 3v14"/><path d="M6 10h8l-4-4"/><path d="M10 14l4-4"/>
+                </svg>
+                <span class="subtab-header-label">Runtime</span>
+            </div>
+            <div class="subtab-list" id="subtab-list">
+                <div class="subtab-pill" id="subtab-pill"></div>
+                <!-- Sub-tabs filled by JS -->
+            </div>
+
+            <!-- Locked overlay for disconnected state -->
+            <div class="locked-overlay" id="locked-overlay">
+                <div class="lock-icon" id="lock-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="9" width="12" height="8" rx="2"/>
+                        <path d="M7 9V6a3 3 0 016 0v3"/>
+                    </svg>
+                </div>
+                <div class="locked-text">Deploy to a lakehouse<br>to unlock Runtime</div>
+                <button class="connect-btn" id="connect-btn">
+                    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 12l5 5 5-5M10 17V3"/>
+                    </svg>
+                    Deploy
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer status bar -->
+        <div class="sidebar-footer" id="sidebar-footer">
+            <div class="status-row">
+                <div class="status-dot disconnected" id="status-dot"></div>
+                <span class="status-label" id="status-label">Disconnected</span>
+                <span class="status-meta" id="status-meta"></span>
+            </div>
+            <div class="token-ring-row" id="token-row">
+                <div class="token-ring">
+                    <svg viewBox="0 0 18 18">
+                        <circle class="track" cx="9" cy="9" r="6.5"/>
+                        <circle class="fill" id="token-fill" cx="9" cy="9" r="6.5" stroke-dasharray="40.84" stroke-dashoffset="0"/>
+                    </svg>
+                </div>
+                <span class="token-ttl" id="token-ttl">45:00</span>
+            </div>
+        </div>
+
+        <!-- Theme toggle -->
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" id="theme-icon">
+                <circle cx="10" cy="10" r="4"/>
+                <path d="M10 2v2m0 12v2M2 10h2m12 0h2M4.93 4.93l1.41 1.41m7.32 7.32l1.41 1.41M4.93 15.07l1.41-1.41m7.32-7.32l1.41-1.41"/>
+            </svg>
+        </button>
+    </aside>
+
+    <!-- ===== CONTENT AREA ===== -->
+    <main class="content" id="content">
+        <div class="content-header">
+            <span class="content-title" id="content-title">Workspace Explorer</span>
+            <span class="content-subtitle" id="content-subtitle">Browse workspaces, lakehouses, and tables</span>
+        </div>
+        <div class="content-body" id="content-body">
+            <div class="content-placeholder" id="content-placeholder">
+                <div class="big-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="16" height="14" rx="2"/>
+                        <path d="M2 7h16"/><path d="M7 7v10"/>
+                    </svg>
+                </div>
+                <h2>Workspace Explorer</h2>
+                <p>Connect to Fabric to browse workspaces, inspect lakehouses, and explore Delta table schemas.</p>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- Particle canvas for shatter effect -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- Shortcuts hint -->
+<div class="shortcuts-hint">
+    <kbd>1</kbd>–<kbd>4</kbd> views
+    <span style="margin: 0 2px; color: var(--border-strong)">·</span>
+    <kbd>D</kbd> theme
+    <span style="margin: 0 2px; color: var(--border-strong)">·</span>
+    <kbd>C</kbd> connect
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   EDOG Studio · Concept C · Interactive Prototype
+   ============================================================ */
+
+const VIEWS = [
+    { id: 'workspace',   label: 'Workspace Explorer',  subtitle: 'Browse workspaces, lakehouses, and tables', key: '1', icon: 'workspace' },
+    { id: 'runtime',     label: 'Runtime DevTools',     subtitle: 'Logs, telemetry, tokens, and system state',  key: '2', icon: 'runtime' },
+    { id: 'api',         label: 'API Playground',       subtitle: 'Test Fabric and FLT APIs interactively',     key: '3', icon: 'api' },
+    { id: 'environment', label: 'Environment',          subtitle: 'Config, feature flags, and deploy targets',  key: '4', icon: 'environment' },
+];
+
+const SUBTABS = [
+    { id: 'logs',           label: 'Logs',            kbd: 'L', icon: 'logs',     badge: null },
+    { id: 'telemetry',      label: 'Telemetry',       kbd: 'T', icon: 'telem',    badge: null },
+    { id: 'system-files',   label: 'System Files',    kbd: 'F', icon: 'files',    badge: null },
+    { id: 'spark-sessions', label: 'Spark Sessions',  kbd: 'S', icon: 'spark',    badge: null },
+    { id: 'tokens',         label: 'Tokens',          kbd: 'K', icon: 'token',    badge: { text: '4:32', cls: 'amber' } },
+    { id: 'caches',         label: 'Caches',          kbd: 'A', icon: 'cache',    badge: null },
+    { id: 'http-pipeline',  label: 'HTTP Pipeline',   kbd: 'H', icon: 'http',     badge: { text: '238', cls: 'muted' } },
+    { id: 'retries',        label: 'Retries',         kbd: 'R', icon: 'retry',    badge: null },
+    { id: 'feature-flags',  label: 'Feature Flags',   kbd: 'G', icon: 'flag',     badge: null },
+    { id: 'di-registry',    label: 'DI Registry',     kbd: 'I', icon: 'di',       badge: null },
+    { id: 'perf-markers',   label: 'Perf Markers',    kbd: 'P', icon: 'perf',     badge: null },
+];
+
+const SUBTAB_ICONS = {
+    logs:   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 3h10M3 6h7M3 9h10M3 12h5"/></svg>`,
+    telem:  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,12 4,7 7,9 10,4 15,6"/></svg>`,
+    files:  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h5l2 2h5v8H2z"/></svg>`,
+    spark:  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v3m0 8v3M1 8h3m8 0h3"/><circle cx="8" cy="8" r="2.5"/></svg>`,
+    token:  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 1"/></svg>`,
+    cache:  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="4" rx="5" ry="2"/><path d="M3 4v4c0 1.1 2.24 2 5 2s5-.9 5-2V4"/><path d="M3 8v4c0 1.1 2.24 2 5 2s5-.9 5-2V8"/></svg>`,
+    http:   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="7" cy="12" r="1" fill="currentColor" stroke="none"/></svg>`,
+    retry:  `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 019-3h-3"/><path d="M13 8a5 5 0 01-9 3h3"/></svg>`,
+    flag:   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v12"/><path d="M3 2h8l-2 3 2 3H3"/></svg>`,
+    di:     `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/><path d="M7 4.5h2.5V9M4.5 7v2.5H9"/></svg>`,
+    perf:   `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13l3-5 3 2 3-6 3 4"/></svg>`,
+};
+
+const CONTENT_ICONS = {
+    workspace:   `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M2 7h16"/><path d="M7 7v10"/></svg>`,
+    runtime:     `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v14"/><path d="M6 10h8l-4-4"/><path d="M10 14l4-4"/><circle cx="15" cy="5" r="2"/><circle cx="15" cy="15" r="2"/></svg>`,
+    api:         `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4-4 4"/><path d="M10 14h6"/></svg>`,
+    environment: `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3"/><path d="M10 2v3m0 10v3M2 10h3m10 0h3"/></svg>`,
+};
+
+class MorphingNav {
+    constructor() {
+        this._sidebar = document.getElementById('sidebar');
+        this._navRail = document.getElementById('nav-rail');
+        this._subtabPanel = document.getElementById('subtab-panel');
+        this._subtabList = document.getElementById('subtab-list');
+        this._subtabPill = document.getElementById('subtab-pill');
+        this._breadcrumbs = document.getElementById('breadcrumbs');
+        this._lockedOverlay = document.getElementById('locked-overlay');
+        this._lockIcon = document.getElementById('lock-icon');
+        this._connectBtn = document.getElementById('connect-btn');
+        this._statusDot = document.getElementById('status-dot');
+        this._statusLabel = document.getElementById('status-label');
+        this._statusMeta = document.getElementById('status-meta');
+        this._tokenRow = document.getElementById('token-row');
+        this._tokenFill = document.getElementById('token-fill');
+        this._tokenTtl = document.getElementById('token-ttl');
+        this._contentTitle = document.getElementById('content-title');
+        this._contentSubtitle = document.getElementById('content-subtitle');
+        this._contentPlaceholder = document.getElementById('content-placeholder');
+        this._themeToggle = document.getElementById('theme-toggle');
+        this._toast = document.getElementById('toast');
+        this._canvas = document.getElementById('particle-canvas');
+        this._ctx = this._canvas.getContext('2d');
+
+        this._activeView = 'workspace';
+        this._activeSubtab = 'logs';
+        this._isConnected = false;
+        this._particles = [];
+        this._animFrame = null;
+        this._tokenSeconds = 2700;
+        this._msgRate = 0;
+        this._isDark = false;
+        this._liveCounters = { errors: 0, requests: 238, retries: 0, events: 0 };
+
+        this._init();
+    }
+
+    _init() {
+        this._buildSubtabs();
+        this._buildBreadcrumbs();
+        this._bindEvents();
+        this._updateView();
+        this._resizeCanvas();
+        window.addEventListener('resize', () => this._resizeCanvas());
+    }
+
+    _buildSubtabs() {
+        SUBTABS.forEach((tab, i) => {
+            const el = document.createElement('div');
+            el.className = `subtab-item${i === 0 ? ' active' : ''}`;
+            el.dataset.subtab = tab.id;
+            el.innerHTML = `
+                ${SUBTAB_ICONS[tab.icon]}
+                <span class="subtab-label">${tab.label}</span>
+                ${tab.badge ? `<span class="subtab-badge ${tab.badge.cls}" data-badge="${tab.id}">${tab.badge.text}</span>` : `<span class="subtab-badge" data-badge="${tab.id}" style="display:none"></span>`}
+                <span class="subtab-kbd">${tab.kbd}</span>
+            `;
+            el.addEventListener('click', () => this._setSubtab(tab.id));
+            this._subtabList.appendChild(el);
+        });
+    }
+
+    _buildBreadcrumbs() {
+        VIEWS.forEach(v => {
+            if (v.id === 'runtime') return;
+            const dot = document.createElement('div');
+            dot.className = 'breadcrumb-dot';
+            dot.dataset.view = v.id;
+            dot.dataset.tooltip = v.label;
+            dot.addEventListener('click', () => this._setView(v.id));
+            this._breadcrumbs.appendChild(dot);
+        });
+    }
+
+    _bindEvents() {
+        // Rail clicks
+        this._navRail.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => this._setView(item.dataset.view));
+        });
+
+        // Connect button
+        this._connectBtn.addEventListener('click', () => this._connect());
+
+        // Theme toggle
+        this._themeToggle.addEventListener('click', () => this._toggleTheme());
+
+        // Keyboard
+        document.addEventListener('keydown', (e) => this._onKeyDown(e));
+    }
+
+    _onKeyDown(e) {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        const key = e.key.toLowerCase();
+
+        // View switching with 1-4
+        if (key >= '1' && key <= '4' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            const view = VIEWS[parseInt(key) - 1];
+            if (view) this._setView(view.id);
+            return;
+        }
+
+        // Theme toggle
+        if (key === 'd' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            e.preventDefault();
+            this._toggleTheme();
+            return;
+        }
+
+        // Connect shortcut
+        if (key === 'c' && !e.ctrlKey && !e.metaKey && !e.altKey && !this._isConnected) {
+            e.preventDefault();
+            if (this._activeView === 'runtime') this._connect();
+            return;
+        }
+
+        // Sub-tab shortcuts when in Runtime
+        if (this._activeView === 'runtime' && this._isConnected && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            const tab = SUBTABS.find(t => t.kbd.toLowerCase() === key);
+            if (tab) {
+                e.preventDefault();
+                this._setSubtab(tab.id);
+            }
+        }
+    }
+
+    _setView(viewId) {
+        if (this._activeView === viewId) return;
+        this._activeView = viewId;
+        this._updateView();
+    }
+
+    _updateView() {
+        const view = VIEWS.find(v => v.id === this._activeView);
+        const isRuntime = this._activeView === 'runtime';
+
+        // Sidebar mode
+        this._sidebar.dataset.mode = isRuntime ? 'expanded' : 'rail';
+
+        // Rail active state
+        this._navRail.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.view === this._activeView);
+        });
+
+        // Breadcrumb active state
+        this._breadcrumbs.querySelectorAll('.breadcrumb-dot').forEach(dot => {
+            dot.classList.toggle('active', dot.dataset.view === this._activeView);
+        });
+
+        // Locked state
+        if (isRuntime && !this._isConnected) {
+            this._lockedOverlay.classList.remove('hidden');
+        } else {
+            this._lockedOverlay.classList.add('hidden');
+        }
+
+        // Content area
+        this._contentTitle.textContent = view.label;
+        this._contentSubtitle.textContent = isRuntime && this._isConnected
+            ? this._getSubtabDescription()
+            : view.subtitle;
+
+        // Content placeholder icon
+        this._contentPlaceholder.querySelector('.big-icon').innerHTML = CONTENT_ICONS[this._activeView] || CONTENT_ICONS.workspace;
+        this._contentPlaceholder.querySelector('h2').textContent = view.label;
+        this._contentPlaceholder.querySelector('p').textContent = view.subtitle;
+
+        // Update pill position after morph animation completes
+        if (isRuntime && this._isConnected) {
+            requestAnimationFrame(() => {
+                setTimeout(() => this._updatePill(), 180);
+            });
+        }
+
+        this._showToast(`${view.label}`);
+    }
+
+    _setSubtab(subtabId) {
+        if (!this._isConnected || this._activeView !== 'runtime') return;
+        this._activeSubtab = subtabId;
+
+        this._subtabList.querySelectorAll('.subtab-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.subtab === subtabId);
+        });
+
+        this._updatePill();
+
+        const tab = SUBTABS.find(t => t.id === subtabId);
+        this._contentTitle.textContent = tab.label;
+        this._contentSubtitle.textContent = this._getSubtabDescription();
+        this._contentPlaceholder.querySelector('h2').textContent = tab.label;
+    }
+
+    _getSubtabDescription() {
+        const descs = {
+            'logs': 'Real-time structured log stream',
+            'telemetry': 'SSR telemetry events and traces',
+            'system-files': 'FLT config and system files',
+            'spark-sessions': 'Active Spark sessions and jobs',
+            'tokens': 'MWC and bearer token lifecycle',
+            'caches': 'Data cache inspection',
+            'http-pipeline': 'HTTP request/response pipeline',
+            'retries': 'Retry policies and active retries',
+            'feature-flags': 'Feature flag states and overrides',
+            'di-registry': 'Dependency injection container',
+            'perf-markers': 'Performance markers and timings',
+        };
+        return descs[this._activeSubtab] || '';
+    }
+
+    _updatePill() {
+        const activeItem = this._subtabList.querySelector(`.subtab-item[data-subtab="${this._activeSubtab}"]`);
+        if (!activeItem) return;
+        const listRect = this._subtabList.getBoundingClientRect();
+        const itemRect = activeItem.getBoundingClientRect();
+        this._subtabPill.style.top = `${itemRect.top - listRect.top + this._subtabList.scrollTop}px`;
+        this._subtabPill.style.height = `${itemRect.height}px`;
+    }
+
+    _connect() {
+        if (this._isConnected) return;
+
+        // Trigger lock shatter animation
+        this._lockIcon.classList.add('shattering');
+        this._spawnShatterParticles();
+
+        setTimeout(() => {
+            this._isConnected = true;
+            this._lockedOverlay.classList.add('hidden');
+            this._statusDot.classList.remove('disconnected');
+            this._statusDot.classList.add('connected');
+            this._statusLabel.textContent = 'Connected';
+            this._statusMeta.textContent = ':5557';
+            this._tokenRow.classList.add('visible');
+
+            // Show live badges
+            this._startLiveData();
+
+            // Update pill once sub-tabs are visible
+            requestAnimationFrame(() => {
+                setTimeout(() => this._updatePill(), 350);
+            });
+
+            this._showToast('Runtime connected ― sub-tabs unlocked');
+            this._lockIcon.classList.remove('shattering');
+        }, 500);
+    }
+
+    _startLiveData() {
+        // Simulate live badge updates
+        this._liveInterval = setInterval(() => {
+            // Random error count
+            if (Math.random() > 0.7) {
+                this._liveCounters.errors = Math.min(this._liveCounters.errors + Math.floor(Math.random() * 3), 99);
+            }
+            this._liveCounters.requests += Math.floor(Math.random() * 12);
+            if (Math.random() > 0.85) {
+                this._liveCounters.retries = Math.max(0, this._liveCounters.retries + (Math.random() > 0.5 ? 1 : -1));
+            }
+
+            // Update badges
+            const logsBadge = this._subtabList.querySelector('[data-badge="logs"]');
+            if (this._liveCounters.errors > 0) {
+                logsBadge.textContent = this._liveCounters.errors;
+                logsBadge.className = 'subtab-badge red';
+                logsBadge.style.display = '';
+            }
+
+            const httpBadge = this._subtabList.querySelector('[data-badge="http-pipeline"]');
+            httpBadge.textContent = this._liveCounters.requests;
+            httpBadge.className = 'subtab-badge muted';
+            httpBadge.style.display = '';
+
+            if (this._liveCounters.retries > 0) {
+                const retryBadge = this._subtabList.querySelector('[data-badge="retries"]');
+                retryBadge.textContent = this._liveCounters.retries;
+                retryBadge.className = 'subtab-badge amber';
+                retryBadge.style.display = '';
+            }
+
+            // Token countdown
+            this._tokenSeconds = Math.max(0, this._tokenSeconds - 1);
+            const mins = Math.floor(this._tokenSeconds / 60);
+            const secs = this._tokenSeconds % 60;
+            this._tokenTtl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            const pct = this._tokenSeconds / 2700;
+            this._tokenFill.style.strokeDashoffset = (1 - pct) * 40.84;
+            if (pct < 0.22) {
+                this._tokenFill.style.stroke = 'var(--red)';
+                this._tokenTtl.style.color = 'var(--red)';
+            } else if (pct < 0.45) {
+                this._tokenFill.style.stroke = 'var(--amber)';
+                this._tokenTtl.style.color = 'var(--amber)';
+            } else {
+                this._tokenFill.style.stroke = 'var(--green)';
+                this._tokenTtl.style.color = '';
+            }
+
+            // Update token badge in subtab
+            const tokenBadge = this._subtabList.querySelector('[data-badge="tokens"]');
+            tokenBadge.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            tokenBadge.className = `subtab-badge ${pct < 0.22 ? 'red' : pct < 0.45 ? 'amber' : 'green'}`;
+            tokenBadge.style.display = '';
+
+            // Msg rate
+            this._msgRate = 700 + Math.floor(Math.random() * 300);
+            this._statusMeta.textContent = `:5557 · ${this._msgRate}/s`;
+        }, 1000);
+    }
+
+    /* ---- Particle Shatter ---- */
+    _resizeCanvas() {
+        this._canvas.width = window.innerWidth;
+        this._canvas.height = window.innerHeight;
+    }
+
+    _spawnShatterParticles() {
+        const lockRect = this._lockIcon.getBoundingClientRect();
+        const cx = lockRect.left + lockRect.width / 2;
+        const cy = lockRect.top + lockRect.height / 2;
+        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+
+        for (let i = 0; i < 36; i++) {
+            const angle = (Math.PI * 2 * i) / 36 + (Math.random() - 0.5) * 0.5;
+            const speed = 2 + Math.random() * 5;
+            const size = 2 + Math.random() * 4;
+            this._particles.push({
+                x: cx, y: cy,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 2,
+                size,
+                life: 1,
+                decay: 0.015 + Math.random() * 0.02,
+                color: Math.random() > 0.4 ? accent : (Math.random() > 0.5 ? '#e8eaf0' : '#8e95a5'),
+                rotation: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.2,
+            });
+        }
+
+        if (!this._animFrame) this._animateParticles();
+    }
+
+    _animateParticles() {
+        this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+        this._particles = this._particles.filter(p => {
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.12;
+            p.vx *= 0.99;
+            p.life -= p.decay;
+            p.rotation += p.rotSpeed;
+
+            if (p.life <= 0) return false;
+
+            this._ctx.save();
+            this._ctx.translate(p.x, p.y);
+            this._ctx.rotate(p.rotation);
+            this._ctx.globalAlpha = p.life;
+            this._ctx.fillStyle = p.color;
+            this._ctx.beginPath();
+            // Diamond/shard shape
+            this._ctx.moveTo(0, -p.size);
+            this._ctx.lineTo(p.size * 0.6, 0);
+            this._ctx.lineTo(0, p.size);
+            this._ctx.lineTo(-p.size * 0.6, 0);
+            this._ctx.closePath();
+            this._ctx.fill();
+            this._ctx.restore();
+            return true;
+        });
+
+        if (this._particles.length > 0) {
+            this._animFrame = requestAnimationFrame(() => this._animateParticles());
+        } else {
+            this._animFrame = null;
+        }
+    }
+
+    /* ---- Theme ---- */
+    _toggleTheme() {
+        this._isDark = !this._isDark;
+        document.documentElement.dataset.theme = this._isDark ? 'dark' : '';
+        const icon = document.getElementById('theme-icon');
+        if (this._isDark) {
+            icon.innerHTML = `<path d="M10 2a8 8 0 107.937 9A5 5 0 0111 4.063 8.001 8.001 0 0010 2z"/>`;
+        } else {
+            icon.innerHTML = `<circle cx="10" cy="10" r="4"/><path d="M10 2v2m0 12v2M2 10h2m12 0h2M4.93 4.93l1.41 1.41m7.32 7.32l1.41 1.41M4.93 15.07l1.41-1.41m7.32-7.32l1.41-1.41"/>`;
+        }
+        this._showToast(this._isDark ? 'Dark theme' : 'Light theme');
+    }
+
+    /* ---- Toast ---- */
+    _showToast(msg) {
+        this._toast.textContent = msg;
+        this._toast.classList.add('visible');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => this._toast.classList.remove('visible'), 1400);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new MorphingNav();
+});
+</script>
+</body>
+</html>

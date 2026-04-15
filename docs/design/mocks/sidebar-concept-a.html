@@ -1,0 +1,1755 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Sidebar Concept A: The Linear Dock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+    /* Typography */
+    --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
+
+    /* Transitions */
+    --spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --t-fast: 160ms;
+    --t-med: 260ms;
+    --t-slow: 360ms;
+
+    /* Radii */
+    --r4: 4px;
+    --r6: 6px;
+    --r8: 8px;
+    --r10: 10px;
+    --r100: 100px;
+
+    /* Sidebar dimensions */
+    --rail-w: 52px;
+    --expanded-w: 224px;
+    --icon-size: 20px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.12);
+    --shadow-glow: 0 0 16px rgba(109,92,255,0.25);
+}
+
+/* Light theme */
+[data-theme="light"] {
+    --accent: #6d5cff;
+    --accent-dim: rgba(109,92,255,0.07);
+    --accent-hover: rgba(109,92,255,0.04);
+    --accent-glow: rgba(109,92,255,0.15);
+    --accent-text: #5a4ce6;
+
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #f8f9fb;
+    --surface-3: #ebedf0;
+
+    --border: rgba(0,0,0,0.06);
+    --border-bright: rgba(0,0,0,0.12);
+
+    --text: #1a1d23;
+    --text-dim: #5a6070;
+    --text-muted: #8e95a5;
+
+    --green: #18a058;
+    --green-dim: rgba(24,160,88,0.08);
+    --amber: #e5940c;
+    --amber-dim: rgba(229,148,12,0.08);
+    --red: #e5453b;
+    --red-dim: rgba(229,69,59,0.08);
+
+    --sidebar-bg: #ffffff;
+    --sidebar-border: rgba(0,0,0,0.08);
+    --sidebar-hover: rgba(0,0,0,0.03);
+    --sidebar-icon: #5a6070;
+    --sidebar-icon-active: #6d5cff;
+
+    --content-bg: #f4f5f7;
+    --pill-bg: rgba(109,92,255,0.10);
+    --pill-text: #5a4ce6;
+
+    --topbar-bg: #ffffff;
+    --badge-bg: rgba(0,0,0,0.04);
+    --kbd-bg: rgba(0,0,0,0.06);
+    --kbd-border: rgba(0,0,0,0.10);
+}
+
+/* Dark theme */
+[data-theme="dark"] {
+    --accent: #8577ff;
+    --accent-dim: rgba(133,119,255,0.10);
+    --accent-hover: rgba(133,119,255,0.06);
+    --accent-glow: rgba(133,119,255,0.20);
+    --accent-text: #a99fff;
+
+    --bg: #0c0e14;
+    --surface: #14171f;
+    --surface-2: #1c2029;
+    --surface-3: #282d3a;
+
+    --border: rgba(255,255,255,0.06);
+    --border-bright: rgba(255,255,255,0.10);
+
+    --text: #e4e7ed;
+    --text-dim: #8a91a3;
+    --text-muted: #555d70;
+
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.10);
+    --amber: #f0b429;
+    --amber-dim: rgba(240,180,41,0.10);
+    --red: #ff6b6b;
+    --red-dim: rgba(255,107,107,0.10);
+
+    --sidebar-bg: #14171f;
+    --sidebar-border: rgba(255,255,255,0.06);
+    --sidebar-hover: rgba(255,255,255,0.04);
+    --sidebar-icon: #8a91a3;
+    --sidebar-icon-active: #8577ff;
+
+    --content-bg: #0c0e14;
+    --pill-bg: rgba(133,119,255,0.14);
+    --pill-text: #a99fff;
+
+    --topbar-bg: #14171f;
+    --badge-bg: rgba(255,255,255,0.06);
+    --kbd-bg: rgba(255,255,255,0.08);
+    --kbd-border: rgba(255,255,255,0.12);
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.app-shell {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ============================================================
+   SIDEBAR — THE LINEAR DOCK
+   ============================================================ */
+.sidebar {
+    width: var(--rail-w);
+    height: 100vh;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: width var(--t-med) var(--spring),
+                box-shadow var(--t-fast) var(--ease-out);
+    position: relative;
+    /* z-index: 10 — sidebar overlays content when expanded */
+    z-index: 10;
+    user-select: none;
+}
+
+.sidebar.expanded {
+    width: var(--expanded-w);
+    box-shadow: var(--shadow-lg);
+}
+
+/* ============================================================
+   SIDEBAR — NAV SECTION
+   ============================================================ */
+.sidebar-nav {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 0;
+    gap: 2px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-nav::-webkit-scrollbar { width: 0; }
+
+/* ============================================================
+   NAV ITEM
+   ============================================================ */
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 40px;
+    margin: 0 8px;
+    padding: 0 6px;
+    border-radius: var(--r8);
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease-out),
+                color var(--t-fast) var(--ease-out);
+    white-space: nowrap;
+    color: var(--sidebar-icon);
+}
+
+.nav-item:hover {
+    background: var(--sidebar-hover);
+}
+
+.nav-item.active {
+    background: var(--pill-bg);
+    color: var(--pill-text);
+}
+
+.nav-item.active .nav-icon svg {
+    color: var(--accent);
+}
+
+.nav-item.active .nav-label {
+    color: var(--pill-text);
+    font-weight: 500;
+}
+
+.nav-item.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.nav-item.disabled:hover {
+    background: transparent;
+}
+
+/* ============================================================
+   NAV ICON
+   ============================================================ */
+.nav-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.nav-icon svg {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    stroke-width: 1.6;
+    transition: color var(--t-fast) var(--ease-out);
+}
+
+/* Glow effect on active icon */
+.nav-item.active .nav-icon::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: var(--r6);
+    background: var(--accent-glow);
+    filter: blur(8px);
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ============================================================
+   NAV LABEL + SHORTCUT
+   ============================================================ */
+.nav-label {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin-left: 4px;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--t-fast) var(--ease-out),
+                transform var(--t-fast) var(--ease-out);
+    flex: 1;
+    min-width: 0;
+}
+
+.sidebar.expanded .nav-label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.nav-shortcut {
+    font-size: 11px;
+    font-family: var(--font);
+    color: var(--text-muted);
+    background: var(--kbd-bg);
+    border: 1px solid var(--kbd-border);
+    border-radius: var(--r4);
+    padding: 1px 5px;
+    line-height: 1.5;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--t-fast) var(--ease-out) 40ms,
+                transform var(--t-fast) var(--ease-out) 40ms;
+    flex-shrink: 0;
+}
+
+.sidebar.expanded .nav-shortcut {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* ============================================================
+   STATUS BADGE (connected dot, lock icon)
+   ============================================================ */
+.nav-badge {
+    position: absolute;
+    top: 6px;
+    left: 30px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--sidebar-bg);
+    transition: background var(--t-fast) var(--ease-out),
+                transform var(--t-med) var(--spring),
+                opacity var(--t-fast) var(--ease-out);
+}
+
+.nav-badge.disconnected {
+    background: var(--text-muted);
+    width: 10px;
+    height: 10px;
+    top: 5px;
+    left: 29px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r4);
+    border: none;
+}
+
+.nav-badge.disconnected::after {
+    content: '';
+    width: 5px;
+    height: 6px;
+    border: 1.5px solid var(--sidebar-bg);
+    border-radius: 2px 2px 0 0;
+    display: block;
+    margin-top: -1px;
+}
+
+.nav-badge.connected {
+    background: var(--green);
+    animation: pulse-once 600ms var(--ease-out);
+}
+
+@keyframes pulse-once {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(24,160,88,0.4); }
+    50% { transform: scale(1.3); box-shadow: 0 0 0 4px rgba(24,160,88,0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(24,160,88,0); }
+}
+
+/* ============================================================
+   RUNTIME SUB-ITEMS (nested in sidebar when expanded)
+   ============================================================ */
+.runtime-subitems {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height var(--t-med) var(--ease-out);
+}
+
+.sidebar.expanded .runtime-subitems.visible {
+    max-height: 400px;
+}
+
+.subitem-group-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 8px 12px 4px 56px;
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease-out) 60ms;
+}
+
+.sidebar.expanded .subitem-group-label {
+    opacity: 1;
+}
+
+.sub-item {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    margin: 0 8px;
+    padding: 0 8px 0 52px;
+    border-radius: var(--r6);
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    transition: background var(--t-fast) var(--ease-out),
+                color var(--t-fast) var(--ease-out),
+                opacity var(--t-med) var(--ease-out),
+                transform var(--t-med) var(--spring);
+    opacity: 0;
+    transform: translateY(-4px);
+    white-space: nowrap;
+}
+
+.sidebar.expanded .runtime-subitems.visible .sub-item {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Staggered cascade animation */
+.sidebar.expanded .runtime-subitems.visible .sub-item:nth-child(1) { transition-delay: 30ms; }
+.sidebar.expanded .runtime-subitems.visible .sub-item:nth-child(2) { transition-delay: 60ms; }
+.sidebar.expanded .runtime-subitems.visible .sub-item:nth-child(3) { transition-delay: 90ms; }
+.sidebar.expanded .runtime-subitems.visible .sub-item:nth-child(4) { transition-delay: 120ms; }
+
+.sub-item .sub-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sub-item .sub-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 1.6;
+}
+
+.sub-item:hover {
+    background: var(--sidebar-hover);
+    color: var(--text);
+}
+
+.sub-item.active {
+    background: var(--accent-dim);
+    color: var(--accent-text);
+}
+
+.sub-item .sub-shortcut {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font);
+}
+
+/* Internals group */
+.internals-group {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height var(--t-med) var(--ease-out);
+}
+
+.internals-group.open {
+    max-height: 300px;
+}
+
+.internals-toggle {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    margin: 2px 8px 0;
+    padding: 0 8px 0 52px;
+    border-radius: var(--r6);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: color var(--t-fast) var(--ease-out);
+    opacity: 0;
+    white-space: nowrap;
+}
+
+.sidebar.expanded .runtime-subitems.visible .internals-toggle {
+    opacity: 1;
+    transition-delay: 150ms;
+}
+
+.internals-toggle:hover {
+    color: var(--text-dim);
+}
+
+.internals-toggle .chevron {
+    display: inline-block;
+    transition: transform var(--t-fast) var(--ease-out);
+    margin-right: 6px;
+    font-size: 9px;
+}
+
+.internals-toggle .chevron.open {
+    transform: rotate(90deg);
+}
+
+.internals-group .sub-item {
+    height: 28px;
+    font-size: 12px;
+    padding-left: 68px;
+}
+
+/* ============================================================
+   SIDEBAR — SECTION DIVIDER
+   ============================================================ */
+.nav-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 16px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   SIDEBAR — FOOTER DOCK
+   ============================================================ */
+.sidebar-footer {
+    padding: 8px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Token health ring */
+.token-health {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 6px;
+    border-radius: var(--r8);
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease-out);
+}
+
+.token-health:hover {
+    background: var(--sidebar-hover);
+}
+
+.token-ring-container {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.token-ring {
+    width: 22px;
+    height: 22px;
+    position: relative;
+}
+
+.token-ring svg {
+    width: 22px;
+    height: 22px;
+    transform: rotate(-90deg);
+}
+
+.token-ring .ring-bg {
+    fill: none;
+    stroke: var(--surface-3);
+    stroke-width: 2.5;
+}
+
+.token-ring .ring-fg {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s var(--ease-out),
+                stroke var(--t-fast) var(--ease-out);
+}
+
+.token-ring .ring-fg.healthy { stroke: var(--green); }
+.token-ring .ring-fg.warning { stroke: var(--amber); }
+.token-ring .ring-fg.expired { stroke: var(--red); }
+
+.token-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: 4px;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--t-fast) var(--ease-out),
+                transform var(--t-fast) var(--ease-out);
+    white-space: nowrap;
+}
+
+.sidebar.expanded .token-label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.token-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease-out);
+}
+
+.sidebar.expanded .token-time {
+    opacity: 1;
+}
+
+.token-time.healthy { color: var(--green); }
+.token-time.warning { color: var(--amber); }
+.token-time.expired { color: var(--red); }
+
+/* Phase indicator */
+.phase-row {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 6px;
+    border-radius: var(--r8);
+}
+
+.phase-dot-container {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.phase-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: background var(--t-fast) var(--ease-out),
+                box-shadow var(--t-fast) var(--ease-out);
+}
+
+.phase-dot.disconnected {
+    background: var(--text-muted);
+    border: 1.5px solid var(--text-muted);
+    background: transparent;
+}
+
+.phase-dot.connected {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(24,160,88,0.4);
+}
+
+.phase-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-left: 4px;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--t-fast) var(--ease-out),
+                transform var(--t-fast) var(--ease-out);
+    white-space: nowrap;
+}
+
+.sidebar.expanded .phase-label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Settings item in footer */
+.footer-item {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 6px;
+    border-radius: var(--r8);
+    cursor: pointer;
+    transition: background var(--t-fast) var(--ease-out);
+    color: var(--sidebar-icon);
+}
+
+.footer-item:hover {
+    background: var(--sidebar-hover);
+}
+
+.footer-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.footer-icon svg {
+    width: var(--icon-size);
+    height: var(--icon-size);
+    stroke-width: 1.6;
+}
+
+.footer-label {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-left: 4px;
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity var(--t-fast) var(--ease-out),
+                transform var(--t-fast) var(--ease-out);
+    white-space: nowrap;
+}
+
+.sidebar.expanded .footer-label {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* ============================================================
+   MAIN CONTENT AREA
+   ============================================================ */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Top bar */
+.topbar {
+    height: 44px;
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.topbar-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.topbar-breadcrumb {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.topbar-spacer {
+    flex: 1;
+}
+
+/* ============================================================
+   CONTROL PANEL (for demo interaction)
+   ============================================================ */
+.control-panel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: var(--r6);
+    border: 1px solid var(--border-bright);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--t-fast) var(--ease-out);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.btn:hover {
+    background: var(--surface-2);
+    color: var(--text);
+    border-color: var(--border-bright);
+}
+
+.btn.primary {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+}
+
+.btn.primary:hover {
+    filter: brightness(1.1);
+    color: #ffffff;
+}
+
+.btn.connected-btn {
+    background: var(--green-dim);
+    color: var(--green);
+    border-color: transparent;
+}
+
+.btn.connected-btn:hover {
+    background: var(--red-dim);
+    color: var(--red);
+}
+
+.btn .btn-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.btn .btn-dot.green { background: var(--green); }
+.btn .btn-dot.amber { background: var(--amber); }
+
+.token-select {
+    height: 28px;
+    padding: 0 8px;
+    border-radius: var(--r6);
+    border: 1px solid var(--border-bright);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-family: var(--font);
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+}
+
+.theme-toggle {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--r6);
+    border: 1px solid var(--border-bright);
+    background: var(--surface);
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--t-fast) var(--ease-out);
+    padding: 0;
+}
+
+.theme-toggle:hover {
+    background: var(--surface-2);
+    color: var(--text);
+}
+
+.theme-toggle svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.6;
+}
+
+/* ============================================================
+   VIEW PANELS
+   ============================================================ */
+.view-container {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+}
+
+.view-panel {
+    display: none;
+    animation: fadeIn 200ms var(--ease-out);
+}
+
+.view-panel.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.view-panel h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.view-panel .view-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+/* Placeholder cards */
+.placeholder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.placeholder-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r10);
+    padding: 16px;
+    min-height: 100px;
+}
+
+.placeholder-card .card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.placeholder-card .card-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--mono);
+}
+
+.placeholder-card .card-sub {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+
+/* Tree placeholder */
+.tree-placeholder {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r10);
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 2;
+}
+
+.tree-placeholder .tree-icon {
+    color: var(--accent);
+    margin-right: 8px;
+}
+
+.tree-placeholder .tree-folder {
+    color: var(--text);
+    font-weight: 500;
+}
+
+.tree-placeholder .tree-item {
+    padding-left: 20px;
+}
+
+.tree-placeholder .tree-item-nested {
+    padding-left: 40px;
+}
+
+/* Log placeholder */
+.log-placeholder {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r10);
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.8;
+}
+
+.log-line {
+    display: flex;
+    gap: 12px;
+}
+
+.log-ts { color: var(--text-muted); }
+.log-level-info { color: #2d7ff9; }
+.log-level-warn { color: var(--amber); }
+.log-level-error { color: var(--red); }
+.log-msg { color: var(--text-dim); }
+
+/* Runtime sub-tab header (visible in the content area when connected) */
+.runtime-subtab-bar {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    padding: 0 0 16px 0;
+}
+
+.runtime-subtab-bar.visible {
+    display: flex;
+}
+
+.runtime-subtab {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border-radius: var(--r100);
+    cursor: pointer;
+    transition: all var(--t-fast) var(--ease-out);
+}
+
+.runtime-subtab:hover {
+    color: var(--text-dim);
+    background: var(--sidebar-hover);
+}
+
+.runtime-subtab.active {
+    color: var(--accent-text);
+    background: var(--pill-bg);
+}
+
+/* ============================================================
+   KEYBOARD HINTS FOOTER
+   ============================================================ */
+.keyboard-footer {
+    height: 32px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    flex-shrink: 0;
+}
+
+.kbd-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.kbd {
+    font-size: 10px;
+    font-family: var(--font);
+    font-weight: 500;
+    background: var(--kbd-bg);
+    border: 1px solid var(--kbd-border);
+    border-radius: 3px;
+    padding: 0 4px;
+    line-height: 1.6;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* ============================================================
+   CONNECTED BADGE ANIMATION
+   ============================================================ */
+.connected-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--green);
+    background: var(--green-dim);
+    padding: 3px 10px;
+    border-radius: var(--r100);
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity var(--t-fast) var(--ease-out),
+                transform var(--t-fast) var(--ease-out);
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.connected-badge.show {
+    opacity: 1;
+    transform: translateY(0);
+    animation: badge-pulse 800ms var(--ease-out);
+}
+
+@keyframes badge-pulse {
+    0% { opacity: 0; transform: scale(0.9); }
+    60% { opacity: 1; transform: scale(1.02); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+.connected-badge .badge-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--green);
+}
+
+/* Disconnected message */
+.disconnected-msg {
+    text-align: center;
+    padding: 60px 24px;
+}
+
+.disconnected-msg .lock-icon {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 16px;
+    background: var(--surface-3);
+    border-radius: var(--r10);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+}
+
+.disconnected-msg .lock-icon svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 1.6;
+}
+
+.disconnected-msg h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.disconnected-msg p {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+/* ============================================================
+   CASCADE REVEAL ANIMATION (for connect transition)
+   ============================================================ */
+.cascade-reveal .sub-item {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+}
+
+.cascade-reveal.animate .sub-item {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    transition: opacity 300ms var(--ease-out),
+                transform 300ms var(--spring);
+}
+
+.cascade-reveal.animate .sub-item:nth-child(1) { transition-delay: 60ms; }
+.cascade-reveal.animate .sub-item:nth-child(2) { transition-delay: 130ms; }
+.cascade-reveal.animate .sub-item:nth-child(3) { transition-delay: 200ms; }
+.cascade-reveal.animate .sub-item:nth-child(4) { transition-delay: 270ms; }
+
+/* ============================================================
+   CONCEPT LABEL
+   ============================================================ */
+.concept-label {
+    position: fixed;
+    top: 12px;
+    right: 16px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: var(--r100);
+    /* z-index: 100 — concept label above everything */
+    z-index: 100;
+    letter-spacing: 0.3px;
+}
+</style>
+</head>
+<body>
+
+<div class="concept-label">Concept A: The Linear Dock</div>
+
+<div class="app-shell">
+    <!-- ====================================================
+         SIDEBAR — THE LINEAR DOCK
+         ==================================================== -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-nav">
+            <!-- Workspace Explorer -->
+            <div class="nav-item active" data-view="workspace" data-key="1">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                        <rect x="2" y="2" width="7" height="7" rx="1.5"/>
+                        <rect x="11" y="2" width="7" height="7" rx="1.5"/>
+                        <rect x="2" y="11" width="7" height="7" rx="1.5"/>
+                        <rect x="11" y="11" width="7" height="7" rx="1.5"/>
+                    </svg>
+                </div>
+                <span class="nav-label">Workspace</span>
+                <span class="nav-shortcut">1</span>
+            </div>
+
+            <!-- Runtime -->
+            <div class="nav-item disabled" data-view="runtime" data-key="2" id="runtime-nav">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                        <path d="M10 2L12.5 8.5L10 7L7.5 8.5L10 2Z"/>
+                        <path d="M10 7L12.5 8.5L13 14.5L10 12L7 14.5L7.5 8.5L10 7Z"/>
+                        <path d="M10 12L13 14.5L12 18L10 16L8 18L7 14.5L10 12Z"/>
+                    </svg>
+                    <span class="nav-badge disconnected" id="runtime-badge"></span>
+                </div>
+                <span class="nav-label">Runtime</span>
+                <span class="nav-shortcut">2</span>
+            </div>
+
+            <!-- Runtime sub-items (only visible when expanded + connected) -->
+            <div class="runtime-subitems" id="runtime-subitems">
+                <div class="subitem-group-label">Debugging</div>
+                <div class="sub-item active" data-subtab="logs">
+                    <span class="sub-icon">
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor">
+                            <path d="M2 3h10M2 7h7M2 11h9"/>
+                        </svg>
+                    </span>
+                    Logs
+                    <span class="sub-shortcut">Alt+1</span>
+                </div>
+                <div class="sub-item" data-subtab="telemetry">
+                    <span class="sub-icon">
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor">
+                            <path d="M2 12L5 6L8 9L12 2"/>
+                        </svg>
+                    </span>
+                    Telemetry
+                    <span class="sub-shortcut">Alt+2</span>
+                </div>
+                <div class="sub-item" data-subtab="sysfiles">
+                    <span class="sub-icon">
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor">
+                            <path d="M3 2h5l3 3v7a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z"/>
+                            <path d="M8 2v3h3"/>
+                        </svg>
+                    </span>
+                    System Files
+                    <span class="sub-shortcut">Alt+3</span>
+                </div>
+                <div class="sub-item" data-subtab="spark">
+                    <span class="sub-icon">
+                        <svg viewBox="0 0 14 14" fill="none" stroke="currentColor">
+                            <circle cx="7" cy="7" r="2"/>
+                            <path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M11.2 2.8l-1.4 1.4M4.2 9.8l-1.4 1.4"/>
+                        </svg>
+                    </span>
+                    Spark
+                    <span class="sub-shortcut">Alt+4</span>
+                </div>
+
+                <!-- Internals toggle -->
+                <div class="internals-toggle" id="internals-toggle">
+                    <span class="chevron" id="internals-chevron">&#9656;</span>
+                    Internals
+                </div>
+                <div class="internals-group" id="internals-group">
+                    <div class="sub-item" data-subtab="tokens">Tokens</div>
+                    <div class="sub-item" data-subtab="caches">Caches</div>
+                    <div class="sub-item" data-subtab="http">HTTP Pipeline</div>
+                    <div class="sub-item" data-subtab="retries">Retries</div>
+                    <div class="sub-item" data-subtab="flags">Feature Flags</div>
+                    <div class="sub-item" data-subtab="di">DI Registry</div>
+                    <div class="sub-item" data-subtab="perf">Perf Markers</div>
+                </div>
+            </div>
+
+            <div class="nav-divider"></div>
+
+            <!-- API Playground -->
+            <div class="nav-item" data-view="api" data-key="3">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                        <rect x="2" y="4" width="16" height="12" rx="2"/>
+                        <path d="M5.5 10L7.5 8L5.5 6"/>
+                        <path d="M9.5 10h4"/>
+                    </svg>
+                </div>
+                <span class="nav-label">API Playground</span>
+                <span class="nav-shortcut">3</span>
+            </div>
+
+            <!-- Environment -->
+            <div class="nav-item" data-view="environment" data-key="4">
+                <div class="nav-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                        <circle cx="6" cy="6" r="2"/>
+                        <path d="M2 6h2M8 6h10"/>
+                        <circle cx="14" cy="14" r="2"/>
+                        <path d="M2 14h10M16 14h2"/>
+                    </svg>
+                </div>
+                <span class="nav-label">Environment</span>
+                <span class="nav-shortcut">4</span>
+            </div>
+        </div>
+
+        <!-- Footer dock -->
+        <div class="sidebar-footer">
+            <div class="token-health" id="token-health">
+                <div class="token-ring-container">
+                    <div class="token-ring">
+                        <svg viewBox="0 0 22 22">
+                            <circle class="ring-bg" cx="11" cy="11" r="8.5"/>
+                            <circle class="ring-fg healthy" id="token-ring-fg" cx="11" cy="11" r="8.5"
+                                stroke-dasharray="53.4" stroke-dashoffset="13.35"/>
+                        </svg>
+                    </div>
+                </div>
+                <span class="token-label">Token</span>
+                <span class="token-time healthy" id="token-time">38m</span>
+            </div>
+
+            <div class="phase-row">
+                <div class="phase-dot-container">
+                    <div class="phase-dot disconnected" id="phase-dot"></div>
+                </div>
+                <span class="phase-label" id="phase-label">Phase 1 — Disconnected</span>
+            </div>
+
+            <div class="footer-item" id="theme-toggle-sidebar">
+                <div class="footer-icon">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" id="settings-icon">
+                        <circle cx="10" cy="10" r="3"/>
+                        <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/>
+                    </svg>
+                </div>
+                <span class="footer-label">Settings</span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ====================================================
+         MAIN CONTENT
+         ==================================================== -->
+    <div class="main-content">
+        <div class="topbar">
+            <span class="topbar-title" id="topbar-title">Workspace Explorer</span>
+            <span class="topbar-breadcrumb" id="topbar-breadcrumb"></span>
+            <div class="connected-badge" id="connected-badge">
+                <span class="badge-dot"></span>
+                Connected
+            </div>
+            <div class="topbar-spacer"></div>
+            <div class="control-panel">
+                <button class="btn primary" id="connect-btn" title="Simulate FLT service connection">
+                    <span class="btn-dot" style="background:white; width:5px; height:5px; border-radius:50%;"></span>
+                    Connect
+                </button>
+                <select class="token-select" id="token-select" title="Simulate token status">
+                    <option value="healthy">Token: Healthy</option>
+                    <option value="warning">Token: Warning</option>
+                    <option value="expired">Token: Expired</option>
+                </select>
+                <button class="theme-toggle" id="theme-toggle-btn" title="Toggle theme">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" id="theme-icon">
+                        <circle cx="10" cy="10" r="4"/>
+                        <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="view-container">
+            <!-- Workspace View -->
+            <div class="view-panel active" id="view-workspace">
+                <h2>Workspace Explorer</h2>
+                <p class="view-desc">Browse workspaces, lakehouses, and Delta tables via Fabric APIs.</p>
+                <div class="tree-placeholder">
+                    <div><span class="tree-icon">&#9662;</span><span class="tree-folder">Engineering Workspace</span></div>
+                    <div class="tree-item"><span class="tree-icon">&#9662;</span><span class="tree-folder">production-lakehouse</span></div>
+                    <div class="tree-item-nested">&#9675; dim_customers</div>
+                    <div class="tree-item-nested">&#9675; fact_orders</div>
+                    <div class="tree-item-nested">&#9675; fact_sessions</div>
+                    <div class="tree-item"><span class="tree-icon">&#9656;</span><span class="tree-folder">staging-lakehouse</span></div>
+                    <div class="tree-item"><span class="tree-icon">&#9656;</span><span class="tree-folder">dev-lakehouse</span></div>
+                    <div><span class="tree-icon">&#9656;</span><span class="tree-folder">Data Science Workspace</span></div>
+                    <div><span class="tree-icon">&#9656;</span><span class="tree-folder">Analytics Workspace</span></div>
+                </div>
+            </div>
+
+            <!-- Runtime View -->
+            <div class="view-panel" id="view-runtime">
+                <!-- Disconnected state -->
+                <div class="disconnected-msg" id="runtime-disconnected">
+                    <div class="lock-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <rect x="5" y="11" width="14" height="10" rx="2"/>
+                            <path d="M8 11V7a4 4 0 018 0v4"/>
+                        </svg>
+                    </div>
+                    <h3>Runtime not connected</h3>
+                    <p>Deploy to a lakehouse and start the FLT service<br>to unlock runtime debugging tools.</p>
+                </div>
+                <!-- Connected state -->
+                <div id="runtime-connected" style="display:none;">
+                    <h2>Runtime</h2>
+                    <p class="view-desc">Real-time debugging tools for the running FLT service.</p>
+                    <div class="runtime-subtab-bar visible" id="runtime-subtab-bar">
+                        <span class="runtime-subtab active" data-rt="logs">Logs</span>
+                        <span class="runtime-subtab" data-rt="telemetry">Telemetry</span>
+                        <span class="runtime-subtab" data-rt="sysfiles">System Files</span>
+                        <span class="runtime-subtab" data-rt="spark">Spark</span>
+                    </div>
+                    <div class="log-placeholder">
+                        <div class="log-line"><span class="log-ts">14:32:01.847</span><span class="log-level-info">INFO</span><span class="log-msg">FabricLiveTable service started on port 5555</span></div>
+                        <div class="log-line"><span class="log-ts">14:32:02.103</span><span class="log-level-info">INFO</span><span class="log-msg">Connected to lakehouse: production-lakehouse</span></div>
+                        <div class="log-line"><span class="log-ts">14:32:02.450</span><span class="log-level-warn">WARN</span><span class="log-msg">Token expires in 38 minutes — consider refreshing</span></div>
+                        <div class="log-line"><span class="log-ts">14:32:03.221</span><span class="log-level-info">INFO</span><span class="log-msg">DAG node MaterializeCustomers started (3 dependencies)</span></div>
+                        <div class="log-line"><span class="log-ts">14:32:05.889</span><span class="log-level-error">ERROR</span><span class="log-msg">SparkSession.execute failed: OutOfMemoryError in executor 2</span></div>
+                        <div class="log-line"><span class="log-ts">14:32:06.012</span><span class="log-level-info">INFO</span><span class="log-msg">Retry policy: attempting re-execution with 2x memory</span></div>
+                        <div class="log-line"><span class="log-ts">14:32:08.445</span><span class="log-level-info">INFO</span><span class="log-msg">MaterializeCustomers completed in 5.22s (37,421 rows)</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Playground View -->
+            <div class="view-panel" id="view-api">
+                <h2>API Playground</h2>
+                <p class="view-desc">Test Fabric REST APIs with your current authentication context.</p>
+                <div class="placeholder-grid">
+                    <div class="placeholder-card">
+                        <div class="card-label">Endpoint</div>
+                        <div class="card-value" style="font-size:14px;">GET /v1/workspaces</div>
+                        <div class="card-sub">List all accessible workspaces</div>
+                    </div>
+                    <div class="placeholder-card">
+                        <div class="card-label">Response Time</div>
+                        <div class="card-value">142<span style="font-size:14px;color:var(--text-muted);">ms</span></div>
+                        <div class="card-sub">Last request latency</div>
+                    </div>
+                    <div class="placeholder-card">
+                        <div class="card-label">Status</div>
+                        <div class="card-value" style="color:var(--green);">200</div>
+                        <div class="card-sub">OK — 3 workspaces returned</div>
+                    </div>
+                    <div class="placeholder-card">
+                        <div class="card-label">Auth</div>
+                        <div class="card-value" style="font-size:14px;">Bearer</div>
+                        <div class="card-sub">MWC token (38m remaining)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Environment View -->
+            <div class="view-panel" id="view-environment">
+                <h2>Environment</h2>
+                <p class="view-desc">Manage configs, favorites, and named environments.</p>
+                <div class="placeholder-grid">
+                    <div class="placeholder-card">
+                        <div class="card-label">Active Environment</div>
+                        <div class="card-value" style="font-size:16px;">dev-west-us</div>
+                        <div class="card-sub">production-lakehouse</div>
+                    </div>
+                    <div class="placeholder-card">
+                        <div class="card-label">Saved Environments</div>
+                        <div class="card-value">4</div>
+                        <div class="card-sub">dev-west, staging, prod, local</div>
+                    </div>
+                    <div class="placeholder-card">
+                        <div class="card-label">Config Status</div>
+                        <div class="card-value" style="font-size:14px;color:var(--green);">Valid</div>
+                        <div class="card-sub">edog-config.json — last modified 2m ago</div>
+                    </div>
+                    <div class="placeholder-card">
+                        <div class="card-label">Feature Flags</div>
+                        <div class="card-value">12</div>
+                        <div class="card-sub">3 overridden locally</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keyboard hints footer -->
+        <div class="keyboard-footer">
+            <div class="kbd-hint"><kbd class="kbd">1</kbd>-<kbd class="kbd">4</kbd> Switch views</div>
+            <div class="kbd-hint" id="alt-hint" style="display:none;"><kbd class="kbd">Alt</kbd>+<kbd class="kbd">1</kbd>-<kbd class="kbd">4</kbd> Runtime tabs</div>
+            <div class="kbd-hint"><kbd class="kbd">Ctrl</kbd>+<kbd class="kbd">K</kbd> Command palette</div>
+            <div class="kbd-hint"><kbd class="kbd">T</kbd> Toggle theme</div>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * SidebarConceptA — Interactive mockup controller for the Linear Dock sidebar.
+ */
+class SidebarConceptA {
+    constructor() {
+        this._sidebar = document.getElementById('sidebar');
+        this._connected = false;
+        this._activeView = 'workspace';
+        this._activeSubtab = 'logs';
+        this._internalsOpen = false;
+        this._expandTimeout = null;
+        this._collapseTimeout = null;
+
+        this._bindEvents();
+        this._updateTokenDisplay('healthy');
+    }
+
+    _bindEvents() {
+        const sidebar = this._sidebar;
+
+        /* Sidebar hover expand/collapse */
+        sidebar.addEventListener('mouseenter', () => {
+            clearTimeout(this._collapseTimeout);
+            this._expandTimeout = setTimeout(() => {
+                sidebar.classList.add('expanded');
+            }, 80);
+        });
+
+        sidebar.addEventListener('mouseleave', () => {
+            clearTimeout(this._expandTimeout);
+            this._collapseTimeout = setTimeout(() => {
+                sidebar.classList.remove('expanded');
+            }, 220);
+        });
+
+        /* Nav item clicks */
+        document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+            item.addEventListener('click', () => {
+                if (item.classList.contains('disabled')) return;
+                this._switchView(item.dataset.view);
+            });
+        });
+
+        /* Runtime sub-item clicks */
+        document.querySelectorAll('.sub-item[data-subtab]').forEach(item => {
+            item.addEventListener('click', () => {
+                this._switchSubtab(item.dataset.subtab);
+            });
+        });
+
+        /* Runtime subtab bar clicks (in content area) */
+        document.querySelectorAll('.runtime-subtab[data-rt]').forEach(tab => {
+            tab.addEventListener('click', () => {
+                this._switchSubtab(tab.dataset.rt);
+            });
+        });
+
+        /* Internals toggle */
+        const internalsToggle = document.getElementById('internals-toggle');
+        internalsToggle.addEventListener('click', () => {
+            this._internalsOpen = !this._internalsOpen;
+            document.getElementById('internals-group').classList.toggle('open', this._internalsOpen);
+            document.getElementById('internals-chevron').classList.toggle('open', this._internalsOpen);
+        });
+
+        /* Connect button */
+        document.getElementById('connect-btn').addEventListener('click', () => {
+            this._toggleConnection();
+        });
+
+        /* Token select */
+        document.getElementById('token-select').addEventListener('change', (e) => {
+            this._updateTokenDisplay(e.target.value);
+        });
+
+        /* Theme toggle buttons */
+        document.getElementById('theme-toggle-btn').addEventListener('click', () => {
+            this._toggleTheme();
+        });
+        document.getElementById('theme-toggle-sidebar').addEventListener('click', () => {
+            this._toggleTheme();
+        });
+
+        /* Keyboard shortcuts */
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+
+            if (e.key === '1') this._switchView('workspace');
+            if (e.key === '2' && this._connected) this._switchView('runtime');
+            if (e.key === '3') this._switchView('api');
+            if (e.key === '4') this._switchView('environment');
+            if (e.key === 't' || e.key === 'T') this._toggleTheme();
+
+            if (e.altKey && this._connected && this._activeView === 'runtime') {
+                if (e.key === '1') { e.preventDefault(); this._switchSubtab('logs'); }
+                if (e.key === '2') { e.preventDefault(); this._switchSubtab('telemetry'); }
+                if (e.key === '3') { e.preventDefault(); this._switchSubtab('sysfiles'); }
+                if (e.key === '4') { e.preventDefault(); this._switchSubtab('spark'); }
+            }
+        });
+    }
+
+    _switchView(viewId) {
+        this._activeView = viewId;
+
+        /* Update nav items */
+        document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+            item.classList.toggle('active', item.dataset.view === viewId);
+        });
+
+        /* Update view panels */
+        document.querySelectorAll('.view-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        const targetPanel = document.getElementById(`view-${viewId}`);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
+
+        /* Update topbar */
+        const titles = {
+            workspace: 'Workspace Explorer',
+            runtime: 'Runtime',
+            api: 'API Playground',
+            environment: 'Environment'
+        };
+        document.getElementById('topbar-title').textContent = titles[viewId] || viewId;
+
+        /* Show runtime subitems only when runtime is active */
+        const subitems = document.getElementById('runtime-subitems');
+        if (viewId === 'runtime' && this._connected) {
+            subitems.classList.add('visible');
+        } else {
+            subitems.classList.remove('visible');
+        }
+
+        /* Show alt+N hint for runtime */
+        document.getElementById('alt-hint').style.display =
+            (viewId === 'runtime' && this._connected) ? 'flex' : 'none';
+    }
+
+    _switchSubtab(subtabId) {
+        this._activeSubtab = subtabId;
+
+        /* Update sidebar sub-items */
+        document.querySelectorAll('.sub-item[data-subtab]').forEach(item => {
+            item.classList.toggle('active', item.dataset.subtab === subtabId);
+        });
+
+        /* Update content area subtab bar */
+        document.querySelectorAll('.runtime-subtab[data-rt]').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.rt === subtabId);
+        });
+    }
+
+    _toggleConnection() {
+        this._connected = !this._connected;
+        const btn = document.getElementById('connect-btn');
+        const runtimeNav = document.getElementById('runtime-nav');
+        const badge = document.getElementById('runtime-badge');
+        const phaseDot = document.getElementById('phase-dot');
+        const phaseLabel = document.getElementById('phase-label');
+        const connectedBadge = document.getElementById('connected-badge');
+        const runtimeDisconnected = document.getElementById('runtime-disconnected');
+        const runtimeConnected = document.getElementById('runtime-connected');
+        const subitems = document.getElementById('runtime-subitems');
+
+        if (this._connected) {
+            /* Connect transition */
+            btn.className = 'btn connected-btn';
+            btn.innerHTML = '<span class="btn-dot green"></span>Disconnect';
+
+            runtimeNav.classList.remove('disabled');
+            badge.className = 'nav-badge connected';
+
+            phaseDot.className = 'phase-dot connected';
+            phaseLabel.textContent = 'Phase 2 — Connected';
+
+            /* Show connected badge with pulse */
+            connectedBadge.classList.add('show');
+            setTimeout(() => connectedBadge.classList.remove('show'), 2500);
+
+            /* Update runtime content */
+            runtimeDisconnected.style.display = 'none';
+            runtimeConnected.style.display = 'block';
+
+            /* Cascade-reveal sub-items */
+            if (this._activeView === 'runtime') {
+                subitems.classList.add('visible');
+            }
+
+            /* Show alt hint if on runtime */
+            if (this._activeView === 'runtime') {
+                document.getElementById('alt-hint').style.display = 'flex';
+            }
+
+            /* Auto-switch to runtime */
+            this._switchView('runtime');
+
+        } else {
+            /* Disconnect transition */
+            btn.className = 'btn primary';
+            btn.innerHTML = '<span class="btn-dot" style="background:white;width:5px;height:5px;border-radius:50%;"></span>Connect';
+
+            badge.className = 'nav-badge disconnected';
+
+            phaseDot.className = 'phase-dot disconnected';
+            phaseLabel.textContent = 'Phase 1 — Disconnected';
+
+            runtimeDisconnected.style.display = 'block';
+            runtimeConnected.style.display = 'none';
+
+            subitems.classList.remove('visible');
+            this._internalsOpen = false;
+            document.getElementById('internals-group').classList.remove('open');
+            document.getElementById('internals-chevron').classList.remove('open');
+
+            document.getElementById('alt-hint').style.display = 'none';
+
+            /* If currently on runtime, switch to workspace */
+            if (this._activeView === 'runtime') {
+                runtimeNav.classList.add('disabled');
+                this._switchView('workspace');
+            } else {
+                runtimeNav.classList.add('disabled');
+            }
+        }
+    }
+
+    _updateTokenDisplay(status) {
+        const ringFg = document.getElementById('token-ring-fg');
+        const tokenTime = document.getElementById('token-time');
+        const circumference = 53.4;
+
+        ringFg.className = `ring-fg ${status}`;
+        tokenTime.className = `token-time ${status}`;
+
+        if (status === 'healthy') {
+            ringFg.setAttribute('stroke-dashoffset', String(circumference * 0.25));
+            tokenTime.textContent = '38m';
+        } else if (status === 'warning') {
+            ringFg.setAttribute('stroke-dashoffset', String(circumference * 0.75));
+            tokenTime.textContent = '8m';
+        } else {
+            ringFg.setAttribute('stroke-dashoffset', String(circumference));
+            tokenTime.textContent = '0m';
+        }
+    }
+
+    _toggleTheme() {
+        const html = document.documentElement;
+        const current = html.getAttribute('data-theme');
+        const next = current === 'light' ? 'dark' : 'light';
+        html.setAttribute('data-theme', next);
+
+        const icon = document.getElementById('theme-icon');
+        if (next === 'dark') {
+            icon.innerHTML = '<path d="M10 3a7 7 0 009 9 7 7 0 11-9-9z"/>';
+        } else {
+            icon.innerHTML = '<circle cx="10" cy="10" r="4"/><path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.2 4.2l1.4 1.4M14.4 14.4l1.4 1.4M15.8 4.2l-1.4 1.4M5.6 14.4l-1.4 1.4"/>';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    new SidebarConceptA();
+});
+</script>
+
+</body>
+</html>

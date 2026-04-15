@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Sidebar Concept B: The Command Rail</title>
+<style>
+/* ═══════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════ */
+:root {
+  --accent: #6d5cff;
+  --accent-glow: rgba(109, 92, 255, 0.12);
+  --accent-glow-strong: rgba(109, 92, 255, 0.22);
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+  --border: rgba(0, 0, 0, 0.06);
+  --border-strong: rgba(0, 0, 0, 0.10);
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', monospace;
+  --transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --green: #18a058;
+  --amber: #e5940c;
+  --red: #e5453b;
+
+  --rail-width: 44px;
+  --flyout-width: 260px;
+  --tooltip-offset: 8px;
+  --icon-size: 18px;
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.3);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="dark"] {
+  --accent: #8577ff;
+  --accent-glow: rgba(133, 119, 255, 0.14);
+  --accent-glow-strong: rgba(133, 119, 255, 0.28);
+  --bg: #0f1117;
+  --surface: #161923;
+  --text: #e8eaf0;
+  --text-dim: #9ca3b4;
+  --text-muted: #5c6478;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --green: #36d37a;
+  --amber: #f5b731;
+  --red: #f06b60;
+
+  --glass-bg: rgba(22, 25, 35, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESET + BASE
+   ═══════════════════════════════════════════════════════ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ═══════════════════════════════════════════════════════
+   THE COMMAND RAIL — 44px collapsed sidebar
+   ═══════════════════════════════════════════════════════ */
+.rail {
+  width: var(--rail-width);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 10px;
+  position: relative;
+  z-index: 100; /* stacking: rail above content */
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* ── NAV ICONS ──────────────────────────────────────── */
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  padding-top: 4px;
+}
+
+.rail-icon {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background var(--transition),
+    transform var(--transition);
+  color: var(--text-muted);
+}
+
+.rail-icon:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.rail-icon.active {
+  color: var(--accent);
+}
+
+.rail-icon:active {
+  transform: scale(0.92);
+}
+
+.rail-icon svg {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  stroke-width: 1.5;
+  stroke: currentColor;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Active dot indicator — 3px dot below icon */
+.rail-icon .active-dot {
+  position: absolute;
+  bottom: 1px;
+  left: 50%;
+  transform: translateX(-50%) scale(0);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: transform var(--spring);
+}
+
+.rail-icon.active .active-dot {
+  transform: translateX(-50%) scale(1);
+}
+
+/* Sub-tab label below Runtime icon */
+.rail-icon .subtab-label {
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--transition);
+  pointer-events: none;
+}
+
+.rail-icon.active .subtab-label {
+  opacity: 1;
+}
+
+/* Disconnected / ghost state */
+.rail-icon.ghost {
+  opacity: 0.22;
+  pointer-events: none;
+  cursor: default;
+}
+
+.rail-icon.ghost:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* Materialize animation */
+.rail-icon.materializing {
+  animation: materialize 600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes materialize {
+  0% { opacity: 0.22; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Ripple ring on connect */
+.ripple-ring {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.ripple-ring.animate {
+  animation: ripple-expand 800ms cubic-bezier(0, 0.5, 0.3, 1) forwards;
+}
+
+@keyframes ripple-expand {
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.8); }
+}
+
+/* ── BOTTOM STATUS ──────────────────────────────────── */
+.rail-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 2px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  position: relative;
+  cursor: pointer;
+  transition: transform var(--transition);
+}
+
+.status-dot:hover {
+  transform: scale(1.5);
+}
+
+.status-dot.green { background: var(--green); }
+.status-dot.amber { background: var(--amber); }
+.status-dot.red { background: var(--red); }
+.status-dot.muted { background: var(--text-muted); }
+
+.status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.25;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOOLTIP FLYOUT — glass card on hover
+   ═══════════════════════════════════════════════════════ */
+.tooltip {
+  position: fixed;
+  left: calc(var(--rail-width) + var(--tooltip-offset));
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+  z-index: 200; /* stacking: tooltip above rail and flyout */
+}
+
+.tooltip.visible {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.tooltip-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  box-shadow: var(--glass-shadow);
+  min-width: 180px;
+  max-width: 240px;
+}
+
+.tooltip-card .tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.tooltip-card .tooltip-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.tooltip-card .tooltip-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tooltip-card .tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.tooltip-card .tooltip-shortcut {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
+
+.tooltip-card .tooltip-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+/* Pointer triangle */
+.tooltip-pointer {
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+}
+
+.tooltip-pointer::before {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--glass-bg);
+  border-left: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+  transform: rotate(45deg);
+  top: 1px;
+  left: 1px;
+  backdrop-filter: blur(16px);
+}
+
+/* ═══════════════════════════════════════════════════════
+   RUNTIME FLYOUT — 260px panel with sub-tab list
+   ═══════════════════════════════════════════════════════ */
+.flyout-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 149; /* stacking: backdrop below flyout */
+  display: none;
+}
+
+.flyout-backdrop.visible {
+  display: block;
+}
+
+.flyout {
+  position: fixed;
+  left: var(--rail-width);
+  top: 0;
+  width: var(--flyout-width);
+  height: 100vh;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--glass-shadow);
+  z-index: 150; /* stacking: flyout above backdrop, below tooltip */
+  transform: translateX(-8px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.2, 0.64, 1),
+    opacity 160ms ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.flyout.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.flyout-header {
+  padding: 16px 16px 0;
+}
+
+.flyout-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.flyout-search {
+  width: 100%;
+  padding: 7px 10px;
+  font-family: var(--font);
+  font-size: 13px;
+  color: var(--text);
+  background: var(--border);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.flyout-search::placeholder {
+  color: var(--text-muted);
+}
+
+.flyout-search:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.flyout-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  list-style: none;
+}
+
+.flyout-list::-webkit-scrollbar { width: 4px; }
+.flyout-list::-webkit-scrollbar-track { background: transparent; }
+.flyout-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+.flyout-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--transition);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 450;
+}
+
+.flyout-item:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.flyout-item.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+}
+
+.flyout-item.active:hover {
+  background: var(--accent-glow-strong);
+}
+
+.flyout-item.focused {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.flyout-item-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.flyout-item.active .flyout-item-icon {
+  opacity: 1;
+}
+
+.flyout-item-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.flyout-item-label {
+  flex: 1;
+}
+
+.flyout-item-shortcut {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.flyout-item:hover .flyout-item-shortcut,
+.flyout-item.active .flyout-item-shortcut {
+  opacity: 1;
+}
+
+.flyout-empty {
+  padding: 24px 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONTENT AREA
+   ═══════════════════════════════════════════════════════ */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  position: relative;
+  background: var(--bg);
+}
+
+.content-header {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.content-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-breadcrumb {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.content-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.content-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.content-placeholder {
+  text-align: center;
+  max-width: 420px;
+}
+
+.content-placeholder-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.content-placeholder-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.content-placeholder h2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.content-placeholder p {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CONTROLS: Theme toggle, Connect button, Keyboard hint
+   ═══════════════════════════════════════════════════════ */
+.btn {
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text);
+  transition:
+    background var(--transition),
+    border-color var(--transition),
+    transform 80ms ease;
+  outline: none;
+}
+
+.btn:hover {
+  background: var(--border);
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.btn-accent:hover {
+  filter: brightness(1.1);
+  background: var(--accent);
+}
+
+.btn-sm {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.theme-toggle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  transition: color var(--transition), background var(--transition);
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+  background: var(--border);
+}
+
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ═══════════════════════════════════════════════════════
+   KEYBOARD HINT BAR
+   ═══════════════════════════════════════════════════════ */
+.keyboard-bar {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  z-index: 50; /* stacking: keyboard bar below rail */
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.keyboard-bar kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
+}
+
+/* ═══════════════════════════════════════════════════════
+   STATUS TOOLTIPS
+   ═══════════════════════════════════════════════════════ */
+.status-tooltip {
+  position: fixed;
+  left: calc(var(--rail-width) + var(--tooltip-offset));
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 120ms ease-out,
+    transform 120ms ease-out;
+  z-index: 200;
+}
+
+.status-tooltip.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.status-tooltip-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px) saturate(1.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: var(--glass-shadow);
+  white-space: nowrap;
+}
+
+.status-tooltip-card .status-label {
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-tooltip-card .status-label .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-tooltip-card .status-label .dot.green { background: var(--green); }
+.status-tooltip-card .status-label .dot.amber { background: var(--amber); }
+.status-tooltip-card .status-label .dot.red { background: var(--red); }
+.status-tooltip-card .status-label .dot.muted { background: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════
+   TRANSITIONS + ANIMATION HELPERS
+   ═══════════════════════════════════════════════════════ */
+.fade-enter {
+  animation: fade-in 200ms ease-out forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE NOTE BADGE (design context)
+   ═══════════════════════════════════════════════════════ */
+.design-badge {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  z-index: 300;
+}
+
+.design-badge .badge-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     THE COMMAND RAIL
+     ═══════════════════════════════════════════════════════ -->
+<nav class="rail" id="rail" aria-label="Main navigation">
+  <div class="rail-nav" id="railNav">
+
+    <!-- 1. Workspace -->
+    <div class="rail-icon active" data-view="workspace" data-key="1"
+         data-tooltip-title="Workspace" data-tooltip-desc="Browse workspaces, lakehouses, and tables" data-tooltip-shortcut="1">
+      <svg viewBox="0 0 18 18"><rect x="2" y="2" width="5.5" height="5.5" rx="1.2"/><rect x="10.5" y="2" width="5.5" height="5.5" rx="1.2"/><rect x="2" y="10.5" width="5.5" height="5.5" rx="1.2"/><rect x="10.5" y="10.5" width="5.5" height="5.5" rx="1.2"/></svg>
+      <span class="active-dot"></span>
+    </div>
+
+    <!-- 2. Runtime -->
+    <div class="rail-icon ghost" data-view="runtime" data-key="2"
+         data-tooltip-title="Runtime" data-tooltip-desc="Logs, DAG, Spark, HTTP, Telemetry" data-tooltip-shortcut="2">
+      <svg viewBox="0 0 18 18"><polyline points="4 14 4 4 14 4"/><polyline points="4 9.5 8 6 11 10 14 7"/><circle cx="14" cy="14" r="2.5"/></svg>
+      <span class="active-dot"></span>
+      <span class="subtab-label" id="subtabLabel"></span>
+      <span class="ripple-ring" id="rippleRing"></span>
+    </div>
+
+    <!-- 3. API Playground -->
+    <div class="rail-icon ghost" data-view="api" data-key="3"
+         data-tooltip-title="API Playground" data-tooltip-desc="Test Fabric and FLT endpoints" data-tooltip-shortcut="3">
+      <svg viewBox="0 0 18 18"><polyline points="5 4.5 2 9 5 13.5"/><polyline points="13 4.5 16 9 13 13.5"/><line x1="10.5" y1="3" x2="7.5" y2="15"/></svg>
+      <span class="active-dot"></span>
+    </div>
+
+    <!-- 4. Environment -->
+    <div class="rail-icon" data-view="env" data-key="4"
+         data-tooltip-title="Environment" data-tooltip-desc="Config, feature flags, deploy targets" data-tooltip-shortcut="4">
+      <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="2.5"/><path d="M9 2.5v2M9 13.5v2M2.5 9h2M13.5 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4"/></svg>
+      <span class="active-dot"></span>
+    </div>
+
+  </div>
+
+  <!-- Bottom status dots -->
+  <div class="rail-status">
+    <div class="status-dot green" id="tokenDot" data-status="token" data-tooltip="Token: Valid (42 min)"></div>
+    <div class="status-dot muted" id="serviceDot" data-status="service" data-tooltip="Service: Disconnected"></div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOOLTIP (single, repositioned on hover)
+     ═══════════════════════════════════════════════════════ -->
+<div class="tooltip" id="tooltip" role="tooltip">
+  <div class="tooltip-pointer"></div>
+  <div class="tooltip-card">
+    <div class="tooltip-header">
+      <span class="tooltip-icon" id="tooltipIcon"></span>
+      <span class="tooltip-title" id="tooltipTitle"></span>
+      <span class="tooltip-shortcut" id="tooltipShortcut"></span>
+    </div>
+    <div class="tooltip-desc" id="tooltipDesc"></div>
+  </div>
+</div>
+
+<!-- Status tooltip -->
+<div class="status-tooltip" id="statusTooltip">
+  <div class="status-tooltip-card">
+    <div class="status-label" id="statusLabel"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     RUNTIME FLYOUT
+     ═══════════════════════════════════════════════════════ -->
+<div class="flyout-backdrop" id="flyoutBackdrop"></div>
+<aside class="flyout" id="flyout" role="dialog" aria-label="Runtime sub-tabs">
+  <div class="flyout-header">
+    <div class="flyout-title">Runtime</div>
+    <input class="flyout-search" id="flyoutSearch" type="text" placeholder="Search sub-tabs..." autocomplete="off" spellcheck="false">
+  </div>
+  <ul class="flyout-list" id="flyoutList"></ul>
+  <div class="flyout-empty" id="flyoutEmpty">No matching sub-tabs</div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════
+     CONTENT AREA
+     ═══════════════════════════════════════════════════════ -->
+<main class="content" id="content">
+  <header class="content-header">
+    <div class="content-title" id="contentTitle">
+      Workspace
+    </div>
+    <div class="content-actions">
+      <button class="btn btn-accent btn-sm" id="connectBtn">Connect</button>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+        <svg id="themeIconSun" viewBox="0 0 18 18"><circle cx="9" cy="9" r="3.5"/><path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.2 4.2l1.4 1.4M12.4 12.4l1.4 1.4M4.2 13.8l1.4-1.4M12.4 5.6l1.4-1.4"/></svg>
+        <svg id="themeIconMoon" viewBox="0 0 18 18" style="display:none"><path d="M14.5 10.5a6 6 0 0 1-7-7 6 6 0 1 0 7 7z"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="content-body" id="contentBody">
+    <!-- Placeholder content per view -->
+  </div>
+</main>
+
+<!-- Keyboard hint bar -->
+<div class="keyboard-bar">
+  <span><kbd>1</kbd>–<kbd>4</kbd> Switch views</span>
+  <span><kbd>Esc</kbd> Close flyout</span>
+  <span><kbd>D</kbd> Toggle theme</span>
+</div>
+
+<!-- Design badge -->
+<div class="design-badge">
+  <span class="badge-dot"></span>
+  Concept B — Command Rail
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  'use strict';
+
+  /* ── DATA ──────────────────────────────────────────── */
+
+  const VIEWS = {
+    workspace: {
+      title: 'Workspace',
+      icon: '<svg viewBox="0 0 18 18"><rect x="2" y="2" width="5.5" height="5.5" rx="1.2"/><rect x="10.5" y="2" width="5.5" height="5.5" rx="1.2"/><rect x="2" y="10.5" width="5.5" height="5.5" rx="1.2"/><rect x="10.5" y="10.5" width="5.5" height="5.5" rx="1.2"/></svg>',
+      desc: 'Browse your Fabric workspaces, lakehouses, and Delta tables. Select a target for deployment.',
+      phase: 'both'
+    },
+    runtime: {
+      title: 'Runtime',
+      icon: '<svg viewBox="0 0 18 18"><polyline points="4 14 4 4 14 4"/><polyline points="4 9.5 8 6 11 10 14 7"/><circle cx="14" cy="14" r="2.5"/></svg>',
+      desc: 'Live runtime diagnostics — logs, DAG, Spark, HTTP traffic, telemetry, and more.',
+      phase: 'connected'
+    },
+    api: {
+      title: 'API Playground',
+      icon: '<svg viewBox="0 0 18 18"><polyline points="5 4.5 2 9 5 13.5"/><polyline points="13 4.5 16 9 13 13.5"/><line x1="10.5" y1="3" x2="7.5" y2="15"/></svg>',
+      desc: 'Test Fabric REST APIs and FLT internal endpoints with your live token.',
+      phase: 'connected'
+    },
+    env: {
+      title: 'Environment',
+      icon: '<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="2.5"/><path d="M9 2.5v2M9 13.5v2M2.5 9h2M13.5 9h2M4.1 4.1l1.4 1.4M12.5 12.5l1.4 1.4M4.1 13.9l1.4-1.4M12.5 5.5l1.4-1.4"/></svg>',
+      desc: 'Manage configurations, feature flags, deploy targets, and named environments.',
+      phase: 'both'
+    }
+  };
+
+  const SUBTABS = [
+    { id: 'logs',     label: 'Logs',            icon: '<svg viewBox="0 0 16 16"><path d="M2 3h12M2 6.5h9M2 10h11M2 13.5h7"/></svg>' },
+    { id: 'http',     label: 'HTTP Inspector',   icon: '<svg viewBox="0 0 16 16"><path d="M2 4l6 4-6 4V4z"/><line x1="11" y1="4" x2="11" y2="12"/><line x1="14" y1="4" x2="14" y2="12"/></svg>' },
+    { id: 'spark',    label: 'Spark Inspector',  icon: '<svg viewBox="0 0 16 16"><polygon points="8 1.5 10 6.5 15 6.5 11 9.5 12.5 14.5 8 11.5 3.5 14.5 5 9.5 1 6.5 6 6.5"/></svg>' },
+    { id: 'dag',      label: 'DAG Studio',       icon: '<svg viewBox="0 0 16 16"><circle cx="4" cy="4" r="2"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><line x1="5.5" y1="5.5" x2="7" y2="10.5"/><line x1="10.5" y1="5.5" x2="9" y2="10.5"/></svg>' },
+    { id: 'telemetry',label: 'Telemetry',        icon: '<svg viewBox="0 0 16 16"><polyline points="1 12 4 6 7 9 10 3 13 8 15 5"/></svg>' },
+    { id: 'flags',    label: 'Feature Flags',    icon: '<svg viewBox="0 0 16 16"><line x1="3" y1="2" x2="3" y2="14"/><path d="M3 2.5h8l-2 3 2 3H3"/></svg>' },
+    { id: 'config',   label: 'Config Viewer',    icon: '<svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="2"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="10" x2="9" y2="10"/></svg>' },
+    { id: 'health',   label: 'Health Monitor',   icon: '<svg viewBox="0 0 16 16"><path d="M1 8h3l2-5 2 10 2-5h5"/></svg>' },
+    { id: 'perf',     label: 'Performance',      icon: '<svg viewBox="0 0 16 16"><circle cx="8" cy="9" r="5.5"/><line x1="8" y1="9" x2="10" y2="6"/><line x1="8" y1="4" x2="8" y2="3.5"/></svg>' },
+    { id: 'diag',     label: 'Diagnostics',      icon: '<svg viewBox="0 0 16 16"><path d="M6 2h4v3h3v9H3V5h3V2z"/><line x1="6" y1="8.5" x2="10" y2="8.5"/><line x1="6" y1="11" x2="9" y2="11"/></svg>' },
+    { id: 'console',  label: 'Console',          icon: '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><polyline points="4.5 7 6.5 9 4.5 11"/><line x1="8" y1="11" x2="11" y2="11"/></svg>' },
+  ];
+
+  /* ── STATE ─────────────────────────────────────────── */
+
+  let currentView = 'workspace';
+  let currentSubtab = 'logs';
+  let isConnected = false;
+  let flyoutOpen = false;
+  let flyoutFocusIdx = -1;
+  let filteredSubtabs = [...SUBTABS];
+
+  /* ── DOM REFS ──────────────────────────────────────── */
+
+  const rail = document.getElementById('rail');
+  const railNav = document.getElementById('railNav');
+  const tooltip = document.getElementById('tooltip');
+  const tooltipIcon = document.getElementById('tooltipIcon');
+  const tooltipTitle = document.getElementById('tooltipTitle');
+  const tooltipShortcut = document.getElementById('tooltipShortcut');
+  const tooltipDesc = document.getElementById('tooltipDesc');
+  const flyout = document.getElementById('flyout');
+  const flyoutBackdrop = document.getElementById('flyoutBackdrop');
+  const flyoutSearch = document.getElementById('flyoutSearch');
+  const flyoutList = document.getElementById('flyoutList');
+  const flyoutEmpty = document.getElementById('flyoutEmpty');
+  const subtabLabel = document.getElementById('subtabLabel');
+  const rippleRing = document.getElementById('rippleRing');
+  const connectBtn = document.getElementById('connectBtn');
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIconSun = document.getElementById('themeIconSun');
+  const themeIconMoon = document.getElementById('themeIconMoon');
+  const contentTitle = document.getElementById('contentTitle');
+  const contentBody = document.getElementById('contentBody');
+  const tokenDot = document.getElementById('tokenDot');
+  const serviceDot = document.getElementById('serviceDot');
+  const statusTooltip = document.getElementById('statusTooltip');
+  const statusLabel = document.getElementById('statusLabel');
+
+  const icons = railNav.querySelectorAll('.rail-icon');
+
+  /* ── HELPERS ───────────────────────────────────────── */
+
+  function getViewIcon(viewId) {
+    return VIEWS[viewId] ? VIEWS[viewId].icon : '';
+  }
+
+  /* ── TOOLTIP ───────────────────────────────────────── */
+
+  let tooltipTimeout = null;
+
+  function showTooltip(iconEl) {
+    if (flyoutOpen) return;
+    const view = iconEl.dataset.view;
+    const rect = iconEl.getBoundingClientRect();
+
+    tooltipIcon.innerHTML = getViewIcon(view);
+    tooltipTitle.textContent = iconEl.dataset.tooltipTitle;
+    tooltipShortcut.textContent = iconEl.dataset.tooltipShortcut;
+    tooltipDesc.textContent = iconEl.dataset.tooltipDesc;
+
+    tooltip.style.top = (rect.top + rect.height / 2 - tooltip.offsetHeight / 2) + 'px';
+    tooltip.classList.add('visible');
+  }
+
+  function hideTooltip() {
+    tooltip.classList.remove('visible');
+  }
+
+  icons.forEach(function(icon) {
+    icon.addEventListener('mouseenter', function() {
+      clearTimeout(tooltipTimeout);
+      tooltipTimeout = setTimeout(function() { showTooltip(icon); }, 200);
+    });
+    icon.addEventListener('mouseleave', function() {
+      clearTimeout(tooltipTimeout);
+      hideTooltip();
+    });
+  });
+
+  /* ── STATUS DOT TOOLTIPS ───────────────────────────── */
+
+  function showStatusTooltip(dotEl) {
+    const rect = dotEl.getBoundingClientRect();
+    const text = dotEl.dataset.tooltip;
+    const colorClass = dotEl.classList.contains('green') ? 'green'
+                     : dotEl.classList.contains('amber') ? 'amber'
+                     : dotEl.classList.contains('red') ? 'red' : 'muted';
+
+    statusLabel.innerHTML = '<span class="dot ' + colorClass + '"></span>' + text;
+    statusTooltip.style.top = (rect.top + rect.height / 2 - 14) + 'px';
+    statusTooltip.classList.add('visible');
+  }
+
+  function hideStatusTooltip() {
+    statusTooltip.classList.remove('visible');
+  }
+
+  [tokenDot, serviceDot].forEach(function(dot) {
+    dot.addEventListener('mouseenter', function() { showStatusTooltip(dot); });
+    dot.addEventListener('mouseleave', hideStatusTooltip);
+  });
+
+  /* ── VIEW SWITCHING ────────────────────────────────── */
+
+  function switchView(viewId) {
+    if (viewId === 'runtime' && !flyoutOpen && isConnected) {
+      openFlyout();
+      return;
+    }
+    if (viewId === 'runtime' && !isConnected) return;
+    if ((viewId === 'api') && !isConnected) return;
+
+    if (viewId === 'runtime' && flyoutOpen) {
+      return;
+    }
+
+    currentView = viewId;
+    closeFlyout();
+
+    icons.forEach(function(ic) {
+      ic.classList.toggle('active', ic.dataset.view === viewId);
+    });
+
+    renderContent();
+  }
+
+  function renderContent() {
+    const view = VIEWS[currentView];
+    if (!view) return;
+
+    let breadcrumb = '';
+    if (currentView === 'runtime') {
+      const sub = SUBTABS.find(function(s) { return s.id === currentSubtab; });
+      breadcrumb = ' <span class="content-breadcrumb">/ ' + (sub ? sub.label : '') + '</span>';
+    }
+
+    contentTitle.innerHTML = view.title + breadcrumb;
+
+    let placeholder = '';
+    if (currentView === 'runtime') {
+      const sub = SUBTABS.find(function(s) { return s.id === currentSubtab; });
+      placeholder = '<div class="content-placeholder fade-enter">'
+        + '<div class="content-placeholder-icon">' + (sub ? sub.icon.replace(/16/g, '48') : '') + '</div>'
+        + '<h2>' + (sub ? sub.label : '') + '</h2>'
+        + '<p>Runtime view for FLT service diagnostics. Live data streams when connected to a running instance.</p>'
+        + '</div>';
+    } else {
+      placeholder = '<div class="content-placeholder fade-enter">'
+        + '<div class="content-placeholder-icon">' + view.icon.replace(/18/g, '48') + '</div>'
+        + '<h2>' + view.title + '</h2>'
+        + '<p>' + view.desc + '</p>'
+        + '</div>';
+    }
+
+    contentBody.innerHTML = placeholder;
+  }
+
+  /* ── ICON CLICK ────────────────────────────────────── */
+
+  icons.forEach(function(icon) {
+    icon.addEventListener('click', function() {
+      const view = icon.dataset.view;
+      if (icon.classList.contains('ghost')) return;
+
+      if (view === 'runtime' && icon.classList.contains('active') && isConnected) {
+        if (flyoutOpen) {
+          closeFlyout();
+        } else {
+          openFlyout();
+        }
+        return;
+      }
+
+      switchView(view);
+    });
+  });
+
+  /* ── RUNTIME FLYOUT ────────────────────────────────── */
+
+  function buildFlyoutList() {
+    flyoutList.innerHTML = '';
+    flyoutFocusIdx = -1;
+
+    if (filteredSubtabs.length === 0) {
+      flyoutEmpty.style.display = 'block';
+      return;
+    }
+    flyoutEmpty.style.display = 'none';
+
+    filteredSubtabs.forEach(function(sub, idx) {
+      const li = document.createElement('li');
+      li.className = 'flyout-item' + (sub.id === currentSubtab ? ' active' : '');
+      li.dataset.subtab = sub.id;
+      li.dataset.idx = idx;
+      li.innerHTML =
+        '<span class="flyout-item-icon">' + sub.icon + '</span>'
+        + '<span class="flyout-item-label">' + sub.label + '</span>'
+        + '<span class="flyout-item-shortcut">' + (idx < 9 ? 'Alt+' + (idx + 1) : '') + '</span>';
+
+      li.addEventListener('click', function() {
+        selectSubtab(sub.id);
+      });
+
+      flyoutList.appendChild(li);
+    });
+  }
+
+  function openFlyout() {
+    if (!isConnected) return;
+    flyoutOpen = true;
+    flyoutSearch.value = '';
+    filteredSubtabs = [...SUBTABS];
+    buildFlyoutList();
+    flyout.classList.add('open');
+    flyoutBackdrop.classList.add('visible');
+    hideTooltip();
+
+    requestAnimationFrame(function() {
+      flyoutSearch.focus();
+    });
+  }
+
+  function closeFlyout() {
+    flyoutOpen = false;
+    flyout.classList.remove('open');
+    flyoutBackdrop.classList.remove('visible');
+    flyoutFocusIdx = -1;
+  }
+
+  function selectSubtab(id) {
+    currentSubtab = id;
+    currentView = 'runtime';
+    subtabLabel.textContent = SUBTABS.find(function(s) { return s.id === id; }).label;
+
+    icons.forEach(function(ic) {
+      ic.classList.toggle('active', ic.dataset.view === 'runtime');
+    });
+
+    closeFlyout();
+    renderContent();
+  }
+
+  flyoutBackdrop.addEventListener('click', closeFlyout);
+
+  /* ── FLYOUT SEARCH ─────────────────────────────────── */
+
+  flyoutSearch.addEventListener('input', function() {
+    const q = flyoutSearch.value.toLowerCase().trim();
+    filteredSubtabs = SUBTABS.filter(function(s) {
+      return s.label.toLowerCase().indexOf(q) !== -1 || s.id.indexOf(q) !== -1;
+    });
+    buildFlyoutList();
+  });
+
+  /* ── FLYOUT KEYBOARD NAV ───────────────────────────── */
+
+  flyoutSearch.addEventListener('keydown', function(e) {
+    const items = flyoutList.querySelectorAll('.flyout-item');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      flyoutFocusIdx = Math.min(flyoutFocusIdx + 1, items.length - 1);
+      updateFlyoutFocus(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      flyoutFocusIdx = Math.max(flyoutFocusIdx - 1, 0);
+      updateFlyoutFocus(items);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (flyoutFocusIdx >= 0 && flyoutFocusIdx < items.length) {
+        selectSubtab(items[flyoutFocusIdx].dataset.subtab);
+      } else if (items.length === 1) {
+        selectSubtab(items[0].dataset.subtab);
+      }
+    }
+  });
+
+  function updateFlyoutFocus(items) {
+    items.forEach(function(it, i) {
+      it.classList.toggle('focused', i === flyoutFocusIdx);
+    });
+    if (flyoutFocusIdx >= 0 && items[flyoutFocusIdx]) {
+      items[flyoutFocusIdx].scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  /* ── PHASE TRANSITION (CONNECT / DISCONNECT) ───────── */
+
+  connectBtn.addEventListener('click', function() {
+    if (isConnected) {
+      disconnect();
+    } else {
+      connect();
+    }
+  });
+
+  function connect() {
+    isConnected = true;
+    connectBtn.textContent = 'Disconnect';
+    connectBtn.classList.remove('btn-accent');
+
+    const runtimeIcon = railNav.querySelector('[data-view="runtime"]');
+    const apiIcon = railNav.querySelector('[data-view="api"]');
+
+    // Materialize runtime
+    runtimeIcon.classList.remove('ghost');
+    runtimeIcon.classList.add('materializing');
+    runtimeIcon.style.pointerEvents = 'auto';
+
+    // Ripple
+    rippleRing.classList.remove('animate');
+    void rippleRing.offsetWidth;
+    rippleRing.classList.add('animate');
+
+    // Materialize API (slightly delayed)
+    setTimeout(function() {
+      apiIcon.classList.remove('ghost');
+      apiIcon.classList.add('materializing');
+      apiIcon.style.pointerEvents = 'auto';
+    }, 120);
+
+    // Cleanup animation class
+    setTimeout(function() {
+      runtimeIcon.classList.remove('materializing');
+      apiIcon.classList.remove('materializing');
+    }, 700);
+
+    // Update service dot
+    serviceDot.classList.remove('muted');
+    serviceDot.classList.add('green');
+    serviceDot.dataset.tooltip = 'Service: Connected';
+  }
+
+  function disconnect() {
+    isConnected = false;
+    connectBtn.textContent = 'Connect';
+    connectBtn.classList.add('btn-accent');
+    closeFlyout();
+
+    const runtimeIcon = railNav.querySelector('[data-view="runtime"]');
+    const apiIcon = railNav.querySelector('[data-view="api"]');
+
+    runtimeIcon.classList.add('ghost');
+    runtimeIcon.classList.remove('active');
+    runtimeIcon.style.pointerEvents = '';
+    apiIcon.classList.add('ghost');
+    apiIcon.classList.remove('active');
+    apiIcon.style.pointerEvents = '';
+
+    subtabLabel.textContent = '';
+
+    // If we were on a connected-only view, go to workspace
+    if (currentView === 'runtime' || currentView === 'api') {
+      switchView('workspace');
+    }
+
+    serviceDot.classList.remove('green');
+    serviceDot.classList.add('muted');
+    serviceDot.dataset.tooltip = 'Service: Disconnected';
+  }
+
+  /* ── THEME ─────────────────────────────────────────── */
+
+  themeToggle.addEventListener('click', toggleTheme);
+
+  function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.dataset.theme === 'dark';
+    html.dataset.theme = isDark ? 'light' : 'dark';
+    themeIconSun.style.display = isDark ? '' : 'none';
+    themeIconMoon.style.display = isDark ? 'none' : '';
+  }
+
+  /* ── KEYBOARD SHORTCUTS ────────────────────────────── */
+
+  document.addEventListener('keydown', function(e) {
+    // Don't capture when typing in search
+    if (document.activeElement === flyoutSearch && e.key !== 'Escape') return;
+
+    if (e.key === 'Escape') {
+      if (flyoutOpen) { closeFlyout(); e.preventDefault(); }
+      return;
+    }
+
+    if (e.key === '1') { switchView('workspace'); e.preventDefault(); }
+    else if (e.key === '2') {
+      if (isConnected) {
+        if (currentView === 'runtime' && !flyoutOpen) { openFlyout(); }
+        else if (!flyoutOpen) { switchView('runtime'); }
+        else { closeFlyout(); }
+      }
+      e.preventDefault();
+    }
+    else if (e.key === '3') { if (isConnected) switchView('api'); e.preventDefault(); }
+    else if (e.key === '4') { switchView('env'); e.preventDefault(); }
+    else if (e.key === 'd' || e.key === 'D') { toggleTheme(); e.preventDefault(); }
+
+    // Alt+N for sub-tab quick selection when runtime is active
+    if (e.altKey && currentView === 'runtime' && isConnected) {
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= SUBTABS.length) {
+        selectSubtab(SUBTABS[num - 1].id);
+        e.preventDefault();
+      }
+    }
+  });
+
+  /* ── INIT ──────────────────────────────────────────── */
+
+  renderContent();
+
+})();
+</script>
+</body>
+</html>

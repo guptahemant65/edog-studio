@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Lakehouse Page V3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDOG Studio — Lakehouse Page V3 — "Feels Like Money"
+   Philosophy: Restraint. Confidence. One hero moment.
+   References: Stripe Dashboard, Apple Developer, Notion, Craft
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* ── Light Theme ── */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-hover: #f0f1f3;
+  --border: rgba(0,0,0,0.06);
+  --border-focus: rgba(109,92,255,0.4);
+
+  --text: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+
+  --accent: #6d5cff;
+  --accent-hover: #5b4bdb;
+  --accent-subtle: rgba(109,92,255,0.06);
+
+  --green: #16a34a;
+  --green-subtle: rgba(22,163,74,0.08);
+  --red: #dc2626;
+  --red-subtle: rgba(220,38,38,0.06);
+
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+
+  --terminal-bg: #fafafa;
+  --terminal-border: rgba(0,0,0,0.08);
+  --terminal-text: #374151;
+  --terminal-muted: #9ca3af;
+}
+
+[data-theme="dark"] {
+  --bg: #0a0b0f;
+  --surface: #111318;
+  --surface-hover: #1a1d25;
+  --border: rgba(255,255,255,0.06);
+  --border-focus: rgba(133,119,255,0.5);
+
+  --text: #e0e2e8;
+  --text-secondary: #8b8fa0;
+  --text-muted: #4b5060;
+
+  --accent: #8577ff;
+  --accent-hover: #9d91ff;
+  --accent-subtle: rgba(133,119,255,0.10);
+
+  --green: #22c55e;
+  --green-subtle: rgba(34,197,94,0.10);
+  --red: #ef4444;
+  --red-subtle: rgba(239,68,68,0.08);
+
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+
+  --terminal-bg: #111318;
+  --terminal-border: rgba(255,255,255,0.06);
+  --terminal-text: #c0c4d0;
+  --terminal-muted: #4b5060;
+}
+
+/* ── Base ── */
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background 200ms ease, color 200ms ease;
+}
+
+/* Scrollbar — barely there */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════
+   APP SHELL — Stripe-clean structure
+   ═══════════════════════════════════════════════════════ */
+.app-shell { display: flex; flex-direction: column; height: 100vh; }
+
+/* ── Top Bar — whisper-thin, functional ── */
+.topbar {
+  height: 48px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.topbar-logo {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.topbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.topbar-breadcrumb span { color: var(--text-secondary); font-weight: 500; }
+.topbar-breadcrumb svg { opacity: 0.4; }
+
+.topbar-spacer { flex: 1; }
+.topbar-actions { display: flex; align-items: center; gap: 4px; }
+
+.topbar-btn {
+  width: 32px; height: 32px;
+  border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 150ms ease, background 150ms ease;
+}
+.topbar-btn:hover { color: var(--text-secondary); background: var(--surface-hover); }
+
+/* ── Layout ── */
+.main-area { flex: 1; display: flex; overflow: hidden; }
+
+/* ── Sidebar — minimal, 48px ── */
+.sidebar {
+  width: 48px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  align-items: center;
+  padding: 12px 0; gap: 4px;
+}
+
+.sidebar-icon {
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); cursor: pointer;
+  transition: color 150ms ease, background 150ms ease;
+  position: relative;
+}
+.sidebar-icon:hover { color: var(--text-secondary); background: var(--surface-hover); }
+.sidebar-icon.active { color: var(--accent); background: var(--accent-subtle); }
+
+.sidebar-tooltip {
+  position: absolute; left: 44px; top: 50%; transform: translateY(-50%) scale(0.96);
+  background: var(--text); color: var(--bg);
+  font-size: 11px; font-weight: 500;
+  padding: 4px 10px; border-radius: 6px;
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; transition: opacity 150ms ease, transform 150ms ease;
+  z-index: 200;
+}
+.sidebar-icon:hover .sidebar-tooltip { opacity: 1; transform: translateY(-50%) scale(1); }
+
+/* ── Page content ── */
+.page-content { flex: 1; overflow-y: auto; overflow-x: hidden; }
+
+.page-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 24px 120px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER — Typography as art. Confident. No card.
+   ═══════════════════════════════════════════════════════ */
+.lh-header {
+  margin-bottom: 32px;
+}
+
+.lh-name {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.lh-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+/* GUID — monospace, muted, becomes interactive on hover */
+.lh-guid {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 0;
+  transition: color 150ms ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lh-guid:hover { color: var(--text-secondary); }
+.lh-guid .copy-icon {
+  opacity: 0;
+  transition: opacity 150ms ease;
+  flex-shrink: 0;
+}
+.lh-guid:hover .copy-icon { opacity: 0.6; }
+.lh-guid.copied { color: var(--green); }
+.lh-guid.copied .copy-icon { opacity: 1; }
+
+.lh-env {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/* Status — green dot + text. That's it. */
+.lh-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.lh-status .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.lh-status.running .dot { background: var(--green); }
+.lh-status.running { color: var(--green); }
+.lh-status.stopped .dot { background: var(--text-muted); }
+.lh-status.deploying .dot {
+  background: var(--accent);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+.lh-status.deploying { color: var(--accent); }
+.lh-status.failed .dot { background: var(--red); }
+.lh-status.failed { color: var(--red); }
+.lh-status .port {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.meta-sep {
+  width: 1px;
+  height: 12px;
+  background: var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACTIONS — Text links. No buttons. Confident.
+   ═══════════════════════════════════════════════════════ */
+.lh-actions {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.action-link {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 150ms ease;
+  text-decoration: none;
+}
+.action-link:hover { color: var(--text); }
+.action-link:hover .action-underline { width: 100%; }
+
+.action-link.danger { color: var(--red); }
+.action-link.danger:hover { color: var(--red); opacity: 0.8; }
+
+.action-link.primary {
+  color: var(--accent);
+  font-weight: 600;
+}
+.action-link.primary:hover { color: var(--accent-hover); }
+
+.action-spacer { flex: 1; }
+
+/* Deploy button — the ONE button on the page */
+.btn-deploy {
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 20px;
+  cursor: pointer;
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-deploy:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 2px 8px rgba(109,92,255,0.25);
+}
+.btn-deploy:active { transform: scale(0.98); }
+
+/* ═══════════════════════════════════════════════════════
+   DEPLOY MODULE — The emotional core
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Deployed state: ONE line. Thin borders. Green check. Done. ── */
+.deploy-bar {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.deploy-bar:hover { background: var(--surface-hover); margin-left: -24px; margin-right: -24px; padding-left: 24px; padding-right: 24px; }
+
+.deploy-check {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  /* THE hero moment: this circle draws in from nothing */
+}
+.deploy-check svg {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+  animation: draw-check 0.5s 0.2s ease-out forwards;
+}
+
+@keyframes draw-check {
+  to { stroke-dashoffset: 0; }
+}
+
+.deploy-bar-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.deploy-bar-text strong { color: var(--green); font-weight: 600; }
+
+.deploy-bar-action {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  transition: color 150ms ease;
+}
+.deploy-bar:hover .deploy-bar-action { color: var(--accent); }
+
+/* ── Deploying state: progress bar + info ── */
+.deploy-progress-section {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+  margin-bottom: 32px;
+}
+
+.deploy-progress-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.deploy-progress-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deploy-progress-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.deploy-cancel-link {
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 150ms ease;
+}
+.deploy-cancel-link:hover { color: var(--red); }
+
+/* The progress bar — thin, accent, rounded, smooth */
+.progress-track {
+  width: 100%;
+  height: 4px;
+  background: var(--surface-hover);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 300ms ease-out;
+  position: relative;
+}
+
+/* Subtle shimmer on the fill edge */
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 60px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* ── Error state ── */
+.deploy-error {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+  margin-bottom: 32px;
+}
+
+.deploy-error-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.error-indicator {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--red);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.error-content { flex: 1; }
+
+.error-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  margin-bottom: 2px;
+}
+
+.error-detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.error-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+/* ── Stopped state ── */
+.deploy-stopped {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.stopped-icon {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--surface-hover);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TERMINAL — Clean. No chrome. Just text.
+   ═══════════════════════════════════════════════════════ */
+.terminal {
+  background: var(--terminal-bg);
+  border: 1px solid var(--terminal-border);
+  border-radius: 8px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 250ms ease-out, padding 250ms ease-out, margin 250ms ease-out, opacity 200ms ease;
+  opacity: 0;
+  margin-top: 0;
+}
+.terminal.open {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 16px;
+  margin-top: 12px;
+  opacity: 1;
+}
+
+.terminal pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--terminal-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal .t-dim { color: var(--terminal-muted); }
+.terminal .t-green { color: var(--green); }
+.terminal .t-red { color: var(--red); }
+.terminal .t-ts { color: var(--terminal-muted); }
+
+/* ═══════════════════════════════════════════════════════
+   TABLES — Stripe-clean data table
+   ═══════════════════════════════════════════════════════ */
+.tables-section { margin-top: 0; }
+
+.tables-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.tables-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tables-count {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.tables-search {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text);
+  border: none;
+  background: transparent;
+  outline: none;
+  padding: 6px 0;
+  width: 180px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 150ms ease;
+}
+.tables-search::placeholder { color: var(--text-muted); }
+.tables-search:focus { border-bottom-color: var(--border-focus); }
+
+.tables-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  /* Top-light effect: 1px lighter on top */
+  box-shadow: var(--shadow-xs), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+[data-theme="dark"] .tables-card {
+  box-shadow: var(--shadow-xs), inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.stale-banner {
+  padding: 10px 20px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+thead th {
+  text-align: left;
+  padding: 10px 20px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  user-select: none;
+}
+thead th.num { text-align: right; }
+
+tbody td {
+  padding: 0 20px;
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+tbody tr:last-child td { border-bottom: none; }
+
+tbody tr {
+  transition: background 150ms ease;
+  cursor: pointer;
+}
+tbody tr:hover { background: var(--surface-hover); }
+tbody tr:hover td { color: var(--text); }
+
+.table-name-cell {
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Type — just colored text, no badge */
+.type-mlv { color: var(--accent); font-weight: 500; }
+.type-managed { color: var(--green); font-weight: 500; }
+.type-external { color: var(--text-muted); font-weight: 500; }
+
+.fmt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+td.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOAST — Minimal
+   ═══════════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed; top: 60px; right: 24px;
+  z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; gap: 8px;
+  animation: toast-in 300ms ease-out forwards;
+  pointer-events: auto;
+}
+.toast.out { animation: toast-out 200ms ease-in forwards; }
+
+.toast-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.toast-dot.success { background: var(--green); }
+.toast-dot.error { background: var(--red); }
+.toast-dot.info { background: var(--accent); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   STATE SWITCHER — Review tool
+   ═══════════════════════════════════════════════════════ */
+.state-switcher {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 52px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  gap: 8px; padding: 0 24px;
+  z-index: 500;
+}
+
+.state-switcher label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+.state-btn {
+  font-family: var(--font-body);
+  font-size: 12px; font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.state-btn:hover { border-color: var(--accent); color: var(--accent); }
+.state-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.theme-toggle {
+  margin-left: 16px;
+  font-family: var(--font-body);
+  font-size: 12px; font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════
+   CONTENT TRANSITIONS — Smooth, purposeful
+   ═══════════════════════════════════════════════════════ */
+.fade-in {
+  animation: fadeIn 300ms ease-out both;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── The hero moment: deployed check morphs in ── */
+@keyframes morph-check-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.deploy-check {
+  animation: morph-check-in 400ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+/* Progress fill complete → green morph (THE signature transition) */
+.progress-fill.complete {
+  background: var(--green);
+  transition: width 300ms ease-out, background 500ms ease-out;
+}
+.progress-fill.complete::after { display: none; }
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+
+@media (max-width: 768px) {
+  .page-inner { padding: 24px 16px 100px; }
+  .lh-name { font-size: 24px; }
+  .state-switcher { overflow-x: auto; justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-shell" id="app">
+  <!-- ── Top Bar ── -->
+  <div class="topbar">
+    <div class="topbar-logo">EDOG Studio</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-breadcrumb">
+      my-flt-workspace
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span id="bc-name">sales_analytics_lh</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" title="Search" onclick="void 0">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+      <button class="topbar-btn" title="Toggle theme" onclick="toggleTheme()">
+        <svg id="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <!-- ── Sidebar ── -->
+    <div class="sidebar">
+      <div class="sidebar-icon active">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="sidebar-tooltip">Explorer</span>
+      </div>
+      <div class="sidebar-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span class="sidebar-tooltip">Logs</span>
+      </div>
+      <div class="sidebar-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        <span class="sidebar-tooltip">Flags</span>
+      </div>
+      <div class="sidebar-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span class="sidebar-tooltip">API</span>
+      </div>
+    </div>
+
+    <!-- ── Page ── -->
+    <div class="page-content">
+      <div class="page-inner" id="page">
+
+        <!-- HEADER -->
+        <div class="lh-header fade-in">
+          <div class="lh-name">sales_analytics_lh</div>
+          <div class="lh-meta">
+            <span class="lh-guid" id="guid" onclick="copyGuid()">
+              <span class="guid-text" id="guid-text">a3f7c2e1</span>
+              <svg class="copy-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </span>
+            <span class="meta-sep"></span>
+            <span class="lh-env">PPE</span>
+            <span class="meta-sep" id="status-sep"></span>
+            <span class="lh-status" id="status"></span>
+          </div>
+        </div>
+
+        <!-- ACTIONS -->
+        <div class="lh-actions" id="actions"></div>
+
+        <!-- DEPLOY MODULE -->
+        <div id="deploy-module"></div>
+
+        <!-- TABLES -->
+        <div class="tables-section fade-in">
+          <div class="tables-header">
+            <div class="tables-label">Tables <span class="tables-count" id="table-count">6</span></div>
+            <input type="text" class="tables-search" placeholder="Filter tables..." id="table-search" />
+          </div>
+          <div class="tables-card" id="tables-card">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Format</th>
+                  <th class="num">Rows</th>
+                  <th class="num">Size</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toasts"></div>
+
+<!-- State Switcher -->
+<div class="state-switcher">
+  <label>State</label>
+  <button class="state-btn active" data-state="pre-deploy" onclick="setState('pre-deploy')">Pre-Deploy</button>
+  <button class="state-btn" data-state="deploying" onclick="setState('deploying')">Deploying</button>
+  <button class="state-btn" data-state="deployed" onclick="setState('deployed')">Deployed</button>
+  <button class="state-btn" data-state="failed" onclick="setState('failed')">Failed</button>
+  <button class="state-btn" data-state="stopped" onclick="setState('stopped')">Stopped</button>
+  <button class="theme-toggle" onclick="toggleTheme()">Theme</button>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   V3 Logic — Minimal. Purposeful. No decoration.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const GUID = 'a3f7c2e1-8b4d-4a6c-b1e3-2d5f8a9c0e1f';
+let state = 'pre-deploy';
+let termOpen = false;
+let timer = null;
+let elapsed = 0;
+let step = 0;
+
+/* ── Helpers ── */
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function fmtN(n) { return new Intl.NumberFormat('en-US').format(n); }
+
+/* ── Table data ── */
+const tables = [
+  { name: 'customer_orders',       type: 'mlv',      fmt: 'delta',   rows: 1247832, size: '2.4 GB' },
+  { name: 'product_inventory',     type: 'mlv',      fmt: 'delta',   rows: 84291,   size: '156 MB' },
+  { name: 'sales_transactions',    type: 'managed',  fmt: 'delta',   rows: 3891004, size: '8.7 GB' },
+  { name: 'dim_store_locations',   type: 'managed',  fmt: 'delta',   rows: 2847,    size: '1.2 MB' },
+  { name: 'daily_revenue_agg',     type: 'mlv',      fmt: 'delta',   rows: 365241,  size: '890 MB' },
+  { name: 'external_partner_feed', type: 'external', fmt: 'parquet', rows: 51003,   size: '234 MB' },
+];
+
+function typeLabel(t) { return t === 'mlv' ? 'MLV' : t === 'managed' ? 'Managed' : 'External'; }
+function typeClass(t) { return 'type-' + t; }
+
+function renderTables() {
+  document.getElementById('tbody').innerHTML = tables.map(t => `
+    <tr>
+      <td><span class="table-name-cell">${esc(t.name)}</span></td>
+      <td><span class="${typeClass(t.type)}">${typeLabel(t.type)}</span></td>
+      <td><span class="fmt">${t.fmt}</span></td>
+      <td class="num">${fmtN(t.rows)}</td>
+      <td class="num">${t.size}</td>
+    </tr>`).join('');
+}
+
+/* ── Terminal lines ── */
+const logLines = [
+  { ts: '14:23:01', t: 'Starting FLT deployment to sales_analytics_lh...', c: '' },
+  { ts: '14:23:01', t: 'Reading edog-config.json...', c: 'dim' },
+  { ts: '14:23:02', t: 'Workspace: my-flt-workspace (a3f7c2e1)', c: 'dim' },
+  { ts: '14:23:02', t: 'Fetching MWC token for capacity...', c: '' },
+  { ts: '14:23:03', t: 'MWC token acquired (expires in 3600s)', c: 'green' },
+  { ts: '14:23:04', t: 'Patching appsettings.json with lakehouse config...', c: '' },
+  { ts: '14:23:04', t: '  WorkspaceId: a3f7c2e1-8b4d-4a6c-b1e3-2d5f8a9c0e1f', c: 'dim' },
+  { ts: '14:23:04', t: '  LakehouseId: f8a1b3c5-2e7d-49ab-8c3f-1a2b3c4d5e6f', c: 'dim' },
+  { ts: '14:23:05', t: 'Building FabricLiveTable.Service...', c: '' },
+  { ts: '14:23:18', t: 'Build succeeded. 0 Warning(s). 0 Error(s).', c: 'green' },
+  { ts: '14:23:18', t: 'Launching service on port 5557...', c: '' },
+  { ts: '14:23:19', t: 'info: Microsoft.Hosting.Lifetime[14]', c: 'dim' },
+  { ts: '14:23:19', t: '      Now listening on: http://localhost:5557', c: 'green' },
+  { ts: '14:23:20', t: 'FLT service ready. Health check passed.', c: 'green' },
+];
+
+const failLines = [
+  { ts: '14:23:01', t: 'Starting FLT deployment to sales_analytics_lh...', c: '' },
+  { ts: '14:23:01', t: 'Reading edog-config.json...', c: 'dim' },
+  { ts: '14:23:02', t: 'Fetching MWC token for capacity...', c: '' },
+  { ts: '14:23:03', t: 'MWC token acquired (expires in 3600s)', c: 'green' },
+  { ts: '14:23:04', t: 'Patching appsettings.json...', c: '' },
+  { ts: '14:23:05', t: 'Building FabricLiveTable.Service...', c: '' },
+  { ts: '14:23:12', t: "error CS0246: The type or namespace 'IFeatureFlighter'", c: 'red' },
+  { ts: '14:23:12', t: '  could not be found.', c: 'red' },
+  { ts: '14:23:12', t: 'Build FAILED. 1 Error(s). 0 Warning(s).', c: 'red' },
+  { ts: '14:23:12', t: 'Deployment aborted at step 3.', c: 'red' },
+];
+
+function termHTML(lines) {
+  return '<pre>' + lines.map(l => {
+    const cls = l.c === 'dim' ? 't-dim' : l.c === 'green' ? 't-green' : l.c === 'red' ? 't-red' : '';
+    return `<span class="t-ts">${l.ts}</span>  <span class="${cls}">${esc(l.t)}</span>`;
+  }).join('\n') + '</pre>';
+}
+
+/* ── SVGs ── */
+const IC = {
+  play: `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></svg>`,
+  stop: `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>`,
+  ext: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`,
+  check: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="20" stroke-dashoffset="20"><polyline points="20 6 9 17 4 12"/></svg>`,
+  x: `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  dash: `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+};
+
+/* ═══════════════════════════════════════════════════════
+   STATE RENDERERS — Each one renders the full page state
+   ═══════════════════════════════════════════════════════ */
+
+function setState(s) {
+  state = s;
+  termOpen = false;
+  if (timer) { clearInterval(timer); timer = null; }
+
+  // Active button
+  document.querySelectorAll('.state-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.state === s));
+
+  // Remove stale banner
+  const stale = document.querySelector('.stale-banner');
+  if (stale) stale.remove();
+
+  switch (s) {
+    case 'pre-deploy': renderPreDeploy(); break;
+    case 'deploying':  renderDeploying(); break;
+    case 'deployed':   renderDeployed(); break;
+    case 'failed':     renderFailed(); break;
+    case 'stopped':    renderStopped(); break;
+  }
+}
+
+function setStatus(cls, text) {
+  const el = document.getElementById('status');
+  el.className = 'lh-status ' + cls;
+  el.innerHTML = text;
+  document.getElementById('status-sep').style.display = text ? '' : 'none';
+}
+
+function renderPreDeploy() {
+  setStatus('', '');
+  document.getElementById('actions').innerHTML = `
+    <button class="btn-deploy" onclick="setState('deploying')">${IC.play} Deploy</button>
+    <span class="action-spacer"></span>
+    <button class="action-link" onclick="void 0">${IC.ext} Open in Fabric</button>
+    <button class="action-link" onclick="void 0">Rename</button>
+    <button class="action-link" onclick="void 0">Clone</button>`;
+  document.getElementById('deploy-module').innerHTML = '';
+}
+
+function renderDeploying() {
+  setStatus('deploying', '<span class="dot"></span> Deploying...');
+
+  document.getElementById('actions').innerHTML = `
+    <span style="font-size:13px;font-weight:500;color:var(--accent);display:flex;align-items:center;gap:8px;">
+      <span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse-dot 1.4s ease-in-out infinite;"></span>
+      Deploying...
+    </span>
+    <span class="action-spacer"></span>
+    <button class="action-link" onclick="void 0">${IC.ext} Open in Fabric</button>`;
+
+  elapsed = 0;
+  step = 0;
+  const stepNames = ['Config', 'Token', 'Patch + Build', 'Launch', 'Health Check'];
+  const stepPcts = [12, 30, 55, 80, 100];
+
+  function updateUI() {
+    const pct = stepPcts[Math.min(step, 4)];
+    const dm = document.getElementById('deploy-module');
+    dm.innerHTML = `
+      <div class="deploy-progress-section fade-in">
+        <div class="deploy-progress-info">
+          <span class="deploy-progress-label">
+            Step ${Math.min(step + 1, 5)}/5: ${stepNames[Math.min(step, 4)]}
+          </span>
+          <span class="deploy-progress-meta">
+            <span id="elapsed">${elapsed}s</span>
+            <button class="deploy-cancel-link" onclick="setState('pre-deploy')">Cancel</button>
+          </span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="pbar" style="width:${pct}%"></div>
+        </div>
+        <div class="terminal ${termOpen ? 'open' : ''}" id="term">
+          ${termHTML(logLines.slice(0, Math.min((step + 1) * 3, logLines.length)))}
+        </div>
+        <button class="action-link" style="margin-top:10px;font-size:12px;" onclick="toggleTerm()">
+          ${termOpen ? 'Hide' : 'View'} log
+        </button>
+      </div>`;
+  }
+
+  updateUI();
+
+  timer = setInterval(() => {
+    elapsed++;
+    if (elapsed % 3 === 0 && step < 4) step++;
+    if (step >= 5) {
+      clearInterval(timer); timer = null;
+      // Morph: fill goes green, then transition to deployed
+      const bar = document.getElementById('pbar');
+      if (bar) {
+        bar.style.width = '100%';
+        bar.classList.add('complete');
+      }
+      setTimeout(() => setState('deployed'), 600);
+      return;
+    }
+    const el = document.getElementById('elapsed');
+    if (el) el.textContent = elapsed + 's';
+
+    const bar = document.getElementById('pbar');
+    if (bar) bar.style.width = stepPcts[Math.min(step, 4)] + '%';
+
+    const term = document.getElementById('term');
+    if (term && termOpen) {
+      term.innerHTML = termHTML(logLines.slice(0, Math.min((step + 1) * 3, logLines.length)));
+    }
+  }, 1000);
+}
+
+function renderDeployed() {
+  setStatus('running', '<span class="dot"></span> Running <span class="port">:5557</span>');
+
+  document.getElementById('actions').innerHTML = `
+    <button class="action-link danger" onclick="setState('stopped')">${IC.stop} Stop Service</button>
+    <span class="action-spacer"></span>
+    <button class="action-link" onclick="void 0">${IC.ext} Open in Fabric</button>
+    <button class="action-link" onclick="void 0">Rename</button>
+    <button class="action-link" onclick="void 0">Clone</button>`;
+
+  document.getElementById('deploy-module').innerHTML = `
+    <div class="deploy-bar fade-in" onclick="toggleTerm()">
+      <span class="deploy-check">${IC.check}</span>
+      <span class="deploy-bar-text"><strong>Deployed</strong> &middot; 34s &middot; 5 steps</span>
+      <span class="deploy-bar-action">View log</span>
+    </div>
+    <div class="terminal ${termOpen ? 'open' : ''}" id="term">
+      ${termHTML(logLines)}
+    </div>`;
+
+  toast('Service deployed', 'success');
+}
+
+function renderFailed() {
+  setStatus('failed', '<span class="dot"></span> Deploy Failed');
+  termOpen = true;
+
+  document.getElementById('actions').innerHTML = `
+    <button class="btn-deploy" onclick="setState('deploying')">${IC.play} Retry Deploy</button>
+    <span class="action-spacer"></span>
+    <button class="action-link" onclick="void 0">${IC.ext} Open in Fabric</button>`;
+
+  document.getElementById('deploy-module').innerHTML = `
+    <div class="deploy-error fade-in">
+      <div class="deploy-error-row">
+        <span class="error-indicator">${IC.x}</span>
+        <div class="error-content">
+          <div class="error-title">Build failed at step 3</div>
+          <div class="error-detail">error CS0246: The type or namespace 'IFeatureFlighter' could not be found.</div>
+          <div class="error-actions">
+            <button class="action-link primary" onclick="setState('deploying')">Retry</button>
+            <button class="action-link" onclick="toggleTerm()">View full log</button>
+          </div>
+        </div>
+      </div>
+      <div class="terminal open" id="term" style="margin-top:16px;">
+        ${termHTML(failLines)}
+      </div>
+    </div>`;
+
+  toast('Deploy failed at build step', 'error');
+}
+
+function renderStopped() {
+  setStatus('stopped', '<span class="dot" style="background:var(--text-muted)"></span> Stopped');
+
+  document.getElementById('actions').innerHTML = `
+    <button class="btn-deploy" onclick="setState('deploying')">${IC.play} Deploy</button>
+    <span class="action-spacer"></span>
+    <button class="action-link" onclick="void 0">${IC.ext} Open in Fabric</button>
+    <button class="action-link" onclick="void 0">Rename</button>
+    <button class="action-link" onclick="void 0">Clone</button>`;
+
+  document.getElementById('deploy-module').innerHTML = `
+    <div class="deploy-stopped fade-in">
+      <span class="stopped-icon">${IC.dash}</span>
+      <span>Service stopped &middot; last deployed 12m ago</span>
+    </div>`;
+
+  // Stale banner on table
+  const card = document.getElementById('tables-card');
+  if (!card.querySelector('.stale-banner')) {
+    const b = document.createElement('div');
+    b.className = 'stale-banner';
+    b.textContent = 'Table data may be stale — service is stopped';
+    card.insertBefore(b, card.firstChild);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   INTERACTIONS — Minimal, purposeful
+   ═══════════════════════════════════════════════════════ */
+
+function toggleTerm() {
+  termOpen = !termOpen;
+  const t = document.getElementById('term');
+  if (t) t.classList.toggle('open', termOpen);
+
+  // Update "View log" / "Hide log" text if the link exists
+  const links = document.querySelectorAll('.deploy-bar-action');
+  links.forEach(l => l.textContent = termOpen ? 'Hide log' : 'View log');
+}
+
+function copyGuid() {
+  const el = document.getElementById('guid');
+  const gt = document.getElementById('guid-text');
+  if (navigator.clipboard) navigator.clipboard.writeText(GUID);
+  el.classList.add('copied');
+  gt.textContent = GUID;
+  toast('GUID copied', 'info');
+  setTimeout(() => {
+    el.classList.remove('copied');
+    gt.textContent = 'a3f7c2e1';
+  }, 2000);
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+}
+
+function toast(msg, type) {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `<span class="toast-dot ${type}"></span> ${esc(msg)}`;
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 200); }, 2500);
+}
+
+/* ── Table search ── */
+document.getElementById('table-search').addEventListener('input', function(e) {
+  const q = e.target.value.toLowerCase();
+  let vis = 0;
+  document.querySelectorAll('#tbody tr').forEach(row => {
+    const name = row.querySelector('.table-name-cell')?.textContent.toLowerCase() || '';
+    const show = name.includes(q);
+    row.style.display = show ? '' : 'none';
+    if (show) vis++;
+  });
+  document.getElementById('table-count').textContent = vis;
+});
+
+/* ── Init ── */
+renderTables();
+setState('pre-deploy');
+</script>
+</body>
+</html>

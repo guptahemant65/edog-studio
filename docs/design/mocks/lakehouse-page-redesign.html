@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Lakehouse Page Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   EDOG Studio — Lakehouse Page Redesign Mockup
+   Designer: Pixel (EDOG Hivemind Frontend Agent)
+   ═══════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eef0f3;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.10);
+  --text: #111318;
+  --text-dim: #555d70;
+  --text-muted: #8e95a5;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.06);
+  --accent-hover: rgba(109,92,255,0.10);
+  --green: #18a058;
+  --green-dim: rgba(24,160,88,0.08);
+  --green-surface: rgba(24,160,88,0.05);
+  --amber: #e5940c;
+  --amber-dim: rgba(229,148,12,0.08);
+  --red: #e5453b;
+  --red-dim: rgba(229,69,59,0.06);
+  --red-surface: rgba(229,69,59,0.04);
+  --text-on-accent: #fff;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 100px;
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+  --shadow-elevated: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --terminal-bg: #0d0f14;
+  --terminal-text: #a0a8b8;
+  --terminal-dim: #4a5060;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface-2: #1a1e28;
+  --surface-3: #242938;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-hover: rgba(133,119,255,0.14);
+  --green: #34d399;
+  --green-dim: rgba(52,211,153,0.10);
+  --green-surface: rgba(52,211,153,0.06);
+  --amber: #f0b429;
+  --amber-dim: rgba(240,180,41,0.10);
+  --red: #ff6b6b;
+  --red-dim: rgba(255,107,107,0.08);
+  --red-surface: rgba(255,107,107,0.05);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.20);
+  --shadow-elevated: 0 4px 12px rgba(0,0,0,0.30);
+  --terminal-bg: #0a0c10;
+  --terminal-text: #8a91a3;
+  --terminal-dim: #3a4050;
+}
+
+html { font-size: 13px; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+/* ── Outer chrome (simulating the app shell) ── */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.topbar {
+  height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.topbar-logo {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.topbar-sep { width: 1px; height: 20px; background: var(--border-bright); }
+
+.topbar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.topbar-breadcrumb span { color: var(--text-dim); font-weight: 500; }
+.topbar-breadcrumb svg { opacity: 0.4; }
+
+.topbar-spacer { flex: 1; }
+
+.topbar-actions { display: flex; align-items: center; gap: 4px; }
+
+.topbar-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+.topbar-btn:hover { color: var(--text); background: var(--surface-2); }
+
+.main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Simulated sidebar */
+.sidebar {
+  width: 54px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 4px;
+}
+
+.sidebar-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.sidebar-icon:hover { color: var(--text); background: var(--surface-2); }
+.sidebar-icon.active { color: var(--accent); background: var(--accent-dim); }
+
+/* ── Page content area ── */
+.page-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.page-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 28px 32px 80px;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER BAND — name, GUID, badges, status
+   ═══════════════════════════════════════════════════════ */
+
+.lh-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.lh-header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: var(--accent-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.lh-header-info { flex: 1; min-width: 0; }
+
+.lh-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lh-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.lh-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--radius-pill);
+  line-height: 1;
+  white-space: nowrap;
+  transition: all var(--transition);
+}
+
+.lh-status-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lh-status-pill.running {
+  background: var(--green-dim);
+  color: var(--green);
+}
+.lh-status-pill.running .dot {
+  background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.lh-status-pill.stopped {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.lh-status-pill.stopped .dot { background: var(--text-muted); }
+
+.lh-status-pill.deploying {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.lh-status-pill.deploying .dot {
+  background: var(--accent);
+  animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.lh-status-pill.failed {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.lh-status-pill.failed .dot { background: var(--red); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.lh-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.lh-guid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  position: relative;
+  user-select: none;
+}
+.lh-guid:hover { background: var(--surface-3); color: var(--text-dim); }
+.lh-guid .copy-hint {
+  display: none;
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-body);
+  font-size: 10px;
+  color: var(--text-on-accent);
+  background: var(--text);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.lh-guid:hover .copy-hint { display: block; }
+.lh-guid.copied { color: var(--green); }
+.lh-guid.copied .copy-hint { display: block; background: var(--green); }
+
+.lh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  line-height: 1.4;
+}
+.lh-badge.env { background: var(--amber-dim); color: var(--amber); }
+.lh-badge.region { background: var(--surface-3); color: var(--text-muted); }
+
+.lh-modified {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACTIONS BAR
+   ═══════════════════════════════════════════════════════ */
+
+.lh-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.lh-actions-left { display: flex; align-items: center; gap: 8px; }
+.lh-actions-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.btn-primary:hover { opacity: 0.88; box-shadow: 0 2px 8px rgba(109,92,255,0.25); }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-danger-outline {
+  background: transparent;
+  color: var(--red);
+  border-color: var(--red);
+  opacity: 0.8;
+}
+.btn-danger-outline:hover { background: var(--red-dim); opacity: 1; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border-color: var(--border-bright);
+}
+.btn-ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border-bright); }
+
+.btn-deploying {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+  cursor: default;
+  pointer-events: none;
+}
+.btn-deploying .spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ═══════════════════════════════════════════════════════
+   DEPLOY MODULE — compact, between actions and tables
+   ═══════════════════════════════════════════════════════ */
+
+.deploy-module {
+  margin-bottom: 20px;
+  overflow: hidden;
+  transition: all 300ms cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── Compact deploy summary (post-deploy) ── */
+.deploy-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--green-surface);
+  border: 1px solid rgba(24,160,88,0.12);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.deploy-summary:hover { background: var(--green-dim); }
+
+.deploy-summary .check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.deploy-summary .summary-text {
+  flex: 1;
+  color: var(--text-dim);
+}
+.deploy-summary .summary-text strong { color: var(--green); font-weight: 600; }
+
+.deploy-summary .expand-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Inline progress stepper (during deploy) ── */
+.deploy-inline-progress {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  transition: all var(--transition);
+}
+
+.deploy-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.deploy-progress-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deploy-progress-elapsed {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.deploy-progress-cancel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition);
+  font-family: var(--font-body);
+}
+.deploy-progress-cancel:hover { color: var(--red); background: var(--red-dim); }
+
+/* Progress track — Vercel-inspired thin bar */
+.deploy-track {
+  height: 3px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.deploy-track-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 400ms cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+}
+
+.deploy-track-fill::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3));
+  animation: shimmer-bar 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer-bar {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* Step dots — compact inline */
+.deploy-steps-inline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.deploy-step-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.deploy-step-inline .step-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-bright);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 250ms ease-out;
+}
+
+.deploy-step-inline .step-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deploy-step-inline .step-connector {
+  flex: 1;
+  height: 1px;
+  background: var(--border-bright);
+  margin: 0 4px;
+  min-width: 8px;
+}
+
+.deploy-step-inline.done .step-dot {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+.deploy-step-inline.done .step-label { color: var(--green); }
+.deploy-step-inline.done .step-connector { background: var(--green); }
+
+.deploy-step-inline.active .step-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  animation: step-pulse 1.6s ease-in-out infinite;
+}
+.deploy-step-inline.active .step-label { color: var(--accent); font-weight: 600; }
+
+.deploy-step-inline.failed .step-dot {
+  border-color: var(--red);
+  background: var(--red);
+  color: #fff;
+}
+.deploy-step-inline.failed .step-label { color: var(--red); font-weight: 600; }
+
+.deploy-step-inline.pending .step-dot {
+  border-color: var(--border-bright);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+@keyframes step-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(109,92,255,0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(109,92,255,0); }
+}
+
+/* Terminal toggle */
+.deploy-terminal-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 6px;
+  font-family: var(--font-body);
+  transition: color var(--transition);
+}
+.deploy-terminal-toggle:hover { color: var(--text-dim); }
+.deploy-terminal-toggle .chevron {
+  transition: transform var(--transition);
+  font-size: 10px;
+}
+.deploy-terminal-toggle.open .chevron { transform: rotate(90deg); }
+
+/* Terminal output */
+.deploy-terminal {
+  background: var(--terminal-bg);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 250ms ease-out, margin 250ms ease-out, padding 250ms ease-out;
+  margin-top: 0;
+  padding: 0 12px;
+}
+.deploy-terminal.open {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.term-line { color: var(--terminal-text); white-space: pre-wrap; word-break: break-all; }
+.term-line .ts { color: var(--terminal-dim); margin-right: 8px; }
+.term-line.warn { color: #f0b429; }
+.term-line.error { color: #ff6b6b; }
+.term-line.success { color: #34d399; }
+.term-line.dim { color: var(--terminal-dim); }
+
+/* ── Error banner ── */
+.deploy-error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--red-surface);
+  border: 1px solid rgba(229,69,59,0.15);
+  border-radius: var(--radius-md);
+  margin-bottom: 4px;
+}
+
+.deploy-error-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.deploy-error-content { flex: 1; min-width: 0; }
+
+.deploy-error-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--red);
+  margin-bottom: 2px;
+}
+
+.deploy-error-detail {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.deploy-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-retry {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--red);
+  background: var(--red);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition);
+}
+.btn-retry:hover { opacity: 0.88; }
+
+.btn-view-logs {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: all var(--transition);
+}
+.btn-view-logs:hover { background: var(--surface-2); }
+
+/* ═══════════════════════════════════════════════════════
+   TABLES SECTION — the hero of the page
+   ═══════════════════════════════════════════════════════ */
+
+.tables-section { margin-top: 4px; }
+
+.tables-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.tables-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tables-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+}
+
+.tables-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tables-search {
+  font-family: var(--font-body);
+  font-size: 12px;
+  padding: 5px 10px 5px 28px;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  width: 200px;
+  outline: none;
+  transition: all var(--transition);
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238e95a5' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 8px center;
+}
+.tables-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+[data-theme="dark"] .tables-search {
+  background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23555d70' stroke-width='2' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");
+}
+
+.tables-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.tables-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.tables-grid th {
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  transition: color var(--transition);
+}
+.tables-grid th:hover { color: var(--text-dim); }
+.tables-grid th.num { text-align: right; }
+.tables-grid th .sort-arrow { margin-left: 3px; opacity: 0.4; font-size: 9px; }
+
+.tables-grid td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+.tables-grid td.num { text-align: right; font-family: var(--font-mono); font-size: 11px; }
+
+.tables-grid tbody tr { transition: background var(--transition); cursor: pointer; }
+.tables-grid tbody tr:hover { background: var(--surface-2); }
+.tables-grid tbody tr:last-child td { border-bottom: none; }
+
+.table-name {
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 9px;
+}
+
+.table-icon.mlv { background: var(--accent-dim); color: var(--accent); }
+.table-icon.managed { background: var(--green-dim); color: var(--green); }
+.table-icon.external { background: var(--amber-dim); color: var(--amber); }
+
+.type-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+}
+.type-badge.mlv { background: var(--accent-dim); color: var(--accent); }
+.type-badge.managed { background: var(--green-dim); color: var(--green); }
+.type-badge.external { background: var(--amber-dim); color: var(--amber); }
+
+.table-format {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Stale data note */
+.stale-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ═══════════════════════════════════════════════════════
+   STATE SWITCHER (bottom bar for CEO review)
+   ═══════════════════════════════════════════════════════ */
+
+.state-switcher {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
+  z-index: 500;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+}
+
+.state-switcher label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+.state-btn {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-bright);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.state-btn:hover { background: var(--surface-2); border-color: var(--accent); color: var(--accent); }
+.state-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+
+.theme-toggle {
+  margin-left: 16px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-bright);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════
+   UTILITIES
+   ═══════════════════════════════════════════════════════ */
+
+.hidden { display: none !important; }
+
+.fade-in { animation: fadeIn 200ms ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.slide-down { animation: slideDown 250ms cubic-bezier(0.4,0,0.2,1); }
+@keyframes slideDown { from { opacity: 0; max-height: 0; } to { opacity: 1; max-height: 400px; } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE — bottom bar scrollable on narrow screens
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .state-switcher { overflow-x: auto; justify-content: flex-start; }
+  .page-inner { padding: 20px 16px 80px; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <!-- ── Top Bar ── -->
+  <div class="topbar">
+    <div class="topbar-logo">EDOG Studio</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-breadcrumb">
+      my-flt-workspace
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      <span id="breadcrumb-name">sales_analytics_lh</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-actions">
+      <button class="topbar-btn" title="Command Palette (Ctrl+K)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+      <button class="topbar-btn theme-toggle-icon" onclick="toggleTheme()" title="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="main-area">
+    <!-- ── Sidebar ── -->
+    <div class="sidebar">
+      <div class="sidebar-icon active" title="Workspace Explorer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <div class="sidebar-icon" title="Logs">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      <div class="sidebar-icon" title="Feature Flags">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+      </div>
+      <div class="sidebar-icon" title="API Playground">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+    </div>
+
+    <!-- ── Page Content ── -->
+    <div class="page-content">
+      <div class="page-inner" id="page">
+
+        <!-- HEADER -->
+        <div class="lh-header fade-in">
+          <div class="lh-header-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          </div>
+          <div class="lh-header-info">
+            <div class="lh-name-row">
+              <div class="lh-name">sales_analytics_lh</div>
+              <span class="lh-status-pill" id="status-pill">
+                <!-- filled by JS -->
+              </span>
+            </div>
+            <div class="lh-meta-row">
+              <span class="lh-guid" id="guid-display" onclick="copyGuid()" title="Click to copy">
+                <span class="copy-hint" id="copy-hint">Click to copy</span>
+                a3f7c2e1-8b4d...9f0e
+              </span>
+              <span class="lh-badge env">PPE</span>
+              <span class="lh-badge region">West US 3</span>
+              <span class="lh-modified">Modified 2h ago</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTIONS BAR -->
+        <div class="lh-actions" id="actions-bar">
+          <!-- filled by JS per state -->
+        </div>
+
+        <!-- DEPLOY MODULE (shown contextually) -->
+        <div class="deploy-module" id="deploy-module">
+          <!-- filled by JS per state -->
+        </div>
+
+        <!-- TABLES SECTION — THE HERO -->
+        <div class="tables-section fade-in">
+          <div class="tables-header">
+            <div class="tables-title">
+              Tables <span class="tables-count">6</span>
+            </div>
+            <div class="tables-filter">
+              <input type="text" class="tables-search" placeholder="Filter tables..." />
+            </div>
+          </div>
+          <div class="tables-card" id="tables-card">
+            <table class="tables-grid">
+              <thead>
+                <tr>
+                  <th>Name <span class="sort-arrow">&#9650;</span></th>
+                  <th>Type</th>
+                  <th>Format</th>
+                  <th class="num">Rows</th>
+                  <th class="num">Size</th>
+                </tr>
+              </thead>
+              <tbody id="tables-body">
+                <tr>
+                  <td><span class="table-name"><span class="table-icon mlv">M</span> customer_orders</span></td>
+                  <td><span class="type-badge mlv">MLV</span></td>
+                  <td class="table-format">delta</td>
+                  <td class="num">1,247,832</td>
+                  <td class="num">2.4 GB</td>
+                </tr>
+                <tr>
+                  <td><span class="table-name"><span class="table-icon mlv">M</span> product_inventory</span></td>
+                  <td><span class="type-badge mlv">MLV</span></td>
+                  <td class="table-format">delta</td>
+                  <td class="num">84,291</td>
+                  <td class="num">156 MB</td>
+                </tr>
+                <tr>
+                  <td><span class="table-name"><span class="table-icon managed">T</span> sales_transactions</span></td>
+                  <td><span class="type-badge managed">Managed</span></td>
+                  <td class="table-format">delta</td>
+                  <td class="num">3,891,004</td>
+                  <td class="num">8.7 GB</td>
+                </tr>
+                <tr>
+                  <td><span class="table-name"><span class="table-icon managed">T</span> dim_store_locations</span></td>
+                  <td><span class="type-badge managed">Managed</span></td>
+                  <td class="table-format">delta</td>
+                  <td class="num">2,847</td>
+                  <td class="num">1.2 MB</td>
+                </tr>
+                <tr>
+                  <td><span class="table-name"><span class="table-icon mlv">M</span> daily_revenue_agg</span></td>
+                  <td><span class="type-badge mlv">MLV</span></td>
+                  <td class="table-format">delta</td>
+                  <td class="num">365,241</td>
+                  <td class="num">890 MB</td>
+                </tr>
+                <tr>
+                  <td><span class="table-name"><span class="table-icon external">E</span> external_partner_feed</span></td>
+                  <td><span class="type-badge external">External</span></td>
+                  <td class="table-format">parquet</td>
+                  <td class="num">51,003</td>
+                  <td class="num">234 MB</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── State Switcher ── -->
+<div class="state-switcher">
+  <label>State</label>
+  <button class="state-btn active" data-state="pre-deploy" onclick="setState('pre-deploy')">Pre-Deploy</button>
+  <button class="state-btn" data-state="deploying" onclick="setState('deploying')">Deploying</button>
+  <button class="state-btn" data-state="deployed" onclick="setState('deployed')">Deployed</button>
+  <button class="state-btn" data-state="failed" onclick="setState('failed')">Failed</button>
+  <button class="state-btn" data-state="stopped" onclick="setState('stopped')">Stopped</button>
+  <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   State Machine + UI Logic
+   ═══════════════════════════════════════════════════════ */
+
+const FULL_GUID = 'a3f7c2e1-8b4d-4a6c-b1e3-2d5f8a9c0e1f';
+const SHORT_GUID = 'a3f7c2e1-8b4d...9f0e';
+let currentState = 'pre-deploy';
+let terminalOpen = false;
+let deployTimer = null;
+
+/* ── Icon helpers ── */
+const icons = {
+  play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>',
+  stop: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  external: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+  edit: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>',
+  copy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  check: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>',
+  x: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+};
+
+/* ── Terminal log lines ── */
+const terminalLines = [
+  { ts: '14:23:01', text: 'Starting FLT deployment to sales_analytics_lh...', cls: '' },
+  { ts: '14:23:01', text: 'Reading edog-config.json...', cls: 'dim' },
+  { ts: '14:23:02', text: 'Workspace: my-flt-workspace (a3f7c2e1)', cls: 'dim' },
+  { ts: '14:23:02', text: 'Fetching MWC token for capacity...', cls: '' },
+  { ts: '14:23:03', text: 'MWC token acquired (expires in 3600s)', cls: 'success' },
+  { ts: '14:23:04', text: 'Patching appsettings.json with lakehouse config...', cls: '' },
+  { ts: '14:23:04', text: '  WorkspaceId: a3f7c2e1-8b4d-4a6c-b1e3-2d5f8a9c0e1f', cls: 'dim' },
+  { ts: '14:23:04', text: '  LakehouseId: f8a1b3c5-2e7d-49ab-8c3f-1a2b3c4d5e6f', cls: 'dim' },
+  { ts: '14:23:05', text: 'Building FabricLiveTable.Service...', cls: '' },
+  { ts: '14:23:18', text: 'Build succeeded. 0 Warning(s). 0 Error(s).', cls: 'success' },
+  { ts: '14:23:18', text: 'Launching service on port 5557...', cls: '' },
+  { ts: '14:23:19', text: 'info: Microsoft.Hosting.Lifetime[14]', cls: 'dim' },
+  { ts: '14:23:19', text: '      Now listening on: http://localhost:5557', cls: 'success' },
+  { ts: '14:23:20', text: 'FLT service ready. Health check passed.', cls: 'success' },
+];
+
+const failedTerminalLines = [
+  { ts: '14:23:01', text: 'Starting FLT deployment to sales_analytics_lh...', cls: '' },
+  { ts: '14:23:01', text: 'Reading edog-config.json...', cls: 'dim' },
+  { ts: '14:23:02', text: 'Fetching MWC token for capacity...', cls: '' },
+  { ts: '14:23:03', text: 'MWC token acquired (expires in 3600s)', cls: 'success' },
+  { ts: '14:23:04', text: 'Patching appsettings.json with lakehouse config...', cls: '' },
+  { ts: '14:23:05', text: 'Building FabricLiveTable.Service...', cls: '' },
+  { ts: '14:23:12', text: 'error CS0246: The type or namespace \'IFeatureFlighter\'', cls: 'error' },
+  { ts: '14:23:12', text: '  could not be found. Are you missing a using directive?', cls: 'error' },
+  { ts: '14:23:12', text: 'Build FAILED. 1 Error(s). 0 Warning(s).', cls: 'error' },
+  { ts: '14:23:12', text: '', cls: '' },
+  { ts: '14:23:12', text: 'Deployment aborted at step 3 (Build Service).', cls: 'error' },
+];
+
+/* ── Render terminal HTML ── */
+function renderTerminal(lines) {
+  return lines.map(l =>
+    `<div class="term-line ${l.cls}"><span class="ts">${l.ts}</span>${escHtml(l.text)}</div>`
+  ).join('');
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── Build step data ── */
+const steps = [
+  { label: 'Config', short: '1' },
+  { label: 'Token', short: '2' },
+  { label: 'Build', short: '3' },
+  { label: 'Launch', short: '4' },
+  { label: 'Health', short: '5' },
+];
+
+function renderSteps(activeIdx, failedIdx) {
+  return steps.map((s, i) => {
+    let cls = 'pending';
+    let dot = s.short;
+    if (failedIdx !== undefined && i === failedIdx) {
+      cls = 'failed';
+      dot = icons.x;
+    } else if (i < activeIdx) {
+      cls = 'done';
+      dot = icons.check;
+    } else if (i === activeIdx) {
+      cls = 'active';
+    }
+    const connector = i < steps.length - 1 ? '<span class="step-connector"></span>' : '';
+    return `<div class="deploy-step-inline ${cls}">
+      <span class="step-dot">${dot}</span>
+      <span class="step-label">${s.label}</span>
+      ${connector}
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════
+   STATE RENDERERS
+   ═══════════════════════════════════════════════════════ */
+
+function setState(state) {
+  currentState = state;
+  terminalOpen = false;
+  if (deployTimer) { clearInterval(deployTimer); deployTimer = null; }
+
+  // Update switcher buttons
+  document.querySelectorAll('.state-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.state === state);
+  });
+
+  // Remove stale note if any
+  const existingStale = document.querySelector('.stale-note');
+  if (existingStale) existingStale.remove();
+
+  switch (state) {
+    case 'pre-deploy': renderPreDeploy(); break;
+    case 'deploying': renderDeploying(); break;
+    case 'deployed': renderDeployed(); break;
+    case 'failed': renderFailed(); break;
+    case 'stopped': renderStopped(); break;
+  }
+}
+
+function renderPreDeploy() {
+  // Status pill — hidden
+  document.getElementById('status-pill').innerHTML = '';
+  document.getElementById('status-pill').className = 'lh-status-pill hidden';
+
+  // Actions
+  document.getElementById('actions-bar').innerHTML = `
+    <div class="lh-actions-left">
+      <button class="btn btn-primary" onclick="setState('deploying')">
+        ${icons.play} Deploy
+      </button>
+    </div>
+    <div class="lh-actions-right">
+      <button class="btn btn-ghost">${icons.external} Open in Fabric</button>
+      <button class="btn btn-ghost">${icons.edit} Rename</button>
+      <button class="btn btn-ghost">${icons.copy} Clone</button>
+    </div>
+  `;
+
+  // Deploy module — empty
+  document.getElementById('deploy-module').innerHTML = '';
+}
+
+function renderDeploying() {
+  // Status pill
+  const pill = document.getElementById('status-pill');
+  pill.className = 'lh-status-pill deploying';
+  pill.innerHTML = '<span class="dot"></span> Deploying...';
+
+  // Actions — deploying button replaces Deploy
+  document.getElementById('actions-bar').innerHTML = `
+    <div class="lh-actions-left">
+      <button class="btn btn-deploying">
+        <span class="spinner"></span> Deploying...
+      </button>
+    </div>
+    <div class="lh-actions-right">
+      <button class="btn btn-ghost">${icons.external} Open in Fabric</button>
+      <button class="btn btn-ghost">${icons.edit} Rename</button>
+      <button class="btn btn-ghost">${icons.copy} Clone</button>
+    </div>
+  `;
+
+  // Deploy module — inline progress
+  let elapsed = 0;
+  let activeStep = 0;
+  const progressPercents = [10, 30, 55, 80, 100];
+
+  function updateProgress() {
+    const pct = progressPercents[Math.min(activeStep, 4)];
+    const stepsHtml = renderSteps(activeStep);
+
+    document.getElementById('deploy-module').innerHTML = `
+      <div class="deploy-inline-progress fade-in">
+        <div class="deploy-progress-header">
+          <span class="deploy-progress-label">Deploying to sales_analytics_lh</span>
+          <span style="display:flex;align-items:center;gap:12px;">
+            <span class="deploy-progress-elapsed" id="deploy-elapsed">${elapsed}s</span>
+            <button class="deploy-progress-cancel" onclick="setState('pre-deploy')">Cancel</button>
+          </span>
+        </div>
+        <div class="deploy-track">
+          <div class="deploy-track-fill" id="deploy-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="deploy-steps-inline" id="deploy-steps-container">${stepsHtml}</div>
+        <button class="deploy-terminal-toggle ${terminalOpen ? 'open' : ''}" onclick="toggleTerminal()">
+          <span class="chevron">&#9656;</span> Build output
+        </button>
+        <div class="deploy-terminal ${terminalOpen ? 'open' : ''}" id="deploy-term">
+          ${renderTerminal(terminalLines.slice(0, Math.min((activeStep + 1) * 3, terminalLines.length)))}
+        </div>
+      </div>
+    `;
+  }
+
+  // Initial full render
+  updateProgress();
+
+  // Subsequent updates: only patch changed elements (no innerHTML nuke)
+  deployTimer = setInterval(() => {
+    elapsed++;
+    if (elapsed % 4 === 0 && activeStep < 4) activeStep++;
+    if (activeStep >= 5) {
+      clearInterval(deployTimer);
+      deployTimer = null;
+      setState('deployed');
+      return;
+    }
+    // Patch only what changed
+    const elapsedEl = document.getElementById('deploy-elapsed');
+    if (elapsedEl) elapsedEl.textContent = elapsed + 's';
+
+    const fillEl = document.getElementById('deploy-fill');
+    const pct = ((activeStep + 0.5) / steps.length) * 100;
+    if (fillEl) fillEl.style.width = pct + '%';
+
+    const stepsContainer = document.getElementById('deploy-steps-container');
+    if (stepsContainer) {
+      stepsContainer.querySelectorAll('.deploy-step-dot').forEach((dot, i) => {
+        dot.className = 'deploy-step-dot' + (i < activeStep ? ' done' : i === activeStep ? ' active' : '');
+        dot.textContent = i < activeStep ? '\u2713' : (i + 1);
+      });
+    }
+
+    const termEl = document.getElementById('deploy-term');
+    if (termEl && terminalOpen) {
+      termEl.innerHTML = renderTerminal(terminalLines.slice(0, Math.min((activeStep + 1) * 3, terminalLines.length)));
+    }
+  }, 1000);
+}
+
+function renderDeployed() {
+  // Status pill
+  const pill = document.getElementById('status-pill');
+  pill.className = 'lh-status-pill running';
+  pill.innerHTML = '<span class="dot"></span> Running :5557';
+
+  // Actions — Stop is the primary destructive action
+  document.getElementById('actions-bar').innerHTML = `
+    <div class="lh-actions-left">
+      <button class="btn btn-danger-outline" onclick="setState('stopped')">
+        ${icons.stop} Stop Service
+      </button>
+    </div>
+    <div class="lh-actions-right">
+      <button class="btn btn-ghost">${icons.external} Open in Fabric</button>
+      <button class="btn btn-ghost">${icons.edit} Rename</button>
+      <button class="btn btn-ghost">${icons.copy} Clone</button>
+    </div>
+  `;
+
+  // Deploy module — compact success summary
+  document.getElementById('deploy-module').innerHTML = `
+    <div class="deploy-summary fade-in" onclick="toggleTerminal()">
+      <span class="check">${icons.check}</span>
+      <span class="summary-text">
+        <strong>Deployed</strong> 34s ago &middot; Port 5557 &middot; Build 0 warnings
+      </span>
+      <span class="expand-hint">
+        <span class="chevron" style="font-size:10px;transition:transform var(--transition);${terminalOpen ? 'transform:rotate(90deg)' : ''}">&#9656;</span>
+        Logs
+      </span>
+    </div>
+    <div class="deploy-terminal ${terminalOpen ? 'open' : ''}" id="deploy-term">
+      ${renderTerminal(terminalLines)}
+    </div>
+  `;
+}
+
+function renderFailed() {
+  // Status pill
+  const pill = document.getElementById('status-pill');
+  pill.className = 'lh-status-pill failed';
+  pill.innerHTML = '<span class="dot"></span> Deploy Failed';
+
+  // Actions
+  document.getElementById('actions-bar').innerHTML = `
+    <div class="lh-actions-left">
+      <button class="btn btn-primary" onclick="setState('deploying')">
+        ${icons.play} Retry Deploy
+      </button>
+    </div>
+    <div class="lh-actions-right">
+      <button class="btn btn-ghost">${icons.external} Open in Fabric</button>
+      <button class="btn btn-ghost">${icons.edit} Rename</button>
+      <button class="btn btn-ghost">${icons.copy} Clone</button>
+    </div>
+  `;
+
+  // Deploy module — error banner + stepper showing failure + expanded terminal
+  terminalOpen = true;
+  document.getElementById('deploy-module').innerHTML = `
+    <div class="deploy-error-banner fade-in">
+      <span class="deploy-error-icon">!</span>
+      <div class="deploy-error-content">
+        <div class="deploy-error-title">Build failed at step 3 — Build Service</div>
+        <div class="deploy-error-detail">
+          error CS0246: The type or namespace 'IFeatureFlighter' could not be found.
+          Are you missing a using directive or an assembly reference?
+        </div>
+        <div class="deploy-error-actions">
+          <button class="btn-retry" onclick="setState('deploying')">Retry</button>
+          <button class="btn-view-logs" onclick="scrollToTerm()">View Full Logs</button>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <div class="deploy-inline-progress" style="border-color:rgba(229,69,59,0.15);">
+        <div class="deploy-progress-header">
+          <span class="deploy-progress-label" style="color:var(--red);">Deploy failed after 12s</span>
+        </div>
+        <div class="deploy-track">
+          <div class="deploy-track-fill" style="width:55%;background:var(--red);"></div>
+        </div>
+        <div class="deploy-steps-inline">${renderSteps(2, 2)}</div>
+        <div class="deploy-terminal open" id="deploy-term" style="margin-top:8px;">
+          ${renderTerminal(failedTerminalLines)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStopped() {
+  // Status pill
+  const pill = document.getElementById('status-pill');
+  pill.className = 'lh-status-pill stopped';
+  pill.innerHTML = '<span class="dot"></span> Stopped';
+
+  // Actions — Deploy returns
+  document.getElementById('actions-bar').innerHTML = `
+    <div class="lh-actions-left">
+      <button class="btn btn-primary" onclick="setState('deploying')">
+        ${icons.play} Deploy
+      </button>
+    </div>
+    <div class="lh-actions-right">
+      <button class="btn btn-ghost">${icons.external} Open in Fabric</button>
+      <button class="btn btn-ghost">${icons.edit} Rename</button>
+      <button class="btn btn-ghost">${icons.copy} Clone</button>
+    </div>
+  `;
+
+  // Deploy module — empty
+  document.getElementById('deploy-module').innerHTML = `
+    <div class="deploy-summary fade-in" style="background:var(--surface-2);border-color:var(--border);" onclick="toggleTerminal()">
+      <span class="check" style="background:var(--text-muted);">&mdash;</span>
+      <span class="summary-text" style="color:var(--text-muted);">
+        Service stopped &middot; Last deployed 12m ago &middot; Port 5557
+      </span>
+      <span class="expand-hint">
+        <span class="chevron" style="font-size:10px;">&#9656;</span>
+        History
+      </span>
+    </div>
+  `;
+
+  // Add stale data note to table
+  const card = document.getElementById('tables-card');
+  const existing = card.querySelector('.stale-note');
+  if (!existing) {
+    const note = document.createElement('div');
+    note.className = 'stale-note';
+    note.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Table data may be stale — service is stopped';
+    card.insertBefore(note, card.firstChild);
+  }
+}
+
+/* ── Toggle functions ── */
+function toggleTerminal() {
+  terminalOpen = !terminalOpen;
+  const term = document.getElementById('deploy-term');
+  if (term) term.classList.toggle('open', terminalOpen);
+
+  const toggleBtn = document.querySelector('.deploy-terminal-toggle');
+  if (toggleBtn) toggleBtn.classList.toggle('open', terminalOpen);
+
+  // Update chevron in summary view
+  const summaryChevron = document.querySelector('.deploy-summary .chevron');
+  if (summaryChevron) {
+    summaryChevron.style.transform = terminalOpen ? 'rotate(90deg)' : '';
+  }
+}
+
+function scrollToTerm() {
+  const term = document.getElementById('deploy-term');
+  if (term) term.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+}
+
+function copyGuid() {
+  const el = document.getElementById('guid-display');
+  const hint = document.getElementById('copy-hint');
+
+  // Copy to clipboard
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(FULL_GUID);
+  }
+
+  el.classList.add('copied');
+  hint.textContent = 'Copied!';
+
+  setTimeout(() => {
+    el.classList.remove('copied');
+    hint.textContent = 'Click to copy';
+  }, 1500);
+}
+
+/* ── Table search filter ── */
+document.querySelector('.tables-search').addEventListener('input', function(e) {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#tables-body tr').forEach(row => {
+    const name = row.querySelector('.table-name')?.textContent.toLowerCase() || '';
+    row.style.display = name.includes(q) ? '' : 'none';
+  });
+});
+
+/* ── Initialize ── */
+setState('pre-deploy');
+</script>
+</body>
+</html>
