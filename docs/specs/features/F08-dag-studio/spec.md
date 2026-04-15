@@ -1,6 +1,6 @@
 # F08: DAG Studio — Master Spec
 
-> **Status:** PREP PHASE
+> **Status:** P0–P3 COMPLETE — P4 (Interactive Mocks) next
 > **Owner:** Sana Reeves (Architecture) + Pixel (Frontend) + Vex (Backend)
 > **CEO:** Hemant Gupta
 > **Rule:** Smallest unit possible. No implementation until every prep item is DONE.
@@ -566,20 +566,20 @@ Each spec must contain:
 
 | # | Component | Output | States (est.) | Depends On | Status |
 |---|-----------|--------|---------------|-----------|--------|
-| P1.1 | DAG Graph Canvas | `states/graph-canvas.md` | 20–25 | P0.3 | ⬜ |
-| P1.2 | Execution Controls | `states/execution-controls.md` | 12–15 | P0.1 | ⬜ |
-| P1.3 | Gantt Chart | `states/gantt-chart.md` | 10–12 | P0.1 | ⬜ |
-| P1.4 | Execution History | `states/execution-history.md` | 8–10 | P0.1 | ⬜ |
+| P1.1 | DAG Graph Canvas | `components/graph-canvas.md` | 26 | P0.3 | ✅ DONE |
+| P1.2 | Execution Controls | `components/execution-controls.md` | 15 | P0.1 | ✅ DONE |
+| P1.3 | Gantt Chart | `components/gantt-chart.md` | 12 | P0.1 | ✅ DONE |
+| P1.4 | Execution History | `components/execution-history.md` | 10 | P0.1 | ✅ DONE |
 | P1.5 | Node Detail Panel | `components/node-detail.md` + `states/node-detail.md` | 19 | P0.1 | ✅ DONE |
 
 ### Phase 2: Architecture
 
 | # | Task | Owner | Output | Depends On | Status |
 |---|------|-------|--------|-----------|--------|
-| P2.1 | DagCanvasRenderer class design — LOD thresholds, render pipeline, memory management | Pixel | Within `states/graph-canvas.md` | P1.1 | ⬜ |
-| P2.2 | DagLayout class design — Sugiyama implementation, virtual nodes, spacing constants | Pixel | Within `states/graph-canvas.md` | P1.1 | ⬜ |
-| P2.3 | DagStudio orchestrator — lifecycle, AutoDetector wiring, view activation/deactivation | Vex | Inline in `states/execution-controls.md` | P1.1, P1.2 | ⬜ |
-| P2.4 | API client extensions — new methods, error handling, retry logic | Vex | Inline in `states/execution-controls.md` | P0.1 | ⬜ |
+| P2.1 | DagCanvasRenderer class design — LOD thresholds, render pipeline, memory management | Pixel | Within `components/graph-canvas.md` | P1.1 | ✅ DONE |
+| P2.2 | DagLayout class design — Sugiyama implementation, virtual nodes, spacing constants | Pixel | Within `components/graph-canvas.md` | P1.1 | ✅ DONE |
+| P2.3 | DagStudio orchestrator — lifecycle, AutoDetector wiring, view activation/deactivation | Vex | Inline in `components/execution-controls.md` | P1.1, P1.2 | ✅ DONE |
+| P2.4 | API client extensions — new methods, error handling, retry logic | Vex | Inline in `components/execution-controls.md` | P0.1 | ✅ DONE |
 
 ### Phase 3: State Matrices
 
@@ -587,10 +587,10 @@ Each matrix lists: every state, every transition, every trigger, every visual, e
 
 | # | Component | Output | States (est.) | Depends On | Status |
 |---|-----------|--------|---------------|-----------|--------|
-| P3.1 | Canvas Graph | `states/graph-canvas.md` | 25 | P2.1, P2.2 | ⬜ |
-| P3.2 | Execution Controls | `states/execution-controls.md` | 15 | P2.3 | ⬜ |
-| P3.3 | Gantt Chart | `states/gantt-chart.md` | 12 | P2.1 | ⬜ |
-| P3.4 | Execution History | `states/execution-history.md` | 10 | P2.4 | ⬜ |
+| P3.1 | Canvas Graph | `states/graph-canvas.md` | 26 | P2.1, P2.2 | ✅ DONE |
+| P3.2 | Execution Controls | `states/execution-controls.md` | 15 | P2.3 | ✅ DONE |
+| P3.3 | Gantt Chart | `states/gantt-chart.md` | 12 | P2.1 | ✅ DONE |
+| P3.4 | Execution History | `states/execution-history.md` | 10 | P2.4 | ✅ DONE |
 | P3.5 | Node Detail | `states/node-detail.md` | 19 | P2.4 | ✅ DONE |
 
 ### Phase 4: Interactive Mocks
