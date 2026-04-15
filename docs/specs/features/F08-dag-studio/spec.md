@@ -605,86 +605,111 @@ CEO reviews and approves before ANY implementation begins.
 
 ---
 
-## 6. Implementation Order (AFTER all prep is done)
-
-```
-Layer 0: DagCanvasRenderer — Canvas 2D engine
-         ├── 3-level LOD system (dot / mini / detail)
-         ├── Pan (mouse drag) + Zoom (wheel, toward cursor)
-         ├── Background dot grid
-         ├── Node drawing (all 3 LOD levels)
-         ├── Edge drawing (bezier curves, status coloring)
-         ├── Hit-test (click → node selection)
-         ├── Minimap
-         └── Fit-to-screen
-
-Layer 1: DagLayout — Sugiyama layout engine
-         ├── Topological sort (Kahn's algorithm)
-         ├── Layer assignment (longest path)
-         ├── Crossing minimization (barycenter, 2-4 passes)
-         ├── Coordinate assignment (spacing, centering)
-         └── Edge routing (bezier control points)
-
-Layer 2: API Integration
-         ├── getLatestDag() → parse nodes/edges → layout → render
-         ├── getDagExecMetrics() → overlay metrics onto graph
-         ├── listDagExecutions() → history table
-         ├── getDagSettings() / updateDagSettings()
-         └── Error handling (401/404/429/500)
-
-Layer 3: Execution Controls
-         ├── Run DAG button (UUID generation, POST)
-         ├── Cancel DAG button (with confirmation)
-         ├── Refresh DAG button
-         ├── Force Unlock button (with confirmation + lock detection)
-         ├── Status indicator (idle/running/completed/failed/locked)
-         ├── MLV Execution Definition dropdown
-         └── Settings panel (parallel limit, refresh mode, environment)
-
-Layer 4: Real-time Execution Updates
-         ├── Wire AutoDetector callbacks → DagCanvasRenderer.updateNodeState()
-         ├── Node status transitions: none→running→completed/failed/skipped
-         ├── Animated edges during execution (dash offset animation)
-         ├── Pulsing running nodes
-         ├── Live elapsed time counter
-         └── Auto-scroll to first failed node on failure
-
-Layer 5: Gantt Chart
-         ├── Time axis (auto-scaled: seconds or minutes)
-         ├── Per-node horizontal bars (colored by status)
-         ├── Real-time bar growth during execution
-         ├── Cross-highlighting with graph (bidirectional)
-         ├── Parallelism visualization (concurrent node stacking)
-         └── Bottleneck highlighting
-
-Layer 6: Execution History + Comparison
-         ├── History table (last 20 executions)
-         ├── Click row → load execution data into graph + Gantt
-         ├── Pagination via continuation token
-         ├── Status filtering
-         ├── Compare mode: select two runs → diff view
-         └── Per-node diff: status changes, timing regressions, new errors
-
-Layer 7: Node Detail Panel
-         ├── Metadata section (name, type, table, parents, children)
-         ├── Execution metrics section (timing, row counts, DQ violations)
-         ├── Error section (error code, message, failure type)
-         ├── Warnings section (CDF, delete hints)
-         ├── Filtered log entries (from log stream)
-         ├── Cross-lakehouse indicator
-         └── Code reference placeholder (V2)
-
-Layer 8: Keyboard Shortcuts + Accessibility
-         ├── Arrow keys: navigate between nodes (when selected)
-         ├── F: fit-to-screen
-         ├── Shift+F: jump to first failed node
-         ├── Escape: deselect / close detail panel
-         ├── Tab: cycle through interactive elements
-         ├── ARIA: canvas fallback content listing all nodes
-         └── Screen reader announcements for status changes
-```
+## 6. Implementation Checklist
 
 Each layer is independently testable. Each layer is one PR. Each layer passes `make lint && make test && make build`.
+
+### Layer 0 — DagCanvasRenderer (Canvas 2D engine)
+
+| # | Task | Status |
+|---|------|--------|
+| L0.1 | 3-level LOD system (dot / mini / detail) | ⬜ |
+| L0.2 | Pan (mouse drag) + Zoom (wheel, toward cursor) | ⬜ |
+| L0.3 | Background dot grid | ⬜ |
+| L0.4 | Node drawing (all 3 LOD levels) | ⬜ |
+| L0.5 | Edge drawing (bezier curves, status coloring) | ⬜ |
+| L0.6 | Hit-test (click → node selection) | ⬜ |
+| L0.7 | Minimap | ⬜ |
+| L0.8 | Fit-to-screen | ⬜ |
+
+### Layer 1 — DagLayout (Sugiyama layout engine)
+
+| # | Task | Status |
+|---|------|--------|
+| L1.1 | Topological sort (Kahn's algorithm) | ⬜ |
+| L1.2 | Layer assignment (longest path) | ⬜ |
+| L1.3 | Crossing minimization (barycenter, 2-4 passes) | ⬜ |
+| L1.4 | Coordinate assignment (spacing, centering) | ⬜ |
+| L1.5 | Edge routing (bezier control points) | ⬜ |
+
+### Layer 2 — API Integration
+
+| # | Task | Status |
+|---|------|--------|
+| L2.1 | getLatestDag() → parse nodes/edges → layout → render | ⬜ |
+| L2.2 | getDagExecMetrics() → overlay metrics onto graph | ⬜ |
+| L2.3 | listDagExecutions() → history table | ⬜ |
+| L2.4 | getDagSettings() / updateDagSettings() | ⬜ |
+| L2.5 | Error handling (401/404/429/500) | ⬜ |
+
+### Layer 3 — Execution Controls
+
+| # | Task | Status |
+|---|------|--------|
+| L3.1 | Run DAG button (UUID generation, POST) | ⬜ |
+| L3.2 | Cancel DAG button (with confirmation) | ⬜ |
+| L3.3 | Refresh DAG button | ⬜ |
+| L3.4 | Force Unlock button (with confirmation + lock detection) | ⬜ |
+| L3.5 | Status indicator (idle/running/completed/failed/locked) | ⬜ |
+| L3.6 | MLV Execution Definition dropdown | ⬜ |
+| L3.7 | Settings panel (parallel limit, refresh mode, environment) | ⬜ |
+
+### Layer 4 — Real-time Execution Updates
+
+| # | Task | Status |
+|---|------|--------|
+| L4.1 | Wire AutoDetector callbacks → DagCanvasRenderer.updateNodeState() | ⬜ |
+| L4.2 | Node status transitions: none→running→completed/failed/skipped | ⬜ |
+| L4.3 | Animated edges during execution (dash offset animation) | ⬜ |
+| L4.4 | Pulsing running nodes | ⬜ |
+| L4.5 | Live elapsed time counter | ⬜ |
+| L4.6 | Auto-scroll to first failed node on failure | ⬜ |
+
+### Layer 5 — Gantt Chart
+
+| # | Task | Status |
+|---|------|--------|
+| L5.1 | Time axis (auto-scaled: seconds or minutes) | ⬜ |
+| L5.2 | Per-node horizontal bars (colored by status) | ⬜ |
+| L5.3 | Real-time bar growth during execution | ⬜ |
+| L5.4 | Cross-highlighting with graph (bidirectional) | ⬜ |
+| L5.5 | Parallelism visualization (concurrent node stacking) | ⬜ |
+| L5.6 | Bottleneck highlighting | ⬜ |
+
+### Layer 6 — Execution History + Comparison
+
+| # | Task | Status |
+|---|------|--------|
+| L6.1 | History table (last 20 executions) | ⬜ |
+| L6.2 | Click row → load execution data into graph + Gantt | ⬜ |
+| L6.3 | Pagination via continuation token | ⬜ |
+| L6.4 | Status filtering | ⬜ |
+| L6.5 | Compare mode: select two runs → diff view | ⬜ |
+| L6.6 | Per-node diff: status changes, timing regressions, new errors | ⬜ |
+
+### Layer 7 — Node Detail Panel
+
+| # | Task | Status |
+|---|------|--------|
+| L7.1 | Metadata section (name, type, table, parents, children) | ⬜ |
+| L7.2 | Execution metrics section (timing, row counts, DQ violations) | ⬜ |
+| L7.3 | Error section (error code, message, failure type) | ⬜ |
+| L7.4 | Warnings section (CDF, delete hints) | ⬜ |
+| L7.5 | Filtered log entries (from log stream) | ⬜ |
+| L7.6 | Cross-lakehouse indicator | ⬜ |
+| L7.7 | Code reference placeholder (V2) | ⬜ |
+
+### Layer 8 — Keyboard Shortcuts + Accessibility
+
+| # | Task | Status |
+|---|------|--------|
+| L8.1 | Arrow keys: navigate between nodes (when selected) | ⬜ |
+| L8.2 | F: fit-to-screen | ⬜ |
+| L8.3 | Shift+F: jump to first failed node | ⬜ |
+| L8.4 | Escape: deselect / close detail panel | ⬜ |
+| L8.5 | Tab: cycle through interactive elements | ⬜ |
+| L8.6 | ARIA: canvas fallback content listing all nodes | ⬜ |
+| L8.7 | Screen reader announcements for status changes | ⬜ |
 
 ---
 
