@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — API Playground Mock (F09)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.12);
+  --accent-glow: rgba(109,92,255,0.25);
+  --green: #18a058;
+  --green-dim: rgba(24,160,88,0.12);
+  --green-glow: rgba(24,160,88,0.25);
+  --amber: #e5940c;
+  --amber-dim: rgba(229,148,12,0.12);
+  --red: #e5453b;
+  --red-dim: rgba(229,69,59,0.12);
+  --blue: #2d7ff9;
+  --blue-dim: rgba(45,127,249,0.12);
+  --purple: #a855f7;
+  --patch-color: #ca8a04;
+  --patch-dim: rgba(202,138,4,0.12);
+
+  --font: 'Inter', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --r4: 4px; --r6: 6px; --r10: 10px; --r16: 16px; --r100: 100px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.6), 0 8px 16px rgba(0,0,0,0.3);
+  --transition: 160ms cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+}
+[data-theme="dark"] {
+  --bg: #0f1117; --bg-2: #161923; --bg-3: #1e2230; --bg-4: #252a38;
+  --text: #e8eaf0; --text-2: #9aa0b2; --text-3: #5f6578;
+  --border: rgba(255,255,255,0.06); --border-bright: rgba(255,255,255,0.12);
+  --hover-bg: rgba(255,255,255,0.03); --selected-bg: rgba(109,92,255,0.10);
+  --toolbar-bg: #13151d; --panel-bg: #161923;
+  --scrollbar-thumb: rgba(255,255,255,0.12); --scrollbar-track: transparent;
+  --badge-bg: rgba(255,255,255,0.06);
+  --input-bg: #1a1e2c; --code-bg: #121520;
+  --overlay-bg: rgba(0,0,0,0.55);
+}
+[data-theme="light"] {
+  --bg: #f8f9fc; --bg-2: #ffffff; --bg-3: #f0f1f5; --bg-4: #e8e9ee;
+  --text: #1a1d27; --text-2: #5c6070; --text-3: #9098a8;
+  --border: rgba(0,0,0,0.08); --border-bright: rgba(0,0,0,0.14);
+  --hover-bg: rgba(0,0,0,0.03); --selected-bg: rgba(109,92,255,0.08);
+  --toolbar-bg: #f2f3f7; --panel-bg: #ffffff;
+  --scrollbar-thumb: rgba(0,0,0,0.15); --scrollbar-track: transparent;
+  --badge-bg: rgba(0,0,0,0.06);
+  --input-bg: #f5f6fa; --code-bg: #f8f9fc;
+  --overlay-bg: rgba(0,0,0,0.25);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased;transition:background 300ms ease, color 300ms ease}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--scrollbar-thumb)}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+input,button,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none;color:var(--text)}
+input,textarea{background:none;border:none;outline:none}
+a{color:var(--accent);text-decoration:none}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* TOP BAR */
+.top-bar{display:flex;align-items:center;padding:0 16px;height:42px;background:var(--bg-2);border-bottom:1px solid var(--border);flex-shrink:0;gap:12px;transition:background var(--transition)}
+.top-bar-title{font-size:13px;font-weight:600;letter-spacing:0.3px;display:flex;align-items:center;gap:8px}
+.top-bar-title .title-icon{color:var(--accent);font-size:15px}
+.top-bar-badge{padding:2px 8px;border-radius:var(--r100);background:var(--accent-dim);color:var(--accent);font-size:10px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;animation:badge-pulse 2s ease infinite}
+@keyframes badge-pulse{0%,100%{opacity:1}50%{opacity:0.7}}
+.top-bar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);color:var(--text-2)}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(24,160,88,0.4);animation:conn-glow 2s ease infinite}
+@keyframes conn-glow{0%,100%{box-shadow:0 0 6px rgba(24,160,88,0.4)}50%{box-shadow:0 0 10px rgba(24,160,88,0.6)}}
+.theme-toggle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;transition:all var(--transition);color:var(--text-2)}
+.theme-toggle:hover{background:var(--hover-bg);color:var(--text);transform:rotate(15deg)}
+.theme-toggle:focus-visible{box-shadow:0 0 0 2px var(--accent-glow)}
+
+/* MAIN CONTENT */
+.main-content{display:flex;flex:1;overflow:hidden}
+.workspace{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REQUEST BUILDER
+   ═══════════════════════════════════════════════════════════════════ */
+.request-panel{display:flex;flex-direction:column;border-bottom:1px solid var(--border-bright);flex-shrink:0;background:var(--bg-2);transition:background var(--transition);animation:panel-enter 400ms ease both}
+@keyframes panel-enter{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+
+/* REQUEST URL BAR */
+.request-url-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);transition:background var(--transition)}
+.method-pill{display:flex;align-items:center;justify-content:center;min-width:72px;padding:6px 12px;border-radius:var(--r6);font-size:12px;font-weight:700;font-family:var(--mono);cursor:pointer;transition:all var(--transition);letter-spacing:0.5px;user-select:none;border:1px solid transparent;position:relative;overflow:hidden}
+.method-pill::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.1) 0%,transparent 50%);opacity:0;transition:opacity var(--transition)}
+.method-pill:hover::after{opacity:1}
+.method-pill:hover{filter:brightness(1.1)}
+.method-pill:active{transform:scale(0.96)}
+.method-pill.get{background:var(--green);color:#fff;border-color:var(--green)}
+.method-pill.post{background:var(--blue);color:#fff;border-color:var(--blue)}
+.method-pill.put{background:var(--amber);color:#fff;border-color:var(--amber)}
+.method-pill.patch{background:var(--patch-color);color:#fff;border-color:var(--patch-color)}
+.method-pill.delete{background:var(--red);color:#fff;border-color:var(--red)}
+
+.url-input-wrapper{flex:1;display:flex;align-items:center;padding:5px 12px;border-radius:var(--r6);border:1px solid var(--border-bright);background:var(--input-bg);transition:all var(--transition);min-width:0}
+.url-input-wrapper:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+.url-input{flex:1;font-family:var(--mono);font-size:12px;color:var(--text);min-width:0;background:transparent;caret-color:var(--accent)}
+.url-input::placeholder{color:var(--text-3)}
+.url-template-var{color:var(--accent);font-weight:500}
+
+.send-btn{display:flex;align-items:center;gap:6px;padding:7px 20px;border-radius:var(--r6);background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:all var(--transition);white-space:nowrap;position:relative;overflow:hidden}
+.send-btn::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border-radius:50%;background:rgba(255,255,255,0.2);transform:translate(-50%,-50%);transition:width 400ms ease, height 400ms ease}
+.send-btn::after{content:'';position:absolute;inset:-1px;border-radius:var(--r6);background:linear-gradient(135deg,rgba(109,92,255,0.3),transparent 60%);opacity:0;transition:opacity 200ms ease;pointer-events:none;z-index:-1}
+.send-btn:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(109,92,255,0.4)}
+.send-btn:hover::after{opacity:1}
+.send-btn:hover .send-label{letter-spacing:0.3px}
+.send-btn:active::before{width:200px;height:200px}
+.send-btn:active{transform:scale(0.97)}
+.send-btn:focus-visible{box-shadow:0 0 0 2px var(--accent-glow)}
+.send-btn.loading{pointer-events:none;opacity:0.85}
+.send-btn .send-label{transition:opacity 150ms ease, letter-spacing 150ms ease}
+.send-btn .send-spinner{display:none;width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 600ms linear infinite}
+.send-btn.loading .send-spinner{display:block}
+.send-btn.loading .send-label{opacity:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.ghost-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--r6);border:1px solid var(--border-bright);font-size:11px;color:var(--text-2);cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.ghost-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.ghost-btn:focus-visible{box-shadow:0 0 0 2px var(--accent-glow)}
+.ghost-btn:active{background:var(--accent-dim);transform:scale(0.96)}
+
+.catalog-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--r6);border:1px solid var(--border-bright);font-size:11px;font-weight:500;color:var(--text-2);cursor:pointer;transition:all var(--transition);white-space:nowrap;position:relative}
+.catalog-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.catalog-btn:focus-visible{box-shadow:0 0 0 2px var(--accent-glow)}
+.catalog-btn:active{background:var(--accent-dim);transform:scale(0.96)}
+.catalog-btn .chevron{font-size:9px;transition:transform 200ms var(--spring)}
+.catalog-btn.open .chevron{transform:rotate(180deg)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REQUEST TABS
+   ═══════════════════════════════════════════════════════════════════ */
+.req-tabs{display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border);position:relative;flex-shrink:0;background:var(--toolbar-bg);transition:background var(--transition)}
+.req-tab{padding:0 14px;height:36px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none}
+.req-tab:hover{color:var(--text)}
+.req-tab.active{color:var(--text);font-weight:600}
+.req-tab::after{content:'';position:absolute;bottom:0;left:50%;width:0;height:2px;background:var(--accent);transition:all 200ms ease;transform:translateX(-50%);border-radius:2px 2px 0 0}
+.req-tab:hover::after{width:50%;opacity:0.4}
+.req-tab.active::after{width:0}
+.req-tab-underline{position:absolute;bottom:0;height:2px;background:var(--accent);border-radius:2px 2px 0 0;transition:left 200ms ease-out, width 200ms ease-out}
+.req-tab .tab-badge{padding:1px 6px;border-radius:var(--r100);background:var(--badge-bg);font-size:10px;font-weight:500;font-family:var(--mono);color:var(--text-3);transition:all 200ms var(--spring)}
+.req-tab:hover .tab-badge{transform:scale(1.1);background:var(--accent-dim);color:var(--accent)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   REQUEST TAB CONTENT
+   ═══════════════════════════════════════════════════════════════════ */
+.req-tab-content{padding:0;max-height:220px;overflow-y:auto;flex-shrink:0;transition:max-height 250ms ease-out}
+.req-tab-pane{display:none;padding:12px 16px;animation:tab-fade 200ms ease both}
+.req-tab-pane.active{display:block}
+@keyframes tab-fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* HEADERS TABLE */
+.headers-table{width:100%;border-collapse:collapse;font-size:12px}
+.headers-table th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);padding:4px 8px 8px;border-bottom:1px solid var(--border)}
+.headers-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.headers-table tbody tr{transition:background 80ms ease}
+.headers-table tbody tr:hover{background:var(--hover-bg)}
+.headers-table tbody tr:last-child td{border-bottom:none}
+.headers-table .h-enabled{width:32px;text-align:center}
+.headers-table .h-key{font-family:var(--mono);color:var(--blue);font-weight:500;white-space:nowrap}
+.headers-table .h-value{font-family:var(--mono);color:var(--text);word-break:break-all}
+.headers-table .h-value.masked{color:var(--text-3)}
+.h-checkbox{width:14px;height:14px;accent-color:var(--accent);cursor:pointer}
+.h-add-row{color:var(--text-3);font-size:11px;cursor:pointer;padding:8px;transition:color var(--transition)}
+.h-add-row:hover{color:var(--accent)}
+
+/* BODY EDITOR */
+.body-editor{position:relative}
+.body-textarea{width:100%;min-height:120px;padding:12px;border-radius:var(--r6);border:1px solid var(--border-bright);background:var(--code-bg);font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text);resize:vertical;transition:border-color var(--transition);tab-size:2;-moz-tab-size:2;caret-color:var(--accent)}
+.body-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow);background:color-mix(in srgb, var(--code-bg) 95%, var(--accent))}
+.body-textarea::placeholder{color:var(--text-3)}
+.body-lang-badge{position:absolute;top:8px;right:12px;padding:2px 8px;border-radius:var(--r4);background:var(--badge-bg);font-size:10px;font-weight:500;color:var(--text-3);pointer-events:none}
+
+/* AUTH TAB */
+.auth-panel{display:flex;flex-direction:column;gap:12px}
+.auth-field{display:flex;flex-direction:column;gap:4px}
+.auth-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3)}
+.auth-value{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:var(--r6);background:var(--code-bg);font-family:var(--mono);font-size:12px;border:1px solid var(--border)}
+.auth-value .reveal-btn{padding:2px 8px;border-radius:var(--r4);border:1px solid var(--border-bright);font-size:10px;color:var(--text-3);cursor:pointer;transition:all var(--transition);white-space:nowrap}
+.auth-value .reveal-btn:hover{border-color:var(--accent);color:var(--accent)}
+.auth-token-masked{color:var(--text-3);flex:1;letter-spacing:2px}
+.auth-token-revealed{color:var(--text);flex:1;word-break:break-all;display:none}
+.auth-expiry{display:flex;align-items:center;gap:6px}
+.auth-expiry-badge{padding:2px 8px;border-radius:var(--r100);font-size:11px;font-weight:500}
+.auth-expiry-badge.valid{background:var(--green-dim);color:var(--green)}
+.auth-expiry-badge.expiring{background:var(--amber-dim);color:var(--amber)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSE VIEWER
+   ═══════════════════════════════════════════════════════════════════ */
+.response-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);transition:background var(--transition);min-height:0}
+.response-header{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.response-label{font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:0.5px}
+.status-pill{padding:3px 10px;border-radius:var(--r100);font-size:11px;font-weight:600;font-family:var(--mono);animation:pill-pop 250ms var(--spring) both;letter-spacing:0.3px}
+@keyframes pill-pop{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+.status-pill.s2xx{background:var(--green-dim);color:var(--green);border:1px solid rgba(24,160,88,0.2);animation:pill-pop 250ms var(--spring) both, status-flash 600ms ease 250ms}
+.status-pill.s4xx{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(229,148,12,0.2);animation:pill-pop 250ms var(--spring) both, status-flash 600ms ease 250ms}
+.status-pill.s5xx{background:var(--red-dim);color:var(--red);border:1px solid rgba(229,69,59,0.2);animation:pill-pop 250ms var(--spring) both, status-flash 600ms ease 250ms}
+.timing-pill{padding:3px 8px;border-radius:var(--r100);font-size:11px;font-family:var(--mono);background:var(--badge-bg);color:var(--text-2);animation:pill-pop 250ms var(--spring) 50ms both}
+.timing-pill.fast{color:var(--green)}
+.timing-pill.medium{color:var(--amber)}
+.timing-pill.slow{color:var(--red)}
+.size-pill{padding:3px 8px;border-radius:var(--r100);font-size:11px;font-family:var(--mono);background:var(--badge-bg);color:var(--text-2);animation:pill-pop 250ms var(--spring) 100ms both}
+
+/* RESPONSE TABS */
+.resp-tabs{display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border);flex-shrink:0;gap:0;position:relative}
+.resp-tab{padding:0 14px;height:34px;display:flex;align-items:center;font-size:12px;font-weight:500;color:var(--text-2);cursor:pointer;position:relative;transition:color var(--transition);user-select:none}
+.resp-tab:hover{color:var(--text)}
+.resp-tab.active{color:var(--text);font-weight:600}
+.resp-tab-underline{position:absolute;bottom:0;height:2px;background:var(--accent);border-radius:2px 2px 0 0;transition:left 200ms ease-out, width 200ms ease-out}
+.resp-tab-right{margin-left:auto;display:flex;align-items:center;gap:4px;padding-right:0}
+.pretty-raw-toggle{display:flex;border:1px solid var(--border-bright);border-radius:var(--r4);overflow:hidden}
+.pretty-raw-btn{padding:3px 10px;font-size:10px;font-weight:500;cursor:pointer;transition:all 150ms var(--spring);color:var(--text-3);text-transform:uppercase;letter-spacing:0.3px}
+.pretty-raw-btn:hover{color:var(--text)}
+.pretty-raw-btn:active{transform:scale(0.94)}
+.pretty-raw-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* RESPONSE BODY */
+.resp-body{flex:1;overflow-y:auto;overflow-x:hidden;position:relative;min-height:0}
+.resp-tab-pane{display:none;padding:0;height:100%}
+.resp-tab-pane.active{display:flex;flex-direction:column}
+
+/* JSON TREE */
+.json-tree-wrapper{flex:1;overflow:auto;padding:12px 16px;font-family:var(--mono);font-size:12px;line-height:1.7}
+.json-tree{white-space:pre}
+.json-key{color:var(--blue)}
+.json-string{color:var(--green)}
+.json-number{color:var(--amber)}
+.json-bool{color:var(--purple)}
+.json-null{color:var(--text-3);font-style:italic}
+.json-brace{color:var(--text-3)}
+.json-bracket{color:var(--text-3)}
+.json-comma{color:var(--text-3)}
+.json-toggle{cursor:pointer;user-select:none;color:var(--text-3);display:inline-block;width:14px;text-align:center;transition:color var(--transition)}
+.json-toggle:hover{color:var(--accent)}
+.json-collapsed-hint{color:var(--text-3);font-style:italic;font-size:11px}
+.json-line{transition:background 80ms ease-out;padding:0 4px;margin:0 -4px;border-radius:var(--r4)}
+.json-line:hover{background:var(--hover-bg)}
+.json-children{border-left:1px solid var(--border);margin-left:8px;padding-left:8px}
+.json-children:hover{border-left-color:var(--border-bright)}
+
+/* RAW VIEW */
+.raw-view{flex:1;overflow:auto;padding:12px 16px;font-family:var(--mono);font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;color:var(--text-2)}
+
+/* EMPTY RESPONSE */
+.resp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px 20px;color:var(--text-3);text-align:center;flex:1}
+.resp-empty-icon{font-size:36px;opacity:0.2;animation:float 3s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.resp-empty-title{font-size:14px;font-weight:500;color:var(--text-2)}
+.resp-empty-hint{font-size:12px;max-width:280px}
+.resp-empty-shortcut{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r4);background:var(--badge-bg);font-family:var(--mono);font-size:11px;color:var(--text-3)}
+
+/* LOADING SHIMMER */
+.shimmer-container{padding:16px;display:none;flex-direction:column;gap:8px;flex:1}
+.shimmer-container.active{display:flex}
+.shimmer-line{height:14px;border-radius:var(--r4);background:linear-gradient(90deg, var(--bg-3) 25%, var(--bg-4) 50%, var(--bg-3) 75%);background-size:400px 100%;animation:shimmer 1.2s ease infinite}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.shimmer-line:nth-child(1){width:90%}
+.shimmer-line:nth-child(2){width:75%;animation-delay:0.1s}
+.shimmer-line:nth-child(3){width:85%;animation-delay:0.2s}
+.shimmer-line:nth-child(4){width:60%;animation-delay:0.3s}
+.shimmer-line:nth-child(5){width:80%;animation-delay:0.4s}
+.shimmer-line:nth-child(6){width:45%;animation-delay:0.5s}
+.shimmer-line:nth-child(7){width:70%;animation-delay:0.6s}
+.shimmer-line:nth-child(8){width:55%;animation-delay:0.7s}
+
+/* RESPONSE HEADERS */
+.resp-headers-list{padding:12px 16px;font-size:12px;display:flex;flex-direction:column;gap:0}
+.resp-header-row{display:flex;padding:6px 0;border-bottom:1px solid var(--border);transition:background 80ms ease}
+.resp-header-row:hover{background:var(--hover-bg)}
+.resp-header-row:last-child{border-bottom:none}
+.resp-header-key{width:220px;flex-shrink:0;font-family:var(--mono);color:var(--blue);font-weight:500}
+.resp-header-val{flex:1;font-family:var(--mono);color:var(--text);word-break:break-all}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════════════════════════════ */
+.sidebar{width:280px;border-left:1px solid var(--border-bright);background:var(--panel-bg);display:flex;flex-direction:column;flex-shrink:0;transition:width 250ms ease-out, opacity 200ms ease, background var(--transition);overflow:hidden;animation:sidebar-enter 350ms ease both 200ms;position:relative}
+@keyframes sidebar-enter{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
+.sidebar.collapsed{width:0;border-left-color:transparent;opacity:0}
+.sidebar::before{content:'';position:absolute;left:-2px;top:0;bottom:0;width:4px;cursor:ew-resize;z-index:2}
+.sidebar-toggle{position:absolute;top:50%;right:0;width:20px;height:40px;background:var(--bg-3);border:1px solid var(--border-bright);border-right:none;border-radius:var(--r6) 0 0 var(--r6);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:10px;color:var(--text-3);transition:all var(--transition);z-index:5;transform:translateY(-50%)}
+.sidebar-toggle:hover{background:var(--bg-4);color:var(--text)}
+.sidebar-toggle:focus-visible{box-shadow:0 0 0 2px var(--accent-glow)}
+.sidebar-toggle:active{transform:translateY(-50%) scale(0.9);transition:transform 100ms var(--spring)}
+.content-wrapper{position:relative;flex:1;display:flex;overflow:hidden}
+
+.sidebar-header{display:flex;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sidebar-header h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);flex:1}
+.sidebar-close{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:var(--r4);font-size:12px;color:var(--text-3);cursor:pointer;transition:all var(--transition)}
+.sidebar-close:hover{background:var(--hover-bg);color:var(--text)}
+
+.sidebar-scroll{flex:1;overflow-y:auto;padding:0;background:
+  linear-gradient(var(--panel-bg) 30%, transparent),
+  linear-gradient(transparent, var(--panel-bg) 70%) 0 100%,
+  radial-gradient(farthest-side at 50% 0, rgba(0,0,0,0.12), transparent),
+  radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,0.12), transparent) 0 100%;
+  background-repeat:no-repeat;
+  background-size:100% 40px, 100% 40px, 100% 12px, 100% 12px;
+  background-attachment:local, local, scroll, scroll}
+
+/* SIDEBAR SECTIONS */
+.sidebar-section{border-bottom:1px solid var(--border)}
+.sidebar-section-header{display:flex;align-items:center;gap:6px;padding:8px 12px;cursor:pointer;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-3);transition:color var(--transition);user-select:none}
+.sidebar-section-header:hover{color:var(--text-2)}
+.sidebar-section-header .section-chevron{font-size:9px;transition:transform 200ms var(--spring)}
+.sidebar-section-header .section-chevron.expanded{transform:rotate(90deg)}
+.sidebar-section-header .section-count{margin-left:auto;font-size:10px;font-family:var(--mono);color:var(--text-3);opacity:0.6}
+.sidebar-section-body{overflow:hidden;transition:max-height 250ms ease-out, opacity 200ms ease}
+.sidebar-section-body.collapsed{max-height:0 !important;opacity:0}
+
+/* HISTORY ENTRIES */
+.history-entry{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;transition:all 100ms ease-out;border-left:2px solid transparent;position:relative}
+.history-entry::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:transparent;transition:background var(--transition)}
+.history-entry:hover{background:var(--hover-bg)}
+.history-entry:hover::before{background:var(--border-bright)}
+.history-entry.active{background:var(--selected-bg);border-left-color:var(--accent)}
+.history-entry.active::before{background:var(--accent)}
+.history-entry .h-method{min-width:38px;padding:2px 6px;border-radius:var(--r4);font-size:10px;font-weight:700;font-family:var(--mono);text-align:center;letter-spacing:0.3px;flex-shrink:0}
+.history-entry .h-method.get{background:var(--green-dim);color:var(--green)}
+.history-entry .h-method.post{background:var(--blue-dim);color:var(--blue)}
+.history-entry .h-method.delete{background:var(--red-dim);color:var(--red)}
+.history-entry .h-url{flex:1;font-size:11px;font-family:var(--mono);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.history-entry .h-meta{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex-shrink:0}
+.history-entry .h-status{font-size:10px;font-weight:600;font-family:var(--mono)}
+.history-entry .h-status.s2xx{color:var(--green)}
+.history-entry .h-status.s4xx{color:var(--amber)}
+.history-entry .h-time{font-size:10px;color:var(--text-3)}
+.history-entry:nth-child(1){animation:hist-slide 300ms ease both}
+.history-entry:nth-child(2){animation:hist-slide 300ms ease both 40ms}
+.history-entry:nth-child(3){animation:hist-slide 300ms ease both 80ms}
+.history-entry:nth-child(4){animation:hist-slide 300ms ease both 120ms}
+.history-entry:nth-child(5){animation:hist-slide 300ms ease both 160ms}
+.history-entry:nth-child(6){animation:hist-slide 300ms ease both 200ms}
+@keyframes hist-slide{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
+
+/* SAVED ENTRIES */
+.saved-group{padding:4px 0}
+.saved-group-header{display:flex;align-items:center;gap:6px;padding:4px 12px 4px 20px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-3);cursor:pointer;transition:color var(--transition);user-select:none}
+.saved-group-header:hover{color:var(--text-2)}
+.saved-group-header .sg-chevron{font-size:8px;transition:transform 200ms var(--spring)}
+.saved-group-header .sg-chevron.expanded{transform:rotate(90deg)}
+.saved-entry{display:flex;align-items:center;gap:6px;padding:5px 12px 5px 28px;cursor:pointer;transition:background 100ms ease-out, padding 150ms ease;font-size:11px;color:var(--text-2)}
+.saved-entry:hover{background:var(--hover-bg);color:var(--text);padding-left:30px}
+.saved-entry .se-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.saved-entry .se-dot.fabric{background:var(--blue)}
+.saved-entry .se-dot.flt{background:var(--accent)}
+.saved-entry .se-dot.maint{background:var(--amber)}
+.saved-group:nth-child(1) .saved-entry{animation:hist-slide 250ms ease both}
+.saved-group:nth-child(2) .saved-entry{animation:hist-slide 250ms ease both 80ms}
+.saved-group:nth-child(3) .saved-entry{animation:hist-slide 250ms ease both 160ms}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ENDPOINT CATALOG DROPDOWN
+   ═══════════════════════════════════════════════════════════════════ */
+.catalog-overlay{position:fixed;inset:0;z-index:20;display:none;align-items:flex-start;justify-content:center;padding-top:80px}
+.catalog-overlay.open{display:flex}
+.catalog-backdrop{position:absolute;inset:0;background:var(--overlay-bg);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:fade-in 150ms ease both}
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+.catalog-panel{position:relative;width:560px;max-height:480px;background:var(--panel-bg);border:1px solid var(--border-bright);border-radius:var(--r16);box-shadow:var(--shadow-xl);display:flex;flex-direction:column;overflow:hidden;animation:catalog-enter 250ms var(--spring) both;z-index:1;transform-origin:top center}
+@keyframes catalog-enter{from{opacity:0;transform:scale(0.95) translateY(-12px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.catalog-search{padding:12px 16px;border-bottom:1px solid var(--border)}
+.catalog-search-inner{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:var(--r10);border:1px solid var(--border-bright);background:var(--input-bg);transition:all var(--transition);animation:slide-down 200ms ease both 100ms}
+.catalog-search-inner:focus-within{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
+.catalog-search-inner svg{width:16px;height:16px;color:var(--text-3);flex-shrink:0}
+.catalog-search-inner input{flex:1;font-size:13px;background:transparent;min-width:0}
+.catalog-search-inner input::placeholder{color:var(--text-3)}
+.catalog-search-inner .catalog-esc{padding:2px 6px;border-radius:var(--r4);background:var(--badge-bg);font-size:10px;color:var(--text-3);font-family:var(--mono)}
+.catalog-list{flex:1;overflow-y:auto;padding:4px 0}
+.catalog-group{padding:4px 0}
+.catalog-group-header{padding:6px 16px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.catalog-group-header .cg-dot{width:6px;height:6px;border-radius:50%}
+.catalog-group-header .cg-dot.fabric{background:var(--blue)}
+.catalog-group-header .cg-dot.flt{background:var(--accent)}
+.catalog-group-header .cg-dot.maint{background:var(--amber)}
+.catalog-item{display:flex;align-items:center;gap:10px;padding:8px 16px 8px 28px;cursor:pointer;transition:all 80ms ease-out;border-radius:0}
+.catalog-item:hover{background:var(--hover-bg)}
+.catalog-item:active{transform:scale(0.99)}
+.catalog-item.selected{background:var(--selected-bg)}
+.catalog-item .ci-method{min-width:48px;padding:2px 8px;border-radius:var(--r4);font-size:10px;font-weight:700;font-family:var(--mono);text-align:center;letter-spacing:0.3px}
+.catalog-item .ci-method.get{background:var(--green-dim);color:var(--green)}
+.catalog-item .ci-method.post{background:var(--blue-dim);color:var(--blue)}
+.catalog-item .ci-method.delete{background:var(--red-dim);color:var(--red)}
+.catalog-item .ci-method.put{background:var(--amber-dim);color:var(--amber)}
+.catalog-item .ci-method.patch{background:var(--patch-dim);color:var(--patch-color)}
+.catalog-item .ci-name{font-size:12px;font-weight:500;color:var(--text)}
+.catalog-item .ci-path{font-size:11px;font-family:var(--mono);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.catalog-item:nth-child(odd){animation:tab-fade 200ms ease both}
+.catalog-item:nth-child(even){animation:tab-fade 200ms ease both 30ms}
+.catalog-empty{display:flex;flex-direction:column;align-items:center;padding:32px 16px;color:var(--text-3);gap:4px}
+.catalog-count{padding:6px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3);flex-shrink:0;text-align:center}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:30;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
+.toast{padding:10px 20px;border-radius:var(--r10);background:var(--bg-3);border:1px solid var(--border-bright);box-shadow:var(--shadow-lg);font-size:12px;font-weight:500;color:var(--text);animation:toast-in 300ms var(--spring) both;pointer-events:auto;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;gap:8px;white-space:nowrap}
+.toast .toast-icon{color:var(--green);font-size:14px}
+@keyframes toast-in{from{opacity:0;transform:translateY(16px) scale(0.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+.toast.out{animation:toast-out 200ms ease-in forwards}
+@keyframes toast-out{to{opacity:0;transform:translateY(-8px) scale(0.95)}}
+.toast.error{border-color:rgba(229,69,59,0.3);background:color-mix(in srgb, var(--bg-3) 92%, var(--red))}
+.toast.error .toast-icon{color:var(--red)}
+.toast.warn{border-color:rgba(229,148,12,0.3);background:color-mix(in srgb, var(--bg-3) 92%, var(--amber))}
+.toast.warn .toast-icon{color:var(--amber)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESIZE HANDLE
+   ═══════════════════════════════════════════════════════════════════ */
+.resize-handle{height:4px;cursor:ns-resize;background:transparent;transition:background var(--transition);flex-shrink:0;position:relative}
+.resize-handle::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:32px;height:3px;border-radius:2px;background:var(--border-bright);opacity:0;transition:opacity var(--transition)}
+.resize-handle:hover{background:var(--accent)}
+.resize-handle:hover::after{opacity:1}
+.resize-handle:active{background:var(--accent);height:3px}
+.resize-handle:active::after{opacity:0}
+
+/* ═══════════════════════════════════════════════════════════════════
+   METHOD DROPDOWN
+   ═══════════════════════════════════════════════════════════════════ */
+.method-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:120px;background:var(--bg-3);border:1px solid var(--border-bright);border-radius:var(--r10);box-shadow:var(--shadow-lg);z-index:15;overflow:hidden;animation:pop-in 150ms var(--spring) both;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.method-dropdown.hidden{display:none}
+.method-dropdown-item{display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;transition:background 80ms ease-out;font-family:var(--mono);font-size:12px;font-weight:600}
+.method-dropdown-item:hover{background:var(--hover-bg)}
+.method-dropdown-item .md-dot{width:8px;height:8px;border-radius:50%}
+.method-dropdown-item .md-dot.get{background:var(--green)}
+.method-dropdown-item .md-dot.post{background:var(--blue)}
+.method-dropdown-item .md-dot.put{background:var(--amber)}
+.method-dropdown-item .md-dot.patch{background:var(--patch-color)}
+.method-dropdown-item .md-dot.delete{background:var(--red)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes pop-in{from{opacity:0;transform:scale(0.92)}to{opacity:1;transform:scale(1)}}
+@keyframes slide-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slide-down{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scale-in{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+@keyframes glow-pulse{0%,100%{box-shadow:0 0 0 0 var(--accent-glow)}50%{box-shadow:0 0 0 4px var(--accent-glow)}}
+@keyframes ripple{0%{transform:scale(0);opacity:0.5}100%{transform:scale(4);opacity:0}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+@keyframes rotate-in{from{opacity:0;transform:rotate(-90deg) scale(0.5)}to{opacity:1;transform:rotate(0) scale(1)}}
+@keyframes bounce-in{0%{transform:scale(0)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+@keyframes status-flash{0%{box-shadow:0 0 0 0 currentColor}50%{box-shadow:0 0 12px 2px currentColor}100%{box-shadow:0 0 0 0 currentColor}}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOCUS & A11Y
+   ═══════════════════════════════════════════════════════════════════ */
+:focus-visible{outline:none;box-shadow:0 0 0 2px var(--accent-glow)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SELECTION & MISC
+   ═══════════════════════════════════════════════════════════════════ */
+::selection{background:rgba(109,92,255,0.3);color:var(--text)}
+.json-tree-wrapper ::selection{background:rgba(109,92,255,0.25)}
+.raw-view ::selection{background:rgba(109,92,255,0.25)}
+::-webkit-scrollbar-corner{background:transparent}
+input:-webkit-autofill{-webkit-box-shadow:0 0 0 1000px var(--input-bg) inset;-webkit-text-fill-color:var(--text)}
+.divider-vert{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+.text-mono{font-family:var(--mono)}
+.color-accent{color:var(--accent)}
+
+/* success/error response tint */
+.response-panel.success-tint{background:color-mix(in srgb, var(--bg) 97%, var(--green))}
+.response-panel.success-tint .response-header{border-bottom-color:color-mix(in srgb, var(--border) 80%, var(--green))}
+.response-panel.error-tint{background:color-mix(in srgb, var(--bg) 97%, var(--red))}
+.response-panel.error-tint .response-header{border-bottom-color:color-mix(in srgb, var(--border) 80%, var(--red))}
+.response-panel.warn-tint{background:color-mix(in srgb, var(--bg) 97%, var(--amber))}
+
+/* METHOD PILL PRESSED STATES */
+.method-pill.get:active{background:color-mix(in srgb, var(--green) 85%, #000)}
+.method-pill.post:active{background:color-mix(in srgb, var(--blue) 85%, #000)}
+.method-pill.put:active{background:color-mix(in srgb, var(--amber) 85%, #000)}
+.method-pill.patch:active{background:color-mix(in srgb, var(--patch-color) 85%, #000)}
+.method-pill.delete:active{background:color-mix(in srgb, var(--red) 85%, #000)}
+
+/* FOCUS-WITHIN HIGHLIGHTING */
+.request-url-bar:focus-within{background:color-mix(in srgb, var(--bg-2) 97%, var(--accent))}
+.request-panel{box-shadow:0 1px 0 var(--border)}
+
+/* LOADING DOT FOR CONN STATUS */
+@keyframes dots{0%,20%{opacity:0}50%{opacity:1}100%{opacity:0}}
+
+/* NOTIFICATION DOT */
+.sidebar-section-header .notif-dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block;animation:scale-in 300ms var(--spring) both}
+
+/* KEYBOARD HINTS */
+.kbd{display:inline-flex;align-items:center;padding:1px 5px;border-radius:3px;background:var(--badge-bg);border:1px solid var(--border-bright);font-family:var(--mono);font-size:10px;color:var(--text-3);line-height:1.4}
+
+/* THEME TRANSITION */
+html{transition:background 300ms ease}
+html *{transition-property:background-color,border-color,color,box-shadow,opacity;transition-duration:0ms}
+html.theme-transition *{transition-duration:300ms !important}
+
+/* PRINT STYLES */
+@media print{
+  .sidebar,.top-bar-right,.sidebar-toggle,.send-btn,.ghost-btn,.catalog-btn{display:none !important}
+  .response-panel,.request-panel{break-inside:avoid}
+  body{background:#fff;color:#000}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ═══════════════ TOP BAR ═══════════════ -->
+  <div class="top-bar" role="banner">
+    <div class="top-bar-title">
+      <span class="title-icon">&#x25C6;</span>
+      <span>EDOG Studio</span>
+      <span style="color:var(--text-3);font-weight:400">/ API Playground</span>
+    </div>
+    <div class="top-bar-badge">F09</div>
+    <div class="top-bar-right">
+      <div class="conn-status" role="status" aria-label="Connection status">
+        <span class="conn-dot"></span>
+        <span>Disconnected Mode</span>
+      </div>
+      <div class="divider-vert"></div>
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark/light theme" title="Toggle theme">
+        <span id="themeIcon">&#x263E;</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+  <div class="main-content">
+    <div class="content-wrapper">
+      <div class="workspace">
+        <!-- ═══════════ REQUEST PANEL ═══════════ -->
+        <div class="request-panel" role="region" aria-label="Request builder">
+          <!-- URL BAR -->
+          <div class="request-url-bar">
+            <div style="position:relative">
+              <button class="method-pill get" id="methodPill" aria-label="HTTP method" aria-haspopup="listbox">
+                <span id="methodLabel">GET</span>
+              </button>
+              <div class="method-dropdown hidden" id="methodDropdown" role="listbox" aria-label="Select HTTP method">
+                <div class="method-dropdown-item" data-method="GET" role="option"><span class="md-dot get"></span>GET</div>
+                <div class="method-dropdown-item" data-method="POST" role="option"><span class="md-dot post"></span>POST</div>
+                <div class="method-dropdown-item" data-method="PUT" role="option"><span class="md-dot put"></span>PUT</div>
+                <div class="method-dropdown-item" data-method="PATCH" role="option"><span class="md-dot patch"></span>PATCH</div>
+                <div class="method-dropdown-item" data-method="DELETE" role="option"><span class="md-dot delete"></span>DELETE</div>
+              </div>
+            </div>
+            <div class="url-input-wrapper">
+              <input class="url-input" id="urlInput" type="text" value="https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces/{workspaceId}/lakehouses" spellcheck="false" aria-label="Request URL" placeholder="Enter request URL...">
+            </div>
+            <button class="send-btn" id="sendBtn" aria-label="Send request">
+              <span class="send-label">Send</span>
+              <span class="send-spinner"></span>
+            </button>
+            <button class="ghost-btn" id="curlBtn" aria-label="Copy as cURL">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M5 11H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg>
+              cURL
+            </button>
+            <button class="catalog-btn" id="catalogBtn" aria-label="Open endpoint catalog" aria-haspopup="dialog">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+              Catalog
+              <span class="chevron">&#x25BE;</span>
+            </button>
+          </div>
+
+          <!-- REQUEST TABS -->
+          <div class="req-tabs" role="tablist" aria-label="Request options">
+            <div class="req-tab active" data-tab="headers" role="tab" aria-selected="true" tabindex="0">Headers <span class="tab-badge">3</span></div>
+            <div class="req-tab" data-tab="body" role="tab" aria-selected="false" tabindex="-1">Body</div>
+            <div class="req-tab" data-tab="auth" role="tab" aria-selected="false" tabindex="-1">Auth</div>
+            <div class="req-tab-underline" id="reqTabUnderline"></div>
+          </div>
+
+          <!-- TAB CONTENT -->
+          <div class="req-tab-content" id="reqTabContent">
+            <!-- HEADERS -->
+            <div class="req-tab-pane active" data-pane="headers" role="tabpanel">
+              <table class="headers-table" aria-label="Request headers">
+                <thead><tr><th class="h-enabled"></th><th>Key</th><th>Value</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="h-enabled"><input type="checkbox" class="h-checkbox" checked aria-label="Enable header"></td>
+                    <td class="h-key">Authorization</td>
+                    <td class="h-value masked">Bearer &#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;</td>
+                  </tr>
+                  <tr>
+                    <td class="h-enabled"><input type="checkbox" class="h-checkbox" checked aria-label="Enable header"></td>
+                    <td class="h-key">Content-Type</td>
+                    <td class="h-value">application/json</td>
+                  </tr>
+                  <tr>
+                    <td class="h-enabled"><input type="checkbox" class="h-checkbox" checked aria-label="Enable header"></td>
+                    <td class="h-key">x-ms-client-request-id</td>
+                    <td class="h-value" style="color:var(--text-3)">a3f7c2e1-8b4d-4f6a-9c0e-1d2b3e4f5a6b</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="h-add-row">+ Add header</div>
+            </div>
+            <!-- BODY -->
+            <div class="req-tab-pane" data-pane="body" role="tabpanel">
+              <div class="body-editor">
+                <textarea class="body-textarea" placeholder="Enter request body as JSON..." spellcheck="false" aria-label="Request body">{
+  "displayName": "New_Lakehouse",
+  "description": "Created via API Playground"
+}</textarea>
+                <div class="body-lang-badge">JSON</div>
+              </div>
+            </div>
+            <!-- AUTH -->
+            <div class="req-tab-pane" data-pane="auth" role="tabpanel">
+              <div class="auth-panel">
+                <div class="auth-field">
+                  <div class="auth-label">Token Type</div>
+                  <div class="auth-value">
+                    <span style="color:var(--accent);font-weight:500">Bearer Token</span>
+                    <span style="margin-left:auto;font-size:11px;color:var(--text-3)">via Fabric Auth</span>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <div class="auth-label">Access Token</div>
+                  <div class="auth-value">
+                    <span class="auth-token-masked" id="authMasked">&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;&#x25CF;</span>
+                    <span class="auth-token-revealed" id="authRevealed">eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsIng1dCI6Ik1HTHR...</span>
+                    <button class="reveal-btn" id="revealBtn" aria-label="Toggle token visibility">Reveal</button>
+                  </div>
+                </div>
+                <div class="auth-field">
+                  <div class="auth-label">Expiry</div>
+                  <div class="auth-expiry">
+                    <span class="auth-expiry-badge valid">&#x25CF; Valid</span>
+                    <span style="font-size:12px;color:var(--text-2)">Expires in 47 minutes</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RESIZE HANDLE -->
+        <div class="resize-handle" aria-hidden="true"></div>
+
+        <!-- ═══════════ RESPONSE PANEL ═══════════ -->
+        <div class="response-panel" id="responsePanel" role="region" aria-label="Response viewer">
+          <!-- RESPONSE HEADER -->
+          <div class="response-header" id="responseHeader">
+            <span class="response-label">Response</span>
+            <span class="status-pill s2xx" id="statusPill" style="display:none" aria-live="polite"></span>
+            <span class="timing-pill" id="timingPill" style="display:none"></span>
+            <span class="size-pill" id="sizePill" style="display:none"></span>
+          </div>
+
+          <!-- RESPONSE TABS -->
+          <div class="resp-tabs" role="tablist" aria-label="Response view">
+            <div class="resp-tab active" data-rtab="body" role="tab" aria-selected="true">Body</div>
+            <div class="resp-tab" data-rtab="headers" role="tab" aria-selected="false">Headers</div>
+            <div class="resp-tab-underline" id="respTabUnderline"></div>
+            <div class="resp-tab-right" id="prettyRawContainer" style="display:none">
+              <div class="pretty-raw-toggle">
+                <button class="pretty-raw-btn active" data-mode="pretty" aria-label="Pretty print">Pretty</button>
+                <button class="pretty-raw-btn" data-mode="raw" aria-label="Raw text">Raw</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RESPONSE BODY -->
+          <div class="resp-body" id="respBody">
+            <!-- Body tab -->
+            <div class="resp-tab-pane active" data-rpane="body">
+              <!-- Empty state -->
+              <div class="resp-empty" id="respEmpty">
+                <div class="resp-empty-icon">&#x25C7;</div>
+                <div class="resp-empty-title">No response yet</div>
+                <div class="resp-empty-hint">Send a request to see the response here</div>
+                <div class="resp-empty-shortcut">Ctrl + Enter</div>
+              </div>
+              <!-- Shimmer loading -->
+              <div class="shimmer-container" id="shimmerLoader">
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+                <div class="shimmer-line"></div>
+              </div>
+              <!-- JSON tree -->
+              <div class="json-tree-wrapper" id="jsonTreeWrapper" style="display:none" aria-label="JSON response body"></div>
+              <!-- Raw view -->
+              <div class="raw-view" id="rawView" style="display:none"></div>
+            </div>
+            <!-- Headers tab -->
+            <div class="resp-tab-pane" data-rpane="headers">
+              <div class="resp-headers-list" id="respHeadersList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIDEBAR TOGGLE -->
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">&#x25B8;</button>
+
+      <!-- ═══════════ SIDEBAR ═══════════ -->
+      <aside class="sidebar" id="sidebar" role="complementary" aria-label="History and saved requests">
+        <div class="sidebar-header">
+          <h3>Explorer</h3>
+          <button class="sidebar-close" id="sidebarClose" aria-label="Close sidebar">&#x2715;</button>
+        </div>
+        <div class="sidebar-scroll">
+          <!-- HISTORY -->
+          <div class="sidebar-section">
+            <div class="sidebar-section-header" id="historySectionHeader" aria-expanded="true" role="button">
+              <span class="section-chevron expanded" id="historyChevron">&#x25B8;</span>
+              History
+              <span class="section-count">6</span>
+            </div>
+            <div class="sidebar-section-body" id="historySectionBody" style="max-height:400px">
+              <div class="history-entry" data-idx="0">
+                <span class="h-method get">GET</span>
+                <span class="h-url">/v1/workspaces</span>
+                <span class="h-meta"><span class="h-status s2xx">200</span><span class="h-time">2m ago</span></span>
+              </div>
+              <div class="history-entry active" data-idx="1">
+                <span class="h-method get">GET</span>
+                <span class="h-url">/v1/workspaces/.../lakehouses</span>
+                <span class="h-meta"><span class="h-status s2xx">200</span><span class="h-time">5m ago</span></span>
+              </div>
+              <div class="history-entry" data-idx="2">
+                <span class="h-method get">GET</span>
+                <span class="h-url">/liveTable/getLatestDag</span>
+                <span class="h-meta"><span class="h-status s2xx">200</span><span class="h-time">8m ago</span></span>
+              </div>
+              <div class="history-entry" data-idx="3">
+                <span class="h-method post">POST</span>
+                <span class="h-url">/liveTableSchedule/runDAG/abc123</span>
+                <span class="h-meta"><span class="h-status s2xx">202</span><span class="h-time">12m ago</span></span>
+              </div>
+              <div class="history-entry" data-idx="4">
+                <span class="h-method get">GET</span>
+                <span class="h-url">/liveTableSchedule/getDAGExecStatus/abc123</span>
+                <span class="h-meta"><span class="h-status s2xx">200</span><span class="h-time">15m ago</span></span>
+              </div>
+              <div class="history-entry" data-idx="5">
+                <span class="h-method delete">DEL</span>
+                <span class="h-url">/v1/workspaces/.../lakehouses/xyz</span>
+                <span class="h-meta"><span class="h-status s4xx">404</span><span class="h-time">18m ago</span></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- SAVED -->
+          <div class="sidebar-section">
+            <div class="sidebar-section-header" id="savedSectionHeader" aria-expanded="true" role="button">
+              <span class="section-chevron expanded" id="savedChevron">&#x25B8;</span>
+              Saved
+              <span class="section-count">10</span>
+            </div>
+            <div class="sidebar-section-body" id="savedSectionBody" style="max-height:600px">
+              <!-- Fabric -->
+              <div class="saved-group">
+                <div class="saved-group-header" data-group="fabric"><span class="sg-chevron expanded">&#x25B8;</span> Fabric</div>
+                <div class="saved-group-body" data-gbody="fabric">
+                  <div class="saved-entry" data-saved="list-workspaces"><span class="se-dot fabric"></span>List Workspaces</div>
+                  <div class="saved-entry" data-saved="list-lakehouses"><span class="se-dot fabric"></span>List Lakehouses</div>
+                  <div class="saved-entry" data-saved="list-tables"><span class="se-dot fabric"></span>List Tables</div>
+                  <div class="saved-entry" data-saved="list-items"><span class="se-dot fabric"></span>List Items</div>
+                </div>
+              </div>
+              <!-- FLT -->
+              <div class="saved-group">
+                <div class="saved-group-header" data-group="flt"><span class="sg-chevron expanded">&#x25B8;</span> FLT</div>
+                <div class="saved-group-body" data-gbody="flt">
+                  <div class="saved-entry" data-saved="get-dag"><span class="se-dot flt"></span>Get Latest DAG</div>
+                  <div class="saved-entry" data-saved="run-dag"><span class="se-dot flt"></span>Run DAG</div>
+                  <div class="saved-entry" data-saved="cancel-dag"><span class="se-dot flt"></span>Cancel DAG</div>
+                  <div class="saved-entry" data-saved="dag-status"><span class="se-dot flt"></span>DAG Exec Status</div>
+                </div>
+              </div>
+              <!-- Maintenance -->
+              <div class="saved-group">
+                <div class="saved-group-header" data-group="maint"><span class="sg-chevron expanded">&#x25B8;</span> Maintenance</div>
+                <div class="saved-group-body" data-gbody="maint">
+                  <div class="saved-entry" data-saved="force-unlock"><span class="se-dot maint"></span>Force Unlock</div>
+                  <div class="saved-entry" data-saved="orphaned"><span class="se-dot maint"></span>List Orphaned Folders</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ CATALOG OVERLAY ═══════════════ -->
+<div class="catalog-overlay" id="catalogOverlay" role="dialog" aria-label="Endpoint catalog" aria-modal="true">
+  <div class="catalog-backdrop" id="catalogBackdrop"></div>
+  <div class="catalog-panel">
+    <div class="catalog-search">
+      <div class="catalog-search-inner">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="5"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+        <input type="text" id="catalogSearch" placeholder="Search 37 endpoints..." autocomplete="off" spellcheck="false" aria-label="Search endpoints">
+        <span class="catalog-esc">ESC</span>
+      </div>
+    </div>
+    <div class="catalog-list" id="catalogList"></div>
+    <div class="catalog-count" id="catalogCount">37 endpoints</div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST ═══════════════ -->
+<div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+
+<span class="sr-only" aria-live="assertive" id="a11yAnnounce"></span>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG Studio — F09 API Playground Mock
+   Interactive behaviors — pure CSS + vanilla JS, zero dependencies
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // ──────────── DATA ────────────
+  const HISTORY_DATA = [
+    { method:'GET', url:'/v1/workspaces', status:200, timing:'342ms', ago:'2m ago', fullUrl:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces' },
+    { method:'GET', url:'/v1/workspaces/.../lakehouses', status:200, timing:'189ms', ago:'5m ago', fullUrl:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces/{workspaceId}/lakehouses' },
+    { method:'GET', url:'/liveTable/getLatestDag', status:200, timing:'567ms', ago:'8m ago', fullUrl:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTable/getLatestDag' },
+    { method:'POST', url:'/liveTableSchedule/runDAG/abc123', status:202, timing:'234ms', ago:'12m ago', fullUrl:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTableSchedule/runDAG/abc123' },
+    { method:'GET', url:'/liveTableSchedule/getDAGExecStatus/abc123', status:200, timing:'78ms', ago:'15m ago', fullUrl:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTableSchedule/getDAGExecStatus/abc123' },
+    { method:'DELETE', url:'/v1/workspaces/.../lakehouses/xyz', status:404, timing:'1.2s', ago:'18m ago', fullUrl:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces/{workspaceId}/lakehouses/xyz' }
+  ];
+
+  const ENDPOINTS = [
+    { group:'Fabric', dot:'fabric', items:[
+      { method:'GET', name:'List Workspaces', path:'/v1/workspaces' },
+      { method:'GET', name:'Get Workspace', path:'/v1/workspaces/{workspaceId}' },
+      { method:'GET', name:'List Lakehouses', path:'/v1/workspaces/{workspaceId}/lakehouses' },
+      { method:'GET', name:'Get Lakehouse', path:'/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}' },
+      { method:'POST', name:'Create Lakehouse', path:'/v1/workspaces/{workspaceId}/lakehouses' },
+      { method:'DELETE', name:'Delete Lakehouse', path:'/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}' },
+      { method:'GET', name:'List Tables', path:'/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables' },
+      { method:'GET', name:'Get Table', path:'/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables/{tableId}' },
+      { method:'GET', name:'List Items', path:'/v1/workspaces/{workspaceId}/items' },
+      { method:'GET', name:'Get Item', path:'/v1/workspaces/{workspaceId}/items/{itemId}' },
+      { method:'PATCH', name:'Update Item', path:'/v1/workspaces/{workspaceId}/items/{itemId}' },
+      { method:'DELETE', name:'Delete Item', path:'/v1/workspaces/{workspaceId}/items/{itemId}' },
+      { method:'GET', name:'List Capacities', path:'/v1/capacities' },
+      { method:'GET', name:'List Gateways', path:'/v1/gateways' },
+    ]},
+    { group:'FLT', dot:'flt', items:[
+      { method:'GET', name:'Get Latest DAG', path:'/liveTable/getLatestDag' },
+      { method:'GET', name:'Get DAG Definition', path:'/liveTable/getDagDefinition/{dagId}' },
+      { method:'POST', name:'Run DAG', path:'/liveTableSchedule/runDAG/{dagId}' },
+      { method:'POST', name:'Cancel DAG', path:'/liveTableSchedule/cancelDAG/{dagId}' },
+      { method:'GET', name:'DAG Exec Status', path:'/liveTableSchedule/getDAGExecStatus/{executionId}' },
+      { method:'GET', name:'List DAG Runs', path:'/liveTableSchedule/listDagRuns/{dagId}' },
+      { method:'GET', name:'Get Node Status', path:'/liveTable/getNodeStatus/{nodeId}' },
+      { method:'POST', name:'Validate DAG', path:'/liveTable/validateDag' },
+      { method:'GET', name:'Get Spark Session', path:'/liveTable/getSparkSession/{sessionId}' },
+      { method:'POST', name:'Submit Spark Job', path:'/liveTable/submitSparkJob' },
+      { method:'GET', name:'List Spark Jobs', path:'/liveTable/listSparkJobs' },
+      { method:'GET', name:'Get Job Output', path:'/liveTable/getJobOutput/{jobId}' },
+      { method:'PUT', name:'Update DAG Config', path:'/liveTable/updateDagConfig/{dagId}' },
+    ]},
+    { group:'Maintenance', dot:'maint', items:[
+      { method:'POST', name:'Force Unlock', path:'/maintenance/forceUnlock/{resourceId}' },
+      { method:'GET', name:'List Orphaned Folders', path:'/maintenance/orphanedFolders' },
+      { method:'POST', name:'Cleanup Orphaned', path:'/maintenance/cleanupOrphaned' },
+      { method:'GET', name:'Health Check', path:'/maintenance/health' },
+      { method:'GET', name:'Service Info', path:'/maintenance/info' },
+      { method:'POST', name:'Flush Cache', path:'/maintenance/flushCache' },
+      { method:'GET', name:'List Locks', path:'/maintenance/locks' },
+      { method:'DELETE', name:'Release Lock', path:'/maintenance/locks/{lockId}' },
+      { method:'GET', name:'Diagnostics', path:'/maintenance/diagnostics' },
+      { method:'POST', name:'Reset Counters', path:'/maintenance/resetCounters' },
+    ]}
+  ];
+
+  const MOCK_RESPONSE = {
+    value: [
+      {
+        id: "d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a",
+        type: "Lakehouse",
+        displayName: "Sales_Lakehouse",
+        description: "Production sales data",
+        workspaceId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        properties: {
+          oneLakeTablesPath: "https://onelake.dfs.fabric.microsoft.com/.../Tables",
+          oneLakeFilesPath: "https://onelake.dfs.fabric.microsoft.com/.../Files",
+          sqlEndpointProperties: {
+            id: "sql-endpoint-id",
+            connectionString: "Data Source=xyz.datawarehouse.fabric.microsoft.com",
+            provisioningStatus: "Success"
+          }
+        }
+      },
+      {
+        id: "1a2b3c4d-5e6f-7890-abcd-ef1234567891",
+        type: "Lakehouse",
+        displayName: "Inventory_LH",
+        description: "Real-time inventory tracking",
+        workspaceId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+      }
+    ]
+  };
+
+  const RESP_HEADERS = [
+    { key:'content-type', val:'application/json; charset=utf-8' },
+    { key:'x-ms-request-id', val:'f4a2b3c7-8d9e-4f5a-b6c1-2d3e4f5a6b7c' },
+    { key:'x-ms-ratelimit-remaining', val:'199' },
+    { key:'x-ms-correlation-id', val:'a3f7c2e1-8b4d-4f6a-9c0e-1d2b3e4f5a6b' },
+    { key:'date', val:'Thu, 10 Jul 2025 14:23:17 GMT' },
+    { key:'content-length', val:'12743' },
+    { key:'cache-control', val:'no-store, no-cache' },
+    { key:'strict-transport-security', val:'max-age=31536000; includeSubDomains' },
+  ];
+
+  // ──────────── DOM REFS ────────────
+  const $ = (s, p) => (p || document).querySelector(s);
+  const $$ = (s, p) => [...(p || document).querySelectorAll(s)];
+
+  // ──────────── THEME TOGGLE ────────────
+  const themeToggle = $('#themeToggle');
+  const themeIcon = $('#themeIcon');
+  themeToggle.addEventListener('click', () => {
+    const html = document.documentElement;
+    html.classList.add('theme-transition');
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    themeIcon.textContent = isDark ? '\u2600' : '\u263E';
+    themeIcon.style.animation = 'rotate-in 300ms var(--spring)';
+    setTimeout(() => { themeIcon.style.animation = ''; }, 300);
+    setTimeout(() => html.classList.remove('theme-transition'), 350);
+    announce(isDark ? 'Switched to light theme' : 'Switched to dark theme');
+  });
+
+  // ──────────── METHOD DROPDOWN ────────────
+  const methodPill = $('#methodPill');
+  const methodLabel = $('#methodLabel');
+  const methodDropdown = $('#methodDropdown');
+  let currentMethod = 'GET';
+
+  const METHOD_CLASSES = { GET:'get', POST:'post', PUT:'put', PATCH:'patch', DELETE:'delete' };
+
+  methodPill.addEventListener('click', (e) => {
+    e.stopPropagation();
+    methodDropdown.classList.toggle('hidden');
+  });
+
+  $$('.method-dropdown-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const m = item.dataset.method;
+      setMethod(m);
+      methodDropdown.classList.add('hidden');
+    });
+  });
+
+  function setMethod(m) {
+    currentMethod = m;
+    methodLabel.textContent = m;
+    methodPill.className = 'method-pill ' + METHOD_CLASSES[m];
+    methodPill.style.animation = 'pop-in 200ms var(--spring)';
+    setTimeout(() => methodPill.style.animation = '', 200);
+    announce('Method changed to ' + m);
+  }
+
+  // ──────────── REQUEST TABS ────────────
+  const reqTabs = $$('.req-tab');
+  const reqPanes = $$('.req-tab-pane');
+  const reqUnderline = $('#reqTabUnderline');
+
+  function updateReqUnderline() {
+    const active = $('.req-tab.active');
+    if (!active) return;
+    reqUnderline.style.left = active.offsetLeft + 'px';
+    reqUnderline.style.width = active.offsetWidth + 'px';
+  }
+
+  reqTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      reqTabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); t.tabIndex = -1; });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected','true');
+      tab.tabIndex = 0;
+      const target = tab.dataset.tab;
+      reqPanes.forEach(p => p.classList.toggle('active', p.dataset.pane === target));
+      updateReqUnderline();
+    });
+  });
+  requestAnimationFrame(updateReqUnderline);
+
+  // ──────────── RESPONSE TABS ────────────
+  const respTabs = $$('.resp-tab');
+  const respPanes = $$('.resp-tab-pane');
+  const respUnderline = $('#respTabUnderline');
+  const prettyRawContainer = $('#prettyRawContainer');
+
+  function updateRespUnderline() {
+    const active = $('.resp-tab.active');
+    if (!active) return;
+    respUnderline.style.left = active.offsetLeft + 'px';
+    respUnderline.style.width = active.offsetWidth + 'px';
+  }
+
+  respTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      respTabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected','true');
+      const target = tab.dataset.rtab;
+      respPanes.forEach(p => p.classList.toggle('active', p.dataset.rpane === target));
+      prettyRawContainer.style.display = (target === 'body' && hasResponse) ? 'flex' : 'none';
+      updateRespUnderline();
+    });
+  });
+  requestAnimationFrame(updateRespUnderline);
+
+  // ──────────── PRETTY / RAW TOGGLE ────────────
+  const prettyRawBtns = $$('.pretty-raw-btn');
+  const jsonTreeWrapper = $('#jsonTreeWrapper');
+  const rawView = $('#rawView');
+  let viewMode = 'pretty';
+
+  prettyRawBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      prettyRawBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      viewMode = btn.dataset.mode;
+      if (hasResponse) {
+        jsonTreeWrapper.style.display = viewMode === 'pretty' ? 'block' : 'none';
+        rawView.style.display = viewMode === 'raw' ? 'block' : 'none';
+      }
+    });
+  });
+
+  // ──────────── SEND BUTTON ────────────
+  const sendBtn = $('#sendBtn');
+  const respEmpty = $('#respEmpty');
+  const shimmerLoader = $('#shimmerLoader');
+  const statusPill = $('#statusPill');
+  const timingPill = $('#timingPill');
+  const sizePill = $('#sizePill');
+  const responsePanel = $('#responsePanel');
+  let hasResponse = false;
+
+  sendBtn.addEventListener('click', simulateSend);
+
+  function simulateSend() {
+    if (sendBtn.classList.contains('loading')) return;
+    sendBtn.classList.add('loading');
+    respEmpty.style.display = 'none';
+    shimmerLoader.classList.add('active');
+    jsonTreeWrapper.style.display = 'none';
+    rawView.style.display = 'none';
+    statusPill.style.display = 'none';
+    timingPill.style.display = 'none';
+    sizePill.style.display = 'none';
+    responsePanel.className = 'response-panel';
+    prettyRawContainer.style.display = 'none';
+
+    setTimeout(() => {
+      sendBtn.classList.remove('loading');
+      shimmerLoader.classList.remove('active');
+      hasResponse = true;
+
+      // Show status pills
+      statusPill.textContent = '200 OK';
+      statusPill.className = 'status-pill s2xx';
+      statusPill.style.display = '';
+      statusPill.style.animation = 'pill-pop 250ms var(--spring) both';
+
+      timingPill.textContent = '342ms';
+      timingPill.className = 'timing-pill fast';
+      timingPill.style.display = '';
+
+      sizePill.textContent = '12.4 KB';
+      sizePill.style.display = '';
+
+      responsePanel.classList.add('success-tint');
+
+      // Show body
+      if (viewMode === 'pretty') {
+        renderJsonTree(MOCK_RESPONSE);
+        jsonTreeWrapper.style.display = 'block';
+      } else {
+        rawView.textContent = JSON.stringify(MOCK_RESPONSE, null, 2);
+        rawView.style.display = 'block';
+      }
+
+      prettyRawContainer.style.display = 'flex';
+
+      // Populate response headers
+      renderRespHeaders();
+
+      announce('Response received: 200 OK, 342ms');
+    }, 900);
+  }
+
+  // ──────────── JSON TREE RENDERER ────────────
+  function renderJsonTree(data) {
+    jsonTreeWrapper.innerHTML = '';
+    const html = buildJsonHtml(data, 0, true);
+    jsonTreeWrapper.innerHTML = html;
+    // Attach toggle handlers
+    $$('.json-toggle', jsonTreeWrapper).forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        const content = toggle.closest('.json-node').querySelector('.json-children');
+        const hint = toggle.closest('.json-node').querySelector('.json-collapsed-hint');
+        const isCollapsed = content.style.display === 'none';
+        content.style.display = isCollapsed ? '' : 'none';
+        if (hint) hint.style.display = isCollapsed ? 'none' : '';
+        toggle.textContent = isCollapsed ? '\u25BE' : '\u25B8';
+      });
+    });
+  }
+
+  function buildJsonHtml(val, depth, isLast) {
+    const indent = '  '.repeat(depth);
+    const indent1 = '  '.repeat(depth + 1);
+
+    if (val === null) return '<span class="json-null">null</span>';
+    if (typeof val === 'boolean') return '<span class="json-bool">' + val + '</span>';
+    if (typeof val === 'number') return '<span class="json-number">' + val + '</span>';
+    if (typeof val === 'string') return '<span class="json-string">"' + escHtml(val) + '"</span>';
+
+    if (Array.isArray(val)) {
+      if (val.length === 0) return '<span class="json-bracket">[]</span>';
+      let h = '<span class="json-node"><span class="json-toggle">\u25BE</span><span class="json-bracket">[</span>';
+      const count = val.length;
+      h += '<span class="json-collapsed-hint" style="display:none"> ' + count + ' items... </span>';
+      h += '<span class="json-children">\n';
+      val.forEach((item, i) => {
+        const comma = i < val.length - 1 ? '<span class="json-comma">,</span>' : '';
+        h += '<span class="json-line">' + indent1 + buildJsonHtml(item, depth + 1, i === val.length - 1) + comma + '</span>\n';
+      });
+      h += indent + '<span class="json-bracket">]</span></span></span>';
+      return h;
+    }
+
+    if (typeof val === 'object') {
+      const keys = Object.keys(val);
+      if (keys.length === 0) return '<span class="json-brace">{}</span>';
+      let h = '<span class="json-node"><span class="json-toggle">\u25BE</span><span class="json-brace">{</span>';
+      h += '<span class="json-collapsed-hint" style="display:none"> ' + keys.length + ' keys... </span>';
+      h += '<span class="json-children">\n';
+      keys.forEach((key, i) => {
+        const comma = i < keys.length - 1 ? '<span class="json-comma">,</span>' : '';
+        h += '<span class="json-line">' + indent1 + '<span class="json-key">"' + escHtml(key) + '"</span>: ' + buildJsonHtml(val[key], depth + 1, i === keys.length - 1) + comma + '</span>\n';
+      });
+      h += indent + '<span class="json-brace">}</span></span></span>';
+      return h;
+    }
+    return String(val);
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ──────────── RESPONSE HEADERS ────────────
+  function renderRespHeaders() {
+    const list = $('#respHeadersList');
+    list.innerHTML = RESP_HEADERS.map(h =>
+      '<div class="resp-header-row"><span class="resp-header-key">' + escHtml(h.key) + '</span><span class="resp-header-val">' + escHtml(h.val) + '</span></div>'
+    ).join('');
+  }
+
+  // ──────────── SIDEBAR TOGGLE ────────────
+  const sidebar = $('#sidebar');
+  const sidebarToggle = $('#sidebarToggle');
+  const sidebarClose = $('#sidebarClose');
+
+  sidebarToggle.addEventListener('click', () => {
+    const isCollapsed = sidebar.classList.contains('collapsed');
+    sidebar.classList.toggle('collapsed');
+    sidebarToggle.textContent = isCollapsed ? '\u25B8' : '\u25C2';
+    announce(isCollapsed ? 'Sidebar expanded' : 'Sidebar collapsed');
+  });
+
+  sidebarClose.addEventListener('click', () => {
+    sidebar.classList.add('collapsed');
+    sidebarToggle.textContent = '\u25C2';
+  });
+
+  // ──────────── SIDEBAR SECTION TOGGLE ────────────
+  $$('.sidebar-section-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const chevron = header.querySelector('.section-chevron');
+      const body = header.nextElementSibling;
+      const isExpanded = chevron.classList.contains('expanded');
+      chevron.classList.toggle('expanded');
+      body.classList.toggle('collapsed');
+      header.setAttribute('aria-expanded', !isExpanded);
+    });
+  });
+
+  // ──────────── SAVED GROUP TOGGLE ────────────
+  $$('.saved-group-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const chevron = header.querySelector('.sg-chevron');
+      const body = header.nextElementSibling;
+      const isExpanded = chevron.classList.contains('expanded');
+      chevron.classList.toggle('expanded');
+      if (isExpanded) {
+        body.style.maxHeight = '0';
+        body.style.overflow = 'hidden';
+      } else {
+        body.style.maxHeight = '200px';
+        body.style.overflow = '';
+      }
+    });
+  });
+
+  // ──────────── HISTORY REPLAY ────────────
+  $$('.history-entry').forEach(entry => {
+    entry.addEventListener('click', () => {
+      const idx = parseInt(entry.dataset.idx);
+      const data = HISTORY_DATA[idx];
+      if (!data) return;
+      $$('.history-entry').forEach(e => e.classList.remove('active'));
+      entry.classList.add('active');
+      setMethod(data.method);
+      $('#urlInput').value = data.fullUrl;
+      announce('Loaded history entry: ' + data.method + ' ' + data.url);
+    });
+  });
+
+  // ──────────── SAVED ENTRY CLICK ────────────
+  const SAVED_URLS = {
+    'list-workspaces': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces' },
+    'list-lakehouses': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces/{workspaceId}/lakehouses' },
+    'list-tables': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables' },
+    'list-items': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/v1/workspaces/{workspaceId}/items' },
+    'get-dag': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTable/getLatestDag' },
+    'run-dag': { method:'POST', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTableSchedule/runDAG/{dagId}' },
+    'cancel-dag': { method:'POST', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTableSchedule/cancelDAG/{dagId}' },
+    'dag-status': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/liveTableSchedule/getDAGExecStatus/{executionId}' },
+    'force-unlock': { method:'POST', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/maintenance/forceUnlock/{resourceId}' },
+    'orphaned': { method:'GET', url:'https://biazure-int-edog-redirect.analysis-df.windows.net/maintenance/orphanedFolders' },
+  };
+
+  $$('.saved-entry').forEach(entry => {
+    entry.addEventListener('click', () => {
+      const key = entry.dataset.saved;
+      const info = SAVED_URLS[key];
+      if (!info) return;
+      setMethod(info.method);
+      $('#urlInput').value = info.url;
+      announce('Loaded saved endpoint: ' + entry.textContent.trim());
+    });
+  });
+
+  // ──────────── ENDPOINT CATALOG ────────────
+  const catalogBtn = $('#catalogBtn');
+  const catalogOverlay = $('#catalogOverlay');
+  const catalogBackdrop = $('#catalogBackdrop');
+  const catalogSearchInput = $('#catalogSearch');
+  const catalogListEl = $('#catalogList');
+  const catalogCountEl = $('#catalogCount');
+
+  function buildCatalog(filter) {
+    let html = '';
+    let total = 0;
+    ENDPOINTS.forEach(group => {
+      const filtered = filter ? group.items.filter(it =>
+        it.name.toLowerCase().includes(filter) || it.path.toLowerCase().includes(filter) || it.method.toLowerCase().includes(filter)
+      ) : group.items;
+      if (filtered.length === 0) return;
+      html += '<div class="catalog-group">';
+      html += '<div class="catalog-group-header"><span class="cg-dot ' + group.dot + '"></span>' + group.group + '</div>';
+      filtered.forEach(item => {
+        const mc = item.method.toLowerCase();
+        const base = 'https://biazure-int-edog-redirect.analysis-df.windows.net';
+        html += '<div class="catalog-item" data-cmethod="' + item.method + '" data-curl="' + base + item.path + '">';
+        html += '<span class="ci-method ' + mc + '">' + item.method + '</span>';
+        html += '<span class="ci-name">' + escHtml(item.name) + '</span>';
+        html += '<span class="ci-path">' + escHtml(item.path) + '</span>';
+        html += '</div>';
+        total++;
+      });
+      html += '</div>';
+    });
+    if (total === 0) {
+      html = '<div class="catalog-empty"><span style="font-size:24px;opacity:0.3">&#x25C7;</span><span>No matching endpoints</span></div>';
+    }
+    catalogListEl.innerHTML = html;
+    catalogCountEl.textContent = total + ' endpoint' + (total !== 1 ? 's' : '');
+
+    $$('.catalog-item', catalogListEl).forEach(item => {
+      item.addEventListener('click', () => {
+        setMethod(item.dataset.cmethod);
+        $('#urlInput').value = item.dataset.curl;
+        closeCatalog();
+        announce('Selected: ' + item.querySelector('.ci-name').textContent);
+      });
+    });
+  }
+
+  function openCatalog() {
+    catalogOverlay.classList.add('open');
+    catalogBtn.classList.add('open');
+    catalogSearchInput.value = '';
+    buildCatalog('');
+    setTimeout(() => catalogSearchInput.focus(), 100);
+  }
+
+  function closeCatalog() {
+    catalogOverlay.classList.remove('open');
+    catalogBtn.classList.remove('open');
+  }
+
+  catalogBtn.addEventListener('click', openCatalog);
+  catalogBackdrop.addEventListener('click', closeCatalog);
+
+  catalogSearchInput.addEventListener('input', () => {
+    buildCatalog(catalogSearchInput.value.toLowerCase().trim());
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && catalogOverlay.classList.contains('open')) {
+      closeCatalog();
+    }
+  });
+
+  // ──────────── COPY AS CURL ────────────
+  const curlBtn = $('#curlBtn');
+  curlBtn.addEventListener('click', () => {
+    showToast('\u2713 Copied to clipboard!');
+  });
+
+  // ──────────── TOAST ────────────
+  const toastContainer = $('#toastContainer');
+  function showToast(msg) {
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = '<span class="toast-icon">\u25CF</span>' + escHtml(msg);
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('out');
+      setTimeout(() => toast.remove(), 200);
+    }, 2500);
+  }
+
+  // ──────────── AUTH REVEAL ────────────
+  const revealBtn = $('#revealBtn');
+  const authMasked = $('#authMasked');
+  const authRevealed = $('#authRevealed');
+  let tokenRevealed = false;
+
+  revealBtn.addEventListener('click', () => {
+    tokenRevealed = !tokenRevealed;
+    authMasked.style.display = tokenRevealed ? 'none' : '';
+    authRevealed.style.display = tokenRevealed ? '' : 'none';
+    revealBtn.textContent = tokenRevealed ? 'Hide' : 'Reveal';
+  });
+
+  // ──────────── KEYBOARD SHORTCUTS ────────────
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      simulateSend();
+    }
+  });
+
+  // ──────────── CLOSE DROPDOWNS ON OUTSIDE CLICK ────────────
+  document.addEventListener('click', (e) => {
+    if (!methodPill.contains(e.target) && !methodDropdown.contains(e.target)) {
+      methodDropdown.classList.add('hidden');
+    }
+  });
+
+  // ──────────── A11Y ANNOUNCE ────────────
+  function announce(msg) {
+    const el = $('#a11yAnnounce');
+    el.textContent = '';
+    requestAnimationFrame(() => { el.textContent = msg; });
+  }
+
+  // ──────────── INIT ────────────
+  requestAnimationFrame(() => {
+    updateReqUnderline();
+    updateRespUnderline();
+  });
+  window.addEventListener('resize', () => {
+    updateReqUnderline();
+    updateRespUnderline();
+  });
+
+})();
+</script>
+</body>
+</html>
