@@ -1,0 +1,2077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — DAG Canvas Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f5f7;--surface:#ffffff;--surface-2:#f8f9fb;--surface-3:#ebedf0;
+  --border:rgba(0,0,0,0.06);--border-bright:rgba(0,0,0,0.12);
+  --text:#1a1d23;--text-dim:#5a6070;--text-muted:#8e95a5;
+  --accent:#6d5cff;--accent-dim:rgba(109,92,255,0.07);--accent-hover:rgba(109,92,255,0.04);
+  --accent-glow:rgba(109,92,255,0.15);--accent-soft:rgba(109,92,255,0.10);
+  --ok:#18a058;--ok-dim:rgba(24,160,88,0.08);--ok-glow:rgba(24,160,88,0.15);
+  --fail:#e5453b;--fail-dim:rgba(229,69,59,0.08);
+  --warn:#e5940c;--warn-dim:rgba(229,148,12,0.08);
+  --bronze:#b87333;--bronze-dim:rgba(184,115,51,0.08);
+  --silver:#7b8794;--silver-dim:rgba(123,135,148,0.08);
+  --gold:#c5a038;--gold-dim:rgba(197,160,56,0.08);
+  --nt:#2d7ff9;--nt-dim:rgba(45,127,249,0.08);
+  --nm:#6d5cff;--nm-dim:rgba(109,92,255,0.08);
+  --np:#e5940c;--np-dim:rgba(229,148,12,0.08);
+  --font:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Code','Consolas',monospace;
+  --xs:10px;--sm:12px;--md:13px;--lg:15px;--xl:18px;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;--s8:32px;
+  --r-s:4px;--r-m:6px;--r-l:10px;--r-xl:14px;--r-f:100px;
+  --sh-s:0 1px 2px rgba(0,0,0,0.04);
+  --sh-m:0 2px 8px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --sh-l:0 4px 16px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  --sh-xl:0 12px 40px rgba(0,0,0,0.10),0 4px 12px rgba(0,0,0,0.06);
+  --sh-glow:0 0 0 3px var(--accent-glow);
+  --ease:cubic-bezier(0.4,0,0.2,1);--spring:cubic-bezier(0.34,1.56,0.64,1);
+  --eo:cubic-bezier(0,0,0.2,1);--tf:80ms;--tn:150ms;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:var(--md);color:var(--text);background:var(--bg);line-height:1.5;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+button{cursor:pointer;border:none;background:none;font:inherit;color:inherit}
+input{font:inherit;color:inherit;background:none;border:none;outline:none}
+
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* HEADER */
+.hdr{height:48px;display:flex;align-items:center;padding:0 var(--s4);border-bottom:1px solid var(--border);background:var(--surface);gap:var(--s4);flex-shrink:0}
+.hdr-brand{font-family:var(--mono);font-size:var(--xs);font-weight:600;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase}
+.hdr-title{font-size:var(--lg);font-weight:700;display:flex;align-items:center;gap:var(--s2)}
+.hdr-title svg{width:18px;height:18px;color:var(--accent)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:var(--s3)}
+.hdr-step{font-size:var(--xs);font-weight:600;color:var(--text-muted)}
+.step-pill{background:var(--accent-dim);color:var(--accent);padding:2px 10px;border-radius:var(--r-f);font-weight:700;font-size:var(--xs);letter-spacing:0.02em}
+.main{flex:1;display:flex;overflow:hidden}
+
+/* PALETTE */
+.pal{width:200px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;padding:var(--s4);gap:var(--s3);animation:slideRight 400ms var(--ease) both}
+.pal-hdr{font-size:var(--xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;display:flex;justify-content:space-between}
+.nd-ct{font-family:var(--mono);font-weight:500;letter-spacing:0}
+.pi{padding:var(--s3);border-radius:var(--r-l);border:1.5px dashed var(--border-bright);background:var(--surface);cursor:grab;display:flex;align-items:center;gap:var(--s3);font-size:var(--sm);font-weight:500;transition:all 150ms var(--ease);user-select:none}
+.pi:hover{border-color:var(--accent);background:var(--accent-hover);border-style:solid;transform:translateY(-1px);box-shadow:var(--sh-m)}
+.pi:active{cursor:grabbing;transform:scale(0.97)}
+.pi-ico{width:28px;height:28px;border-radius:var(--r-m);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.pi-ico.t{background:var(--nt-dim);color:var(--nt)}
+.pi-ico.m{background:var(--nm-dim);color:var(--nm)}
+.pi-ico.p{background:var(--np-dim);color:var(--np)}
+.pi-info{display:flex;flex-direction:column;gap:1px}
+.pi-name{font-weight:600}
+.pi-sub{font-size:9px;color:var(--text-muted)}
+.pal-sep{height:1px;background:var(--border);margin:var(--s1) 0}
+.pal-bot{margin-top:auto;display:flex;flex-direction:column;gap:var(--s2)}
+.pa{padding:var(--s2) var(--s3);border-radius:var(--r-m);font-size:var(--xs);font-weight:600;color:var(--text-dim);background:var(--surface-2);display:flex;align-items:center;gap:var(--s2);transition:all var(--tf) var(--ease)}
+.pa:hover{background:var(--surface-3);color:var(--text)}
+.pa:disabled{opacity:0.35;pointer-events:none}
+.pa svg{width:14px;height:14px;flex-shrink:0}
+.pa-row{display:flex;gap:var(--s1)}
+.pa-row .pa{flex:1;justify-content:center}
+
+/* VIEWPORT */
+.vp{flex:1;position:relative;overflow:hidden;background:var(--surface-2);cursor:default}
+.vp.panning{cursor:grabbing}
+.vp.connecting{cursor:crosshair}
+.grid{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(circle,rgba(0,0,0,0.07) 1px,transparent 1px);background-size:24px 24px;transition:opacity 300ms var(--ease)}
+.grid.off{opacity:0}
+.world{position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform}
+
+/* NODES */
+.nd{position:absolute;width:180px;background:var(--surface);border-radius:var(--r-l);border:1.5px solid var(--border-bright);box-shadow:var(--sh-s);cursor:pointer;user-select:none;transition:box-shadow 200ms var(--ease),border-color 200ms var(--ease);z-index:1}
+.nd::before{content:'';position:absolute;top:-1px;left:12px;right:12px;height:3px;border-radius:0 0 3px 3px;opacity:0;transition:opacity 200ms var(--ease)}
+.nd:hover::before,.nd.sel::before{opacity:1}
+.nd[data-s=bronze]::before{background:var(--bronze)}
+.nd[data-s=silver]::before{background:var(--silver)}
+.nd[data-s=gold]::before{background:var(--gold)}
+.nd[data-s=dbo]::before{background:var(--text-muted)}
+.nd:hover{border-color:rgba(0,0,0,0.18);box-shadow:var(--sh-m);z-index:2}
+.nd.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow),var(--sh-m);z-index:3}
+.nd.dragging{box-shadow:var(--sh-xl);z-index:100;opacity:0.92}
+.nd-body{padding:var(--s3) var(--s4)}
+.nd-hdr{display:flex;align-items:center;gap:var(--s2)}
+.nd-ico{width:22px;height:22px;border-radius:var(--r-s);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.nd-ico.t{background:var(--nt-dim);color:var(--nt)}
+.nd-ico.m{background:var(--nm-dim);color:var(--nm)}
+.nd-ico.p{background:var(--np-dim);color:var(--np)}
+.nd-nm{font-size:var(--sm);font-weight:600;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.nd-nm-in{font-size:var(--sm);font-weight:600;font-family:var(--mono);background:var(--accent-dim);border:1px solid var(--accent);border-radius:var(--r-s);padding:0 4px;width:120px;color:var(--text)}
+.nd-meta{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s1)}
+.nbg{font-size:8px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:var(--r-f);letter-spacing:0.04em}
+.nbg.t{background:var(--nt-dim);color:var(--nt)}
+.nbg.m{background:var(--nm-dim);color:var(--nm)}
+.nbg.p{background:var(--np-dim);color:var(--np)}
+.sbg{font-size:8px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:var(--r-f);letter-spacing:0.04em}
+.sbg[data-s=bronze]{background:var(--bronze-dim);color:var(--bronze)}
+.sbg[data-s=silver]{background:var(--silver-dim);color:var(--silver)}
+.sbg[data-s=gold]{background:var(--gold-dim);color:var(--gold)}
+.sbg[data-s=dbo]{background:rgba(90,96,112,0.08);color:var(--text-muted)}
+
+/* PORTS */
+.pt{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--text-muted);cursor:crosshair;z-index:10;opacity:0;transform:scale(0.5);transition:all 200ms var(--spring)}
+.nd:hover .pt,.nd.sel .pt,.nd.show-ports .pt{opacity:1;transform:scale(1)}
+.pt-t{top:-6px;left:50%;margin-left:-6px}
+.pt-b{bottom:-6px;left:50%;margin-left:-6px}
+.pt-l{left:-6px;top:50%;margin-top:-6px}
+.pt-r{right:-6px;top:50%;margin-top:-6px}
+.pt:hover{border-color:var(--accent);background:var(--accent-dim);transform:scale(1.3)!important;box-shadow:0 0 0 4px var(--accent-glow)}
+.pt.vt{border-color:var(--ok);background:var(--ok-dim);animation:ppg 600ms ease infinite;opacity:1!important;transform:scale(1.3)!important}
+.pt.it{border-color:var(--fail);background:var(--fail-dim);opacity:1!important;transform:scale(1.1)!important}
+
+/* CONNECTIONS */
+.csv{position:absolute;top:0;left:0;width:10000px;height:10000px;overflow:visible;pointer-events:none;z-index:0}
+.cp{fill:none;stroke-width:2.5;opacity:0.8;pointer-events:stroke;stroke-linecap:round;stroke-linejoin:round;cursor:pointer;transition:stroke-width 150ms var(--ease),opacity 150ms var(--ease),filter 150ms var(--ease)}
+.cp:hover{stroke-width:4;opacity:1}
+.cp.sel{stroke:var(--accent);stroke-width:3;opacity:1;filter:drop-shadow(0 0 5px rgba(109,92,255,0.45))}
+.cp.new-conn{stroke-dasharray:300;stroke-dashoffset:300;animation:cd 500ms var(--ease) forwards}
+.cf{fill:none;stroke-width:2.5;stroke-dasharray:8 5;pointer-events:none;opacity:0.45;animation:fd 1.2s linear infinite}
+.cpv{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-dasharray:8 4;opacity:0.85;pointer-events:none;filter:drop-shadow(0 0 3px rgba(109,92,255,0.3))}
+.cdel{cursor:pointer;pointer-events:all}
+
+/* CODE PANEL */
+.cpn{width:280px;flex-shrink:0;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;transition:width 300ms var(--ease),opacity 200ms var(--ease);overflow:hidden;animation:slideLeft 400ms var(--ease) 100ms both}
+.cpn.collapsed{width:0;border:none;opacity:0}
+.cpn-h{padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.cpn-t{font-size:var(--xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em}
+.cpn-a{display:flex;gap:var(--s1)}
+.cb{padding:2px 8px;border-radius:var(--r-s);font-size:var(--xs);font-weight:600;color:var(--text-dim);background:var(--surface-2);transition:all var(--tf) var(--ease);display:flex;align-items:center;gap:4px}
+.cb:hover{background:var(--surface-3);color:var(--text)}
+.cb.ok{background:var(--ok-dim);color:var(--ok)}
+.cpn-b{flex:1;overflow-y:auto;font-family:var(--mono);font-size:var(--xs);line-height:1.8}
+.cc{border-bottom:1px solid var(--border);padding:var(--s3) 0;position:relative;animation:cci 300ms var(--ease) both}
+.cc:last-child{border-bottom:none}
+.cc-h{display:flex;align-items:center;justify-content:space-between;padding:0 var(--s3);margin-bottom:2px}
+.cc-l{font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em}
+.cc-cp{padding:1px 6px;border-radius:var(--r-s);font-size:9px;font-weight:600;color:var(--text-muted);background:var(--surface-2);cursor:pointer;transition:all var(--tf) var(--ease)}
+.cc-cp:hover{background:var(--surface-3);color:var(--text)}
+.cc-cp.ok{background:var(--ok-dim);color:var(--ok)}
+.cl{display:flex}
+.cg{padding:0 var(--s2);text-align:right;color:var(--text-muted);opacity:0.35;user-select:none;min-width:28px}
+.ct{flex:1;padding:0 var(--s3);white-space:pre-wrap;word-break:break-word;color:var(--text-dim)}
+.ct .kw{color:var(--accent);font-weight:500}
+.ct .ty{color:#18a058;font-weight:500}
+.ct .str{color:var(--ok)}
+.ct .fn{color:var(--nt)}
+.ct .cm{color:var(--text-muted);font-style:italic}
+
+/* CODE TOGGLE */
+.ctg{position:absolute;right:280px;top:50%;transform:translateY(-50%);width:20px;height:44px;background:var(--surface);border:1px solid var(--border-bright);border-right:none;border-radius:var(--r-s) 0 0 var(--r-s);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:10px;cursor:pointer;transition:all var(--tf) var(--ease);z-index:20}
+.ctg:hover{background:var(--surface-2);color:var(--text)}
+.ctg.c{right:0}
+
+/* ZOOM */
+.zb{position:absolute;bottom:var(--s4);right:var(--s4);display:flex;align-items:center;gap:1px;background:var(--surface);border:1px solid var(--border-bright);border-radius:var(--r-m);padding:3px;box-shadow:var(--sh-m);z-index:20}
+.zbt{width:30px;height:28px;border-radius:var(--r-s);display:flex;align-items:center;justify-content:center;font-size:var(--sm);color:var(--text-dim);font-weight:600;transition:all var(--tf) var(--ease)}
+.zbt:hover{background:var(--surface-2);color:var(--text)}
+.zpct{min-width:44px;text-align:center;font-size:var(--xs);font-weight:600;color:var(--text-dim);font-family:var(--mono);cursor:pointer;padding:0 4px}
+.zpct:hover{color:var(--accent)}
+.zsp{width:1px;height:18px;background:var(--border-bright);margin:0 2px}
+
+/* TOOLBAR */
+.tb{position:absolute;top:var(--s3);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:1px;background:var(--surface);border:1px solid var(--border-bright);border-radius:var(--r-m);padding:3px;box-shadow:var(--sh-m);z-index:20;animation:slideDown 300ms var(--ease) 200ms both}
+.tbb{width:30px;height:28px;border-radius:var(--r-s);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--text-dim);transition:all var(--tf) var(--ease);position:relative}
+.tbb:hover{background:var(--surface-2);color:var(--text)}
+.tbb.on{background:var(--accent-dim);color:var(--accent)}
+.tbb svg{width:14px;height:14px}
+.tbs{width:1px;height:18px;background:var(--border-bright);margin:0 2px}
+.tbt{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--text);color:#fff;font-size:9px;font-weight:600;padding:3px 8px;border-radius:var(--r-s);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 150ms var(--ease);z-index:30}
+.tbb:hover .tbt{opacity:1}
+
+/* MINIMAP */
+.mm{position:absolute;bottom:var(--s4);left:var(--s4);width:160px;height:100px;background:var(--surface);border:1px solid var(--border-bright);border-radius:var(--r-m);box-shadow:var(--sh-m);z-index:20;overflow:hidden;display:none}
+.mm.vis{display:block;animation:scaleIn 250ms var(--spring) both}
+.mm-vp{position:absolute;border:1.5px solid var(--accent);border-radius:1px;background:rgba(109,92,255,0.06)}
+
+/* CONTEXT MENU */
+.cm-m{position:fixed;background:var(--surface);border:1px solid var(--border-bright);border-radius:var(--r-l);padding:var(--s1);box-shadow:var(--sh-xl);min-width:180px;z-index:1000;display:none;animation:scaleSpring 200ms var(--spring) both}
+.cm-m.vis{display:block}
+.ci{padding:var(--s2) var(--s3);border-radius:var(--r-s);font-size:var(--sm);color:var(--text-dim);display:flex;align-items:center;gap:var(--s2);cursor:pointer;transition:all var(--tf) var(--ease)}
+.ci:hover{background:var(--surface-2);color:var(--text)}
+.ci.dng{color:var(--fail)}
+.ci.dng:hover{background:var(--fail-dim)}
+.ci .sc{margin-left:auto;font-size:9px;color:var(--text-muted);font-family:var(--mono)}
+.csep{height:1px;background:var(--border);margin:var(--s1)}
+
+/* TOAST */
+.tc{position:fixed;top:var(--s4);right:var(--s4);display:flex;flex-direction:column;gap:var(--s2);z-index:2000;pointer-events:none}
+.tst{pointer-events:all;background:var(--surface);border:1px solid var(--border-bright);border-radius:var(--r-l);padding:var(--s3) var(--s4);box-shadow:var(--sh-xl);display:flex;align-items:center;gap:var(--s3);font-size:var(--sm);min-width:260px;max-width:380px;animation:ti 350ms var(--spring) both;position:relative;overflow:hidden}
+.tst.out{animation:to 250ms var(--ease) both}
+.tst-i{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.tst-i.ok{background:var(--ok-dim);color:var(--ok)}
+.tst-i.err{background:var(--fail-dim);color:var(--fail)}
+.tst-i.inf{background:var(--accent-dim);color:var(--accent)}
+.tst-m{flex:1;font-weight:500}
+.tst-x{padding:2px;border-radius:var(--r-s);color:var(--text-muted);font-size:14px}
+.tst-x:hover{background:var(--surface-3);color:var(--text)}
+.tst-p{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);border-radius:0 0 0 var(--r-l);animation:tp 3s linear both}
+.tst.err .tst-p{background:var(--fail)}
+.tst.ok .tst-p{background:var(--ok)}
+
+/* MARQUEE */
+.mq{position:absolute;border:1.5px solid var(--accent);background:rgba(109,92,255,0.06);border-radius:2px;pointer-events:none;z-index:50;display:none}
+
+/* DROP ZONE */
+.dz{position:absolute;inset:0;z-index:15;pointer-events:none;display:none}
+.dz.on{display:block;animation:dzp 1s ease infinite}
+.dz::before{content:'';position:absolute;inset:8px;border:2px dashed var(--accent);border-radius:var(--r-xl);opacity:0.3}
+
+/* EMPTY STATE */
+.es{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:5;pointer-events:none;transition:opacity 400ms var(--ease)}
+.es.hid{opacity:0}
+.es-i{width:64px;height:64px;border-radius:var(--r-xl);background:var(--accent-dim);display:flex;align-items:center;justify-content:center;margin-bottom:var(--s4);animation:eb 3s ease-in-out infinite}
+.es-i svg{width:28px;height:28px;color:var(--accent)}
+.es-t{font-size:var(--lg);font-weight:600;margin-bottom:var(--s1)}
+.es-h{font-size:var(--sm);color:var(--text-muted);text-align:center;max-width:280px;line-height:1.6}
+.kbd{display:inline-flex;padding:1px 6px;background:var(--surface-3);border-radius:var(--r-s);font-family:var(--mono);font-size:var(--xs);font-weight:500;color:var(--text-dim);margin:0 2px}
+
+/* GHOST */
+.gh{position:fixed;pointer-events:none;z-index:5000;opacity:0.85;transform:rotate(-2deg);padding:var(--s3) var(--s4);background:var(--surface);border-radius:var(--r-l);border:1.5px solid var(--accent);box-shadow:var(--sh-xl);display:none;font-size:var(--sm);font-weight:600;font-family:var(--mono)}
+
+/* STATUS */
+.sb{height:26px;display:flex;align-items:center;padding:0 var(--s4);border-top:1px solid var(--border);background:var(--surface);font-size:var(--xs);color:var(--text-muted);gap:var(--s4);flex-shrink:0}
+.sb .sep{width:1px;height:12px;background:var(--border-bright)}
+
+/* PARTICLES */
+.particle{position:absolute;width:4px;height:4px;border-radius:50%;pointer-events:none;z-index:200;animation:pb 600ms var(--eo) both}
+
+/* 35 KEYFRAMES */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideDown{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideLeft{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideRight{from{opacity:0;transform:translateX(-60px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scaleIn{from{opacity:0;transform:scale(0.92)}to{opacity:1;transform:scale(1)}}
+@keyframes scaleSpring{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+@keyframes nsi{0%{opacity:0;transform:scale(0.3)}60%{opacity:1;transform:scale(1.08)}80%{transform:scale(0.97)}100%{transform:scale(1)}}
+@keyframes ndo{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.3) rotate(10deg)}}
+@keyframes ppg{0%,100%{box-shadow:0 0 0 0 var(--ok-glow)}50%{box-shadow:0 0 0 8px transparent}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes fd{to{stroke-dashoffset:-20}}
+@keyframes ti{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes to{to{opacity:0;transform:translateX(40px)}}
+@keyframes tp{from{width:100%}to{width:0}}
+@keyframes dzp{0%,100%{opacity:0.4}50%{opacity:0.8}}
+@keyframes eb{0%,100%{transform:scale(1);box-shadow:0 0 0 0 var(--accent-glow)}50%{transform:scale(1.05);box-shadow:0 0 0 12px transparent}}
+@keyframes cs{0%{stroke-width:4;opacity:1}50%{stroke-width:3}100%{stroke-width:2;opacity:0.5}}
+@keyframes shk{0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes cci{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pb{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--px),var(--py)) scale(0)}}
+@keyframes cd{from{stroke-dashoffset:300}to{stroke-dashoffset:0}}
+@keyframes ns{0%{box-shadow:0 0 0 0 var(--accent-glow)}50%{box-shadow:0 0 0 8px var(--accent-glow)}100%{box-shadow:0 0 0 3px var(--accent-glow)}}
+@keyframes gf{from{opacity:0}to{opacity:1}}
+@keyframes bg{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
+@keyframes flowGlow{0%{filter:brightness(1)}50%{filter:brightness(1.3)}100%{filter:brightness(1)}}
+@keyframes portRing{0%{box-shadow:0 0 0 0 var(--accent-glow)}100%{box-shadow:0 0 0 10px transparent}}
+@keyframes arrangeMove{from{opacity:0.6}to{opacity:1}}
+@keyframes headerPulse{0%,100%{opacity:1}50%{opacity:0.7}}
+@keyframes copyFlash{0%{background:var(--ok-dim)}100%{background:var(--surface-2)}}
+@keyframes dragOver{0%,100%{border-color:rgba(109,92,255,0.3)}50%{border-color:rgba(109,92,255,0.6)}}
+@keyframes minimapPan{from{opacity:0.5}to{opacity:1}}
+/* ORPHAN MLV INDICATOR */
+.nd.orphan-mlv{border-style:dashed;border-color:var(--warn)}
+.nd.orphan-mlv::after{content:'\26A0';position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:var(--warn-dim);color:var(--warn);font-size:10px;display:flex;align-items:center;justify-content:center;border:1px solid var(--warn);z-index:5}
+
+/* CODE PANEL HIGHLIGHT */
+.cc.highlighted{border-left:2px solid var(--accent);background:var(--accent-dim)}
+
+/* QUICK START MODAL */
+.qs-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.35);backdrop-filter:blur(4px);z-index:3000;display:none;align-items:center;justify-content:center;animation:fadeIn 200ms var(--ease) both}
+.qs-overlay.vis{display:flex}
+.qs-modal{background:var(--surface);border-radius:var(--r-xl);box-shadow:var(--sh-xl),0 0 0 1px var(--border);width:720px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column;animation:scaleSpring 300ms var(--spring) both;overflow:hidden}
+.qs-hdr{display:flex;align-items:center;justify-content:space-between;padding:var(--s4) var(--s5);border-bottom:1px solid var(--border);flex-shrink:0}
+.qs-title{font-size:var(--lg);font-weight:700;display:flex;align-items:center;gap:var(--s2)}
+.qs-title svg{width:18px;height:18px;color:var(--accent)}
+.qs-close{width:28px;height:28px;border-radius:var(--r-s);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:16px;transition:all var(--tf) var(--ease)}
+.qs-close:hover{background:var(--surface-3);color:var(--text)}
+.qs-body{flex:1;overflow-y:auto;padding:var(--s5)}
+.qs-section-label{font-size:var(--xs);font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:var(--s3)}
+.qs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:var(--s3);margin-bottom:var(--s5)}
+.qs-card{padding:var(--s4);border-radius:var(--r-l);border:1.5px solid var(--border-bright);background:var(--surface);cursor:pointer;transition:all 200ms var(--ease);display:flex;flex-direction:column;gap:var(--s2)}
+.qs-card:hover{border-color:rgba(0,0,0,0.18);box-shadow:var(--sh-m);transform:translateY(-1px)}
+.qs-card.active{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow),var(--sh-m)}
+.qs-card-preview{height:64px;display:flex;align-items:center;justify-content:center;border-radius:var(--r-m);background:var(--surface-2);overflow:hidden}
+.qs-card-preview svg{width:100%;height:100%;max-width:160px}
+.qs-card-name{font-size:var(--sm);font-weight:700}
+.qs-card-desc{font-size:10px;color:var(--text-muted);line-height:1.4}
+.qs-card-footer{display:flex;align-items:center;gap:var(--s2);margin-top:auto}
+.qs-badge{font-size:8px;font-weight:700;text-transform:uppercase;padding:1px 6px;border-radius:var(--r-f);letter-spacing:0.04em}
+.qs-badge.beginner{background:var(--ok-dim);color:var(--ok)}
+.qs-badge.intermediate{background:var(--accent-dim);color:var(--accent)}
+.qs-badge.advanced{background:var(--warn-dim);color:var(--warn)}
+.qs-config{display:grid;grid-template-columns:1fr 1fr;gap:var(--s4);padding:var(--s4);border-radius:var(--r-l);border:1px solid var(--border);background:var(--surface-2);margin-bottom:var(--s5)}
+.qs-field{display:flex;flex-direction:column;gap:var(--s1)}
+.qs-field-label{font-size:var(--xs);font-weight:600;color:var(--text-dim)}
+.qs-field-row{display:flex;align-items:center;gap:var(--s2)}
+.qs-slider{flex:1;accent-color:var(--accent);height:4px}
+.qs-val{font-family:var(--mono);font-size:var(--sm);font-weight:700;min-width:24px;text-align:center;color:var(--accent)}
+.qs-preview-box{border-radius:var(--r-l);border:1px solid var(--border);background:var(--surface);padding:var(--s3);min-height:80px;display:flex;align-items:center;justify-content:center;margin-bottom:var(--s5)}
+.qs-preview-box svg{width:100%;max-width:400px;height:80px}
+.qs-footer{display:flex;align-items:center;justify-content:space-between;padding:var(--s4) var(--s5);border-top:1px solid var(--border);flex-shrink:0}
+.qs-hint{font-size:var(--xs);color:var(--text-muted)}
+.qs-gen{padding:var(--s2) var(--s5);border-radius:var(--r-m);background:var(--accent);color:#fff;font-weight:700;font-size:var(--sm);transition:all 150ms var(--ease);display:flex;align-items:center;gap:var(--s2)}
+.qs-gen:hover{filter:brightness(1.1);box-shadow:var(--sh-m)}
+.qs-gen:active{transform:scale(0.97)}
+
+/* EMPTY STATE QUICK START BUTTON */
+.es-qs{pointer-events:all;margin-top:var(--s4);padding:var(--s2) var(--s5);border-radius:var(--r-m);background:var(--accent);color:#fff;font-weight:700;font-size:var(--sm);transition:all 150ms var(--ease);display:inline-flex;align-items:center;gap:var(--s2);cursor:pointer}
+.es-qs:hover{filter:brightness(1.1);box-shadow:var(--sh-m)}
+.es-qs:active{transform:scale(0.97)}
+.es-or{font-size:var(--xs);color:var(--text-muted);margin-top:var(--s2);pointer-events:none}
+
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Header -->
+  <div class="hdr">
+    <span class="hdr-brand">EDOG Studio</span>
+    <div class="hdr-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      New Infrastructure
+    </div>
+    <div class="hdr-right">
+      <span class="hdr-step">Step</span>
+      <span class="step-pill">3 / 5</span>
+      <span class="hdr-step" style="margin-left:var(--s2)">Build DAG</span>
+    </div>
+  </div>
+
+  <!-- Main area -->
+  <div class="main">
+    <!-- Palette -->
+    <div class="pal" id="palette">
+      <div class="pal-hdr">
+        <span>ADD NODES</span>
+        <span class="nd-ct" id="nodeCount">0 / 100</span>
+      </div>
+      <div class="pi" data-type="sql-table" draggable="false">
+        <div class="pi-ico t">◇</div>
+        <div class="pi-info"><span class="pi-name">SQL Table</span><span class="pi-sub">Source data table</span></div>
+      </div>
+      <div class="pi" data-type="sql-mlv" draggable="false">
+        <div class="pi-ico m">◆</div>
+        <div class="pi-info"><span class="pi-name">SQL MLV</span><span class="pi-sub">SQL materialized view</span></div>
+      </div>
+      <div class="pi" data-type="pyspark-mlv" draggable="false">
+        <div class="pi-ico p">◆</div>
+        <div class="pi-info"><span class="pi-name">PySpark MLV</span><span class="pi-sub">PySpark materialized view</span></div>
+      </div>
+      <div class="pal-sep"></div>
+      <div class="pal-bot">
+        <button class="pa" id="autoBtn" title="Auto Arrange (Ctrl+Shift+A)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Auto Arrange
+        </button>
+        <div class="pa-row">
+          <button class="pa" id="undoBtn" disabled title="Undo (Ctrl+Z)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Undo
+          </button>
+          <button class="pa" id="redoBtn" disabled title="Redo (Ctrl+Y)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transform:scaleX(-1)"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Redo
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas area wrapper (for code toggle positioning) -->
+    <div style="flex:1;display:flex;position:relative;overflow:hidden">
+      <!-- Viewport -->
+      <div class="vp" id="viewport">
+        <div class="grid" id="grid"></div>
+        <div class="world" id="world">
+          <svg class="csv" id="connSvg" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="ah" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 10 4, 0 7.5" fill="rgba(142,149,165,0.8)"/></marker>
+              <marker id="ah-bronze" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 10 4, 0 7.5" fill="#c98040"/></marker>
+              <marker id="ah-silver" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 10 4, 0 7.5" fill="#5a8fa8"/></marker>
+              <marker id="ah-gold" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 10 4, 0 7.5" fill="#8e6abf"/></marker>
+              <marker id="ah-dbo" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 10 4, 0 7.5" fill="#7b8794"/></marker>
+              <marker id="aha" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0.5, 10 4, 0 7.5" fill="rgba(109,92,255,0.85)"/></marker>
+            </defs>
+            <g id="connLayer"></g>
+            <g id="flowLayer"></g>
+            <g id="prevLayer"></g>
+          </svg>
+          <div id="nodesLayer"></div>
+        </div>
+        <div class="mq" id="marquee"></div>
+        <div class="dz" id="dropZone"></div>
+        <div class="es" id="emptyState">
+          <div class="es-i">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="es-t">Build Your DAG</div>
+          <div class="es-h">Scaffold a complete pipeline in seconds, or drag nodes from the palette to build from scratch.</div>
+          <button class="es-qs" id="esQuickStart">Quick Start ▸</button>
+          <div class="es-or">or drag nodes from palette</div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="tb" id="toolbar">
+          <button class="tbb on" id="gridBtn" title="Toggle Grid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            <span class="tbt">Toggle Grid</span>
+          </button>
+          <button class="tbb" id="snapBtn" title="Snap to Grid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
+            <span class="tbt">Snap to Grid</span>
+          </button>
+          <div class="tbs"></div>
+          <button class="tbb" id="mmBtn" title="Mini-map">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><rect x="6" y="6" width="4" height="4"/></svg>
+            <span class="tbt">Mini-map</span>
+          </button>
+          <button class="tbb" id="fitBtn2" title="Fit to View">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+            <span class="tbt">Fit to View</span>
+          </button>
+          <div class="tbs"></div>
+          <button class="tbb" id="qsBtn" title="Quick Start">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span class="tbt">Quick Start</span>
+          </button>
+        </div>
+
+        <!-- Zoom bar -->
+        <div class="zb" id="zoomBar">
+          <button class="zbt" id="zOutBtn" title="Zoom Out">−</button>
+          <div class="zsp"></div>
+          <span class="zpct" id="zoomPct" title="Double-click to reset">100%</span>
+          <div class="zsp"></div>
+          <button class="zbt" id="zInBtn" title="Zoom In">+</button>
+          <div class="zsp"></div>
+          <button class="zbt" id="fitBtn" title="Fit" style="font-size:10px">⌸</button>
+        </div>
+
+        <!-- Minimap -->
+        <div class="mm" id="minimap">
+          <canvas id="mmCanvas" width="160" height="100"></canvas>
+          <div class="mm-vp" id="mmVp"></div>
+        </div>
+      </div>
+
+      <!-- Code Toggle -->
+      <button class="ctg" id="codeToggle" title="Toggle code preview">◂</button>
+
+      <!-- Code Panel -->
+      <div class="cpn" id="codePanel">
+        <div class="cpn-h">
+          <span class="cpn-t">Code Preview</span>
+          <div class="cpn-a">
+            <button class="cb" id="copyAllBtn">Copy All</button>
+            <button class="cb" id="refreshBtn">Refresh</button>
+          </div>
+        </div>
+        <div class="cpn-b" id="codeBody"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="sb" id="statusBar">
+    <span id="sbNodes">0 nodes</span>
+    <span class="sep"></span>
+    <span id="sbConns">0 connections</span>
+    <span class="sep"></span>
+    <span id="sbZoom">100%</span>
+    <span style="margin-left:auto;font-family:var(--mono)">Ctrl+Z undo · Del remove · Ctrl+A select all</span>
+  </div>
+</div>
+
+<!-- Context Menu -->
+<div class="cm-m" id="ctxMenu"></div>
+
+<!-- Toast Container -->
+<div class="tc" id="toastBox"></div>
+
+<!-- Drag Ghost -->
+<div class="gh" id="ghost"></div>
+
+<!-- Quick Start Modal -->
+<div class="qs-overlay" id="qsOverlay">
+  <div class="qs-modal">
+    <div class="qs-hdr">
+      <div class="qs-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Quick Start: Choose a Structure
+      </div>
+      <button class="qs-close" id="qsClose">&times;</button>
+    </div>
+    <div class="qs-body">
+      <div class="qs-section-label">Structure Type</div>
+      <div class="qs-grid" id="qsGrid"></div>
+      <div class="qs-section-label">Configure Counts</div>
+      <div class="qs-config" id="qsConfig">
+        <div class="qs-field">
+          <span class="qs-field-label">Source Tables</span>
+          <div class="qs-field-row">
+            <input type="range" class="qs-slider" id="qsTables" min="1" max="12" value="3">
+            <span class="qs-val" id="qsTablesVal">3</span>
+          </div>
+        </div>
+        <div class="qs-field">
+          <span class="qs-field-label">MLV Nodes</span>
+          <div class="qs-field-row">
+            <input type="range" class="qs-slider" id="qsMlvs" min="1" max="12" value="3">
+            <span class="qs-val" id="qsMlvsVal">3</span>
+          </div>
+        </div>
+        <div class="qs-field">
+          <span class="qs-field-label">Gold Tier MLVs</span>
+          <div class="qs-field-row">
+            <input type="range" class="qs-slider" id="qsGold" min="0" max="6" value="1">
+            <span class="qs-val" id="qsGoldVal">1</span>
+          </div>
+        </div>
+        <div class="qs-field">
+          <span class="qs-field-label">PySpark MLVs</span>
+          <div class="qs-field-row">
+            <input type="range" class="qs-slider" id="qsPy" min="0" max="6" value="0">
+            <span class="qs-val" id="qsPyVal">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="qs-section-label">Live Preview</div>
+      <div class="qs-preview-box" id="qsPreview"></div>
+    </div>
+    <div class="qs-footer">
+      <span class="qs-hint">You can always modify after generation</span>
+      <button class="qs-gen" id="qsGenerate">Build DAG &#9654;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+
+/* ═══════════════════════════════════════════════════════════════
+   EDOG Studio — DAG Canvas Builder (F16 Mock)
+   Pure vanilla JS, SVG-based canvas with full interactivity
+   ═══════════════════════════════════════════════════════════════ */
+'use strict';
+
+// ─── CONFIG ──────────────────────────────────────────────────
+const CFG = {
+  NODE_W: 180, NODE_H: 64, GRID: 24, MAX_NODES: 100,
+  MIN_ZOOM: 0.25, MAX_ZOOM: 4, ZOOM_STEP: 0.12,
+  SNAP_DIST: 20, PORT_MAGNET: 30, CONN_OFFSET_MIN: 50,
+  DEBOUNCE_CODE: 300
+};
+
+const TYPE_MAP = {
+  'sql-table':   { icon: '\u25C7', badge: 'SQL TABLE',  cls: 't', schema: 'bronze', prefix: 'table' },
+  'sql-mlv':     { icon: '\u25C6', badge: 'SQL MLV',    cls: 'm', schema: 'silver', prefix: 'mlv'   },
+  'pyspark-mlv': { icon: '\u25C6', badge: 'PYSPARK',    cls: 'p', schema: 'gold',   prefix: 'spark' }
+};
+
+const SCHEMA_COLORS = {
+  bronze: '#b87333', silver: '#7b8794', gold: '#c5a038', dbo: '#5a6070'
+};
+
+// ─── STATE ───────────────────────────────────────────────────
+const S = {
+  nodes: [], conns: [], sel: new Set(), selConn: null,
+  pan: { x: 0, y: 0 }, zoom: 1, nextId: 1, nextConn: 1,
+  undo: [], redo: [], seqCounters: { 'sql-table': 0, 'sql-mlv': 0, 'pyspark-mlv': 0 },
+  gridOn: true, snapOn: false, mmOn: false, codeOpen: true,
+  // interaction state
+  dragging: null, panning: null, connecting: null, marquee: null, palDrag: null,
+  renaming: null, codeTimer: null, lastCreatedConn: null
+};
+
+// ─── DOM ─────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const svgNS = 'http://www.w3.org/2000/svg';
+const vp = $('viewport'), world = $('world'), grid = $('grid');
+const connLayer = $('connLayer'), flowLayer = $('flowLayer'), prevLayer = $('prevLayer');
+const nodesLayer = $('nodesLayer'), emptyState = $('emptyState');
+const marqueeEl = $('marquee'), dropZone = $('dropZone');
+const ctxMenu = $('ctxMenu'), ghost = $('ghost'), toastBox = $('toastBox');
+const zoomPct = $('zoomPct'), codeBody = $('codeBody'), codePanel = $('codePanel');
+const codeToggle = $('codeToggle'), minimap = $('minimap');
+
+// ─── UTILS ───────────────────────────────────────────────────
+function screenToCanvas(sx, sy) {
+  const r = vp.getBoundingClientRect();
+  return { x: (sx - r.left - S.pan.x) / S.zoom, y: (sy - r.top - S.pan.y) / S.zoom };
+}
+
+function snapGrid(v) { return S.snapOn ? Math.round(v / CFG.GRID) * CFG.GRID : v; }
+
+function nodeById(id) { return S.nodes.find(n => n.id === id); }
+
+function updateTransform() {
+  world.style.transform = `translate(${S.pan.x}px,${S.pan.y}px) scale(${S.zoom})`;
+  const sz = CFG.GRID * S.zoom;
+  grid.style.backgroundSize = `${sz}px ${sz}px`;
+  grid.style.backgroundPosition = `${S.pan.x % sz}px ${S.pan.y % sz}px`;
+  zoomPct.textContent = Math.round(S.zoom * 100) + '%';
+  $('sbZoom').textContent = Math.round(S.zoom * 100) + '%';
+  updateMinimap();
+}
+
+function updateStatus() {
+  $('nodeCount').textContent = S.nodes.length + ' / ' + CFG.MAX_NODES;
+  $('sbNodes').textContent = S.nodes.length + ' node' + (S.nodes.length !== 1 ? 's' : '');
+  $('sbConns').textContent = S.conns.length + ' connection' + (S.conns.length !== 1 ? 's' : '');
+  emptyState.classList.toggle('hid', S.nodes.length > 0);
+  $('undoBtn').disabled = S.undo.length === 0;
+  $('redoBtn').disabled = S.redo.length === 0;
+}
+
+// ─── UNDO / REDO ─────────────────────────────────────────────
+function pushUndo(action) { S.undo.push(action); S.redo = []; updateStatus(); }
+
+function applyAction(a, reverse) {
+  const r = reverse;
+  switch (a.type) {
+    case 'addNode': r ? removeNodeRaw(a.node.id) : addNodeRaw(a.node); break;
+    case 'removeNode': r ? addNodeRaw(a.node) : removeNodeRaw(a.node.id); if (r && a.conns) a.conns.forEach(c => addConnRaw(c)); if (!r && a.conns) a.conns.forEach(c => removeConnRaw(c.id)); break;
+    case 'moveNode': { const n = nodeById(a.id); if (n) { const p = r ? a.from : a.to; n.x = p.x; n.y = p.y; renderNode(n); renderConns(); } } break;
+    case 'addConn': r ? removeConnRaw(a.conn.id) : addConnRaw(a.conn); break;
+    case 'removeConn': r ? addConnRaw(a.conn) : removeConnRaw(a.conn.id); break;
+    case 'renameNode': { const n = nodeById(a.id); if (n) { n.name = r ? a.oldName : a.newName; renderNode(n); } } break;
+    case 'changeType': { const n = nodeById(a.id); if (n) { n.type = r ? a.oldType : a.newType; renderNode(n); renderConns(); } } break;
+    case 'changeSchema': { const n = nodeById(a.id); if (n) { n.schema = r ? a.oldSchema : a.newSchema; renderNode(n); renderConns(); } } break;
+    case 'moveMulti': { a.moves.forEach(m => { const n = nodeById(m.id); if (n) { const p = r ? m.from : m.to; n.x = p.x; n.y = p.y; renderNode(n); } }); renderConns(); } break;
+  }
+  scheduleCodeRefresh();
+  updateStatus();
+}
+
+function undo() { if (!S.undo.length) return; const a = S.undo.pop(); S.redo.push(a); applyAction(a, true); toast('Undo: ' + a.type.replace(/([A-Z])/g, ' $1').toLowerCase(), 'info'); }
+function redo() { if (!S.redo.length) return; const a = S.redo.pop(); S.undo.push(a); applyAction(a, false); toast('Redo: ' + a.type.replace(/([A-Z])/g, ' $1').toLowerCase(), 'info'); }
+
+// ─── NODE CRUD (raw, no undo) ────────────────────────────────
+function addNodeRaw(n) {
+  S.nodes.push(n);
+  const el = createNodeEl(n);
+  nodesLayer.appendChild(el);
+  el.style.animation = 'nsi 400ms var(--spring) both';
+  setTimeout(() => el.style.animation = '', 500);
+  updateStatus();
+}
+
+function removeNodeRaw(id) {
+  const idx = S.nodes.findIndex(n => n.id === id);
+  if (idx < 0) return;
+  const el = nodesLayer.querySelector(`[data-id="${id}"]`);
+  if (el) {
+    el.style.animation = 'ndo 300ms var(--ease) both';
+    burstParticles(el);
+    setTimeout(() => el.remove(), 350);
+  }
+  // Remove associated connections
+  S.conns = S.conns.filter(c => c.src !== id && c.tgt !== id);
+  S.nodes.splice(idx, 1);
+  S.sel.delete(id);
+  renderConns();
+  updateStatus();
+}
+
+function createNode(type, x, y, name) {
+  if (S.nodes.length >= CFG.MAX_NODES) { toast('Maximum ' + CFG.MAX_NODES + ' nodes reached', 'error'); return null; }
+  S.seqCounters[type]++;
+  const tm = TYPE_MAP[type];
+  const n = {
+    id: 'n' + (S.nextId++), type,
+    name: name || (tm.prefix + '_' + S.seqCounters[type]),
+    schema: tm.schema, x: snapGrid(x), y: snapGrid(y),
+    w: CFG.NODE_W, h: CFG.NODE_H
+  };
+  return n;
+}
+
+// ─── NODE ELEMENT ────────────────────────────────────────────
+function createNodeEl(n) {
+  const tm = TYPE_MAP[n.type];
+  const el = document.createElement('div');
+  el.className = 'nd';
+  el.dataset.id = n.id;
+  el.dataset.s = n.schema;
+  el.style.left = n.x + 'px';
+  el.style.top = n.y + 'px';
+  el.style.width = n.w + 'px';
+  // SQL Tables have no input ports (top/left)
+  const hasInput = n.type !== 'sql-table';
+  el.innerHTML = `
+    ${hasInput ? '<div class="pt pt-t" data-port="top" title="Input \u2014 drag to connect"></div>' : ''}
+    <div class="pt pt-r" data-port="right" title="Output \u2014 drag to connect"></div>
+    <div class="pt pt-b" data-port="bottom" title="Output \u2014 drag to connect"></div>
+    ${hasInput ? '<div class="pt pt-l" data-port="left" title="Input \u2014 drag to connect"></div>' : ''}
+    <div class="nd-body">
+      <div class="nd-hdr">
+        <div class="nd-ico ${tm.cls}">${tm.icon}</div>
+        <span class="nd-nm" data-field="name">${n.name}</span>
+      </div>
+      <div class="nd-meta">
+        <span class="nbg ${tm.cls}">${tm.badge}</span>
+        <span class="sbg" data-s="${n.schema}">${n.schema.toUpperCase()}</span>
+      </div>
+    </div>`;
+  // Event listeners
+  el.addEventListener('mousedown', e => onNodeMouseDown(e, n.id));
+  el.addEventListener('dblclick', e => onNodeDblClick(e, n.id));
+  el.addEventListener('contextmenu', e => onNodeContext(e, n.id));
+  // Port events
+  el.querySelectorAll('.pt').forEach(p => {
+    p.addEventListener('mousedown', e => { e.stopPropagation(); onPortMouseDown(e, n.id, p.dataset.port); });
+  });
+  return el;
+}
+
+function renderNode(n) {
+  const el = nodesLayer.querySelector(`[data-id="${n.id}"]`);
+  if (!el) return;
+  const tm = TYPE_MAP[n.type];
+  el.style.left = n.x + 'px';
+  el.style.top = n.y + 'px';
+  el.dataset.s = n.schema;
+  el.classList.toggle('sel', S.sel.has(n.id));
+  const nm = el.querySelector('[data-field="name"]');
+  if (nm && nm.tagName !== 'INPUT') nm.textContent = n.name;
+  const ico = el.querySelector('.nd-ico');
+  ico.className = 'nd-ico ' + tm.cls; ico.textContent = tm.icon;
+  const bg = el.querySelector('.nbg');
+  bg.className = 'nbg ' + tm.cls; bg.textContent = tm.badge;
+  const sg = el.querySelector('.sbg');
+  sg.dataset.s = n.schema; sg.textContent = n.schema.toUpperCase();
+}
+
+function renderAllNodes() { S.nodes.forEach(renderNode); updateCodeHighlight(); updateOrphanIndicators(); }
+
+// ─── CONNECTIONS ─────────────────────────────────────────────
+function addConnRaw(c) { S.conns.push(c); renderConns(); updateStatus(); }
+function removeConnRaw(id) { S.conns = S.conns.filter(c => c.id !== id); renderConns(); updateStatus(); }
+
+function bezierPath(src, tgt) {
+  const sx = src.x + src.w / 2, sy = src.y + src.h;
+  const tx = tgt.x + tgt.w / 2, ty = tgt.y;
+  const off = Math.max(CFG.CONN_OFFSET_MIN, Math.abs(ty - sy) * 0.4);
+  return `M${sx},${sy} C${sx},${sy + off} ${tx},${ty - off} ${tx},${ty}`;
+}
+
+function bezierMidpoint(src, tgt) {
+  const sx = src.x + src.w / 2, sy = src.y + src.h;
+  const tx = tgt.x + tgt.w / 2, ty = tgt.y;
+  return { x: (sx + tx) / 2, y: (sy + ty) / 2 };
+}
+
+// Vibrant connection colors (more visible than muted schema colors)
+const CONN_COLORS = {
+  bronze: '#c98040', silver: '#5a8fa8', gold: '#8e6abf', dbo: '#7b8794'
+};
+
+function renderConns() {
+  connLayer.innerHTML = '';
+  flowLayer.innerHTML = '';
+  S.conns.forEach(c => {
+    const src = nodeById(c.src), tgt = nodeById(c.tgt);
+    if (!src || !tgt) return;
+    const d = bezierPath(src, tgt);
+    const color = CONN_COLORS[src.schema] || '#7b8794';
+    const markerId = 'ah-' + (src.schema || 'dbo');
+    // Main path
+    const p = document.createElementNS(svgNS, 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('stroke', color);
+    p.setAttribute('marker-end', 'url(#' + markerId + ')');
+    p.className.baseVal = 'cp' + (S.selConn === c.id ? ' sel' : '') + (S.lastCreatedConn === c.id ? ' new-conn' : '');
+    p.dataset.id = c.id;
+    // Tooltip
+    const title = document.createElementNS(svgNS, 'title');
+    title.textContent = src.name + ' \u2192 ' + tgt.name;
+    p.appendChild(title);
+    p.addEventListener('click', e => { e.stopPropagation(); selectConn(c.id); });
+    p.addEventListener('dblclick', e => { e.stopPropagation(); deleteConn(c.id); });
+    // Connection context menu
+    p.addEventListener('contextmenu', e => {
+      e.preventDefault(); e.stopPropagation();
+      selectConn(c.id);
+      ctxHandler = action => {
+        if (action === 'delete-conn') deleteConn(c.id);
+        if (action === 'select-src') { S.sel.clear(); S.sel.add(c.src); S.selConn = null; renderAllNodes(); renderConns(); }
+        if (action === 'select-tgt') { S.sel.clear(); S.sel.add(c.tgt); S.selConn = null; renderAllNodes(); renderConns(); }
+      };
+      showCtx(e.clientX, e.clientY, [
+        { label: 'Delete Connection', action: 'delete-conn', cls: 'dng', shortcut: 'Del' },
+        '---',
+        { label: 'Select Source: ' + src.name, action: 'select-src' },
+        { label: 'Select Target: ' + tgt.name, action: 'select-tgt' },
+      ]);
+    });
+    connLayer.appendChild(p);
+    // Flow animation (animated dashes in data direction)
+    const f = document.createElementNS(svgNS, 'path');
+    f.setAttribute('d', d);
+    f.setAttribute('stroke', color);
+    f.className.baseVal = 'cf';
+    flowLayer.appendChild(f);
+  });
+  // Clear draw animation flag after render
+  if (S.lastCreatedConn) { setTimeout(() => { S.lastCreatedConn = null; }, 600); }
+  // Update orphan MLV indicators
+  updateOrphanIndicators();
+}
+
+function selectConn(id) {
+  S.selConn = (S.selConn === id) ? null : id;
+  S.sel.clear();
+  renderAllNodes();
+  renderConns();
+}
+
+function deleteConn(id) {
+  const c = S.conns.find(x => x.id === id);
+  if (!c) return;
+  pushUndo({ type: 'removeConn', conn: { ...c } });
+  removeConnRaw(id);
+  S.selConn = null;
+  toast('Connection removed', 'info');
+  scheduleCodeRefresh();
+}
+
+function isValidConnection(srcId, tgtId) {
+  const src = nodeById(srcId), tgt = nodeById(tgtId);
+  if (!src || !tgt) return { valid: false, reason: 'Invalid node' };
+  if (srcId === tgtId) return { valid: false, reason: 'Cannot connect a node to itself' };
+  if (src.type === 'sql-table' && tgt.type === 'sql-table')
+    return { valid: false, reason: 'Tables cannot consume from other tables' };
+  if (tgt.type === 'sql-table')
+    return { valid: false, reason: 'SQL Tables are source-only \u2014 they cannot receive connections' };
+  if (S.conns.some(c => c.src === srcId && c.tgt === tgtId))
+    return { valid: false, reason: 'Connection already exists' };
+  if (wouldCycle(srcId, tgtId))
+    return { valid: false, reason: 'Cycle detected \u2014 connections must flow in one direction' };
+  return { valid: true };
+}
+
+function wouldCycle(srcId, tgtId) {
+  if (srcId === tgtId) return true;
+  const visited = new Set();
+  const q = [tgtId];
+  while (q.length) {
+    const cur = q.pop();
+    if (cur === srcId) return true;
+    if (visited.has(cur)) continue;
+    visited.add(cur);
+    S.conns.forEach(c => { if (c.src === cur) q.push(c.tgt); });
+  }
+  return false;
+}
+
+// ─── PORT / CONNECTION DRAG ──────────────────────────────────
+function getPortPos(node, port) {
+  switch (port) {
+    case 'top':    return { x: node.x + node.w / 2, y: node.y };
+    case 'bottom': return { x: node.x + node.w / 2, y: node.y + node.h };
+    case 'left':   return { x: node.x, y: node.y + node.h / 2 };
+    case 'right':  return { x: node.x + node.w, y: node.y + node.h / 2 };
+  }
+}
+
+function isOutputPort(port) { return port === 'bottom' || port === 'right'; }
+
+function buildBezier(sp, tp, srcPort, tgtPort) {
+  const vertical = (srcPort === 'bottom' || srcPort === 'top') && (tgtPort === 'top' || tgtPort === 'bottom');
+  if (vertical) {
+    const off = Math.max(50, Math.abs(tp.y - sp.y) * 0.4);
+    const sy_off = srcPort === 'bottom' ? off : -off;
+    const ty_off = tgtPort === 'top' ? -off : off;
+    return `M${sp.x},${sp.y} C${sp.x},${sp.y + sy_off} ${tp.x},${tp.y + ty_off} ${tp.x},${tp.y}`;
+  }
+  const off = Math.max(50, Math.abs(tp.x - sp.x) * 0.4);
+  const sx_off = srcPort === 'right' ? off : -off;
+  const tx_off = tgtPort === 'left' ? -off : off;
+  return `M${sp.x},${sp.y} C${sp.x + sx_off},${sp.y} ${tp.x + tx_off},${tp.y} ${tp.x},${tp.y}`;
+}
+
+function onPortMouseDown(e, nodeId, port) {
+  e.preventDefault();
+  const srcNode = nodeById(nodeId);
+  const isOut = isOutputPort(port);
+  S.connecting = { nodeId, port, isOut };
+  vp.classList.add('connecting');
+  // Show all ports on all nodes
+  nodesLayer.querySelectorAll('.nd').forEach(el => el.classList.add('show-ports'));
+
+  const preview = document.createElementNS(svgNS, 'path');
+  preview.className.baseVal = 'cpv';
+  prevLayer.appendChild(preview);
+
+  function onMove(ev) {
+    const cursor = screenToCanvas(ev.clientX, ev.clientY);
+    const sp = getPortPos(srcNode, port);
+    const d = buildBezier(sp, cursor, port, isOut ? 'top' : 'bottom');
+    preview.setAttribute('d', d);
+
+    // Highlight valid/invalid target ports
+    nodesLayer.querySelectorAll('.pt').forEach(pel => {
+      pel.classList.remove('vt', 'it');
+      const tEl = pel.closest('.nd');
+      const tId = tEl.dataset.id;
+      if (tId === nodeId) return;
+      const tPort = pel.dataset.port;
+      // Only match input ports if we drag from output, and vice versa
+      const tIsOut = isOutputPort(tPort);
+      if (isOut === tIsOut) return; // same polarity = invalid target
+      const tNode = nodeById(tId);
+      const pp = getPortPos(tNode, tPort);
+      const dist = Math.hypot(cursor.x - pp.x, cursor.y - pp.y);
+      if (dist < CFG.PORT_MAGNET * 1.5) {
+        const srcN = isOut ? nodeId : tId;
+        const tgtN = isOut ? tId : nodeId;
+        const check = isValidConnection(srcN, tgtN);
+        pel.classList.add(check.valid ? 'vt' : 'it');
+      }
+    });
+  }
+
+  function onUp(ev) {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    prevLayer.innerHTML = '';
+    vp.classList.remove('connecting');
+    nodesLayer.querySelectorAll('.nd').forEach(el => el.classList.remove('show-ports'));
+    S.sel.forEach(id => { const el = nodesLayer.querySelector(`[data-id="${id}"]`); if (el) el.classList.add('sel'); });
+    nodesLayer.querySelectorAll('.pt').forEach(p => p.classList.remove('vt', 'it'));
+
+    // Find closest valid target port
+    const cursor = screenToCanvas(ev.clientX, ev.clientY);
+    let best = null, bestDist = Infinity;
+    S.nodes.forEach(nd => {
+      if (nd.id === nodeId) return;
+      const ports = ['top','bottom','left','right'];
+      ports.forEach(tp => {
+        const tIsOut = isOutputPort(tp);
+        if (isOut === tIsOut) return; // same polarity
+        // Check if port actually exists on this node (tables have no input ports)
+        if (!tIsOut && nd.type === 'sql-table') return;
+        const pp = getPortPos(nd, tp);
+        const dist = Math.hypot(cursor.x - pp.x, cursor.y - pp.y);
+        if (dist < CFG.PORT_MAGNET * 1.5 && dist < bestDist) {
+          bestDist = dist;
+          best = { nodeId: nd.id, port: tp };
+        }
+      });
+    });
+
+    if (best) {
+      const srcId = isOut ? nodeId : best.nodeId;
+      const tgtId = isOut ? best.nodeId : nodeId;
+      const check = isValidConnection(srcId, tgtId);
+      if (!check.valid) {
+        toast(check.reason, 'error');
+        const el = nodesLayer.querySelector(`[data-id="${tgtId}"]`);
+        if (el) { el.style.animation = 'shk 400ms var(--ease)'; setTimeout(() => el.style.animation = '', 500); }
+        S.connecting = null;
+        return;
+      }
+      const conn = { id: 'c' + (S.nextConn++), src: srcId, tgt: tgtId };
+      S.lastCreatedConn = conn.id;
+      pushUndo({ type: 'addConn', conn: { ...conn } });
+      addConnRaw(conn);
+      toast('Connected ' + nodeById(srcId).name + ' \u2192 ' + nodeById(tgtId).name, 'success');
+      scheduleCodeRefresh();
+    }
+    S.connecting = null;
+  }
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ─── NODE MOUSE DOWN (drag/select) ──────────────────────────
+function onNodeMouseDown(e, id) {
+  if (e.button !== 0) return;
+  if (e.target.closest('.pt')) return;
+  e.preventDefault();
+  const n = nodeById(id);
+
+  // Selection logic
+  if (e.shiftKey) {
+    if (S.sel.has(id)) S.sel.delete(id); else S.sel.add(id);
+  } else if (!S.sel.has(id)) {
+    S.sel.clear(); S.sel.add(id);
+  }
+  S.selConn = null;
+  renderAllNodes();
+  renderConns();
+
+  // Start dragging
+  const startX = e.clientX, startY = e.clientY;
+  const startPositions = {};
+  S.sel.forEach(sid => { const sn = nodeById(sid); startPositions[sid] = { x: sn.x, y: sn.y }; });
+  let moved = false;
+
+  const el = nodesLayer.querySelector(`[data-id="${id}"]`);
+  if (el) el.classList.add('dragging');
+
+  function onMove(ev) {
+    const dx = (ev.clientX - startX) / S.zoom;
+    const dy = (ev.clientY - startY) / S.zoom;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) moved = true;
+    S.sel.forEach(sid => {
+      const sn = nodeById(sid);
+      sn.x = snapGrid(startPositions[sid].x + dx);
+      sn.y = snapGrid(startPositions[sid].y + dy);
+      renderNode(sn);
+    });
+    renderConns();
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (el) el.classList.remove('dragging');
+    if (moved) {
+      const moves = [];
+      S.sel.forEach(sid => {
+        const sn = nodeById(sid);
+        moves.push({ id: sid, from: startPositions[sid], to: { x: sn.x, y: sn.y } });
+      });
+      if (moves.length === 1) pushUndo({ type: 'moveNode', id: moves[0].id, from: moves[0].from, to: moves[0].to });
+      else pushUndo({ type: 'moveMulti', moves });
+    }
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ─── NODE DOUBLE-CLICK (rename) ──────────────────────────────
+function onNodeDblClick(e, id) {
+  e.preventDefault();
+  const n = nodeById(id);
+  const el = nodesLayer.querySelector(`[data-id="${id}"]`);
+  const nm = el.querySelector('[data-field="name"]');
+  const inp = document.createElement('input');
+  inp.className = 'nd-nm-in';
+  inp.value = n.name;
+  inp.maxLength = 63;
+  nm.replaceWith(inp);
+  inp.focus();
+  inp.select();
+
+  function commit() {
+    const newName = inp.value.trim().replace(/[^a-z0-9_]/gi, '').toLowerCase();
+    if (newName && newName !== n.name && !S.nodes.some(nd => nd.id !== id && nd.name === newName)) {
+      pushUndo({ type: 'renameNode', id, oldName: n.name, newName });
+      n.name = newName;
+      toast('Renamed to ' + newName, 'info');
+    } else if (newName && S.nodes.some(nd => nd.id !== id && nd.name === newName)) {
+      toast('Name "' + newName + '" already exists', 'error');
+    }
+    const span = document.createElement('span');
+    span.className = 'nd-nm';
+    span.dataset.field = 'name';
+    span.textContent = n.name;
+    inp.replaceWith(span);
+    scheduleCodeRefresh();
+  }
+  inp.addEventListener('blur', commit);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = n.name; inp.blur(); } });
+}
+
+// ─── CONTEXT MENU ────────────────────────────────────────────
+function showCtx(x, y, items) {
+  ctxMenu.innerHTML = items.map(it => {
+    if (it === '---') return '<div class="csep"></div>';
+    return `<div class="ci${it.cls ? ' ' + it.cls : ''}" data-action="${it.action}">${it.icon || ''}${it.label}${it.shortcut ? '<span class="sc">' + it.shortcut + '</span>' : ''}</div>`;
+  }).join('');
+  ctxMenu.style.left = x + 'px';
+  ctxMenu.style.top = y + 'px';
+  ctxMenu.classList.add('vis');
+  ctxMenu.querySelectorAll('.ci').forEach(el => {
+    el.addEventListener('click', () => { ctxMenu.classList.remove('vis'); const a = el.dataset.action; if (ctxHandler) ctxHandler(a); });
+  });
+}
+
+let ctxHandler = null;
+
+function onNodeContext(e, id) {
+  e.preventDefault(); e.stopPropagation();
+  if (!S.sel.has(id)) { S.sel.clear(); S.sel.add(id); renderAllNodes(); }
+  const n = nodeById(id);
+  ctxHandler = action => {
+    switch (action) {
+      case 'rename': onNodeDblClick({ preventDefault(){} }, id); break;
+      case 'type-sql-table': changeType(id, 'sql-table'); break;
+      case 'type-sql-mlv': changeType(id, 'sql-mlv'); break;
+      case 'type-pyspark-mlv': changeType(id, 'pyspark-mlv'); break;
+      case 'schema-bronze': changeSchema(id, 'bronze'); break;
+      case 'schema-silver': changeSchema(id, 'silver'); break;
+      case 'schema-gold': changeSchema(id, 'gold'); break;
+      case 'schema-dbo': changeSchema(id, 'dbo'); break;
+      case 'delete': deleteSelected(); break;
+    }
+  };
+  showCtx(e.clientX, e.clientY, [
+    { label: 'Rename', action: 'rename', shortcut: 'Dbl-click' },
+    '---',
+    { label: '\u25C7 SQL Table', action: 'type-sql-table' },
+    { label: '\u25C6 SQL MLV', action: 'type-sql-mlv' },
+    { label: '\u25C6 PySpark MLV', action: 'type-pyspark-mlv' },
+    '---',
+    { label: 'Bronze', action: 'schema-bronze' },
+    { label: 'Silver', action: 'schema-silver' },
+    { label: 'Gold', action: 'schema-gold' },
+    { label: 'dbo', action: 'schema-dbo' },
+    '---',
+    { label: 'Delete', action: 'delete', cls: 'dng', shortcut: 'Del' }
+  ]);
+}
+
+function onCanvasContext(e) {
+  e.preventDefault();
+  const pos = screenToCanvas(e.clientX, e.clientY);
+  ctxHandler = action => {
+    switch (action) {
+      case 'add-sql-table': addNodeAt('sql-table', pos.x, pos.y); break;
+      case 'add-sql-mlv': addNodeAt('sql-mlv', pos.x, pos.y); break;
+      case 'add-pyspark-mlv': addNodeAt('pyspark-mlv', pos.x, pos.y); break;
+      case 'auto': autoArrange(); break;
+      case 'fit': fitView(); break;
+      case 'grid': toggleGrid(); break;
+    }
+  };
+  showCtx(e.clientX, e.clientY, [
+    { label: '\u25C7 Add SQL Table', action: 'add-sql-table' },
+    { label: '\u25C6 Add SQL MLV', action: 'add-sql-mlv' },
+    { label: '\u25C6 Add PySpark MLV', action: 'add-pyspark-mlv' },
+    '---',
+    { label: 'Auto Arrange', action: 'auto', shortcut: 'Ctrl+Shift+A' },
+    { label: 'Fit to View', action: 'fit' },
+    { label: S.gridOn ? 'Hide Grid' : 'Show Grid', action: 'grid' }
+  ]);
+}
+
+function changeType(id, newType) {
+  const n = nodeById(id); if (!n) return;
+  const old = n.type;
+  if (old === newType) return;
+  // Remove input connections if changing to sql-table
+  if (newType === 'sql-table') {
+    S.conns.filter(c => c.tgt === id).forEach(c => removeConnRaw(c.id));
+  }
+  pushUndo({ type: 'changeType', id, oldType: old, newType });
+  n.type = newType;
+  renderNode(n); renderConns();
+  toast('Changed to ' + TYPE_MAP[newType].badge, 'info');
+  scheduleCodeRefresh();
+}
+
+function changeSchema(id, newSchema) {
+  const n = nodeById(id); if (!n) return;
+  const old = n.schema;
+  if (old === newSchema) return;
+  pushUndo({ type: 'changeSchema', id, oldSchema: old, newSchema });
+  n.schema = newSchema;
+  renderNode(n); renderConns();
+  toast('Schema changed to ' + newSchema.toUpperCase(), 'info');
+  scheduleCodeRefresh();
+}
+
+// ─── ADD NODE ────────────────────────────────────────────────
+function addNodeAt(type, x, y, name) {
+  const n = createNode(type, x - CFG.NODE_W / 2, y - CFG.NODE_H / 2, name);
+  if (!n) return;
+  pushUndo({ type: 'addNode', node: { ...n } });
+  addNodeRaw(n);
+  S.sel.clear(); S.sel.add(n.id);
+  renderAllNodes();
+  scheduleCodeRefresh();
+  return n;
+}
+
+function deleteSelected() {
+  if (S.selConn) { deleteConn(S.selConn); return; }
+  if (S.sel.size === 0) return;
+  S.sel.forEach(id => {
+    const n = nodeById(id);
+    if (!n) return;
+    const affectedConns = S.conns.filter(c => c.src === id || c.tgt === id).map(c => ({ ...c }));
+    pushUndo({ type: 'removeNode', node: { ...n }, conns: affectedConns });
+    removeNodeRaw(id);
+  });
+  S.sel.clear();
+  toast('Deleted', 'info');
+  scheduleCodeRefresh();
+}
+
+// ─── CANVAS EVENTS ───────────────────────────────────────────
+vp.addEventListener('mousedown', e => {
+  if (e.target !== vp && e.target !== grid && e.target.id !== 'connSvg') return;
+  if (e.button === 0) {
+    ctxMenu.classList.remove('vis');
+    if (e.shiftKey) {
+      // Marquee selection
+      S.marquee = { sx: e.clientX, sy: e.clientY };
+      marqueeEl.style.display = 'block';
+      return;
+    }
+    // Pan
+    S.panning = { sx: e.clientX - S.pan.x, sy: e.clientY - S.pan.y };
+    vp.classList.add('panning');
+    // Deselect
+    S.sel.clear(); S.selConn = null;
+    renderAllNodes(); renderConns();
+  }
+});
+
+vp.addEventListener('contextmenu', e => {
+  if (!e.target.closest('.nd')) onCanvasContext(e);
+});
+
+document.addEventListener('mousemove', e => {
+  // Pan
+  if (S.panning) {
+    S.pan.x = e.clientX - S.panning.sx;
+    S.pan.y = e.clientY - S.panning.sy;
+    updateTransform();
+  }
+  // Marquee
+  if (S.marquee) {
+    const r = vp.getBoundingClientRect();
+    const x1 = Math.min(S.marquee.sx, e.clientX) - r.left;
+    const y1 = Math.min(S.marquee.sy, e.clientY) - r.top;
+    const x2 = Math.max(S.marquee.sx, e.clientX) - r.left;
+    const y2 = Math.max(S.marquee.sy, e.clientY) - r.top;
+    marqueeEl.style.left = x1 + 'px';
+    marqueeEl.style.top = y1 + 'px';
+    marqueeEl.style.width = (x2 - x1) + 'px';
+    marqueeEl.style.height = (y2 - y1) + 'px';
+    // Determine selected nodes
+    const c1 = screenToCanvas(Math.min(S.marquee.sx, e.clientX), Math.min(S.marquee.sy, e.clientY));
+    const c2 = screenToCanvas(Math.max(S.marquee.sx, e.clientX), Math.max(S.marquee.sy, e.clientY));
+    S.sel.clear();
+    S.nodes.forEach(n => {
+      if (n.x + n.w > c1.x && n.x < c2.x && n.y + n.h > c1.y && n.y < c2.y) S.sel.add(n.id);
+    });
+    renderAllNodes();
+  }
+  // Palette drag
+  if (S.palDrag) {
+    ghost.style.left = (e.clientX - 90) + 'px';
+    ghost.style.top = (e.clientY - 32) + 'px';
+    const r = vp.getBoundingClientRect();
+    const over = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
+    dropZone.classList.toggle('on', over);
+  }
+});
+
+document.addEventListener('mouseup', e => {
+  if (S.panning) { S.panning = null; vp.classList.remove('panning'); }
+  if (S.marquee) { S.marquee = null; marqueeEl.style.display = 'none'; }
+  if (S.palDrag) {
+    ghost.style.display = 'none';
+    dropZone.classList.remove('on');
+    const r = vp.getBoundingClientRect();
+    const over = e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom;
+    if (over) {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      addNodeAt(S.palDrag.type, pos.x, pos.y);
+    }
+    S.palDrag = null;
+  }
+});
+
+// ─── ZOOM ────────────────────────────────────────────────────
+vp.addEventListener('wheel', e => {
+  e.preventDefault();
+  const dir = e.deltaY > 0 ? -1 : 1;
+  const newZoom = Math.max(CFG.MIN_ZOOM, Math.min(CFG.MAX_ZOOM, S.zoom + dir * CFG.ZOOM_STEP * S.zoom));
+  const r = vp.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const cx = (mx - S.pan.x) / S.zoom, cy = (my - S.pan.y) / S.zoom;
+  S.zoom = newZoom;
+  S.pan.x = mx - cx * S.zoom;
+  S.pan.y = my - cy * S.zoom;
+  updateTransform();
+}, { passive: false });
+
+$('zInBtn').addEventListener('click', () => { zoomTo(S.zoom * 1.25); });
+$('zOutBtn').addEventListener('click', () => { zoomTo(S.zoom * 0.8); });
+$('fitBtn').addEventListener('click', fitView);
+$('fitBtn2').addEventListener('click', fitView);
+zoomPct.addEventListener('dblclick', () => zoomTo(1));
+
+function zoomTo(z) {
+  const r = vp.getBoundingClientRect();
+  const cx = (r.width / 2 - S.pan.x) / S.zoom;
+  const cy = (r.height / 2 - S.pan.y) / S.zoom;
+  S.zoom = Math.max(CFG.MIN_ZOOM, Math.min(CFG.MAX_ZOOM, z));
+  S.pan.x = r.width / 2 - cx * S.zoom;
+  S.pan.y = r.height / 2 - cy * S.zoom;
+  updateTransform();
+}
+
+function fitView(instant) {
+  if (S.nodes.length === 0) { S.pan = { x: 0, y: 0 }; S.zoom = 1; updateTransform(); return; }
+  const pad = 60;
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  S.nodes.forEach(n => { x1 = Math.min(x1, n.x); y1 = Math.min(y1, n.y); x2 = Math.max(x2, n.x + n.w); y2 = Math.max(y2, n.y + n.h); });
+  const r = vp.getBoundingClientRect();
+  const w = x2 - x1 + pad * 2, h = y2 - y1 + pad * 2;
+  let targetZoom = Math.min(r.width / w, r.height / h, 2);
+  targetZoom = Math.max(CFG.MIN_ZOOM, Math.min(CFG.MAX_ZOOM, targetZoom));
+  const targetPanX = (r.width - w * targetZoom) / 2 - (x1 - pad) * targetZoom;
+  const targetPanY = (r.height - h * targetZoom) / 2 - (y1 - pad) * targetZoom;
+  if (instant) {
+    S.zoom = targetZoom; S.pan.x = targetPanX; S.pan.y = targetPanY; updateTransform(); return;
+  }
+  const startZoom = S.zoom, startPanX = S.pan.x, startPanY = S.pan.y;
+  let step = 0; const totalSteps = 20;
+  function animateFit() {
+    step++;
+    const t = 1 - Math.pow(1 - step / totalSteps, 3);
+    S.zoom = startZoom + (targetZoom - startZoom) * t;
+    S.pan.x = startPanX + (targetPanX - startPanX) * t;
+    S.pan.y = startPanY + (targetPanY - startPanY) * t;
+    updateTransform();
+    if (step < totalSteps) requestAnimationFrame(animateFit);
+  }
+  requestAnimationFrame(animateFit);
+}
+
+// ─── PALETTE DRAG ────────────────────────────────────────────
+document.querySelectorAll('.pi').forEach(el => {
+  el.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const type = el.dataset.type;
+    S.palDrag = { type };
+    ghost.textContent = TYPE_MAP[type].prefix + '_' + (S.seqCounters[type] + 1);
+    ghost.style.display = 'block';
+    ghost.style.left = (e.clientX - 90) + 'px';
+    ghost.style.top = (e.clientY - 32) + 'px';
+  });
+  // Double-click to quick-add
+  el.addEventListener('dblclick', () => {
+    const r = vp.getBoundingClientRect();
+    const pos = screenToCanvas(r.left + r.width / 2, r.top + r.height / 2);
+    addNodeAt(el.dataset.type, pos.x + (Math.random() - 0.5) * 100, pos.y + (Math.random() - 0.5) * 100);
+  });
+});
+
+// ─── TOOLBAR ─────────────────────────────────────────────────
+function toggleGrid() { S.gridOn = !S.gridOn; grid.classList.toggle('off', !S.gridOn); $('gridBtn').classList.toggle('on', S.gridOn); }
+function toggleSnap() { S.snapOn = !S.snapOn; $('snapBtn').classList.toggle('on', S.snapOn); toast(S.snapOn ? 'Snap to grid enabled' : 'Snap to grid disabled', 'info'); }
+function toggleMinimap() { S.mmOn = !S.mmOn; minimap.classList.toggle('vis', S.mmOn); $('mmBtn').classList.toggle('on', S.mmOn); if (S.mmOn) updateMinimap(); }
+
+$('gridBtn').addEventListener('click', toggleGrid);
+$('snapBtn').addEventListener('click', toggleSnap);
+$('mmBtn').addEventListener('click', toggleMinimap);
+$('autoBtn').addEventListener('click', autoArrange);
+$('undoBtn').addEventListener('click', undo);
+$('redoBtn').addEventListener('click', redo);
+
+// ─── CODE TOGGLE ─────────────────────────────────────────────
+codeToggle.addEventListener('click', () => {
+  S.codeOpen = !S.codeOpen;
+  codePanel.classList.toggle('collapsed', !S.codeOpen);
+  codeToggle.textContent = S.codeOpen ? '\u25C2' : '\u25B8';
+  codeToggle.classList.toggle('c', !S.codeOpen);
+});
+$('refreshBtn').addEventListener('click', refreshCode);
+$('copyAllBtn').addEventListener('click', () => {
+  const code = generateRawCode();
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = $('copyAllBtn');
+    btn.textContent = '\u2713 Copied';
+    btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = 'Copy All'; btn.classList.remove('ok'); }, 1500);
+  });
+});
+
+// ─── AUTO ARRANGE ────────────────────────────────────────────
+function autoArrange() {
+  if (S.nodes.length === 0) return;
+  // Compute layers via BFS from sources
+  const layers = {};
+  const inDeg = {};
+  S.nodes.forEach(n => { inDeg[n.id] = 0; });
+  S.conns.forEach(c => { inDeg[c.tgt] = (inDeg[c.tgt] || 0) + 1; });
+  const q = S.nodes.filter(n => !inDeg[n.id]).map(n => n.id);
+  q.forEach(id => layers[id] = 0);
+  // BFS
+  const visited = new Set(q);
+  while (q.length) {
+    const cur = q.shift();
+    S.conns.filter(c => c.src === cur).forEach(c => {
+      layers[c.tgt] = Math.max(layers[c.tgt] || 0, layers[cur] + 1);
+      if (!visited.has(c.tgt)) { visited.add(c.tgt); q.push(c.tgt); }
+    });
+  }
+  // Assign unvisited nodes
+  S.nodes.forEach(n => { if (layers[n.id] === undefined) layers[n.id] = 0; });
+
+  // Group by layer
+  const groups = {};
+  S.nodes.forEach(n => { const l = layers[n.id]; if (!groups[l]) groups[l] = []; groups[l].push(n); });
+
+  const layerH = 140, nodeSpacing = 220, startY = 60;
+  const layerKeys = Object.keys(groups).sort((a, b) => a - b);
+  const maxPerLayer = Math.max(...layerKeys.map(k => groups[k].length));
+  const totalW = maxPerLayer * nodeSpacing;
+
+  // Save old positions and compute new
+  const moves = [];
+  layerKeys.forEach(lk => {
+    const ns = groups[lk];
+    const startX = (totalW - ns.length * nodeSpacing) / 2 + (nodeSpacing - CFG.NODE_W) / 2;
+    ns.forEach((n, i) => {
+      const nx = startX + i * nodeSpacing;
+      const ny = startY + parseInt(lk) * layerH;
+      if (n.x !== nx || n.y !== ny) {
+        moves.push({ id: n.id, from: { x: n.x, y: n.y }, to: { x: nx, y: ny } });
+      }
+    });
+  });
+
+  if (moves.length === 0) return;
+  pushUndo({ type: 'moveMulti', moves });
+
+  // Animate
+  let step = 0;
+  const totalSteps = 30;
+  const startPos = {};
+  moves.forEach(m => startPos[m.id] = { ...m.from });
+
+  function animate() {
+    step++;
+    const t = step / totalSteps;
+    // Ease out cubic
+    const e = 1 - Math.pow(1 - t, 3);
+    moves.forEach(m => {
+      const n = nodeById(m.id);
+      if (!n) return;
+      n.x = startPos[m.id].x + (m.to.x - startPos[m.id].x) * e;
+      n.y = startPos[m.id].y + (m.to.y - startPos[m.id].y) * e;
+      renderNode(n);
+    });
+    renderConns();
+    if (step < totalSteps) requestAnimationFrame(animate);
+    else {
+      // Snap to final
+      moves.forEach(m => { const n = nodeById(m.id); if (n) { n.x = m.to.x; n.y = m.to.y; renderNode(n); } });
+      renderConns();
+      scheduleCodeRefresh();
+      fitView();
+      toast('Nodes arranged', 'success');
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+// ─── MINIMAP ─────────────────────────────────────────────────
+function updateMinimap() {
+  if (!S.mmOn) return;
+  const canvas = $('mmCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 160, 100);
+
+  if (S.nodes.length === 0) return;
+
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  S.nodes.forEach(n => { x1 = Math.min(x1, n.x); y1 = Math.min(y1, n.y); x2 = Math.max(x2, n.x + n.w); y2 = Math.max(y2, n.y + n.h); });
+
+  const pad = 40;
+  const cw = x2 - x1 + pad * 2, ch = y2 - y1 + pad * 2;
+  const scale = Math.min(160 / cw, 100 / ch);
+  const ox = (160 - cw * scale) / 2, oy = (100 - ch * scale) / 2;
+
+  // Draw connections
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1.5;
+  S.conns.forEach(c => {
+    const s = nodeById(c.src), t = nodeById(c.tgt);
+    if (!s || !t) return;
+    ctx.beginPath();
+    ctx.moveTo(ox + (s.x + s.w / 2 - x1 + pad) * scale, oy + (s.y + s.h - y1 + pad) * scale);
+    ctx.lineTo(ox + (t.x + t.w / 2 - x1 + pad) * scale, oy + (t.y - y1 + pad) * scale);
+    ctx.stroke();
+  });
+
+  // Draw nodes
+  S.nodes.forEach(n => {
+    const sc = SCHEMA_COLORS[n.schema] || '#8e95a5';
+    ctx.fillStyle = sc + '40';
+    ctx.strokeStyle = sc;
+    ctx.lineWidth = 1;
+    const rx = ox + (n.x - x1 + pad) * scale;
+    const ry = oy + (n.y - y1 + pad) * scale;
+    const rw = n.w * scale, rh = n.h * scale;
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeRect(rx, ry, rw, rh);
+  });
+
+  // Viewport rect
+  const r = vp.getBoundingClientRect();
+  const vx1 = (-S.pan.x / S.zoom - x1 + pad) * scale + ox;
+  const vy1 = (-S.pan.y / S.zoom - y1 + pad) * scale + oy;
+  const vw = (r.width / S.zoom) * scale;
+  const vh = (r.height / S.zoom) * scale;
+  const mmVp = $('mmVp');
+  mmVp.style.left = Math.max(0, vx1) + 'px';
+  mmVp.style.top = Math.max(0, vy1) + 'px';
+  mmVp.style.width = Math.min(160, vw) + 'px';
+  mmVp.style.height = Math.min(100, vh) + 'px';
+}
+
+// ─── CODE GENERATION ─────────────────────────────────────────
+function topoSort() {
+  const inDeg = {};
+  const adj = {};
+  S.nodes.forEach(n => { inDeg[n.id] = 0; adj[n.id] = []; });
+  S.conns.forEach(c => { inDeg[c.tgt]++; adj[c.src].push(c.tgt); });
+  const q = S.nodes.filter(n => inDeg[n.id] === 0).map(n => n.id);
+  const result = [];
+  while (q.length) {
+    const id = q.shift();
+    result.push(nodeById(id));
+    for (const next of adj[id]) { inDeg[next]--; if (inDeg[next] === 0) q.push(next); }
+  }
+  // Add any remaining (cycles shouldn't exist but just in case)
+  S.nodes.forEach(n => { if (!result.includes(n)) result.push(n); });
+  return result;
+}
+
+function getParents(id) {
+  return S.conns.filter(c => c.tgt === id).map(c => nodeById(c.src)).filter(Boolean);
+}
+
+function generateRawCode() {
+  const sorted = topoSort();
+  const lines = [];
+  const hasPy = sorted.some(n => n.type === 'pyspark-mlv');
+  if (hasPy) { lines.push('# Setup cell\n!pip install fmlv\nimport fmlv\n'); }
+  let cell = hasPy ? 2 : 1;
+  sorted.forEach(n => {
+    const parents = getParents(n.id);
+    lines.push(`-- Cell ${cell}: ${n.name} (${n.schema})`);
+    if (n.type === 'sql-table') {
+      lines.push('%%sql');
+      lines.push(`CREATE TABLE IF NOT EXISTS ${n.schema}.${n.name} (`);
+      lines.push('    id INT, name STRING, value DECIMAL(10,2),');
+      lines.push('    created_at TIMESTAMP');
+      lines.push(');\n');
+    } else if (n.type === 'sql-mlv') {
+      lines.push('%%sql');
+      lines.push(`CREATE MATERIALIZED LAKE VIEW ${n.schema}.${n.name} AS`);
+      if (parents.length === 0) {
+        lines.push(`SELECT * FROM dbo.source_table;\n`);
+      } else if (parents.length === 1) {
+        lines.push(`SELECT * FROM ${parents[0].schema}.${parents[0].name};\n`);
+      } else {
+        const p0 = parents[0], p1 = parents[1];
+        lines.push(`SELECT a.*, b.*`);
+        lines.push(`FROM ${p0.schema}.${p0.name} a`);
+        lines.push(`JOIN ${p1.schema}.${p1.name} b`);
+        lines.push(`  ON a.id = b.id;\n`);
+      }
+    } else {
+      lines.push(`import fmlv`);
+      lines.push(`@fmlv.materialized_lake_view(name="${n.schema}.${n.name}")`);
+      lines.push(`def ${n.name}():`);
+      if (parents.length === 0) {
+        lines.push(`    return spark.table("dbo.source")\n`);
+      } else {
+        parents.forEach(p => lines.push(`    df_${p.name} = spark.table("${p.schema}.${p.name}")`));
+        if (parents.length > 1) {
+          lines.push(`    result = df_${parents[0].name}`);
+          for (let i = 1; i < parents.length; i++) lines.push(`        .join(df_${parents[i].name}, "id")`);
+          lines.push(`    return result\n`);
+        } else {
+          lines.push(`    return df_${parents[0].name}\n`);
+        }
+      }
+    }
+    cell++;
+  });
+  return lines.join('\n');
+}
+
+function highlightCode(raw) {
+  let h = raw
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/(--[^\n]*)/g, '<span class="cm">$1</span>')
+    .replace(/(#[^\n]*)/g, '<span class="cm">$1</span>')
+    .replace(/\b(CREATE|TABLE|IF NOT EXISTS|AS|SELECT|FROM|JOIN|ON|INSERT|INTO|VALUES|MATERIALIZED LAKE VIEW|WHERE|GROUP BY|ORDER BY|import|def|return|%%sql)\b/g, '<span class="kw">$1</span>')
+    .replace(/\b(INT|STRING|DECIMAL|TIMESTAMP|BOOLEAN|FLOAT)\b/g, '<span class="ty">$1</span>')
+    .replace(/"([^"]*)"/g, '<span class="str">"$1"</span>')
+    .replace(/@fmlv\.\w+/g, '<span class="kw">$&</span>');
+  return h;
+}
+
+function refreshCode() {
+  const raw = generateRawCode();
+  const lines = raw.split('\n');
+  // Group into cells
+  const cells = [];
+  let current = null;
+  lines.forEach(line => {
+    if (line.startsWith('-- Cell') || line.startsWith('# Setup')) {
+      if (current) cells.push(current);
+      current = { label: line.replace(/^--|^#/, '').trim(), lines: [] };
+    } else if (current) {
+      current.lines.push(line);
+    } else {
+      current = { label: 'Setup', lines: [line] };
+    }
+  });
+  if (current) cells.push(current);
+
+  codeBody.innerHTML = cells.map((c, ci) => {
+    const code = c.lines.join('\n').trim();
+    const highlighted = highlightCode(code);
+    const numbered = highlighted.split('\n');
+    const gutter = numbered.map((_, i) => i + 1).join('\n');
+    return `<div class="cc" style="animation-delay:${ci * 50}ms">
+      <div class="cc-h">
+        <span class="cc-l">${c.label}</span>
+        <span class="cc-cp" onclick="copyCell(this, ${ci})">Copy</span>
+      </div>
+      <div class="cl">
+        <div class="cg"><pre>${gutter}</pre></div>
+        <div class="ct"><pre>${highlighted}</pre></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function scheduleCodeRefresh() {
+  clearTimeout(S.codeTimer);
+  S.codeTimer = setTimeout(refreshCode, CFG.DEBOUNCE_CODE);
+}
+
+// Global copy handler
+window.copyCell = function(el, idx) {
+  const raw = generateRawCode();
+  const cells = raw.split(/(?=-- Cell|# Setup)/);
+  const text = (cells[idx] || '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    el.textContent = '\u2713';
+    el.classList.add('ok');
+    setTimeout(() => { el.textContent = 'Copy'; el.classList.remove('ok'); }, 1200);
+  });
+};
+
+// ─── TOAST ───────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const t = document.createElement('div');
+  t.className = 'tst ' + type;
+  const icons = { success: '\u2713', error: '\u2717', info: '\u25CF' };
+  const cls = { success: 'ok', error: 'err', info: 'inf' };
+  t.innerHTML = `<div class="tst-i ${cls[type]}">${icons[type]}</div><span class="tst-m">${msg}</span><button class="tst-x" onclick="this.closest('.tst').remove()">\u2715</button><div class="tst-p"></div>`;
+  toastBox.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ─── PARTICLES ───────────────────────────────────────────────
+function burstParticles(el) {
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const colors = [SCHEMA_COLORS[el.dataset.s] || '#8e95a5', 'var(--accent)', '#e5453b'];
+  for (let i = 0; i < 8; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const angle = (i / 8) * Math.PI * 2;
+    const dist = 30 + Math.random() * 40;
+    p.style.left = cx + 'px';
+    p.style.top = cy + 'px';
+    p.style.background = colors[i % colors.length];
+    p.style.setProperty('--px', Math.cos(angle) * dist + 'px');
+    p.style.setProperty('--py', Math.sin(angle) * dist + 'px');
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+}
+
+// ─── KEYBOARD ────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  // Close context menu
+  if (e.key === 'Escape') { ctxMenu.classList.remove('vis'); S.sel.clear(); S.selConn = null; renderAllNodes(); renderConns(); return; }
+  if (e.key === 'Delete' || e.key === 'Backspace') { if (!S.renaming) deleteSelected(); return; }
+  if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); return; }
+  if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); return; }
+  if (e.ctrlKey && e.key === 'a') { e.preventDefault(); S.sel.clear(); S.nodes.forEach(n => S.sel.add(n.id)); renderAllNodes(); return; }
+  if (e.ctrlKey && e.shiftKey && e.key === 'A') { e.preventDefault(); autoArrange(); return; }
+  if (e.key === '0' && e.ctrlKey) { e.preventDefault(); zoomTo(1); return; }
+});
+
+// Close context menu on outside click
+document.addEventListener('click', e => { if (!ctxMenu.contains(e.target)) ctxMenu.classList.remove('vis'); });
+
+// ─── ORPHAN MLV INDICATOR ─────────────────────────────────────
+function updateOrphanIndicators() {
+  S.nodes.forEach(n => {
+    if (n.type === 'sql-table') return;
+    const el = nodesLayer.querySelector(`[data-id="${n.id}"]`);
+    if (!el) return;
+    const hasParent = S.conns.some(c => c.tgt === n.id);
+    el.classList.toggle('orphan-mlv', !hasParent);
+  });
+}
+
+// ─── CODE PANEL HIGHLIGHTING ─────────────────────────────────
+function updateCodeHighlight() {
+  const cells = codeBody.querySelectorAll('.cc');
+  cells.forEach(cc => cc.classList.remove('highlighted'));
+  if (S.sel.size !== 1) return;
+  const selId = [...S.sel][0];
+  const selNode = nodeById(selId);
+  if (!selNode) return;
+  cells.forEach(cc => {
+    const label = cc.querySelector('.cc-l');
+    if (label && label.textContent.includes(selNode.name)) cc.classList.add('highlighted');
+  });
+}
+
+// ─── QUICK START PRESETS ─────────────────────────────────────
+const PRESETS = [
+  {
+    id: 'simple', name: 'Simple Pipeline', complexity: 'beginner',
+    desc: 'One source, sequential transforms. The simplest DAG.',
+    defaults: { tables: 1, mlvs: 2, gold: 1, py: 0 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="25" cy="30" r="8" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="80" cy="30" r="8" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="135" cy="30" r="8" fill="#c5a03830" stroke="#8e6abf" stroke-width="1.5"/><line x1="33" y1="30" x2="72" y2="30" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/><line x1="88" y1="30" x2="127" y2="30" stroke="#5a8fa8" stroke-width="1.5" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      for (let i = 0; i < t; i++) nodes.push({ type:'sql-table', name:'source_'+(i+1), schema:'bronze' });
+      const totalMlv = m + g;
+      for (let i = 0; i < m; i++) nodes.push({ type: i < (totalMlv-g-py) ? 'sql-mlv' : (py > 0 ? (py--,'pyspark-mlv') : 'sql-mlv'), name:'transform_'+(i+1), schema:'silver' });
+      for (let i = 0; i < g; i++) nodes.push({ type: py > 0 ? (py--,'pyspark-mlv') : 'sql-mlv', name:'output_'+(i+1), schema:'gold' });
+      // Chain: T0→M0→M1→...→G0
+      for (let i = 0; i < nodes.length - 1; i++) {
+        if (nodes[i].type === 'sql-table' && nodes[i+1].type === 'sql-table') continue;
+        conns.push([i, i+1]);
+      }
+      return { nodes, conns };
+    }
+  },
+  {
+    id: 'medallion', name: 'Medallion Pipeline', complexity: 'intermediate',
+    desc: 'Bronze tables \u2192 Silver MLVs \u2192 Gold aggregate. Classic lakehouse.',
+    defaults: { tables: 3, mlvs: 3, gold: 1, py: 1 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="20" cy="15" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="20" cy="30" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="20" cy="45" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="80" cy="15" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="80" cy="30" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="80" cy="45" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="135" cy="30" r="8" fill="#c5a03830" stroke="#8e6abf" stroke-width="1.5"/><line x1="26" y1="15" x2="74" y2="15" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="26" y1="30" x2="74" y2="30" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="26" y1="45" x2="74" y2="45" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="86" y1="15" x2="127" y2="27" stroke="#5a8fa8" stroke-width="1" marker-end="url(#qsArr)"/><line x1="86" y1="30" x2="127" y2="30" stroke="#5a8fa8" stroke-width="1" marker-end="url(#qsArr)"/><line x1="86" y1="45" x2="127" y2="33" stroke="#5a8fa8" stroke-width="1" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      for (let i = 0; i < t; i++) nodes.push({ type:'sql-table', name:['orders','customers','products','inventory','payments','shipments','returns','reviews'][i] || 'source_'+(i+1), schema:'bronze' });
+      let pyLeft = py;
+      for (let i = 0; i < m; i++) nodes.push({ type:'sql-mlv', name:['order_summary','customer_enriched','product_metrics','inventory_check','payment_agg','ship_tracking','return_analysis','review_scores'][i] || 'transform_'+(i+1), schema:'silver' });
+      for (let i = 0; i < g; i++) { const isPy = pyLeft > 0; if(isPy) pyLeft--; nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['customer_360','sales_report','analytics_hub'][i] || 'aggregate_'+(i+1), schema:'gold' }); }
+      // Each table → matching silver (or round-robin)
+      for (let i = 0; i < t; i++) { if (m > 0) conns.push([i, t + (i % m)]); }
+      // Each silver → each gold
+      for (let i = 0; i < m; i++) { for (let j = 0; j < g; j++) conns.push([t + i, t + m + j]); }
+      return { nodes, conns };
+    }
+  },
+  {
+    id: 'star', name: 'Star Aggregation', complexity: 'intermediate',
+    desc: 'Multiple dimension tables feeding one central fact MLV.',
+    defaults: { tables: 4, mlvs: 0, gold: 1, py: 0 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="25" cy="10" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="10" cy="35" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="25" cy="55" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="50" cy="30" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="120" cy="30" r="10" fill="#c5a03830" stroke="#8e6abf" stroke-width="1.5"/><line x1="31" y1="13" x2="110" y2="28" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="16" y1="35" x2="110" y2="31" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="31" y1="52" x2="110" y2="33" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="56" y1="30" x2="110" y2="30" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      for (let i = 0; i < t; i++) nodes.push({ type:'sql-table', name:['dim_customer','dim_product','dim_date','dim_store','dim_region','dim_category','dim_channel','dim_promo'][i] || 'dim_'+(i+1), schema:'bronze' });
+      const totalG = Math.max(1, g);
+      let pyLeft = py;
+      for (let i = 0; i < totalG; i++) { const isPy = pyLeft > 0; if(isPy) pyLeft--; nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['fact_sales','fact_orders','fact_revenue'][i] || 'fact_'+(i+1), schema:'gold' }); }
+      // All tables → each fact
+      for (let i = 0; i < t; i++) { for (let j = 0; j < totalG; j++) conns.push([i, t + j]); }
+      return { nodes, conns };
+    }
+  },
+  {
+    id: 'chain', name: 'Linear Chain', complexity: 'beginner',
+    desc: 'Table \u2192 MLV \u2192 MLV \u2192 MLV. Simple sequential pipeline.',
+    defaults: { tables: 1, mlvs: 3, gold: 0, py: 0 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="15" cy="30" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="55" cy="30" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="95" cy="30" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="140" cy="30" r="6" fill="#c5a03830" stroke="#8e6abf" stroke-width="1.5"/><line x1="21" y1="30" x2="49" y2="30" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/><line x1="61" y1="30" x2="89" y2="30" stroke="#5a8fa8" stroke-width="1.5" marker-end="url(#qsArr)"/><line x1="101" y1="30" x2="134" y2="30" stroke="#5a8fa8" stroke-width="1.5" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      for (let i = 0; i < t; i++) nodes.push({ type:'sql-table', name:'raw_data'+(t>1?'_'+(i+1):''), schema:'bronze' });
+      let pyLeft = py;
+      for (let i = 0; i < m; i++) {
+        const isPy = pyLeft > 0; if(isPy) pyLeft--;
+        const isGold = i >= m - g;
+        nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['cleaned','enriched','filtered','aggregated','final'][i] || 'step_'+(i+1), schema: isGold ? 'gold' : 'silver' });
+      }
+      // Chain sequentially
+      for (let i = 0; i < nodes.length - 1; i++) conns.push([i, i+1]);
+      return { nodes, conns };
+    }
+  },
+  {
+    id: 'fanout', name: 'Fan-Out Broadcast', complexity: 'intermediate',
+    desc: 'One source \u2192 multiple independent views. Region/segment splits.',
+    defaults: { tables: 1, mlvs: 3, gold: 0, py: 0 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="25" cy="30" r="8" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="130" cy="12" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="130" cy="30" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="130" cy="48" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><line x1="33" y1="27" x2="124" y2="13" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/><line x1="33" y1="30" x2="124" y2="30" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/><line x1="33" y1="33" x2="124" y2="47" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      for (let i = 0; i < t; i++) nodes.push({ type:'sql-table', name:'source'+(t>1?'_'+(i+1):''), schema:'bronze' });
+      let pyLeft = py;
+      for (let i = 0; i < m; i++) { const isPy = pyLeft > 0; if(isPy) pyLeft--; nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['view_us','view_eu','view_apac','view_latam','view_mea','view_anz'][i] || 'view_'+(i+1), schema: i < m - g ? 'silver' : 'gold' }); }
+      for (let i = 0; i < g; i++) { nodes.push({ type:'sql-mlv', name:'agg_'+(i+1), schema:'gold' }); }
+      // Each table → all MLVs
+      for (let i = 0; i < t; i++) { for (let j = t; j < nodes.length; j++) conns.push([i, j]); }
+      return { nodes, conns };
+    }
+  },
+  {
+    id: 'diamond', name: 'Diamond Merge', complexity: 'advanced',
+    desc: 'Source splits into branches, then recombines. Feature engineering.',
+    defaults: { tables: 2, mlvs: 3, gold: 1, py: 1 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="15" cy="30" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="40" cy="30" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="80" cy="12" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="80" cy="30" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="80" cy="48" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><circle cx="135" cy="30" r="8" fill="#c5a03830" stroke="#8e6abf" stroke-width="1.5"/><line x1="21" y1="28" x2="74" y2="13" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="21" y1="30" x2="74" y2="30" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="46" y1="32" x2="74" y2="47" stroke="#c98040" stroke-width="1" marker-end="url(#qsArr)"/><line x1="86" y1="15" x2="127" y2="27" stroke="#5a8fa8" stroke-width="1" marker-end="url(#qsArr)"/><line x1="86" y1="30" x2="127" y2="30" stroke="#5a8fa8" stroke-width="1" marker-end="url(#qsArr)"/><line x1="86" y1="45" x2="127" y2="33" stroke="#5a8fa8" stroke-width="1" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      for (let i = 0; i < t; i++) nodes.push({ type:'sql-table', name:['events','profiles','transactions','sessions'][i] || 'source_'+(i+1), schema:'bronze' });
+      let pyLeft = py;
+      for (let i = 0; i < m; i++) { const isPy = pyLeft > 0; if(isPy) pyLeft--; nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['branch_a','branch_b','branch_c','branch_d'][i] || 'branch_'+(i+1), schema:'silver' }); }
+      for (let i = 0; i < Math.max(1,g); i++) { const isPy = pyLeft > 0; if(isPy) pyLeft--; nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['combined','unified','merged'][i] || 'combined_'+(i+1), schema:'gold' }); }
+      // Tables → silver (distribute)
+      for (let i = 0; i < t; i++) { for (let j = 0; j < m; j++) conns.push([i, t + j]); }
+      // Silver → gold
+      for (let j = 0; j < m; j++) { for (let k = 0; k < Math.max(1,g); k++) conns.push([t + j, t + m + k]); }
+      return { nodes, conns };
+    }
+  },
+  {
+    id: 'lanes', name: 'Independent Lanes', complexity: 'beginner',
+    desc: 'Parallel 1:1 pipelines. Each table has its own view.',
+    defaults: { tables: 3, mlvs: 3, gold: 0, py: 0 },
+    svg: '<svg viewBox="0 0 160 60"><circle cx="30" cy="12" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="130" cy="12" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><line x1="36" y1="12" x2="124" y2="12" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/><circle cx="30" cy="30" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="130" cy="30" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><line x1="36" y1="30" x2="124" y2="30" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/><circle cx="30" cy="48" r="6" fill="#b8733330" stroke="#b87333" stroke-width="1.5"/><circle cx="130" cy="48" r="6" fill="#7b879430" stroke="#5a8fa8" stroke-width="1.5"/><line x1="36" y1="48" x2="124" y2="48" stroke="#c98040" stroke-width="1.5" marker-end="url(#qsArr)"/></svg>',
+    generate(t, m, g, py) {
+      const nodes = [], conns = [];
+      const count = Math.max(t, m);
+      let pyLeft = py;
+      for (let i = 0; i < count; i++) {
+        nodes.push({ type:'sql-table', name:['orders','customers','products','inventory','payments','sessions','events','reviews'][i] || 'source_'+(i+1), schema:'bronze' });
+        const isPy = pyLeft > 0; if(isPy) pyLeft--;
+        nodes.push({ type: isPy ? 'pyspark-mlv' : 'sql-mlv', name:['order_view','customer_view','product_view','inv_view','payment_view','session_view','event_view','review_view'][i] || 'view_'+(i+1), schema: i < count - g ? 'silver' : 'gold' });
+        conns.push([i * 2, i * 2 + 1]);
+      }
+      return { nodes, conns };
+    }
+  }
+];
+
+// ─── QUICK START MODAL LOGIC ─────────────────────────────────
+let qsSelected = null;
+const qsOverlay = $('qsOverlay');
+
+function openQuickStart() {
+  if (S.nodes.length > 0) {
+    if (!confirm('This will replace all existing nodes. Continue?')) return;
+  }
+  renderQsGrid();
+  qsSelected = null;
+  qsOverlay.classList.add('vis');
+  // Auto-select medallion
+  selectPreset('medallion');
+}
+
+function closeQuickStart() { qsOverlay.classList.remove('vis'); }
+
+function renderQsGrid() {
+  const defs = '<defs><marker id="qsArr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0, 6 2.5, 0 5" fill="#8e95a5"/></marker></defs>';
+  $('qsGrid').innerHTML = PRESETS.map(p => `
+    <div class="qs-card" data-preset="${p.id}">
+      <div class="qs-card-preview">${p.svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ').replace('</svg>', defs + '</svg>')}</div>
+      <div class="qs-card-name">${p.name}</div>
+      <div class="qs-card-desc">${p.desc}</div>
+      <div class="qs-card-footer">
+        <span class="qs-badge ${p.complexity}">${p.complexity}</span>
+      </div>
+    </div>
+  `).join('');
+  $('qsGrid').querySelectorAll('.qs-card').forEach(card => {
+    card.addEventListener('click', () => selectPreset(card.dataset.preset));
+  });
+}
+
+function selectPreset(id) {
+  qsSelected = PRESETS.find(p => p.id === id);
+  if (!qsSelected) return;
+  $('qsGrid').querySelectorAll('.qs-card').forEach(c => c.classList.toggle('active', c.dataset.preset === id));
+  $('qsTables').value = qsSelected.defaults.tables;
+  $('qsMlvs').value = qsSelected.defaults.mlvs;
+  $('qsGold').value = qsSelected.defaults.gold;
+  $('qsPy').value = qsSelected.defaults.py;
+  updateQsVals();
+  renderQsPreview();
+}
+
+function updateQsVals() {
+  $('qsTablesVal').textContent = $('qsTables').value;
+  $('qsMlvsVal').textContent = $('qsMlvs').value;
+  $('qsGoldVal').textContent = $('qsGold').value;
+  $('qsPyVal').textContent = $('qsPy').value;
+}
+
+function renderQsPreview() {
+  if (!qsSelected) { $('qsPreview').innerHTML = '<span style="color:var(--text-muted);font-size:var(--xs)">Select a structure above</span>'; return; }
+  const t = +$('qsTables').value, m = +$('qsMlvs').value, g = +$('qsGold').value, py = +$('qsPy').value;
+  const result = qsSelected.generate(t, m, g, py);
+  const nCount = result.nodes.length, cCount = result.conns.length;
+  // Render mini SVG preview
+  const layerMap = {};
+  result.nodes.forEach((n, i) => { const layer = n.schema === 'bronze' ? 0 : n.schema === 'silver' ? 1 : 2; if (!layerMap[layer]) layerMap[layer] = []; layerMap[layer].push(i); });
+  const layers = Object.keys(layerMap).sort();
+  const lw = 400, lh = 80;
+  const colW = lw / (layers.length || 1);
+  const positions = [];
+  layers.forEach((l, li) => {
+    const items = layerMap[l];
+    const rowH = lh / (items.length + 1);
+    items.forEach((ni, ri) => { positions[ni] = { x: colW * li + colW / 2, y: rowH * (ri + 1) }; });
+  });
+  // Ensure all positions set
+  result.nodes.forEach((n, i) => { if (!positions[i]) positions[i] = { x: 200, y: 40 }; });
+  const schemaFill = { bronze: '#b87333', silver: '#5a8fa8', gold: '#8e6abf' };
+  let svg = `<svg viewBox="0 0 ${lw} ${lh}" xmlns="http://www.w3.org/2000/svg"><defs><marker id="qsPArr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0, 6 2.5, 0 5" fill="#8e95a5"/></marker></defs>`;
+  result.conns.forEach(([si, ti]) => {
+    const sp = positions[si], tp = positions[ti];
+    if (sp && tp) svg += `<line x1="${sp.x}" y1="${sp.y}" x2="${tp.x}" y2="${tp.y}" stroke="${schemaFill[result.nodes[si].schema] || '#8e95a5'}" stroke-width="1.5" opacity="0.6" marker-end="url(#qsPArr)"/>`;
+  });
+  result.nodes.forEach((n, i) => {
+    const p = positions[i]; if (!p) return;
+    const c = schemaFill[n.schema] || '#8e95a5';
+    svg += `<circle cx="${p.x}" cy="${p.y}" r="${n.type === 'sql-table' ? 5 : 6}" fill="${c}20" stroke="${c}" stroke-width="1.5"/>`;
+  });
+  svg += '</svg>';
+  $('qsPreview').innerHTML = svg + `<span style="font-size:var(--xs);color:var(--text-muted);margin-left:var(--s3)">${nCount} nodes, ${cCount} connections</span>`;
+}
+
+function generateFromPreset() {
+  if (!qsSelected) { toast('Select a structure first', 'error'); return; }
+  const t = +$('qsTables').value, m = +$('qsMlvs').value, g = +$('qsGold').value, py = +$('qsPy').value;
+  const result = qsSelected.generate(t, m, g, py);
+
+  // Clear existing canvas
+  if (S.nodes.length > 0) {
+    S.nodes.slice().forEach(n => removeNodeRaw(n.id));
+    S.conns = [];
+    S.sel.clear(); S.selConn = null;
+    S.undo = []; S.redo = [];
+    S.seqCounters = { 'sql-table': 0, 'sql-mlv': 0, 'pyspark-mlv': 0 };
+    S.nextId = 1; S.nextConn = 1;
+  }
+
+  closeQuickStart();
+
+  // Create nodes with staggered animation
+  const nodeIds = [];
+  const spacing = 220, layerH = 140, startY = 60;
+  // Compute layers
+  const layerMap = {};
+  result.nodes.forEach((n, i) => { const layer = n.schema === 'bronze' ? 0 : n.schema === 'silver' ? 1 : 2; if (!layerMap[layer]) layerMap[layer] = []; layerMap[layer].push(i); });
+  const layers = Object.keys(layerMap).sort();
+  const maxPerLayer = Math.max(...layers.map(l => layerMap[l].length));
+  const totalW = maxPerLayer * spacing;
+
+  result.nodes.forEach((nd, idx) => {
+    const layer = nd.schema === 'bronze' ? 0 : nd.schema === 'silver' ? 1 : 2;
+    const layerItems = layerMap[layer];
+    const posInLayer = layerItems.indexOf(idx);
+    const startX = (totalW - layerItems.length * spacing) / 2 + (spacing - CFG.NODE_W) / 2;
+    const x = startX + posInLayer * spacing;
+    const y = startY + layer * layerH;
+
+    S.seqCounters[nd.type]++;
+    const n = {
+      id: 'n' + (S.nextId++), type: nd.type,
+      name: nd.name, schema: nd.schema,
+      x, y, w: CFG.NODE_W, h: CFG.NODE_H
+    };
+    S.nodes.push(n);
+    nodeIds.push(n.id);
+    const el = createNodeEl(n);
+    el.style.animation = `nsi 400ms var(--spring) ${idx * 60}ms both`;
+    nodesLayer.appendChild(el);
+  });
+
+  // Create connections after nodes are placed
+  setTimeout(() => {
+    result.conns.forEach(([si, ti]) => {
+      const srcId = nodeIds[si], tgtId = nodeIds[ti];
+      if (!srcId || !tgtId) return;
+      S.conns.push({ id: 'c' + (S.nextConn++), src: srcId, tgt: tgtId });
+    });
+    renderConns();
+    updateStatus();
+    refreshCode();
+    fitView();
+    const nTotal = result.nodes.length;
+    toast(`Generated ${nTotal}-node ${qsSelected.name.toLowerCase()}`, 'success');
+  }, result.nodes.length * 60 + 200);
+
+  updateStatus();
+}
+
+// Quick Start event listeners
+$('esQuickStart').addEventListener('click', openQuickStart);
+$('qsBtn').addEventListener('click', openQuickStart);
+$('qsClose').addEventListener('click', closeQuickStart);
+qsOverlay.addEventListener('click', e => { if (e.target === qsOverlay) closeQuickStart(); });
+$('qsGenerate').addEventListener('click', generateFromPreset);
+['qsTables','qsMlvs','qsGold','qsPy'].forEach(id => {
+  $(id).addEventListener('input', () => { updateQsVals(); renderQsPreview(); });
+});
+
+// ─── INIT WITH E-COMMERCE THEME ──────────────────────────────
+function initECommerce() {
+  const nodes = [
+    { type: 'sql-table', name: 'orders', schema: 'bronze', x: 80, y: 60 },
+    { type: 'sql-table', name: 'customers', schema: 'bronze', x: 300, y: 60 },
+    { type: 'sql-table', name: 'products', schema: 'bronze', x: 520, y: 60 },
+    { type: 'sql-mlv', name: 'order_summary', schema: 'silver', x: 180, y: 240 },
+    { type: 'sql-mlv', name: 'product_metrics', schema: 'silver', x: 420, y: 240 },
+    { type: 'pyspark-mlv', name: 'customer_360', schema: 'gold', x: 300, y: 420 },
+  ];
+
+  nodes.forEach((nd, i) => {
+    const n = { id: 'n' + (S.nextId++), type: nd.type, name: nd.name, schema: nd.schema, x: nd.x, y: nd.y, w: CFG.NODE_W, h: CFG.NODE_H };
+    S.nodes.push(n);
+    S.seqCounters[nd.type]++;
+    const el = createNodeEl(n);
+    el.style.animation = `nsi 400ms var(--spring) ${i * 80}ms both`;
+    nodesLayer.appendChild(el);
+  });
+
+  const connections = [
+    ['n1', 'n4'], ['n2', 'n4'], ['n3', 'n5'], ['n4', 'n6'], ['n5', 'n6']
+  ];
+  connections.forEach(([src, tgt]) => {
+    S.conns.push({ id: 'c' + (S.nextConn++), src, tgt });
+  });
+
+  setTimeout(() => {
+    renderConns();
+    updateStatus();
+    refreshCode();
+    fitView();
+  }, 600);
+}
+
+// ─── BOOT ────────────────────────────────────────────────────
+updateTransform();
+updateStatus();
+initECommerce();
+
+</script>
+</body></html>
