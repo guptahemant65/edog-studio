@@ -105,6 +105,58 @@ Captured from Phantom's corrected assessment — apply whenever touching logs/te
 
 ---
 
+## TD-05 — Workspace Explorer (Source: Phantom Review)
+
+Current score: **7.2/10** — solid functional foundation, critical accessibility gaps.
+
+### Tier 1 — Fix Real Problems (bugs, broken UX)
+
+| ID | Issue | Impact | Files |
+|----|-------|--------|-------|
+| TD-05.1 | **No ARIA tree semantics** — Container missing `role="tree"`, nodes missing `role="treeitem"`, no `aria-expanded`, `aria-selected`, `aria-level`. Screen readers can't navigate the tree at all. | 🔴 A11y | `workspace-explorer.js` |
+| TD-05.2 | **No keyboard navigation** — Only Escape and Ctrl+F bound. Arrow keys, Enter/Space, Home/End, F2, Delete all missing. Keyboard-only users are locked out. | 🔴 A11y | `workspace-explorer.js` |
+| TD-05.3 | **No `focus-visible` styles** — No visual indicator of which element has focus for keyboard users. Missing entirely from CSS. | 🔴 A11y | `workspace.css` |
+| TD-05.4 | **Context menu missing ARIA roles** — No `role="menu"` / `role="menuitem"`, no keyboard trap (ArrowUp/Down, Escape, Enter). | 🟠 A11y | `workspace-explorer.js`, `workspace.css` |
+| TD-05.5 | **Toast lacks `aria-live`** — Screen readers don't announce toast notifications. | 🟠 A11y | `workspace-explorer.js` |
+| TD-05.6 | **Event listener leak on re-render** — Per-node click handlers create closures over stale workspace objects. Should use event delegation on `_treeEl`. | 🟠 Bug | `workspace-explorer.js` |
+
+### Tier 2 — Improve Core Experience
+
+| ID | Issue | Impact | Files |
+|----|-------|--------|-------|
+| TD-05.7 | **Loading state doesn't match spec** — States.md specifies shimmer skeletons; actual shows plain "Loading..." text. | 🟠 UX | `workspace-explorer.js` |
+| TD-05.8 | **No collapse animation** — Children animate in with stagger but vanish instantly on collapse. Jarring asymmetry. | 🟡 Polish | `workspace-explorer.js`, `workspace.css` |
+| TD-05.9 | **No filter debouncing** — Table filter runs full DOM sweep on every keystroke. 9 sweeps for "warehouse". | 🟡 Perf | `workspace-explorer.js` |
+| TD-05.10 | **Triple click handler overlap** — Workspace row has 3 overlapping handlers (name, toggle, row) with fragile `stopPropagation`. Use event delegation. | 🟡 Maint | `workspace-explorer.js` |
+| TD-05.11 | **No tree search** — States.md specifies search for 50+ items. Only table content has filter, tree does not. | 🟡 UX | `workspace-explorer.js` |
+| TD-05.12 | **40+ hard-coded rgba colors** — `rgba(109,92,255,...)` bypasses token system. Will break on theme/accent changes. | 🟡 Theme | `workspace.css` |
+| TD-05.13 | **Tree item height mismatch** — CSS sets 30px, `variables.css` has `--row-height: 28px`. 2px inconsistency. | 🟡 Consistency | `workspace.css` |
+
+### Tier 3 — Polish & Cleanup
+
+| ID | Issue | Impact | Files |
+|----|-------|--------|-------|
+| TD-05.14 | **14 hard-coded font sizes** — `13px`, `14px`, `12px` etc. bypass typography scale. | 🟢 Consistency | `workspace.css` |
+| TD-05.15 | **12 hard-coded spacings** — `48px`, `24px`, `16px` etc. bypass spacing scale. | 🟢 Consistency | `workspace.css` |
+| TD-05.16 | **`oklch()` color in error state** — Not in token system, inconsistent with rgba pattern elsewhere. | 🟢 Consistency | `workspace.css` |
+| TD-05.17 | **Duplicate `.ws-content-meta` selector** — Two definitions create confusion about precedence. | 🟢 Maint | `workspace.css` |
+| TD-05.18 | **Dead code** — `_getHealthStatus()` defined but never called, `health` var assigned but unused. | 🟢 Maint | `workspace-explorer.js` |
+| TD-05.19 | **`z-index: 9998` on burst particles** — Bypasses z-index scale. Should use token. | 🟢 Maint | `workspace.css` |
+| TD-05.20 | **No custom scrollbar styling** — Browser-default scrollbar is visually heavy on Windows. | 🟢 Polish | `workspace.css` |
+| TD-05.21 | **SVG icon color hard-coded in CSS data URL** — Won't respond to theme changes. | 🟢 Theme | `workspace.css` |
+| TD-05.22 | **Table row animation too slow** — 400ms with cubic-bezier bounce. Design bible says max 150ms for data views. | 🟢 Polish | `workspace.css` |
+| TD-05.23 | **`en-IN` number format** — Hard-coded Indian locale may confuse non-Indian users. Should detect locale. | 🟢 i18n | `workspace-explorer.js` |
+
+### Tier 4 — Nice to Have
+
+| ID | Issue | Impact | Files |
+|----|-------|--------|-------|
+| TD-05.24 | **No virtual scrolling** — 1000+ workspaces = 1000+ DOM nodes. Performance will degrade at scale. | 🟢 Perf | `workspace-explorer.js` |
+| TD-05.25 | **No expand/collapse state persistence** — Page refresh loses all tree expansion. Persist to `localStorage`. | 🟢 UX | `workspace-explorer.js` |
+| TD-05.26 | **Race condition on rapid create** — Multiple clicks submit duplicate API calls. No button disable during fetch. | 🟢 Bug | `workspace-explorer.js` |
+
+---
+
 ## How to Use This Backlog
 
 1. **During feature sprints:** When touching a file listed here, fix the debt in that file
