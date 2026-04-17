@@ -418,6 +418,16 @@ class EdogLogViewer {
       pauseBtn.addEventListener('click', this.togglePause);
     }
     
+    // F12: Stream badge (LIVE/PAUSED indicator) — click to resume
+    const streamBadge = document.getElementById('stream-badge');
+    if (streamBadge) {
+      streamBadge.addEventListener('click', () => {
+        if (this.state.streamMode === 'PAUSED') {
+          this.renderer._transitionToLive();
+        }
+      });
+    }
+    
     // Error navigation button
     const nextErrorBtn = document.getElementById('btn-next-error');
     if (nextErrorBtn) {
@@ -494,6 +504,20 @@ class EdogLogViewer {
         if (!this.detail.isVisible) {
           e.preventDefault();
           this.togglePause();
+        }
+        break;
+
+      case 'End':
+        if (this.state.streamMode === 'PAUSED') {
+          e.preventDefault();
+          this.renderer._transitionToLive();
+        }
+        break;
+
+      case 'ArrowDown':
+        if ((e.ctrlKey || e.metaKey) && this.state.streamMode === 'PAUSED') {
+          e.preventDefault();
+          this.renderer._transitionToLive();
         }
         break;
     }
@@ -689,17 +713,13 @@ class EdogLogViewer {
   }
   
   togglePause = () => {
-    this.state.paused = !this.state.paused;
-    const btn = document.getElementById('pause-btn');
-    if (btn) {
-      btn.textContent = this.state.paused ? '\u25B6 Resume' : 'Pause';
-      btn.classList.toggle('paused', this.state.paused);
-    }
-    if (!this.state.paused) {
-      this.state.autoScroll = true;
-      this.hideResumeButton();
-      this.filter.applyFilters();
-      this.renderer.scrollToBottom();
+    if (this.state.streamMode === 'LIVE') {
+      this.renderer._transitionToPaused('manual');
+    } else if (this.state.pauseReason === 'hover') {
+      // Promote hover-pause to manual-pause (don't resume)
+      this.state.pauseReason = 'manual';
+    } else {
+      this.renderer._transitionToLive();
     }
   }
   
@@ -716,14 +736,7 @@ class EdogLogViewer {
   }
   
   resumeAutoScroll = () => {
-    this.state.autoScroll = true;
-    this.hideResumeButton();
-    
-    // Scroll to bottom
-    const container = document.getElementById('logs-container');
-    if (container) {
-      this.renderer.scrollToBottom(container);
-    }
+    this.renderer._transitionToLive();
   }
   
   showResumeButton = () => {

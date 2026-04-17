@@ -317,6 +317,10 @@ class Renderer {
     // Scroll handler drives virtual scroll
     this.scrollContainer.addEventListener('scroll', this._onScroll, { passive: true });
 
+    // F12: Hover-freeze listeners (configurable via state.hoverFreezeEnabled)
+    this.scrollContainer.addEventListener('mouseenter', this._onHoverEnter);
+    this.scrollContainer.addEventListener('mouseleave', this._onHoverLeave);
+
     this.containerReady = true;
   }
 
@@ -367,24 +371,81 @@ class Renderer {
   }
 
   _onScroll = () => {
-    // Detect user scrolling away from bottom (disable auto-scroll)
-    if (this.state.autoScroll && Date.now() > this._scrollPinUntil) {
+    // Detect user scrolling away from bottom while LIVE
+    if (this.state.streamMode === 'LIVE' && Date.now() > this._scrollPinUntil) {
       const c = this.scrollContainer;
       const isAtBottom = c.scrollTop + c.clientHeight >= c.scrollHeight - this.ROW_HEIGHT * 2;
       if (!isAtBottom) {
-        this.state.autoScroll = false;
-        if (window.edogViewer) window.edogViewer.showResumeButton();
+        this._transitionToPaused('scroll');
       }
     }
-    // When auto-scrolling, don't schedule renders from scroll events —
-    // only scheduleRender() (timer-driven from new data) should trigger renders.
-    // This prevents the feedback loop: render→scrollTop→scroll event→render.
-    if (this.state.autoScroll) return;
-    // Manual scroll: go through flush() so stats update and renderScheduled resets
+    // When LIVE, suppress manual-scroll renders (prevent feedback loop)
+    if (this.state.streamMode === 'LIVE') return;
+    // PAUSED: user is scrolling manually — render the viewport
     if (!this.renderScheduled) {
       this.renderScheduled = true;
       requestAnimationFrame(() => this.flush());
     }
+  }
+
+  // ===== F12 STREAM CONTROLLER =====
+
+  _transitionToPaused = (reason) => {
+    if (this.state.streamMode === 'PAUSED') {
+      // Upgrade pause reason if new reason is higher priority
+      if (reason === 'scroll' && this.state.pauseReason === 'hover') {
+        this.state.pauseReason = 'scroll';
+      }
+      return;
+    }
+    this.state.streamMode = 'PAUSED';
+    this.state.pauseReason = reason;
+    this.state.bufferedCount = 0;
+    this._updateStreamBadge();
+    if (window.edogViewer) window.edogViewer.showResumeButton();
+  }
+
+  _transitionToLive = () => {
+    if (this.state.streamMode === 'LIVE') return;
+    this.state.streamMode = 'LIVE';
+    this.state.pauseReason = null;
+    this.state.bufferedCount = 0;
+    this._updateStreamBadge();
+    if (window.edogViewer) window.edogViewer.hideResumeButton();
+    this._scrollPinUntil = Date.now() + 80;
+    this.flush();
+    this.scrollToBottom();
+  }
+
+  _updateStreamBadge = () => {
+    const badge = document.getElementById('stream-badge');
+    if (!badge) return;
+    const isLive = this.state.streamMode === 'LIVE';
+    badge.dataset.mode = isLive ? 'live' : 'paused';
+    const label = badge.querySelector('.stream-label');
+    if (label) label.textContent = isLive ? 'LIVE' : 'PAUSED';
+    const countEl = badge.querySelector('.stream-count');
+    if (countEl) {
+      if (isLive) {
+        countEl.hidden = true;
+      } else {
+        countEl.hidden = false;
+        countEl.textContent = ' \u00B7 ' + this.state.bufferedCount.toLocaleString() + ' new';
+      }
+    }
+    badge.title = isLive ? 'Auto-scrolling to latest' : 'Click to resume (End)';
+  }
+
+  _onHoverEnter = () => {
+    if (!this.state.hoverFreezeEnabled) return;
+    if (this.state.streamMode !== 'LIVE') return;
+    this._transitionToPaused('hover');
+  }
+
+  _onHoverLeave = () => {
+    if (!this.state.hoverFreezeEnabled) return;
+    if (this.state.pauseReason !== 'hover') return;
+    this._transitionToLive();
   }
 
   // ===== SCHEDULE / FLUSH =====
@@ -409,7 +470,7 @@ class Renderer {
     this.lastRenderTime = Date.now();
 
     // When paused, still update filter index and stats but skip DOM rendering
-    if (this.state.paused) {
+    if (this.state.streamMode === 'PAUSED') {
       if (this.state.newLogsSinceRender > 0) {
         this.state.filterIndex.updateIncremental(
           this.state.logBuffer,
@@ -418,6 +479,7 @@ class Renderer {
         this.state.newLogsSinceRender = 0;
       }
       this.updateStats();
+      this._updateStreamBadge();
       this.renderScheduled = false;
       return;
     }

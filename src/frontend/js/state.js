@@ -132,8 +132,37 @@ class LogViewerState {
     this.correlationFilter = null;
     this.excludedComponents = new Set();
     this.activePreset = 'flt';
-    this.autoScroll = true;
-    this.paused = false;
+    // F12 Stream Controller — unified state machine (replaces autoScroll + paused)
+    this.streamMode = 'LIVE';          // 'LIVE' | 'PAUSED'
+    this.bufferedCount = 0;            // logs received while PAUSED
+    this.pauseReason = null;           // 'scroll' | 'manual' | 'hover' | null
+    this.hoverFreezeEnabled = localStorage.getItem('edog-hover-freeze') !== 'false';
+
+    // Backward-compat shims (keep existing code working)
+    Object.defineProperty(this, 'autoScroll', {
+      get: () => this.streamMode === 'LIVE',
+      set: (v) => {
+        if (v && this.streamMode === 'PAUSED') {
+          this.streamMode = 'LIVE';
+          this.pauseReason = null;
+          this.bufferedCount = 0;
+        }
+        if (!v && this.streamMode === 'LIVE') {
+          this.streamMode = 'PAUSED';
+        }
+      }
+    });
+    Object.defineProperty(this, 'paused', {
+      get: () => this.streamMode === 'PAUSED',
+      set: (v) => {
+        if (v && this.streamMode === 'LIVE') this.streamMode = 'PAUSED';
+        if (!v && this.streamMode === 'PAUSED') {
+          this.streamMode = 'LIVE';
+          this.pauseReason = null;
+          this.bufferedCount = 0;
+        }
+      }
+    });
     this.timeRangeSeconds = 0;
     this.stats = {
       totalLogs: 0, verbose: 0, message: 0, warning: 0, error: 0,
@@ -203,6 +232,11 @@ class LogViewerState {
   addLog = (entry) => {
     this.logBuffer.push(entry);
     this.newLogsSinceRender++;
+
+    // F12: track logs arriving while paused
+    if (this.streamMode === 'PAUSED') {
+      this.bufferedCount++;
+    }
 
     this.stats.totalLogs++;
     const level = entry.level?.toLowerCase();
