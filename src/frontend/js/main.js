@@ -403,10 +403,13 @@ class EdogLogViewer {
       });
     }
     
-    // Export button
+    // Export button — opens format dropdown
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) {
-      exportBtn.addEventListener('click', this.exportLogs);
+      exportBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleExportDropdown();
+      });
     }
     
     // Pause button
@@ -477,6 +480,13 @@ class EdogLogViewer {
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
           this.filter.clearAll();
+        }
+        break;
+
+      case 'KeyE':
+        if (e.ctrlKey && e.shiftKey) {
+          e.preventDefault();
+          this.toggleExportDropdown();
         }
         break;
         
@@ -1011,33 +1021,224 @@ class EdogLogViewer {
     }
   }
 
-  exportLogs = () => {
-    const telemetryArr = [];
-    this.state.telemetry.forEach(e => telemetryArr.push(e));
-    const dataToExport = {
-      exportedAt: new Date().toISOString(),
-      logs: this.state.filteredLogs.length > 0 ? this.state.filteredLogs : this.state.logs,
-      telemetry: telemetryArr,
-      stats: this.state.stats,
-      filters: {
-        searchText: this.state.searchText,
-        activeLevels: Array.from(this.state.activeLevels),
-        correlationFilter: this.state.correlationFilter
-      }
+  // ===== EXPORT MANAGER (C04) =====
+
+  /** Collect entries from FilterIndex (filtered view of RingBuffer). */
+  getFilteredEntries = () => {
+    const fi = this.state.filterIndex;
+    const entries = [];
+    for (let i = 0; i < fi.length; i++) {
+      const seq = fi.seqAt(i);
+      const entry = this.state.logBuffer.getBySeq(seq);
+      if (entry) entries.push(entry);
+    }
+    return entries;
+  }
+
+  /** Toggle the export format dropdown. */
+  toggleExportDropdown = () => {
+    const existing = document.querySelector('.export-dropdown');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+
+    const entries = this.getFilteredEntries();
+    if (entries.length === 0) {
+      this.showExportToast('No entries match current filters', 'warning');
+      return;
+    }
+
+    const exportBtn = document.getElementById('export-btn');
+    const dropdown = document.createElement('div');
+    dropdown.className = 'export-dropdown';
+
+    const formats = [
+      { key: 'json', label: 'JSON' },
+      { key: 'csv', label: 'CSV' },
+      { key: 'txt', label: 'Plain Text' }
+    ];
+    const lastUsed = sessionStorage.getItem('edog-export-format') || 'json';
+
+    for (const fmt of formats) {
+      const btn = document.createElement('button');
+      btn.className = 'export-option';
+      if (fmt.key === lastUsed) btn.classList.add('last-used');
+      btn.dataset.format = fmt.key;
+      btn.textContent = fmt.label;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.remove();
+        this.executeExport(entries, fmt.key);
+      });
+      dropdown.appendChild(btn);
+    }
+
+    // Position below export button
+    if (exportBtn) {
+      exportBtn.parentElement.style.position = 'relative';
+      exportBtn.parentElement.appendChild(dropdown);
+    } else {
+      document.body.appendChild(dropdown);
+    }
+
+    // Dismiss on outside click or Escape
+    const dismiss = (e) => {
+      if (e.type === 'keydown' && e.code !== 'Escape') return;
+      const dd = document.querySelector('.export-dropdown');
+      if (dd) dd.remove();
+      document.removeEventListener('click', dismiss);
+      document.removeEventListener('keydown', dismiss);
     };
-    
-    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { 
-      type: 'application/json' 
+    // Defer so this click event doesn't immediately dismiss
+    requestAnimationFrame(() => {
+      document.addEventListener('click', dismiss);
+      document.addEventListener('keydown', dismiss);
     });
-    
+  }
+
+  /** Run the export pipeline for a chosen format. */
+  executeExport = (entries, format) => {
+    try {
+      sessionStorage.setItem('edog-export-format', format);
+
+      // Size warning
+      const avgBytes = { json: 250, csv: 150, txt: 120 };
+      const estimated = entries.length * (avgBytes[format] || 200);
+      if (estimated > 10 * 1024 * 1024) {
+        const sizeMB = (estimated / (1024 * 1024)).toFixed(1);
+        if (!confirm(`Export will be approximately ${sizeMB}MB. Continue?`)) return;
+      }
+
+      let content;
+      switch (format) {
+        case 'csv':  content = this.generateCSV(entries);  break;
+        case 'txt':  content = this.generateText(entries); break;
+        default:     content = this.generateJSON(entries);  break;
+      }
+
+      this.downloadExportFile(content, format, entries.length);
+      this.showExportToast(entries.length, format);
+    } catch (err) {
+      console.error('[export] Failed:', err);
+      this.showExportToast('Export failed \u2014 check console for details', 'error');
+    }
+  }
+
+  // --- Format generators ---
+
+  generateJSON = (entries) => {
+    const output = {
+      exportedAt: new Date().toISOString(),
+      entryCount: entries.length,
+      entries: entries.map(e => {
+        let customData = e.customData || null;
+        if (customData !== null) {
+          try { JSON.stringify(customData); }
+          catch { customData = '[serialization error]'; }
+        }
+        return {
+          timestamp: e.timestamp || '',
+          level: e.level || 'INFO',
+          component: e.component || '',
+          message: e.message || '',
+          customData
+        };
+      })
+    };
+    return JSON.stringify(output, null, 2);
+  }
+
+  generateCSV = (entries) => {
+    const csvField = (value) => {
+      const s = String(value ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+    const flattenCustomData = (obj) => {
+      if (obj == null) return '';
+      if (typeof obj === 'string') return obj;
+      try { return JSON.stringify(obj); }
+      catch { return '[serialization error]'; }
+    };
+    const rows = ['timestamp,level,component,message,customData'];
+    for (const e of entries) {
+      rows.push([
+        csvField(e.timestamp || ''),
+        csvField(e.level || 'INFO'),
+        csvField(e.component || ''),
+        csvField(e.message || ''),
+        csvField(flattenCustomData(e.customData))
+      ].join(','));
+    }
+    return rows.join('\r\n') + '\r\n';
+  }
+
+  generateText = (entries) => {
+    const lines = [];
+    for (const e of entries) {
+      const ts = e.timestamp || '[no-timestamp]';
+      const level = (e.level || 'INFO').toUpperCase().padEnd(7);
+      const comp = e.component ? '[' + e.component + '] ' : '';
+      lines.push(`[${ts}] ${level} ${comp}${e.message || ''}`);
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  // --- Download + toast helpers ---
+
+  downloadExportFile = (content, format, entryCount) => {
+    const mimeTypes = { json: 'application/json', csv: 'text/csv', txt: 'text/plain' };
+    const extensions = { json: '.json', csv: '.csv', txt: '.txt' };
+    const filename = `edog-logs-${entryCount}-entries${extensions[format] || '.txt'}`;
+
+    const blob = new Blob([content], { type: mimeTypes[format] || 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `edog-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  showExportToast = (countOrMessage, formatOrType) => {
+    // Remove any existing toast
+    const prev = document.querySelector('.export-toast');
+    if (prev) prev.remove();
+
+    const formatLabels = { json: 'JSON', csv: 'CSV', txt: 'Plain Text' };
+    let message, variant;
+
+    if (typeof countOrMessage === 'number') {
+      message = `Exported ${countOrMessage.toLocaleString()} entries as ${formatLabels[formatOrType] || formatOrType}`;
+      variant = '';
+    } else {
+      message = countOrMessage;
+      variant = formatOrType || '';
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'export-toast';
+    if (variant) toast.classList.add(variant);
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add('visible'));
+
+    setTimeout(() => {
+      toast.classList.remove('visible');
+      toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+      // Fallback removal if transitionend doesn't fire
+      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 500);
+    }, 3000);
+  }
+
+  exportLogs = () => {
+    this.toggleExportDropdown();
   }
 
   jumpToNextError = () => {

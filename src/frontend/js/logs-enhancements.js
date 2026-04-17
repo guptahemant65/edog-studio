@@ -53,6 +53,9 @@ class LogsEnhancements {
     this._activeMarkers = [];
     this._markerFilterOpen = false;
 
+    /** @type {ClusterEngine|null} — set via setClusterEngine() */
+    this._clusterEngine = null;
+
     this._ready = false;
   }
 
@@ -247,14 +250,31 @@ class LogsEnhancements {
 
   /**
    * Detect error clusters from a list of entries.
-   * Consecutive error entries whose messages share a common prefix/pattern
-   * are grouped together.
+   * Delegates to ClusterEngine for global signature-based clustering
+   * when available; falls back to legacy consecutive-only grouping.
    * @param {object[]} entries — array of log entry objects
-   * @returns {ErrorCluster[]}
+   * @returns {object[]}
    */
   detectClusters(entries) {
-    this._errorClusters = [];
-    if (!entries || entries.length === 0) return this._errorClusters;
+    // Delegate to ClusterEngine for global grouping
+    if (this._clusterEngine) {
+      this._clusterEngine.rebuildFromBuffer(this._state.logBuffer);
+      this._errorClusters = this._clusterEngine.getSortedClusters();
+    } else {
+      this._errorClusters = this._detectClustersLegacy(entries);
+    }
+    this._renderClusterSummary();
+    return this._errorClusters;
+  }
+
+  /**
+   * Legacy consecutive-only clustering (preserved as fallback).
+   * @param {object[]} entries
+   * @returns {object[]}
+   */
+  _detectClustersLegacy(entries) {
+    const clusters = [];
+    if (!entries || entries.length === 0) return clusters;
 
     let current = null;
 
@@ -269,7 +289,7 @@ class LogsEnhancements {
           current.lastTimestamp = entry.timestamp;
         } else {
           if (current && current.entries.length >= LogsEnhancements.CLUSTER_THRESHOLD) {
-            this._errorClusters.push(current);
+            clusters.push(current);
           }
           current = {
             id: 'cluster-' + i,
@@ -283,27 +303,27 @@ class LogsEnhancements {
         }
       } else {
         if (current && current.entries.length >= LogsEnhancements.CLUSTER_THRESHOLD) {
-          this._errorClusters.push(current);
+          clusters.push(current);
         }
         current = null;
       }
     }
 
-    // Flush last group
     if (current && current.entries.length >= LogsEnhancements.CLUSTER_THRESHOLD) {
-      this._errorClusters.push(current);
+      clusters.push(current);
     }
 
-    this._renderClusterSummary();
-    return this._errorClusters;
+    return clusters;
   }
 
   /**
    * Toggle expand/collapse of a cluster.
-   * @param {string} clusterId
+   * @param {string} clusterKey — cluster id (legacy) or signature (global)
    */
-  toggleCluster(clusterId) {
-    const cluster = this._errorClusters.find(c => c.id === clusterId);
+  toggleCluster(clusterKey) {
+    const cluster = this._errorClusters.find(
+      c => c.id === clusterKey || c.signature === clusterKey
+    );
     if (!cluster) return;
     cluster.expanded = !cluster.expanded;
     this._renderClusterSummary();
@@ -766,53 +786,196 @@ class LogsEnhancements {
     const summary = document.getElementById('le-cluster-summary');
     if (!summary) return;
 
-    if (this._errorClusters.length === 0) {
+    const clusters = this._clusterEngine
+      ? this._clusterEngine.getSortedClusters()
+      : this._errorClusters;
+
+    if (clusters.length === 0) {
       summary.style.display = 'none';
       return;
     }
 
     summary.style.display = '';
-    summary.innerHTML = '';
+    summary.textContent = '';
 
-    const label = document.createElement('span');
-    label.className = 'le-cluster-label';
-    label.textContent = this._errorClusters.length + ' error pattern'
-      + (this._errorClusters.length > 1 ? 's' : '') + ' detected:';
-    summary.appendChild(label);
+    // Header
+    const header = document.createElement('div');
+    header.className = 'le-cluster-header';
+    header.textContent = clusters.length + ' error pattern'
+      + (clusters.length > 1 ? 's' : '') + ' detected';
+    summary.appendChild(header);
 
-    this._errorClusters.forEach(cluster => {
-      const pill = document.createElement('span');
-      pill.className = 'le-cluster-pill';
-      pill.title = cluster.label;
+    // Show max 10 clusters, with overflow indicator
+    const displayLimit = 10;
+    const displayClusters = clusters.slice(0, displayLimit);
 
+    displayClusters.forEach(cluster => {
+      const row = document.createElement('div');
+      row.className = 'le-cluster-row' + (cluster.expanded ? ' expanded' : '');
+
+      // Count badge
       const count = document.createElement('span');
       count.className = 'le-cluster-count';
-      count.textContent = cluster.entries.length + '\u00d7';
+      count.textContent = cluster.count + '\u00d7';
 
-      const text = document.createElement('span');
-      text.className = 'le-cluster-text';
-      text.textContent = cluster.label.length > 40
-        ? cluster.label.substring(0, 40) + '\u2026'
-        : cluster.label;
+      // Error code / label (safe text)
+      const label = document.createElement('span');
+      label.className = 'le-cluster-text';
+      const labelStr = cluster.code || cluster.label || cluster.signature || '';
+      label.textContent = labelStr.length > 40
+        ? labelStr.substring(0, 40) + '\u2026'
+        : labelStr;
+      label.title = cluster.label || cluster.signature || '';
 
+      // Trend badge
+      const trend = this._createTrendBadge(cluster);
+
+      // Time range
+      const time = document.createElement('span');
+      time.className = 'le-cluster-time';
+      time.textContent = this._formatTimeShort(cluster.firstSeen)
+        + ' \u2013 ' + this._formatTimeShort(cluster.lastSeen);
+
+      // Node pills
+      const nodesContainer = document.createElement('span');
+      nodesContainer.className = 'le-cluster-nodes';
+      const nodeSet = cluster.nodes instanceof Set ? cluster.nodes : new Set();
+      if (nodeSet.size > 0) {
+        for (const nodeName of nodeSet) {
+          const nodePill = document.createElement('span');
+          nodePill.className = 'le-cluster-node-pill';
+          const truncated = nodeName.length > 30
+            ? nodeName.substring(0, 27) + '\u2026'
+            : nodeName;
+          nodePill.textContent = truncated;
+          nodePill.title = 'Error occurred in node: ' + nodeName;
+
+          nodePill.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._navigateToDAGNode(nodeName);
+          });
+
+          nodesContainer.appendChild(nodePill);
+        }
+      } else {
+        const dash = document.createElement('span');
+        dash.className = 'le-cluster-no-nodes';
+        dash.textContent = '\u2014';
+        nodesContainer.appendChild(dash);
+      }
+
+      // Skipped nodes indicator
+      if (cluster.skippedNodes && cluster.skippedNodes.length > 0) {
+        const skip = document.createElement('span');
+        skip.className = 'le-cluster-skipped';
+        skip.textContent = 'Skipped: ' + cluster.skippedNodes.join(', ');
+        skip.title = 'Downstream nodes skipped due to this error';
+        nodesContainer.appendChild(skip);
+      }
+
+      // Expand chevron
       const chevron = document.createElement('span');
       chevron.className = 'le-cluster-chevron' + (cluster.expanded ? ' expanded' : '');
       chevron.textContent = '\u25B8';
 
-      pill.appendChild(count);
-      pill.appendChild(text);
-      pill.appendChild(chevron);
+      // Assemble row
+      row.appendChild(count);
+      row.appendChild(label);
+      row.appendChild(trend);
+      row.appendChild(time);
+      row.appendChild(nodesContainer);
+      row.appendChild(chevron);
 
-      pill.addEventListener('click', () => {
-        this.toggleCluster(cluster.id);
-        // Jump to first entry in cluster
-        if (cluster.entries[0] && cluster.entries[0].seq !== undefined) {
-          this._scrollToSeq(cluster.entries[0].seq);
+      // Click handler: expand/collapse + jump to first entry
+      row.addEventListener('click', () => {
+        cluster.expanded = !cluster.expanded;
+        this._renderClusterSummary();
+        if (cluster.expanded && cluster.entries[0]) {
+          const seq = cluster.entries[0].seq;
+          if (seq !== undefined) this._scrollToSeq(seq);
         }
       });
 
-      summary.appendChild(pill);
+      summary.appendChild(row);
+
+      // Expanded: show matching entries
+      if (cluster.expanded) {
+        const entryList = document.createElement('div');
+        entryList.className = 'le-cluster-entries';
+
+        const displayCount = Math.min(cluster.entries.length, 50);
+        for (let i = 0; i < displayCount; i++) {
+          const e = cluster.entries[i];
+          const entryRow = document.createElement('div');
+          entryRow.className = 'le-cluster-entry-row';
+          entryRow.textContent = this._formatTimeShort(e.timestamp)
+            + ' ' + (e.message || '').substring(0, 120);
+          entryRow.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (e.seq !== undefined) this._scrollToSeq(e.seq);
+          });
+          entryList.appendChild(entryRow);
+        }
+
+        if (cluster.entries.length > 50) {
+          const more = document.createElement('div');
+          more.className = 'le-cluster-more';
+          more.textContent = '+ ' + (cluster.entries.length - 50) + ' more entries';
+          entryList.appendChild(more);
+        }
+
+        summary.appendChild(entryList);
+      }
     });
+
+    // Overflow indicator for >10 clusters
+    if (clusters.length > displayLimit) {
+      const overflow = document.createElement('div');
+      overflow.className = 'le-cluster-overflow';
+      overflow.textContent = '+ ' + (clusters.length - displayLimit) + ' more patterns';
+      summary.appendChild(overflow);
+    }
+  }
+
+  /**
+   * Create a trend badge element for a cluster.
+   * @param {object} cluster
+   * @returns {HTMLElement}
+   */
+  _createTrendBadge(cluster) {
+    const badge = document.createElement('span');
+    badge.className = 'le-cluster-trend';
+    const arrow = cluster.trend || '\u2192';
+    badge.textContent = arrow;
+
+    if (arrow === '\u2191') {
+      badge.classList.add('le-trend-rising');
+      badge.title = 'Increasing \u2014 error rate rising >20% vs previous 60s';
+    } else if (arrow === '\u2193') {
+      badge.classList.add('le-trend-falling');
+      badge.title = 'Decreasing \u2014 error rate falling >20% vs previous 60s';
+    } else {
+      badge.classList.add('le-trend-stable');
+      badge.title = 'Stable \u2014 error rate within \u00b120% vs previous 60s';
+    }
+
+    return badge;
+  }
+
+  /**
+   * Navigate to a DAG node by switching to the DAG tab and dispatching
+   * a custom event. No-op if DAG tab is not available.
+   * @param {string} nodeName
+   */
+  _navigateToDAGNode(nodeName) {
+    const dagTab = document.querySelector('[data-tab="dag"]');
+    if (!dagTab) return;
+
+    dagTab.click();
+
+    window.dispatchEvent(new CustomEvent('edog:navigate-to-node', {
+      detail: { nodeName }
+    }));
   }
 
   // ───────────────────────────────────────────────────────────────
@@ -1056,12 +1219,29 @@ class LogsEnhancements {
   refreshClusters() {
     if (!this._state || !this._state.logBuffer) return;
 
-    const entries = [];
-    const buf = this._state.logBuffer;
-    for (let i = 0; i < buf.count; i++) {
-      const entry = buf.getByIndex(i);
-      if (entry) entries.push(entry);
+    if (this._clusterEngine) {
+      // Use ClusterEngine for global clustering
+      this._clusterEngine.rebuildFromBuffer(this._state.logBuffer);
+      this._errorClusters = this._clusterEngine.getSortedClusters();
+      this._renderClusterSummary();
+    } else {
+      // Legacy fallback: scan all entries
+      const entries = [];
+      const buf = this._state.logBuffer;
+      for (let i = 0; i < buf.count; i++) {
+        const entry = buf.getByIndex(i);
+        if (entry) entries.push(entry);
+      }
+      this.detectClusters(entries);
     }
-    this.detectClusters(entries);
+  }
+
+  /**
+   * Attach a ClusterEngine instance (from ErrorIntelligence).
+   * Once attached, detectClusters and refreshClusters delegate to it.
+   * @param {ClusterEngine} engine
+   */
+  setClusterEngine(engine) {
+    this._clusterEngine = engine || null;
   }
 }

@@ -1,6 +1,7 @@
 /**
  * EDOG Real-Time Log Viewer - DOM Renderer
- * V2: Virtual scroll, DOM recycling pool, event delegation, zero innerHTML for log rows
+ * V2: Virtual scroll, DOM recycling pool, event delegation
+ * F12: Highlight engine — controlled innerHTML for search + error code decoration
  */
 
 // ===== ROW POOL =====
@@ -84,6 +85,170 @@ class RowPool {
   }
 }
 
+// ===== HIGHLIGHT ENGINE (F12 — Error Intelligence) =====
+// Module-level pure functions for the 6-step innerHTML escaping pipeline.
+// SECURITY INVARIANT: All user-controlled text is HTML-escaped BEFORE any
+// highlight tag insertion. Tags contain only hardcoded class names and
+// regex-validated data-code values. The order is NEVER reversed.
+
+/**
+ * Build a mapping from raw text character positions to escaped HTML positions.
+ * Required because HTML escaping changes string length (e.g. '<' → '&lt;' is 1→4).
+ *
+ * @param {string} rawText — the unescaped message string
+ * @returns {number[]} map where map[rawIdx] = escapedIdx, length = rawText.length + 1
+ */
+function buildOffsetMap(rawText) {
+  const map = new Array(rawText.length + 1);
+  let escapedIdx = 0;
+  for (let i = 0; i < rawText.length; i++) {
+    map[i] = escapedIdx;
+    const ch = rawText.charCodeAt(i);
+    if (ch === 38) escapedIdx += 5;       // & → &amp;
+    else if (ch === 60) escapedIdx += 4;  // < → &lt;
+    else if (ch === 62) escapedIdx += 4;  // > → &gt;
+    else if (ch === 34) escapedIdx += 6;  // " → &quot;
+    else if (ch === 39) escapedIdx += 5;  // ' → &#39;
+    else escapedIdx += 1;
+  }
+  map[rawText.length] = escapedIdx;
+  return map;
+}
+
+/**
+ * Build the opening HTML tag for a highlight range.
+ * Only produces tags from the allowed whitelist (§14):
+ *   <mark class="search-hit">
+ *   <span class="error-code-known" data-code="...">
+ *   <span class="error-code-unknown" data-code="...">
+ *
+ * @param {Object} highlight — a HighlightRange object
+ * @returns {string} opening tag string
+ */
+function buildOpenTag(highlight) {
+  if (highlight.className === 'search-hit') {
+    if (highlight.current) {
+      return '<mark class="log-search-match log-search-current">';
+    }
+    return '<mark class="log-search-match">';
+  }
+  // Error code span — data.code is regex-verified [A-Z0-9_]+ by ErrorDecoder
+  let tag = '<span class="log-error-code log-error-code--' +
+    (highlight.className === 'error-code-known' ? 'known' : 'unknown') + '"';
+  if (highlight.data && highlight.data.code) {
+    tag += ' data-code="' + highlight.data.code + '"';
+  }
+  tag += '>';
+  return tag;
+}
+
+/**
+ * Resolve overlapping highlights by priority. Higher-priority ranges claim
+ * their positions first; lower-priority ranges are clipped or discarded.
+ *
+ * @param {Array} highlights — unsorted, potentially overlapping HighlightRange[]
+ * @returns {Array} sorted, non-overlapping HighlightRange[]
+ */
+function resolveOverlaps(highlights) {
+  if (highlights.length <= 1) return highlights;
+
+  const PRIORITY = { 'error-code-known': 0, 'error-code-unknown': 1, 'search-hit': 2 };
+  highlights.sort((a, b) => {
+    const pd = (PRIORITY[a.className] || 0) - (PRIORITY[b.className] || 0);
+    return pd !== 0 ? pd : a.start - b.start;
+  });
+
+  const occupied = [];
+  const result = [];
+
+  for (const h of highlights) {
+    let s = h.start;
+    let e = h.end;
+
+    for (let j = 0; j < occupied.length; j++) {
+      const os = occupied[j][0];
+      const oe = occupied[j][1];
+      if (s < oe && e > os) {
+        if (s >= os && e <= oe) { s = e; break; }
+        if (s < os && e > os) { e = os; }
+        if (s < oe && e > oe) { s = oe; }
+      }
+    }
+
+    if (s < e) {
+      result.push({ start: s, end: e, className: h.className, data: h.data, current: h.current });
+      occupied.push([s, e]);
+    }
+  }
+
+  result.sort((a, b) => a.start - b.start);
+  return result;
+}
+
+/**
+ * Find all case-insensitive occurrences of a search term in raw text.
+ *
+ * @param {string} rawText — the unescaped message string
+ * @param {string} searchTerm — the user's search text (literal, not regex)
+ * @param {number} [currentMatchIdx] — index of the "current" match to navigate to
+ * @returns {Array} HighlightRange[] with className 'search-hit'
+ */
+function computeSearchHighlights(rawText, searchTerm, currentMatchIdx) {
+  if (!searchTerm || !rawText) return [];
+  const ranges = [];
+  const textLower = rawText.toLowerCase();
+  const termLower = searchTerm.toLowerCase();
+  const termLen = termLower.length;
+  let pos = 0;
+  let matchCount = 0;
+  while (pos <= textLower.length - termLen) {
+    const idx = textLower.indexOf(termLower, pos);
+    if (idx === -1) break;
+    const range = { start: idx, end: idx + termLen, className: 'search-hit' };
+    if (currentMatchIdx !== undefined && matchCount === currentMatchIdx) {
+      range.current = true;
+    }
+    ranges.push(range);
+    pos = idx + termLen;
+    matchCount++;
+  }
+  return ranges;
+}
+
+/**
+ * Convert raw log text + highlight ranges into safe innerHTML.
+ *
+ * SECURITY INVARIANT: rawText is HTML-escaped FIRST (Step 2). Only hardcoded
+ * <mark> and <span> tags are inserted (Step 4). User content NEVER bypasses escaping.
+ *
+ * @param {string} rawText — the truncated, unescaped message string
+ * @param {Array} highlights — sorted, overlap-resolved HighlightRange[]
+ * @param {Renderer} renderer — Renderer instance (for escapeHtml access)
+ * @returns {string} safe HTML string ready for innerHTML assignment
+ */
+function applyHighlights(rawText, highlights, renderer) {
+  // Step 2: Escape ALL text first (security gate)
+  const escaped = renderer.escapeHtml(rawText);
+
+  if (!highlights || highlights.length === 0) return escaped;
+
+  // Step 4a: Build raw→escaped offset map
+  const offsetMap = buildOffsetMap(rawText);
+
+  // Step 4b: Insert tags at mapped positions (right-to-left preserves earlier positions)
+  let html = escaped;
+  for (let i = highlights.length - 1; i >= 0; i--) {
+    const h = highlights[i];
+    const eStart = offsetMap[h.start];
+    const eEnd = offsetMap[h.end];
+    const openTag = buildOpenTag(h);
+    const closeTag = (h.className === 'search-hit') ? '</mark>' : '</span>';
+    html = html.substring(0, eStart) + openTag + html.substring(eStart, eEnd) + closeTag + html.substring(eEnd);
+  }
+
+  return html;
+}
+
 // ===== VIRTUAL SCROLL RENDERER =====
 
 class Renderer {
@@ -99,6 +264,12 @@ class Renderer {
     this.pendingTimer = null;
     // Auto-scroll: suppress user-scroll-detection briefly after programmatic scrollTop changes
     this._scrollPinUntil = 0;
+
+    // F12 Highlight Engine state
+    this._highlightVersion = 0;
+    this._searchTerm = '';
+    this._currentSearchMatchIdx = -1;
+    this._errorDecoder = null;
 
     // Virtual scroll state
     this.scrollContainer = null;
@@ -165,6 +336,20 @@ class Renderer {
 
     const entry = this.state.logBuffer.getBySeq(row._seq);
     if (!entry) return;
+
+    // Error code click → dispatch custom event for popover (F12 Highlight Engine)
+    if (e.target.classList.contains('log-error-code--known') ||
+        e.target.classList.contains('log-error-code--unknown')) {
+      e.stopPropagation();
+      const code = e.target.dataset.code;
+      if (code) {
+        const detail = { code, element: e.target };
+        this.scrollContainer.dispatchEvent(
+          new CustomEvent('error-code-click', { detail, bubbles: true })
+        );
+      }
+      return;
+    }
 
     // Component pill click → exclude
     if (e.target.classList.contains('log-component')) {
@@ -327,7 +512,7 @@ class Renderer {
       if (seq === undefined) continue;
 
       let row = this.renderedRows.get(i);
-      if (row && row._seq === seq) {
+      if (row && row._seq === seq && row._highlightVersion === this._highlightVersion) {
         row.style.transform = 'translateY(' + (i * this.ROW_HEIGHT) + 'px)';
         continue;
       }
@@ -371,7 +556,7 @@ class Renderer {
     return 'default';
   }
 
-  // ===== ROW POPULATION (zero innerHTML — textContent only) =====
+  // ===== ROW POPULATION (F12: textContent fast path + innerHTML highlight path) =====
 
   _populateRow(row, entry, seq, filteredIdx) {
     row._seq = seq;
@@ -392,9 +577,20 @@ class Renderer {
     row._component.title = 'Click to exclude this component';
     row._component.dataset.category = this._getComponentCategory(component);
 
-    // Message (truncated via textContent — no HTML parsing)
+    // Message — highlight pipeline (F12 Error Intelligence)
+    // 6-step pipeline: raw text → HTML-escape → compute highlights → offset map → insert tags → innerHTML
     const msg = entry.message || '';
-    row._message.textContent = msg.length > 500 ? msg.substring(0, 500) + '\u2026' : msg;
+    const truncated = msg.length > 500 ? msg.substring(0, 500) + '\u2026' : msg;
+    const highlights = this._computeHighlights(truncated, entry);
+
+    if (highlights.length === 0) {
+      // FAST PATH: no highlights active → stay with safe textContent (zero overhead)
+      row._message.textContent = truncated;
+    } else {
+      // HIGHLIGHT PATH: use innerHTML with strict escaping pipeline
+      row._message.innerHTML = applyHighlights(truncated, highlights, this);
+    }
+    row._highlightVersion = this._highlightVersion;
 
     // Error/warning row styling
     if (levelLower === 'error') {
@@ -416,6 +612,100 @@ class Renderer {
     }
 
     row.dataset.rootActivityId = entry.rootActivityId || '';
+  }
+
+  // ===== HIGHLIGHT ENGINE — Instance Methods (F12) =====
+
+  /**
+   * Collect highlights from all sources and produce the final resolved array.
+   * Called from _populateRow for each visible row.
+   *
+   * @param {string} rawText — truncated, unescaped message
+   * @param {Object} entry — the log entry object
+   * @returns {Array} sorted, non-overlapping HighlightRange[]
+   */
+  _computeHighlights(rawText, entry) {
+    if (!rawText) return [];
+
+    // Fast-path bail: no search active AND no error decoder → skip entirely
+    if (!this._searchTerm && !this._errorDecoder) return [];
+
+    const highlights = [];
+
+    // Source 1: Error codes (priority 1–2)
+    if (this._errorDecoder) {
+      const errorMatches = this._errorDecoder.matchErrorCodes(rawText);
+      for (let i = 0; i < errorMatches.length; i++) {
+        const m = errorMatches[i];
+        highlights.push({
+          start: m.start,
+          end: m.end,
+          className: m.known ? 'error-code-known' : 'error-code-unknown',
+          data: { code: m.code }
+        });
+      }
+    }
+
+    // Source 2: Search matches (priority 3)
+    if (this._searchTerm) {
+      const searchRanges = computeSearchHighlights(rawText, this._searchTerm);
+      highlights.push(...searchRanges);
+    }
+
+    if (highlights.length === 0) return highlights;
+
+    // Resolve overlaps (error codes win over search)
+    return resolveOverlaps(highlights);
+  }
+
+  /**
+   * Set the search term for highlight rendering. Invalidates all visible row caches.
+   *
+   * @param {string} term — the search text (empty string to clear)
+   */
+  setSearchTerm(term) {
+    const newTerm = (term || '').trim();
+    if (newTerm === this._searchTerm) return;
+    this._searchTerm = newTerm;
+    this._currentSearchMatchIdx = -1;
+    this._highlightVersion++;
+  }
+
+  /**
+   * Set the ErrorDecoder instance used for error code detection.
+   *
+   * @param {ErrorDecoder} decoder — the ErrorDecoder instance
+   */
+  setErrorDecoder(decoder) {
+    this._errorDecoder = decoder || null;
+    this._highlightVersion++;
+  }
+
+  /**
+   * Get the count of search matches across all currently filtered log entries.
+   *
+   * @returns {number} total search match count in the filtered view
+   */
+  getSearchMatchCount() {
+    if (!this._searchTerm) return 0;
+    const termLower = this._searchTerm.toLowerCase();
+    const termLen = termLower.length;
+    let total = 0;
+    const filterIndex = this.state.filterIndex;
+    for (let i = 0; i < filterIndex.length; i++) {
+      const seq = filterIndex.seqAt(i);
+      const entry = this.state.logBuffer.getBySeq(seq);
+      if (!entry) continue;
+      const msg = (entry.message || '').toLowerCase();
+      let pos = 0;
+      while (pos <= msg.length - termLen) {
+        const idx = msg.indexOf(termLower, pos);
+        if (idx === -1) break;
+        total++;
+        pos = idx + termLen;
+      }
+    }
+    return total;
   }
 
   // Fast time formatting (avoids toLocaleTimeString overhead)
@@ -645,10 +935,10 @@ class Renderer {
     return mapping[(status || '').toLowerCase()] || '?';
   }
 
-  // String-based escapeHtml (no DOM allocation)
+  // String-based escapeHtml (no DOM allocation) — 5 entities including ' for F12
   escapeHtml = (text) => {
     if (!text) return '';
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   updateLogsStatus = () => {
