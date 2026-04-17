@@ -67,11 +67,13 @@ LIB_MODULES = [
 # JS modules — order matters (dependencies first, then features, then main)
 JS_MODULES = [
     "js/mock-data.js",
+    "js/error-codes-data.js",
     "js/state.js",
     "js/signalr-manager.js",
     "js/api-client.js",
     "js/notebook-parser.js",
     "js/notebook-view.js",
+    "js/error-decoder.js",
     "js/renderer.js",
     "js/filters.js",
     "js/detail-panel.js",
@@ -79,6 +81,7 @@ JS_MODULES = [
     "js/auto-detect.js",
     "js/smart-context.js",
     "js/error-intel.js",
+    "js/error-timeline.js",
     "js/anomaly.js",
     "js/control-panel.js",
     "js/topbar.js",

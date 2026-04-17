@@ -308,9 +308,8 @@ def validate_entry(code: str, entry: dict) -> list[str]:
     if "retryable" in entry and not isinstance(entry["retryable"], bool):
         errors.append(f"'{code}.retryable': expected bool")
 
-    if "runbookUrl" in entry and entry["runbookUrl"] is not None:
-        if not isinstance(entry["runbookUrl"], str):
-            errors.append(f"'{code}.runbookUrl': expected string or null")
+    if "runbookUrl" in entry and entry["runbookUrl"] is not None and not isinstance(entry["runbookUrl"], str):
+        errors.append(f"'{code}.runbookUrl': expected string or null")
 
     if "relatedCodes" in entry:
         if not isinstance(entry["relatedCodes"], list):
