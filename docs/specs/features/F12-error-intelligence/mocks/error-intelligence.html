@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Error Intelligence (F12 Mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — EDOG Studio Design System (Light Theme)
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --accent-soft: rgba(109,92,255,0.10);
+  --text-on-accent: #ffffff;
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --text-xs: 10px; --text-sm: 12px; --text-md: 13px;
+  --text-lg: 15px; --text-xl: 18px; --text-2xl: 22px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-xl: 14px; --r-full: 100px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,0.12), 0 8px 24px rgba(0,0,0,0.08);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --t-fast: 80ms; --t-normal: 150ms; --t-page: 360ms;
+  --level-error: #e5453b; --level-warning: #e5940c;
+  --level-message: #2d7ff9; --level-verbose: #8e95a5;
+  --level-error-tint: rgba(229,69,59,0.08);
+  --level-warning-tint: rgba(229,148,12,0.06);
+  --level-message-tint: rgba(45,127,249,0.06);
+  --level-verbose-tint: rgba(142,149,165,0.06);
+  --row-error-tint: rgba(229,69,59,0.04);
+  --row-warning-tint: rgba(229,148,12,0.03);
+  --row-stripe: rgba(0,0,0,0.015);
+  --comp-controller: #2d7ff9; --comp-controller-bg: rgba(45,127,249,0.08);
+  --comp-dag: #18a058; --comp-dag-bg: rgba(24,160,88,0.08);
+  --comp-onelake: #0d9488; --comp-onelake-bg: rgba(13,148,136,0.08);
+  --comp-dq: #6d5cff; --comp-dq-bg: rgba(109,92,255,0.08);
+  --comp-retry: #e5940c; --comp-retry-bg: rgba(229,148,12,0.08);
+  --status-ok: #18a058; --status-ok-dim: rgba(24,160,88,0.08);
+  --status-ok-glow: rgba(24,160,88,0.15);
+  --search-hit: #fef08a; --search-hit-border: #eab308;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS (32 named)
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideLeft { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideRight { from { opacity: 0; transform: translateX(-60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes scaleSpring { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes cardIn { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes cardOut { to { opacity: 0; transform: translateY(4px) scale(0.98); } }
+@keyframes pulseAccent { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes pulseLive { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--status-ok-glow); } 50% { opacity: 0.6; box-shadow: 0 0 0 4px transparent; } }
+@keyframes pulsePaused { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes errorFlash { 0% { background: var(--row-error-tint); } 50% { background: rgba(229,69,59,0.12); } 100% { background: var(--row-error-tint); } }
+@keyframes warningFlash { 0% { background: var(--row-warning-tint); } 50% { background: rgba(229,148,12,0.08); } 100% { background: var(--row-warning-tint); } }
+@keyframes logRowIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes badgePop { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes toastOut { to { opacity: 0; transform: translateY(8px) scale(0.97); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes dropdownIn { from { opacity: 0; transform: translateY(-4px) scaleY(0.95); } to { opacity: 1; transform: translateY(0) scaleY(1); } }
+@keyframes panelSlideUp { from { opacity: 0; transform: translateY(100%); } to { opacity: 1; transform: translateY(0); } }
+@keyframes panelSlideRight { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+@keyframes sparklineDraw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes countUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes codeUnderline { from { background-size: 0 2px; } to { background-size: 100% 2px; } }
+@keyframes checkPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes searchPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(254,240,138,0.4); } 50% { box-shadow: 0 0 0 3px rgba(254,240,138,0.2); } }
+@keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes fabBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font); font-size: var(--text-md); color: var(--text);
+  background: var(--bg); line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+input, select { font: inherit; color: inherit; background: none; border: none; outline: none; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+.app { display: flex; flex-direction: column; height: 100vh; background: var(--bg); }
+
+/* Header */
+.header {
+  display: flex; align-items: center; gap: var(--sp-3); height: 44px;
+  padding: 0 var(--sp-4); background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; z-index: 100;
+}
+.header-logo { font-weight: 700; font-size: var(--text-lg); color: var(--accent); letter-spacing: -0.3px; }
+.header-sep { width: 1px; height: 20px; background: var(--border-bright); }
+.header-title { font-size: var(--text-md); font-weight: 600; color: var(--text); }
+.header-badge {
+  font-size: var(--text-xs); padding: 2px 8px; border-radius: var(--r-full);
+  background: var(--accent-dim); color: var(--accent); font-weight: 600; letter-spacing: 0.3px;
+}
+.header-spacer { flex: 1; }
+.header-meta { font-size: var(--text-sm); color: var(--text-muted); font-family: var(--mono); }
+
+/* Toolbar */
+.toolbar {
+  display: flex; align-items: center; gap: var(--sp-2); height: 40px;
+  padding: 0 var(--sp-3); background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.toolbar-group { display: flex; align-items: center; gap: var(--sp-2); }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 var(--sp-1); }
+.toolbar-spacer { flex: 1; }
+
+/* Stream Badge */
+.stream-badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px;
+  border-radius: var(--r-full); font-size: var(--text-xs); font-weight: 600;
+  cursor: pointer; transition: all var(--t-fast) var(--ease); user-select: none;
+  letter-spacing: 0.3px;
+}
+.stream-badge:hover { transform: translateY(-1px); }
+.stream-badge.live {
+  background: var(--status-ok-dim); color: var(--status-ok); border: 1px solid rgba(24,160,88,0.15);
+}
+.stream-badge.live .stream-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--status-ok);
+  animation: pulseLive 2s ease-in-out infinite;
+}
+.stream-badge.paused {
+  background: rgba(229,148,12,0.08); color: #b97a08; border: 1px solid rgba(229,148,12,0.15);
+}
+.stream-badge.paused .stream-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--level-warning);
+  animation: pulsePaused 1.5s ease-in-out infinite;
+}
+.stream-badge .buffered-count {
+  background: rgba(229,148,12,0.15); padding: 1px 6px; border-radius: var(--r-full);
+  font-size: 9px; font-weight: 700; animation: badgePop 0.3s var(--spring);
+}
+
+/* Search Bar */
+.search-bar {
+  display: flex; align-items: center; gap: var(--sp-2); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: var(--r-md); padding: 0 var(--sp-2);
+  height: 28px; width: 280px; transition: all var(--t-normal) var(--ease);
+}
+.search-bar:focus-within {
+  border-color: var(--accent); box-shadow: var(--shadow-glow);
+  background: var(--surface);
+}
+.search-bar input {
+  flex: 1; height: 100%; font-size: var(--text-sm); font-family: var(--mono);
+  min-width: 0;
+}
+.search-bar input::placeholder { color: var(--text-muted); }
+.search-icon { color: var(--text-muted); font-size: var(--text-sm); flex-shrink: 0; }
+.search-nav {
+  display: none; align-items: center; gap: 2px; font-size: var(--text-xs);
+  color: var(--text-dim); white-space: nowrap;
+}
+.search-bar.has-query .search-nav { display: flex; }
+.search-nav-btn {
+  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); color: var(--text-dim); font-size: 11px;
+  transition: all var(--t-fast) var(--ease);
+}
+.search-nav-btn:hover { background: var(--surface-3); color: var(--text); }
+.search-clear {
+  width: 18px; height: 18px; display: none; align-items: center; justify-content: center;
+  border-radius: 50%; color: var(--text-muted); font-size: 11px;
+  transition: all var(--t-fast) var(--ease);
+}
+.search-bar.has-query .search-clear { display: flex; }
+.search-clear:hover { background: var(--surface-3); color: var(--text); }
+
+/* Level Filters */
+.level-filter-btn {
+  padding: 2px 8px; border-radius: var(--r-full); font-size: var(--text-xs);
+  font-weight: 600; letter-spacing: 0.3px; text-transform: uppercase;
+  transition: all var(--t-fast) var(--ease); opacity: 0.5;
+  border: 1px solid transparent;
+}
+.level-filter-btn.active { opacity: 1; }
+.level-filter-btn.error { color: var(--level-error); }
+.level-filter-btn.error.active { background: var(--level-error-tint); border-color: rgba(229,69,59,0.15); }
+.level-filter-btn.warning { color: var(--level-warning); }
+.level-filter-btn.warning.active { background: var(--level-warning-tint); border-color: rgba(229,148,12,0.15); }
+.level-filter-btn.info { color: var(--level-message); }
+.level-filter-btn.info.active { background: var(--level-message-tint); border-color: rgba(45,127,249,0.15); }
+.level-filter-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+/* Toolbar Buttons */
+.tb-btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
+  border-radius: var(--r-md); font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-dim); transition: all var(--t-fast) var(--ease);
+  border: 1px solid transparent; position: relative;
+}
+.tb-btn:hover { background: var(--surface-2); color: var(--text); transform: translateY(-1px); }
+.tb-btn .tb-icon { font-size: 13px; }
+
+/* Main Content */
+.main-content { display: flex; flex: 1; min-height: 0; }
+
+/* Log Panel */
+.log-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+
+/* Error Timeline */
+.error-timeline {
+  position: relative; height: 52px; flex-shrink: 0; background: var(--surface-2);
+  border-bottom: 1px solid var(--border); padding: 4px var(--sp-2) 0;
+  overflow: visible;
+}
+.etl-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--sp-1); margin-bottom: 2px;
+}
+.etl-label { font-size: 9px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.etl-toggle {
+  font-size: 9px; color: var(--text-muted); cursor: pointer;
+  transition: color var(--t-fast) var(--ease);
+}
+.etl-toggle:hover { color: var(--text-dim); }
+.etl-bars {
+  display: grid; grid-auto-columns: 1fr; grid-auto-flow: column;
+  height: 32px; align-items: flex-end; gap: 1px;
+}
+.etl-col {
+  display: flex; flex-direction: column-reverse; align-items: stretch;
+  min-width: 0; cursor: pointer; border-radius: 1px 1px 0 0;
+  transition: opacity var(--t-fast) var(--ease); transform-origin: bottom;
+  animation: barGrow 0.4s var(--ease-out) backwards;
+}
+.etl-col:hover { opacity: 0.75; }
+.etl-col.selected { outline: 1px solid var(--accent); outline-offset: -1px; border-radius: 2px 2px 0 0; }
+.etl-seg { min-height: 0; transition: height 0.3s var(--ease); }
+.etl-seg-error { background: var(--level-error); border-radius: 1px 1px 0 0; }
+.etl-seg-warning { background: var(--level-warning); }
+.etl-seg-message { background: var(--level-message); opacity: 0.35; }
+.etl-tooltip {
+  position: absolute; top: -6px; transform: translate(-50%, -100%);
+  background: var(--surface); color: var(--text); font: var(--text-xs)/1.3 var(--mono);
+  padding: 4px 8px; border-radius: var(--r-sm); white-space: nowrap;
+  pointer-events: none; box-shadow: var(--shadow-md); z-index: 200;
+  display: none; border: 1px solid var(--border);
+  animation: cardIn 0.15s var(--spring);
+}
+.etl-filter-label {
+  position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%);
+  font-size: 9px; color: var(--accent); font-weight: 600; cursor: pointer;
+  display: none; padding: 2px 6px; border-radius: var(--r-sm);
+  background: var(--accent-dim); transition: all var(--t-fast) var(--ease);
+}
+.etl-filter-label:hover { background: var(--accent-soft); }
+.error-timeline.has-filter .etl-filter-label { display: block; }
+
+/* Log Scroll Area */
+.log-scroll {
+  flex: 1; overflow-y: auto; overflow-x: hidden; position: relative;
+  contain: strict;
+}
+
+/* Log Rows */
+.log-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 0 var(--sp-3); height: 30px; font-size: 11px;
+  font-family: var(--mono); border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background var(--t-fast) var(--ease);
+  animation: logRowIn 0.15s var(--ease-out) backwards;
+}
+.log-row:hover { background: var(--surface-2); }
+.log-row.error-row { border-left: 3px solid var(--level-error); background: var(--row-error-tint); }
+.log-row.warning-row { border-left: 3px solid var(--level-warning); background: var(--row-warning-tint); }
+.log-row.stripe { background: var(--row-stripe); }
+.log-row.stripe.error-row { background: var(--row-error-tint); }
+.log-row.new-error { animation: errorFlash 1.5s ease-in-out; }
+.log-row.new-warning { animation: warningFlash 1.5s ease-in-out; }
+.log-row.search-active { background: rgba(254,240,138,0.06); }
+
+.log-time {
+  color: var(--text-muted); white-space: nowrap; font-size: 10px;
+  width: 80px; flex-shrink: 0; opacity: 0.6; letter-spacing: -0.3px;
+}
+.log-level {
+  padding: 1px 6px; border-radius: var(--r-full); font-size: 9px;
+  font-weight: 700; min-width: 20px; text-align: center;
+  letter-spacing: 0.4px; text-transform: uppercase; flex-shrink: 0;
+}
+.log-level.error { background: var(--level-error-tint); color: var(--level-error); }
+.log-level.warning { background: var(--level-warning-tint); color: var(--level-warning); }
+.log-level.info { background: var(--level-message-tint); color: var(--level-message); }
+.log-level.verbose { background: var(--level-verbose-tint); color: var(--level-verbose); }
+.log-component {
+  padding: 1px 6px; border-radius: var(--r-sm); font-size: 9px;
+  font-weight: 500; white-space: nowrap; flex-shrink: 0; max-width: 110px;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.log-message { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 11px; }
+
+/* Error Code Decoration */
+.error-code {
+  text-decoration: underline; text-decoration-style: solid;
+  text-decoration-color: var(--level-error); text-underline-offset: 2px;
+  cursor: help; padding: 0 2px; border-radius: 2px;
+  transition: background var(--t-fast) var(--ease);
+  font-weight: 600;
+}
+.error-code:hover { background: var(--level-error-tint); }
+.error-code.unknown {
+  text-decoration-style: dashed; text-decoration-color: var(--level-warning);
+  font-weight: 500;
+}
+.error-code.unknown:hover { background: var(--level-warning-tint); }
+
+/* Search Highlights */
+mark.search-hit {
+  background: var(--search-hit); color: inherit; padding: 0 1px;
+  border-radius: 2px; border-bottom: 2px solid var(--search-hit-border);
+  animation: searchPulse 2s ease-in-out 1;
+}
+mark.search-hit.current { background: #fbbf24; border-color: #d97706; box-shadow: 0 0 0 2px rgba(251,191,36,0.3); }
+
+/* Scroll FAB */
+.scroll-fab {
+  position: absolute; bottom: var(--sp-3); right: var(--sp-4);
+  background: var(--accent); color: var(--text-on-accent); border: none;
+  border-radius: var(--r-full); padding: 6px 14px; font-size: var(--text-xs);
+  font-weight: 600; box-shadow: 0 2px 8px rgba(109,92,255,0.25), 0 4px 16px rgba(109,92,255,0.15);
+  transition: all var(--t-normal) var(--ease); z-index: 10; display: none;
+  animation: fabBounce 2s ease-in-out infinite;
+  letter-spacing: 0.3px;
+}
+.scroll-fab:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(109,92,255,0.35); }
+.scroll-fab.visible { display: block; animation: slideUp 0.2s var(--spring), fabBounce 2s ease-in-out 0.5s infinite; }
+
+/* Status Bar */
+.status-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 3px var(--sp-3); font-family: var(--mono); font-size: 10px;
+  color: var(--text-muted); border-top: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.status-bar-group { display: flex; align-items: center; gap: var(--sp-4); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   ERROR CONTEXT CARD (Popover)
+   ═══════════════════════════════════════════════════════════════════ */
+.error-card {
+  position: fixed; z-index: 300; width: 380px;
+  background: var(--surface); border: 1px solid var(--border-bright);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-xl);
+  animation: cardIn 0.2s var(--spring); overflow: hidden;
+  font-family: var(--font);
+}
+.error-card.closing { animation: cardOut 0.15s var(--ease) forwards; }
+.error-card-header {
+  padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+}
+.error-card-code {
+  font-family: var(--mono); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text); word-break: break-all; flex: 1; line-height: 1.4;
+}
+.error-card-severity {
+  padding: 2px 8px; border-radius: var(--r-full); font-size: 9px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;
+}
+.error-card-severity.error { background: var(--level-error-tint); color: var(--level-error); }
+.error-card-severity.warning { background: var(--level-warning-tint); color: var(--level-warning); }
+.error-card-severity.system { background: rgba(109,92,255,0.08); color: var(--accent); }
+.error-card-severity.user { background: rgba(229,148,12,0.08); color: #b97a08; }
+.error-card-close {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); color: var(--text-muted); font-size: 14px;
+  transition: all var(--t-fast) var(--ease); flex-shrink: 0;
+}
+.error-card-close:hover { background: var(--surface-3); color: var(--text); }
+.error-card-body { padding: var(--sp-3) var(--sp-4); }
+.error-card-desc {
+  font-size: var(--text-sm); color: var(--text-dim); line-height: 1.5; margin-bottom: var(--sp-3);
+}
+.error-card-fix {
+  display: flex; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-2); border-radius: var(--r-md);
+  font-size: var(--text-sm); color: var(--text); margin-bottom: var(--sp-3);
+  line-height: 1.4;
+}
+.error-card-fix-icon { color: var(--status-ok); flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+.error-card-meta {
+  display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4);
+  font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--sp-3);
+}
+.error-card-meta-item { display: flex; align-items: center; gap: 4px; }
+.error-card-meta-value { color: var(--text-dim); font-weight: 600; }
+.error-card-actions {
+  display: flex; gap: var(--sp-2); padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.error-card-action {
+  padding: 4px 10px; border-radius: var(--r-md); font-size: var(--text-xs);
+  font-weight: 500; color: var(--text-dim); transition: all var(--t-fast) var(--ease);
+  border: 1px solid var(--border);
+}
+.error-card-action:hover { background: var(--surface-2); color: var(--text); transform: translateY(-1px); }
+.error-card-action.primary {
+  background: var(--accent); color: var(--text-on-accent); border-color: var(--accent);
+}
+.error-card-action.primary:hover { filter: brightness(1.1); }
+/* Unknown card variant */
+.error-card.unknown .error-card-header { border-left: 3px solid var(--level-warning); }
+.error-card-unknown-msg {
+  font-size: var(--text-sm); color: var(--text-muted); font-style: italic;
+  padding: var(--sp-2) 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXPORT DROPDOWN
+   ═══════════════════════════════════════════════════════════════════ */
+.export-dropdown {
+  position: absolute; top: 100%; right: 0; margin-top: 4px; width: 260px;
+  background: var(--surface); border: 1px solid var(--border-bright);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-lg);
+  z-index: 200; display: none; overflow: hidden;
+  animation: dropdownIn 0.15s var(--spring);
+}
+.export-dropdown.open { display: block; }
+.export-dropdown-header {
+  padding: var(--sp-3) var(--sp-3); font-size: var(--text-sm); font-weight: 600;
+  color: var(--text); border-bottom: 1px solid var(--border);
+}
+.export-format-option {
+  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3);
+  cursor: pointer; transition: background var(--t-fast) var(--ease);
+}
+.export-format-option:hover { background: var(--surface-2); }
+.export-format-option.selected { background: var(--accent-dim); }
+.export-format-radio {
+  width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-bright);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: all var(--t-fast) var(--ease);
+}
+.export-format-option.selected .export-format-radio {
+  border-color: var(--accent);
+}
+.export-format-option.selected .export-format-radio::after {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  animation: checkPop 0.3s var(--spring);
+}
+.export-format-label { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
+.export-format-desc { font-size: var(--text-xs); color: var(--text-muted); }
+.export-preview {
+  margin: 0 var(--sp-3); padding: var(--sp-2); background: var(--surface-2);
+  border-radius: var(--r-sm); font-family: var(--mono); font-size: 9px;
+  color: var(--text-dim); max-height: 60px; overflow: hidden; line-height: 1.4;
+  border: 1px solid var(--border);
+}
+.export-dropdown-footer {
+  padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: var(--sp-2);
+}
+.export-download-btn {
+  padding: 5px 14px; border-radius: var(--r-md); font-size: var(--text-sm);
+  font-weight: 600; background: var(--accent); color: var(--text-on-accent);
+  transition: all var(--t-fast) var(--ease);
+}
+.export-download-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CLUSTERING SIDE PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.cluster-panel {
+  width: 300px; flex-shrink: 0; background: var(--surface);
+  border-left: 1px solid var(--border); display: flex; flex-direction: column;
+  animation: panelSlideRight 0.3s var(--ease-out);
+  overflow: hidden;
+}
+.cluster-panel.collapsed { width: 0; border: none; }
+.cluster-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-3); border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cluster-header-title { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.cluster-header-count {
+  font-size: var(--text-xs); color: var(--text-muted); font-family: var(--mono);
+}
+.cluster-header-close {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border-radius: var(--r-sm); color: var(--text-muted); font-size: 12px;
+  transition: all var(--t-fast) var(--ease);
+}
+.cluster-header-close:hover { background: var(--surface-3); color: var(--text); }
+.cluster-list { flex: 1; overflow-y: auto; padding: var(--sp-2); }
+
+.cluster-item {
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md);
+  border: 1px solid var(--border); margin-bottom: var(--sp-2);
+  transition: all var(--t-fast) var(--ease); cursor: pointer;
+  animation: slideUp 0.2s var(--ease-out) backwards;
+}
+.cluster-item:hover { border-color: var(--border-bright); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.cluster-item-header { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: 4px; }
+.cluster-item-code {
+  font-family: var(--mono); font-size: 10px; font-weight: 600; color: var(--text);
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cluster-item-count {
+  font-size: var(--text-xs); font-weight: 700; color: var(--level-error);
+  background: var(--level-error-tint); padding: 1px 6px; border-radius: var(--r-full);
+  flex-shrink: 0;
+}
+.cluster-item-trend {
+  font-size: 12px; flex-shrink: 0; font-weight: 600;
+}
+.cluster-item-trend.up { color: var(--level-error); }
+.cluster-item-trend.down { color: var(--status-ok); }
+.cluster-item-trend.stable { color: var(--text-muted); }
+.cluster-item-meta {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+}
+.cluster-node-pill {
+  font-size: 9px; padding: 1px 5px; border-radius: var(--r-sm);
+  background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border);
+  font-family: var(--mono);
+}
+.cluster-item-times {
+  font-size: 9px; color: var(--text-muted); font-family: var(--mono); margin-top: 4px;
+}
+.cluster-sparkline {
+  width: 60px; height: 16px; flex-shrink: 0;
+}
+.cluster-sparkline polyline {
+  fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 100; animation: sparklineDraw 1s var(--ease-out) forwards;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BOTTOM TIMELINE PANEL (collapsible)
+   ═══════════════════════════════════════════════════════════════════ */
+.bottom-panel {
+  height: 0; flex-shrink: 0; background: var(--surface);
+  border-top: 1px solid var(--border); overflow: hidden;
+  transition: height 0.3s var(--ease);
+}
+.bottom-panel.expanded { height: 140px; animation: panelSlideUp 0.3s var(--ease-out); }
+.bottom-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border);
+}
+.bottom-panel-title { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.bottom-panel-body {
+  padding: var(--sp-2) var(--sp-3); height: calc(100% - 32px); overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast {
+  position: fixed; bottom: var(--sp-6); right: var(--sp-6); z-index: 500;
+  padding: var(--sp-2) var(--sp-4); background: var(--surface);
+  border: 1px solid var(--border-bright); border-radius: var(--r-md);
+  font-size: var(--text-sm); color: var(--text); box-shadow: var(--shadow-lg);
+  display: flex; align-items: center; gap: var(--sp-2);
+  animation: toastIn 0.3s var(--spring);
+  pointer-events: none;
+}
+.toast.success { border-left: 3px solid var(--status-ok); }
+.toast.warning { border-left: 3px solid var(--level-warning); }
+.toast.leaving { animation: toastOut 0.2s var(--ease) forwards; }
+.toast-icon { font-size: 14px; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   HOVER-FREEZE TOGGLE
+   ═══════════════════════════════════════════════════════════════════ */
+.hover-freeze-toggle {
+  display: flex; align-items: center; gap: 4px; font-size: var(--text-xs);
+  color: var(--text-muted); cursor: pointer; transition: color var(--t-fast) var(--ease);
+}
+.hover-freeze-toggle:hover { color: var(--text-dim); }
+.hover-freeze-track {
+  width: 24px; height: 13px; border-radius: var(--r-full);
+  background: var(--surface-3); border: 1px solid var(--border);
+  position: relative; transition: all var(--t-normal) var(--ease);
+}
+.hover-freeze-toggle.active .hover-freeze-track { background: var(--accent-dim); border-color: var(--accent); }
+.hover-freeze-thumb {
+  position: absolute; top: 1px; left: 1px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--text-muted); transition: all var(--t-normal) var(--spring);
+}
+.hover-freeze-toggle.active .hover-freeze-thumb { left: 12px; background: var(--accent); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <span class="header-logo">EDOG</span>
+    <span class="header-sep"></span>
+    <span class="header-title">Error Intelligence</span>
+    <span class="header-badge">F12 MOCK</span>
+    <span class="header-spacer"></span>
+    <span class="header-meta" id="clock">14:23:07</span>
+  </header>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-group">
+      <div class="stream-badge live" id="streamBadge" title="Click to pause/resume">
+        <span class="stream-dot"></span>
+        <span id="streamLabel">LIVE</span>
+      </div>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group">
+      <button class="level-filter-btn error active" data-level="error" title="Toggle errors">ERR <span id="errCount">0</span></button>
+      <button class="level-filter-btn warning active" data-level="warning" title="Toggle warnings">WRN <span id="wrnCount">0</span></button>
+      <button class="level-filter-btn info active" data-level="info" title="Toggle info">INF <span id="infCount">0</span></button>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="search-bar" id="searchBar">
+      <span class="search-icon">&#9906;</span>
+      <input type="text" id="searchInput" placeholder="Search logs... (Ctrl+F)" autocomplete="off" spellcheck="false">
+      <div class="search-nav">
+        <span id="searchCount">0/0</span>
+        <button class="search-nav-btn" id="searchPrev" title="Previous (Shift+Enter)">&#9650;</button>
+        <button class="search-nav-btn" id="searchNext" title="Next (Enter)">&#9660;</button>
+      </div>
+      <button class="search-clear" id="searchClear" title="Clear (Escape)">&#10005;</button>
+    </div>
+    <div class="toolbar-spacer"></div>
+    <div class="toolbar-group">
+      <div class="hover-freeze-toggle active" id="hoverFreezeToggle" title="Hover-freeze: pause on mouse hover">
+        <div class="hover-freeze-track"><div class="hover-freeze-thumb"></div></div>
+        <span>Hover freeze</span>
+      </div>
+    </div>
+    <div class="toolbar-sep"></div>
+    <div class="toolbar-group" style="position:relative">
+      <button class="tb-btn" id="exportBtn" title="Export logs (Ctrl+Shift+E)">
+        <span class="tb-icon">&#9112;</span> Export
+      </button>
+      <div class="export-dropdown" id="exportDropdown">
+        <div class="export-dropdown-header">Export Filtered Logs</div>
+        <div class="export-format-option selected" data-format="json">
+          <div class="export-format-radio"></div>
+          <div>
+            <div class="export-format-label">JSON</div>
+            <div class="export-format-desc">Structured data with metadata</div>
+          </div>
+        </div>
+        <div class="export-format-option" data-format="csv">
+          <div class="export-format-radio"></div>
+          <div>
+            <div class="export-format-label">CSV</div>
+            <div class="export-format-desc">Spreadsheet-compatible format</div>
+          </div>
+        </div>
+        <div class="export-format-option" data-format="text">
+          <div class="export-format-radio"></div>
+          <div>
+            <div class="export-format-label">Plain Text</div>
+            <div class="export-format-desc">Human-readable log format</div>
+          </div>
+        </div>
+        <div class="export-preview" id="exportPreview"></div>
+        <div class="export-dropdown-footer">
+          <button class="export-download-btn" id="exportDownloadBtn">&#11123; Download</button>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar-sep"></div>
+    <button class="tb-btn" id="clusterToggle" title="Toggle error clustering panel">
+      <span class="tb-icon">&#9673;</span> Clusters
+    </button>
+    <button class="tb-btn" id="timelineToggle" title="Toggle error timeline">
+      <span class="tb-icon">&#9604;</span> Timeline
+    </button>
+  </div>
+
+  <!-- Error Timeline Mini-Chart -->
+  <div class="error-timeline" id="errorTimeline">
+    <div class="etl-header">
+      <span class="etl-label">Error Frequency</span>
+      <span class="etl-toggle" id="etlCollapse">&#9660; collapse</span>
+    </div>
+    <div class="etl-bars" id="etlBars"></div>
+    <div class="etl-tooltip" id="etlTooltip"></div>
+    <div class="etl-filter-label" id="etlFilterLabel">&#10005; Clear filter</div>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="main-content">
+    <!-- Log Panel -->
+    <div class="log-panel">
+      <div class="log-scroll" id="logScroll">
+        <!-- Log rows injected by JS -->
+      </div>
+      <button class="scroll-fab" id="scrollFab">&#9660; Resume · <span id="fabCount">0</span> new</button>
+    </div>
+
+    <!-- Clustering Side Panel -->
+    <div class="cluster-panel" id="clusterPanel">
+      <div class="cluster-header">
+        <span class="cluster-header-title">Error Clusters</span>
+        <span class="cluster-header-count" id="clusterCount">0 groups</span>
+        <button class="cluster-header-close" id="clusterClose" title="Close panel">&#10005;</button>
+      </div>
+      <div class="cluster-list" id="clusterList"></div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="status-bar-group">
+      <span>Total: <strong id="totalCount">0</strong></span>
+      <span>Visible: <strong id="visibleCount">0</strong></span>
+      <span>Buffer: <strong>10,000</strong></span>
+    </div>
+    <div class="status-bar-group">
+      <span>Stream: <strong id="streamRate">0</strong> entries/s</span>
+      <span id="statusMsg">Simulated log stream</span>
+    </div>
+  </div>
+</div>
+
+<!-- Error Context Card (positioned by JS) -->
+<div class="error-card" id="errorCard" style="display:none">
+  <div class="error-card-header">
+    <div>
+      <div class="error-card-code" id="cardCode"></div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <span class="error-card-severity" id="cardSeverity"></span>
+        <span class="error-card-severity" id="cardCategory"></span>
+      </div>
+    </div>
+    <button class="error-card-close" id="cardClose">&#10005;</button>
+  </div>
+  <div class="error-card-body">
+    <div class="error-card-desc" id="cardDesc"></div>
+    <div class="error-card-fix">
+      <span class="error-card-fix-icon">&#9656;</span>
+      <span id="cardFix"></span>
+    </div>
+    <div class="error-card-meta" id="cardMeta"></div>
+    <div class="error-card-actions">
+      <button class="error-card-action primary" id="cardFilter">Filter to all</button>
+      <button class="error-card-action" id="cardCopy">Copy details</button>
+      <button class="error-card-action" id="cardDetail">View in detail</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   F12 ERROR INTELLIGENCE — INTERACTIVE MOCK
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+'use strict';
+
+// ── Error Codes Database (simulated) ──
+const ERROR_DB = {
+  MLV_SPARK_SESSION_ACQUISITION_FAILED: {
+    title: 'Spark Session Acquisition Failed', severity: 'error', category: 'SYSTEM',
+    description: 'Failed to acquire a Spark session for the materialized view refresh. The Spark pool may be at capacity or unavailable.',
+    suggestedFix: 'Check Spark pool availability and capacity limits. Verify the workspace has sufficient CU allocation.',
+    retryable: true, runbookUrl: null
+  },
+  MLV_EXECUTION_TIMEOUT: {
+    title: 'Execution Timeout', severity: 'error', category: 'SYSTEM',
+    description: 'The materialized view refresh exceeded the configured timeout period. This typically occurs with large datasets or complex transformations.',
+    suggestedFix: 'Increase the timeout configuration or optimize the view query. Consider incremental refresh patterns.',
+    retryable: true, runbookUrl: 'https://aka.ms/flt-timeout'
+  },
+  FLT_DAG_CYCLE_DETECTED: {
+    title: 'DAG Cycle Detected', severity: 'error', category: 'USER',
+    description: 'A circular dependency was found in the DAG node graph. Nodes cannot reference themselves directly or through intermediate dependencies.',
+    suggestedFix: 'Review the dependency chain and remove the circular reference. Use the DAG Studio visualizer to identify the cycle.',
+    retryable: false, runbookUrl: null
+  },
+  MLV_ONELAKE_WRITE_FAILED: {
+    title: 'OneLake Write Failed', severity: 'error', category: 'SYSTEM',
+    description: 'Failed to write refreshed data to OneLake storage. The storage endpoint may be throttled or temporarily unavailable.',
+    suggestedFix: 'Retry the operation. If persistent, check OneLake service health and storage quotas.',
+    retryable: true, runbookUrl: null
+  },
+  FLT_SCHEMA_MISMATCH: {
+    title: 'Schema Mismatch', severity: 'warning', category: 'USER',
+    description: 'The source table schema has changed since the materialized view was created. Column types or names do not match the expected schema.',
+    suggestedFix: 'Recreate the materialized view with the updated schema, or alter the source to match.',
+    retryable: false, runbookUrl: null
+  },
+  SPARK_POOL_EXHAUSTED: {
+    title: 'Spark Pool Exhausted', severity: 'error', category: 'SYSTEM',
+    description: 'All available Spark executors in the pool are currently allocated. No capacity available for new sessions.',
+    suggestedFix: 'Wait for running jobs to complete, or increase the Spark pool max node count in workspace settings.',
+    retryable: true, runbookUrl: null
+  },
+  MLV_DQ_CHECK_FAILED: {
+    title: 'Data Quality Check Failed', severity: 'warning', category: 'USER',
+    description: 'One or more data quality rules failed during the refresh. The view data may contain anomalies.',
+    suggestedFix: 'Review DQ rule results in the Data Quality tab. Fix source data issues or adjust rule thresholds.',
+    retryable: false, runbookUrl: null
+  },
+  FLT_RETRY_EXHAUSTED: {
+    title: 'Retry Attempts Exhausted', severity: 'error', category: 'SYSTEM',
+    description: 'The maximum number of retry attempts has been reached. The operation has been permanently failed.',
+    suggestedFix: 'Investigate the root cause of the underlying failure. Manual intervention may be required.',
+    retryable: false, runbookUrl: 'https://aka.ms/flt-retry'
+  }
+};
+
+const COMPONENTS = [
+  { name: 'SparkClient', cat: 'controller', color: 'var(--comp-controller)', bg: 'var(--comp-controller-bg)' },
+  { name: 'DagExecutor', cat: 'dag', color: 'var(--comp-dag)', bg: 'var(--comp-dag-bg)' },
+  { name: 'OneLakeWriter', cat: 'onelake', color: 'var(--comp-onelake)', bg: 'var(--comp-onelake-bg)' },
+  { name: 'DQEngine', cat: 'dq', color: 'var(--comp-dq)', bg: 'var(--comp-dq-bg)' },
+  { name: 'RetryManager', cat: 'retry', color: 'var(--comp-retry)', bg: 'var(--comp-retry-bg)' },
+  { name: 'SchemaValidator', cat: 'controller', color: 'var(--comp-controller)', bg: 'var(--comp-controller-bg)' },
+  { name: 'SessionPool', cat: 'controller', color: 'var(--comp-controller)', bg: 'var(--comp-controller-bg)' },
+];
+
+const NODES = ['Refresh_Sales', 'Refresh_Inventory', 'Refresh_Orders', 'Aggregate_Daily', 'DQ_Validate', 'Write_Gold'];
+
+const INFO_MSGS = [
+  'Starting materialized view refresh cycle #{n}',
+  'Acquired Spark session {sid} from pool (2/8 available)',
+  'Reading source table dbo.FactSales ({rows} rows)',
+  'Incremental refresh: processing delta since {ts}',
+  'DAG node {node} scheduled for execution',
+  'Writing {rows} rows to OneLake path /Tables/{table}',
+  'Checkpoint saved at sequence {seq}',
+  'Data quality check passed: {n} rules evaluated',
+  'Refresh completed for node {node} in {dur}ms',
+  'Session {sid} returned to pool',
+  'Filter index rebuilt: {n} entries in {dur}ms',
+  'Schema validation passed for {table}',
+  'Compaction triggered for partition {p}',
+  'Metrics emitted: {n} counters, {m} gauges',
+  'Heartbeat OK — uptime {dur}s',
+  'Memory usage: {n}MB / 4096MB ({pct}%)',
+  'Reading partition {p} of {total} ({rows} rows)',
+  'Merge operation completed: {n} inserts, {m} updates',
+];
+
+const WARNING_MSGS = [
+  'FLT_SCHEMA_MISMATCH: Column "Revenue" type changed from Decimal to Double in source table',
+  'MLV_DQ_CHECK_FAILED: Null ratio for column "CustomerID" exceeds threshold (12.3% > 5%)',
+  'FLT_SCHEMA_MISMATCH: New column "Discount" detected in source — not in materialized view',
+  'High memory pressure detected: {pct}% utilization on executor {n}',
+  'Slow query detected: node {node} scan took {dur}ms (threshold: 5000ms)',
+  'MLV_DQ_CHECK_FAILED: Row count deviation of {pct}% from expected baseline',
+  'Stale session detected — refreshing connection pool',
+  'Throttling detected from OneLake endpoint — backing off {dur}ms',
+];
+
+const ERROR_MSGS = [
+  'MLV_SPARK_SESSION_ACQUISITION_FAILED: Timeout after 30s waiting for available session in pool "sp-analytics-01"',
+  'MLV_EXECUTION_TIMEOUT: Node {node} exceeded 120s timeout during transformation phase',
+  'FLT_DAG_CYCLE_DETECTED: Circular dependency found: {node} -> Aggregate_Daily -> {node}',
+  'MLV_ONELAKE_WRITE_FAILED: HTTP 503 from OneLake endpoint — service temporarily unavailable',
+  'SPARK_POOL_EXHAUSTED: Pool "sp-analytics-01" has 0/8 executors available (all allocated)',
+  'FLT_RETRY_EXHAUSTED: Node {node} failed after 3 retry attempts — marking as FAILED',
+  'MLV_SPARK_SESSION_ACQUISITION_FAILED: Pool "sp-analytics-01" returned error: InsufficientResources',
+  'MLV_ONELAKE_WRITE_FAILED: Write to path /Tables/FactSales/part-00042 failed — quota exceeded',
+];
+
+// ── State ──
+const state = {
+  logs: [],
+  streamMode: 'LIVE',
+  pauseReason: null,
+  bufferedCount: 0,
+  hoverFreezeEnabled: true,
+  searchQuery: '',
+  searchMatches: [],
+  searchIndex: -1,
+  levelFilters: { error: true, warning: true, info: true },
+  timelineFilter: null,
+  selectedTimelineBar: -1,
+  totalErrors: 0, totalWarnings: 0, totalInfo: 0,
+  exportFormat: 'json',
+  clusterPanelOpen: true,
+  errorOccurrences: {},
+  streamRate: 0,
+  rateCounter: 0,
+  seq: 0,
+};
+
+let logScroll, streamBadge, streamLabel, scrollFab, fabCount;
+let errCountEl, wrnCountEl, infCountEl, totalCountEl, visibleCountEl, streamRateEl;
+let searchInput, searchBar, searchCount;
+let etlBars, etlTooltip, etlFilterLabel;
+let errorCard, clusterList, clusterCount;
+let exportDropdown, exportPreview;
+let baseTime = Date.now() - 120000;
+let batchTimer = null;
+let rateTimer = null;
+
+// ── Initialization ──
+function init() {
+  logScroll = document.getElementById('logScroll');
+  streamBadge = document.getElementById('streamBadge');
+  streamLabel = document.getElementById('streamLabel');
+  scrollFab = document.getElementById('scrollFab');
+  fabCount = document.getElementById('fabCount');
+  errCountEl = document.getElementById('errCount');
+  wrnCountEl = document.getElementById('wrnCount');
+  infCountEl = document.getElementById('infCount');
+  totalCountEl = document.getElementById('totalCount');
+  visibleCountEl = document.getElementById('visibleCount');
+  streamRateEl = document.getElementById('streamRate');
+  searchInput = document.getElementById('searchInput');
+  searchBar = document.getElementById('searchBar');
+  searchCount = document.getElementById('searchCount');
+  etlBars = document.getElementById('etlBars');
+  etlTooltip = document.getElementById('etlTooltip');
+  etlFilterLabel = document.getElementById('etlFilterLabel');
+  errorCard = document.getElementById('errorCard');
+  clusterList = document.getElementById('clusterList');
+  clusterCount = document.getElementById('clusterCount');
+  exportDropdown = document.getElementById('exportDropdown');
+  exportPreview = document.getElementById('exportPreview');
+
+  bindEvents();
+  generateInitialLogs();
+  renderTimeline();
+  renderClusters();
+  updateCounts();
+  startStream();
+  startClock();
+  startRateCounter();
+}
+
+function bindEvents() {
+  // Stream badge
+  streamBadge.addEventListener('click', toggleStream);
+  scrollFab.addEventListener('click', resumeStream);
+
+  // Search
+  searchInput.addEventListener('input', onSearchInput);
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.shiftKey ? navigateSearch(-1) : navigateSearch(1); }
+    if (e.key === 'Escape') { clearSearch(); searchInput.blur(); }
+  });
+  document.getElementById('searchPrev').addEventListener('click', () => navigateSearch(-1));
+  document.getElementById('searchNext').addEventListener('click', () => navigateSearch(1));
+  document.getElementById('searchClear').addEventListener('click', clearSearch);
+
+  // Level filters
+  document.querySelectorAll('.level-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const level = btn.dataset.level;
+      state.levelFilters[level] = !state.levelFilters[level];
+      btn.classList.toggle('active', state.levelFilters[level]);
+      rerenderLogs();
+    });
+  });
+
+  // Scroll detection
+  logScroll.addEventListener('scroll', onLogScroll);
+
+  // Hover freeze
+  if (state.hoverFreezeEnabled) {
+    logScroll.addEventListener('mouseenter', () => {
+      if (state.streamMode === 'LIVE' && state.hoverFreezeEnabled) pauseStream('hover');
+    });
+    logScroll.addEventListener('mouseleave', () => {
+      if (state.streamMode === 'PAUSED' && state.pauseReason === 'hover') resumeStream();
+    });
+  }
+  document.getElementById('hoverFreezeToggle').addEventListener('click', function() {
+    state.hoverFreezeEnabled = !state.hoverFreezeEnabled;
+    this.classList.toggle('active', state.hoverFreezeEnabled);
+  });
+
+  // Error code clicks
+  logScroll.addEventListener('click', onLogClick);
+  logScroll.addEventListener('mouseover', onLogHover);
+
+  // Card
+  document.getElementById('cardClose').addEventListener('click', hideCard);
+  document.getElementById('cardFilter').addEventListener('click', filterToCode);
+  document.getElementById('cardCopy').addEventListener('click', copyCodeDetails);
+  document.addEventListener('click', e => {
+    if (errorCard.style.display !== 'none' && !errorCard.contains(e.target) && !e.target.classList.contains('error-code')) {
+      hideCard();
+    }
+  });
+
+  // Export
+  document.getElementById('exportBtn').addEventListener('click', toggleExport);
+  document.querySelectorAll('.export-format-option').forEach(opt => {
+    opt.addEventListener('click', () => selectExportFormat(opt.dataset.format));
+  });
+  document.getElementById('exportDownloadBtn').addEventListener('click', doExport);
+  document.addEventListener('click', e => {
+    if (!document.getElementById('exportBtn').contains(e.target) && !exportDropdown.contains(e.target)) {
+      exportDropdown.classList.remove('open');
+    }
+  });
+
+  // Cluster panel
+  document.getElementById('clusterToggle').addEventListener('click', () => {
+    state.clusterPanelOpen = !state.clusterPanelOpen;
+    document.getElementById('clusterPanel').classList.toggle('collapsed', !state.clusterPanelOpen);
+  });
+  document.getElementById('clusterClose').addEventListener('click', () => {
+    state.clusterPanelOpen = false;
+    document.getElementById('clusterPanel').classList.add('collapsed');
+  });
+
+  // Timeline filter
+  etlFilterLabel.addEventListener('click', clearTimelineFilter);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'f') { e.preventDefault(); searchInput.focus(); }
+    if (e.key === 'End') resumeStream();
+    if (e.ctrlKey && e.key === 'ArrowDown') resumeStream();
+    if (e.key === ' ' && document.activeElement.tagName !== 'INPUT') {
+      e.preventDefault(); toggleStream();
+    }
+    if (e.ctrlKey && e.shiftKey && e.key === 'E') { e.preventDefault(); toggleExport(); }
+  });
+}
+
+// ── Log Generation ──
+function genTime(offset) {
+  const d = new Date(baseTime + offset);
+  return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+
+function genTimestamp(offset) {
+  return new Date(baseTime + offset).toISOString();
+}
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+function generateLogEntry(timeOffset) {
+  const roll = Math.random();
+  let level, message, component;
+  const node = pickRandom(NODES);
+
+  if (roll < 0.08) {
+    level = 'error';
+    message = pickRandom(ERROR_MSGS).replace(/\{node\}/g, node);
+    component = pickRandom(COMPONENTS);
+  } else if (roll < 0.20) {
+    level = 'warning';
+    message = pickRandom(WARNING_MSGS)
+      .replace(/\{node\}/g, node).replace(/\{pct\}/g, randInt(60, 95))
+      .replace(/\{n\}/g, randInt(1, 8)).replace(/\{dur\}/g, randInt(3000, 15000));
+    component = pickRandom(COMPONENTS);
+  } else {
+    level = 'info';
+    message = pickRandom(INFO_MSGS)
+      .replace(/\{node\}/g, node).replace(/\{n\}/g, randInt(1, 5000))
+      .replace(/\{rows\}/g, randInt(100, 500000).toLocaleString())
+      .replace(/\{sid\}/g, 'sp-' + randInt(1000, 9999))
+      .replace(/\{table\}/g, pickRandom(['FactSales', 'DimCustomer', 'FactInventory']))
+      .replace(/\{seq\}/g, state.seq).replace(/\{dur\}/g, randInt(10, 5000))
+      .replace(/\{ts\}/g, '2024-01-15T' + randInt(0, 23) + ':00:00Z')
+      .replace(/\{p\}/g, randInt(1, 64)).replace(/\{total\}/g, 64)
+      .replace(/\{m\}/g, randInt(1, 20)).replace(/\{pct\}/g, randInt(20, 80));
+    component = pickRandom(COMPONENTS);
+  }
+
+  return {
+    seq: state.seq++,
+    timestamp: genTimestamp(timeOffset),
+    time: genTime(timeOffset),
+    level, message,
+    component: component.name,
+    componentCat: component.cat,
+    componentColor: component.color,
+    componentBg: component.bg,
+    node
+  };
+}
+
+function generateInitialLogs() {
+  const count = 200;
+  for (let i = 0; i < count; i++) {
+    const entry = generateLogEntry(i * 600);
+    state.logs.push(entry);
+    trackOccurrence(entry);
+    if (entry.level === 'error') state.totalErrors++;
+    else if (entry.level === 'warning') state.totalWarnings++;
+    else state.totalInfo++;
+  }
+  baseTime = Date.now();
+  rerenderLogs();
+}
+
+function trackOccurrence(entry) {
+  const codes = extractErrorCodes(entry.message);
+  codes.forEach(code => {
+    if (!state.errorOccurrences[code]) {
+      state.errorOccurrences[code] = { count: 0, nodes: new Set(), firstSeen: entry.time, lastSeen: entry.time };
+    }
+    state.errorOccurrences[code].count++;
+    state.errorOccurrences[code].lastSeen = entry.time;
+    state.errorOccurrences[code].nodes.add(entry.node);
+  });
+}
+
+function extractErrorCodes(text) {
+  const re = /\b(MLV_\w+|FLT_\w+|SPARK_\w+)\b/g;
+  const codes = [];
+  let m;
+  while ((m = re.exec(text)) !== null) codes.push(m[1]);
+  return codes;
+}
+
+// ── Stream Control ──
+function startStream() {
+  scheduleBatch();
+}
+
+function scheduleBatch() {
+  const delay = randInt(200, 1500);
+  batchTimer = setTimeout(() => {
+    if (state.logs.length > 10000) {
+      state.logs = state.logs.slice(-8000);
+    }
+    const batchSize = randInt(3, 15);
+    const now = Date.now() - baseTime + 120000;
+    for (let i = 0; i < batchSize; i++) {
+      const entry = generateLogEntry(now + i * randInt(50, 200));
+      state.logs.push(entry);
+      trackOccurrence(entry);
+      state.rateCounter++;
+      if (entry.level === 'error') state.totalErrors++;
+      else if (entry.level === 'warning') state.totalWarnings++;
+      else state.totalInfo++;
+
+      if (state.streamMode === 'PAUSED') {
+        state.bufferedCount++;
+      }
+    }
+
+    if (state.streamMode === 'LIVE') {
+      rerenderLogs();
+      scrollToBottom();
+    } else {
+      updateBufferedBadge();
+    }
+
+    updateCounts();
+    if (Math.random() < 0.3) { renderTimeline(); renderClusters(); }
+    scheduleBatch();
+  }, delay);
+}
+
+function startRateCounter() {
+  rateTimer = setInterval(() => {
+    state.streamRate = state.rateCounter;
+    state.rateCounter = 0;
+    streamRateEl.textContent = state.streamRate;
+  }, 1000);
+}
+
+function toggleStream() {
+  if (state.streamMode === 'LIVE') pauseStream('manual');
+  else resumeStream();
+}
+
+function pauseStream(reason) {
+  if (state.streamMode === 'PAUSED' && (reason === 'hover' && state.pauseReason !== 'hover')) return;
+  state.streamMode = 'PAUSED';
+  state.pauseReason = reason;
+  streamBadge.className = 'stream-badge paused';
+  updateStreamLabel();
+}
+
+function resumeStream() {
+  state.streamMode = 'LIVE';
+  state.pauseReason = null;
+  state.bufferedCount = 0;
+  streamBadge.className = 'stream-badge live';
+  streamLabel.textContent = 'LIVE';
+  scrollFab.classList.remove('visible');
+  rerenderLogs();
+  scrollToBottom();
+}
+
+function updateStreamLabel() {
+  if (state.bufferedCount > 0) {
+    streamLabel.innerHTML = 'PAUSED <span class="buffered-count">' + state.bufferedCount + ' new</span>';
+  } else {
+    streamLabel.textContent = 'PAUSED';
+  }
+}
+
+function updateBufferedBadge() {
+  updateStreamLabel();
+  fabCount.textContent = state.bufferedCount;
+  if (state.bufferedCount > 0 && !scrollFab.classList.contains('visible')) {
+    scrollFab.classList.add('visible');
+  }
+}
+
+function onLogScroll() {
+  if (state.streamMode !== 'LIVE') return;
+  const el = logScroll;
+  const isAtBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+  if (!isAtBottom) {
+    pauseStream('scroll');
+    scrollFab.classList.add('visible');
+  }
+}
+
+function scrollToBottom() {
+  logScroll.scrollTop = logScroll.scrollHeight;
+}
+
+// ── Rendering ──
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function decorateMessage(message) {
+  let html = escapeHtml(message);
+
+  // Error code decoration
+  html = html.replace(/\b(MLV_\w+|FLT_\w+|SPARK_\w+)\b/g, (match) => {
+    const isKnown = ERROR_DB[match];
+    const cls = isKnown ? 'error-code' : 'error-code unknown';
+    return '<span class="' + cls + '" data-code="' + match + '">' + match + '</span>';
+  });
+
+  // Search highlighting
+  if (state.searchQuery) {
+    const escaped = escapeHtml(state.searchQuery).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp('(?![^<]*>)(' + escaped + ')', 'gi');
+    html = html.replace(re, '<mark class="search-hit">$1</mark>');
+  }
+
+  return html;
+}
+
+function passesFilter(entry) {
+  if (!state.levelFilters[entry.level]) return false;
+  if (state.timelineFilter) {
+    const ts = new Date(entry.timestamp).getTime();
+    if (ts < state.timelineFilter.startMs || ts >= state.timelineFilter.endMs) return false;
+  }
+  if (state.searchQuery) {
+    if (!entry.message.toLowerCase().includes(state.searchQuery.toLowerCase())) return false;
+  }
+  return true;
+}
+
+function rerenderLogs() {
+  const fragment = document.createDocumentFragment();
+  let visCount = 0;
+  let matchCount = 0;
+  state.searchMatches = [];
+
+  const filtered = state.logs.filter(passesFilter);
+  const toRender = filtered.slice(-500);
+
+  toRender.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    if (entry.level === 'error') row.className += ' error-row';
+    else if (entry.level === 'warning') row.className += ' warning-row';
+    else if (i % 2 === 0) row.className += ' stripe';
+
+    if (state.searchQuery && entry.message.toLowerCase().includes(state.searchQuery.toLowerCase())) {
+      row.classList.add('search-active');
+      state.searchMatches.push(row);
+      matchCount++;
+    }
+
+    row.style.animationDelay = Math.min(i * 0.5, 30) + 'ms';
+    row.dataset.seq = entry.seq;
+
+    const msgHtml = decorateMessage(entry.message);
+
+    row.innerHTML =
+      '<span class="log-time">' + entry.time + '</span>' +
+      '<span class="log-level ' + entry.level + '">' + entry.level.charAt(0).toUpperCase() + '</span>' +
+      '<span class="log-component" style="color:' + entry.componentColor + ';background:' + entry.componentBg + '">' + escapeHtml(entry.component) + '</span>' +
+      '<span class="log-message">' + msgHtml + '</span>';
+
+    fragment.appendChild(row);
+    visCount++;
+  });
+
+  logScroll.innerHTML = '';
+  logScroll.appendChild(fragment);
+  visibleCountEl.textContent = visCount.toLocaleString();
+
+  if (state.searchQuery) {
+    searchCount.textContent = (state.searchIndex + 1) + '/' + matchCount;
+  }
+}
+
+function updateCounts() {
+  errCountEl.textContent = state.totalErrors;
+  wrnCountEl.textContent = state.totalWarnings;
+  infCountEl.textContent = state.totalInfo;
+  totalCountEl.textContent = state.logs.length.toLocaleString();
+}
+
+// ── Search ──
+function onSearchInput() {
+  state.searchQuery = searchInput.value.trim();
+  searchBar.classList.toggle('has-query', state.searchQuery.length > 0);
+  state.searchIndex = -1;
+
+  if (state.searchQuery.length > 0) {
+    rerenderLogs();
+    if (state.searchMatches.length > 0) {
+      state.searchIndex = 0;
+      highlightCurrentMatch();
+    }
+    searchCount.textContent = (state.searchMatches.length > 0 ? '1' : '0') + '/' + state.searchMatches.length;
+  } else {
+    rerenderLogs();
+    searchCount.textContent = '0/0';
+  }
+}
+
+function navigateSearch(dir) {
+  if (state.searchMatches.length === 0) return;
+  state.searchIndex = (state.searchIndex + dir + state.searchMatches.length) % state.searchMatches.length;
+  highlightCurrentMatch();
+  searchCount.textContent = (state.searchIndex + 1) + '/' + state.searchMatches.length;
+}
+
+function highlightCurrentMatch() {
+  document.querySelectorAll('.log-row.current-match').forEach(r => r.classList.remove('current-match'));
+  document.querySelectorAll('mark.search-hit.current').forEach(m => m.classList.remove('current'));
+
+  const row = state.searchMatches[state.searchIndex];
+  if (!row) return;
+  row.classList.add('current-match');
+  const marks = row.querySelectorAll('mark.search-hit');
+  if (marks[0]) marks[0].classList.add('current');
+  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function clearSearch() {
+  searchInput.value = '';
+  state.searchQuery = '';
+  state.searchMatches = [];
+  state.searchIndex = -1;
+  searchBar.classList.remove('has-query');
+  searchCount.textContent = '0/0';
+  rerenderLogs();
+}
+
+// ── Error Code Card ──
+let hoverTimer = null;
+let activeCode = null;
+
+function onLogHover(e) {
+  const codeEl = e.target.closest('.error-code');
+  if (!codeEl) {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+    return;
+  }
+  if (hoverTimer) clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => showCard(codeEl), 300);
+}
+
+function onLogClick(e) {
+  const codeEl = e.target.closest('.error-code');
+  if (codeEl) {
+    e.stopPropagation();
+    showCard(codeEl, true);
+  }
+}
+
+function showCard(codeEl, pinned) {
+  const code = codeEl.dataset.code;
+  const info = ERROR_DB[code];
+  activeCode = code;
+
+  const cardCode = document.getElementById('cardCode');
+  const cardSeverity = document.getElementById('cardSeverity');
+  const cardCategory = document.getElementById('cardCategory');
+  const cardDesc = document.getElementById('cardDesc');
+  const cardFix = document.getElementById('cardFix');
+  const cardMeta = document.getElementById('cardMeta');
+
+  if (info) {
+    errorCard.classList.remove('unknown');
+    cardCode.textContent = code;
+    cardSeverity.textContent = info.severity.toUpperCase();
+    cardSeverity.className = 'error-card-severity ' + info.severity;
+    cardCategory.textContent = info.category;
+    cardCategory.className = 'error-card-severity ' + info.category.toLowerCase();
+    cardDesc.textContent = info.description;
+    cardFix.textContent = info.suggestedFix;
+    document.querySelector('.error-card-fix').style.display = 'flex';
+
+    const occ = state.errorOccurrences[code];
+    let metaHtml = '';
+    metaHtml += '<div class="error-card-meta-item"><span>Occurrences:</span> <span class="error-card-meta-value">' + (occ ? occ.count : 0) + '</span></div>';
+    if (occ && occ.nodes.size > 0) {
+      metaHtml += '<div class="error-card-meta-item"><span>Nodes:</span> <span class="error-card-meta-value">' + Array.from(occ.nodes).join(', ') + '</span></div>';
+    }
+    if (info.retryable) metaHtml += '<div class="error-card-meta-item"><span>Retryable:</span> <span class="error-card-meta-value" style="color:var(--status-ok)">Yes</span></div>';
+    if (occ) metaHtml += '<div class="error-card-meta-item"><span>First seen:</span> <span class="error-card-meta-value">' + occ.firstSeen + '</span></div>';
+    if (occ) metaHtml += '<div class="error-card-meta-item"><span>Last seen:</span> <span class="error-card-meta-value">' + occ.lastSeen + '</span></div>';
+    cardMeta.innerHTML = metaHtml;
+  } else {
+    errorCard.classList.add('unknown');
+    cardCode.textContent = code;
+    cardSeverity.textContent = 'UNKNOWN';
+    cardSeverity.className = 'error-card-severity warning';
+    cardCategory.textContent = '?';
+    cardCategory.className = 'error-card-severity';
+    cardDesc.innerHTML = '<div class="error-card-unknown-msg">This error code is not in the registry. It matches the FLT pattern but has no documentation.</div>';
+    document.querySelector('.error-card-fix').style.display = 'none';
+    const occ = state.errorOccurrences[code];
+    cardMeta.innerHTML = '<div class="error-card-meta-item"><span>Occurrences:</span> <span class="error-card-meta-value">' + (occ ? occ.count : 0) + '</span></div>';
+    cardFix.textContent = '';
+  }
+
+  // Position card near the code element
+  const rect = codeEl.getBoundingClientRect();
+  let top = rect.bottom + 8;
+  let left = rect.left;
+  if (top + 350 > window.innerHeight) top = rect.top - 350;
+  if (left + 380 > window.innerWidth) left = window.innerWidth - 390;
+  if (left < 10) left = 10;
+
+  errorCard.style.top = top + 'px';
+  errorCard.style.left = left + 'px';
+  errorCard.style.display = 'block';
+  errorCard.style.animation = 'none';
+  errorCard.offsetHeight; // reflow
+  errorCard.style.animation = 'cardIn 0.2s var(--spring)';
+}
+
+function hideCard() {
+  errorCard.classList.add('closing');
+  setTimeout(() => {
+    errorCard.style.display = 'none';
+    errorCard.classList.remove('closing');
+    activeCode = null;
+  }, 150);
+}
+
+function filterToCode() {
+  if (!activeCode) return;
+  searchInput.value = activeCode;
+  state.searchQuery = activeCode;
+  searchBar.classList.add('has-query');
+  hideCard();
+  onSearchInput();
+  showToast('Filtered to ' + activeCode, 'success');
+}
+
+function copyCodeDetails() {
+  if (!activeCode) return;
+  const info = ERROR_DB[activeCode];
+  let text = 'Error Code: ' + activeCode + '\n';
+  if (info) {
+    text += 'Title: ' + info.title + '\n';
+    text += 'Category: ' + info.category + '\n';
+    text += 'Description: ' + info.description + '\n';
+    text += 'Suggested Fix: ' + info.suggestedFix + '\n';
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Error details copied to clipboard', 'success');
+  });
+  hideCard();
+}
+
+// ── Timeline ──
+function renderTimeline() {
+  const bucketCount = 45;
+  const logs = state.logs;
+  if (logs.length < 2) return;
+
+  const t0 = new Date(logs[0].timestamp).getTime();
+  const t1 = new Date(logs[logs.length - 1].timestamp).getTime();
+  const span = Math.max(t1 - t0, 1000);
+  const bucketDur = span / bucketCount;
+
+  const buckets = Array.from({ length: bucketCount }, (_, i) => ({
+    startMs: t0 + i * bucketDur, endMs: t0 + (i + 1) * bucketDur,
+    error: 0, warning: 0, info: 0, total: 0
+  }));
+
+  logs.forEach(entry => {
+    const ts = new Date(entry.timestamp).getTime();
+    const idx = Math.min(Math.floor((ts - t0) / bucketDur), bucketCount - 1);
+    if (idx < 0) return;
+    const b = buckets[idx];
+    if (entry.level === 'error') b.error++;
+    else if (entry.level === 'warning') b.warning++;
+    else b.info++;
+    b.total++;
+  });
+
+  const maxCount = Math.max(1, ...buckets.map(b => b.total));
+  etlBars.innerHTML = '';
+
+  buckets.forEach((b, i) => {
+    const col = document.createElement('div');
+    col.className = 'etl-col';
+    if (i === state.selectedTimelineBar) col.classList.add('selected');
+    col.dataset.index = i;
+    col.style.animationDelay = (i * 8) + 'ms';
+
+    const pct = (b.total / maxCount) * 100;
+    const errH = b.total ? (b.error / b.total) * pct : 0;
+    const warnH = b.total ? (b.warning / b.total) * pct : 0;
+    const infoH = Math.max(0, pct - errH - warnH);
+
+    const errSeg = document.createElement('div');
+    errSeg.className = 'etl-seg etl-seg-error';
+    errSeg.style.height = errH + '%';
+
+    const warnSeg = document.createElement('div');
+    warnSeg.className = 'etl-seg etl-seg-warning';
+    warnSeg.style.height = warnH + '%';
+
+    const infoSeg = document.createElement('div');
+    infoSeg.className = 'etl-seg etl-seg-message';
+    infoSeg.style.height = infoH + '%';
+
+    col.appendChild(infoSeg);
+    col.appendChild(warnSeg);
+    col.appendChild(errSeg);
+
+    col.addEventListener('mouseenter', () => showTimelineTooltip(col, b));
+    col.addEventListener('mouseleave', hideTimelineTooltip);
+    col.addEventListener('click', () => selectTimelineBar(i, b));
+
+    etlBars.appendChild(col);
+  });
+
+  window._timelineBuckets = buckets;
+}
+
+function showTimelineTooltip(col, bucket) {
+  const fmt = ms => {
+    const d = new Date(ms);
+    return String(d.getHours()).padStart(2, '0') + ':' +
+           String(d.getMinutes()).padStart(2, '0') + ':' +
+           String(d.getSeconds()).padStart(2, '0');
+  };
+  const parts = [];
+  if (bucket.error) parts.push(bucket.error + ' err');
+  if (bucket.warning) parts.push(bucket.warning + ' wrn');
+  if (bucket.info) parts.push(bucket.info + ' inf');
+
+  etlTooltip.textContent = fmt(bucket.startMs) + ' \u2013 ' + fmt(bucket.endMs) + ' \u00B7 ' + (parts.length ? parts.join(', ') : 'empty');
+
+  const colRect = col.getBoundingClientRect();
+  const chartRect = document.getElementById('errorTimeline').getBoundingClientRect();
+  etlTooltip.style.left = (colRect.left - chartRect.left + colRect.width / 2) + 'px';
+  etlTooltip.style.display = 'block';
+}
+
+function hideTimelineTooltip() { etlTooltip.style.display = 'none'; }
+
+function selectTimelineBar(idx, bucket) {
+  if (state.selectedTimelineBar === idx) {
+    clearTimelineFilter();
+    return;
+  }
+  state.selectedTimelineBar = idx;
+  state.timelineFilter = { startMs: bucket.startMs, endMs: bucket.endMs };
+  document.getElementById('errorTimeline').classList.add('has-filter');
+
+  document.querySelectorAll('.etl-col').forEach((c, i) => {
+    c.classList.toggle('selected', i === idx);
+  });
+  rerenderLogs();
+}
+
+function clearTimelineFilter() {
+  state.selectedTimelineBar = -1;
+  state.timelineFilter = null;
+  document.getElementById('errorTimeline').classList.remove('has-filter');
+  document.querySelectorAll('.etl-col.selected').forEach(c => c.classList.remove('selected'));
+  rerenderLogs();
+}
+
+// ── Clusters ──
+function renderClusters() {
+  const clusters = {};
+  state.logs.forEach(entry => {
+    if (entry.level !== 'error' && entry.level !== 'warning') return;
+    const codes = extractErrorCodes(entry.message);
+    const sig = codes[0] || entry.message.substring(0, 40);
+    if (!clusters[sig]) {
+      clusters[sig] = { code: codes[0] || null, label: sig, count: 0, nodes: new Set(), entries: [], firstSeen: entry.time, lastSeen: entry.time };
+    }
+    clusters[sig].count++;
+    clusters[sig].lastSeen = entry.time;
+    clusters[sig].nodes.add(entry.node);
+    if (clusters[sig].entries.length < 100) clusters[sig].entries.push(entry);
+  });
+
+  const sorted = Object.values(clusters).sort((a, b) => b.count - a.count);
+  clusterCount.textContent = sorted.length + ' groups';
+  clusterList.innerHTML = '';
+
+  sorted.slice(0, 15).forEach((cluster, i) => {
+    const item = document.createElement('div');
+    item.className = 'cluster-item';
+    item.style.animationDelay = (i * 40) + 'ms';
+
+    const trend = cluster.count > 5 ? (Math.random() > 0.5 ? 'up' : 'stable') : 'down';
+    const trendSymbol = trend === 'up' ? '\u2191' : trend === 'down' ? '\u2193' : '\u2192';
+
+    // Generate sparkline data
+    const points = [];
+    for (let j = 0; j < 10; j++) {
+      const y = Math.max(1, cluster.count * (0.3 + Math.random() * 0.7) / 10);
+      points.push(j * 6 + ',' + (16 - y * 14 / cluster.count));
+    }
+    const strokeColor = cluster.code && ERROR_DB[cluster.code] ? 'var(--level-error)' : 'var(--level-warning)';
+
+    const nodePills = Array.from(cluster.nodes).slice(0, 3).map(n =>
+      '<span class="cluster-node-pill">' + escapeHtml(n) + '</span>'
+    ).join('');
+
+    item.innerHTML =
+      '<div class="cluster-item-header">' +
+        '<span class="cluster-item-code">' + escapeHtml(cluster.label) + '</span>' +
+        '<span class="cluster-item-count">' + cluster.count + '</span>' +
+        '<span class="cluster-item-trend ' + trend + '">' + trendSymbol + '</span>' +
+        '<svg class="cluster-sparkline" viewBox="0 0 54 16"><polyline points="' + points.join(' ') + '" stroke="' + strokeColor + '"/></svg>' +
+      '</div>' +
+      '<div class="cluster-item-meta">' + nodePills + '</div>' +
+      '<div class="cluster-item-times">First: ' + cluster.firstSeen + ' \u00B7 Last: ' + cluster.lastSeen + '</div>';
+
+    item.addEventListener('click', () => {
+      if (cluster.code) {
+        searchInput.value = cluster.code;
+        state.searchQuery = cluster.code;
+        searchBar.classList.add('has-query');
+        onSearchInput();
+      }
+    });
+
+    clusterList.appendChild(item);
+  });
+}
+
+// ── Export ──
+function toggleExport() {
+  exportDropdown.classList.toggle('open');
+  if (exportDropdown.classList.contains('open')) {
+    updateExportPreview();
+    exportDropdown.style.animation = 'none';
+    exportDropdown.offsetHeight;
+    exportDropdown.style.animation = 'dropdownIn 0.15s var(--spring)';
+  }
+}
+
+function selectExportFormat(format) {
+  state.exportFormat = format;
+  document.querySelectorAll('.export-format-option').forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.format === format);
+  });
+  updateExportPreview();
+}
+
+function updateExportPreview() {
+  const filtered = state.logs.filter(passesFilter);
+  const sample = filtered.slice(0, 3);
+
+  if (state.exportFormat === 'json') {
+    const preview = JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      entryCount: filtered.length,
+      entries: sample.map(e => ({ timestamp: e.timestamp, level: e.level, component: e.component, message: e.message.substring(0, 60) + '...' }))
+    }, null, 2);
+    exportPreview.textContent = preview.substring(0, 300) + (preview.length > 300 ? '\n...' : '');
+  } else if (state.exportFormat === 'csv') {
+    let csv = 'timestamp,level,component,message\n';
+    sample.forEach(e => {
+      csv += e.timestamp + ',' + e.level + ',' + e.component + ',"' + e.message.substring(0, 50) + '..."\n';
+    });
+    exportPreview.textContent = csv + '... (' + filtered.length + ' total rows)';
+  } else {
+    let text = '';
+    sample.forEach(e => {
+      text += '[' + e.time + '] ' + e.level.toUpperCase().padEnd(7) + ' [' + e.component + '] ' + e.message.substring(0, 50) + '...\n';
+    });
+    exportPreview.textContent = text + '... (' + filtered.length + ' total entries)';
+  }
+}
+
+function doExport() {
+  const filtered = state.logs.filter(passesFilter);
+  if (filtered.length === 0) {
+    showToast('No entries match current filters', 'warning');
+    exportDropdown.classList.remove('open');
+    return;
+  }
+
+  let content, ext, mime;
+  if (state.exportFormat === 'json') {
+    content = JSON.stringify({
+      exportedAt: new Date().toISOString(), entryCount: filtered.length,
+      entries: filtered.map(e => ({ timestamp: e.timestamp, level: e.level, component: e.component, message: e.message }))
+    }, null, 2);
+    ext = '.json'; mime = 'application/json';
+  } else if (state.exportFormat === 'csv') {
+    content = 'timestamp,level,component,message\r\n';
+    filtered.forEach(e => {
+      content += '"' + e.timestamp + '","' + e.level + '","' + e.component + '","' + e.message.replace(/"/g, '""') + '"\r\n';
+    });
+    ext = '.csv'; mime = 'text/csv';
+  } else {
+    content = '';
+    filtered.forEach(e => {
+      content += '[' + e.timestamp + '] ' + e.level.toUpperCase().padEnd(7) + ' [' + e.component + '] ' + e.message + '\n';
+    });
+    ext = '.txt'; mime = 'text/plain';
+  }
+
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'edog-logs-' + filtered.length + '-entries' + ext;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  exportDropdown.classList.remove('open');
+  showToast('Exported ' + filtered.length.toLocaleString() + ' entries as ' + state.exportFormat.toUpperCase(), 'success');
+}
+
+// ── Toast ──
+function showToast(msg, type) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const toast = document.createElement('div');
+  toast.className = 'toast ' + (type || 'success');
+  const icon = type === 'warning' ? '\u26A0' : '\u2713';
+  toast.innerHTML = '<span class="toast-icon">' + icon + '</span> ' + escapeHtml(msg);
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('leaving');
+    setTimeout(() => toast.remove(), 200);
+  }, 3000);
+}
+
+// ── Clock ──
+function startClock() {
+  setInterval(() => {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      String(now.getHours()).padStart(2, '0') + ':' +
+      String(now.getMinutes()).padStart(2, '0') + ':' +
+      String(now.getSeconds()).padStart(2, '0');
+  }, 1000);
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>
