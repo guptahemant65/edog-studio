@@ -96,32 +96,17 @@ Open **http://localhost:5555** — you're in.
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph cli["Python CLI"]
-        edog["edog.py"]
-        watch["File Watcher"]
-    end
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture-light.svg">
+  <img alt="EDOG Studio Architecture" src="docs/assets/architecture-dark.svg" width="100%">
+</picture>
 
-    subgraph backend["C# DevMode · injected into FLT"]
-        reg["DI Registrar"]
-        intercept["Interceptors"]
-        signalr["SignalR Server"]
-    end
+<br>
 
-    subgraph frontend["Single HTML File"]
-        ui["Web UI · localhost:5555"]
-    end
-
-    edog --> auth
-    edog -->|inject C#| reg
-    edog -->|Silent CBA| auth["Token Helper"]
-    watch -->|hot redeploy| edog
-    signalr <-->|MessagePack| ui
-    edog -->|serve| ui
-```
-
-The frontend builds into a **single self-contained HTML file** — all CSS and JS inlined, zero external dependencies at runtime.
+<details>
+<summary><b>Project Structure</b></summary>
+<br>
 
 ```
 edog-studio/
@@ -138,6 +123,10 @@ edog-studio/
 │   └── adr/               # Architecture Decision Records
 └── hivemind/              # Multi-agent orchestration layer
 ```
+
+The frontend builds into a **single self-contained HTML file** — all CSS and JS inlined, zero external dependencies at runtime.
+
+</details>
 
 ---
 
