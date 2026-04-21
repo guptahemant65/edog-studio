@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f0f3f6"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="600" cy="150" r="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6d5cff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#6d5cff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="16" cy="16" r="0.6" fill="#000000" opacity="0.03"/>
+    </pattern>
+  </defs>
+
+  <!-- Background layers -->
+  <rect width="1200" height="300" rx="10" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="10" fill="url(#glow)"/>
+  <rect width="1200" height="300" rx="10" fill="url(#grid)"/>
+
+  <!-- Border -->
+  <rect x="0.5" y="0.5" width="1199" height="299" rx="10" stroke="#d1d9e0" stroke-width="1" fill="none"/>
+
+  <!-- Corner accents -->
+  <path d="M 24 40 L 24 24 L 40 24" stroke="#6d5cff" stroke-width="1.5" fill="none" opacity="0.35" stroke-linecap="round"/>
+  <path d="M 1176 40 L 1176 24 L 1160 24" stroke="#6d5cff" stroke-width="1.5" fill="none" opacity="0.35" stroke-linecap="round"/>
+  <path d="M 24 260 L 24 276 L 40 276" stroke="#6d5cff" stroke-width="1.5" fill="none" opacity="0.35" stroke-linecap="round"/>
+  <path d="M 1176 260 L 1176 276 L 1160 276" stroke="#6d5cff" stroke-width="1.5" fill="none" opacity="0.35" stroke-linecap="round"/>
+
+  <!-- Side indicators (left) -->
+  <rect x="20" y="108" width="3" height="14" rx="1.5" fill="#6d5cff" opacity="0.2"/>
+  <rect x="20" y="128" width="3" height="22" rx="1.5" fill="#6d5cff" opacity="0.35"/>
+  <rect x="20" y="156" width="3" height="10" rx="1.5" fill="#6d5cff" opacity="0.15"/>
+  <rect x="20" y="172" width="3" height="18" rx="1.5" fill="#6d5cff" opacity="0.25"/>
+
+  <!-- Side indicators (right) -->
+  <rect x="1177" y="108" width="3" height="18" rx="1.5" fill="#6d5cff" opacity="0.25"/>
+  <rect x="1177" y="132" width="3" height="10" rx="1.5" fill="#6d5cff" opacity="0.15"/>
+  <rect x="1177" y="148" width="3" height="22" rx="1.5" fill="#6d5cff" opacity="0.35"/>
+  <rect x="1177" y="176" width="3" height="14" rx="1.5" fill="#6d5cff" opacity="0.2"/>
+
+  <!-- Diamond symbol -->
+  <path d="M 600 58 L 618 82 L 600 106 L 582 82 Z" fill="#6d5cff" opacity="0.9"/>
+  <path d="M 600 64 L 613 82 L 600 100 L 587 82 Z" fill="#8b7fff" opacity="0.35"/>
+
+  <!-- Title -->
+  <text x="600" y="148" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="42" font-weight="700" fill="#1f2328" letter-spacing="6">EDOG STUDIO</text>
+
+  <!-- Subtitle -->
+  <text x="600" y="182" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" fill="#656d76" letter-spacing="4">THE DEVELOPER COCKPIT FOR FABRICLIVETABLE</text>
+
+  <!-- Accent line with terminal dots -->
+  <line x1="480" y1="205" x2="720" y2="205" stroke="#6d5cff" stroke-width="1.5" opacity="0.3"/>
+  <circle cx="480" cy="205" r="2" fill="#6d5cff" opacity="0.45"/>
+  <circle cx="720" cy="205" r="2" fill="#6d5cff" opacity="0.45"/>
+
+  <!-- Bottom info -->
+  <text x="600" y="242" text-anchor="middle" font-family="'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace" font-size="11" fill="#8b949e" letter-spacing="2">v2.0.0  ·  PYTHON  ·  VANILLA JS  ·  C#</text>
+
+  <!-- Data flow dots (bottom left) -->
+  <circle cx="120" cy="268" r="2" fill="#6d5cff" opacity="0.1"/>
+  <circle cx="132" cy="268" r="2" fill="#6d5cff" opacity="0.18"/>
+  <circle cx="144" cy="268" r="2" fill="#6d5cff" opacity="0.26"/>
+  <circle cx="156" cy="268" r="2" fill="#6d5cff" opacity="0.34"/>
+  <circle cx="168" cy="268" r="2" fill="#6d5cff" opacity="0.42"/>
+
+  <!-- Data flow dots (bottom right) -->
+  <circle cx="1032" cy="268" r="2" fill="#6d5cff" opacity="0.42"/>
+  <circle cx="1044" cy="268" r="2" fill="#6d5cff" opacity="0.34"/>
+  <circle cx="1056" cy="268" r="2" fill="#6d5cff" opacity="0.26"/>
+  <circle cx="1068" cy="268" r="2" fill="#6d5cff" opacity="0.18"/>
+  <circle cx="1080" cy="268" r="2" fill="#6d5cff" opacity="0.1"/>
+</svg>

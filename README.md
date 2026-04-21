@@ -1,97 +1,134 @@
 <div align="center">
+<br>
 
-# ◆ EDOG Studio
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg">
+  <img alt="EDOG Studio" src="docs/assets/banner-dark.svg" width="100%">
+</picture>
 
-### The Developer Cockpit for Microsoft FabricLiveTable
-
-[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.0-blue?style=flat-square)]()
-[![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)]()
+<br>
 
 **Browse workspaces. Deploy locally. Debug in real-time.**
-**All from a single localhost UI on port 5555.**
+<br>
+**A developer cockpit on `localhost:5555`.**
 
----
+<br>
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
+[![v2.0.0](https://img.shields.io/badge/version-2.0.0-6d5cff?style=flat-square)]()
+[![Windows](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)]()
 
 </div>
 
-## What is EDOG Studio?
+<br>
 
-EDOG Studio is a localhost developer tool for building and debugging [Microsoft FabricLiveTable](https://learn.microsoft.com/en-us/fabric/) (FLT) — evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) into a full-featured engineering cockpit.
-
-It works in **two phases** — so you can explore Fabric resources without running FLT, and get deep debugging tools when you do.
+EDOG Studio gives [FabricLiveTable](https://learn.microsoft.com/en-us/fabric/) developers a single UI to browse Fabric resources, deploy to a local lakehouse with one click, and debug with real-time logs, DAG visualization, and Spark traffic inspection. It evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) into a full engineering cockpit.
 
 ---
 
-## Two-Phase Lifecycle
+## Two Phases, One Cockpit
 
-### Phase 1 — Disconnected (no FLT service needed)
+<table>
+<tr>
+<td width="50%" valign="top">
 
-> Explore your Fabric environment using live APIs — no local service required.
+### ○ Phase 1 — Disconnected
 
-- **Workspace Explorer** — Browse tenants, workspaces, lakehouses, and tables
-- **Resource Management** — Create, rename, and delete workspaces and lakehouses
-- **Feature Flags** — View rollout status, set local overrides, create PRs for flag changes
-- **API Playground** — Postman-like API tester with pre-configured Fabric endpoints
+> No FLT service required. Just your Fabric credentials.
 
-### Phase 2 — Connected (FLT service running)
+▸ Browse tenants, workspaces, lakehouses, tables<br>
+▸ Create, rename, and delete Fabric resources<br>
+▸ Manage feature flags with rollout visibility<br>
+▸ Test any Fabric API in the built-in playground
 
-> Pick a lakehouse, deploy with one click, and get full DevTools.
+</td>
+<td width="50%" valign="top">
 
-- **Real-Time Logs** — Streaming log viewer with breakpoints, bookmarks, and error clustering
-- **DAG Studio** — Interactive DAG graph with Gantt chart, execution diff, run/cancel controls
-- **Spark Inspector** — Capture and inspect every Spark/GTS HTTP request and response
-- **Lock Monitor** — Track distributed locks with auto-unlock capability
-- **Hot Re-Deploy** — File change detection triggers automatic rebuild and re-deploy
+### ● Phase 2 — Connected
+
+> Pick a lakehouse ▸ deploy ▸ full DevTools.
+
+▸ Real-time log streaming with breakpoints<br>
+▸ Interactive DAG graph with Gantt chart<br>
+▸ Spark HTTP request/response inspector<br>
+▸ Lock monitor with auto-unlock<br>
+▸ File change detection with hot re-deploy
+
+</td>
+</tr>
+</table>
+
+---
+
+## Views
+
+| View | Phase | Description |
+|:-----|:-----:|:------------|
+| **Workspace Explorer** | Both | Browse and manage tenants, workspaces, lakehouses, tables. One-click deploy. |
+| **Logs** | Connected | Streaming log viewer with breakpoints, bookmarks, and error clustering. |
+| **DAG Studio** | Connected | Interactive DAG graph, Gantt execution chart, diff, run/cancel controls. |
+| **Spark Inspector** | Connected | Capture every Spark and GTS HTTP request and response. |
+| **API Playground** | Both | Test Fabric APIs with pre-configured endpoints and live auth. |
+| **Environment** | Both | Feature flags, lock monitor, orphaned resource cleanup. |
+
+Plus: Command Palette (<kbd>Ctrl</kbd>+<kbd>K</kbd>), Token Inspector, File Change Detection, Session History.
 
 ---
 
 ## Quick Start
 
 ```powershell
-# Install (one-liner)
+# Install
 irm https://raw.githubusercontent.com/guptahemant65/edog-studio/master/scripts/install.ps1 | iex
 
-# Configure with your Microsoft identity
+# Configure
 edog --config -u your@email.com
 
-# Launch the cockpit
+# Launch
 edog
 ```
 
-Then open **http://localhost:5555** and you're in.
-
----
-
-## Views at a Glance
-
-| View | Phase | What It Does |
-|:-----|:-----:|:-------------|
-| **Workspace Explorer** | ● Both | Browse and manage tenants, workspaces, lakehouses, tables. One-click deploy. |
-| **Logs** | ● Connected | Real-time log stream with breakpoints, bookmarks, and error clustering. |
-| **DAG Studio** | ● Connected | Interactive DAG graph, Gantt execution chart, run/cancel, execution diff. |
-| **Spark Inspector** | ● Connected | Full HTTP traffic capture for all Spark and GTS calls. |
-| **API Playground** | ● Both | Test Fabric APIs with pre-configured endpoints and auth. |
-| **Environment** | ● Both | Feature flags, lock monitor, orphaned resource cleanup. |
-
-**Plus:** Command Palette (`Ctrl+K`), Token Inspector, File Change Detection, Session History.
+Open **http://localhost:5555** — you're in.
 
 ---
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph cli["Python CLI"]
+        edog["edog.py"]
+        auth["Playwright Auth"]
+        watch["File Watcher"]
+    end
+
+    subgraph backend["C# DevMode · injected into FLT"]
+        reg["DI Registrar"]
+        intercept["Interceptors"]
+        signalr["SignalR Server"]
+    end
+
+    subgraph frontend["Single HTML File"]
+        ui["Web UI · localhost:5555"]
+    end
+
+    edog --> auth
+    edog -->|inject| reg
+    watch -->|hot redeploy| edog
+    signalr <-->|MessagePack| ui
+    edog -->|serve| ui
+```
+
+The frontend builds into a **single self-contained HTML file** — all CSS and JS inlined, zero external dependencies at runtime.
+
 ```
 edog-studio/
 ├── src/
-│   ├── frontend/          # Web UI — JS + CSS modules → single HTML build
-│   │   ├── js/            #   View controllers, services, state management
-│   │   ├── css/           #   Design-system-driven stylesheets
-│   │   └── assets/        #   SVG icons
-│   └── backend/           # C# DevMode — injected into the FLT service
-│       └── DevMode/       #   Log server, interceptors, DI wrappers
-├── edog.py                # CLI entrypoint (Python)
-├── edog.cmd               # Windows launcher
+│   ├── frontend/          # JS + CSS modules → single HTML build
+│   └── backend/           # C# DevMode injected into FLT service
+├── edog.py                # CLI entrypoint
 ├── scripts/               # Build, install, setup automation
 ├── config/                # Default configuration templates
 ├── tests/                 # Test suite
@@ -102,47 +139,44 @@ edog-studio/
 └── hivemind/              # Multi-agent orchestration layer
 ```
 
-The frontend builds into a **single self-contained HTML file** via `python scripts/build-html.py` — all CSS and JS inlined, zero external dependencies at runtime.
-
 ---
 
-## Tech Stack
+<details>
+<summary><b>Tech Stack</b></summary>
+<br>
 
 | Layer | Technology |
 |:------|:-----------|
-| **CLI** | Python 3.10+ (Playwright, Watchdog, Pywinauto) |
-| **Frontend** | Vanilla JS + CSS (no framework, single-file build) |
-| **Backend Injection** | C# (DevMode registrar, interceptors, SignalR+MessagePack) |
+| **CLI** | Python 3.10+ — Playwright, Watchdog, Pywinauto |
+| **Frontend** | Vanilla JS + CSS — no framework, single-file build |
+| **Backend Injection** | C# — DevMode registrar, interceptors |
 | **Auth** | Playwright-based browser token acquisition |
-| **Communication** | SignalR with MessagePack binary protocol |
+| **IPC** | SignalR with MessagePack binary protocol |
 
----
+</details>
 
-## Development
+<details>
+<summary><b>Development</b></summary>
+<br>
 
 ```powershell
-# Clone and setup
 git clone https://github.com/guptahemant65/edog-studio.git
 cd edog-studio
 python -m venv .venv && .venv\Scripts\activate
 pip install -e ".[dev]"
 
-# Build the frontend
+# Build
 python scripts/build-html.py
 
-# Run checks
-make lint      # Ruff linter + formatter
-make test      # Pytest suite
-make build     # Full build pipeline
+# Quality gates
+make lint      # Ruff
+make test      # Pytest
+make build     # Full pipeline
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
----
-
-## Origin Story
-
-EDOG DevMode started as a simple token manager + code patcher + log viewer. Over time, FabricLiveTable developers needed more — workspace browsing, DAG visualization, Spark inspection, feature flag management, and a proper API playground. EDOG Studio is the answer: a complete developer cockpit that covers the full inner-loop workflow.
+</details>
 
 ---
 
@@ -150,6 +184,6 @@ EDOG DevMode started as a simple token manager + code patcher + log viewer. Over
 
 **Built for the FabricLiveTable team at Microsoft**
 
-[Getting Started](#quick-start) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
+[Quick Start](#quick-start) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
 
 </div>
