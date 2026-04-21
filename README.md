@@ -100,7 +100,6 @@ Open **http://localhost:5555** — you're in.
 flowchart TB
     subgraph cli["Python CLI"]
         edog["edog.py"]
-        auth["Playwright Auth"]
         watch["File Watcher"]
     end
 
@@ -115,7 +114,8 @@ flowchart TB
     end
 
     edog --> auth
-    edog -->|inject| reg
+    edog -->|inject C#| reg
+    edog -->|Silent CBA| auth["Token Helper"]
     watch -->|hot redeploy| edog
     signalr <-->|MessagePack| ui
     edog -->|serve| ui
@@ -147,10 +147,10 @@ edog-studio/
 
 | Layer | Technology |
 |:------|:-----------|
-| **CLI** | Python 3.10+ — Playwright, Watchdog, Pywinauto |
+| **CLI** | Python 3.10+ — Watchdog, Pywinauto, WebSockets |
 | **Frontend** | Vanilla JS + CSS — no framework, single-file build |
 | **Backend Injection** | C# — DevMode registrar, interceptors |
-| **Auth** | Playwright-based browser token acquisition |
+| **Auth** | Silent CBA via C# token-helper (certificate-based, zero browser) |
 | **IPC** | SignalR with MessagePack binary protocol |
 
 </details>

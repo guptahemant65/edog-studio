@@ -22,9 +22,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "playwright",
     "pywinauto",
     "watchdog",
+    "websockets",
 ]
 
 [project.optional-dependencies]

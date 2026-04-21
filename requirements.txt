@@ -1,4 +1,3 @@
-playwright
 pywinauto
 watchdog
 websockets
