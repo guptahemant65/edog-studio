@@ -1,77 +1,155 @@
-# EDOG Studio
+<div align="center">
 
-**The FabricLiveTable Developer Cockpit**
+# ◆ EDOG Studio
 
-EDOG Studio is the evolution of [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) — a localhost developer tool for building and debugging Microsoft FabricLiveTable (FLT) locally.
+### The Developer Cockpit for Microsoft FabricLiveTable
 
-## What's New (v2)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue?style=flat-square)]()
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)]()
 
-EDOG DevMode was a token manager + code patcher + log viewer. EDOG Studio is a **full developer cockpit** with a two-phase lifecycle:
+**Browse workspaces. Deploy locally. Debug in real-time.**
+**All from a single localhost UI on port 5555.**
 
-**Phase 1 — Browse & Explore** (no FLT service needed)
-- Browse tenants, workspaces, lakehouses, tables via Fabric APIs
-- Create/rename/delete workspaces and lakehouses
-- Manage feature flags with rollout visibility + local overrides + PR creation
-- Test Fabric APIs with built-in playground
+---
 
-**Phase 2 — Connected DevTools** (FLT service running)  
-- Pick a lakehouse → one-click deploy (token + patch + build + launch)
-- Real-time log streaming with breakpoints and bookmarks
-- Interactive DAG graph with execution Gantt chart
-- Spark HTTP request/response inspector
-- Lock monitor with auto-unlock
-- File change detection with hot re-deploy
+</div>
+
+## What is EDOG Studio?
+
+EDOG Studio is a localhost developer tool for building and debugging [Microsoft FabricLiveTable](https://learn.microsoft.com/en-us/fabric/) (FLT) — evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) into a full-featured engineering cockpit.
+
+It works in **two phases** — so you can explore Fabric resources without running FLT, and get deep debugging tools when you do.
+
+---
+
+## Two-Phase Lifecycle
+
+### Phase 1 — Disconnected (no FLT service needed)
+
+> Explore your Fabric environment using live APIs — no local service required.
+
+- **Workspace Explorer** — Browse tenants, workspaces, lakehouses, and tables
+- **Resource Management** — Create, rename, and delete workspaces and lakehouses
+- **Feature Flags** — View rollout status, set local overrides, create PRs for flag changes
+- **API Playground** — Postman-like API tester with pre-configured Fabric endpoints
+
+### Phase 2 — Connected (FLT service running)
+
+> Pick a lakehouse, deploy with one click, and get full DevTools.
+
+- **Real-Time Logs** — Streaming log viewer with breakpoints, bookmarks, and error clustering
+- **DAG Studio** — Interactive DAG graph with Gantt chart, execution diff, run/cancel controls
+- **Spark Inspector** — Capture and inspect every Spark/GTS HTTP request and response
+- **Lock Monitor** — Track distributed locks with auto-unlock capability
+- **Hot Re-Deploy** — File change detection triggers automatic rebuild and re-deploy
+
+---
+
+## Quick Start
+
+```powershell
+# Install (one-liner)
+irm https://raw.githubusercontent.com/guptahemant65/edog-studio/master/scripts/install.ps1 | iex
+
+# Configure with your Microsoft identity
+edog --config -u your@email.com
+
+# Launch the cockpit
+edog
+```
+
+Then open **http://localhost:5555** and you're in.
+
+---
+
+## Views at a Glance
+
+| View | Phase | What It Does |
+|:-----|:-----:|:-------------|
+| **Workspace Explorer** | ● Both | Browse and manage tenants, workspaces, lakehouses, tables. One-click deploy. |
+| **Logs** | ● Connected | Real-time log stream with breakpoints, bookmarks, and error clustering. |
+| **DAG Studio** | ● Connected | Interactive DAG graph, Gantt execution chart, run/cancel, execution diff. |
+| **Spark Inspector** | ● Connected | Full HTTP traffic capture for all Spark and GTS calls. |
+| **API Playground** | ● Both | Test Fabric APIs with pre-configured endpoints and auth. |
+| **Environment** | ● Both | Feature flags, lock monitor, orphaned resource cleanup. |
+
+**Plus:** Command Palette (`Ctrl+K`), Token Inspector, File Change Detection, Session History.
+
+---
 
 ## Architecture
 
 ```
 edog-studio/
 ├── src/
-│   ├── backend/           # C# files injected into FLT service
-│   │   └── DevMode/       # EdogLogServer, interceptors, wrappers
-│   └── frontend/          # Web UI (single-file HTML build)
-│       ├── css/           # CSS modules
-│       ├── js/            # JS modules
-│       └── assets/        # Icons
-├── scripts/               # Build, install, setup scripts
-├── docs/
-│   └── specs/             # Design specifications
+│   ├── frontend/          # Web UI — JS + CSS modules → single HTML build
+│   │   ├── js/            #   View controllers, services, state management
+│   │   ├── css/           #   Design-system-driven stylesheets
+│   │   └── assets/        #   SVG icons
+│   └── backend/           # C# DevMode — injected into the FLT service
+│       └── DevMode/       #   Log server, interceptors, DI wrappers
+├── edog.py                # CLI entrypoint (Python)
+├── edog.cmd               # Windows launcher
+├── scripts/               # Build, install, setup automation
+├── config/                # Default configuration templates
 ├── tests/                 # Test suite
-├── config/                # Default config templates
-├── edog.py                # Main CLI (Python)
-└── edog.cmd               # Windows launcher
+├── docs/
+│   ├── specs/             # Feature specifications
+│   ├── design/            # Design bible, component library, mockups
+│   └── adr/               # Architecture Decision Records
+└── hivemind/              # Multi-agent orchestration layer
 ```
 
-## Quick Start
+The frontend builds into a **single self-contained HTML file** via `python scripts/build-html.py` — all CSS and JS inlined, zero external dependencies at runtime.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|:------|:-----------|
+| **CLI** | Python 3.10+ (Playwright, Watchdog, Pywinauto) |
+| **Frontend** | Vanilla JS + CSS (no framework, single-file build) |
+| **Backend Injection** | C# (DevMode registrar, interceptors, SignalR+MessagePack) |
+| **Auth** | Playwright-based browser token acquisition |
+| **Communication** | SignalR with MessagePack binary protocol |
+
+---
+
+## Development
 
 ```powershell
-# Install
-irm https://raw.githubusercontent.com/guptahemant65/edog-studio/main/scripts/install.ps1 | iex
+# Clone and setup
+git clone https://github.com/guptahemant65/edog-studio.git
+cd edog-studio
+python -m venv .venv && .venv\Scripts\activate
+pip install -e ".[dev]"
 
-# Configure
-edog --config -u your@email.com
+# Build the frontend
+python scripts/build-html.py
 
-# Launch
-edog
+# Run checks
+make lint      # Ruff linter + formatter
+make test      # Pytest suite
+make build     # Full build pipeline
 ```
 
-## Views
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development guide.
 
-| # | View | Phase | Description |
-|---|------|-------|-------------|
-| 1 | **Workspace Explorer** | Both | Browse tenants/workspaces/lakehouses/tables, deploy to lakehouse |
-| 2 | **Logs** | Connected | Real-time log stream with breakpoints, bookmarks, error clustering |
-| 3 | **DAG Studio** | Connected | Interactive DAG graph, Gantt chart, run/cancel, execution diff |
-| 4 | **Spark Inspector** | Connected | HTTP traffic capture for all Spark/GTS calls |
-| 5 | **API Playground** | Both | Postman-like API testing with pre-configured endpoints |
-| 6 | **Environment** | Both | Feature flags, lock monitor, orphaned resource cleanup |
+---
 
-Plus: Command Palette (Ctrl+K), Token Inspector, File Change Detection, Session History.
+## Origin Story
 
-## Origin
+EDOG DevMode started as a simple token manager + code patcher + log viewer. Over time, FabricLiveTable developers needed more — workspace browsing, DAG visualization, Spark inspection, feature flag management, and a proper API playground. EDOG Studio is the answer: a complete developer cockpit that covers the full inner-loop workflow.
 
-This project evolved from [flt-edog-devmode](https://github.com/guptahemant65/flt-edog-devmode) which provides the core token management, code patching, and log viewer functionality. EDOG Studio extends it with workspace browsing, DAG visualization, Spark inspection, feature flag management, and a complete API playground.
+---
 
-## License
+<div align="center">
 
-Microsoft Internal
+**Built for the FabricLiveTable team at Microsoft**
+
+[Getting Started](#quick-start) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [License](LICENSE)
+
+</div>
