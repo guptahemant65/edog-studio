@@ -1022,3 +1022,290 @@ class HistorySaved {
     this.onReplay = null;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+ * §6  API PLAYGROUND ORCHESTRATOR
+ * ══════════════════════════════════════════════════════════════ */
+
+class ApiPlayground {
+  constructor(viewEl, apiClient, stateManager) {
+    this._viewEl = viewEl;
+    this._apiClient = apiClient;
+    this._stateManager = stateManager;
+    this._initialized = false;
+    this._abortController = null;
+    this._isMock = new URLSearchParams(window.location.search).has('mock');
+
+    this._requestBuilder = null;
+    this._responseViewer = null;
+    this._endpointCatalog = null;
+    this._historySaved = null;
+  }
+
+  activate() {
+    if (!this._initialized) this._init();
+    this._viewEl.style.display = '';
+  }
+
+  deactivate() {
+    if (this._abortController) {
+      this._abortController.abort();
+      this._abortController = null;
+    }
+    if (this._requestBuilder && this._requestBuilder.getCatalog()) {
+      this._requestBuilder.getCatalog().close();
+    }
+  }
+
+  _init() {
+    this._initialized = true;
+    this._buildDOM();
+    this._wireEvents();
+  }
+
+  _buildDOM() {
+    this._viewEl.innerHTML = '';
+
+    var playground = document.createElement('div');
+    playground.className = 'api-playground';
+
+    // Main area
+    var main = document.createElement('div');
+    main.className = 'api-main';
+
+    // Request section
+    var requestSection = document.createElement('div');
+    requestSection.className = 'api-request-section';
+    this._requestBuilder = new RequestBuilder(requestSection);
+    main.appendChild(requestSection);
+
+    // Response section
+    var responseSection = document.createElement('div');
+    responseSection.className = 'api-response-section';
+    this._responseViewer = new ResponseViewer(responseSection);
+    main.appendChild(responseSection);
+
+    playground.appendChild(main);
+
+    // Sidebar
+    var sidebar = document.createElement('div');
+    sidebar.className = 'api-sidebar';
+    this._historySaved = new HistorySaved(sidebar);
+    playground.appendChild(sidebar);
+
+    this._viewEl.appendChild(playground);
+  }
+
+  _wireEvents() {
+    var self = this;
+
+    // Send request
+    this._requestBuilder.onSend = function(request) {
+      self._handleSend(request);
+    };
+
+    // Endpoint catalog selection → populate builder
+    this._requestBuilder.getCatalog().onSelect = function(endpoint) {
+      var resolvedUrl = self._resolveUrl(endpoint.urlTemplate);
+      var headers = [];
+      if (endpoint.tokenType === 'bearer') {
+        headers.push({ key: 'Authorization', value: 'Bearer \u25CF\u25CF\u25CF\u25CF' });
+      } else if (endpoint.tokenType === 'mwc') {
+        headers.push({ key: 'Authorization', value: 'MwcToken \u25CF\u25CF\u25CF\u25CF' });
+      }
+      headers.push({ key: 'Content-Type', value: 'application/json' });
+
+      self._requestBuilder.setRequest({
+        method: endpoint.method,
+        url: resolvedUrl,
+        headers: headers,
+        body: endpoint.bodyTemplate ? JSON.stringify(endpoint.bodyTemplate, null, 2) : ''
+      });
+    };
+
+    // History/saved replay → populate builder
+    this._historySaved.onReplay = function(entry) {
+      self._requestBuilder.setRequest({
+        method: entry.method,
+        url: entry.url,
+        headers: entry.headers || [],
+        body: entry.body || ''
+      });
+    };
+
+    // Cancel button
+    this._requestBuilder.getCancelBtn().addEventListener('click', function() {
+      if (self._abortController) {
+        self._abortController.abort();
+        self._abortController = null;
+      }
+      self._requestBuilder.setSending(false);
+      self._responseViewer.showError({ message: 'Request cancelled' });
+    });
+  }
+
+  _handleSend(request) {
+    var self = this;
+
+    // Abort previous
+    if (this._abortController) this._abortController.abort();
+    this._abortController = new AbortController();
+
+    // Resolve URL
+    var resolvedUrl = this._resolveUrl(request.url);
+
+    this._requestBuilder.setSending(true);
+    this._responseViewer.showLoading();
+
+    if (this._isMock) {
+      this._mockSend(request, resolvedUrl);
+      return;
+    }
+
+    // Build proxy request
+    var proxyBody = JSON.stringify({
+      method: request.method,
+      url: resolvedUrl,
+      headers: this._buildProxyHeaders(request.headers),
+      body: request.body,
+      tokenType: request.tokenType || this._detectTokenType(resolvedUrl)
+    });
+
+    var startTime = Date.now();
+    fetch('/api/playground/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: proxyBody,
+      signal: this._abortController.signal
+    }).then(function(resp) {
+      return resp.json();
+    }).then(function(result) {
+      if (!result.duration) result.duration = Date.now() - startTime;
+      self._responseViewer.showResponse(result);
+      self._historySaved.addHistoryEntry(
+        self._sanitizeForHistory(request, resolvedUrl, result)
+      );
+      self._requestBuilder.setSending(false);
+      self._abortController = null;
+    }).catch(function(e) {
+      if (e.name === 'AbortError') return;
+      self._responseViewer.showError(e);
+      self._requestBuilder.setSending(false);
+      self._abortController = null;
+    });
+  }
+
+  _mockSend(request, resolvedUrl) {
+    var self = this;
+    var delay = 100 + Math.floor(Math.random() * 400);
+    setTimeout(function() {
+      var mockResult = {
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'content-type': 'application/json',
+          'x-ms-request-id': self._uuid()
+        },
+        body: JSON.stringify({
+          status: 'ok',
+          message: 'Mock response for ' + request.method + ' ' + request.url,
+          timestamp: new Date().toISOString(),
+          data: { items: [], count: 0 }
+        }),
+        duration: delay,
+        bodySize: 128
+      };
+      self._responseViewer.showResponse(mockResult);
+      self._historySaved.addHistoryEntry(
+        self._sanitizeForHistory(request, resolvedUrl, mockResult)
+      );
+      self._requestBuilder.setSending(false);
+      self._abortController = null;
+    }, delay);
+  }
+
+  _resolveUrl(template) {
+    var config = (this._apiClient && this._apiClient.getConfig) ? this._apiClient.getConfig() : null;
+    config = config || {};
+    var vars = {
+      workspaceId: config.workspaceId || '{workspaceId}',
+      lakehouseId: config.lakehouseId || '{lakehouseId}',
+      artifactId: config.artifactId || '{artifactId}',
+      capacityId: config.capacityId || '{capacityId}',
+      fabricBaseUrl: config.fabricBaseUrl || '{fabricBaseUrl}'
+    };
+    var resolved = template.replace(/\{(\w+)\}/g, function(match, key) {
+      return vars[key] || match;
+    });
+
+    // Prefix relative URLs
+    if (resolved.charAt(0) === '/') {
+      resolved = 'https://api.fabric.microsoft.com' + resolved;
+    }
+    return resolved;
+  }
+
+  _buildProxyHeaders(headers) {
+    var obj = {};
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
+      // Skip the masked auth header — proxy handles token injection
+      if (h.key.toLowerCase() === 'authorization') continue;
+      if (h.key.trim()) obj[h.key] = h.value;
+    }
+    return obj;
+  }
+
+  _detectTokenType(url) {
+    if (url.indexOf('pbidedicated') !== -1) return 'mwc';
+    if (url.indexOf('api.fabric') !== -1) return 'bearer';
+    return 'none';
+  }
+
+  _sanitizeForHistory(request, resolvedUrl, result) {
+    var sanitizedHeaders = [];
+    for (var i = 0; i < request.headers.length; i++) {
+      var h = request.headers[i];
+      if (h.key.toLowerCase() === 'authorization') {
+        sanitizedHeaders.push({ key: h.key, value: h.value.replace(/\s.+$/, ' \u25CF\u25CF\u25CF\u25CF') });
+      } else {
+        sanitizedHeaders.push({ key: h.key, value: h.value });
+      }
+    }
+
+    return {
+      id: this._uuid(),
+      method: request.method,
+      url: request.url,
+      resolvedUrl: resolvedUrl,
+      headers: sanitizedHeaders,
+      body: request.body,
+      tokenType: request.tokenType || 'none',
+      response: {
+        status: result.status,
+        statusText: result.statusText,
+        duration: result.duration,
+        bodySize: result.bodySize,
+        bodyPreview: (result.body || '').substring(0, 500)
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  _uuid() {
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  destroy() {
+    if (this._abortController) this._abortController.abort();
+    if (this._requestBuilder) this._requestBuilder.destroy();
+    if (this._responseViewer) this._responseViewer.destroy();
+    if (this._historySaved) this._historySaved.destroy();
+    this._viewEl.innerHTML = '';
+    this._initialized = false;
+  }
+}
