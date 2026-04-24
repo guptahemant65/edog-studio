@@ -86,6 +86,7 @@ JS_MODULES = [
     "js/anomaly.js",
     "js/dag-layout.js",
     "js/dag-graph.js",
+    "js/dag-gantt.js",
     "js/dag-studio.js",
     "js/control-panel.js",
     "js/topbar.js",
