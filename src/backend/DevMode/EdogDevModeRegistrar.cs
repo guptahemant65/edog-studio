@@ -43,6 +43,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterSparkSessionInterceptor();
                 RegisterDiRegistryCapture();
 
+                // Nexus aggregator — consumes topic events, emits dependency graph snapshots
+                StartNexusAggregator();
+
                 Console.WriteLine("[EDOG] DevMode interceptors registered");
             }
             catch (Exception ex)
@@ -194,6 +197,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] ✗ DI registry capture failed: {ex.Message}");
+            }
+        }
+
+        private static void StartNexusAggregator()
+        {
+            try
+            {
+                EdogNexusAggregator.Start();
+                Console.WriteLine("[EDOG] ✓ Nexus aggregator started");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Nexus aggregator failed: {ex.Message}");
             }
         }
     }

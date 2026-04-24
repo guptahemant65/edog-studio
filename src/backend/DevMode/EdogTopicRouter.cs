@@ -37,6 +37,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("di", 100);
             RegisterTopic("perf", 5000);
             RegisterTopic("capacity", 500);
+            RegisterTopic("nexus", 100);  // Nexus aggregated snapshots (low volume, high value)
         }
 
         /// <summary>
