@@ -339,3 +339,407 @@ class ExecutionStateManager {
     return 'pending';
   }
 }
+
+/**
+ * DagStudio — Orchestrator for DAG Studio view.
+ *
+ * Coordinates: FabricApiClient, SignalRManager, AutoDetector,
+ * DagCanvasRenderer, DagLayout, ExecutionStateManager.
+ * Toolbar: Run/Cancel/Refresh/ForceUnlock with state-driven visibility.
+ * History panel: loads past 20 executions with click-to-view.
+ * Lock detection: polls every 30s, shows Force Unlock when stuck.
+ */
+class DagStudio {
+  constructor(apiClient, signalR, autoDetector) {
+    this._api = apiClient;
+    this._signalR = signalR;
+    this._autoDetector = autoDetector;
+    this._esm = new ExecutionStateManager();
+    this._layout = new DagLayout();
+    this._renderer = null;
+    this._dag = null;
+    this._active = false;
+    this._lockCheckInterval = null;
+    this._elapsedInterval = null;
+
+    // DOM refs
+    this._runBtn = document.getElementById('dagRunBtn');
+    this._cancelBtn = document.getElementById('dagCancelBtn');
+    this._refreshBtn = document.getElementById('dagRefreshBtn');
+    this._unlockBtn = document.getElementById('dagUnlockBtn');
+    this._statusDot = document.getElementById('dagStatusDot');
+    this._statusText = document.getElementById('dagStatusText');
+    this._graphPanel = document.getElementById('dagGraphPanel');
+    this._historyContainer = document.getElementById('dagHistoryContainer');
+    this._nodeDetail = document.getElementById('dagNodeDetail');
+    this._ganttContainer = document.getElementById('dagGanttContainer');
+
+    // Bind event handlers
+    this._onTelemetryEvent = this._onTelemetryEvent.bind(this);
+    this._onLogEntry = this._onLogEntry.bind(this);
+    this._onRunClick = this._onRunClick.bind(this);
+    this._onCancelClick = this._onCancelClick.bind(this);
+    this._onRefreshClick = this._onRefreshClick.bind(this);
+    this._onUnlockClick = this._onUnlockClick.bind(this);
+
+    // ESM callbacks
+    this._esm.onNodeStateChanged = this._onNodeStateChanged.bind(this);
+    this._esm.onExecutionStateChanged = this._onExecutionStateChanged.bind(this);
+    this._esm.onExecutionComplete = this._onExecutionComplete.bind(this);
+
+    // Button listeners
+    this._runBtn.addEventListener('click', this._onRunClick);
+    this._cancelBtn.addEventListener('click', this._onCancelClick);
+    this._refreshBtn.addEventListener('click', this._onRefreshClick);
+    this._unlockBtn.addEventListener('click', this._onUnlockClick);
+  }
+
+  async activate() {
+    if (this._active) return;
+    this._active = true;
+    // Lazy init renderer
+    if (!this._renderer) {
+      this._renderer = new DagCanvasRenderer(this._graphPanel);
+      this._renderer.onNodeSelected = this._onNodeSelected.bind(this);
+    } else {
+      this._renderer.resumeRendering();
+    }
+    // Subscribe to SignalR telemetry topic
+    this._signalR.on('telemetry', this._onTelemetryEvent);
+    this._signalR.subscribeTopic('telemetry');
+    // Load DAG
+    await this._loadDag();
+    // Load history
+    await this._loadHistory();
+    // Start lock check polling
+    this._startLockCheck();
+  }
+
+  deactivate() {
+    if (!this._active) return;
+    this._active = false;
+    // Unsubscribe telemetry
+    this._signalR.off('telemetry', this._onTelemetryEvent);
+    this._signalR.unsubscribeTopic('telemetry');
+    // Pause rendering
+    if (this._renderer) this._renderer.pauseRendering();
+    // Stop intervals
+    this._stopLockCheck();
+    this._stopElapsedTimer();
+  }
+
+  async _loadDag() {
+    try {
+      var dag = await this._api.getLatestDag();
+      if (!dag || !dag.nodes) {
+        this._renderEmpty('No DAG found. Ensure FLT is configured.');
+        return;
+      }
+      this._dag = dag;
+      this._esm.setDag(dag);
+      // Layout
+      var layoutResult = this._layout.layout(dag.nodes, dag.edges || []);
+      this._renderer.setData(layoutResult.nodes, layoutResult.edges);
+      this._renderer.fitToScreen();
+      this._renderControls('idle');
+      this._renderStatus('idle');
+    } catch (err) {
+      console.error('[DagStudio] Failed to load DAG:', err);
+      this._renderEmpty('Failed to load DAG: ' + (err.message || err));
+    }
+  }
+
+  async _runDag() {
+    try {
+      var iterationId = crypto.randomUUID();
+      this._runBtn.disabled = true;
+      var result = await this._api.runDag(iterationId);
+      if (result === null) {
+        this._runBtn.disabled = false;
+        return;
+      }
+      this._esm.startTracking(iterationId);
+      this._renderControls('running');
+      this._renderStatus('running');
+      this._startElapsedTimer();
+    } catch (err) {
+      console.error('[DagStudio] Failed to run DAG:', err);
+      this._runBtn.disabled = false;
+      this._renderStatus('error', 'Run failed: ' + (err.message || err));
+    }
+  }
+
+  async _cancelDag() {
+    var iterationId = this._esm.activeIterationId;
+    if (!iterationId) return;
+    try {
+      this._cancelBtn.disabled = true;
+      await this._api.cancelDag(iterationId);
+      this._renderStatus('cancelling');
+    } catch (err) {
+      console.error('[DagStudio] Failed to cancel DAG:', err);
+      this._cancelBtn.disabled = false;
+    }
+  }
+
+  async _refreshDag() {
+    this._esm.reset();
+    this._renderControls('idle');
+    this._renderStatus('idle');
+    this._stopElapsedTimer();
+    await this._loadDag();
+    await this._loadHistory();
+  }
+
+  async _forceUnlock() {
+    try {
+      var locked = await this._api.getLockedExecution();
+      if (!locked) {
+        this._unlockBtn.style.display = 'none';
+        return;
+      }
+      var lockedId = locked.iterationId || locked;
+      await this._api.forceUnlockDag(lockedId);
+      this._unlockBtn.style.display = 'none';
+      this._renderStatus('idle', 'DAG unlocked');
+    } catch (err) {
+      console.error('[DagStudio] Failed to unlock DAG:', err);
+    }
+  }
+
+  async _loadHistory() {
+    try {
+      var result = await this._api.listDagExecutions({ historyCount: 20 });
+      var iterations = result.iterations || [];
+      this._renderHistory(iterations);
+    } catch (err) {
+      console.error('[DagStudio] Failed to load history:', err);
+      this._historyContainer.innerHTML = '<div class="dag-empty-hint">Failed to load history</div>';
+    }
+  }
+
+  async _loadHistoricalExecution(iterationId) {
+    try {
+      var metrics = await this._api.getDagExecMetrics(iterationId);
+      this._esm.loadHistorical(metrics);
+      // Update renderer with node states
+      for (var entry of this._esm.nodeStates) {
+        this._renderer.updateNodeState(entry[0], entry[1].status);
+      }
+      this._renderControls(this._esm.status);
+      this._renderStatus(this._esm.status);
+    } catch (err) {
+      console.error('[DagStudio] Failed to load execution:', err);
+    }
+  }
+
+  _startLockCheck() {
+    this._stopLockCheck();
+    this._checkLockState();
+    this._lockCheckInterval = setInterval(this._checkLockState.bind(this), 30000);
+  }
+
+  _stopLockCheck() {
+    if (this._lockCheckInterval) {
+      clearInterval(this._lockCheckInterval);
+      this._lockCheckInterval = null;
+    }
+  }
+
+  async _checkLockState() {
+    try {
+      var locked = await this._api.getLockedExecution();
+      this._unlockBtn.style.display = locked ? '' : 'none';
+    } catch (err) {
+      // Silently ignore lock check failures
+    }
+  }
+
+  _startElapsedTimer() {
+    this._stopElapsedTimer();
+    var startedAt = this._esm.startedAt || Date.now();
+    var self = this;
+    this._elapsedInterval = setInterval(function() {
+      var elapsed = Date.now() - startedAt;
+      var secs = (elapsed / 1000).toFixed(1);
+      self._statusText.textContent = 'Running ' + secs + 's';
+    }, 100);
+  }
+
+  _stopElapsedTimer() {
+    if (this._elapsedInterval) {
+      clearInterval(this._elapsedInterval);
+      this._elapsedInterval = null;
+    }
+  }
+
+  // --- Event handlers ---
+
+  _onTelemetryEvent(event) {
+    if (!this._esm.activeIterationId) return;
+    this._esm.processTelemetry(event);
+  }
+
+  _onLogEntry(entry) {
+    if (!this._esm.activeIterationId) return;
+    this._autoDetector.processLog(entry);
+    // Check if autoDetector has an active execution matching ours
+    var exec = this._autoDetector.detectedExecutions.get(this._esm.activeIterationId);
+    if (exec) {
+      this._esm.processAutoDetectorUpdate(exec);
+    }
+  }
+
+  _onNodeSelected(nodeId) {
+    this._renderNodeDetail(nodeId);
+    if (this._renderer) this._renderer.highlightNode(nodeId);
+  }
+
+  _onExecutionStateChanged(status) {
+    this._renderControls(status);
+    this._renderStatus(status);
+    if (status !== 'running') {
+      this._stopElapsedTimer();
+    }
+  }
+
+  _onNodeStateChanged(nodeId, state) {
+    if (this._renderer) this._renderer.updateNodeState(nodeId, state.status);
+  }
+
+  _onExecutionComplete(iterationId, finalStatus) {
+    this._stopElapsedTimer();
+    this._renderControls(finalStatus);
+    this._renderStatus(finalStatus);
+    this._loadHistory();
+  }
+
+  _onRunClick() { this._runDag(); }
+  _onCancelClick() { this._cancelDag(); }
+  _onRefreshClick() { this._refreshDag(); }
+  _onUnlockClick() { this._forceUnlock(); }
+
+  // --- UI rendering ---
+
+  _renderControls(status) {
+    var isIdle = status === 'idle' || status === 'completed' || status === 'failed' || status === 'cancelled';
+    var isRunning = status === 'running';
+    this._runBtn.style.display = isIdle ? '' : 'none';
+    this._runBtn.disabled = false;
+    this._cancelBtn.style.display = isRunning ? '' : 'none';
+    this._cancelBtn.disabled = false;
+    this._refreshBtn.disabled = isRunning;
+  }
+
+  _renderStatus(status, message) {
+    var dot = this._statusDot;
+    // Remove all state classes
+    dot.className = 'dag-status-dot';
+    if (status === 'running') {
+      dot.classList.add('running');
+      if (!message) this._statusText.textContent = 'Running';
+    } else if (status === 'completed') {
+      dot.classList.add('completed');
+      this._statusText.textContent = message || 'Completed';
+    } else if (status === 'failed') {
+      dot.classList.add('failed');
+      this._statusText.textContent = message || 'Failed';
+    } else if (status === 'cancelled' || status === 'cancelling') {
+      dot.classList.add('cancelled');
+      this._statusText.textContent = message || (status === 'cancelling' ? 'Cancelling...' : 'Cancelled');
+    } else if (status === 'error') {
+      dot.classList.add('failed');
+      this._statusText.textContent = message || 'Error';
+    } else {
+      this._statusText.textContent = message || 'Idle';
+    }
+  }
+
+  _renderEmpty(message) {
+    if (this._renderer && this._renderer._nodesLayer) {
+      this._renderer._nodesLayer.innerHTML = '<div class="dag-empty-hint">' + message + '</div>';
+    }
+  }
+
+  _renderHistory(iterations) {
+    if (!iterations || iterations.length === 0) {
+      this._historyContainer.innerHTML = '<div class="dag-empty-hint">No execution history</div>';
+      return;
+    }
+    var html = '<table class="dag-history-table">';
+    html += '<tr><th>Iteration</th><th>Status</th><th>Time</th></tr>';
+    for (var i = 0; i < iterations.length; i++) {
+      var it = iterations[i];
+      var id = it.iterationId || it;
+      var shortId = (typeof id === 'string' && id.length > 8) ? id.substring(0, 8) : id;
+      var status = it.status || '\u2014';
+      var time = it.startTime ? new Date(it.startTime).toLocaleString() : '\u2014';
+      html += '<tr class="dag-history-row" data-iteration="' + id + '">';
+      html += '<td title="' + id + '">' + shortId + '</td>';
+      html += '<td>' + status + '</td>';
+      html += '<td>' + time + '</td>';
+      html += '</tr>';
+    }
+    html += '</table>';
+    this._historyContainer.innerHTML = html;
+    // Bind click handlers
+    var self = this;
+    var rows = this._historyContainer.querySelectorAll('.dag-history-row');
+    for (var j = 0; j < rows.length; j++) {
+      rows[j].addEventListener('click', function() {
+        var iterationId = this.getAttribute('data-iteration');
+        self._loadHistoricalExecution(iterationId);
+      });
+    }
+  }
+
+  _renderNodeDetail(nodeId) {
+    if (!nodeId || !this._dag) {
+      this._nodeDetail.classList.remove('open');
+      return;
+    }
+    var node = null;
+    for (var i = 0; i < this._dag.nodes.length; i++) {
+      if (this._dag.nodes[i].nodeId === nodeId) {
+        node = this._dag.nodes[i];
+        break;
+      }
+    }
+    if (!node) {
+      this._nodeDetail.classList.remove('open');
+      return;
+    }
+    var state = this._esm.nodeStates.get(nodeId);
+    var statusText = state ? state.status : 'pending';
+    var html = '<div class="dag-detail-header">';
+    html += '<span class="dag-detail-title">' + (node.name || node.nodeId) + '</span>';
+    html += '<button class="dag-detail-close" id="dagDetailClose">&#10005;</button>';
+    html += '</div>';
+    html += '<div class="dag-detail-body">';
+    html += '<div class="dag-detail-row"><span class="dag-detail-label">Status</span><span class="dag-status-dot ' + statusText + '"></span> ' + statusText + '</div>';
+    html += '<div class="dag-detail-row"><span class="dag-detail-label">Type</span>' + (node.kind || node.type || '\u2014') + '</div>';
+    html += '<div class="dag-detail-row"><span class="dag-detail-label">Node ID</span><span title="' + nodeId + '">' + nodeId.substring(0, 12) + '...</span></div>';
+    if (state && state.startedAt) {
+      html += '<div class="dag-detail-row"><span class="dag-detail-label">Started</span>' + new Date(state.startedAt).toLocaleTimeString() + '</div>';
+    }
+    if (state && state.endedAt) {
+      html += '<div class="dag-detail-row"><span class="dag-detail-label">Ended</span>' + new Date(state.endedAt).toLocaleTimeString() + '</div>';
+      html += '<div class="dag-detail-row"><span class="dag-detail-label">Duration</span>' + ((state.endedAt - state.startedAt) / 1000).toFixed(1) + 's</div>';
+    }
+    if (state && state.errorCode) {
+      html += '<div class="dag-detail-row"><span class="dag-detail-label">Error</span><span class="error-text">' + state.errorCode + '</span></div>';
+    }
+    html += '</div>';
+    this._nodeDetail.innerHTML = html;
+    this._nodeDetail.classList.add('open');
+    // Close button
+    var self = this;
+    var closeBtn = document.getElementById('dagDetailClose');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        self._nodeDetail.classList.remove('open');
+        if (self._renderer) self._renderer.clearHighlight();
+      });
+    }
+  }
+}

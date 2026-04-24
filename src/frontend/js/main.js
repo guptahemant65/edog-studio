@@ -799,7 +799,10 @@ class EdogLogViewer {
         }
       }
     } else if (viewId === 'dag') {
-      if (this.dagStudio) this.dagStudio.activate();
+      if (!this.dagStudio) {
+        this.dagStudio = new DagStudio(this.apiClient, this.ws, this.autoDetector);
+      }
+      this.dagStudio.activate();
       if (this.controlPanel) this.controlPanel.deactivate();
     } else {
       if (this.dagStudio) this.dagStudio.deactivate();
