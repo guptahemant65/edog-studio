@@ -84,6 +84,7 @@ JS_MODULES = [
     "js/error-intel.js",
     "js/error-timeline.js",
     "js/anomaly.js",
+    "js/dag-layout.js",
     "js/control-panel.js",
     "js/topbar.js",
     "js/deploy-flow.js",
