@@ -795,6 +795,7 @@ class EdogLogViewer {
     if (viewId === 'runtime') {
       // RuntimeView handles its own tab switching
       this.runtimeView.switchTab(this.runtimeView._activeTab);
+      if (this.apiPlayground) this.apiPlayground.deactivate();
 
       // Sync sidebar sub-tab highlight with runtime's active tab
       if (this.sidebar.setActiveSubTab) {
@@ -823,9 +824,22 @@ class EdogLogViewer {
         this.dagStudio = new DagStudio(this.apiClient, this.ws, this.autoDetector);
       }
       this.dagStudio.activate();
+      if (this.apiPlayground) this.apiPlayground.deactivate();
+      if (this.controlPanel) this.controlPanel.deactivate();
+    } else if (viewId === 'api') {
+      if (!this.apiPlayground) {
+        this.apiPlayground = new ApiPlayground(
+          document.getElementById('view-api'),
+          this.apiClient,
+          this.state
+        );
+      }
+      this.apiPlayground.activate();
+      if (this.dagStudio) this.dagStudio.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
     } else {
       if (this.dagStudio) this.dagStudio.deactivate();
+      if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
     }
   }
