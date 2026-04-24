@@ -35,7 +35,7 @@ edog-feature-overrides.json
 .edog-lock
 
 # Config with secrets
-# edog-config.json is gitignored — use config/edog-config.template.json
+edog-config.json
 
 # Build output
 src/frontend/edog-studio.html
