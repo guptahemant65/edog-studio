@@ -44,6 +44,7 @@ CSS_MODULES = [
     "css/notebook.css",
     "css/environment.css",
     "css/token-inspector.css",
+    "css/infra-wizard.css",
     "css/runtime.css",
     "css/logs-enhancements.css",
     "css/tab-telemetry.css",
