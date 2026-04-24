@@ -1578,3 +1578,6 @@
   color: var(--text-muted);
   margin-top: var(--space-1);
 }
+
+/* Notebook dot in tree */
+.ws-tree-dot.notebook { background: var(--status-info, #5b9bd5); }

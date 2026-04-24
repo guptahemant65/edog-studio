@@ -192,6 +192,7 @@ class WorkspaceExplorer {
       items.push({ label: 'Save as Favorite', action: () => this._ctxSaveFavorite() });
     } else if (nodeData.isWorkspace) {
       items.push({ label: 'Create Lakehouse', action: () => this._ctxCreateLakehouse() });
+      items.push({ label: 'Create Notebook', action: () => this._ctxCreateNotebook() });
       items.push({ sep: true });
       items.push({ label: 'Rename', action: () => this._ctxRename() });
       items.push({ label: 'Delete', cls: 'danger', action: () => this._ctxDelete() });
@@ -704,6 +705,113 @@ class WorkspaceExplorer {
       }
     };
     const onBlur = () => {
+      if (!committed) {
+        committed = true;
+        commit();
+      }
+    };
+
+    input.addEventListener('keydown', onKey);
+    input.addEventListener('blur', onBlur);
+  }
+
+  /** Context menu action: create notebook inside selected workspace. */
+  async _ctxCreateNotebook() {
+    var t = this._ctxTarget;
+    if (!t || !t.isWorkspace) return;
+
+    // Expand workspace so children are visible
+    if (!this._expanded.has(t.workspace.id)) {
+      await this._toggleWorkspace(t.workspace);
+    }
+
+    if (!this._treeEl) return;
+    // Find insertion point: after workspace's last child in tree
+    var allRows = Array.from(this._treeEl.querySelectorAll('.ws-tree-item'));
+    var insertAfter = null;
+    var foundWs = false;
+    for (var i = 0; i < allRows.length; i++) {
+      var row = allRows[i];
+      var nameEl = row.querySelector('.ws-tree-name');
+      if (nameEl && nameEl.textContent === t.workspace.displayName && !foundWs) {
+        foundWs = true;
+        insertAfter = row;
+        continue;
+      }
+      if (foundWs) {
+        var pl = parseInt(row.style.paddingLeft, 10) || 0;
+        if (pl > 12) {
+          insertAfter = row;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Avoid duplicates
+    if (this._treeEl.querySelector('.ws-create-row')) return;
+
+    var createRow = document.createElement('div');
+    createRow.className = 'ws-create-row';
+    createRow.style.paddingLeft = '28px';
+
+    var dot = document.createElement('span');
+    dot.className = 'ws-tree-dot notebook';
+    createRow.appendChild(dot);
+
+    var input = document.createElement('input');
+    input.className = 'ws-create-input';
+    input.type = 'text';
+    input.placeholder = 'New notebook name';
+    input.setAttribute('aria-label', 'New notebook name');
+    createRow.appendChild(input);
+
+    if (insertAfter && insertAfter.nextSibling) {
+      this._treeEl.insertBefore(createRow, insertAfter.nextSibling);
+    } else {
+      this._treeEl.appendChild(createRow);
+    }
+    input.focus();
+
+    var self = this;
+    var committed = false;
+    var commit = function() {
+      var name = input.value.trim();
+      cleanup();
+      if (!name) return;
+      self._api.createNotebook(t.workspace.id, name).then(function() {
+        self._toast('Created notebook "' + name + '"', 'success');
+        // Refresh children
+        delete self._children[t.workspace.id];
+        self._expanded.add(t.workspace.id);
+        return self._toggleWorkspace(t.workspace).then(function() {
+          if (!self._expanded.has(t.workspace.id)) {
+            return self._toggleWorkspace(t.workspace);
+          }
+        });
+      }).catch(function(err) {
+        self._toast('Create failed: ' + err.message, 'error');
+      });
+    };
+
+    var cleanup = function() {
+      if (createRow.parentNode) createRow.remove();
+      input.removeEventListener('keydown', onKey);
+      input.removeEventListener('blur', onBlur);
+    };
+
+    var onKey = function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        committed = true;
+        commit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        committed = true;
+        cleanup();
+      }
+    };
+    var onBlur = function() {
       if (!committed) {
         committed = true;
         commit();
