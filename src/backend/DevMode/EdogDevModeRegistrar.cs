@@ -46,9 +46,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterCatalogInterceptor();
                 RegisterFltOpsInterceptors();
 
-                // Note: DAG execution hook (EdogDagExecutionHook) must be registered by FLT team
-                // in DagExecutionHandlerV2's hook list. NodeExecutor wrapping requires FLT to
-                // provide factory or DI registration. See gaps-roadmap.md Gap 2.
+                // Note: DAG execution hook (EdogDagExecutionHook) needs a patch to
+                // DagExecutionHandlerV2 to inject into the hook list. NodeExecutor
+                // wrapping needs a patch at the creation point. See gaps-roadmap.md Gap 2.
 
                 // Nexus aggregator — consumes topic events, emits dependency graph snapshots
                 StartNexusAggregator();

@@ -3,11 +3,11 @@
 // </copyright>
 
 // REGISTRATION NOTE:
-// EdogDagExecutionHook must be registered by FLT in DagExecutionHandlerV2's hook list.
-// EdogNodeExecutorWrapper requires FLT to provide INodeExecutorFactory or
-// change NodeExecutor creation to go through DI.
+// EdogDagExecutionHook needs a patch to DagExecutionHandlerV2's hook list
+// (same injection pattern as Program.cs / WorkloadApp.cs patches in edog.py).
+// EdogNodeExecutorWrapper requires patching NodeExecutor creation to go through DI.
 // The "dag" topic must be registered in EdogTopicRouter.Initialize().
-// See gaps-roadmap.md Gap 2 for coordination details.
+// See gaps-roadmap.md Gap 2 for implementation details.
 
 #nullable disable
 #pragma warning disable // DevMode-only file — suppress all warnings
