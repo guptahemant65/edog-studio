@@ -189,6 +189,9 @@ window.onerror = function(msg, src, line, col, err) {
         <!-- Tab content containers -->
         <div id="rt-content" class="rt-content">
           <div id="rt-tab-logs" class="rt-tab-content active">
+            <!-- Execution Summary (shown when filtering by execution ID) -->
+            <div id="exec-summary-data" class="exec-summary" style="display:none"></div>
+            <div id="exec-summary-empty" style="display:none"></div>
             <!-- Breakpoints bar -->
             <div id="breakpoints-bar" class="breakpoints-bar"></div>
             <!-- Logs toolbar (scoped to logs view) -->
