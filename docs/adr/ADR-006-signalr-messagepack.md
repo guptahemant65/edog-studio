@@ -3,7 +3,7 @@
 ## Status: ACCEPTED (CEO decision, 2026-04-09)
 
 ## Context
-EDOG Playground streams 11 event types from C# interceptors to browser.
+EDOG Playground streams 16 event types from C# interceptors to browser.
 1000+ events/sec at peak. Need: topic subscription, backpressure, reconnection.
 
 ## Options Evaluated
@@ -39,7 +39,7 @@ EDOG Playground streams 11 event types from C# interceptors to browser.
 ## Consequences
 - +1 NuGet package (MessagePack protocol) — DEFERRED: version conflict with FLT's MessagePack.Annotations
 - JS SignalR client adds ~47KB to HTML (acceptable within 800KB budget)
-- All 11 sub-views use same SignalR connection with streaming per topic
+- All 12 runtime sub-views use same SignalR connection with streaming per topic
 - Replaces current raw WebSocket implementation in EdogLogServer
 
 ## Addendum (2026-04-12): JSON Protocol + Streaming Architecture
