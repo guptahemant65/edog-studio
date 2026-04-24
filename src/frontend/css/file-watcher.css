@@ -1,0 +1,99 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   File Change Detection — Notification Bar
+   Renders in #file-change-bar within .notification-zone.
+   Follows smart-context-bar pattern. Amber accent for "stale code" warning.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.file-change-bar {
+  display: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  animation: slideDown 0.3s ease;
+}
+
+.file-change-bar.active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Left: warning indicator */
+.file-change-bar .fcb-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.10);
+  color: oklch(0.75 0.15 75);
+  white-space: nowrap;
+}
+
+/* File count label */
+.file-change-bar .fcb-label {
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* File list (comma-separated, truncated) */
+.file-change-bar .fcb-files {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+  flex-shrink: 1;
+}
+
+/* Spacer to push buttons right */
+.file-change-bar .fcb-spacer {
+  flex: 1;
+}
+
+/* Re-deploy button */
+.file-change-bar .fcb-redeploy {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  white-space: nowrap;
+}
+
+.file-change-bar .fcb-redeploy:hover {
+  opacity: 0.85;
+}
+
+/* Dismiss button */
+.file-change-bar .fcb-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  font-family: var(--font-body);
+  transition: color var(--transition-fast);
+}
+
+.file-change-bar .fcb-dismiss:hover {
+  color: var(--text);
+}
+
+/* slideDown animation — reuse if already defined, else define */
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -35,6 +35,7 @@ CSS_MODULES = [
     "css/detail.css",
     "css/summary.css",
     "css/smart.css",
+    "css/file-watcher.css",
     "css/control.css",
     "css/command-palette.css",
     "css/dag.css",
