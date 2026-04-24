@@ -55,7 +55,7 @@ A finite, closed set of string constants representing the 9 canonical dependency
 | `fabric-api` | `http` | `*/workspaces/*`, `*/lakehouses/*` (`spec.md:98`) |
 | `platform-api` | `http` | `*pbidedicated*`, `*powerbi-df*` (`spec.md:97`) |
 | `auth` | `http`, `token` | `*/generatemwctoken`, `*/token` (`spec.md:96`) |
-| `capacity` | `http`, `capacity` topic | `*/capacities/*` (`spec.md:95`) |
+| `capacity` | `http` | `*/capacities/*` (`spec.md:95`) or HTTP 430 status code from any URL. **Note:** the `capacity:500` topic buffer in `EdogTopicRouter.cs:39` exists but nothing publishes to it in V1 — it is reserved for future use. V1 capacity signals come exclusively from HTTP 430 ("Spark Job Capacity Throttling") responses flowing through the `http` topic. |
 | `cache` | `cache` | Cache interceptor events (`EdogCacheInterceptor.cs:46-56`) |
 | `retry-system` | `retry` | Retry interceptor events (`EdogRetryInterceptor.cs:186-200`) |
 | `filesystem` | `fileop` | File system interceptor events (`EdogFileSystemInterceptor.cs:252-262`) |
@@ -156,6 +156,41 @@ public sealed class NexusNormalizedEvent
     /// <summary>True if the event represents an error condition.</summary>
     public bool IsError { get; set; }
 
+    /// <summary>
+    /// True if the event represents a throttling response (HTTP 429 or 430).
+    /// Enables the aggregator to distinguish throttle storms from other errors.
+    /// </summary>
+    public bool IsThrottled { get; set; }
+
+    /// <summary>
+    /// Throttle classification: "capacity-430" for GTS capacity throttling (HTTP 430),
+    /// "rate-limit-429" for standard rate limiting (HTTP 429), or null if not throttled.
+    /// </summary>
+    public string ThrottleType { get; set; }
+
+    /// <summary>
+    /// GTS operation phase for spark-gts events: "submit" (POST/PUT to /transforms/),
+    /// "polling" (GET /transforms/{id}), "result-fetch" (GET /transforms/{id}/result),
+    /// or null for non-GTS events. Enables the aggregator to track polling count per
+    /// transform, average polling interval, and total polling duration.
+    /// </summary>
+    public string OperationPhase { get; set; }
+
+    /// <summary>
+    /// FLT error code extracted from HTTP response body (e.g., "SPARK_SESSION_ACQUISITION_FAILED",
+    /// "MV_NOT_FOUND", "CONCURRENT_REFRESH"). Null if no error or error code not parseable.
+    /// See <see cref="NexusErrorClassification"/> for the known error taxonomy.
+    /// </summary>
+    public string ErrorCode { get; set; }
+
+    /// <summary>
+    /// Severity classification of the error: "user" (no retry, user must fix),
+    /// "system" (retry up to 3x, engineering attention), "transient" (exponential backoff,
+    /// self-healing expected), or null if no error. Derived from ErrorCode via
+    /// <see cref="NexusErrorClassification.Classify"/>.
+    /// </summary>
+    public string ErrorSeverity { get; set; }
+
     /// <summary>Retry attempt count from retry enrichment. 0 if no retry.</summary>
     public int RetryCount { get; set; }
 
@@ -181,6 +216,11 @@ public sealed class NexusNormalizedEvent
 | `StatusCode` | HTTP interceptor | `statusCode` | `EdogHttpPipelineHandler.cs:63,71` |
 | `LatencyMs` | HTTP interceptor | `durationMs` | `EdogHttpPipelineHandler.cs:72` |
 | `IsError` | Derived | `statusCode >= 400` or spark `event == "Error"` | `EdogHttpPipelineHandler.cs:63`, `EdogSparkSessionInterceptor.cs:70` |
+| `IsThrottled` | Derived | `statusCode == 429 \|\| statusCode == 430` | `EdogHttpPipelineHandler.cs:63,71` |
+| `ThrottleType` | Derived | `statusCode == 430` → `"capacity-430"`, `statusCode == 429` → `"rate-limit-429"`, else `null` | `EdogHttpPipelineHandler.cs:63,71` |
+| `OperationPhase` | Derived by classifier | POST/PUT to `/transforms/` → `"submit"`, GET `/transforms/{id}` → `"polling"`, GET `/transforms/{id}/result` → `"result-fetch"` | `EdogHttpPipelineHandler.cs:50,69` |
+| `ErrorCode` | HTTP interceptor (body) | Extracted from `responseBodyPreview` via regex match for FLT error code prefixes | `EdogHttpPipelineHandler.cs:65,75` |
+| `ErrorSeverity` | Derived | `NexusErrorClassification.Classify(errorCode)` | — (computed from `ErrorCode`) |
 | `RetryCount` | Retry interceptor | `retryAttempt` | `EdogRetryInterceptor.cs:134,190` |
 | `CorrelationId` | HTTP interceptor | `correlationId` | `EdogHttpPipelineHandler.cs:53,77` |
 | `EndpointHint` | HTTP URL (redacted) or fileop path | `url` / `path` | `EdogHttpPipelineHandler.cs:51,70`, `EdogFileSystemInterceptor.cs:254` |
@@ -191,7 +231,12 @@ public sealed class NexusNormalizedEvent
 - **Token events without latency**: `EdogTokenInterceptor` does not measure its own latency — it piggybacks on the HTTP call that carries the token. Set `LatencyMs = 0` for pure token events.
 - **Spark error events**: `event == "Error"` has `durationMs` (time-to-failure) and `error` message. Set `IsError = true`, map `LatencyMs` from `durationMs`.
 - **Cache events**: no HTTP method/status. Set `Method = null`, `StatusCode = 0`. Latency comes from `durationMs` (`EdogCacheInterceptor.cs:54`).
-- **Null fields**: all string fields nullable. Consumers must tolerate `null` for `Method`, `CorrelationId`, `EndpointHint`, `IterationId`.
+- **Null fields**: all string fields nullable. Consumers must tolerate `null` for `Method`, `CorrelationId`, `EndpointHint`, `IterationId`, `ThrottleType`, `OperationPhase`, `ErrorCode`, `ErrorSeverity`.
+- **HTTP 430 capacity throttling**: when `StatusCode == 430`, the classifier reclassifies the event as `capacity` (regardless of URL match), sets `IsThrottled = true`, `ThrottleType = "capacity-430"`. The `capacity` topic buffer (`EdogTopicRouter.cs:39`) is empty in V1 — all capacity signals come from HTTP 430 responses.
+- **HTTP 429 rate limiting**: when `StatusCode == 429`, `IsThrottled = true`, `ThrottleType = "rate-limit-429"`. The dependency ID is NOT overridden — the event retains whatever dependency the URL matched (rate limiting can happen on any dependency).
+- **GTS polling phases**: for `spark-gts` events, `OperationPhase` distinguishes submit/polling/result-fetch. Enables the aggregator to track: polling count per transform, average polling interval, total polling duration. Non-GTS events have `OperationPhase = null`.
+- **Error code extraction**: `ErrorCode` is best-effort — extracted from `responseBodyPreview` (`EdogHttpPipelineHandler.cs:75`) only when `StatusCode >= 400`. If the response body doesn't contain a recognizable FLT error code pattern (prefixes: `FLT_`, `FMLV_`, `MLV_`, or known bare codes like `MV_NOT_FOUND`), `ErrorCode = null`.
+- **Error severity mapping**: `ErrorSeverity` is derived from `ErrorCode` via `NexusErrorClassification.Classify()`. Unknown error codes map to `null` severity (rely on HTTP status alone).
 
 ### 2.6 Interactions
 | Producer | Consumer |
@@ -252,6 +297,114 @@ public static class NexusHealthStatus
 
 ### 3.7 Priority
 **P0** — required by `NexusEdgeStats` and `NexusSnapshot`.
+
+---
+
+## 3A. NexusErrorClassification
+
+### 3A.1 Trigger
+Referenced at classification time by `EdogNexusClassifier` when an HTTP event has `statusCode >= 400` and a recognizable FLT error code is extracted from the `responseBodyPreview` field.
+
+### 3A.2 Expected behavior
+A static utility class that maps FLT error code strings to severity classifications. FLT uses 25+ classified error codes with three prefixes (`FLT_`, `FMLV_`, `MLV_`) plus bare codes (e.g., `MV_NOT_FOUND`). Each error has a severity that determines retry behavior:
+
+| Severity | Meaning | Retry behavior |
+|---|---|---|
+| `user` | Configuration error, permissions, missing artifacts — user must fix | No retry |
+| `system` | Internal failure, data corruption — engineering attention needed | Retry up to 3x |
+| `transient` | Temporary capacity/rate issue — self-healing expected | Exponential backoff |
+
+**Known error codes (from FLT codebase research):**
+
+| Error Code | Severity | Description |
+|---|---|---|
+| `MV_NOT_FOUND` | `user` | MLV doesn't exist |
+| `SOURCE_ENTITIES_UNDEFINED` | `user` | Missing source definitions |
+| `CONCURRENT_REFRESH` | `user` | Refresh already running |
+| `ACCESS_DENIED` | `user` | Permissions issue |
+| `SOURCE_ENTITIES_CORRUPTED` | `system` | Source data corruption |
+| `SOURCE_ENTITIES_MISSING` | `system` | Can't find source entities |
+| `SYSTEM_ERROR` | `system` | Internal failure |
+| `MLV_RESULTCODE_NOT_FOUND` | `system` | Result extraction failed |
+| `SPARK_SESSION_ACQUISITION_FAILED` | `transient` | GTS/TJS session issue |
+| `TOO_MANY_REQUESTS` | `transient` | Rate limiting (HTTP 429) |
+| `SPARK_JOB_CAPACITY_THROTTLING` | `transient` | Capacity throttling (HTTP 430) |
+
+### 3A.3 Technical mechanism
+
+```csharp
+/// <summary>
+/// Maps FLT error codes to severity classifications.
+/// Used by EdogNexusClassifier to populate ErrorSeverity on NexusNormalizedEvent.
+/// </summary>
+public static class NexusErrorClassification
+{
+    // ── Severity constants ──
+    public const string User      = "user";
+    public const string System    = "system";
+    public const string Transient = "transient";
+
+    // ── Known error code → severity mappings ──
+    private static readonly Dictionary<string, string> KnownErrors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // User errors — no retry, user must fix
+        ["MV_NOT_FOUND"]               = User,
+        ["SOURCE_ENTITIES_UNDEFINED"]   = User,
+        ["CONCURRENT_REFRESH"]          = User,
+        ["ACCESS_DENIED"]               = User,
+
+        // System errors — retry up to 3x, engineering attention
+        ["SOURCE_ENTITIES_CORRUPTED"]   = System,
+        ["SOURCE_ENTITIES_MISSING"]     = System,
+        ["SYSTEM_ERROR"]                = System,
+        ["MLV_RESULTCODE_NOT_FOUND"]    = System,
+
+        // Transient errors — exponential backoff, self-healing
+        ["SPARK_SESSION_ACQUISITION_FAILED"] = Transient,
+        ["TOO_MANY_REQUESTS"]                = Transient,
+        ["SPARK_JOB_CAPACITY_THROTTLING"]    = Transient,
+    };
+
+    /// <summary>
+    /// Regex to extract FLT error codes from response body previews.
+    /// Matches prefixed codes (FLT_xxx, FMLV_xxx, MLV_xxx) and known bare codes.
+    /// </summary>
+    internal static readonly Regex ErrorCodePattern = new(
+        @"\b((?:FLT|FMLV|MLV)_[A-Z_]+|MV_NOT_FOUND|SOURCE_ENTITIES_\w+|CONCURRENT_REFRESH|ACCESS_DENIED|SYSTEM_ERROR|SPARK_SESSION_ACQUISITION_FAILED|SPARK_JOB_CAPACITY_THROTTLING|TOO_MANY_REQUESTS|MLV_RESULTCODE_NOT_FOUND)\b",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns the severity for a known error code, or null for unrecognized codes.
+    /// </summary>
+    public static string Classify(string errorCode)
+    {
+        if (string.IsNullOrEmpty(errorCode)) return null;
+        return KnownErrors.TryGetValue(errorCode, out var severity) ? severity : null;
+    }
+}
+```
+
+### 3A.4 Source code path
+- FLT error taxonomy: discovered via codebase research across FLT service layer error handling
+- HTTP response body preview: `EdogHttpPipelineHandler.cs:65,75` (`responseBodyPreview` field, first 4KB of response body)
+- Error code prefixes: `FLT_`, `FMLV_`, `MLV_` are the three namespaces used across the FLT error hierarchy
+
+### 3A.5 Edge cases
+- **Unrecognized error code**: `Classify()` returns `null` — the classifier falls back to HTTP status code alone for `IsError` determination.
+- **Multiple error codes in body**: the regex extracts the **first** match. FLT responses typically have a single primary error code.
+- **Body preview truncation**: `CaptureBodyPreview` captures first 4KB (`EdogHttpPipelineHandler.cs:195`). Error codes appear early in JSON error responses, so truncation rarely affects extraction.
+- **Future error codes**: new codes with `FLT_`/`FMLV_`/`MLV_` prefixes are captured by the regex but return `null` severity until added to `KnownErrors`. This is safe — the classifier still sets `IsError = true` based on HTTP status.
+- **Case insensitivity**: `KnownErrors` uses `StringComparer.OrdinalIgnoreCase` to handle potential casing variations in response bodies.
+
+### 3A.6 Interactions
+| Producer | Consumer |
+|---|---|
+| `EdogNexusClassifier` (calls `Classify()` during normalization) | `NexusNormalizedEvent.ErrorSeverity` field |
+| — | `EdogNexusAggregator` (error severity distribution per edge) |
+| — | `tab-nexus.js` (error detail drill-through rendering) |
+
+### 3A.7 Priority
+**P1** — enriches error diagnostics but not blocking for core graph rendering.
 
 ---
 
@@ -610,6 +763,8 @@ All types in `EdogNexusModels.cs` use public get/set properties (not constructor
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Collections.Generic;
+    using System.Text.RegularExpressions;
 
     // ──────────────────────────────────────────────
     // NexusDependencyId — Canonical dependency identifiers
@@ -658,10 +813,51 @@ namespace Microsoft.LiveTable.Service.DevMode
         public int StatusCode { get; set; }
         public double LatencyMs { get; set; }
         public bool IsError { get; set; }
+        public bool IsThrottled { get; set; }
+        public string ThrottleType { get; set; }
+        public string OperationPhase { get; set; }
+        public string ErrorCode { get; set; }
+        public string ErrorSeverity { get; set; }
         public int RetryCount { get; set; }
         public string CorrelationId { get; set; }
         public string EndpointHint { get; set; }
         public string IterationId { get; set; }
+    }
+
+    // ──────────────────────────────────────────────
+    // NexusErrorClassification — FLT error code taxonomy
+    // ──────────────────────────────────────────────
+
+    public static class NexusErrorClassification
+    {
+        public const string User      = "user";
+        public const string System    = "system";
+        public const string Transient = "transient";
+
+        private static readonly Dictionary<string, string> KnownErrors = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["MV_NOT_FOUND"]               = User,
+            ["SOURCE_ENTITIES_UNDEFINED"]   = User,
+            ["CONCURRENT_REFRESH"]          = User,
+            ["ACCESS_DENIED"]               = User,
+            ["SOURCE_ENTITIES_CORRUPTED"]   = System,
+            ["SOURCE_ENTITIES_MISSING"]     = System,
+            ["SYSTEM_ERROR"]                = System,
+            ["MLV_RESULTCODE_NOT_FOUND"]    = System,
+            ["SPARK_SESSION_ACQUISITION_FAILED"] = Transient,
+            ["TOO_MANY_REQUESTS"]                = Transient,
+            ["SPARK_JOB_CAPACITY_THROTTLING"]    = Transient,
+        };
+
+        internal static readonly Regex ErrorCodePattern = new(
+            @"\b((?:FLT|FMLV|MLV)_[A-Z_]+|MV_NOT_FOUND|SOURCE_ENTITIES_\w+|CONCURRENT_REFRESH|ACCESS_DENIED|SYSTEM_ERROR|SPARK_SESSION_ACQUISITION_FAILED|SPARK_JOB_CAPACITY_THROTTLING|TOO_MANY_REQUESTS|MLV_RESULTCODE_NOT_FOUND)\b",
+            RegexOptions.Compiled);
+
+        public static string Classify(string errorCode)
+        {
+            if (string.IsNullOrEmpty(errorCode)) return null;
+            return KnownErrors.TryGetValue(errorCode, out var severity) ? severity : null;
+        }
     }
 
     // ──────────────────────────────────────────────
@@ -729,6 +925,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 EdogNexusClassifier (C02)
   │ creates ──→ NexusNormalizedEvent
   │ uses    ──→ NexusDependencyId
+  │ uses    ──→ NexusErrorClassification (error code → severity mapping)
   │
   ▼
 EdogNexusAggregator (C03)
@@ -761,7 +958,8 @@ tab-nexus.js (C05)
 |---|---|---|---|
 | 1 | `NexusDependencyId` static class | P0 | — |
 | 2 | `NexusHealthStatus` static class | P0 | — |
-| 3 | `NexusNormalizedEvent` class | P0 | `NexusDependencyId` |
+| 3 | `NexusNormalizedEvent` class (incl. `IsThrottled`, `ThrottleType`, `OperationPhase`, `ErrorCode`, `ErrorSeverity`) | P0 | `NexusDependencyId` |
+| 3A | `NexusErrorClassification` static class | P1 | — |
 | 4 | `NexusEdgeStats` class | P0 | `NexusDependencyId`, `NexusHealthStatus` |
 | 5 | `NexusNodeInfo` class | P1 | `NexusDependencyId` |
 | 6 | `NexusAlert` class | P1 | `NexusDependencyId` |

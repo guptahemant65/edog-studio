@@ -26,6 +26,8 @@
    - [S05 — Classification Rule Extensibility](#s05--classification-rule-extensibility)
    - [S06 — Performance](#s06--performance)
    - [S07 — Filesystem Filtering](#s07--filesystem-filtering)
+   - [S08 — Error Code Classification](#s08--error-code-classification)
+   - [S09 — GTS Polling Phase Detection](#s09--gts-polling-phase-detection)
 5. [URL Pattern Table](#5-url-pattern-table)
 6. [State Machine](#6-state-machine)
 7. [Security](#7-security)
@@ -47,6 +49,10 @@ The classifier's job is deterministic: given an event's topic name, URL, and `ht
 
 **EdogNexusClassifier owns:**
 - URL pattern matching for `http` topic events → dependency IDs
+- HTTP status code–based classification override (430 → `capacity`, pre-URL)
+- Throttle detection for HTTP 429/430 responses (`IsThrottled`, `ThrottleType`)
+- GTS polling phase detection for `spark-gts` events (`EndpointHint` = `gts:submit`/`gts:poll`/`gts:result`)
+- Error code extraction from `responseBodyPreview` for HTTP error responses (S08)
 - Topic-name-based classification for non-HTTP topics (`token`, `spark`, `cache`, `fileop`)
 - The `unknown` fallback path with URL signature extraction
 - Priority resolution when a URL matches multiple patterns
@@ -63,8 +69,8 @@ The classifier's job is deterministic: given an event's topic name, URL, and `ht
 
 | Direction | Component | Channel | Data |
 |-----------|-----------|---------|------|
-| C01 → C02 | Models → Classifier | Compile-time reference | `DependencyId` constants, `NormalizedDependencyEvent` DTO |
-| C02 → C03 | Classifier → Aggregator | `Classify()` return value | `ClassificationResult { DependencyId, EndpointHint, IsInternal }` |
+| C01 → C02 | Models → Classifier | Compile-time reference | `DependencyId` constants, `NormalizedDependencyEvent` DTO, `NexusErrorClassification` |
+| C02 → C03 | Classifier → Aggregator | `Classify()` return value | `ClassificationResult { DependencyId, EndpointHint, IsInternal, IsThrottled, ThrottleType }` |
 | Topics → C02 | TopicRouter events → Classifier | Method argument | Raw event `object` from `TopicEvent.Data` |
 
 ---
@@ -79,7 +85,7 @@ From the approved design spec (`docs/superpowers/specs/2026-04-24-nexus-design.m
 | `fabric-api` | Fabric public REST APIs | `http` (URL match) |
 | `platform-api` | FLT service APIs via capacity relay host | `http` (URL match) |
 | `auth` | Token acquisition (AAD/Entra/MWC) | `token` (topic), `http` (URL match) |
-| `capacity` | Capacity management APIs | `http` (URL match) |
+| `capacity` | Capacity management APIs (HTTP 430 or URL match) | `http` (status code 430 or URL match) |
 | `cache` | Cache operations | `cache` (topic) |
 | `retry-system` | Retry telemetry (enrichment) | `retry` (topic) |
 | `filesystem` | File I/O via OneLake | `fileop` (topic) |
@@ -120,6 +126,8 @@ public readonly struct ClassificationResult
     public string DependencyId { get; init; }
     public string EndpointHint { get; init; }
     public bool IsInternal { get; init; }
+    public bool IsThrottled { get; init; }
+    public string ThrottleType { get; init; }
 }
 ```
 
@@ -215,17 +223,61 @@ public static ClassificationResult Classify(string topic, object eventData)
 private static ClassificationResult ClassifyHttp(object eventData)
 {
     var url = ExtractField(eventData, "url") ?? string.Empty;
+    var statusCode = ExtractIntField(eventData, "statusCode");
+    var method = ExtractField(eventData, "method") ?? string.Empty;
     var endpointHint = ExtractPathOnly(url);
 
+    // ── PRIORITY 0: HTTP 430 = capacity throttling (before URL patterns) ──
+    // HTTP 430 is FLT's canonical "Spark Job Capacity Throttling" signal.
+    // When GTS returns 430, it means the capacity management system rejected
+    // the request — regardless of what URL was called. This takes precedence
+    // over URL-based classification because the capacity topic buffer
+    // (EdogTopicRouter.cs:39) is empty in V1; 430 is the only capacity signal.
+    if (statusCode == 430)
+    {
+        return new ClassificationResult
+        {
+            DependencyId = "capacity",
+            EndpointHint = endpointHint,
+            IsInternal = false,
+            IsThrottled = true,
+            ThrottleType = "capacity-430",
+        };
+    }
+
+    // ── URL pattern matching (first match wins) ──
     foreach (var (pattern, depId) in UrlRules)
     {
         if (pattern.IsMatch(url))
-            return new ClassificationResult
+        {
+            var result = new ClassificationResult
             {
                 DependencyId = depId,
                 EndpointHint = endpointHint,
                 IsInternal = false,
             };
+
+            // Enrich with throttle info for 429 (rate limiting on any dependency)
+            if (statusCode == 429)
+            {
+                result = result with
+                {
+                    IsThrottled = true,
+                    ThrottleType = "rate-limit-429",
+                };
+            }
+
+            // Enrich spark-gts events with GTS polling phase detection
+            if (depId == "spark-gts")
+            {
+                result = result with
+                {
+                    EndpointHint = DeriveGtsPhaseHint(method, url, endpointHint),
+                };
+            }
+
+            return result;
+        }
     }
 
     // No match — falls to unknown
@@ -234,7 +286,52 @@ private static ClassificationResult ClassifyHttp(object eventData)
         DependencyId = "unknown",
         EndpointHint = ExtractUrlSignature(url),
         IsInternal = false,
+        IsThrottled = statusCode == 429,
+        ThrottleType = statusCode == 429 ? "rate-limit-429" : null,
     };
+}
+
+// ── GTS polling phase detection (Gap 5) ──
+// After submitting a Spark transform, FLT polls for completion via repeated
+// GET requests. The polling loop can run for minutes. Phase detection enables
+// the aggregator to track: polling count per transform, average polling
+// interval, and total polling duration.
+//
+// FLT's GTS interaction pattern:
+//   POST /transforms/ (submit job) → returns transformId
+//   GET  /transforms/{id} (poll status) × N times
+//   GET  /transforms/{id}/result (fetch result)
+//
+// Source: EdogHttpPipelineHandler.cs:50,69 (method + url fields)
+
+private static readonly Regex GtsResultPattern = new(
+    @"/(transforms|livysessions)/[^/]+/result",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+private static readonly Regex GtsPollPattern = new(
+    @"/(transforms|livysessions)/[0-9a-fA-F-]+(/statements/\d+)?$",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+private static string DeriveGtsPhaseHint(string method, string url, string defaultHint)
+{
+    var upperMethod = method?.ToUpperInvariant();
+
+    // POST/PUT to /transforms/ or /livysessions/ = submit
+    if (upperMethod is "POST" or "PUT")
+        return "gts:submit";
+
+    if (upperMethod == "GET")
+    {
+        // GET /transforms/{id}/result = result fetch
+        if (GtsResultPattern.IsMatch(url))
+            return "gts:result";
+
+        // GET /transforms/{id} (status poll)
+        if (GtsPollPattern.IsMatch(url))
+            return "gts:poll";
+    }
+
+    return defaultHint;
 }
 ```
 
@@ -251,6 +348,10 @@ private static ClassificationResult ClassifyHttp(object eventData)
 2. URL contains SAS tokens already redacted (`sig=[redacted]`) → regex must tolerate query params
 3. URL contains both `/capacities/` and `/liveTable/` → `platform-api` wins (PlatformApiPattern tested before CapacityPattern)
 4. Localhost URLs from EDOG dev server (e.g., `http://localhost:5555/api/...`) → `unknown` (intentional: these are EDOG-internal, not FLT dependencies)
+5. HTTP 430 from a Spark/Livy URL → classified as `capacity` (NOT `spark-gts`), because 430 takes precedence over URL patterns. The capacity management system rejected the request.
+6. HTTP 429 from any URL → dependency ID is NOT overridden (URL match preserved), but `IsThrottled = true`, `ThrottleType = "rate-limit-429"`. Rate limiting can happen on any dependency.
+7. HTTP 430 + URL matches nothing → still classified as `capacity` (430 always wins)
+8. GTS polling detection: POST to `/livysessions/` → `"gts:submit"`, repeated GETs to same URL → `"gts:poll"`, final GET with `/result` → `"gts:result"`
 
 **Interactions:**
 - HTTP events already have SAS redaction from `EdogHttpPipelineHandler.RedactUrl()` — classifier receives clean URLs
@@ -316,7 +417,7 @@ private static string ExtractTopicHint(string topic, object eventData)
 **Edge cases:**
 1. `retry` topic events enrich existing dependency edges (via correlation) — they don't create new nodes but still need a dependency ID for routing to the aggregator
 2. `spark` topic captures `Created`/`Error` lifecycle events which may not have HTTP URLs — topic-based classification ensures they still route to `spark-gts`
-3. Unknown topic name (e.g., future `perf` or `capacity` topic routed here) → maps to `unknown`
+3. Unknown topic name (e.g., future `perf` topic routed here) → maps to `unknown`. Note: the `capacity` topic (`EdogTopicRouter.cs:39`) is empty in V1 — capacity signals come from HTTP 430 responses, not from the capacity topic. If `capacity` topic events arrive in future, they should map to `"capacity"` via the topic switch.
 
 **Interactions:**
 - Token events arrive from `EdogTokenInterceptor` AND matching HTTP events arrive from `EdogHttpPipelineHandler` for the same request — the aggregator deduplicates, but the classifier correctly classifies both independently
@@ -503,9 +604,12 @@ Priority 6: FabricApiPattern  — api.fabric.microsoft.com or /api/fabric paths
 
 | Scenario | Target | Mechanism |
 |----------|--------|-----------|
+| HTTP 430 (pre-URL short-circuit) | <2μs | Integer comparison, no regex |
 | HTTP URL match (first rule hits) | <10μs | Compiled regex, early exit |
 | HTTP URL match (last rule hits) | <50μs | 6 compiled regex tests |
+| HTTP URL match + GTS phase | <60μs | URL match + 2 additional compiled regex for phase |
 | HTTP URL miss (unknown fallback) | <60μs | All 6 patterns + signature extraction |
+| HTTP with error code extraction | <80μs | URL match + regex on responseBodyPreview (4KB max) |
 | Topic-based (non-HTTP) | <1μs | Switch expression, no regex |
 
 **Source code paths:**
@@ -544,6 +648,8 @@ public readonly struct ClassificationResult
     public string DependencyId { get; init; }   // "filesystem"
     public string EndpointHint { get; init; }   // "Write:/path/to/file"
     public bool IsInternal { get; init; }       // true
+    public bool IsThrottled { get; init; }      // false (fileop never throttled)
+    public string ThrottleType { get; init; }   // null
 }
 ```
 
@@ -567,12 +673,178 @@ The aggregator always processes `filesystem` events into the graph model (node m
 
 ---
 
+### S08 — Error Code Classification
+
+**Trigger:** An HTTP event has `statusCode >= 400` and the `responseBodyPreview` field contains text that may include an FLT error code.
+
+**Expected behavior:** The classifier extracts the first recognizable FLT error code from the response body preview using `NexusErrorClassification.ErrorCodePattern` (C01 Models) and populates the `ErrorCode` and `ErrorSeverity` fields on the resulting `NexusNormalizedEvent`. This is a best-effort enrichment — if no error code is found, both fields remain `null` and `IsError = true` is set based on HTTP status alone.
+
+**Technical mechanism:**
+
+```csharp
+// Called by the aggregator's normalization step after ClassifyHttp() returns.
+// The classifier produces ClassificationResult; the aggregator builds
+// NexusNormalizedEvent and calls this enrichment for error events.
+
+private static (string ErrorCode, string ErrorSeverity) ExtractErrorInfo(object eventData, int statusCode)
+{
+    if (statusCode < 400) return (null, null);
+
+    var bodyPreview = ExtractField(eventData, "responseBodyPreview");
+    if (string.IsNullOrEmpty(bodyPreview)) return (null, null);
+
+    // Attempt regex extraction of FLT error code from response body
+    // Source: EdogHttpPipelineHandler.cs:65,75 — responseBodyPreview is
+    // first 4KB of response body (EdogHttpPipelineHandler.cs:195)
+    var match = NexusErrorClassification.ErrorCodePattern.Match(bodyPreview);
+    if (!match.Success) return (null, null);
+
+    var errorCode = match.Groups[1].Value;
+    var severity = NexusErrorClassification.Classify(errorCode);
+    return (errorCode, severity);
+}
+```
+
+**FLT error code prefixes:**
+- `FLT_` — FabricLiveTable service-layer errors
+- `FMLV_` — Fabric Materialized Lake View errors
+- `MLV_` — legacy Materialized Lake View errors
+- Bare codes (e.g., `MV_NOT_FOUND`, `CONCURRENT_REFRESH`) — pre-prefix era codes still in use
+
+**Example extractions:**
+
+| HTTP Status | Response Body Snippet | Extracted ErrorCode | ErrorSeverity |
+|---|---|---|---|
+| 404 | `{"errorCode":"MV_NOT_FOUND","message":"..."}` | `MV_NOT_FOUND` | `user` |
+| 500 | `{"errorCode":"SYSTEM_ERROR","details":"..."}` | `SYSTEM_ERROR` | `system` |
+| 503 | `{"errorCode":"SPARK_SESSION_ACQUISITION_FAILED","retry":true}` | `SPARK_SESSION_ACQUISITION_FAILED` | `transient` |
+| 430 | `{"errorCode":"SPARK_JOB_CAPACITY_THROTTLING","message":"..."}` | `SPARK_JOB_CAPACITY_THROTTLING` | `transient` |
+| 409 | `{"errorCode":"CONCURRENT_REFRESH","message":"..."}` | `CONCURRENT_REFRESH` | `user` |
+| 500 | `Internal Server Error` (plain text, no JSON) | `null` | `null` |
+| 502 | `{"error":"bad gateway"}` (no FLT error code) | `null` | `null` |
+
+**Source code paths:**
+- Response body capture: `src/backend/DevMode/EdogHttpPipelineHandler.cs:65` (CaptureBodyPreview call)
+- Body preview field: `src/backend/DevMode/EdogHttpPipelineHandler.cs:75` (`responseBodyPreview` in published event)
+- Body preview size: `src/backend/DevMode/EdogHttpPipelineHandler.cs:195` (first 4KB, skips binary/large payloads)
+- Error classification: `EdogNexusModels.cs` — `NexusErrorClassification.Classify()` (C01 §3A)
+
+**Edge cases:**
+1. Response body is `null` (e.g., connection timeout, no response received) → `ErrorCode = null`, rely on HTTP status.
+2. Response body is `[body >10MB, skipped]` (`EdogHttpPipelineHandler.cs:203`) → regex won't match, `ErrorCode = null`.
+3. Response body contains multiple error codes (nested error object) → first regex match wins. This is acceptable for V1 diagnostic purposes.
+4. Error code not in `KnownErrors` dictionary but matches prefix pattern (e.g., new `FLT_SOME_NEW_ERROR`) → `ErrorCode` is populated but `ErrorSeverity = null`. The code is captured for observability even without severity classification.
+5. Non-JSON error responses (HTML error pages, plain text) → regex is format-agnostic; it searches for the pattern anywhere in the string.
+
+**Interactions:**
+- The aggregator uses `ErrorCode` and `ErrorSeverity` to compute per-edge error severity distributions (e.g., "80% of errors on spark-gts are transient → likely self-healing")
+- The frontend `tab-nexus.js` can render error code breakdown in the drill-through panel
+- `NexusAlert` generation can use `ErrorSeverity` to distinguish "user errors spiking" (config problem) from "transient errors spiking" (infra problem)
+
+**Revert mechanism:** Stateless — remove the extraction call and both fields remain `null`.
+
+**Priority:** P1.
+
+---
+
+### S09 — GTS Polling Phase Detection
+
+**Trigger:** An HTTP event is classified as `spark-gts` by URL pattern matching (S01).
+
+**Expected behavior:** The classifier further annotates `spark-gts` events with an operation phase that distinguishes the three stages of GTS interaction: job submission, status polling, and result fetching. This phase is encoded in the `EndpointHint` field as a `"gts:{phase}"` prefix.
+
+After submitting a Spark transform to GTS, FLT enters a polling loop: repeated GET requests to the same transform URL until the job completes. This loop can run for minutes on large transforms with varying intervals. Without phase detection, these polling GETs are indistinguishable from the initial submission in the Nexus graph — making it impossible to diagnose "slow transform" vs "many poll iterations" vs "slow result fetch".
+
+**Technical mechanism:**
+
+```csharp
+// Phase detection regex patterns (compiled, static):
+
+// Result fetch: GET /transforms/{id}/result or /livysessions/{id}/result
+private static readonly Regex GtsResultPattern = new(
+    @"/(transforms|livysessions)/[^/]+/result",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+// Status poll: GET /transforms/{guid} or /livysessions/{id}/statements/{n}
+private static readonly Regex GtsPollPattern = new(
+    @"/(transforms|livysessions)/[0-9a-fA-F-]+(/statements/\d+)?$",
+    RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+// Phase derivation logic:
+private static string DeriveGtsPhaseHint(string method, string url, string defaultHint)
+{
+    var upperMethod = method?.ToUpperInvariant();
+
+    // POST/PUT to /transforms/ or /livysessions/ = submit
+    if (upperMethod is "POST" or "PUT")
+        return "gts:submit";
+
+    if (upperMethod == "GET")
+    {
+        // GET /transforms/{id}/result = result fetch
+        if (GtsResultPattern.IsMatch(url))
+            return "gts:result";
+
+        // GET /transforms/{id} (status poll)
+        if (GtsPollPattern.IsMatch(url))
+            return "gts:poll";
+    }
+
+    return defaultHint;
+}
+```
+
+**Phase mapping:**
+
+| HTTP Method | URL Pattern | EndpointHint | OperationPhase (on NexusNormalizedEvent) |
+|---|---|---|---|
+| POST | `/transforms/` | `gts:submit` | `"submit"` |
+| PUT | `/livysessions/{id}/statements` | `gts:submit` | `"submit"` |
+| GET | `/transforms/{guid}` | `gts:poll` | `"polling"` |
+| GET | `/livysessions/{id}/statements/{n}` | `gts:poll` | `"polling"` |
+| GET | `/transforms/{guid}/result` | `gts:result` | `"result-fetch"` |
+| DELETE | `/livysessions/{id}` | (default hint) | `null` |
+
+**Aggregator consumption:** The aggregator maps `EndpointHint` prefixes to `NexusNormalizedEvent.OperationPhase`:
+- `"gts:submit"` → `OperationPhase = "submit"`
+- `"gts:poll"` → `OperationPhase = "polling"`
+- `"gts:result"` → `OperationPhase = "result-fetch"`
+- anything else → `OperationPhase = null`
+
+This enables the aggregator to compute per-transform:
+- **Polling count**: number of `"polling"` events per correlation ID
+- **Average polling interval**: time between consecutive poll events
+- **Total polling duration**: time from first poll to result-fetch
+
+**Source code paths:**
+- HTTP method captured: `src/backend/DevMode/EdogHttpPipelineHandler.cs:50` (`method`)
+- HTTP URL captured: `src/backend/DevMode/EdogHttpPipelineHandler.cs:51` (`url`)
+- GTS transform submission: Spark session interceptor tracks `POST /transforms/` (`EdogSparkSessionInterceptor.cs:67-79`)
+- Livy session statements: `PUT /livysessions/{id}/statements` for statement submission
+
+**Edge cases:**
+1. DELETE to `/livysessions/{id}` (session cleanup) → not a recognized GTS phase, uses default hint. The aggregator ignores unknown phases.
+2. POST to `/livysessions/{id}/statements` vs POST to `/transforms/` → both are `"gts:submit"` (statement execution is semantically a submission)
+3. Polling loop with PATCH method (hypothetical) → falls through to default hint. Only GET is recognized as polling.
+4. URL with query parameters (e.g., `/transforms/{id}?type=summary`) → `GtsPollPattern` anchors on `$` after optional `/statements/\d+`, so query params cause a non-match. This is acceptable — query-param variations are rare in GTS URLs.
+
+**Interactions:**
+- The `CorrelationId` field (from HTTP headers) enables the aggregator to group submit + poll + result events for the same transform
+- GTS polling volume is a key triage signal — "300 poll iterations over 5 minutes" means a slow transform, not a broken dependency
+
+**Revert mechanism:** Remove `DeriveGtsPhaseHint()` call from `ClassifyHttp()`; all spark-gts events get default endpoint hint. No persistent side effects.
+
+**Priority:** P1.
+
+---
+
 ## 5. URL Pattern Table
 
 Complete mapping of real FLT URL patterns to dependency IDs, with codebase evidence:
 
 | Pattern | Regex | Dependency ID | Codebase Evidence |
 |---------|-------|---------------|-------------------|
+| **HTTP 430 (pre-URL)** | `statusCode == 430` | `capacity` | `EdogHttpPipelineHandler.cs:63,71` — FLT canonical "Spark Job Capacity Throttling" signal. Evaluated BEFORE URL patterns. |
 | Livy/Spark sessions | `/(livy\|livysessions\|spark\|sparkSessions)/` | `spark-gts` | `filters.js:132` Spark preset, `spec.md:97` |
 | OAuth2 token endpoints | `/(generatemwctoken\|oauth2/v2\.0/token\|token)(\?\|$\|/)` | `auth` | `spec.md:98`, `EdogTokenInterceptor.cs:63-72` |
 | Notebook/Jupyter | `/(notebooks?\|jupyter)/` | `spark-gts` | `api-client.js:332,355`, `EdogRetryInterceptor.cs:60-62` |
@@ -580,6 +852,14 @@ Complete mapping of real FLT URL patterns to dependency IDs, with codebase evide
 | Capacity management | `/capacities/[0-9a-fA-F-]+/` | `capacity` | `spec.md:98`, `EdogApiProxy.cs:92` |
 | Fabric REST APIs | `(api\.fabric\.microsoft\.com\|/api/fabric)/(v1/)?(workspaces\|lakehouses\|...)` | `fabric-api` | `api-client.js:80-92,395` |
 | Everything else | (no match) | `unknown` | Fallback |
+
+**GTS phase sub-classification (applied after `spark-gts` URL match):**
+
+| HTTP Method | URL Sub-Pattern | EndpointHint | Phase |
+|---|---|---|---|
+| POST/PUT | `/(transforms\|livysessions)/` | `gts:submit` | Submit |
+| GET | `/(transforms\|livysessions)/[id]/result` | `gts:result` | Result fetch |
+| GET | `/(transforms\|livysessions)/[id]` | `gts:poll` | Status poll |
 
 ---
 
@@ -589,10 +869,17 @@ The classifier is stateless — there is no state machine. It is a pure function
 
 ```
 Input: (topic: string, eventData: object)
-Output: ClassificationResult { DependencyId, EndpointHint, IsInternal }
+Output: ClassificationResult { DependencyId, EndpointHint, IsInternal, IsThrottled, ThrottleType }
 ```
 
 No transitions, no lifecycle, no initialization. The `UrlRules` array and compiled regex instances are static readonly — initialized once at class load time by the CLR.
+
+**Evaluation order for HTTP events:**
+1. Check `statusCode == 430` → return `capacity` with `IsThrottled = true` (pre-URL, highest priority)
+2. Test URL against `UrlRules` array (first match wins)
+3. If URL matched and `statusCode == 429` → enrich with `IsThrottled = true`, `ThrottleType = "rate-limit-429"`
+4. If URL matched `spark-gts` → enrich with GTS phase hint via `DeriveGtsPhaseHint()`
+5. No URL match → return `unknown`
 
 ---
 
@@ -657,6 +944,26 @@ public static ClassificationResult Classify(string topic, object eventData)
 | Priority: Spark over Platform | `("http", { url: "https://cap.pbidedicated.../livysessions/1/statements" })` | `spark-gts` | S04 priority |
 | Priority: Auth before Platform | `("http", { url: "https://cap.pbidedicated.../generatemwctoken" })` | `auth` | S04 priority |
 | URL signature normalization | `ExtractUrlSignature("https://host/v1/workspaces/abc-123/items/456")` | `/v1/workspaces/{id}/items/{n}` | S03 signature |
+| **HTTP 430 → capacity** | `("http", { url: "https://host/livysessions/123", statusCode: 430 })` | `capacity` + `IsThrottled=true` + `ThrottleType="capacity-430"` | S01 HTTP 430 pre-URL override |
+| **HTTP 430 from Spark URL** | `("http", { url: "https://host/spark/sessions/1", statusCode: 430 })` | `capacity` (NOT `spark-gts`) | S01 430 beats URL match |
+| **HTTP 430 from unknown URL** | `("http", { url: "https://mystery.example.com/api", statusCode: 430 })` | `capacity` + `IsThrottled=true` | S01 430 from any URL = capacity |
+| **HTTP 429 on Spark URL** | `("http", { url: "https://host/livysessions/123", statusCode: 429 })` | `spark-gts` + `IsThrottled=true` + `ThrottleType="rate-limit-429"` | S01 429 preserves dependency ID |
+| **HTTP 429 on unknown URL** | `("http", { url: "https://mystery.com/api", statusCode: 429 })` | `unknown` + `IsThrottled=true` + `ThrottleType="rate-limit-429"` | S01 429 on unknown |
+| **HTTP 200 (no throttle)** | `("http", { url: "https://host/livysessions/123", statusCode: 200 })` | `spark-gts` + `IsThrottled=false` | S01 normal path |
+| **GTS submit (POST)** | `("http", { url: "https://host/transforms/", method: "POST", statusCode: 200 })` | `spark-gts` + EndpointHint=`"gts:submit"` | S09 GTS submit phase |
+| **GTS poll (GET)** | `("http", { url: "https://host/transforms/abc-123", method: "GET", statusCode: 200 })` | `spark-gts` + EndpointHint=`"gts:poll"` | S09 GTS poll phase |
+| **GTS result (GET)** | `("http", { url: "https://host/transforms/abc-123/result", method: "GET", statusCode: 200 })` | `spark-gts` + EndpointHint=`"gts:result"` | S09 GTS result-fetch phase |
+| **GTS Livy submit (PUT)** | `("http", { url: "https://host/livysessions/1/statements", method: "PUT", statusCode: 200 })` | `spark-gts` + EndpointHint=`"gts:submit"` | S09 Livy statement submit |
+| **GTS Livy poll (GET)** | `("http", { url: "https://host/livysessions/1/statements/42", method: "GET", statusCode: 200 })` | `spark-gts` + EndpointHint=`"gts:poll"` | S09 Livy statement poll |
+| **GTS DELETE (no phase)** | `("http", { url: "https://host/livysessions/1", method: "DELETE", statusCode: 200 })` | `spark-gts` + EndpointHint=(default) | S09 non-phase method |
+| **Error: MV_NOT_FOUND** | `("http", { statusCode: 404, responseBodyPreview: '{"errorCode":"MV_NOT_FOUND"}' })` | ErrorCode=`"MV_NOT_FOUND"`, ErrorSeverity=`"user"` | S08 user error extraction |
+| **Error: SYSTEM_ERROR** | `("http", { statusCode: 500, responseBodyPreview: '{"errorCode":"SYSTEM_ERROR"}' })` | ErrorCode=`"SYSTEM_ERROR"`, ErrorSeverity=`"system"` | S08 system error extraction |
+| **Error: SPARK_SESSION_ACQUISITION_FAILED** | `("http", { statusCode: 503, responseBodyPreview: '{"errorCode":"SPARK_SESSION_ACQUISITION_FAILED"}' })` | ErrorCode=`"SPARK_SESSION_ACQUISITION_FAILED"`, ErrorSeverity=`"transient"` | S08 transient error |
+| **Error: CONCURRENT_REFRESH** | `("http", { statusCode: 409, responseBodyPreview: '{"errorCode":"CONCURRENT_REFRESH"}' })` | ErrorCode=`"CONCURRENT_REFRESH"`, ErrorSeverity=`"user"` | S08 user error (conflict) |
+| **Error: unknown FLT code** | `("http", { statusCode: 500, responseBodyPreview: '{"errorCode":"FLT_NEW_ERROR"}' })` | ErrorCode=`"FLT_NEW_ERROR"`, ErrorSeverity=`null` | S08 unknown code captured |
+| **Error: no FLT code in body** | `("http", { statusCode: 502, responseBodyPreview: 'Bad Gateway' })` | ErrorCode=`null`, ErrorSeverity=`null` | S08 no code fallback |
+| **Error: null body** | `("http", { statusCode: 500, responseBodyPreview: null })` | ErrorCode=`null`, ErrorSeverity=`null` | S08 null body safety |
+| **Error: 430 + error code** | `("http", { statusCode: 430, responseBodyPreview: '{"errorCode":"SPARK_JOB_CAPACITY_THROTTLING"}' })` | `capacity` + ErrorCode=`"SPARK_JOB_CAPACITY_THROTTLING"`, ErrorSeverity=`"transient"` | S08 + S01 combined |
 
 ### 9.2 Benchmark test
 
