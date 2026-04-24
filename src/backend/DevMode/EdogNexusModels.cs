@@ -45,6 +45,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>File I/O via OneLake.</summary>
         public const string Filesystem = "filesystem";
 
+        /// <summary>DAG orchestration engine (execution hooks, node scheduling).</summary>
+        public const string DagOrchestrator = "dag-orchestrator";
+
+        /// <summary>FLT operations subsystems (refresh triggers, MLV definitions, DQ reports, maintenance).</summary>
+        public const string FltOperations = "flt-operations";
+
         /// <summary>Unmatched HTTP events.</summary>
         public const string Unknown = "unknown";
 
@@ -52,7 +58,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         public static readonly string[] All = new[]
         {
             SparkGts, FabricApi, PlatformApi, Auth, Capacity,
-            Cache, RetrySystem, Filesystem, Unknown,
+            Cache, RetrySystem, Filesystem, DagOrchestrator, FltOperations, Unknown,
         };
     }
 

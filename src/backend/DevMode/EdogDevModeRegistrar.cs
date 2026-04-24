@@ -44,6 +44,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterDiRegistryCapture();
                 RegisterTokenLifecycleInterceptor();
                 RegisterCatalogInterceptor();
+                RegisterFltOpsInterceptors();
+
+                // Note: DAG execution hook (EdogDagExecutionHook) must be registered by FLT team
+                // in DagExecutionHandlerV2's hook list. NodeExecutor wrapping requires FLT to
+                // provide factory or DI registration. See gaps-roadmap.md Gap 2.
 
                 // Nexus aggregator — consumes topic events, emits dependency graph snapshots
                 StartNexusAggregator();
@@ -235,6 +240,73 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] ✗ Catalog interceptor failed: {ex.Message}");
+            }
+        }
+
+        private static void RegisterFltOpsInterceptors()
+        {
+            // 1. RefreshTriggers
+            try
+            {
+                var refreshInner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.Core.RefreshTrigger.IRefreshTriggersHandler>();
+                if (refreshInner is EdogRefreshTriggersWrapper) return;
+                var refreshWrapper = new EdogRefreshTriggersWrapper(refreshInner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.Core.RefreshTrigger.IRefreshTriggersHandler>(refreshWrapper);
+                Console.WriteLine("[EDOG] ✓ RefreshTriggers interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ RefreshTriggers interceptor failed: {ex.Message}");
+            }
+
+            // 2. MLV Definition Persistence
+            try
+            {
+                var mlvInner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.Persistence.IMLVExecutionDefinitionPersistenceManager>();
+                if (mlvInner is EdogMLVDefinitionWrapper) return;
+                var mlvWrapper = new EdogMLVDefinitionWrapper(mlvInner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.Persistence.IMLVExecutionDefinitionPersistenceManager>(mlvWrapper);
+                Console.WriteLine("[EDOG] ✓ MLV Definition interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ MLV Definition interceptor failed: {ex.Message}");
+            }
+
+            // 3. Report State (Data Quality)
+            try
+            {
+                var dqInner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.DataQuality.StateManagement.IReportStateManager>();
+                if (dqInner is EdogReportStateWrapper) return;
+                var dqWrapper = new EdogReportStateWrapper(dqInner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.DataQuality.StateManagement.IReportStateManager>(dqWrapper);
+                Console.WriteLine("[EDOG] ✓ ReportState interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ ReportState interceptor failed: {ex.Message}");
+            }
+
+            // 4. Table Maintenance Factory
+            try
+            {
+                var maintInner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.Maintenance.MaintenanceHttp.ITableMaintenanceClientFactory>();
+                if (maintInner is EdogTableMaintenanceFactoryWrapper) return;
+                var maintWrapper = new EdogTableMaintenanceFactoryWrapper(maintInner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.Maintenance.MaintenanceHttp.ITableMaintenanceClientFactory>(maintWrapper);
+                Console.WriteLine("[EDOG] ✓ TableMaintenance interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ TableMaintenance interceptor failed: {ex.Message}");
             }
         }
 

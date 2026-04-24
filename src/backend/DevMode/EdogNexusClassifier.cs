@@ -338,6 +338,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "fileop" => (NexusDependencyId.Filesystem, true),
                 "catalog" => (NexusDependencyId.FabricApi, false),
                 "capacity" => (NexusDependencyId.Capacity, false),
+                "dag" => (NexusDependencyId.DagOrchestrator, false),
+                "flt-ops" => (NexusDependencyId.FltOperations, false),
                 _ => (NexusDependencyId.Unknown, false),
             };
 
@@ -393,6 +395,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "cache" => ExtractFieldFromJson(json, "cacheName") ?? "cache-op",
                 "retry" => ExtractFieldFromJson(json, "endpoint") ?? "retry",
                 "fileop" => BuildFileopHint(json),
+                "dag" => ExtractFieldFromJson(json, "event") ?? "dag-execution",
+                "flt-ops" => ExtractFieldFromJson(json, "operation") ?? "flt-operation",
                 _ => topic,
             };
         }

@@ -38,6 +38,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("perf", 5000);
             RegisterTopic("capacity", 500);
             RegisterTopic("catalog", 200);  // Catalog discovery events (start/complete/fail)
+            RegisterTopic("dag", 500);  // DAG execution hooks + per-node lifecycle events
+            RegisterTopic("flt-ops", 300);  // FLT operations: refresh triggers, MLV defs, DQ reports, maintenance
             RegisterTopic("nexus", 100);  // Nexus aggregated snapshots (low volume, high value)
         }
 
