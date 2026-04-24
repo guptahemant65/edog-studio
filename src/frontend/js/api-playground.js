@@ -592,3 +592,433 @@ class RequestBuilder {
     this.onSend = null;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+ * §4  RESPONSE VIEWER
+ * ══════════════════════════════════════════════════════════════ */
+
+class ResponseViewer {
+  constructor(container) {
+    this._container = container;
+    this._jsonTree = null;
+    this._activeTab = 'body';
+    this._lastResponse = null;
+    this._showEmpty();
+  }
+
+  _showEmpty() {
+    this._container.innerHTML = '<div class="api-empty">'
+      + '<span style="font-size:24px;opacity:0.3">\u25C7</span>'
+      + '<span>Send a request to see the response</span>'
+      + '<span class="api-empty-hint">Select an endpoint from the catalog or type a URL</span>'
+      + '</div>';
+  }
+
+  showLoading() {
+    this._container.innerHTML = '<div class="api-loading">'
+      + '<div class="api-spinner"></div>'
+      + '<span>Sending request...</span>'
+      + '</div>';
+  }
+
+  showResponse(result) {
+    this._lastResponse = result;
+    this._container.innerHTML = '';
+
+    // Status header
+    var header = document.createElement('div');
+    header.className = 'api-response-header';
+
+    var statusClass = 's2xx';
+    if (result.status >= 400 && result.status < 500) statusClass = 's4xx';
+    if (result.status >= 500) statusClass = 's5xx';
+    if (result.status === 0) statusClass = 's5xx';
+
+    var statusEl = document.createElement('span');
+    statusEl.className = 'api-response-status ' + statusClass;
+    statusEl.textContent = result.status + ' ' + (result.statusText || '');
+    header.appendChild(statusEl);
+
+    if (result.duration !== undefined) {
+      var timing = document.createElement('span');
+      timing.className = 'api-response-timing';
+      timing.textContent = result.duration + 'ms';
+      header.appendChild(timing);
+    }
+
+    if (result.bodySize !== undefined) {
+      var size = document.createElement('span');
+      size.className = 'api-response-timing';
+      size.textContent = this._formatSize(result.bodySize);
+      header.appendChild(size);
+    }
+
+    this._container.appendChild(header);
+
+    // Tabs
+    var tabs = document.createElement('div');
+    tabs.className = 'api-resp-tabs';
+    var bodyTab = document.createElement('button');
+    bodyTab.className = 'api-resp-tab active';
+    bodyTab.textContent = 'Body';
+    bodyTab.setAttribute('data-tab', 'body');
+    var headersTab = document.createElement('button');
+    headersTab.className = 'api-resp-tab';
+    headersTab.textContent = 'Headers';
+    headersTab.setAttribute('data-tab', 'headers');
+    tabs.appendChild(bodyTab);
+    tabs.appendChild(headersTab);
+    this._container.appendChild(tabs);
+
+    // Tab content container
+    var content = document.createElement('div');
+    content.style.cssText = 'flex:1;overflow:auto';
+    this._container.appendChild(content);
+
+    // Render body tab content
+    var bodyContent = document.createElement('div');
+    bodyContent.setAttribute('data-panel', 'body');
+    this._renderBody(bodyContent, result);
+    content.appendChild(bodyContent);
+
+    // Render headers tab content
+    var headersContent = document.createElement('div');
+    headersContent.setAttribute('data-panel', 'headers');
+    headersContent.style.display = 'none';
+    this._renderHeaders(headersContent, result.headers);
+    content.appendChild(headersContent);
+
+    // Tab switching
+    var self = this;
+    tabs.addEventListener('click', function(e) {
+      var tab = e.target.getAttribute('data-tab');
+      if (!tab) return;
+      var allTabs = tabs.querySelectorAll('.api-resp-tab');
+      for (var i = 0; i < allTabs.length; i++) {
+        allTabs[i].classList.toggle('active', allTabs[i].getAttribute('data-tab') === tab);
+      }
+      var panels = content.querySelectorAll('[data-panel]');
+      for (var j = 0; j < panels.length; j++) {
+        panels[j].style.display = panels[j].getAttribute('data-panel') === tab ? '' : 'none';
+      }
+    });
+  }
+
+  _renderBody(container, result) {
+    var bodyStr = result.body || '';
+
+    // JSON tree controls
+    var controls = document.createElement('div');
+    controls.className = 'json-tree-controls';
+    var expandBtn = document.createElement('button');
+    expandBtn.className = 'json-tree-btn';
+    expandBtn.textContent = 'Expand All';
+    var collapseBtn = document.createElement('button');
+    collapseBtn.className = 'json-tree-btn';
+    collapseBtn.textContent = 'Collapse All';
+    var rawBtn = document.createElement('button');
+    rawBtn.className = 'json-tree-btn';
+    rawBtn.textContent = 'Raw';
+    controls.appendChild(expandBtn);
+    controls.appendChild(collapseBtn);
+    controls.appendChild(rawBtn);
+    container.appendChild(controls);
+
+    var treeWrap = document.createElement('div');
+    treeWrap.className = 'json-tree';
+    treeWrap.style.padding = 'var(--space-3)';
+    container.appendChild(treeWrap);
+
+    // Try to parse as JSON
+    var parsed = null;
+    try { parsed = JSON.parse(bodyStr); } catch (e) { parsed = null; }
+
+    if (parsed !== null) {
+      this._jsonTree = new JsonTree(treeWrap);
+      this._jsonTree.render(parsed);
+
+      var self = this;
+      expandBtn.addEventListener('click', function() { self._jsonTree.expandAll(); });
+      collapseBtn.addEventListener('click', function() { self._jsonTree.collapseAll(); });
+      rawBtn.addEventListener('click', function() {
+        var isRaw = treeWrap.getAttribute('data-raw') === 'true';
+        if (isRaw) {
+          treeWrap.setAttribute('data-raw', 'false');
+          treeWrap.innerHTML = '';
+          treeWrap.className = 'json-tree';
+          self._jsonTree = new JsonTree(treeWrap);
+          self._jsonTree.render(parsed);
+          rawBtn.textContent = 'Raw';
+        } else {
+          treeWrap.setAttribute('data-raw', 'true');
+          treeWrap.className = 'api-response-body';
+          treeWrap.textContent = JSON.stringify(parsed, null, 2);
+          rawBtn.textContent = 'Tree';
+        }
+      });
+    } else {
+      treeWrap.className = 'api-response-body';
+      treeWrap.textContent = bodyStr;
+      expandBtn.style.display = 'none';
+      collapseBtn.style.display = 'none';
+      rawBtn.style.display = 'none';
+    }
+  }
+
+  _renderHeaders(container, headers) {
+    if (!headers || Object.keys(headers).length === 0) {
+      container.innerHTML = '<div class="api-empty" style="padding:var(--space-3)"><span>No response headers</span></div>';
+      return;
+    }
+    var table = document.createElement('table');
+    table.className = 'api-resp-headers-table';
+    var headerKeys = Object.keys(headers);
+    for (var i = 0; i < headerKeys.length; i++) {
+      var row = document.createElement('tr');
+      var keyCell = document.createElement('td');
+      keyCell.textContent = headerKeys[i];
+      var valCell = document.createElement('td');
+      valCell.textContent = headers[headerKeys[i]];
+      row.appendChild(keyCell);
+      row.appendChild(valCell);
+      table.appendChild(row);
+    }
+    container.appendChild(table);
+  }
+
+  showError(err) {
+    this._container.innerHTML = '';
+    var header = document.createElement('div');
+    header.className = 'api-response-header';
+    var status = document.createElement('span');
+    status.className = 'api-response-status s5xx';
+    status.textContent = 'Error';
+    header.appendChild(status);
+    this._container.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'api-response-body';
+    body.textContent = err.message || String(err);
+    this._container.appendChild(body);
+  }
+
+  _formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  destroy() {
+    if (this._jsonTree) this._jsonTree.destroy();
+    this._container.innerHTML = '';
+    this._lastResponse = null;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * §5  HISTORY & SAVED REQUESTS
+ * ══════════════════════════════════════════════════════════════ */
+
+class HistorySaved {
+  constructor(container) {
+    this._container = container;
+    this._history = [];
+    this._saved = [];
+    this.onReplay = null;
+    this._maxHistory = 50;
+    this._storageKeyHistory = 'edog-api-history';
+    this._storageKeySaved = 'edog-api-saved';
+    this._loadFromStorage();
+    this._render();
+  }
+
+  _loadFromStorage() {
+    try {
+      var raw = localStorage.getItem(this._storageKeyHistory);
+      this._history = raw ? JSON.parse(raw) : [];
+    } catch (e) { this._history = []; }
+
+    try {
+      var rawS = localStorage.getItem(this._storageKeySaved);
+      this._saved = rawS ? JSON.parse(rawS) : [];
+    } catch (e) { this._saved = []; }
+  }
+
+  _render() {
+    this._container.innerHTML = '';
+
+    // Saved section
+    var savedSection = document.createElement('div');
+    savedSection.className = 'api-sidebar-section';
+    var savedTitle = document.createElement('div');
+    savedTitle.className = 'api-sidebar-title';
+    savedTitle.textContent = 'Saved Requests';
+    savedSection.appendChild(savedTitle);
+
+    var savedList = document.createElement('div');
+    savedList.className = 'api-saved-list';
+    this._renderSaved(savedList);
+    savedSection.appendChild(savedList);
+    this._container.appendChild(savedSection);
+
+    // History section
+    var historySection = document.createElement('div');
+    historySection.className = 'api-sidebar-section';
+    var historyTitle = document.createElement('div');
+    historyTitle.className = 'api-sidebar-title';
+    historyTitle.textContent = 'History';
+    historySection.appendChild(historyTitle);
+
+    var historyList = document.createElement('div');
+    historyList.className = 'api-history-list';
+    this._renderHistory(historyList);
+    historySection.appendChild(historyList);
+    this._container.appendChild(historySection);
+  }
+
+  _renderSaved(listEl) {
+    listEl.innerHTML = '';
+    if (this._saved.length === 0) {
+      var hint = document.createElement('div');
+      hint.style.cssText = 'font-size:var(--text-xs);color:var(--text-muted);padding:var(--space-1)';
+      hint.textContent = 'No saved requests yet';
+      listEl.appendChild(hint);
+      return;
+    }
+    var lastGroup = '';
+    for (var i = 0; i < this._saved.length; i++) {
+      var entry = this._saved[i];
+      if (entry.group && entry.group !== lastGroup) {
+        var groupLabel = document.createElement('div');
+        groupLabel.className = 'api-sidebar-group-label';
+        groupLabel.textContent = entry.group;
+        listEl.appendChild(groupLabel);
+        lastGroup = entry.group;
+      }
+      listEl.appendChild(this._createSavedItem(entry, i));
+    }
+  }
+
+  _createSavedItem(entry, index) {
+    var item = document.createElement('div');
+    item.className = 'api-saved-item';
+
+    var pill = document.createElement('span');
+    pill.className = 'method-pill ' + entry.method.toLowerCase();
+    pill.textContent = entry.method;
+
+    var name = document.createElement('span');
+    name.textContent = entry.name || entry.url;
+
+    item.appendChild(pill);
+    item.appendChild(name);
+
+    var self = this;
+    item.addEventListener('click', function() {
+      if (self.onReplay) self.onReplay(entry);
+    });
+    return item;
+  }
+
+  _renderHistory(listEl) {
+    listEl.innerHTML = '';
+    if (this._history.length === 0) {
+      var hint = document.createElement('div');
+      hint.style.cssText = 'font-size:var(--text-xs);color:var(--text-muted);padding:var(--space-1)';
+      hint.textContent = 'No history yet';
+      listEl.appendChild(hint);
+      return;
+    }
+    for (var i = 0; i < this._history.length; i++) {
+      listEl.appendChild(this._createHistoryItem(this._history[i]));
+    }
+  }
+
+  _createHistoryItem(entry) {
+    var item = document.createElement('div');
+    item.className = 'api-history-item';
+
+    var pill = document.createElement('span');
+    pill.className = 'method-pill ' + entry.method.toLowerCase();
+    pill.textContent = entry.method;
+
+    var url = document.createElement('span');
+    var urlText = entry.url || '';
+    url.textContent = urlText.length > 30 ? urlText.substring(0, 30) + '...' : urlText;
+
+    item.appendChild(pill);
+    item.appendChild(url);
+
+    if (entry.response) {
+      var statusEl = document.createElement('span');
+      statusEl.className = 'api-history-status';
+      var sCls = 's2xx';
+      if (entry.response.status >= 400 && entry.response.status < 500) sCls = 's4xx';
+      if (entry.response.status >= 500 || entry.response.status === 0) sCls = 's5xx';
+      statusEl.className = 'api-history-status status-code ' + sCls;
+      statusEl.textContent = entry.response.status;
+      item.appendChild(statusEl);
+    }
+
+    var self = this;
+    item.addEventListener('click', function() {
+      if (self.onReplay) self.onReplay(entry);
+    });
+    return item;
+  }
+
+  addHistoryEntry(entry) {
+    this._history.unshift(entry);
+    while (this._history.length > this._maxHistory) {
+      this._history.pop();
+    }
+    // Size safety: cap at 300KB serialized
+    var serialized = JSON.stringify(this._history);
+    while (serialized.length > 300000 && this._history.length > 10) {
+      this._history.pop();
+      serialized = JSON.stringify(this._history);
+    }
+    try { localStorage.setItem(this._storageKeyHistory, serialized); } catch (e) { /* quota */ }
+    var historyList = this._container.querySelector('.api-history-list');
+    if (historyList) this._renderHistory(historyList);
+  }
+
+  saveRequest(req) {
+    var entry = {
+      id: this._uuid(),
+      name: req.name || req.url,
+      group: 'Custom',
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+      body: req.body,
+      tokenType: req.tokenType,
+      isBuiltIn: false,
+      createdAt: new Date().toISOString()
+    };
+    this._saved.push(entry);
+    try { localStorage.setItem(this._storageKeySaved, JSON.stringify(this._saved)); } catch (e) { /* quota */ }
+    var savedList = this._container.querySelector('.api-saved-list');
+    if (savedList) this._renderSaved(savedList);
+  }
+
+  clearHistory() {
+    this._history = [];
+    try { localStorage.removeItem(this._storageKeyHistory); } catch (e) { /* ignore */ }
+    var historyList = this._container.querySelector('.api-history-list');
+    if (historyList) this._renderHistory(historyList);
+  }
+
+  _uuid() {
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  destroy() {
+    this._container.innerHTML = '';
+    this.onReplay = null;
+  }
+}
