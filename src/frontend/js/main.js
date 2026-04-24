@@ -135,10 +135,10 @@ class EdogLogViewer {
     this.smartContext = new SmartContextBar(this.autoDetector);
     this.errorIntel = new ErrorIntelligence(this.autoDetector);
     this.anomaly = new AnomalyDetector(this.state);
-    this.controlPanel = new ControlPanel(
-      document.getElementById('control-panel'),
-      { autoDetector: this.autoDetector, stateManager: this.state }
-    );
+    const cpEl = document.getElementById('control-panel');
+    this.controlPanel = cpEl
+      ? new ControlPanel(cpEl, { autoDetector: this.autoDetector, stateManager: this.state })
+      : null;
 
     // Wire error-intel jump-to-error
     this.errorIntel.onJumpToError = (errorMsg) => {
@@ -796,8 +796,7 @@ class EdogLogViewer {
         }
       }
     } else {
-      // DAG control panel deactivation (legacy — will be removed in Layer 2)
-      this.controlPanel.deactivate();
+      if (this.controlPanel) this.controlPanel.deactivate();
     }
   }
 
