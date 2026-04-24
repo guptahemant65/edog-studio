@@ -45,3 +45,7 @@ node_modules/
 scripts/token-helper/bin/
 scripts/token-helper/obj/
 .edog-thumbprint-cache
+
+# Tool/session artifacts
+.playwright-mcp/
+donna-app/
