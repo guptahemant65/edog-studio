@@ -117,6 +117,11 @@ class TokensTab {
     this._stopTicking();
   }
 
+  /** Expose token map for Token Inspector drawer access. */
+  getTokens() {
+    return this._tokenMap;
+  }
+
   // ═══════ EVENT HANDLER (core dedup logic) ═══════
 
   _onEvent = (event) => {
