@@ -109,6 +109,7 @@ JS_MODULES = [
     "js/tab-nexus.js",
     "js/workspace-explorer.js",
     "js/command-palette.js",
+    "js/api-playground.js",
     "js/mock-renderer.js",
     "js/onboarding.js",
     "js/main.js",
