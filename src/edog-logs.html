@@ -8860,90 +8860,481 @@ mark {
 }
 
     /* === css/token-inspector.css === */
-/* ── Token Inspector Drawer ── */
+/* ── Token Inspector — List → Decode ── */
+
+/* ═══ Keyframe Animations ═══ */
+@keyframes ti-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes ti-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ti-card-enter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ti-pulse-red {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(229,69,59,0.12); }
+  50%      { opacity: 0.7; box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes ti-decode-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes ti-claim-row-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ti-pill-bounce {
+  0%   { transform: scale(0) translateY(4px); }
+  60%  { transform: scale(1.1) translateY(-1px); }
+  100% { transform: scale(1) translateY(0); }
+}
+@keyframes ti-empty-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes ti-bar-fill {
+  from { width: 0; }
+}
+@keyframes ti-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ═══ Overlay ═══ */
+.ti-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: calc(var(--z-detail) - 1);
+  opacity: 0; pointer-events: none;
+  transition: opacity 200ms ease;
+  backdrop-filter: blur(2px);
+}
+.ti-overlay.open {
+  opacity: 1; pointer-events: auto;
+  animation: ti-fade-in 200ms ease forwards;
+}
+
+/* ═══ Drawer Shell ═══ */
 .token-inspector {
   position: fixed; top: var(--topbar-height); right: 0;
   width: 360px; height: calc(100vh - var(--topbar-height));
-  background: var(--surface); border-left: 1px solid var(--border);
-  transform: translateX(100%);
-  transition: transform 120ms ease-out;
-  z-index: var(--z-detail); /* stacking: above content, below command palette */
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: var(--z-detail);
   display: flex; flex-direction: column;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(100%);
+  will-change: transform;
   overflow: hidden;
 }
-.token-inspector.open { transform: translateX(0); }
+.token-inspector.open {
+  animation: ti-slide-in 300ms cubic-bezier(0.16,1,0.3,1) forwards;
+}
 
+/* ═══ Header ═══ */
 .ti-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center;
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0; gap: var(--space-3);
+  min-height: 48px;
+}
+.ti-header-left {
+  display: flex; align-items: center;
+  gap: var(--space-2); flex: 1; min-width: 0;
+}
+.ti-title {
+  font-size: var(--text-md); font-weight: 600; color: var(--text);
+}
+.ti-count {
+  font-size: var(--text-xs); color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 1px var(--space-2);
+  border-radius: 100px;
+  font-weight: 500; font-variant-numeric: tabular-nums;
+}
+.ti-close {
+  background: none; border: none;
+  color: var(--text-muted); font-size: var(--text-lg);
+  cursor: pointer; padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  line-height: 1; flex-shrink: 0;
+}
+.ti-close:hover { color: var(--text); background: var(--surface-2); }
+
+/* ═══ Token List View ═══ */
+.ti-list {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  padding: var(--space-3);
+  display: flex; flex-direction: column;
+  gap: var(--space-2); scroll-behavior: smooth;
+}
+.ti-list::-webkit-scrollbar { width: 6px; }
+.ti-list::-webkit-scrollbar-track { background: transparent; }
+.ti-list::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+.ti-list::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Token Card ── */
+.ti-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 180ms ease;
+  overflow: hidden; position: relative;
+  animation: ti-card-enter 260ms cubic-bezier(0.16,1,0.3,1) backwards;
+}
+.ti-card:nth-child(1) { animation-delay: 0ms; }
+.ti-card:nth-child(2) { animation-delay: 40ms; }
+.ti-card:nth-child(3) { animation-delay: 80ms; }
+.ti-card:nth-child(4) { animation-delay: 120ms; }
+.ti-card:nth-child(5) { animation-delay: 160ms; }
+.ti-card:nth-child(6) { animation-delay: 200ms; }
+
+.ti-card:hover {
+  border-color: var(--border-bright);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+.ti-card:active { transform: translateY(0); }
+
+/* Type-specific left borders */
+.ti-card.bearer  { border-left-color: var(--tok-bearer); }
+.ti-card.mwc     { border-left-color: var(--tok-mwc); }
+.ti-card.s2s     { border-left-color: var(--tok-s2s); }
+.ti-card.obo     { border-left-color: var(--tok-obo); }
+.ti-card.unknown { border-left-color: var(--tok-unknown); }
+
+/* Expired card state */
+.ti-card.expired {
+  border-color: rgba(229,69,59,0.15);
+  animation: ti-card-enter 260ms cubic-bezier(0.16,1,0.3,1) backwards,
+             ti-pulse-red 2s ease-in-out infinite;
+}
+.ti-card.expired:hover { border-color: var(--level-error); }
+
+/* ── Card Inner Layout ── */
+.ti-card-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Type Badge */
+.ti-type-badge {
+  display: inline-flex; align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: 100px;
+  font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.3px; white-space: nowrap;
   flex-shrink: 0;
 }
-.ti-title { font-size: var(--text-md); font-weight: 600; color: var(--text); }
-.ti-close {
-  background: none; border: none; color: var(--text-muted); font-size: var(--text-lg);
-  cursor: pointer; padding: var(--space-1);
+.ti-type-badge svg {
+  width: 14px; height: 14px; fill: currentColor;
 }
-.ti-close:hover { color: var(--text); }
+.ti-type-badge.bearer { background: var(--tok-bearer-dim); color: var(--tok-bearer); }
+.ti-type-badge.mwc    { background: var(--tok-mwc-dim);    color: var(--tok-mwc); }
+.ti-type-badge.s2s    { background: var(--tok-s2s-dim);    color: var(--tok-s2s); }
+.ti-type-badge.obo    { background: var(--tok-obo-dim);    color: var(--tok-obo); }
+.ti-type-badge.unknown { background: var(--tok-unknown-dim); color: var(--tok-unknown); }
 
-.ti-body { flex: 1; overflow-y: auto; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+/* TTL Badge */
+.ti-ttl-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs); font-weight: 500;
+  white-space: nowrap;
+  display: flex; align-items: center;
+  gap: var(--space-1); flex-shrink: 0;
+}
+.ti-ttl-badge.green   { color: var(--status-succeeded); }
+.ti-ttl-badge.amber   { color: var(--level-warning); }
+.ti-ttl-badge.red     { color: var(--level-error); }
+.ti-ttl-badge.expired { color: var(--level-error); font-weight: 700; }
 
-.ti-token-card {
-  border: 1px solid var(--border); border-radius: var(--space-2);
+/* Audience — NEVER TRUNCATED */
+.ti-card-audience {
+  font-family: var(--font-mono);
+  font-size: 11px; color: var(--text-dim);
+  word-break: break-all; line-height: 1.5;
+  padding: 0 var(--space-4) var(--space-2);
+}
+
+/* Health / progress bar */
+.ti-card-bar {
+  height: 3px; background: var(--surface-3);
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   overflow: hidden;
 }
-.ti-token-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
+.ti-card-bar-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 1s linear;
+  animation: ti-bar-fill 600ms ease-out;
+}
+.ti-card-bar-fill.green   { background: var(--status-succeeded); }
+.ti-card-bar-fill.amber   { background: var(--level-warning); }
+.ti-card-bar-fill.red     { background: var(--level-error); }
+.ti-card-bar-fill.expired { background: var(--level-error); width: 100% !important; }
+
+/* Card bottom meta row */
+.ti-card-meta {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+  font-size: var(--text-xs); color: var(--text-muted);
+}
+
+/* Decode hint CTA */
+.ti-decode-hint {
+  font-size: var(--text-xs); font-weight: 500;
+  color: var(--accent);
+  display: flex; align-items: center; gap: 2px;
+  opacity: 0; transform: translateX(-4px);
+  transition: all var(--transition-normal);
+}
+.ti-card:hover .ti-decode-hint {
+  opacity: 1; transform: translateX(0);
+}
+
+/* ═══ Empty State ═══ */
+.ti-empty {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--space-4); padding: var(--space-6);
+  text-align: center;
+}
+.ti-empty-icon {
+  width: 48px; height: 48px;
+  fill: var(--text-muted); opacity: 0.4;
+  animation: ti-empty-float 3s ease-in-out infinite;
+}
+.ti-empty-title {
+  font-size: var(--text-lg); font-weight: 600;
+  color: var(--text-dim);
+}
+.ti-empty-hint {
+  font-size: var(--text-sm); color: var(--text-muted);
+  max-width: 260px; line-height: 1.6;
+}
+.ti-empty-hint code {
+  font-family: var(--font-mono); font-size: var(--text-xs);
   background: var(--surface-2);
-  font-size: var(--text-sm); font-weight: 600; color: var(--text);
-}
-.ti-token-header .ti-type-badge {
-  font-size: var(--text-xs); padding: 1px var(--space-2); border-radius: var(--space-2);
-  background: var(--accent-dim); color: var(--accent); font-weight: 500;
-}
-.ti-token-header .ti-type-badge.green { background: rgba(24,160,88,0.08); color: var(--status-succeeded); }
-.ti-token-header .ti-type-badge.amber { background: rgba(229,148,12,0.08); color: var(--level-warning); }
-.ti-token-header .ti-type-badge.red { background: rgba(229,69,59,0.08); color: var(--level-error); }
-
-.ti-expiry-bar {
-  height: 4px; background: var(--surface-3);
-}
-.ti-expiry-fill {
-  height: 100%; transition: width 1s linear;
-}
-.ti-expiry-fill.green { background: var(--status-succeeded); }
-.ti-expiry-fill.amber { background: var(--level-warning); }
-.ti-expiry-fill.red { background: var(--level-error); }
-
-.ti-token-body { padding: var(--space-3); }
-
-.ti-claims { display: grid; grid-template-columns: 80px 1fr; gap: var(--space-1); font-size: var(--text-xs); }
-.ti-claims dt { color: var(--text-muted); font-weight: 500; }
-.ti-claims dd { color: var(--text); font-family: var(--font-mono); word-break: break-all; margin: 0; }
-
-.ti-scopes { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
-.ti-scope-pill {
-  padding: 1px var(--space-2); border-radius: var(--space-2);
-  font-size: 10px; background: var(--surface-2); color: var(--text-dim);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
+  color: var(--text-dim);
 }
 
-.ti-actions { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
-.ti-card-actions {
-  display: flex; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+/* ═══ Decode View ═══ */
+.ti-decode {
+  flex: 1; overflow-y: auto; overflow-x: hidden;
+  display: none; flex-direction: column;
+  gap: 0; scroll-behavior: smooth;
+}
+.ti-decode.visible {
+  display: flex;
+  animation: ti-decode-in 300ms cubic-bezier(0.16,1,0.3,1);
+}
+.ti-decode::-webkit-scrollbar { width: 6px; }
+.ti-decode::-webkit-scrollbar-track { background: transparent; }
+.ti-decode::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+/* Back link */
+.ti-back {
+  display: none; background: none; border: none;
+  color: var(--accent); font-family: var(--font-body);
+  font-size: var(--text-sm); font-weight: 500;
+  cursor: pointer; padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+  white-space: nowrap;
+}
+.ti-back:hover { background: var(--accent-dim); text-decoration: underline; }
+.ti-back.visible { display: flex; align-items: center; gap: var(--space-1); }
+
+/* Decode identity header */
+.ti-decode-identity {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 2;
+}
+.ti-decode-audience {
+  font-family: var(--font-mono);
+  font-size: 11px; color: var(--text-dim);
+  word-break: break-all; line-height: 1.5;
+}
+
+/* Collapsible sections */
+.ti-section {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.ti-section-title {
+  font-size: var(--text-xs); font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: var(--space-3);
+  display: flex; align-items: center; gap: var(--space-2);
+}
+
+/* JWT raw token display */
+.ti-jwt-raw {
+  font-family: var(--font-mono);
+  font-size: 11px; line-height: 1.7;
+  word-break: break-all;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3); overflow: hidden;
+}
+.ti-jwt-header-seg {
+  color: var(--tok-s2s); /* teal, maps to jwt-header */
+  background: var(--tok-s2s-dim);
+  padding: 1px 2px; border-radius: 2px;
+  cursor: pointer; transition: background var(--transition-fast);
+}
+.ti-jwt-header-seg:hover { background: rgba(13,148,136,0.18); }
+.ti-jwt-payload-seg {
+  color: var(--tok-mwc); /* purple, maps to jwt-payload */
+  background: var(--tok-mwc-dim);
+  padding: 1px 2px; border-radius: 2px;
+  cursor: pointer; transition: background var(--transition-fast);
+}
+.ti-jwt-payload-seg:hover { background: rgba(168,85,247,0.18); }
+.ti-jwt-sig-seg {
+  color: var(--tok-unknown); /* gray, maps to jwt-signature */
+  background: var(--tok-unknown-dim);
+  padding: 1px 2px; border-radius: 2px;
+}
+.ti-jwt-dot {
+  color: var(--level-error); font-weight: 700; font-size: var(--text-md);
+}
+
+/* Claims table */
+.ti-claims-table {
+  display: flex; flex-direction: column; gap: 0;
+}
+.ti-claims-table > div {
+  display: grid; grid-template-columns: 120px 1fr;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  animation: ti-claim-row-in 200ms ease-out backwards;
+}
+.ti-claims-table > div:last-child { border-bottom: none; }
+
+.ti-claim-key {
+  font-family: var(--font-mono); font-weight: 600;
+  color: var(--text-dim); word-break: break-all;
+}
+.ti-claim-val {
+  font-family: var(--font-mono); color: var(--text);
+  word-break: break-all; line-height: 1.6;
+}
+.ti-claim-val.timestamp {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.ti-claim-date {
+  color: var(--text-dim); font-size: 10px;
+}
+
+/* Scope pills */
+.ti-scopes {
+  display: flex; flex-wrap: wrap;
+  gap: var(--space-1); margin-top: var(--space-1);
+}
+.ti-scope-pill {
+  padding: 2px var(--space-2);
+  border-radius: 100px;
+  font-size: 10px; font-family: var(--font-mono); font-weight: 500;
+  background: var(--accent-dim); color: var(--accent);
+  border: 1px solid rgba(109,92,255,0.12);
+  animation: ti-pill-bounce 0.3s cubic-bezier(0.34,1.56,0.64,1) backwards;
+}
+.ti-scope-pill:nth-child(1) { animation-delay: 0ms; }
+.ti-scope-pill:nth-child(2) { animation-delay: 40ms; }
+.ti-scope-pill:nth-child(3) { animation-delay: 80ms; }
+.ti-scope-pill:nth-child(4) { animation-delay: 120ms; }
+.ti-scope-pill:nth-child(5) { animation-delay: 160ms; }
+
+/* Expiry section in decode view */
+.ti-expiry-section {
+  display: flex; flex-direction: column;
+  gap: var(--space-2); margin-top: var(--space-3);
+}
+.ti-expiry-section .ti-expiry-track {
+  height: 6px; background: var(--surface-3);
+  border-radius: 3px; overflow: hidden;
+}
+.ti-expiry-section .ti-expiry-fill {
+  height: 100%; border-radius: 3px;
+  transition: width 1s linear;
+}
+.ti-expiry-section .ti-expiry-fill.green { background: var(--status-succeeded); }
+.ti-expiry-section .ti-expiry-fill.amber { background: var(--level-warning); }
+.ti-expiry-section .ti-expiry-fill.red   { background: var(--level-error); }
+.ti-expiry-section .ti-expiry-labels {
+  display: flex; justify-content: space-between;
+  font-size: var(--text-xs); color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Action buttons */
+.ti-actions {
+  padding: var(--space-4);
   border-top: 1px solid var(--border);
+  display: flex; gap: var(--space-2); flex-wrap: wrap;
+  background: var(--surface); flex-shrink: 0;
 }
 .ti-btn {
-  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
-  font-size: var(--text-xs); border: 1px solid var(--border-bright);
-  background: var(--surface); color: var(--text); cursor: pointer;
-  font-family: var(--font-body); transition: all var(--transition-fast);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs); font-weight: 500;
+  font-family: var(--font-body);
+  border: 1px solid var(--border-bright);
+  background: var(--surface); color: var(--text);
+  cursor: pointer; transition: all var(--transition-fast);
+  display: flex; align-items: center; gap: var(--space-2);
+  white-space: nowrap; position: relative; overflow: hidden;
 }
-.ti-btn:hover { background: var(--surface-2); }
-.ti-btn:disabled { opacity: 0.5; cursor: default; }
-.ti-btn.primary { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent); }
+.ti-btn:hover {
+  background: var(--surface-2);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transform: translateY(-1px);
+}
+.ti-btn:active { transform: translateY(0); box-shadow: none; }
+.ti-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+.ti-btn.primary {
+  background: var(--accent); color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.ti-btn.primary:hover { opacity: 0.9; }
+.ti-btn svg { width: 14px; height: 14px; fill: currentColor; }
+.ti-btn.spinning svg { animation: ti-spin 0.6s linear infinite; }
+
+/* Link-style button */
+.ti-link {
+  font-size: var(--text-xs); color: var(--accent);
+  text-decoration: none; font-weight: 500;
+  display: flex; align-items: center; gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+  border: none; background: none; cursor: pointer;
+  font-family: var(--font-body);
+}
+.ti-link:hover { background: var(--accent-dim); }
 
 /* ── Log Bookmarks Drawer ── */
 .bookmarks-drawer {
