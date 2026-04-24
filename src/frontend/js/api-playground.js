@@ -201,3 +201,394 @@ class JsonTree {
     this._data = null;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+ * §2  ENDPOINT CATALOG
+ * ══════════════════════════════════════════════════════════════ */
+
+class EndpointCatalog {
+  constructor(container) {
+    this._container = container;
+    this._isOpen = false;
+    this._dropdown = null;
+    this._searchInput = null;
+    this.onSelect = null;
+    this._boundClose = null;
+    this._render();
+  }
+
+  _render() {
+    this._container.innerHTML = '';
+    var trigger = document.createElement('button');
+    trigger.className = 'api-catalog-trigger';
+    trigger.textContent = 'Endpoints \u25BE';
+    this._container.appendChild(trigger);
+
+    this._dropdown = document.createElement('div');
+    this._dropdown.className = 'api-catalog-dropdown';
+    this._dropdown.style.display = 'none';
+    this._container.appendChild(this._dropdown);
+
+    var self = this;
+    trigger.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (self._isOpen) { self.close(); } else { self.open(); }
+    });
+  }
+
+  open() {
+    this._isOpen = true;
+    this._dropdown.style.display = '';
+    this._dropdown.innerHTML = '';
+
+    var searchWrap = document.createElement('div');
+    this._searchInput = document.createElement('input');
+    this._searchInput.className = 'api-catalog-search';
+    this._searchInput.placeholder = 'Search endpoints...';
+    this._searchInput.setAttribute('type', 'text');
+    searchWrap.appendChild(this._searchInput);
+    this._dropdown.appendChild(searchWrap);
+
+    var listEl = document.createElement('div');
+    this._dropdown.appendChild(listEl);
+    this._renderList(listEl, '');
+
+    var self = this;
+    this._searchInput.addEventListener('input', function() {
+      self._renderList(listEl, self._searchInput.value.toLowerCase());
+    });
+    this._searchInput.focus();
+
+    this._boundClose = function(e) {
+      if (!self._container.contains(e.target)) { self.close(); }
+    };
+    document.addEventListener('click', this._boundClose);
+  }
+
+  close() {
+    this._isOpen = false;
+    this._dropdown.style.display = 'none';
+    if (this._boundClose) {
+      document.removeEventListener('click', this._boundClose);
+      this._boundClose = null;
+    }
+  }
+
+  _renderList(listEl, filter) {
+    listEl.innerHTML = '';
+    var matched = 0;
+    for (var g = 0; g < ENDPOINT_GROUPS.length; g++) {
+      var group = ENDPOINT_GROUPS[g];
+      var endpoints = [];
+      for (var i = 0; i < ENDPOINT_CATALOG.length; i++) {
+        var ep = ENDPOINT_CATALOG[i];
+        if (ep.group !== group.id) continue;
+        if (filter && ep.name.toLowerCase().indexOf(filter) === -1
+            && ep.urlTemplate.toLowerCase().indexOf(filter) === -1
+            && ep.method.toLowerCase().indexOf(filter) === -1) continue;
+        endpoints.push(ep);
+      }
+      if (endpoints.length === 0) continue;
+
+      var groupEl = document.createElement('div');
+      groupEl.className = 'api-catalog-group';
+      var label = document.createElement('div');
+      label.className = 'api-catalog-group-label';
+      label.textContent = group.label;
+      groupEl.appendChild(label);
+
+      for (var j = 0; j < endpoints.length; j++) {
+        var item = this._createItem(endpoints[j]);
+        groupEl.appendChild(item);
+        matched++;
+      }
+      listEl.appendChild(groupEl);
+    }
+    if (matched === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'api-catalog-empty';
+      empty.textContent = 'No endpoints match "' + filter + '"';
+      listEl.appendChild(empty);
+    }
+  }
+
+  _createItem(ep) {
+    var item = document.createElement('div');
+    item.className = 'api-catalog-item';
+    if (ep.dangerLevel === 'destructive') item.classList.add('api-danger-destructive');
+
+    var pill = document.createElement('span');
+    pill.className = 'method-pill ' + ep.method.toLowerCase();
+    pill.textContent = ep.method;
+
+    var name = document.createElement('span');
+    name.className = 'api-catalog-item-name';
+    name.textContent = ep.name;
+
+    var url = document.createElement('span');
+    url.className = 'api-catalog-item-url';
+    url.textContent = ep.urlTemplate;
+
+    item.appendChild(pill);
+    item.appendChild(name);
+    item.appendChild(url);
+
+    var self = this;
+    item.addEventListener('click', function() {
+      if (self.onSelect) self.onSelect(ep);
+      self.close();
+    });
+    return item;
+  }
+
+  destroy() {
+    this.close();
+    this._container.innerHTML = '';
+    this.onSelect = null;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * §3  REQUEST BUILDER
+ * ══════════════════════════════════════════════════════════════ */
+
+class RequestBuilder {
+  constructor(container) {
+    this._container = container;
+    this._methodEl = null;
+    this._urlEl = null;
+    this._bodyEl = null;
+    this._bodySection = null;
+    this._headersEl = null;
+    this._sendBtn = null;
+    this._cancelBtn = null;
+    this._catalogWrap = null;
+    this._catalog = null;
+    this.onSend = null;
+    this._render();
+  }
+
+  _render() {
+    this._container.innerHTML = '';
+
+    // URL row
+    var urlRow = document.createElement('div');
+    urlRow.className = 'api-url-row';
+
+    this._methodEl = document.createElement('select');
+    this._methodEl.className = 'api-method-select';
+    var methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+    for (var i = 0; i < methods.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = methods[i];
+      opt.textContent = methods[i];
+      this._methodEl.appendChild(opt);
+    }
+    urlRow.appendChild(this._methodEl);
+
+    this._urlEl = document.createElement('input');
+    this._urlEl.className = 'api-url-input';
+    this._urlEl.placeholder = 'Enter URL or select from endpoints...';
+    urlRow.appendChild(this._urlEl);
+
+    this._sendBtn = document.createElement('button');
+    this._sendBtn.className = 'api-send-btn';
+    this._sendBtn.textContent = 'Send';
+    urlRow.appendChild(this._sendBtn);
+
+    this._cancelBtn = document.createElement('button');
+    this._cancelBtn.className = 'api-cancel-btn';
+    this._cancelBtn.textContent = 'Cancel';
+    urlRow.appendChild(this._cancelBtn);
+
+    // cURL copy button
+    var curlBtn = document.createElement('button');
+    curlBtn.className = 'api-send-btn';
+    curlBtn.style.cssText = 'background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border-bright)';
+    curlBtn.textContent = 'Copy cURL';
+    urlRow.appendChild(curlBtn);
+
+    this._catalogWrap = document.createElement('div');
+    this._catalogWrap.style.cssText = 'position:relative;display:inline-block';
+    this._catalog = new EndpointCatalog(this._catalogWrap);
+    urlRow.appendChild(this._catalogWrap);
+
+    this._container.appendChild(urlRow);
+
+    // Headers section
+    var headersSection = document.createElement('div');
+    headersSection.className = 'api-body-section';
+    var headersLabel = document.createElement('span');
+    headersLabel.className = 'api-body-label';
+    headersLabel.textContent = 'Headers';
+    headersSection.appendChild(headersLabel);
+
+    this._headersEl = document.createElement('div');
+    this._headersEl.className = 'api-headers';
+    this._addHeaderRow('Authorization', 'Bearer \u25CF\u25CF\u25CF\u25CF', true);
+    this._addHeaderRow('Content-Type', 'application/json', false);
+    headersSection.appendChild(this._headersEl);
+
+    var addHeaderBtn = document.createElement('button');
+    addHeaderBtn.className = 'api-header-add';
+    addHeaderBtn.textContent = '+ Add Header';
+    headersSection.appendChild(addHeaderBtn);
+    this._container.appendChild(headersSection);
+
+    // Body section (hidden for GET/DELETE)
+    this._bodySection = document.createElement('div');
+    this._bodySection.className = 'api-body-section';
+    this._bodySection.style.display = 'none';
+    var bodyLabel = document.createElement('span');
+    bodyLabel.className = 'api-body-label';
+    bodyLabel.textContent = 'Request Body';
+    this._bodySection.appendChild(bodyLabel);
+
+    this._bodyEl = document.createElement('textarea');
+    this._bodyEl.className = 'api-body-input';
+    this._bodyEl.placeholder = '{"key": "value"}';
+    this._bodySection.appendChild(this._bodyEl);
+    this._container.appendChild(this._bodySection);
+
+    // Wire events
+    var self = this;
+    this._methodEl.addEventListener('change', function() {
+      var needsBody = self._methodEl.value === 'POST'
+        || self._methodEl.value === 'PUT'
+        || self._methodEl.value === 'PATCH';
+      self._bodySection.style.display = needsBody ? '' : 'none';
+    });
+
+    this._sendBtn.addEventListener('click', function() {
+      if (self.onSend) self.onSend(self.getRequest());
+    });
+
+    this._urlEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (self.onSend) self.onSend(self.getRequest());
+      }
+    });
+
+    addHeaderBtn.addEventListener('click', function() {
+      self._addHeaderRow('', '', false);
+    });
+
+    curlBtn.addEventListener('click', function() {
+      var curl = self.generateCurl();
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(curl);
+      }
+    });
+  }
+
+  _addHeaderRow(key, value, readonly) {
+    var row = document.createElement('div');
+    row.className = 'api-header-row';
+
+    var keyInput = document.createElement('input');
+    keyInput.className = 'api-header-key';
+    keyInput.value = key;
+    keyInput.placeholder = 'Header name';
+    if (readonly) keyInput.readOnly = true;
+
+    var valInput = document.createElement('input');
+    valInput.className = 'api-header-val';
+    valInput.value = value;
+    valInput.placeholder = 'Value';
+    if (readonly) valInput.readOnly = true;
+
+    var rmBtn = document.createElement('button');
+    rmBtn.className = 'api-header-rm';
+    rmBtn.textContent = '\u2715';
+    if (readonly) { rmBtn.disabled = true; }
+
+    rmBtn.addEventListener('click', function() { row.remove(); });
+
+    row.appendChild(keyInput);
+    row.appendChild(valInput);
+    row.appendChild(rmBtn);
+    this._headersEl.appendChild(row);
+  }
+
+  getRequest() {
+    var headers = [];
+    var rows = this._headersEl.querySelectorAll('.api-header-row');
+    for (var i = 0; i < rows.length; i++) {
+      var k = rows[i].querySelector('.api-header-key');
+      var v = rows[i].querySelector('.api-header-val');
+      if (k && v && k.value.trim()) {
+        headers.push({ key: k.value.trim(), value: v.value });
+      }
+    }
+
+    var method = this._methodEl.value;
+    var needsBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
+
+    return {
+      method: method,
+      url: this._urlEl.value.trim(),
+      headers: headers,
+      body: needsBody ? this._bodyEl.value : null,
+      tokenType: this._detectTokenType(this._urlEl.value)
+    };
+  }
+
+  setRequest(req) {
+    if (req.method) {
+      this._methodEl.value = req.method;
+      var needsBody = req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH';
+      this._bodySection.style.display = needsBody ? '' : 'none';
+    }
+    if (req.url !== undefined) this._urlEl.value = req.url;
+    if (req.body !== undefined) this._bodyEl.value = req.body || '';
+
+    if (req.headers) {
+      // Keep the Authorization row, replace others
+      var authRow = this._headersEl.querySelector('.api-header-row');
+      this._headersEl.innerHTML = '';
+      if (authRow) this._headersEl.appendChild(authRow);
+      for (var i = 0; i < req.headers.length; i++) {
+        var h = req.headers[i];
+        if (h.key.toLowerCase() === 'authorization') continue;
+        this._addHeaderRow(h.key, h.value, false);
+      }
+    }
+  }
+
+  setSending(sending) {
+    this._sendBtn.style.display = sending ? 'none' : '';
+    this._cancelBtn.classList.toggle('visible', sending);
+    this._methodEl.disabled = sending;
+    this._urlEl.disabled = sending;
+  }
+
+  getCancelBtn() { return this._cancelBtn; }
+
+  generateCurl() {
+    var req = this.getRequest();
+    var parts = ['curl -X ' + req.method];
+    parts.push('"' + req.url + '"');
+    for (var i = 0; i < req.headers.length; i++) {
+      parts.push('-H "' + req.headers[i].key + ': ' + req.headers[i].value + '"');
+    }
+    if (req.body) {
+      parts.push("-d '" + req.body.replace(/'/g, "'\\''") + "'");
+    }
+    return parts.join(' \\\n  ');
+  }
+
+  _detectTokenType(url) {
+    if (url.indexOf('pbidedicated') !== -1 || url.indexOf('{fabricBaseUrl}') !== -1) return 'mwc';
+    if (url.indexOf('/v1/') !== -1 || url.indexOf('api.fabric') !== -1) return 'bearer';
+    return 'none';
+  }
+
+  getCatalog() { return this._catalog; }
+
+  destroy() {
+    if (this._catalog) this._catalog.destroy();
+    this._container.innerHTML = '';
+    this.onSend = null;
+  }
+}
