@@ -1152,3 +1152,253 @@ class InfraSetupPage {
     this._capSelect.innerHTML = html;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME DEFINITIONS
+   ═══════════════════════════════════════════════════════════════════ */
+var IW_THEMES = [
+  {
+    id: 'ecommerce',
+    name: 'E-Commerce',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+    tables: 'orders, customers, products, categories, reviews, inventory'
+  },
+  {
+    id: 'sales',
+    name: 'Sales Analytics',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    tables: 'opportunities, accounts, contacts, activities, pipeline, quotas'
+  },
+  {
+    id: 'iot',
+    name: 'IoT / Sensors',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+    tables: 'sensors, readings, alerts, devices, maintenance, locations'
+  },
+  {
+    id: 'hr',
+    name: 'HR & People',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    tables: 'employees, departments, payroll, attendance, reviews, positions'
+  },
+  {
+    id: 'finance',
+    name: 'Finance',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+    tables: 'transactions, accounts, invoices, payments, budgets, categories'
+  },
+  {
+    id: 'healthcare',
+    name: 'Healthcare',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+    tables: 'patients, appointments, prescriptions, labs, providers, claims'
+  }
+];
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME SCHEMA PAGE (Page 2)
+   ═══════════════════════════════════════════════════════════════════ */
+class ThemeSchemaPage {
+  constructor(options) {
+    this._containerEl = options.containerEl;
+    this._onValidationChange = options.onValidationChange;
+
+    this._selectedTheme = null;
+    this._medallionOn = false;
+    this._schemas = { dbo: true, bronze: false, silver: false, gold: false };
+
+    this._render();
+    this._bindEvents();
+  }
+
+  activate(wizardState) {
+    // Restore state if navigating back
+    if (wizardState && wizardState.theme) {
+      this._selectedTheme = wizardState.theme;
+      this._schemas = Object.assign({ dbo: true, bronze: false, silver: false, gold: false }, wizardState.schemas);
+      this._medallionOn = this._schemas.bronze || this._schemas.silver || this._schemas.gold;
+      this._updateThemeUI();
+      this._updateMedallionUI();
+    }
+    this._emitValidation();
+  }
+
+  deactivate() {}
+
+  validate() {
+    if (!this._selectedTheme) return 'Please select a data theme';
+    return null;
+  }
+
+  collectState(state) {
+    state.theme = this._selectedTheme;
+    state.schemas = Object.assign({}, this._schemas);
+    state.dirty = true;
+  }
+
+  destroy() {
+    this._containerEl.innerHTML = '';
+  }
+
+  getElement() {
+    return this._containerEl;
+  }
+
+  /* --- Render --- */
+
+  _render() {
+    var html =
+      '<div class="iw-form-group">' +
+        '<label class="iw-form-label">Data Theme</label>' +
+        '<div class="iw-theme-grid" id="iw-theme-grid">';
+
+    for (var i = 0; i < IW_THEMES.length; i++) {
+      var t = IW_THEMES[i];
+      html +=
+        '<div class="iw-theme-card" data-theme="' + t.id + '">' +
+          '<div class="iw-theme-icon">' + t.icon + '</div>' +
+          '<div class="iw-theme-name">' + t.name + '</div>' +
+          '<div class="iw-theme-tables">' + t.tables + '</div>' +
+        '</div>';
+    }
+
+    html += '</div></div>';
+
+    // Schema section
+    html +=
+      '<div class="iw-schema-section">' +
+        '<label class="iw-form-label">Schemas</label>' +
+        '<div class="iw-schema-row">' +
+          '<span class="iw-chip iw-chip-dbo">\u25CF dbo</span>' +
+          '<span style="font-size:10px;color:var(--text-muted,#8e95a5)">Always included</span>' +
+        '</div>' +
+        '<div class="iw-schema-row" style="margin-top:12px">' +
+          '<button class="iw-toggle-track" id="iw-medallion-toggle">' +
+            '<div class="iw-toggle-thumb"></div>' +
+          '</button>' +
+          '<span class="iw-toggle-label">Add medallion schemas</span>' +
+        '</div>' +
+        '<div class="iw-medallion-chips" id="iw-medallion-chips">' +
+          '<div class="iw-medallion-chip" data-schema="bronze">' +
+            '<div class="iw-medallion-check">\u2713</div>' +
+            'Bronze' +
+          '</div>' +
+          '<div class="iw-medallion-chip" data-schema="silver">' +
+            '<div class="iw-medallion-check">\u2713</div>' +
+            'Silver' +
+          '</div>' +
+          '<div class="iw-medallion-chip" data-schema="gold">' +
+            '<div class="iw-medallion-check">\u2713</div>' +
+            'Gold' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    this._containerEl.innerHTML = html;
+  }
+
+  /* --- Events --- */
+
+  _bindEvents() {
+    var self = this;
+
+    // Theme card clicks
+    var grid = this._containerEl.querySelector('#iw-theme-grid');
+    if (grid) {
+      grid.addEventListener('click', function(e) {
+        var card = e.target.closest('.iw-theme-card');
+        if (!card) return;
+        self._selectedTheme = card.getAttribute('data-theme');
+        self._updateThemeUI();
+        self._emitValidation();
+      });
+    }
+
+    // Medallion toggle
+    var toggle = this._containerEl.querySelector('#iw-medallion-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', function() {
+        self._medallionOn = !self._medallionOn;
+        if (self._medallionOn) {
+          // Enable all by default when toggling on
+          self._schemas.bronze = true;
+          self._schemas.silver = true;
+          self._schemas.gold = true;
+        } else {
+          self._schemas.bronze = false;
+          self._schemas.silver = false;
+          self._schemas.gold = false;
+        }
+        self._updateMedallionUI();
+      });
+    }
+
+    // Medallion chip clicks
+    var chips = this._containerEl.querySelector('#iw-medallion-chips');
+    if (chips) {
+      chips.addEventListener('click', function(e) {
+        var chip = e.target.closest('.iw-medallion-chip');
+        if (!chip) return;
+        var schema = chip.getAttribute('data-schema');
+        if (!schema) return;
+        self._schemas[schema] = !self._schemas[schema];
+        // If all off, turn toggle off
+        if (!self._schemas.bronze && !self._schemas.silver && !self._schemas.gold) {
+          self._medallionOn = false;
+        }
+        self._updateMedallionUI();
+      });
+    }
+  }
+
+  /* --- UI Updates --- */
+
+  _updateThemeUI() {
+    var cards = this._containerEl.querySelectorAll('.iw-theme-card');
+    for (var i = 0; i < cards.length; i++) {
+      var isSelected = cards[i].getAttribute('data-theme') === this._selectedTheme;
+      if (isSelected) {
+        cards[i].classList.add('selected');
+      } else {
+        cards[i].classList.remove('selected');
+      }
+    }
+  }
+
+  _updateMedallionUI() {
+    var toggle = this._containerEl.querySelector('#iw-medallion-toggle');
+    var chipsContainer = this._containerEl.querySelector('#iw-medallion-chips');
+
+    if (toggle) {
+      if (this._medallionOn) {
+        toggle.classList.add('on');
+      } else {
+        toggle.classList.remove('on');
+      }
+    }
+
+    if (chipsContainer) {
+      if (this._medallionOn) {
+        chipsContainer.classList.add('show');
+      } else {
+        chipsContainer.classList.remove('show');
+      }
+    }
+
+    // Update individual chips
+    var chipEls = this._containerEl.querySelectorAll('.iw-medallion-chip');
+    for (var i = 0; i < chipEls.length; i++) {
+      var schema = chipEls[i].getAttribute('data-schema');
+      if (this._schemas[schema]) {
+        chipEls[i].classList.add('active');
+      } else {
+        chipEls[i].classList.remove('active');
+      }
+    }
+  }
+
+  _emitValidation() {
+    var isValid = this._selectedTheme !== null;
+    if (this._onValidationChange) this._onValidationChange(isValid);
+  }
+}
