@@ -2149,6 +2149,7 @@ class WorkspaceExplorer {
     }
 
     const capacityId = ws.capacityId || '';
+    this._lastDeployTarget = { workspaceId: ws.id, artifactId: lh.id, capacityId: capacityId, lakehouseName: lh.displayName || '' };
     this._deployFlow.startDeploy(ws.id, lh.id, capacityId, lh.displayName || '');
   }
 

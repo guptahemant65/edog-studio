@@ -109,6 +109,7 @@ class EdogLogViewer {
     this.runtimeView = new RuntimeView(this.ws);
     this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
     this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
+    this.fileWatcher = new FileChangeWatcher();
 
     // Runtime View tab modules
     this.telemetryTab = new TelemetryTab(document.getElementById('rt-tab-telemetry'), this.ws);
@@ -245,7 +246,21 @@ class EdogLogViewer {
     // Check for active/completed deploy (AFTER workspace explorer DOM exists)
     this._checkDeployResume();
 
-    // Don't auto-connect WebSocket — _checkDeployResume will connect
+    // F13: Wire file change Re-deploy to deploy flow
+    var self = this;
+    this.fileWatcher._onRedeploy = function () {
+      if (self.workspaceExplorer && self.workspaceExplorer._deployFlow) {
+        var target = self.workspaceExplorer._lastDeployTarget;
+        if (target) {
+          self.workspaceExplorer._deployFlow.startDeploy(
+            target.workspaceId, target.artifactId,
+            target.capacityId, target.lakehouseName, true
+          );
+        }
+      }
+    };
+
+    // Don't auto-connect WebSocket— _checkDeployResume will connect
     // to the right port if FLT is running. Otherwise no WS is needed.
   }
 
@@ -276,14 +291,17 @@ class EdogLogViewer {
                   if (this.runtimeView) this.runtimeView.setPort(s.fltPort);
                 }
                 this.loadInitialData();
+                this.fileWatcher.start();
               } else if (s.status === 'stopped' && s.error) {
                 this.topbar.setDeployStatus('failed');
+                this.fileWatcher.stop();
               }
             };
           }
           this.workspaceExplorer._deployFlow.resume(state);
         }
         this.topbar.setDeployStatus('deploying');
+        this.fileWatcher.stop();
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
         if (this.runtimeView) this.runtimeView.setPhase('connected');
@@ -293,8 +311,10 @@ class EdogLogViewer {
           if (this.runtimeView) this.runtimeView.setPort(state.fltPort);
         }
         this.loadInitialData();
+        this.fileWatcher.start();
       } else if (state.phase === 'crashed') {
         this.topbar.setDeployStatus('crashed');
+        this.fileWatcher.stop();
       }
     } catch {
       // Studio status not available — normal in standalone mode
