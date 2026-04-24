@@ -17,7 +17,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <summary>
     /// SignalR hub for EDOG Playground real-time streaming (ADR-006).
     /// Clients subscribe to topic groups and receive only messages for their active tabs.
-    /// Topics: log, telemetry, fileop, spark, token, cache, http, retry, flag, di, perf.
+    /// Topics: log, telemetry, fileop, spark, token, cache, http, retry, flag, di, perf, capacity, catalog, dag, flt-ops, nexus.
     /// </summary>
     public sealed class EdogPlaygroundHub : Hub
     {
