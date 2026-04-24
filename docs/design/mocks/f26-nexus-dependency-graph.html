@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Nexus: Dependency Topology (F26)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   F26 NEXUS DEPENDENCY GRAPH — PHANTOM MANIFESTATION
+   Canvas 2D topology · 1Hz live snapshots · anomaly alerts
+   Pure vanilla JS · Zero dependencies · The nervous system of FLT
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ── DESIGN TOKENS ── */
+:root {
+  --accent:#6d5cff;--accent-dim:rgba(109,92,255,0.12);--accent-glow:rgba(109,92,255,0.25);
+  --green:#18a058;--green-dim:rgba(24,160,88,0.12);--green-glow:rgba(24,160,88,0.35);
+  --amber:#e5940c;--amber-dim:rgba(229,148,12,0.12);--amber-glow:rgba(229,148,12,0.35);
+  --red:#e5453b;--red-dim:rgba(229,69,59,0.12);--red-glow:rgba(229,69,59,0.35);
+  --blue:#2d7ff9;--teal:#0d9488;--purple:#a855f7;--cyan:#06b6d4;
+  --font:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Code','Consolas',monospace;
+  --r4:4px;--r6:6px;--r10:10px;--r100:100px;
+  --transition:160ms cubic-bezier(0.4,0,0.2,1);
+  --spring:cubic-bezier(0.34,1.56,0.64,1);
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--bg-2:#161923;--bg-3:#1e2230;--bg-4:#252a38;
+  --text:#e8eaf0;--text-2:#9aa0b2;--text-3:#5f6578;
+  --border:rgba(255,255,255,0.06);--border-bright:rgba(255,255,255,0.12);
+  --hover-bg:rgba(255,255,255,0.03);--selected-bg:rgba(109,92,255,0.10);
+  --toolbar-bg:#13151d;--panel-bg:#161923;
+  --scrollbar-thumb:rgba(255,255,255,0.12);--scrollbar-track:transparent;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.3),0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.4),0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg:0 8px 32px rgba(0,0,0,0.5),0 4px 8px rgba(0,0,0,0.3);
+  --canvas-grid:rgba(255,255,255,0.015);
+  --particle-glow:rgba(109,92,255,0.6);
+}
+[data-theme="light"]{
+  --bg:#f8f9fc;--bg-2:#ffffff;--bg-3:#f0f1f5;--bg-4:#e8e9ee;
+  --text:#1a1d27;--text-2:#5c6070;--text-3:#9098a8;
+  --border:rgba(0,0,0,0.08);--border-bright:rgba(0,0,0,0.14);
+  --hover-bg:rgba(0,0,0,0.03);--selected-bg:rgba(109,92,255,0.08);
+  --toolbar-bg:#f2f3f7;--panel-bg:#ffffff;
+  --scrollbar-thumb:rgba(0,0,0,0.15);--scrollbar-track:transparent;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.1),0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg:0 8px 32px rgba(0,0,0,0.12),0 4px 8px rgba(0,0,0,0.06);
+  --canvas-grid:rgba(0,0,0,0.02);
+  --particle-glow:rgba(109,92,255,0.4);
+}
+
+/* ── BASE ── */
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:13px;color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+button{cursor:pointer;border:none;background:none;color:var(--text);font-family:inherit;font-size:inherit}
+
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ── TOOLBAR ── */
+.nexus-toolbar{
+  display:flex;align-items:center;gap:12px;padding:0 16px;height:44px;
+  background:var(--toolbar-bg);border-bottom:1px solid var(--border);flex-shrink:0;
+  position:relative;z-index:10;
+}
+.toolbar-section{display:flex;align-items:center;gap:8px}
+.toolbar-divider{width:1px;height:20px;background:var(--border);margin:0 4px}
+.toolbar-label{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px}
+.toolbar-spacer{flex:1}
+
+/* Filter pills */
+.filter-pill{
+  padding:4px 12px;border-radius:var(--r100);font-size:11px;font-weight:500;
+  color:var(--text-2);border:1px solid var(--border);transition:all var(--transition);
+  display:flex;align-items:center;gap:4px;user-select:none;
+}
+.filter-pill:hover{background:var(--hover-bg);border-color:var(--border-bright)}
+.filter-pill.active{background:var(--accent-dim);color:var(--accent);border-color:rgba(109,92,255,0.3)}
+.filter-pill .pill-count{
+  font-size:10px;background:var(--border);border-radius:var(--r100);
+  padding:0 5px;min-width:16px;text-align:center;line-height:16px;
+}
+.filter-pill.active .pill-count{background:rgba(109,92,255,0.2)}
+
+/* Internals toggle */
+.toggle-btn{
+  padding:4px 12px;border-radius:var(--r6);font-size:11px;font-weight:500;
+  color:var(--text-3);border:1px solid var(--border);transition:all var(--transition);
+  display:flex;align-items:center;gap:5px;
+}
+.toggle-btn:hover{color:var(--text-2);border-color:var(--border-bright)}
+.toggle-btn.active{color:var(--accent);background:var(--accent-dim);border-color:rgba(109,92,255,0.3)}
+.toggle-icon{font-size:13px;opacity:0.7}
+
+/* Connection indicator */
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-3)}
+.conn-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:all 300ms ease}
+.conn-dot.live{background:var(--green);box-shadow:0 0 6px var(--green-glow)}
+.conn-dot.stale{background:var(--amber);box-shadow:0 0 6px var(--amber-glow);animation:pulse-amber 2s ease-in-out infinite}
+
+/* Stats bar */
+.stats-bar{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--text-3);font-family:var(--mono)}
+.stat-item{display:flex;align-items:center;gap:4px}
+.stat-val{color:var(--text-2);font-weight:500}
+
+/* Snapshot time */
+.snap-time{font-size:10px;color:var(--text-3);font-family:var(--mono);white-space:nowrap}
+.snap-time.stale{color:var(--amber)}
+
+/* ── MAIN AREA ── */
+.nexus-main{flex:1;display:flex;position:relative;overflow:hidden}
+
+/* ── CANVAS ── */
+.canvas-wrap{flex:1;position:relative;overflow:hidden;transition:flex 200ms ease}
+.canvas-wrap.panel-open{flex:1 1 0;min-width:0}
+canvas#nexus-canvas{display:block;width:100%;height:100%;cursor:default}
+
+/* ── EMPTY STATE ── */
+.nexus-empty{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:12px;opacity:0;pointer-events:none;transition:opacity 400ms ease;
+}
+.nexus-empty.visible{opacity:1;pointer-events:auto}
+.nexus-empty svg{color:var(--text-3);opacity:0.4}
+.nexus-empty-title{font-size:15px;font-weight:600;color:var(--text-2)}
+.nexus-empty-desc{font-size:12px;color:var(--text-3);max-width:280px;text-align:center}
+
+/* ── TOOLTIP ── */
+.nexus-tooltip{
+  position:fixed;padding:10px 14px;border-radius:var(--r6);
+  background:var(--bg-2);border:1px solid var(--border-bright);
+  box-shadow:var(--shadow-lg);z-index:500;pointer-events:none;
+  opacity:0;transition:opacity 80ms ease;font-size:11px;min-width:180px;max-width:280px;
+}
+.nexus-tooltip.visible{opacity:1}
+.tt-header{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tt-name{font-weight:600;font-size:12px;color:var(--text)}
+.tt-badge{
+  padding:1px 6px;border-radius:var(--r100);font-size:9px;font-weight:600;
+  text-transform:uppercase;letter-spacing:0.3px;
+}
+.tt-badge.healthy{background:var(--green-dim);color:var(--green)}
+.tt-badge.degraded{background:var(--amber-dim);color:var(--amber)}
+.tt-badge.critical{background:var(--red-dim);color:var(--red)}
+.tt-row{display:flex;justify-content:space-between;padding:2px 0;color:var(--text-3)}
+.tt-row span:last-child{color:var(--text-2);font-family:var(--mono);font-size:10px}
+.tt-divider{height:1px;background:var(--border);margin:4px 0}
+
+/* ── DETAIL PANEL ── */
+.detail-panel{
+  width:340px;flex-shrink:0;background:var(--panel-bg);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+  transform:translateX(100%);transition:transform 200ms cubic-bezier(0.4,0,0.2,1);
+  position:relative;z-index:5;
+}
+.detail-panel.open{transform:translateX(0)}
+.dp-header{
+  display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);
+  gap:8px;flex-shrink:0;
+}
+.dp-icon{width:28px;height:28px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:14px}
+.dp-title-area{flex:1;min-width:0}
+.dp-title{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dp-subtitle{font-size:11px;color:var(--text-3)}
+.dp-close{
+  width:28px;height:28px;border-radius:var(--r4);display:flex;align-items:center;
+  justify-content:center;color:var(--text-3);transition:all var(--transition);font-size:16px;
+}
+.dp-close:hover{background:var(--hover-bg);color:var(--text)}
+.dp-body{flex:1;overflow-y:auto;padding:16px}
+.dp-section{margin-bottom:20px}
+.dp-section-title{
+  font-size:10px;font-weight:600;color:var(--text-3);text-transform:uppercase;
+  letter-spacing:0.5px;margin-bottom:8px;
+}
+
+/* Metric rows */
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.metric-card{
+  padding:10px 12px;border-radius:var(--r6);background:var(--bg-3);
+  border:1px solid var(--border);transition:all var(--transition);
+}
+.metric-card:hover{border-color:var(--border-bright)}
+.metric-label{font-size:10px;color:var(--text-3);margin-bottom:2px}
+.metric-value{font-size:16px;font-weight:700;font-family:var(--mono);line-height:1.2}
+.metric-value.green{color:var(--green)}
+.metric-value.amber{color:var(--amber)}
+.metric-value.red{color:var(--red)}
+.metric-unit{font-size:10px;font-weight:400;color:var(--text-3);margin-left:2px}
+.metric-card.full{grid-column:1/-1}
+
+/* Health badge in panel */
+.health-badge{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 10px;
+  border-radius:var(--r100);font-size:11px;font-weight:600;
+}
+.health-badge.healthy{background:var(--green-dim);color:var(--green)}
+.health-badge.degraded{background:var(--amber-dim);color:var(--amber)}
+.health-badge.critical{background:var(--red-dim);color:var(--red)}
+.health-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* Latency bar */
+.latency-bar-wrap{margin-top:12px}
+.latency-bar{
+  display:flex;align-items:flex-end;gap:2px;height:48px;padding:0;
+}
+.lat-segment{
+  flex:1;border-radius:2px 2px 0 0;transition:height 400ms var(--spring);
+  min-height:2px;position:relative;
+}
+.lat-labels{display:flex;justify-content:space-between;margin-top:4px}
+.lat-labels span{font-size:9px;color:var(--text-3);font-family:var(--mono)}
+
+/* Deep link buttons */
+.deep-links{display:flex;flex-direction:column;gap:6px}
+.deep-link{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--r6);
+  background:var(--bg-3);border:1px solid var(--border);font-size:12px;font-weight:500;
+  color:var(--text-2);transition:all var(--transition);
+}
+.deep-link:hover{background:var(--accent-dim);border-color:rgba(109,92,255,0.3);color:var(--accent)}
+.deep-link-icon{font-size:14px;opacity:0.6}
+.deep-link-arrow{margin-left:auto;opacity:0.3;font-size:12px}
+
+/* ── ALERT BANNERS ── */
+.alert-container{
+  position:absolute;top:52px;right:16px;z-index:400;
+  display:flex;flex-direction:column;gap:8px;max-width:380px;
+}
+.alert-banner{
+  display:flex;align-items:flex-start;gap:10px;padding:10px 14px;
+  border-radius:var(--r6);border:1px solid;
+  box-shadow:var(--shadow-md);font-size:12px;
+  animation:alertSlideIn 300ms var(--spring) both;
+  position:relative;overflow:hidden;
+}
+.alert-banner.warning{
+  background:rgba(229,148,12,0.08);border-color:rgba(229,148,12,0.2);
+}
+.alert-banner.critical{
+  background:rgba(229,69,59,0.08);border-color:rgba(229,69,59,0.2);
+}
+.alert-icon{font-size:14px;flex-shrink:0;margin-top:1px}
+.alert-banner.warning .alert-icon{color:var(--amber)}
+.alert-banner.critical .alert-icon{color:var(--red)}
+.alert-text{flex:1;line-height:1.4}
+.alert-dep{font-weight:600;color:var(--text)}
+.alert-msg{color:var(--text-2);margin-top:2px}
+.alert-time{font-size:10px;color:var(--text-3);font-family:var(--mono);margin-top:3px}
+.alert-dismiss{
+  flex-shrink:0;width:22px;height:22px;border-radius:var(--r4);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--text-3);font-size:14px;transition:all var(--transition);
+}
+.alert-dismiss:hover{background:rgba(255,255,255,0.08);color:var(--text)}
+.alert-banner.exiting{animation:alertSlideOut 200ms ease-in forwards}
+.alert-pulse{
+  position:absolute;left:0;top:0;bottom:0;width:3px;
+}
+.alert-banner.warning .alert-pulse{background:var(--amber)}
+.alert-banner.critical .alert-pulse{background:var(--red)}
+
+/* ── THEME TOGGLE ── */
+.theme-toggle{
+  position:fixed;bottom:12px;right:12px;z-index:999;
+  width:32px;height:32px;border-radius:var(--r6);background:var(--bg-3);
+  border:1px solid var(--border);display:flex;align-items:center;
+  justify-content:center;color:var(--text-3);font-size:14px;
+  transition:all var(--transition);
+}
+.theme-toggle:hover{background:var(--bg-4);color:var(--text)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS — 32 named animations
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes pulse-green{0%,100%{box-shadow:0 0 4px var(--green-glow)}50%{box-shadow:0 0 12px var(--green-glow)}}
+@keyframes pulse-amber{0%,100%{box-shadow:0 0 4px var(--amber-glow)}50%{box-shadow:0 0 14px var(--amber-glow)}}
+@keyframes pulse-red{0%,100%{box-shadow:0 0 4px var(--red-glow)}50%{box-shadow:0 0 16px var(--red-glow)}}
+@keyframes alertSlideIn{from{opacity:0;transform:translateX(40px) scale(0.95)}to{opacity:1;transform:translateX(0) scale(1)}}
+@keyframes alertSlideOut{from{opacity:1;transform:translateX(0) scale(1)}to{opacity:0;transform:translateX(40px) scale(0.9)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scaleSpring{0%{transform:scale(0.85);opacity:0}60%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}
+@keyframes breathe{0%,100%{opacity:0.6}50%{opacity:1}}
+@keyframes panelSlide{from{transform:translateX(100%)}to{transform:translateX(0)}}
+@keyframes panelSlideOut{from{transform:translateX(0)}to{transform:translateX(100%)}}
+@keyframes popIn{0%{transform:scale(0);opacity:0}70%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+@keyframes nodeReveal{0%{transform:scale(0);opacity:0}50%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+@keyframes edgeTrace{from{stroke-dashoffset:1000}to{stroke-dashoffset:0}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes spinSlow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes heartbeat{0%,100%{transform:scale(1)}10%{transform:scale(1.05)}20%{transform:scale(1)}}
+@keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 2px currentColor)}50%{filter:drop-shadow(0 0 8px currentColor)}}
+@keyframes counterTick{0%{transform:translateY(-2px);opacity:0.5}50%{transform:translateY(0);opacity:1}100%{transform:translateY(0);opacity:1}}
+@keyframes alertPulse{0%,100%{opacity:0.7}50%{opacity:1}}
+@keyframes slideRight{from{transform:translateX(-20px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes ripple{0%{box-shadow:0 0 0 0 var(--accent-glow)}100%{box-shadow:0 0 0 12px transparent}}
+@keyframes tooltipIn{from{opacity:0;transform:scale(0.96) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes barGrow{from{height:2px}to{height:var(--target-h)}}
+@keyframes statusFlash{0%,100%{opacity:1}50%{opacity:0.5}}
+@keyframes dotBreathe{0%,100%{transform:scale(1);opacity:0.7}50%{transform:scale(1.3);opacity:1}}
+@keyframes particleTrail{0%{opacity:1}100%{opacity:0}}
+@keyframes ringExpand{from{r:0;opacity:1}to{r:40;opacity:0}}
+@keyframes entryOrbit{0%{transform:rotate(0deg) translateX(0) scale(0);opacity:0}60%{transform:rotate(180deg) translateX(40px) scale(1.1);opacity:0.8}100%{transform:rotate(360deg) translateX(0) scale(1);opacity:1}}
+@keyframes centerPulse{0%{transform:scale(0.9);opacity:0}40%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes labelFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@keyframes connectedGlow{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 8px var(--accent-glow)}}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .detail-panel{width:280px}
+  .metric-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOOLBAR -->
+  <div class="nexus-toolbar" id="toolbar">
+    <div class="toolbar-section">
+      <span class="toolbar-label">Nexus</span>
+      <div class="toolbar-divider"></div>
+    </div>
+    <div class="toolbar-section" id="filter-pills">
+      <button class="filter-pill active" data-filter="all">All <span class="pill-count" id="count-all">8</span></button>
+      <button class="filter-pill" data-filter="degraded">Degraded+ <span class="pill-count" id="count-degraded">2</span></button>
+      <button class="filter-pill" data-filter="critical">Critical <span class="pill-count" id="count-critical">1</span></button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <button class="toggle-btn" id="internals-toggle">
+      <span class="toggle-icon">&#9673;</span> Internals
+    </button>
+    <div class="toolbar-spacer"></div>
+    <div class="stats-bar">
+      <div class="stat-item"><span class="stat-val" id="stat-nodes">8</span> nodes</div>
+      <div class="stat-item"><span class="stat-val" id="stat-edges">8</span> edges</div>
+      <div class="stat-item"><span class="stat-val" id="stat-rps">127</span> req/min</div>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="conn-status">
+      <div class="conn-dot live" id="conn-dot"></div>
+      <span id="conn-label">Live</span>
+    </div>
+    <span class="snap-time" id="snap-time">0s ago</span>
+  </div>
+
+  <!-- MAIN AREA -->
+  <div class="nexus-main">
+    <!-- CANVAS -->
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="nexus-canvas"></canvas>
+      <!-- EMPTY STATE -->
+      <div class="nexus-empty" id="empty-state">
+        <svg viewBox="0 0 48 48" width="56" height="56" fill="none" stroke="currentColor" stroke-width="1.2">
+          <circle cx="24" cy="24" r="8"/>
+          <circle cx="10" cy="8" r="4"/><line x1="18" y1="18" x2="13" y2="11"/>
+          <circle cx="38" cy="8" r="4"/><line x1="30" y1="18" x2="35" y2="11"/>
+          <circle cx="42" cy="24" r="4"/><line x1="32" y1="24" x2="38" y2="24"/>
+          <circle cx="38" cy="40" r="4"/><line x1="30" y1="30" x2="35" y2="37"/>
+          <circle cx="10" cy="40" r="4"/><line x1="18" y1="30" x2="13" y2="37"/>
+          <circle cx="6" cy="24" r="4"/><line x1="16" y1="24" x2="10" y2="24"/>
+        </svg>
+        <div class="nexus-empty-title">No dependency data yet</div>
+        <div class="nexus-empty-desc">Nexus will populate once FLT begins making outbound calls.</div>
+      </div>
+    </div>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="dp-header">
+        <div class="dp-icon" id="dp-icon"></div>
+        <div class="dp-title-area">
+          <div class="dp-title" id="dp-title">—</div>
+          <div class="dp-subtitle" id="dp-subtitle">Dependency</div>
+        </div>
+        <button class="dp-close" id="dp-close" title="Close (Esc)">&#10005;</button>
+      </div>
+      <div class="dp-body" id="dp-body"></div>
+    </div>
+
+    <!-- TOOLTIP -->
+    <div class="nexus-tooltip" id="tooltip"></div>
+
+    <!-- ALERT CONTAINER -->
+    <div class="alert-container" id="alert-container"></div>
+  </div>
+</div>
+
+<!-- THEME TOGGLE -->
+<button class="theme-toggle" id="theme-toggle" title="Toggle theme">&#9681;</button>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   F26 NEXUS — THE NERVOUS SYSTEM
+   Canvas 2D · Particle flow · Anomaly detection · Live topology
+   ═══════════════════════════════════════════════════════════════════ */
+'use strict';
+
+/* ── UTILITY ── */
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const css = p => getComputedStyle(document.documentElement).getPropertyValue(p).trim();
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const TAU = Math.PI * 2;
+
+/* ── DEPENDENCY DATA MODEL ── */
+const DEPS = {
+  'flt-local': { label: 'FLT', kind: 'core', color: () => css('--accent'), icon: '◆' },
+  'spark-gts': { label: 'Spark (GTS)', kind: 'dependency', color: () => css('--blue'), icon: '⚡' },
+  'fabric-api': { label: 'Fabric APIs', kind: 'dependency', color: () => css('--teal'), icon: '◈' },
+  'platform-api': { label: 'Platform API', kind: 'dependency', color: () => css('--purple'), icon: '▣' },
+  'auth': { label: 'Auth (AAD)', kind: 'dependency', color: () => css('--cyan'), icon: '◉' },
+  'capacity': { label: 'Capacity Svc', kind: 'dependency', color: () => css('--red'), icon: '◧' },
+  'cache': { label: 'Cache Layer', kind: 'dependency', color: () => '#84cc16', icon: '◫' },
+  'retry-system': { label: 'Retry System', kind: 'dependency', color: () => css('--amber'), icon: '↻' },
+  'unknown': { label: 'Unknown', kind: 'dependency', color: () => css('--text-3'), icon: '?' },
+  'filesystem': { label: 'Filesystem', kind: 'dependency', color: () => '#6b7280', icon: '▤', internal: true },
+};
+
+/* ── SNAPSHOT SIMULATOR ── */
+function generateSnapshot(tick) {
+  const jitter = (base, pct) => base * (1 + (Math.random() - 0.5) * 2 * pct);
+  const nodes = [
+    { id: 'flt-local', kind: 'core', volume: 0 },
+    { id: 'spark-gts', kind: 'dependency', volume: Math.round(jitter(186, 0.1)) },
+    { id: 'fabric-api', kind: 'dependency', volume: Math.round(jitter(312, 0.08)) },
+    { id: 'platform-api', kind: 'dependency', volume: Math.round(jitter(94, 0.15)) },
+    { id: 'auth', kind: 'dependency', volume: Math.round(jitter(220, 0.06)) },
+    { id: 'capacity', kind: 'dependency', volume: Math.round(jitter(68, 0.12)) },
+    { id: 'cache', kind: 'dependency', volume: Math.round(jitter(410, 0.05)) },
+    { id: 'retry-system', kind: 'dependency', volume: Math.round(jitter(42, 0.2)) },
+    { id: 'unknown', kind: 'dependency', volume: Math.round(jitter(18, 0.3)) },
+    { id: 'filesystem', kind: 'dependency', volume: Math.round(jitter(55, 0.1)) },
+  ];
+
+  /* Platform API: degraded — latency spike incident */
+  const platformLatencySpike = 1.4 + Math.sin(tick * 0.3) * 0.4;
+  /* Capacity: critical — 23% error rate incident */
+  const capacityErrorRate = 0.20 + Math.random() * 0.06;
+
+  const edges = [
+    { from: 'flt-local', to: 'spark-gts', volume: nodes[1].volume, throughputPerMin: jitter(37.2, 0.1), p50Ms: jitter(180, 0.08), p95Ms: jitter(420, 0.1), p99Ms: jitter(890, 0.12), errorRate: jitter(0.02, 0.3), retryRate: jitter(0.04, 0.2), baselineDelta: jitter(1.1, 0.1), health: 'healthy' },
+    { from: 'flt-local', to: 'fabric-api', volume: nodes[2].volume, throughputPerMin: jitter(62.4, 0.08), p50Ms: jitter(24, 0.1), p95Ms: jitter(68, 0.12), p99Ms: jitter(145, 0.15), errorRate: jitter(0.01, 0.3), retryRate: jitter(0.01, 0.2), baselineDelta: jitter(1.0, 0.05), health: 'healthy' },
+    { from: 'flt-local', to: 'platform-api', volume: nodes[3].volume, throughputPerMin: jitter(18.8, 0.12), p50Ms: jitter(340 * platformLatencySpike, 0.05), p95Ms: jitter(890 * platformLatencySpike, 0.08), p99Ms: jitter(1650 * platformLatencySpike, 0.1), errorRate: jitter(0.08, 0.2), retryRate: jitter(0.12, 0.15), baselineDelta: 3.2 + Math.random() * 0.8, health: 'degraded' },
+    { from: 'flt-local', to: 'auth', volume: nodes[4].volume, throughputPerMin: jitter(44.0, 0.06), p50Ms: jitter(12, 0.1), p95Ms: jitter(35, 0.15), p99Ms: jitter(78, 0.2), errorRate: jitter(0.005, 0.5), retryRate: jitter(0.0, 0.1), baselineDelta: jitter(1.0, 0.05), health: 'healthy' },
+    { from: 'flt-local', to: 'capacity', volume: nodes[5].volume, throughputPerMin: jitter(13.6, 0.1), p50Ms: jitter(45, 0.1), p95Ms: jitter(220, 0.15), p99Ms: jitter(580, 0.2), errorRate: capacityErrorRate, retryRate: jitter(0.18, 0.1), baselineDelta: 5.2 + Math.random() * 1.2, health: 'critical' },
+    { from: 'flt-local', to: 'cache', volume: nodes[6].volume, throughputPerMin: jitter(82.0, 0.05), p50Ms: jitter(2, 0.3), p95Ms: jitter(8, 0.2), p99Ms: jitter(18, 0.25), errorRate: 0, retryRate: 0, baselineDelta: jitter(1.0, 0.03), health: 'healthy' },
+    { from: 'flt-local', to: 'retry-system', volume: nodes[7].volume, throughputPerMin: jitter(8.4, 0.15), p50Ms: jitter(0, 0.1), p95Ms: jitter(2, 0.3), p99Ms: jitter(5, 0.4), errorRate: 0, retryRate: jitter(1.0, 0), baselineDelta: jitter(1.0, 0.1), health: 'healthy' },
+    { from: 'flt-local', to: 'unknown', volume: nodes[8].volume, throughputPerMin: jitter(3.6, 0.2), p50Ms: jitter(120, 0.15), p95Ms: jitter(340, 0.2), p99Ms: jitter(780, 0.25), errorRate: jitter(0.03, 0.3), retryRate: 0, baselineDelta: jitter(1.2, 0.1), health: 'healthy' },
+    { from: 'flt-local', to: 'filesystem', volume: nodes[9].volume, throughputPerMin: jitter(11.0, 0.08), p50Ms: jitter(1, 0.2), p95Ms: jitter(4, 0.3), p99Ms: jitter(12, 0.4), errorRate: 0, retryRate: 0, baselineDelta: jitter(1.0, 0.05), health: 'healthy' },
+  ];
+
+  const alerts = [];
+  if (tick > 2) {
+    alerts.push({ severity: 'warning', dependencyId: 'platform-api', message: `Latency ${(3.2 + Math.random() * 0.8).toFixed(1)}x above baseline (p95: ${Math.round(890 * platformLatencySpike)}ms)`, timestamp: new Date().toISOString() });
+  }
+  if (tick > 4) {
+    alerts.push({ severity: 'critical', dependencyId: 'capacity', message: `Error rate ${(capacityErrorRate * 100).toFixed(1)}% — ${Math.round(capacityErrorRate * nodes[5].volume)} failed requests`, timestamp: new Date().toISOString() });
+  }
+
+  return {
+    type: 'snapshot', generatedAt: new Date().toISOString(), windowSec: 300,
+    nodes, edges, alerts
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NEXUS ENGINE
+   ═══════════════════════════════════════════════════════════════════ */
+class NexusEngine {
+  constructor() {
+    this.canvas = $('#nexus-canvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.dpr = window.devicePixelRatio || 1;
+    this.snapshot = null;
+    this.tick = 0;
+    this.time = 0;
+
+    /* State */
+    this.nodePositions = new Map();
+    this.nodeRadii = new Map();
+    this.selectedNode = null;
+    this.selectedEdge = null;
+    this.hoveredNode = null;
+    this.hoveredEdge = null;
+    this.showInternals = false;
+    this.healthFilter = 'all';
+    this.particles = [];
+    this.entryAnimProgress = 0;
+    this.entryAnimating = false;
+    this.alertsShown = new Set();
+    this.lastSnapshotTime = Date.now();
+
+    /* Canvas interaction state */
+    this.mouseX = 0;
+    this.mouseY = 0;
+
+    /* Init */
+    this._resize();
+    this._bindEvents();
+    this._startSimulation();
+  }
+
+  /* ── RESIZE ── */
+  _resize() {
+    const wrap = $('#canvas-wrap');
+    const w = wrap.clientWidth;
+    const h = wrap.clientHeight;
+    this.canvas.width = w * this.dpr;
+    this.canvas.height = h * this.dpr;
+    this.canvas.style.width = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.w = w;
+    this.h = h;
+    this.cx = w / 2;
+    this.cy = h / 2;
+    if (this.snapshot) this._computeLayout();
+  }
+
+  /* ── EVENTS ── */
+  _bindEvents() {
+    window.addEventListener('resize', () => this._resize());
+    this.canvas.addEventListener('mousemove', e => this._onMouseMove(e));
+    this.canvas.addEventListener('click', e => this._onClick(e));
+    this.canvas.addEventListener('mouseleave', () => this._onMouseLeave());
+    document.addEventListener('keydown', e => this._onKeyDown(e));
+    $('#dp-close').addEventListener('click', () => this._closePanel());
+    $('#theme-toggle').addEventListener('click', () => this._toggleTheme());
+    $('#internals-toggle').addEventListener('click', () => this._toggleInternals());
+
+    /* Filter pills */
+    $$('.filter-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        $$('.filter-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this.healthFilter = pill.dataset.filter;
+        this._computeLayout();
+      });
+    });
+  }
+
+  /* ── SIMULATION LOOP ── */
+  _startSimulation() {
+    /* Show empty state briefly, then animate in */
+    $('#empty-state').classList.add('visible');
+    setTimeout(() => {
+      this._onSnapshot(generateSnapshot(0));
+      this.tick = 0;
+      this.entryAnimating = true;
+      this.entryAnimProgress = 0;
+      $('#empty-state').classList.remove('visible');
+    }, 1200);
+
+    /* 1Hz snapshot updates */
+    setInterval(() => {
+      this.tick++;
+      this._onSnapshot(generateSnapshot(this.tick));
+    }, 1000);
+
+    /* Render loop */
+    const loop = (ts) => {
+      this.time = ts;
+      this._render();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+
+    /* Staleness timer */
+    setInterval(() => this._updateStaleness(), 1000);
+
+    /* Auto-trigger alerts */
+    setTimeout(() => this._triggerAlert('warning', 'platform-api', 'Latency 3.4x above baseline (p95: 1,247ms vs 340ms avg)'), 4000);
+    setTimeout(() => this._triggerAlert('critical', 'capacity', 'Error rate 23.1% — 16 failed requests in 5m window'), 7000);
+  }
+
+  /* ── SNAPSHOT HANDLER ── */
+  _onSnapshot(snap) {
+    this.snapshot = snap;
+    this.lastSnapshotTime = Date.now();
+    this._computeLayout();
+    this._updateToolbar();
+    this._spawnParticles();
+
+    /* Update detail panel if open */
+    if (this.selectedNode) this._renderNodePanel(this.selectedNode);
+    if (this.selectedEdge !== null) this._renderEdgePanel(this.selectedEdge);
+  }
+
+  /* ── LAYOUT ── */
+  _computeLayout() {
+    if (!this.snapshot) return;
+    const nodes = this._visibleNodes();
+    const depNodes = nodes.filter(n => n.id !== 'flt-local');
+
+    /* FLT center */
+    this.nodePositions.set('flt-local', { x: this.cx, y: this.cy });
+    this.nodeRadii.set('flt-local', 32);
+
+    /* Ring layout */
+    const ringR = Math.min(this.w, this.h) * 0.32;
+    const count = depNodes.length;
+    const angleStep = TAU / Math.max(count, 1);
+    const startAngle = -Math.PI / 2;
+
+    depNodes.forEach((n, i) => {
+      const angle = startAngle + angleStep * i;
+      const r = clamp(18, 18 + Math.sqrt(n.volume) * 1.2, 40);
+      this.nodePositions.set(n.id, {
+        x: this.cx + Math.cos(angle) * ringR,
+        y: this.cy + Math.sin(angle) * ringR
+      });
+      this.nodeRadii.set(n.id, r);
+    });
+  }
+
+  _visibleNodes() {
+    if (!this.snapshot) return [];
+    return this.snapshot.nodes.filter(n => {
+      if (n.id === 'filesystem' && !this.showInternals) return false;
+      if (this.healthFilter !== 'all') {
+        if (n.id === 'flt-local') return true;
+        const edge = this.snapshot.edges.find(e => e.to === n.id);
+        if (!edge) return false;
+        if (this.healthFilter === 'degraded') return edge.health === 'degraded' || edge.health === 'critical';
+        if (this.healthFilter === 'critical') return edge.health === 'critical';
+      }
+      return true;
+    });
+  }
+
+  _visibleEdges() {
+    if (!this.snapshot) return [];
+    const visIds = new Set(this._visibleNodes().map(n => n.id));
+    return this.snapshot.edges.filter(e => visIds.has(e.from) && visIds.has(e.to));
+  }
+
+  /* ── PARTICLES ── */
+  _spawnParticles() {
+    const edges = this._visibleEdges();
+    edges.forEach(e => {
+      const count = clamp(1, Math.round(e.throughputPerMin / 15), 5);
+      for (let i = 0; i < count; i++) {
+        if (this.particles.length > 200) return;
+        this.particles.push({
+          from: e.from, to: e.to, health: e.health,
+          progress: Math.random(),
+          speed: 0.003 + Math.random() * 0.004,
+          size: 2 + Math.random() * 2,
+          opacity: 0.4 + Math.random() * 0.4
+        });
+      }
+    });
+  }
+
+  _updateParticles() {
+    const visIds = new Set(this._visibleNodes().map(n => n.id));
+    this.particles = this.particles.filter(p => {
+      p.progress += p.speed;
+      if (p.progress > 1) return false;
+      if (!visIds.has(p.to)) return false;
+      return true;
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     CANVAS RENDERING — THE HEART
+     ═══════════════════════════════════════════════════════════════════ */
+  _render() {
+    const ctx = this.ctx;
+    const w = this.w * this.dpr;
+    const h = this.h * this.dpr;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+
+    if (!this.snapshot) return;
+
+    /* Entry animation */
+    if (this.entryAnimating) {
+      this.entryAnimProgress += 0.018;
+      if (this.entryAnimProgress >= 1) {
+        this.entryAnimProgress = 1;
+        this.entryAnimating = false;
+      }
+    }
+    const entryT = this._easeOutBack(clamp(this.entryAnimProgress, 0, 1));
+
+    /* Draw grid dots */
+    this._drawGrid(ctx);
+
+    /* Update particles */
+    this._updateParticles();
+
+    /* Draw edges (healthy first for z-order) */
+    const edges = this._visibleEdges();
+    const sortedEdges = [...edges].sort((a, b) => {
+      const order = { healthy: 0, degraded: 1, critical: 2 };
+      return (order[a.health] || 0) - (order[b.health] || 0);
+    });
+    sortedEdges.forEach((e, i) => this._drawEdge(ctx, e, i, entryT));
+
+    /* Draw particles */
+    this._drawParticles(ctx);
+
+    /* Draw nodes */
+    const nodes = this._visibleNodes();
+    nodes.forEach(n => this._drawNode(ctx, n, entryT));
+
+    /* Draw labels */
+    nodes.forEach(n => this._drawLabel(ctx, n, entryT));
+  }
+
+  /* ── GRID ── */
+  _drawGrid(ctx) {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    ctx.fillStyle = isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)';
+    const spacing = 32;
+    for (let x = spacing; x < this.w; x += spacing) {
+      for (let y = spacing; y < this.h; y += spacing) {
+        ctx.beginPath();
+        ctx.arc(x, y, 0.8, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
+  /* ── EDGE DRAWING ── */
+  _drawEdge(ctx, edge, idx, entryT) {
+    const from = this.nodePositions.get(edge.from);
+    const to = this.nodePositions.get(edge.to);
+    if (!from || !to) return;
+
+    const fx = lerp(this.cx, from.x, entryT);
+    const fy = lerp(this.cy, from.y, entryT);
+    const tx = lerp(this.cx, to.x, entryT);
+    const ty = lerp(this.cy, to.y, entryT);
+
+    /* Control point for curve */
+    const mx = (fx + tx) / 2;
+    const my = (fy + ty) / 2;
+    const dx = tx - fx;
+    const dy = ty - fy;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const nx = -dy / len;
+    const ny = dx / len;
+    const curveOffset = len * 0.08;
+    const cpx = mx + nx * curveOffset;
+    const cpy = my + ny * curveOffset;
+
+    /* Health color */
+    const healthColors = {
+      healthy: css('--green'),
+      degraded: css('--amber'),
+      critical: css('--red')
+    };
+    const color = healthColors[edge.health] || css('--text-3');
+
+    /* Thickness by throughput */
+    const thickness = clamp(1.5, edge.throughputPerMin / 12, 5);
+
+    /* Hover / selection state */
+    const isHovered = this.hoveredEdge === idx;
+    const isSelected = this.selectedEdge === idx;
+    const alpha = (isHovered || isSelected) ? 1.0 : 0.5;
+
+    ctx.save();
+    ctx.globalAlpha = alpha * entryT;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thickness + (isHovered ? 1 : 0) + (isSelected ? 1.5 : 0);
+
+    /* Glow for unhealthy */
+    if (edge.health !== 'healthy') {
+      const pulsePhase = Math.sin(this.time * 0.003) * 0.3 + 0.7;
+      ctx.globalAlpha = alpha * pulsePhase * entryT;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = edge.health === 'critical' ? 12 : 8;
+    }
+
+    if (isSelected) {
+      ctx.shadowColor = css('--accent');
+      ctx.shadowBlur = 8;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.quadraticCurveTo(cpx, cpy, tx, ty);
+    ctx.stroke();
+
+    /* Arrowhead */
+    const arrowT = 0.85;
+    const ax = (1 - arrowT) * (1 - arrowT) * fx + 2 * (1 - arrowT) * arrowT * cpx + arrowT * arrowT * tx;
+    const ay = (1 - arrowT) * (1 - arrowT) * fy + 2 * (1 - arrowT) * arrowT * cpy + arrowT * arrowT * ty;
+    const at2 = arrowT + 0.01;
+    const ax2 = (1 - at2) * (1 - at2) * fx + 2 * (1 - at2) * at2 * cpx + at2 * at2 * tx;
+    const ay2 = (1 - at2) * (1 - at2) * fy + 2 * (1 - at2) * at2 * cpy + at2 * at2 * ty;
+    const angle = Math.atan2(ay2 - ay, ax2 - ax);
+    const arrowSize = 6 + thickness;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(ax + Math.cos(angle) * arrowSize, ay + Math.sin(angle) * arrowSize);
+    ctx.lineTo(ax + Math.cos(angle + 2.5) * arrowSize * 0.5, ay + Math.sin(angle + 2.5) * arrowSize * 0.5);
+    ctx.lineTo(ax + Math.cos(angle - 2.5) * arrowSize * 0.5, ay + Math.sin(angle - 2.5) * arrowSize * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  /* ── PARTICLE DRAWING ── */
+  _drawParticles(ctx) {
+    const healthColors = {
+      healthy: css('--green'),
+      degraded: css('--amber'),
+      critical: css('--red')
+    };
+
+    this.particles.forEach(p => {
+      const from = this.nodePositions.get(p.from);
+      const to = this.nodePositions.get(p.to);
+      if (!from || !to) return;
+
+      /* Bezier curve matching edge */
+      const mx = (from.x + to.x) / 2;
+      const my = (from.y + to.y) / 2;
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const nx = -dy / len;
+      const ny = dx / len;
+      const cpx = mx + nx * len * 0.08;
+      const cpy = my + ny * len * 0.08;
+
+      const t = p.progress;
+      const x = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * cpx + t * t * to.x;
+      const y = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * cpy + t * t * to.y;
+
+      const color = healthColors[p.health] || css('--accent');
+      const fade = t < 0.1 ? t / 0.1 : t > 0.9 ? (1 - t) / 0.1 : 1;
+
+      ctx.save();
+      ctx.globalAlpha = p.opacity * fade;
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(x, y, p.size, 0, TAU);
+      ctx.fill();
+
+      /* Trail */
+      const trailT = Math.max(0, t - 0.04);
+      const trailX = (1 - trailT) * (1 - trailT) * from.x + 2 * (1 - trailT) * trailT * cpx + trailT * trailT * to.x;
+      const trailY = (1 - trailT) * (1 - trailT) * from.y + 2 * (1 - trailT) * trailT * cpy + trailT * trailT * to.y;
+      ctx.globalAlpha = p.opacity * fade * 0.3;
+      ctx.shadowBlur = 3;
+      ctx.beginPath();
+      ctx.arc(trailX, trailY, p.size * 0.6, 0, TAU);
+      ctx.fill();
+
+      ctx.restore();
+    });
+  }
+
+  /* ── NODE DRAWING ── */
+  _drawNode(ctx, node, entryT) {
+    const pos = this.nodePositions.get(node.id);
+    if (!pos) return;
+    const dep = DEPS[node.id];
+    const r = this.nodeRadii.get(node.id) || 24;
+    const edge = this.snapshot?.edges.find(e => e.to === node.id);
+    const health = edge?.health || 'healthy';
+    const isCenter = node.id === 'flt-local';
+    const isHovered = this.hoveredNode === node.id;
+    const isSelected = this.selectedNode === node.id;
+
+    /* Entry animation */
+    const scale = isCenter ? this._easeOutBack(clamp(entryT * 1.2, 0, 1)) : entryT;
+    const x = isCenter ? pos.x : lerp(this.cx, pos.x, entryT);
+    const y = isCenter ? pos.y : lerp(this.cy, pos.y, entryT);
+
+    ctx.save();
+
+    /* Anomaly pulse glow */
+    if (health === 'critical' || health === 'degraded') {
+      const pulsePhase = Math.sin(this.time * 0.004) * 0.5 + 0.5;
+      const glowColor = health === 'critical' ? css('--red') : css('--amber');
+      const glowSize = (health === 'critical' ? 20 : 14) * pulsePhase;
+      const grad = ctx.createRadialGradient(x, y, r * scale, x, y, (r + glowSize) * scale);
+      grad.addColorStop(0, glowColor.replace(')', ',0.3)').replace('rgb', 'rgba'));
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, (r + glowSize) * scale, 0, TAU);
+      ctx.fill();
+    }
+
+    /* Selection ring */
+    if (isSelected) {
+      ctx.strokeStyle = css('--accent');
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(x, y, (r + 6) * scale, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      /* Accent glow ring */
+      ctx.strokeStyle = css('--accent-glow');
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(x, y, (r + 6) * scale, 0, TAU);
+      ctx.stroke();
+    }
+
+    /* Node body */
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    const bgColor = isDark ? '#1a1e28' : '#ffffff';
+    const borderColor = isCenter ? css('--accent') :
+      health === 'critical' ? css('--red') :
+      health === 'degraded' ? css('--amber') :
+      dep?.color() || css('--text-3');
+
+    /* Shadow */
+    ctx.shadowColor = isHovered || isSelected ? css('--accent-glow') : 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = isHovered ? 16 : isSelected ? 12 : 6;
+    ctx.shadowOffsetY = 2;
+
+    /* Fill */
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.arc(x, y, r * scale, 0, TAU);
+    ctx.fill();
+
+    /* Border */
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isCenter ? 2.5 : isHovered ? 2 : 1.5;
+    ctx.stroke();
+
+    /* Hover lift effect */
+    if (isHovered && !isSelected) {
+      ctx.strokeStyle = css('--accent-glow');
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, (r + 3) * scale, 0, TAU);
+      ctx.stroke();
+    }
+
+    /* Icon / Label inside node */
+    ctx.fillStyle = isCenter ? css('--accent') : borderColor;
+    ctx.font = `${isCenter ? 600 : 500} ${isCenter ? 14 : 11}px ${isCenter ? "'Inter'" : "'JetBrains Mono'"}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = scale;
+    const innerLabel = isCenter ? 'FLT' : (dep?.icon || '?');
+    ctx.fillText(innerLabel, x, y);
+
+    /* Health indicator dot */
+    if (!isCenter && health !== 'healthy') {
+      const dotR = 5;
+      const dotX = x + r * scale * 0.7;
+      const dotY = y - r * scale * 0.7;
+      ctx.fillStyle = health === 'critical' ? css('--red') : css('--amber');
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      ctx.arc(dotX, dotY, dotR, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      /* Exclamation mark */
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 7px Inter';
+      ctx.fillText('!', dotX, dotY + 0.5);
+    }
+
+    ctx.restore();
+  }
+
+  /* ── LABEL DRAWING ── */
+  _drawLabel(ctx, node, entryT) {
+    const pos = this.nodePositions.get(node.id);
+    if (!pos) return;
+    const dep = DEPS[node.id];
+    const r = this.nodeRadii.get(node.id) || 24;
+    const isCenter = node.id === 'flt-local';
+    const x = isCenter ? pos.x : lerp(this.cx, pos.x, entryT);
+    const y = isCenter ? pos.y : lerp(this.cy, pos.y, entryT);
+
+    ctx.save();
+    ctx.globalAlpha = entryT;
+    ctx.fillStyle = css('--text-2');
+    ctx.font = '500 10px Inter';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(dep?.label || node.id, x, y + r + 8);
+
+    /* Volume badge for dependencies */
+    if (!isCenter) {
+      const edge = this.snapshot?.edges.find(e => e.to === node.id);
+      if (edge) {
+        ctx.fillStyle = css('--text-3');
+        ctx.font = '400 9px "JetBrains Mono"';
+        ctx.fillText(`${edge.throughputPerMin.toFixed(0)}/min`, x, y + r + 21);
+      }
+    }
+    ctx.restore();
+  }
+
+  /* ── HIT TESTING ── */
+  _hitTestNode(mx, my) {
+    const nodes = this._visibleNodes();
+    const entryT = this.entryAnimating ? this._easeOutBack(clamp(this.entryAnimProgress, 0, 1)) : 1;
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const pos = this.nodePositions.get(n.id);
+      if (!pos) continue;
+      const isCenter = n.id === 'flt-local';
+      const x = isCenter ? pos.x : lerp(this.cx, pos.x, entryT);
+      const y = isCenter ? pos.y : lerp(this.cy, pos.y, entryT);
+      const r = (this.nodeRadii.get(n.id) || 24) + 6;
+      const dx = mx - x;
+      const dy = my - y;
+      if (dx * dx + dy * dy <= r * r) return n.id;
+    }
+    return null;
+  }
+
+  _hitTestEdge(mx, my) {
+    const edges = this._visibleEdges();
+    for (let i = 0; i < edges.length; i++) {
+      const e = edges[i];
+      const from = this.nodePositions.get(e.from);
+      const to = this.nodePositions.get(e.to);
+      if (!from || !to) continue;
+
+      const cpx_ = (from.x + to.x) / 2 + (-(to.y - from.y)) / Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2) * Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2) * 0.08;
+      const cpy_ = (from.y + to.y) / 2 + ((to.x - from.x)) / Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2) * Math.sqrt((to.x - from.x) ** 2 + (to.y - from.y) ** 2) * 0.08;
+
+      /* Sample 20 points on bezier */
+      for (let t = 0; t <= 1; t += 0.05) {
+        const bx = (1 - t) * (1 - t) * from.x + 2 * (1 - t) * t * cpx_ + t * t * to.x;
+        const by = (1 - t) * (1 - t) * from.y + 2 * (1 - t) * t * cpy_ + t * t * to.y;
+        const dist = Math.sqrt((mx - bx) ** 2 + (my - by) ** 2);
+        if (dist < 10) return i;
+      }
+    }
+    return null;
+  }
+
+  /* ── MOUSE EVENTS ── */
+  _onMouseMove(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    this.mouseX = mx;
+    this.mouseY = my;
+
+    const nodeId = this._hitTestNode(mx, my);
+    const edgeIdx = nodeId ? null : this._hitTestEdge(mx, my);
+
+    this.hoveredNode = nodeId;
+    this.hoveredEdge = edgeIdx;
+
+    this.canvas.style.cursor = (nodeId || edgeIdx !== null) ? 'pointer' : 'default';
+
+    /* Tooltip */
+    if (nodeId) {
+      this._showNodeTooltip(nodeId, e.clientX, e.clientY);
+    } else if (edgeIdx !== null) {
+      this._showEdgeTooltip(edgeIdx, e.clientX, e.clientY);
+    } else {
+      this._hideTooltip();
+    }
+  }
+
+  _onClick(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const nodeId = this._hitTestNode(mx, my);
+    if (nodeId) {
+      this.selectedNode = nodeId;
+      this.selectedEdge = null;
+      this._renderNodePanel(nodeId);
+      this._openPanel();
+      this._hideTooltip();
+      return;
+    }
+
+    const edgeIdx = this._hitTestEdge(mx, my);
+    if (edgeIdx !== null) {
+      this.selectedEdge = edgeIdx;
+      this.selectedNode = null;
+      this._renderEdgePanel(edgeIdx);
+      this._openPanel();
+      this._hideTooltip();
+      return;
+    }
+
+    /* Click on empty space */
+    this._closePanel();
+    this.selectedNode = null;
+    this.selectedEdge = null;
+  }
+
+  _onMouseLeave() {
+    this.hoveredNode = null;
+    this.hoveredEdge = null;
+    this._hideTooltip();
+    this.canvas.style.cursor = 'default';
+  }
+
+  _onKeyDown(e) {
+    if (e.key === 'Escape') {
+      this._closePanel();
+      this.selectedNode = null;
+      this.selectedEdge = null;
+    }
+    if (e.key === 'i' || e.key === 'I') {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      this._toggleInternals();
+    }
+  }
+
+  /* ── TOOLTIP ── */
+  _showNodeTooltip(nodeId, cx, cy) {
+    const dep = DEPS[nodeId];
+    const edge = this.snapshot?.edges.find(e => e.to === nodeId);
+    const isCenter = nodeId === 'flt-local';
+    const tt = $('#tooltip');
+
+    let html = `<div class="tt-header"><span class="tt-name">${dep?.label || nodeId}</span>`;
+    if (!isCenter && edge) {
+      html += `<span class="tt-badge ${edge.health}">${edge.health}</span>`;
+    }
+    html += '</div>';
+
+    if (isCenter) {
+      const totalVol = this.snapshot.nodes.reduce((s, n) => s + n.volume, 0);
+      html += `<div class="tt-row"><span>Total volume</span><span>${totalVol}</span></div>`;
+      html += `<div class="tt-row"><span>Dependencies</span><span>${this.snapshot.nodes.length - 1}</span></div>`;
+    } else if (edge) {
+      html += `<div class="tt-row"><span>p50 latency</span><span>${edge.p50Ms.toFixed(0)}ms</span></div>`;
+      html += `<div class="tt-row"><span>Throughput</span><span>${edge.throughputPerMin.toFixed(1)}/min</span></div>`;
+      html += `<div class="tt-divider"></div>`;
+      html += `<div class="tt-row"><span>Error rate</span><span>${(edge.errorRate * 100).toFixed(1)}%</span></div>`;
+      html += `<div class="tt-row"><span>Retry rate</span><span>${(edge.retryRate * 100).toFixed(1)}%</span></div>`;
+    }
+
+    tt.innerHTML = html;
+    tt.classList.add('visible');
+
+    /* Position clamped to viewport */
+    const ttRect = tt.getBoundingClientRect();
+    let tx = cx + 16;
+    let ty = cy + 16;
+    if (tx + ttRect.width > window.innerWidth - 8) tx = cx - ttRect.width - 16;
+    if (ty + ttRect.height > window.innerHeight - 8) ty = cy - ttRect.height - 16;
+    tt.style.left = tx + 'px';
+    tt.style.top = ty + 'px';
+  }
+
+  _showEdgeTooltip(edgeIdx, cx, cy) {
+    const edge = this._visibleEdges()[edgeIdx];
+    if (!edge) return;
+    const dep = DEPS[edge.to];
+    const tt = $('#tooltip');
+
+    let html = `<div class="tt-header"><span class="tt-name">FLT &#x2192; ${dep?.label || edge.to}</span>`;
+    html += `<span class="tt-badge ${edge.health}">${edge.health}</span></div>`;
+    html += `<div class="tt-row"><span>p50</span><span>${edge.p50Ms.toFixed(0)}ms</span></div>`;
+    html += `<div class="tt-row"><span>p95</span><span>${edge.p95Ms.toFixed(0)}ms</span></div>`;
+    html += `<div class="tt-row"><span>p99</span><span>${edge.p99Ms.toFixed(0)}ms</span></div>`;
+    html += `<div class="tt-divider"></div>`;
+    html += `<div class="tt-row"><span>Error rate</span><span>${(edge.errorRate * 100).toFixed(1)}%</span></div>`;
+    html += `<div class="tt-row"><span>Throughput</span><span>${edge.throughputPerMin.toFixed(1)}/min</span></div>`;
+    if (edge.baselineDelta > 1.5) {
+      html += `<div class="tt-row"><span>Baseline</span><span style="color:${edge.health === 'critical' ? css('--red') : css('--amber')}">${edge.baselineDelta.toFixed(1)}x above</span></div>`;
+    }
+
+    tt.innerHTML = html;
+    tt.classList.add('visible');
+    const ttRect = tt.getBoundingClientRect();
+    let tx = cx + 16;
+    let ty = cy + 16;
+    if (tx + ttRect.width > window.innerWidth - 8) tx = cx - ttRect.width - 16;
+    if (ty + ttRect.height > window.innerHeight - 8) ty = cy - ttRect.height - 16;
+    tt.style.left = tx + 'px';
+    tt.style.top = ty + 'px';
+  }
+
+  _hideTooltip() {
+    $('#tooltip').classList.remove('visible');
+  }
+
+  /* ── DETAIL PANEL ── */
+  _openPanel() {
+    $('#detail-panel').classList.add('open');
+    $('#canvas-wrap').classList.add('panel-open');
+    setTimeout(() => this._resize(), 220);
+  }
+
+  _closePanel() {
+    $('#detail-panel').classList.remove('open');
+    $('#canvas-wrap').classList.remove('panel-open');
+    this.selectedNode = null;
+    this.selectedEdge = null;
+    setTimeout(() => this._resize(), 220);
+  }
+
+  _renderNodePanel(nodeId) {
+    const dep = DEPS[nodeId];
+    const edge = this.snapshot?.edges.find(e => e.to === nodeId);
+    const isCenter = nodeId === 'flt-local';
+    const health = edge?.health || 'healthy';
+
+    /* Header */
+    const icon = $('#dp-icon');
+    icon.textContent = dep?.icon || '?';
+    icon.style.background = isCenter ? css('--accent-dim') : 'var(--bg-3)';
+    icon.style.color = isCenter ? css('--accent') : (dep?.color() || css('--text'));
+    icon.style.fontSize = '16px';
+
+    $('#dp-title').textContent = dep?.label || nodeId;
+    $('#dp-subtitle').textContent = isCenter ? 'FLT Local Instance' : 'Dependency Node';
+
+    /* Body */
+    const body = $('#dp-body');
+    let html = '';
+
+    if (isCenter) {
+      const totalVol = this.snapshot.nodes.reduce((s, n) => s + n.volume, 0);
+      const totalThroughput = this.snapshot.edges.reduce((s, e) => s + e.throughputPerMin, 0);
+      html += `<div class="dp-section">
+        <div class="dp-section-title">Aggregate Metrics</div>
+        <div class="metric-grid">
+          <div class="metric-card"><div class="metric-label">Dependencies</div><div class="metric-value">${this.snapshot.nodes.length - 1}</div></div>
+          <div class="metric-card"><div class="metric-label">Total Volume</div><div class="metric-value">${totalVol}</div></div>
+          <div class="metric-card"><div class="metric-label">Throughput</div><div class="metric-value">${totalThroughput.toFixed(0)}<span class="metric-unit">/min</span></div></div>
+          <div class="metric-card"><div class="metric-label">Active Alerts</div><div class="metric-value ${this.snapshot.alerts.length > 0 ? 'red' : 'green'}">${this.snapshot.alerts.length}</div></div>
+        </div>
+      </div>`;
+    } else if (edge) {
+      /* Health */
+      html += `<div class="dp-section">
+        <div class="dp-section-title">Health</div>
+        <span class="health-badge ${health}"><span class="health-dot"></span>${health.charAt(0).toUpperCase() + health.slice(1)}</span>
+        ${edge.baselineDelta > 1.5 ? `<span style="margin-left:8px;font-size:11px;color:${health === 'critical' ? css('--red') : css('--amber')};font-weight:600">${edge.baselineDelta.toFixed(1)}x baseline</span>` : ''}
+      </div>`;
+
+      /* Latency */
+      html += `<div class="dp-section">
+        <div class="dp-section-title">Latency Percentiles</div>
+        <div class="metric-grid">
+          <div class="metric-card"><div class="metric-label">p50</div><div class="metric-value">${edge.p50Ms.toFixed(0)}<span class="metric-unit">ms</span></div></div>
+          <div class="metric-card"><div class="metric-label">p95</div><div class="metric-value ${edge.p95Ms > 500 ? 'amber' : ''}">${edge.p95Ms.toFixed(0)}<span class="metric-unit">ms</span></div></div>
+          <div class="metric-card"><div class="metric-label">p99</div><div class="metric-value ${edge.p99Ms > 1000 ? 'red' : ''}">${edge.p99Ms.toFixed(0)}<span class="metric-unit">ms</span></div></div>
+          <div class="metric-card"><div class="metric-label">Baseline Delta</div><div class="metric-value ${edge.baselineDelta > 3 ? 'red' : edge.baselineDelta > 1.5 ? 'amber' : 'green'}">${edge.baselineDelta.toFixed(1)}<span class="metric-unit">x</span></div></div>
+        </div>
+      </div>`;
+
+      /* Latency visualization bar */
+      const maxLat = Math.max(edge.p50Ms, edge.p95Ms, edge.p99Ms);
+      html += `<div class="dp-section">
+        <div class="dp-section-title">Latency Distribution</div>
+        <div class="latency-bar">
+          <div class="lat-segment" style="height:${clamp(8, edge.p50Ms / maxLat * 48, 48)}px;background:var(--green);opacity:0.8"></div>
+          <div class="lat-segment" style="height:${clamp(8, edge.p95Ms / maxLat * 48, 48)}px;background:var(--amber);opacity:0.8"></div>
+          <div class="lat-segment" style="height:${clamp(8, edge.p99Ms / maxLat * 48, 48)}px;background:var(--red);opacity:0.8"></div>
+        </div>
+        <div class="lat-labels"><span>p50: ${edge.p50Ms.toFixed(0)}ms</span><span>p95: ${edge.p95Ms.toFixed(0)}ms</span><span>p99: ${edge.p99Ms.toFixed(0)}ms</span></div>
+      </div>`;
+
+      /* Traffic */
+      html += `<div class="dp-section">
+        <div class="dp-section-title">Traffic</div>
+        <div class="metric-grid">
+          <div class="metric-card"><div class="metric-label">Volume</div><div class="metric-value">${edge.volume}</div></div>
+          <div class="metric-card"><div class="metric-label">Throughput</div><div class="metric-value">${edge.throughputPerMin.toFixed(1)}<span class="metric-unit">/min</span></div></div>
+          <div class="metric-card"><div class="metric-label">Error Rate</div><div class="metric-value ${edge.errorRate > 0.1 ? 'red' : edge.errorRate > 0.05 ? 'amber' : 'green'}">${(edge.errorRate * 100).toFixed(1)}<span class="metric-unit">%</span></div></div>
+          <div class="metric-card"><div class="metric-label">Retry Rate</div><div class="metric-value ${edge.retryRate > 0.1 ? 'amber' : ''}">${(edge.retryRate * 100).toFixed(1)}<span class="metric-unit">%</span></div></div>
+        </div>
+      </div>`;
+
+      /* Deep links */
+      html += `<div class="dp-section">
+        <div class="dp-section-title">Navigate</div>
+        <div class="deep-links">
+          <button class="deep-link" onclick="alert('Would navigate to HTTP Pipeline tab filtered to ${dep?.label || nodeId}')">
+            <span class="deep-link-icon">&#9656;</span> View in HTTP Pipeline <span class="deep-link-arrow">&#8250;</span>
+          </button>`;
+      if (nodeId === 'spark-gts') {
+        html += `<button class="deep-link" onclick="alert('Would navigate to Spark Sessions tab')">
+            <span class="deep-link-icon">&#9889;</span> View in Spark Sessions <span class="deep-link-arrow">&#8250;</span>
+          </button>`;
+      }
+      if (edge.retryRate > 0.01) {
+        html += `<button class="deep-link" onclick="alert('Would navigate to Retries tab filtered to ${dep?.label || nodeId}')">
+            <span class="deep-link-icon">&#8634;</span> View in Retries <span class="deep-link-arrow">&#8250;</span>
+          </button>`;
+      }
+      html += '</div></div>';
+    }
+
+    body.innerHTML = html;
+  }
+
+  _renderEdgePanel(edgeIdx) {
+    const edge = this._visibleEdges()[edgeIdx];
+    if (!edge) return;
+    const dep = DEPS[edge.to];
+
+    /* Header */
+    const icon = $('#dp-icon');
+    icon.textContent = '&#8594;';
+    icon.style.background = 'var(--bg-3)';
+    icon.style.color = dep?.color() || css('--text');
+    icon.innerHTML = '&#8594;';
+
+    $('#dp-title').textContent = `FLT \u2192 ${dep?.label || edge.to}`;
+    $('#dp-subtitle').textContent = 'Edge Detail';
+
+    /* Re-use node panel rendering with edge data */
+    const body = $('#dp-body');
+    const health = edge.health;
+    let html = '';
+
+    html += `<div class="dp-section">
+      <div class="dp-section-title">Connection Health</div>
+      <span class="health-badge ${health}"><span class="health-dot"></span>${health.charAt(0).toUpperCase() + health.slice(1)}</span>
+      ${edge.baselineDelta > 1.5 ? `<span style="margin-left:8px;font-size:11px;color:${health === 'critical' ? css('--red') : css('--amber')};font-weight:600">${edge.baselineDelta.toFixed(1)}x baseline</span>` : ''}
+    </div>`;
+
+    html += `<div class="dp-section">
+      <div class="dp-section-title">Latency</div>
+      <div class="metric-grid">
+        <div class="metric-card"><div class="metric-label">p50</div><div class="metric-value">${edge.p50Ms.toFixed(0)}<span class="metric-unit">ms</span></div></div>
+        <div class="metric-card"><div class="metric-label">p95</div><div class="metric-value ${edge.p95Ms > 500 ? 'amber' : ''}">${edge.p95Ms.toFixed(0)}<span class="metric-unit">ms</span></div></div>
+        <div class="metric-card"><div class="metric-label">p99</div><div class="metric-value ${edge.p99Ms > 1000 ? 'red' : ''}">${edge.p99Ms.toFixed(0)}<span class="metric-unit">ms</span></div></div>
+        <div class="metric-card"><div class="metric-label">Throughput</div><div class="metric-value">${edge.throughputPerMin.toFixed(1)}<span class="metric-unit">/min</span></div></div>
+      </div>
+    </div>`;
+
+    const maxLat = Math.max(edge.p50Ms, edge.p95Ms, edge.p99Ms);
+    html += `<div class="dp-section">
+      <div class="dp-section-title">Distribution</div>
+      <div class="latency-bar">
+        <div class="lat-segment" style="height:${clamp(8, edge.p50Ms / maxLat * 48, 48)}px;background:var(--green);opacity:0.8"></div>
+        <div class="lat-segment" style="height:${clamp(8, edge.p95Ms / maxLat * 48, 48)}px;background:var(--amber);opacity:0.8"></div>
+        <div class="lat-segment" style="height:${clamp(8, edge.p99Ms / maxLat * 48, 48)}px;background:var(--red);opacity:0.8"></div>
+      </div>
+      <div class="lat-labels"><span>p50</span><span>p95</span><span>p99</span></div>
+    </div>`;
+
+    html += `<div class="dp-section">
+      <div class="dp-section-title">Error Analysis</div>
+      <div class="metric-grid">
+        <div class="metric-card"><div class="metric-label">Error Rate</div><div class="metric-value ${edge.errorRate > 0.1 ? 'red' : edge.errorRate > 0.05 ? 'amber' : 'green'}">${(edge.errorRate * 100).toFixed(1)}<span class="metric-unit">%</span></div></div>
+        <div class="metric-card"><div class="metric-label">Retry Rate</div><div class="metric-value ${edge.retryRate > 0.1 ? 'amber' : ''}">${(edge.retryRate * 100).toFixed(1)}<span class="metric-unit">%</span></div></div>
+        <div class="metric-card full"><div class="metric-label">Volume (5m window)</div><div class="metric-value">${edge.volume} <span class="metric-unit">requests</span></div></div>
+      </div>
+    </div>`;
+
+    html += `<div class="dp-section">
+      <div class="dp-section-title">Navigate</div>
+      <div class="deep-links">
+        <button class="deep-link" onclick="alert('Would navigate to HTTP Pipeline tab')">
+          <span class="deep-link-icon">&#9656;</span> View in HTTP Pipeline <span class="deep-link-arrow">&#8250;</span>
+        </button>
+        ${edge.retryRate > 0 ? `<button class="deep-link" onclick="alert('Would navigate to Retries tab')">
+          <span class="deep-link-icon">&#8634;</span> View in Retries <span class="deep-link-arrow">&#8250;</span>
+        </button>` : ''}
+      </div>
+    </div>`;
+
+    body.innerHTML = html;
+  }
+
+  /* ── ALERTS ── */
+  _triggerAlert(severity, depId, message) {
+    const key = `${severity}-${depId}`;
+    if (this.alertsShown.has(key)) return;
+    this.alertsShown.add(key);
+
+    const dep = DEPS[depId];
+    const container = $('#alert-container');
+
+    const el = document.createElement('div');
+    el.className = `alert-banner ${severity}`;
+    el.innerHTML = `
+      <div class="alert-pulse"></div>
+      <span class="alert-icon">${severity === 'critical' ? '&#9888;' : '&#9888;'}</span>
+      <div class="alert-text">
+        <div class="alert-dep">${dep?.label || depId}</div>
+        <div class="alert-msg">${message}</div>
+        <div class="alert-time">${new Date().toLocaleTimeString()}</div>
+      </div>
+      <button class="alert-dismiss" title="Dismiss">&#10005;</button>
+    `;
+
+    el.querySelector('.alert-dismiss').addEventListener('click', () => {
+      el.classList.add('exiting');
+      setTimeout(() => el.remove(), 200);
+    });
+
+    /* Click alert to select the node */
+    el.querySelector('.alert-text').style.cursor = 'pointer';
+    el.querySelector('.alert-text').addEventListener('click', () => {
+      this.selectedNode = depId;
+      this.selectedEdge = null;
+      this._renderNodePanel(depId);
+      this._openPanel();
+    });
+
+    container.appendChild(el);
+
+    /* Auto-dismiss after 15s */
+    setTimeout(() => {
+      if (el.parentNode) {
+        el.classList.add('exiting');
+        setTimeout(() => el.remove(), 200);
+      }
+    }, 15000);
+  }
+
+  /* ── TOOLBAR UPDATES ── */
+  _updateToolbar() {
+    if (!this.snapshot) return;
+    const vis = this._visibleNodes().filter(n => n.id !== 'flt-local');
+    const visEdges = this._visibleEdges();
+
+    $('#stat-nodes').textContent = vis.length;
+    $('#stat-edges').textContent = visEdges.length;
+    const totalRPS = visEdges.reduce((s, e) => s + e.throughputPerMin, 0);
+    $('#stat-rps').textContent = totalRPS.toFixed(0);
+
+    /* Filter counts */
+    const allEdges = this.snapshot.edges.filter(e => e.to !== 'filesystem' || this.showInternals);
+    const degradedPlus = allEdges.filter(e => e.health === 'degraded' || e.health === 'critical').length;
+    const critical = allEdges.filter(e => e.health === 'critical').length;
+    $('#count-all').textContent = allEdges.length;
+    $('#count-degraded').textContent = degradedPlus;
+    $('#count-critical').textContent = critical;
+  }
+
+  _updateStaleness() {
+    const elapsed = Math.floor((Date.now() - this.lastSnapshotTime) / 1000);
+    const el = $('#snap-time');
+    el.textContent = `${elapsed}s ago`;
+    el.classList.toggle('stale', elapsed > 3);
+    $('#conn-dot').classList.toggle('stale', elapsed > 3);
+    $('#conn-dot').classList.toggle('live', elapsed <= 3);
+    $('#conn-label').textContent = elapsed > 3 ? 'Stale' : 'Live';
+  }
+
+  /* ── INTERNALS TOGGLE ── */
+  _toggleInternals() {
+    this.showInternals = !this.showInternals;
+    $('#internals-toggle').classList.toggle('active', this.showInternals);
+    this._computeLayout();
+    this._updateToolbar();
+  }
+
+  /* ── THEME ── */
+  _toggleTheme() {
+    const html = document.documentElement;
+    html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
+  }
+
+  /* ── EASING ── */
+  _easeOutBack(t) {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+}
+
+/* ── BOOT ── */
+document.addEventListener('DOMContentLoaded', () => {
+  window.nexus = new NexusEngine();
+});
+</script>
+</body>
+</html>
