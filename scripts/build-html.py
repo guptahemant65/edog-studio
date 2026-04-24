@@ -108,6 +108,7 @@ JS_MODULES = [
     "js/tab-di.js",
     "js/tab-perf.js",
     "js/tab-nexus.js",
+    "js/infra-wizard.js",
     "js/workspace-explorer.js",
     "js/command-palette.js",
     "js/api-playground.js",
