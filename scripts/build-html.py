@@ -92,6 +92,7 @@ JS_MODULES = [
     "js/control-panel.js",
     "js/topbar.js",
     "js/deploy-flow.js",
+    "js/file-watcher.js",
     "js/sidebar.js",
     "js/runtime-view.js",
     "js/logs-enhancements.js",
