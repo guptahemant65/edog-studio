@@ -114,9 +114,13 @@
   position: absolute; bottom: 0; left: 0; right: 0;
   background: var(--surface); border-top: 1px solid var(--border);
   max-height: 240px; overflow-y: auto; padding: var(--space-4);
-  display: none; z-index: 10;
+  z-index: 10; transform: translateY(100%); opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  pointer-events: none;
 }
-.dag-node-detail.open { display: block; }
+.dag-node-detail.open {
+  transform: translateY(0); opacity: 1; pointer-events: auto;
+}
 
 /* DAG zoom controls */
 .dag-zoom-controls {
@@ -177,3 +181,39 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(109,92,255,0.15), var(--shadow-md);
 }
+
+/* Node detail content */
+.dag-detail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.dag-detail-title {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+  font-family: var(--font-mono);
+}
+.dag-detail-close {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: var(--text-base); padding: var(--space-1);
+}
+.dag-detail-close:hover { color: var(--text); }
+.dag-detail-body {
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.dag-detail-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: var(--text-xs); color: var(--text-dim);
+}
+.dag-detail-label {
+  width: 72px; color: var(--text-muted); font-size: var(--text-xs);
+  text-transform: uppercase; letter-spacing: 0.03em; flex-shrink: 0;
+}
+.error-text { color: var(--status-failed); font-family: var(--font-mono); }
+
+/* Cross-highlight: gantt row */
+.gantt-row.highlighted { background: var(--surface-2); }
+.gantt-row.highlighted .gantt-label { color: var(--text); }
+
+/* Gantt row interactive */
+.gantt-row { cursor: pointer; transition: background 0.15s ease; }
+.gantt-row:hover { background: var(--surface-2); }
+.gantt-row:hover .gantt-label { color: var(--text); }

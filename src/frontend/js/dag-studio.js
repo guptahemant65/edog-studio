@@ -357,6 +357,7 @@ class DagStudio {
     this._esm = new ExecutionStateManager();
     this._layout = new DagLayout();
     this._renderer = null;
+    this._gantt = null;
     this._dag = null;
     this._active = false;
     this._lockCheckInterval = null;
@@ -381,6 +382,7 @@ class DagStudio {
     this._onCancelClick = this._onCancelClick.bind(this);
     this._onRefreshClick = this._onRefreshClick.bind(this);
     this._onUnlockClick = this._onUnlockClick.bind(this);
+    this._onKeyDown = this._onKeyDown.bind(this);
 
     // ESM callbacks
     this._esm.onNodeStateChanged = this._onNodeStateChanged.bind(this);
@@ -400,13 +402,40 @@ class DagStudio {
     // Lazy init renderer
     if (!this._renderer) {
       this._renderer = new DagCanvasRenderer(this._graphPanel);
-      this._renderer.onNodeSelected = this._onNodeSelected.bind(this);
     } else {
       this._renderer.resumeRendering();
     }
+    // Lazy init gantt
+    if (!this._gantt) {
+      this._gantt = new DagGantt(this._ganttContainer);
+    }
+    // Cross-highlighting: renderer → gantt
+    var self = this;
+    this._renderer.onNodeSelected = function(nodeId) {
+      self._onNodeSelected(nodeId);
+    };
+    this._renderer.onNodeHovered = function(nodeId) {
+      if (self._gantt) self._gantt.highlightNode(nodeId);
+    };
+    this._renderer.onNodeUnhovered = function() {
+      if (self._gantt) self._gantt.unhoverNode();
+    };
+    // Cross-highlighting: gantt → renderer
+    this._gantt.onNodeSelected = function(nodeId) {
+      if (self._renderer) self._renderer.highlightNode(nodeId);
+      self._renderNodeDetail(nodeId);
+    };
+    this._gantt.onNodeHovered = function(nodeId) {
+      if (self._renderer) self._renderer.highlightNode(nodeId);
+    };
+    this._gantt.onNodeUnhovered = function() {
+      if (self._renderer) self._renderer.clearHighlight();
+    };
     // Subscribe to SignalR telemetry topic
     this._signalR.on('telemetry', this._onTelemetryEvent);
     this._signalR.subscribeTopic('telemetry');
+    // Keyboard shortcuts
+    document.addEventListener('keydown', this._onKeyDown);
     // Load DAG
     await this._loadDag();
     // Load history
@@ -423,6 +452,8 @@ class DagStudio {
     this._signalR.unsubscribeTopic('telemetry');
     // Pause rendering
     if (this._renderer) this._renderer.pauseRendering();
+    // Remove keyboard listener
+    document.removeEventListener('keydown', this._onKeyDown);
     // Stop intervals
     this._stopLockCheck();
     this._stopElapsedTimer();
@@ -459,6 +490,10 @@ class DagStudio {
         return;
       }
       this._esm.startTracking(iterationId);
+      // Initialize gantt with current DAG nodes
+      if (this._gantt && this._dag && this._dag.nodes) {
+        this._gantt.renderExecution(this._dag.nodes, Date.now());
+      }
       this._renderControls('running');
       this._renderStatus('running');
       this._startElapsedTimer();
@@ -522,9 +557,14 @@ class DagStudio {
     try {
       var metrics = await this._api.getDagExecMetrics(iterationId);
       this._esm.loadHistorical(metrics);
-      // Update renderer with node states
+      // Initialize gantt for historical view
+      if (this._gantt && this._dag && this._dag.nodes) {
+        this._gantt.renderExecution(this._dag.nodes, this._esm.startedAt || Date.now());
+      }
+      // Update renderer and gantt with node states
       for (var entry of this._esm.nodeStates) {
         this._renderer.updateNodeState(entry[0], entry[1].status);
+        if (this._gantt) this._gantt.updateBar(entry[0], entry[1]);
       }
       this._renderControls(this._esm.status);
       this._renderStatus(this._esm.status);
@@ -593,6 +633,7 @@ class DagStudio {
   _onNodeSelected(nodeId) {
     this._renderNodeDetail(nodeId);
     if (this._renderer) this._renderer.highlightNode(nodeId);
+    if (this._gantt) this._gantt.highlightNode(nodeId);
   }
 
   _onExecutionStateChanged(status) {
@@ -605,6 +646,7 @@ class DagStudio {
 
   _onNodeStateChanged(nodeId, state) {
     if (this._renderer) this._renderer.updateNodeState(nodeId, state.status);
+    if (this._gantt) this._gantt.updateBar(nodeId, state);
   }
 
   _onExecutionComplete(iterationId, finalStatus) {
@@ -618,6 +660,30 @@ class DagStudio {
   _onCancelClick() { this._cancelDag(); }
   _onRefreshClick() { this._refreshDag(); }
   _onUnlockClick() { this._forceUnlock(); }
+
+  _onKeyDown(e) {
+    if (!this._active) return;
+    // Don't capture if user is typing in an input
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
+    if (e.key === 'Escape') {
+      // Deselect node, close detail panel
+      this._nodeDetail.classList.remove('open');
+      if (this._renderer) this._renderer.clearHighlight();
+      if (this._gantt) this._gantt.unhoverNode();
+    } else if (e.key === '+' || e.key === '=') {
+      // Zoom in — delegate to zoom button
+      var zoomIn = document.getElementById('dagZoomIn');
+      if (zoomIn) zoomIn.click();
+    } else if (e.key === '-') {
+      // Zoom out
+      var zoomOut = document.getElementById('dagZoomOut');
+      if (zoomOut) zoomOut.click();
+    } else if (e.key === '0') {
+      // Fit to screen
+      if (this._renderer) this._renderer.fitToScreen();
+    }
+  }
 
   // --- UI rendering ---
 
