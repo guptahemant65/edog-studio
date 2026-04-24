@@ -22,6 +22,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from socketserver import ThreadingMixIn
 
+from file_watcher import FileWatcher
+
 PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
 BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
@@ -79,6 +81,43 @@ _studio_state = {
 _studio_lock = threading.Lock()
 _flt_process = None
 _deploy_cancel = threading.Event()
+_file_watcher: FileWatcher | None = None
+_file_watcher_thread: threading.Thread | None = None
+_file_watcher_stop = threading.Event()
+
+
+def _file_watcher_loop():
+    """Background thread: polls FileWatcher every 3 seconds."""
+    import contextlib
+
+    while not _file_watcher_stop.is_set():
+        if _file_watcher and _file_watcher.is_active():
+            with contextlib.suppress(Exception):
+                _file_watcher.poll_changes()
+        _file_watcher_stop.wait(3.0)
+
+
+def _start_file_watcher(service_dir: str):
+    """Start watching the FLT Service directory for file changes."""
+    global _file_watcher, _file_watcher_thread
+    _file_watcher_stop.clear()
+    _file_watcher = FileWatcher(service_dir)
+    _file_watcher.snapshot_deployed()
+    _file_watcher_thread = threading.Thread(
+        target=_file_watcher_loop, daemon=True, name="file-watcher"
+    )
+    _file_watcher_thread.start()
+
+
+def _stop_file_watcher():
+    """Stop the file watcher background thread."""
+    global _file_watcher, _file_watcher_thread
+    _file_watcher_stop.set()
+    if _file_watcher_thread and _file_watcher_thread.is_alive():
+        _file_watcher_thread.join(timeout=5)
+    _file_watcher_thread = None
+    if _file_watcher:
+        _file_watcher.reset()
 
 
 def _write_cache(path: Path, token: str, expiry: float):
@@ -845,6 +884,16 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             })
         _deploy_log("Deploy complete!", "success")
 
+        # Start file change detection after successful deploy
+        try:
+            config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            flt_repo = config.get("flt_repo_path", "")
+            if flt_repo:
+                service_dir = str(Path(flt_repo) / "Service" / "Microsoft.LiveTable.Service")
+                _start_file_watcher(service_dir)
+        except Exception:
+            pass  # File watcher is non-critical
+
         # Start monitor thread
         monitor = threading.Thread(target=_monitor_flt, args=(deploy_id,), daemon=True)
         monitor.start()
@@ -929,6 +978,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # WebSocket upgrade request — can't handle in stdlib HTTP server.
             # Return 426 so the client knows to use the FLT port instead.
             self._json_response(426, {"error": "ws_not_here", "message": "WebSocket available on FLT port after deploy"})
+        elif self.path == "/api/studio/file-changes":
+            self._serve_file_changes()
         else:
             self.send_error(404)
 
@@ -971,6 +1022,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_deploy_cancel()
         elif self.path == "/api/command/undeploy":
             self._serve_undeploy()
+        elif self.path == "/api/studio/file-changes/dismiss":
+            self._serve_file_changes_dismiss()
         else:
             self.send_error(404)
 
@@ -1100,7 +1153,34 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             state = dict(_studio_state)
             state["deployLogs"] = list(_studio_state["deployLogs"][-200:])
+            if _file_watcher and _file_watcher.is_active():
+                fc = _file_watcher.get_changes()
+                state["fileChanges"] = fc["files"]
+                state["fileChangesVersion"] = fc["version"]
+            else:
+                state["fileChanges"] = []
+                state["fileChangesVersion"] = 0
         self._json_response(200, state)
+
+    def _serve_file_changes(self):
+        """GET /api/studio/file-changes — return changed files since deploy."""
+        if _file_watcher and _file_watcher.is_active():
+            result = _file_watcher.get_changes()
+        else:
+            result = {"files": [], "version": 0}
+        self._json_response(200, result)
+
+    def _serve_file_changes_dismiss(self):
+        """POST /api/studio/file-changes/dismiss — acknowledge changes through version."""
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(content_length)) if content_length else {}
+            version = body.get("version", 0)
+        except (json.JSONDecodeError, ValueError):
+            version = 0
+        if _file_watcher:
+            _file_watcher.dismiss(version)
+        self._json_response(200, {"ok": True})
 
     def _serve_deploy_start(self):
         """POST /api/command/deploy — start deploy pipeline.
@@ -1147,6 +1227,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     })
                     return
 
+        _stop_file_watcher()
+
         # If already running, stop current service first
         global _flt_process
         if _flt_process and _flt_process.poll() is None:
@@ -1189,6 +1271,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
     def _serve_undeploy(self):
         """POST /api/command/undeploy — stop FLT service + revert patches."""
+        _stop_file_watcher()
         global _flt_process
         stopped = False
 
