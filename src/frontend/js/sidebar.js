@@ -297,12 +297,12 @@ class Sidebar {
     if (e.ctrlKey || e.metaKey) return;
 
     const views = ['workspace', 'runtime', 'api', 'environment'];
-    const primarySubTabs = ['logs', 'telemetry', 'sysfiles', 'spark'];
+    const primarySubTabs = ['logs', 'telemetry', 'sysfiles', 'spark', 'nexus'];
 
-    /* Alt+1-4: runtime primary sub-tabs */
+    /* Alt+1-5: runtime primary sub-tabs */
     if (e.altKey && this._phase === 'connected' && this._activeView === 'runtime') {
       const num = parseInt(e.key);
-      if (num >= 1 && num <= 4) {
+      if (num >= 1 && num <= 5) {
         e.preventDefault();
         this._switchSubTab(primarySubTabs[num - 1]);
         return;

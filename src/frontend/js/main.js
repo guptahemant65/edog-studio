@@ -114,6 +114,7 @@ class EdogLogViewer {
     this.telemetryTab = new TelemetryTab(document.getElementById('rt-tab-telemetry'), this.ws);
     this.sysfilesTab = new SystemFilesTab(document.getElementById('rt-tab-sysfiles'), this.ws);
     this.sparkTab = new SparkSessionsTab(document.getElementById('rt-tab-spark'), this.ws);
+    this.nexusTab = new NexusTab(document.getElementById('rt-tab-nexus'), this.ws);
     this.tokensTab = new TokensTab(document.getElementById('rt-tab-tokens'), this.ws);
     this.cachesTab = new CachesTab(document.getElementById('rt-tab-caches'), this.ws);
     this.httpTab = new HttpPipelineTab(document.getElementById('rt-tab-http'), this.ws);
@@ -206,6 +207,7 @@ class EdogLogViewer {
     this.runtimeView.registerTab('telemetry', this.telemetryTab);
     this.runtimeView.registerTab('sysfiles', this.sysfilesTab);
     this.runtimeView.registerTab('spark', this.sparkTab);
+    this.runtimeView.registerTab('nexus', this.nexusTab);
     this.runtimeView.registerTab('tokens', this.tokensTab);
     this.runtimeView.registerTab('caches', this.cachesTab);
     this.runtimeView.registerTab('http', this.httpTab);

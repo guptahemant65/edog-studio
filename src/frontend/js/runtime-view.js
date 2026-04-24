@@ -21,7 +21,7 @@ class RuntimeView {
     this._connectionStatus = 'disconnected';
 
     // Top-level tab IDs (order matches tab bar)
-    this._topTabIds = ['logs', 'telemetry', 'sysfiles', 'spark'];
+    this._topTabIds = ['logs', 'telemetry', 'sysfiles', 'spark', 'nexus'];
 
     // Internals sub-view IDs
     this._internalsIds = ['tokens', 'caches', 'http', 'retries', 'flags', 'di', 'perf'];
@@ -112,7 +112,7 @@ class RuntimeView {
       });
     }
 
-    // Keyboard: Alt+1-5 for tabs within Runtime View
+    // Keyboard: Alt+1-6 for tabs within Runtime View
     document.addEventListener('keydown', (e) => this._onKeyDown(e));
 
     // Set initial indicator position
@@ -343,7 +343,7 @@ class RuntimeView {
     this._indicator.style.width = tabRect.width + 'px';
   }
 
-  /** Keyboard shortcuts: Alt+1-4 for top tabs, Alt+5 for Internals toggle. */
+  /** Keyboard shortcuts: Alt+1-5 for top tabs, Alt+6 for Internals toggle. */
   _onKeyDown(e) {
     if (!e.altKey) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -353,10 +353,10 @@ class RuntimeView {
     if (!rtPanel || !rtPanel.classList.contains('active')) return;
 
     const num = parseInt(e.key);
-    if (num >= 1 && num <= 4) {
+    if (num >= 1 && num <= 5) {
       e.preventDefault();
       this.switchTab(this._topTabIds[num - 1]);
-    } else if (num === 5) {
+    } else if (num === 6) {
       e.preventDefault();
       this.toggleInternals();
     }

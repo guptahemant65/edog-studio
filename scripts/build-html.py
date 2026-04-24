@@ -55,6 +55,7 @@ CSS_MODULES = [
     "css/tab-flags.css",
     "css/tab-di.css",
     "css/tab-perf.css",
+    "css/tab-nexus.css",
     "css/mock-components.css",
     "css/onboarding.css",
 ]
@@ -99,6 +100,7 @@ JS_MODULES = [
     "js/tab-flags.js",
     "js/tab-di.js",
     "js/tab-perf.js",
+    "js/tab-nexus.js",
     "js/workspace-explorer.js",
     "js/command-palette.js",
     "js/mock-renderer.js",
