@@ -1,10 +1,29 @@
 # Feature 16: New Infra Wizard
 
-> **Status:** P0 (Foundation Research) — NOT STARTED
+> **Status:** P5 (Implementation) — READY TO START
 > **Phase:** V2
 > **Owner:** Vex (Python/C#) + Pixel (JS/CSS)
 > **Design Ref:** Design Bible 4b, Overlay 25A
 > **SOP:** hivemind/FEATURE_DEV_SOP.md
+
+---
+
+## 0. Resolved Decisions (2025-04-25 CEO Review)
+
+| # | Question | Decision | Rationale |
+|---|----------|----------|-----------|
+| D1 | Execution architecture: client-orchestrated vs SSE? | **Client-orchestrated** (sequential `fetch()`, NO SSE) | Simpler, no server state machine, retry trivial. Integration doc's SSE section is SUPERSEDED. |
+| D2 | DAG canvas library: vanilla SVG or JointJS? | **JointJS Core** (MPL-2.0) — use it if it's really good | Research strongly recommends it. 3-4× less effort than hand-rolling. Evaluate quality first. |
+| D3 | Bundle size: +230KB (JointJS+Dagre) acceptable? | **Yes** — localhost tool, 2.16MB total is fine | No network latency concern for localhost. |
+| D4 | Token expiry mid-execution? | **CEO has a solution** — to be discussed separately | Defer — implementation should handle 401 gracefully, details TBD. |
+| D5 | "Coming Soon" capacity creation UI? | **Skip entirely** for V1 | Don't build disabled UI shells. |
+| D6 | DAG presets on empty canvas? | **Yes** — show preset cards, but user may skip them | Presets are helpful entry point, not mandatory. |
+| D7 | Double-confirm "Lock In & Create"? | **Yes** — confirmation dialog required | Creates real cloud resources and costs money. |
+| D8 | Template deletion UX placement? | **Donna's call** (UX expert decision) | Decision: Inside template load dropdown — each template row has a delete icon (✕) with confirm tooltip. |
+| D9 | Max node limit enforcement? | **Warning at 90 + hard-block at 100** | Toast at 90: "10 nodes remaining." Block at 100: palette drag disabled, toast "Maximum 100 nodes reached." |
+| D10 | Cancel mid-execution / browser close? | **Leave orphaned resources** | No rollback on browser close. User can manually clean up. |
+| D11 | Schema creation via API? | **No** — schemas created via notebook cells only | Notebook CREATE SCHEMA statements handle this. |
+| D12 | Checklist status tracking? | **Updated** — all P0-P4 phases marked ✅ | All research, specs, architecture, states, and mocks exist. |
 
 ---
 
@@ -308,65 +327,62 @@ def {mlv_name}():
 
 | # | Task | Owner | Output | Status |
 |---|------|-------|--------|--------|
-| P0.1 | Code audit — workspace-explorer.js, deploy-flow.js, api-client.js, dag-studio specs | Pixel+Vex | `research/p0-foundation.md` §1 | ⬜ |
-| P0.2 | API verification — test A1-A7 endpoints, document exact request/response bodies | Vex | `research/p0-foundation.md` §2 | ⬜ |
-| P0.3 | Notebook content format — reverse-engineer updateDefinition body for multi-cell notebooks | Vex | `research/p0-foundation.md` §3 | ⬜ |
-| P0.4 | Industry research — visual DAG builder UX patterns (dbt Cloud, Airflow, Prefect, Dagster, n8n, Retool) | Sana | `research/p0-foundation.md` §4 | ⬜ |
-| P0.5 | Industry research — modal wizard patterns (Stripe, Vercel, Linear, Notion, Figma) | Sana | `research/p0-foundation.md` §5 | ⬜ |
-| P0.6 | Canvas interaction research — node palette drag-and-drop vs click-to-place vs context menu | Pixel | `research/p0-foundation.md` §6 | ⬜ |
-| P0.7 | Schema creation API verification — can we create bronze/silver/gold via API? | Vex | `research/p0-foundation.md` §7 | ⬜ |
-| P0.8 | Lakehouse creation with enableSchemas — test and document | Vex | `research/p0-foundation.md` §8 | ⬜ |
+| P0.1 | Code audit — workspace-explorer.js, deploy-flow.js, api-client.js, dag-studio specs | Pixel+Vex | `research/p0-code-audit.md` | ✅ |
+| P0.2 | API verification — test A1-A7 endpoints, document exact request/response bodies | Vex | `architecture-backend.md` §2 | ✅ |
+| P0.3 | Notebook content format — reverse-engineer updateDefinition body for multi-cell notebooks | Vex | `architecture-backend.md` §3 | ✅ |
+| P0.4 | Industry research — visual DAG builder UX patterns (dbt Cloud, Airflow, Prefect, Dagster, n8n, Retool) | Sana | `research/p0-dag-builder-research.md` | ✅ |
+| P0.5 | Industry research — modal wizard patterns (Stripe, Vercel, Linear, Notion, Figma) | Sana | `research/p0-wizard-research.md` | ✅ |
+| P0.6 | Canvas interaction research — node palette drag-and-drop vs click-to-place vs context menu | Pixel | `research/p0-canvas-interaction.md` | ✅ |
+| P0.7 | Schema creation API verification — can we create bronze/silver/gold via API? | Vex | **RESOLVED:** Schemas created via notebook cells only (not API) | ✅ |
+| P0.8 | Lakehouse creation with enableSchemas — test and document | Vex | `architecture-backend.md` §2.2.3 — ⚠️ NOT TESTED but spec locked | ✅ |
 
 ### Phase 1: Component Deep Specs
 
 | # | Component | Output | States (est.) | Depends On | Status |
 |---|-----------|--------|---------------|-----------|--------|
-| P1.1 | InfraWizardDialog | `components/infra-wizard-dialog.md` | 12 | P0 | ⬜ |
-| P1.2 | InfraSetupPage | `components/infra-setup-page.md` | 8 | P0.2 | ⬜ |
-| P1.3 | ThemeSchemaPage | `components/theme-schema-page.md` | 6 | P0 | ⬜ |
-| P1.4 | DagCanvas | `components/dag-canvas.md` | 15+ | P0.4, P0.6 | ⬜ |
-| P1.5 | NodePalette | `components/node-palette.md` | 4 | P0.6 | ⬜ |
-| P1.6 | DagNode | `components/dag-node.md` | 10 | P0.4 | ⬜ |
-| P1.7 | ConnectionManager | `components/connection-manager.md` | 8 | P0.4 | ⬜ |
-| P1.8 | CodePreviewPanel | `components/code-preview-panel.md` | 5 | P0.3 | ⬜ |
-| P1.9 | ReviewSummary | `components/review-summary.md` | 4 | P1.1-P1.8 | ⬜ |
-| P1.10 | ExecutionPipeline | `components/execution-pipeline.md` | 10 | P0.2 | ⬜ |
-| P1.11 | FloatingBadge | `components/floating-badge.md` | 4 | P1.10 | ⬜ |
-| P1.12 | TemplateManager | `components/template-manager.md` | 6 | P1.4 | ⬜ |
-| P1.13 | AutoLayoutEngine | `components/auto-layout-engine.md` | 3 | P0.4 | ⬜ |
-| P1.14 | UndoRedoManager | `components/undo-redo-manager.md` | 4 | P1.4 | ⬜ |
+| P1.1 | InfraWizardDialog | `components/C01-infra-wizard-dialog.md` | 12 | P0 | ✅ |
+| P1.2 | InfraSetupPage | `components/C02-infra-setup-page.md` | 8 | P0.2 | ✅ |
+| P1.3 | ThemeSchemaPage | `components/C03-theme-schema-page.md` | 6 | P0 | ✅ |
+| P1.4 | DagCanvas | `components/C04-dag-canvas.md` | 15+ | P0.4, P0.6 | ✅ |
+| P1.5 | NodePalette | `components/C05-node-palette.md` | 4 | P0.6 | ✅ |
+| P1.6 | DagNode | `components/C06-dag-node.md` | 10 | P0.4 | ✅ |
+| P1.7 | ConnectionManager | `components/C07-connection-manager.md` | 8 | P0.4 | ✅ |
+| P1.8 | CodePreviewPanel | `components/C08-code-preview-panel.md` | 5 | P0.3 | ✅ |
+| P1.9 | ReviewSummary | `components/C09-review-summary.md` | 4 | P1.1-P1.8 | ✅ |
+| P1.10 | ExecutionPipeline | `components/C10-execution-pipeline.md` | 10 | P0.2 | ✅ |
+| P1.11 | FloatingBadge | `components/C11-floating-badge.md` | 4 | P1.10 | ✅ |
+| P1.12 | TemplateManager | `components/C12-template-manager.md` | 6 | P1.4 | ✅ |
+| P1.13 | AutoLayoutEngine | `components/C13-auto-layout-engine.md` | 3 | P0.4 | ✅ |
+| P1.14 | UndoRedoManager | `components/C14-undo-redo-manager.md` | 4 | P1.4 | ✅ |
 
 ### Phase 2: Architecture
 
 | # | Task | Owner | Output | Depends On | Status |
 |---|------|-------|--------|-----------|--------|
-| P2.1 | InfraWizard class design — page state machine, data flow, dialog lifecycle | Pixel | `architecture.md` §1 | P1 | ⬜ |
-| P2.2 | DAG data model — node graph, topological sort, code generation engine | Pixel+Vex | `architecture.md` §2 | P1.4-P1.7 | ⬜ |
-| P2.3 | API orchestration — sequential pipeline, rollback strategy, retry mechanics | Vex | `architecture.md` §3 | P1.10 | ⬜ |
-| P2.4 | Template persistence — file format, schema validation, load/save/delete | Vex | `architecture.md` §4 | P1.12 | ⬜ |
-| P2.5 | Canvas rendering — node layout, arrow path routing, virtual rendering for scale | Pixel | `architecture.md` §5 | P1.4, P1.13 | ⬜ |
-| P2.6 | Code generation — SQL/PySpark template engine, theme data mapping | Vex | `architecture.md` §6 | P0.3, P1.8 | ⬜ |
+| P2.1 | InfraWizard class design — page state machine, data flow, dialog lifecycle | Pixel | `architecture-frontend.md` §1-3 | P1 | ✅ |
+| P2.2 | DAG data model — node graph, topological sort, code generation engine | Pixel+Vex | `architecture-frontend.md` §4-6 | P1.4-P1.7 | ✅ |
+| P2.3 | API orchestration — sequential pipeline, rollback strategy, retry mechanics | Vex | `architecture-backend.md` §1-3 | P1.10 | ✅ |
+| P2.4 | Template persistence — file format, schema validation, load/save/delete | Vex | `architecture-backend.md` §5 | P1.12 | ✅ |
+| P2.5 | Canvas rendering — node layout, arrow path routing, virtual rendering for scale | Pixel | `architecture-frontend.md` §5 | P1.4, P1.13 | ✅ |
+| P2.6 | Code generation — SQL/PySpark template engine, theme data mapping | Vex | `architecture-frontend.md` §6 | P0.3, P1.8 | ✅ |
 
 ### Phase 3: State Matrices
 
 | # | Component | Output | States (est.) | Depends On | Status |
 |---|-----------|--------|---------------|-----------|--------|
-| P3.1 | InfraWizardDialog | `states/infra-wizard-dialog.md` | 12 | P2.1 | ⬜ |
-| P3.2 | InfraSetupPage | `states/infra-setup-page.md` | 8 | P2.1 | ⬜ |
-| P3.3 | ThemeSchemaPage | `states/theme-schema-page.md` | 6 | P2.1 | ⬜ |
-| P3.4 | DagCanvas | `states/dag-canvas.md` | 15+ | P2.2, P2.5 | ⬜ |
-| P3.5 | DagNode | `states/dag-node.md` | 10 | P2.2 | ⬜ |
-| P3.6 | ConnectionManager | `states/connection-manager.md` | 8 | P2.2 | ⬜ |
-| P3.7 | ExecutionPipeline | `states/execution-pipeline.md` | 10 | P2.3 | ⬜ |
-| P3.8 | TemplateManager | `states/template-manager.md` | 6 | P2.4 | ⬜ |
+| P3.1 | Wizard Shell | `states/wizard-shell.md` | 12 | P2.1 | ✅ |
+| P3.2 | Form Pages | `states/form-pages.md` | 8 | P2.1 | ✅ |
+| P3.3 | Canvas System | `states/canvas-system.md` | 28 | P2.2, P2.5 | ✅ |
+| P3.4 | Execution & Utils | `states/execution-utils.md` | 32 | P2.3 | ✅ |
+| P3.5 | Panels & Review | `states/panels-review.md` | 10 | P2.4 | ✅ |
 
 ### Phase 4: Interactive Mocks
 
 | # | Mock | Output | Depends On | Status |
 |---|------|--------|-----------|--------|
-| P4.1 | Full wizard (all 5 pages) | `mocks/infra-wizard.html` | P3 | ⬜ |
-| P4.2 | DAG canvas standalone | `mocks/dag-canvas.html` | P3.4-P3.6 | ⬜ |
-| P4.3 | Execution pipeline | `mocks/execution-pipeline.html` | P3.7 | ⬜ |
+| P4.1 | Full wizard (all 5 pages) | `mocks/infra-wizard.html` | P3 | ✅ |
+| P4.2 | DAG canvas standalone | `mocks/dag-canvas.html` | P3.3 | ✅ |
+| P4.3 | Execution pipeline | (merged into P4.1) | P3.4 | ✅ |
 
 ---
 

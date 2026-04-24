@@ -2,8 +2,8 @@
 
 > **Feature:** F16 — New Infrastructure Wizard
 > **Document Type:** P2 Architecture — Frontend/Backend Integration Contract
-> **Status:** Draft
-> **Version:** 1.0.0
+> **Status:** Draft — ⚠️ SSE SECTIONS SUPERSEDED (see spec.md §0 Decision D1)
+> **Version:** 1.1.0
 > **Owners:** Vex (Python backend) + Pixel (JS frontend)
 > **Last Updated:** 2025-07-21
 > **Depends On:** P0 Code Audit, P1 Component Specs (C01, C02, C10, C12)
