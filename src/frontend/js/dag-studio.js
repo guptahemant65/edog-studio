@@ -362,6 +362,8 @@ class DagStudio {
     this._active = false;
     this._lockCheckInterval = null;
     this._elapsedInterval = null;
+    this._codeCache = new Map();
+    this._workspaceId = null;
 
     // DOM refs
     this._runBtn = document.getElementById('dagRunBtn');
@@ -795,11 +797,30 @@ class DagStudio {
     if (state && state.errorCode) {
       html += '<div class="dag-detail-row"><span class="dag-detail-label">Error</span><span class="error-text">' + state.errorCode + '</span></div>';
     }
+    // ── Definition section (F21) ──
+    var self = this;
+    if (node.codeReference) {
+      html += '<div class="dag-detail-divider"></div>';
+      html += '<div class="dag-detail-section-title">Definition</div>';
+      var cacheKey = node.codeReference.notebookId + ':' + node.codeReference.cellIndex;
+      var cached = self._codeCache.get(cacheKey);
+      if (cached) {
+        html += '<div class="dag-code-block">' + self._escapeHtml(cached) + '</div>';
+        html += '<div class="dag-code-actions">';
+        html += '<button class="dag-code-btn" id="dagCodeCopy" title="Copy to clipboard">Copy</button>';
+        html += '</div>';
+      } else {
+        html += '<button class="dag-code-btn dag-code-load" id="dagCodeLoad" data-node="' + nodeId + '">Load Definition</button>';
+      }
+    } else {
+      html += '<div class="dag-detail-divider"></div>';
+      html += '<div class="dag-detail-section-title">Definition</div>';
+      html += '<div class="dag-code-empty">No code reference available</div>';
+    }
     html += '</div>';
     this._nodeDetail.innerHTML = html;
     this._nodeDetail.classList.add('open');
     // Close button
-    var self = this;
     var closeBtn = document.getElementById('dagDetailClose');
     if (closeBtn) {
       closeBtn.addEventListener('click', function() {
@@ -807,5 +828,90 @@ class DagStudio {
         if (self._renderer) self._renderer.clearHighlight();
       });
     }
+    // Load definition button
+    var loadBtn = document.getElementById('dagCodeLoad');
+    if (loadBtn) {
+      loadBtn.addEventListener('click', function() {
+        var nid = this.getAttribute('data-node');
+        self._loadNodeDefinition(nid);
+      });
+    }
+    // Copy button
+    var copyBtn = document.getElementById('dagCodeCopy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', function() {
+        var codeBlock = self._nodeDetail.querySelector('.dag-code-block');
+        if (codeBlock && navigator.clipboard) {
+          navigator.clipboard.writeText(codeBlock.textContent);
+        }
+      });
+    }
+  }
+
+  /** Fetch and display code definition for a DAG node. */
+  _loadNodeDefinition(nodeId) {
+    var node = null;
+    for (var i = 0; i < this._dag.nodes.length; i++) {
+      if (this._dag.nodes[i].nodeId === nodeId) {
+        node = this._dag.nodes[i];
+        break;
+      }
+    }
+    if (!node || !node.codeReference) return;
+
+    var ref = node.codeReference;
+    var cacheKey = ref.notebookId + ':' + ref.cellIndex;
+    var self = this;
+
+    // Show loading state
+    var loadBtn = document.getElementById('dagCodeLoad');
+    if (loadBtn) {
+      loadBtn.textContent = 'Loading...';
+      loadBtn.disabled = true;
+    }
+
+    var isMock = new URLSearchParams(window.location.search).has('mock');
+    if (isMock) {
+      var mockCode = (window.MockEdogData && window.MockEdogData.mockCodeDefinitions)
+        ? window.MockEdogData.mockCodeDefinitions[cacheKey]
+        : null;
+      if (mockCode) {
+        self._codeCache.set(cacheKey, mockCode);
+      } else {
+        self._codeCache.set(cacheKey, '-- No definition found for cell ' + ref.cellIndex);
+      }
+      self._renderNodeDetail(nodeId);
+      return;
+    }
+
+    // Real mode: fetch notebook content
+    var wsId = self._workspaceId;
+    if (!wsId) {
+      var app = window.edogApp;
+      if (app && app._deployTarget) wsId = app._deployTarget.workspaceId;
+    }
+    if (!wsId || !self._api) {
+      self._codeCache.set(cacheKey, '-- Cannot load: no workspace context');
+      self._renderNodeDetail(nodeId);
+      return;
+    }
+
+    self._api.getNotebookContent(wsId, ref.notebookId).then(function(resp) {
+      var content = (resp && resp.content) ? resp.content : '';
+      var cells = content.split(/\n--\s*CELL\s+SEPARATOR\s*\n|\n#{2,}\s/);
+      var cellCode = (ref.cellIndex < cells.length) ? cells[ref.cellIndex].trim() : content.trim();
+      self._codeCache.set(cacheKey, cellCode);
+      self._renderNodeDetail(nodeId);
+    }).catch(function(err) {
+      self._codeCache.set(cacheKey, '-- Failed to load: ' + err.message);
+      self._renderNodeDetail(nodeId);
+    });
+  }
+
+  /** Escape HTML entities for safe insertion. */
+  _escapeHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
   }
 }
