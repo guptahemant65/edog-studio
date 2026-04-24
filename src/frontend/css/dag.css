@@ -166,3 +166,14 @@
 .dag-status-dot.completed { background: var(--status-succeeded); }
 .dag-status-dot.failed { background: var(--status-failed); }
 .dag-status-dot.cancelled { background: var(--status-cancelled); }
+
+/* LOD mini mode — hide internal details */
+.dag-node.lod-mini .dag-node-meta { display: none }
+.dag-node.lod-mini .dag-node-body { padding: 4px 6px 4px 10px }
+.dag-node.lod-mini .dag-node-name { font-size: 9px }
+
+/* Highlighted node (cross-highlight from gantt) */
+.dag-node.highlighted {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(109,92,255,0.15), var(--shadow-md);
+}
