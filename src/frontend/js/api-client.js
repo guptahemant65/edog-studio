@@ -412,6 +412,76 @@ class FabricApiClient {
     return this._fltFetch(`/liveTableSchedule/cancelDAG/${iterationId}`, { method: 'POST' });
   }
 
+  // --- DAG Studio APIs (MWC token, connected mode) ---
+
+  /** Get per-node execution metrics for a completed DAG iteration. */
+  async getDagExecMetrics(iterationId) {
+    return this._fltFetchStrict(`/liveTable/getDAGExecMetrics/${iterationId}`);
+  }
+
+  /**
+   * List historical DAG execution iteration IDs with pagination.
+   * @param {object} [opts] - { historyCount: number, statuses: string[], continuationToken: string }
+   * @returns {Promise<{iterations: Array, continuationToken: string|null}>}
+   */
+  async listDagExecutions(opts = {}) {
+    const params = new URLSearchParams();
+    params.set('historyCount', String(opts.historyCount || 20));
+    if (opts.statuses) opts.statuses.forEach(s => params.append('statuses', s));
+    if (opts.continuationToken) params.set('continuationToken', opts.continuationToken);
+    const resp = await this._fltFetchRaw(`/liveTable/listDAGExecutionIterationIds?${params}`);
+    const data = await resp.json();
+    return {
+      iterations: data,
+      continuationToken: resp.headers.get('x-ms-continuation-token') || null,
+    };
+  }
+
+  /** Get the currently locked DAG execution iteration (if any). */
+  async getLockedExecution() {
+    return this._fltFetchStrict('/liveTableMaintanance/getLockedDAGExecutionIteration');
+  }
+
+  /**
+   * Force-unlock a stuck DAG execution.
+   * @param {string} lockedIterationId - The iteration ID to unlock.
+   */
+  async forceUnlockDag(lockedIterationId) {
+    return this._fltFetchStrict(
+      `/liveTableMaintanance/forceUnlockDAGExecution/${lockedIterationId}`,
+      { method: 'POST' }
+    );
+  }
+
+  /** Get DAG schedule/settings. */
+  async getDagSettings() {
+    return this._fltFetchStrict('/liveTable/settings');
+  }
+
+  /**
+   * Update DAG schedule/settings.
+   * @param {object} body - Settings payload.
+   */
+  async updateDagSettings(body) {
+    return this._fltFetchStrict('/liveTable/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** List all MLV execution definitions in current lakehouse. */
+  async listMlvDefinitions() {
+    return this._fltFetchStrict('/liveTable/mlvExecutionDefinitions');
+  }
+
+  /**
+   * Get the execution status of a specific DAG iteration (polling fallback).
+   * @param {string} iterationId
+   */
+  async getDagExecStatus(iterationId) {
+    return this._fltFetchStrict(`/liveTableSchedule/getDAGExecStatus/${iterationId}`);
+  }
+
   // --- Generic HTTP method wrappers (Fabric public API) ---
 
   /** @param {string} path - API path appended to base URL. */
@@ -505,5 +575,68 @@ class FabricApiClient {
       console.warn('FLT API fetch failed:', path, e.message);
       return null;
     }
+  }
+
+  /**
+   * FLT fetch with structured errors — throws on any failure, never returns null.
+   * Use for DAG Studio APIs where callers need to handle specific error types.
+   * @param {string} path - API path appended to FLT base URL.
+   * @param {object} [options] - fetch() options.
+   * @returns {Promise<object>} Parsed JSON response.
+   * @throws {Error} With .status, .body, .path properties.
+   */
+  async _fltFetchStrict(path, options = {}) {
+    if (!this._fabricBaseUrl || !this._mwcToken) {
+      const err = new Error('FLT service not connected — ensure MWC token is available');
+      err.status = 0;
+      err.path = path;
+      throw err;
+    }
+    const url = this._fabricBaseUrl + path;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `MwcToken ${this._mwcToken}`,
+      ...options.headers,
+    };
+    const resp = await fetch(url, { ...options, headers });
+    if (!resp.ok) {
+      const err = new Error(`FLT API error: ${resp.status} ${path}`);
+      err.status = resp.status;
+      err.body = await resp.text().catch(() => '');
+      err.path = path;
+      throw err;
+    }
+    const text = await resp.text();
+    return text ? JSON.parse(text) : {};
+  }
+
+  /**
+   * FLT fetch returning raw Response object (for reading response headers
+   * like continuation tokens from paginated endpoints).
+   * @param {string} path - API path appended to FLT base URL.
+   * @param {object} [options] - fetch() options.
+   * @returns {Promise<Response>} Raw fetch Response.
+   * @throws {Error} With .status, .path properties.
+   */
+  async _fltFetchRaw(path, options = {}) {
+    if (!this._fabricBaseUrl || !this._mwcToken) {
+      const err = new Error('FLT service not connected');
+      err.status = 0;
+      err.path = path;
+      throw err;
+    }
+    const url = this._fabricBaseUrl + path;
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `MwcToken ${this._mwcToken}`,
+    };
+    const resp = await fetch(url, { ...options, headers });
+    if (!resp.ok) {
+      const err = new Error(`FLT API error: ${resp.status} ${path}`);
+      err.status = resp.status;
+      err.path = path;
+      throw err;
+    }
+    return resp;
   }
 }
