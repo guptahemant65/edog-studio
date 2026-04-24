@@ -8,7 +8,7 @@
  * Public API (backward-compatible with main.js):
  *   constructor()
  *   init()
- *   switchView(viewId)        — 'workspace' | 'runtime' | 'api' | 'environment'
+ *   switchView(viewId)        — 'workspace' | 'runtime' | 'api' | 'environment' | 'dag'
  *   setPhase(phase)           — 'disconnected' | 'connected'
  *   getActiveView()           — returns current viewId
  *   onViewChange              — callback: (viewId) => void
@@ -296,7 +296,7 @@ class Sidebar {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.ctrlKey || e.metaKey) return;
 
-    const views = ['workspace', 'runtime', 'api', 'environment'];
+    const views = ['workspace', 'runtime', 'api', 'environment', 'dag'];
     const primarySubTabs = ['logs', 'telemetry', 'sysfiles', 'spark', 'nexus'];
 
     /* Alt+1-5: runtime primary sub-tabs */
@@ -312,7 +312,7 @@ class Sidebar {
     /* 1-4: view switching (no modifiers) */
     if (!e.altKey) {
       const num = parseInt(e.key);
-      if (num >= 1 && num <= 4) {
+      if (num >= 1 && num <= views.length) {
         e.preventDefault();
         this.switchView(views[num - 1]);
       }

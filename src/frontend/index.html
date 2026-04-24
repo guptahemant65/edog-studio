@@ -88,6 +88,7 @@ window.onerror = function(msg, src, line, col, err) {
         <div class="nav-divider"></div>
         <div class="nav-item" data-view="api" tabindex="0" role="button" aria-label="API Playground"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div><span class="nav-label">API Playground</span><span class="nav-shortcut">3</span></div>
         <div class="nav-item" data-view="environment" tabindex="0" role="button" aria-label="Environment"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span class="nav-label">Environment</span><span class="nav-shortcut">4</span></div>
+        <div class="nav-item connected-only" data-view="dag" tabindex="0" role="button" aria-label="DAG Studio"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h4M14 5l3 5M14 19l3-5"/></svg></div><span class="nav-label">DAG Studio</span><span class="nav-shortcut">5</span></div>
       </div>
       <div class="sidebar-footer">
         <div class="phase-row">
@@ -293,6 +294,53 @@ window.onerror = function(msg, src, line, col, err) {
         <div class="view-empty-state">
           <span class="empty-icon">&#9881;</span>
           <span class="empty-text">Environment panel &#8212; coming in V1.1</span>
+        </div>
+      </div>
+
+      <!-- View 5: DAG Studio (connected mode only) -->
+      <div id="view-dag" class="view-panel" data-view="dag">
+        <div class="dag-studio" id="dagStudio">
+          <!-- Toolbar -->
+          <div class="dag-toolbar" id="dagToolbar">
+            <button class="dag-btn primary" id="dagRunBtn" title="Run DAG">&#9654; Run DAG</button>
+            <button class="dag-btn danger" id="dagCancelBtn" title="Cancel" style="display:none">&#10005; Cancel</button>
+            <button class="dag-btn" id="dagRefreshBtn" title="Refresh DAG">&#8635; Refresh</button>
+            <button class="dag-btn" id="dagUnlockBtn" title="Force Unlock" style="display:none">&#128274; Unlock</button>
+            <div class="dag-toolbar-spacer"></div>
+            <div class="dag-toolbar-status" id="dagStatus">
+              <span class="dag-status-dot" id="dagStatusDot"></span>
+              <span id="dagStatusText">Idle</span>
+            </div>
+          </div>
+          <!-- Body: graph + side panel -->
+          <div class="dag-body">
+            <div class="dag-graph-panel" id="dagGraphPanel">
+              <canvas id="dagCanvas"></canvas>
+              <div class="dag-nodes-layer" id="dagNodesLayer"></div>
+              <canvas class="dag-minimap" id="dagMinimap" width="180" height="100"></canvas>
+              <div class="dag-zoom-controls">
+                <button class="dag-zoom-btn" id="dagZoomIn" title="Zoom in">+</button>
+                <button class="dag-zoom-btn" id="dagZoomOut" title="Zoom out">&#8722;</button>
+                <button class="dag-zoom-btn" id="dagFitBtn" title="Fit to screen">&#9635;</button>
+              </div>
+            </div>
+            <div class="dag-side-panel" id="dagSidePanel">
+              <div class="dag-gantt-section">
+                <div class="dag-section-title">GANTT CHART</div>
+                <div class="gantt-chart" id="dagGanttContainer">
+                  <div class="dag-empty-hint">Run a DAG to see the timeline</div>
+                </div>
+              </div>
+              <div class="dag-history-section">
+                <div class="dag-section-title">EXECUTION HISTORY</div>
+                <div id="dagHistoryContainer">
+                  <div class="dag-empty-hint">No execution history</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Node Detail Panel (slides from right) -->
+          <div class="dag-node-detail" id="dagNodeDetail"></div>
         </div>
       </div>
 

@@ -130,6 +130,9 @@ class EdogLogViewer {
       renderer: this.renderer
     });
 
+    // DAG Studio (lazy-initialized on first view activation)
+    this.dagStudio = null;
+
     // Smart feature modules
     this.autoDetector = new AutoDetector(this.state);
     this.smartContext = new SmartContextBar(this.autoDetector);
@@ -795,7 +798,11 @@ class EdogLogViewer {
           this.ws.connect();
         }
       }
+    } else if (viewId === 'dag') {
+      if (this.dagStudio) this.dagStudio.activate();
+      if (this.controlPanel) this.controlPanel.deactivate();
     } else {
+      if (this.dagStudio) this.dagStudio.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
     }
   }
