@@ -125,16 +125,23 @@ const MockData = (() => {
     return entries;
   }
 
+  // ── Capacities ──
+  const capacities = [
+    { id: 'cap-001', displayName: 'Dev Capacity F2', sku: 'F2', region: 'West US', state: 'Active' },
+    { id: 'cap-002', displayName: 'Staging Capacity F4', sku: 'F4', region: 'East US', state: 'Active' },
+    { id: 'cap-003', displayName: 'Production Capacity F64', sku: 'F64', region: 'West US', state: 'Active' },
+  ];
+
   // ── DAG Nodes ──
   const dagNodes = [
-    { nodeId: 'n1', name: 'RefreshSalesData', kind: 'sql', parents: [], children: ['n3', 'n4'], status: 'completed', duration: 2300, errorMessage: null },
-    { nodeId: 'n2', name: 'RefreshCustomerRaw', kind: 'sql', parents: [], children: ['n3'], status: 'completed', duration: 1800, errorMessage: null },
-    { nodeId: 'n3', name: 'TransformCustomerDim', kind: 'sql', parents: ['n1', 'n2'], children: ['n5', 'n6'], status: 'completed', duration: 4700, errorMessage: null },
-    { nodeId: 'n4', name: 'AggregateMetrics', kind: 'pyspark', parents: ['n1'], children: ['n7'], status: 'failed', duration: 12400, errorMessage: 'DeltaTableWriteException: Concurrent write conflict' },
-    { nodeId: 'n5', name: 'BuildSalesSummary', kind: 'sql', parents: ['n3'], children: ['n8'], status: 'completed', duration: 3200, errorMessage: null },
-    { nodeId: 'n6', name: 'RefreshProductJoin', kind: 'sql', parents: ['n3'], children: ['n8'], status: 'completed', duration: 2100, errorMessage: null },
-    { nodeId: 'n7', name: 'WriteMetricsOutput', kind: 'pyspark', parents: ['n4'], children: [], status: 'skipped', duration: 0, errorMessage: 'Skipped: parent node failed' },
-    { nodeId: 'n8', name: 'FinalizeViews', kind: 'sql', parents: ['n5', 'n6'], children: [], status: 'running', duration: null, errorMessage: null },
+    { nodeId: 'n1', name: 'RefreshSalesData', kind: 'sql', parents: [], children: ['n3', 'n4'], status: 'completed', duration: 2300, errorMessage: null, codeReference: { notebookId: 'nb-001', cellIndex: 0 } },
+    { nodeId: 'n2', name: 'RefreshCustomerRaw', kind: 'sql', parents: [], children: ['n3'], status: 'completed', duration: 1800, errorMessage: null, codeReference: { notebookId: 'nb-001', cellIndex: 1 } },
+    { nodeId: 'n3', name: 'TransformCustomerDim', kind: 'sql', parents: ['n1', 'n2'], children: ['n5', 'n6'], status: 'completed', duration: 4700, errorMessage: null, codeReference: { notebookId: 'nb-002', cellIndex: 0 } },
+    { nodeId: 'n4', name: 'AggregateMetrics', kind: 'pyspark', parents: ['n1'], children: ['n7'], status: 'failed', duration: 12400, errorMessage: 'DeltaTableWriteException: Concurrent write conflict', codeReference: { notebookId: 'nb-003', cellIndex: 0 } },
+    { nodeId: 'n5', name: 'BuildSalesSummary', kind: 'sql', parents: ['n3'], children: ['n8'], status: 'completed', duration: 3200, errorMessage: null, codeReference: { notebookId: 'nb-002', cellIndex: 1 } },
+    { nodeId: 'n6', name: 'RefreshProductJoin', kind: 'sql', parents: ['n3'], children: ['n8'], status: 'completed', duration: 2100, errorMessage: null, codeReference: { notebookId: 'nb-002', cellIndex: 2 } },
+    { nodeId: 'n7', name: 'WriteMetricsOutput', kind: 'pyspark', parents: ['n4'], children: [], status: 'skipped', duration: 0, errorMessage: 'Skipped: parent node failed', codeReference: null },
+    { nodeId: 'n8', name: 'FinalizeViews', kind: 'sql', parents: ['n5', 'n6'], children: [], status: 'running', duration: null, errorMessage: null, codeReference: { notebookId: 'nb-004', cellIndex: 0 } },
   ];
 
   const dagEdges = [
@@ -152,6 +159,17 @@ const MockData = (() => {
     { iterationId: _uuid().substring(0, 8), status: 'Succeeded', duration: '2m 45s', total: 8, completed: 8, failed: 0, startTime: _shortTime(180) },
     { iterationId: _uuid().substring(0, 8), status: 'Cancelled', duration: '0m 34s', total: 8, completed: 2, failed: 0, startTime: _shortTime(240) },
   ];
+
+  // ── Mock notebook code (keyed by "notebookId:cellIndex") ──
+  const mockCodeDefinitions = {
+    'nb-001:0': 'CREATE OR REPLACE MATERIALIZED VIEW RefreshSalesData AS\nSELECT\n    s.region,\n    s.product_id,\n    p.product_name,\n    SUM(s.quantity) AS total_qty,\n    SUM(s.amount)   AS total_amount\nFROM sales_transactions s\nJOIN products p ON s.product_id = p.id\nGROUP BY s.region, s.product_id, p.product_name;',
+    'nb-001:1': 'CREATE OR REPLACE MATERIALIZED VIEW RefreshCustomerRaw AS\nSELECT\n    customer_id,\n    first_name,\n    last_name,\n    email,\n    signup_date,\n    region\nFROM raw_customers\nWHERE is_active = 1;',
+    'nb-002:0': 'CREATE OR REPLACE MATERIALIZED VIEW TransformCustomerDim AS\nSELECT\n    c.customer_id,\n    c.first_name || \' \' || c.last_name AS full_name,\n    c.email,\n    c.region,\n    COUNT(s.order_id)   AS order_count,\n    SUM(s.amount)       AS lifetime_value\nFROM RefreshCustomerRaw c\nLEFT JOIN RefreshSalesData s ON c.customer_id = s.customer_id\nGROUP BY c.customer_id, c.first_name, c.last_name, c.email, c.region;',
+    'nb-002:1': 'CREATE OR REPLACE MATERIALIZED VIEW BuildSalesSummary AS\nSELECT\n    region,\n    DATE_TRUNC(\'month\', order_date) AS month,\n    COUNT(*)    AS order_count,\n    SUM(amount) AS revenue\nFROM TransformCustomerDim\nGROUP BY region, DATE_TRUNC(\'month\', order_date);',
+    'nb-002:2': 'CREATE OR REPLACE MATERIALIZED VIEW RefreshProductJoin AS\nSELECT\n    p.product_id,\n    p.product_name,\n    p.category,\n    COALESCE(s.total_qty, 0)    AS units_sold,\n    COALESCE(s.total_amount, 0) AS revenue\nFROM products p\nLEFT JOIN RefreshSalesData s ON p.product_id = s.product_id;',
+    'nb-003:0': '# PySpark: AggregateMetrics\nfrom pyspark.sql import functions as F\n\ndf = spark.table("TransformCustomerDim")\nagg = (\n    df.groupBy("region")\n      .agg(\n          F.count("customer_id").alias("customer_count"),\n          F.sum("lifetime_value").alias("total_ltv"),\n          F.avg("order_count").alias("avg_orders")\n      )\n)\nagg.write.format("delta").mode("overwrite").saveAsTable("aggregated_metrics")',
+    'nb-004:0': 'CREATE OR REPLACE MATERIALIZED VIEW FinalizeViews AS\nSELECT\n    s.region,\n    s.month,\n    s.order_count,\n    s.revenue,\n    p.category,\n    p.units_sold\nFROM BuildSalesSummary s\nJOIN RefreshProductJoin p ON s.region = p.product_id;',
+  };
 
   // ── Spark Requests ──
   const sparkRequests = [
@@ -287,6 +305,8 @@ const MockData = (() => {
     dagNodes,
     dagEdges,
     dagHistory,
+    capacities,
+    mockCodeDefinitions,
     sparkRequests,
     featureFlags,
     savedRequests,
