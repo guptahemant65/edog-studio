@@ -1481,39 +1481,6 @@ def revert_gts_spark_client_change(content, repo_root=None):
 
 
 # ============================================================================
-# Telemetry Console Output (included in patch for easy revert)
-# ============================================================================
-TELEMETRY_CONSOLE_CODE = '''
-            // EDOG DevMode - Console telemetry output
-            var edogCorrelationId = string.IsNullOrEmpty(correlationId) ? MonitoredScope.RootActivityId.ToString() : correlationId;
-            Console.ForegroundColor = ConsoleColor.Magenta;
-            Console.WriteLine($"[TELEMETRY] Activity: {activityName} | Status: {activityStatus} | Result: {resultCode ?? "OK"} | Duration: {durationMs}ms | CorrelationId: {edogCorrelationId}");
-            if (activityAttributes != null && activityAttributes.Count > 0)
-            {
-                Console.WriteLine($"            Attributes: {JsonConvert.SerializeObject(activityAttributes, Formatting.None)}");
-            }
-
-            Console.ResetColor();
-'''
-
-def apply_telemetry_console_output(content):
-    """Add console output to telemetry reporter. Revert handled by patch."""
-    marker = '// EDOG DevMode - Console telemetry output'
-    if marker in content:
-        return content, "already_applied"
-    
-    target = 'Check.Assert(durationMs >= 0, nameof(durationMs));'
-    if target not in content:
-        return content, "pattern_not_found"
-    
-    # Insert after target line
-    idx = content.find(target)
-    line_end = content.find('\n', idx) + 1
-    
-    return content[:line_end] + TELEMETRY_CONSOLE_CODE + content[line_end:], "applied"
-
-
-# ============================================================================
 # Tracer Console Output (for actual logs via Tracer.LogSanitizedMessage etc.)
 # ============================================================================
 
