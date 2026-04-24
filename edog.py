@@ -60,6 +60,7 @@ FILES = {
     "Program": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "Program.cs",
     "ParametersManifest": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "WorkloadParameters/ParametersManifest.json",
     "TestRollout": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "WorkloadParameters/Rollouts/Test.json",
+    "DagExecutionHandlerV2": SERVICE_PATH / "Core/V2/DagExecutionHandlerV2.cs",
 }
 
 # DevMode log viewer files (created, not patched)
@@ -1842,7 +1843,50 @@ def revert_log_viewer_registration_workloadapp_cs(content):
     return new_content
 
 
-def apply_disable_flt_auth_manifest(content):
+def apply_dag_execution_hook_patch(content):
+    """Patch DagExecutionHandlerV2.cs to register EdogDagExecutionHook in the hooks list."""
+    if "EdogDagExecutionHook" in content:
+        return content, "already_applied"
+
+    # Find the hook registration log line — our hook goes right before it
+    anchor = 'Tracer.LogSanitizedMessage(\n                        $"[DagHook] Registered {dagExecutionHooks.Count} hooks'
+    # Simpler match — just the unique log marker
+    marker = '[DagHook] Registered {dagExecutionHooks.Count} hooks'
+    if marker not in content:
+        return content, "pattern_not_found"
+
+    # Find the Tracer.LogSanitizedMessage line and insert our hook before it
+    lines = content.split('\n')
+    insert_idx = None
+    for i, line in enumerate(lines):
+        if marker in line:
+            # Walk back to the Tracer.LogSanitizedMessage( start
+            idx = i
+            while idx > 0 and 'Tracer.LogSanitizedMessage' not in lines[idx]:
+                idx -= 1
+            insert_idx = idx
+            break
+
+    if insert_idx is None:
+        return content, "pattern_not_found"
+
+    edog_hook_line = (
+        "\n"
+        "                    // EDOG DevMode - observability hook for DAG lifecycle events\n"
+        "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());\n"
+    )
+
+    lines.insert(insert_idx, edog_hook_line)
+    return '\n'.join(lines), "applied"
+
+
+def revert_dag_execution_hook_patch(content):
+    """Remove EdogDagExecutionHook registration from DagExecutionHandlerV2.cs."""
+    pattern = (
+        r"\n\s*// EDOG DevMode - observability hook for DAG lifecycle events\n"
+        r"\s*dagExecutionHooks\.Add\(new Microsoft\.LiveTable\.Service\.DevMode\.EdogDagExecutionHook\(\)\);\n"
+    )
+    return re.sub(pattern, "", content)
     """Set DisableFLTAuth to true in ParametersManifest.json."""
     if '"DisableFLTAuth": true' in content:
         return content, "already_applied"
@@ -2207,6 +2251,28 @@ def apply_all_changes(token, repo_root):
             modified_contents[rel_path] = content
             warnings.append(f"⚠️  Log viewer telemetry interceptor: pattern not found")
     
+    # 4b. Patch DagExecutionHandlerV2.cs to register EDOG DAG hook
+    rel_path = FILES["DagExecutionHandlerV2"]
+    filepath = repo_root / rel_path
+    content = read_file(filepath)
+    if content:
+        new_content, status = apply_dag_execution_hook_patch(content)
+        if status == "applied":
+            original_contents[rel_path] = content
+            write_file(filepath, new_content)
+            modified_contents[rel_path] = new_content
+            changes_made.append(f"✅ DAG execution hook (DagExecutionHandlerV2.cs)")
+        elif status == "already_applied":
+            reverted = revert_dag_execution_hook_patch(content)
+            if reverted != content:
+                original_contents[rel_path] = reverted
+                modified_contents[rel_path] = content
+            changes_made.append(f"⏭️  DAG execution hook (already)")
+        elif status == "pattern_not_found":
+            original_contents[rel_path] = content
+            modified_contents[rel_path] = content
+            warnings.append(f"⚠️  DAG execution hook: pattern not found in DagExecutionHandlerV2.cs")
+
     # 5. Disable FLT auth for EDOG DevMode (ParametersManifest.json and Test.json)
     for file_key, apply_fn, revert_fn, desc in [
         ("ParametersManifest", apply_disable_flt_auth_manifest, revert_disable_flt_auth_manifest, "DisableFLTAuth (ParametersManifest.json)"),
@@ -2315,6 +2381,22 @@ def revert_all_changes(repo_root):
                 print(f"   ⏭️  WorkloadApp.cs (clean)")
     except Exception as e:
         print(f"   ⚠️ Error reverting WorkloadApp.cs: {e}")
+        all_success = False
+    
+    # 5b. Revert DagExecutionHandlerV2.cs hook patch
+    try:
+        rel_path = FILES["DagExecutionHandlerV2"]
+        filepath = repo_root / rel_path
+        content = read_file(filepath)
+        if content:
+            reverted = revert_dag_execution_hook_patch(content)
+            if reverted != content:
+                write_file(filepath, reverted)
+                print(f"   ✅ Reverted DAG execution hook (DagExecutionHandlerV2.cs)")
+            else:
+                print(f"   ⏭️  DagExecutionHandlerV2.cs (clean)")
+    except Exception as e:
+        print(f"   ⚠️ Error reverting DagExecutionHandlerV2.cs: {e}")
         all_success = False
     
     # 6. Revert DisableFLTAuth in ParametersManifest.json and Test.json

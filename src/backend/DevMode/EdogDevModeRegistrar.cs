@@ -46,9 +46,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterCatalogInterceptor();
                 RegisterFltOpsInterceptors();
 
-                // Note: DAG execution hook (EdogDagExecutionHook) needs a patch to
-                // DagExecutionHandlerV2 to inject into the hook list. NodeExecutor
-                // wrapping needs a patch at the creation point. See gaps-roadmap.md Gap 2.
+                // DAG execution hook (EdogDagExecutionHook) is wired via edog.py
+                // patch to DagExecutionHandlerV2.cs — adds our hook to the inline hook list.
+                // NodeExecutor wrapping needs a patch at the creation point. See gaps-roadmap.md Gap 2.
 
                 // Nexus aggregator — consumes topic events, emits dependency graph snapshots
                 StartNexusAggregator();
