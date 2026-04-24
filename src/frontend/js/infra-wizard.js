@@ -728,3 +728,427 @@ class InfraWizardDialog {
     }
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   NAME GENERATOR DATA — Docker-style random names
+   ═══════════════════════════════════════════════════════════════════ */
+var IW_ADJECTIVES = [
+  'brave','calm','bold','keen','wise','fair','pure','warm','cool','kind',
+  'glad','fond','mild','true','free','swift','quick','fast','brisk','agile',
+  'fleet','rapid','lively','nimble','zippy','bright','sharp','clear','deep','smart',
+  'lucid','astute','clever','witty','adept','tough','solid','steady','firm','stout',
+  'hardy','robust','stable','deft','able','vivid','crisp','fresh','lush','sleek',
+  'noble','prime','grand','neat','happy','jolly','merry','proud','eager','loyal'
+];
+
+var IW_NOUNS = [
+  'turing','lovelace','hopper','dijkstra','knuth','ritchie','thompson','mccarthy','backus','liskov',
+  'gosling','torvalds','pike','kernighan','stroustrup','hejlsberg','matsumoto','wozniak','cerf','berners_lee',
+  'minsky','shannon','church','babbage','von_neumann','hamilton','boole','curry','haskell','erlang',
+  'carmack','dean','norvig','hinton','lecun','bengio','goodfellow','sutskever','ng','pearl',
+  'goldberg','lamport','wing','keller','shaw','bartik','holberton','sammet','allen','estrin',
+  'moore','grove','noyce','kilby','engelbart','postel','metcalfe','baran','clark','floyd'
+];
+
+function iwGenerateRandomName() {
+  var adj = IW_ADJECTIVES[Math.floor(Math.random() * IW_ADJECTIVES.length)];
+  var noun = IW_NOUNS[Math.floor(Math.random() * IW_NOUNS.length)];
+  var num = Math.floor(Math.random() * 90) + 10;
+  return adj + '_' + noun + '_' + num;
+}
+
+function iwGenerateUniqueRandomName(existingWorkspaces) {
+  var existingNames = {};
+  for (var i = 0; i < existingWorkspaces.length; i++) {
+    existingNames[existingWorkspaces[i].displayName.toLowerCase()] = true;
+  }
+  for (var attempt = 0; attempt < 5; attempt++) {
+    var candidate = iwGenerateRandomName();
+    if (!existingNames[candidate.toLowerCase()]) return candidate;
+  }
+  var base = iwGenerateRandomName();
+  var suffix = Date.now().toString(36).slice(-4);
+  return base + '_' + suffix;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INFRA SETUP PAGE (Page 1)
+   ═══════════════════════════════════════════════════════════════════ */
+class InfraSetupPage {
+  constructor(options) {
+    this._api = options.apiClient;
+    this._existingWorkspaces = options.existingWorkspaces || [];
+    this._containerEl = options.containerEl;
+    this._onValidationChange = options.onValidationChange;
+
+    this._fields = {
+      workspace: { value: '', valid: false, error: null, touched: false },
+      capacity: { value: '', valid: false, error: null, touched: false },
+      lakehouse: { value: '', valid: false, error: null, touched: false },
+      notebook: { value: '', valid: false, error: null, touched: false }
+    };
+    this._lakehouseManual = false;
+    this._notebookManual = false;
+    this._capacities = null;
+    this._capacityLoading = false;
+    this._firstActivation = true;
+
+    this._render();
+    this._bindEvents();
+  }
+
+  activate(wizardState) {
+    if (this._firstActivation) {
+      this._firstActivation = false;
+      // Generate initial random name
+      var name = iwGenerateUniqueRandomName(this._existingWorkspaces);
+      this._wsInput.value = name;
+      this._fields.workspace.value = name;
+      this._cascadeNames();
+      // Load capacities
+      this._loadCapacities();
+    }
+    // Restore state if navigating back
+    if (wizardState && wizardState.workspaceName) {
+      this._wsInput.value = wizardState.workspaceName;
+      this._fields.workspace.value = wizardState.workspaceName;
+      this._lhInput.value = wizardState.lakehouseName;
+      this._fields.lakehouse.value = wizardState.lakehouseName;
+      this._nbInput.value = wizardState.notebookName;
+      this._fields.notebook.value = wizardState.notebookName;
+      this._lakehouseManual = wizardState.lakehouseManuallyEdited || false;
+      this._notebookManual = wizardState.notebookManuallyEdited || false;
+      if (wizardState.capacityId && this._capSelect) {
+        this._capSelect.value = wizardState.capacityId;
+        this._fields.capacity.value = wizardState.capacityId;
+      }
+    }
+    this._validateAllFields();
+  }
+
+  deactivate() {}
+
+  validate() {
+    this._validateAllFields();
+    var allValid = this._fields.workspace.valid &&
+                   this._fields.capacity.valid &&
+                   this._fields.lakehouse.valid &&
+                   this._fields.notebook.valid;
+    if (!allValid) return 'Please fill in all required fields';
+    return null;
+  }
+
+  collectState(state) {
+    state.workspaceName = this._fields.workspace.value;
+    state.capacityId = this._fields.capacity.value;
+    state.capacityDisplayName = this._capSelect ? this._capSelect.options[this._capSelect.selectedIndex].text : '';
+    state.lakehouseName = this._fields.lakehouse.value;
+    state.notebookName = this._fields.notebook.value;
+    state.lakehouseManuallyEdited = this._lakehouseManual;
+    state.notebookManuallyEdited = this._notebookManual;
+    state.dirty = true;
+  }
+
+  destroy() {
+    this._containerEl.innerHTML = '';
+  }
+
+  getElement() {
+    return this._containerEl;
+  }
+
+  randomize() {
+    var name = iwGenerateUniqueRandomName(this._existingWorkspaces);
+    this._wsInput.value = name;
+    this._fields.workspace.value = name;
+    this._lakehouseManual = false;
+    this._notebookManual = false;
+    this._cascadeNames();
+    this._validateAllFields();
+    // Spin animation on randomize button
+    var btn = this._containerEl.querySelector('.iw-randomize-btn');
+    if (btn) {
+      btn.classList.add('spinning');
+      setTimeout(function() { btn.classList.remove('spinning'); }, 300);
+    }
+  }
+
+  /* --- Render --- */
+
+  _render() {
+    this._containerEl.innerHTML =
+      '<div class="iw-form-group">' +
+        '<label class="iw-form-label">Workspace Name</label>' +
+        '<div class="iw-input-wrapper">' +
+          '<input class="iw-form-input mono" id="iw-ws-name" spellcheck="false" placeholder="e.g. brave_turing_42">' +
+          '<button class="iw-input-icon iw-randomize-btn" title="Randomize name">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="iw-form-hint"><span class="iw-dot">\u25CF</span> Unique name, underscores allowed</div>' +
+        '<div class="iw-form-error" id="iw-ws-error"></div>' +
+      '</div>' +
+
+      '<div class="iw-form-group">' +
+        '<label class="iw-form-label">Capacity</label>' +
+        '<div class="iw-select-wrapper">' +
+          '<select class="iw-form-select" id="iw-cap-select">' +
+            '<option value="" disabled selected>Loading capacities\u2026</option>' +
+          '</select>' +
+          '<span class="iw-select-arrow">\u25BE</span>' +
+        '</div>' +
+        '<div class="iw-coming-soon-link">' +
+          '<span>Create New Capacity</span>' +
+          '<span class="iw-coming-soon-badge">Coming Soon</span>' +
+        '</div>' +
+        '<div class="iw-form-error" id="iw-cap-error"></div>' +
+      '</div>' +
+
+      '<div class="iw-form-row">' +
+        '<div class="iw-form-group">' +
+          '<label class="iw-form-label">Lakehouse Name</label>' +
+          '<div class="iw-input-wrapper">' +
+            '<input class="iw-form-input mono" id="iw-lh-name" spellcheck="false" placeholder="auto-generated">' +
+            '<span class="iw-input-icon valid" id="iw-lh-icon" style="display:none">\u2713</span>' +
+          '</div>' +
+          '<div class="iw-form-hint"><span class="iw-dot">\u25CF</span> Schema-enabled (always)</div>' +
+          '<div class="iw-form-error" id="iw-lh-error"></div>' +
+        '</div>' +
+        '<div class="iw-form-group">' +
+          '<label class="iw-form-label">Notebook Name</label>' +
+          '<div class="iw-input-wrapper">' +
+            '<input class="iw-form-input mono" id="iw-nb-name" spellcheck="false" placeholder="auto-generated">' +
+            '<span class="iw-input-icon valid" id="iw-nb-icon" style="display:none">\u2713</span>' +
+          '</div>' +
+          '<div class="iw-form-hint"><span class="iw-dot">\u25CF</span> Auto-generated from workspace</div>' +
+          '<div class="iw-form-error" id="iw-nb-error"></div>' +
+        '</div>' +
+      '</div>';
+
+    // Cache DOM refs
+    this._wsInput = this._containerEl.querySelector('#iw-ws-name');
+    this._capSelect = this._containerEl.querySelector('#iw-cap-select');
+    this._lhInput = this._containerEl.querySelector('#iw-lh-name');
+    this._nbInput = this._containerEl.querySelector('#iw-nb-name');
+  }
+
+  /* --- Events --- */
+
+  _bindEvents() {
+    var self = this;
+
+    // Workspace name: sanitize + cascade
+    this._wsInput.addEventListener('input', function() {
+      var v = self._wsInput.value.replace(/[^a-zA-Z0-9_]/g, '');
+      self._wsInput.value = v;
+      self._fields.workspace.value = v;
+      self._cascadeNames();
+      if (self._fields.workspace.touched) self._validateField('workspace');
+    });
+    this._wsInput.addEventListener('blur', function() {
+      self._fields.workspace.touched = true;
+      self._validateField('workspace');
+    });
+
+    // Capacity select
+    this._capSelect.addEventListener('change', function() {
+      self._fields.capacity.value = self._capSelect.value;
+      self._fields.capacity.touched = true;
+      self._validateField('capacity');
+    });
+
+    // Lakehouse name: detect manual edit
+    this._lhInput.addEventListener('input', function() {
+      var v = self._lhInput.value.replace(/[^a-zA-Z0-9_]/g, '');
+      self._lhInput.value = v;
+      self._fields.lakehouse.value = v;
+      self._lakehouseManual = true;
+      if (self._fields.lakehouse.touched) self._validateField('lakehouse');
+    });
+    this._lhInput.addEventListener('blur', function() {
+      self._fields.lakehouse.touched = true;
+      self._validateField('lakehouse');
+    });
+
+    // Notebook name: detect manual edit
+    this._nbInput.addEventListener('input', function() {
+      var v = self._nbInput.value.replace(/[^a-zA-Z0-9_]/g, '');
+      self._nbInput.value = v;
+      self._fields.notebook.value = v;
+      self._notebookManual = true;
+      if (self._fields.notebook.touched) self._validateField('notebook');
+    });
+    this._nbInput.addEventListener('blur', function() {
+      self._fields.notebook.touched = true;
+      self._validateField('notebook');
+    });
+
+    // Randomize button
+    var randBtn = this._containerEl.querySelector('.iw-randomize-btn');
+    if (randBtn) {
+      randBtn.addEventListener('click', function() { self.randomize(); });
+    }
+  }
+
+  /* --- Cascade --- */
+
+  _cascadeNames() {
+    var base = this._fields.workspace.value;
+    if (!this._lakehouseManual) {
+      var lhVal = base ? base + '_lh' : '';
+      this._lhInput.value = lhVal;
+      this._fields.lakehouse.value = lhVal;
+    }
+    if (!this._notebookManual) {
+      var nbVal = base ? base + '_nb' : '';
+      this._nbInput.value = nbVal;
+      this._fields.notebook.value = nbVal;
+    }
+  }
+
+  /* --- Validation --- */
+
+  _validateField(fieldName) {
+    var field = this._fields[fieldName];
+    var value = field.value;
+    field.error = null;
+    field.valid = false;
+
+    if (fieldName === 'workspace') {
+      if (!value) { field.error = 'Workspace name is required'; }
+      else if (value.length < 3) { field.error = 'Must be at least 3 characters'; }
+      else if (value.length > 64) { field.error = 'Must be 64 characters or fewer'; }
+      else if (!/^[a-zA-Z]/.test(value)) { field.error = 'Must start with a letter'; }
+      else {
+        // Check collision
+        var lower = value.toLowerCase();
+        for (var i = 0; i < this._existingWorkspaces.length; i++) {
+          if (this._existingWorkspaces[i].displayName.toLowerCase() === lower) {
+            field.error = 'Workspace name already exists';
+            break;
+          }
+        }
+      }
+      if (!field.error) field.valid = true;
+    }
+
+    if (fieldName === 'capacity') {
+      if (!value) { field.error = 'Please select a capacity'; }
+      else { field.valid = true; }
+    }
+
+    if (fieldName === 'lakehouse' || fieldName === 'notebook') {
+      if (!value) { field.error = (fieldName === 'lakehouse' ? 'Lakehouse' : 'Notebook') + ' name is required'; }
+      else if (value.length < 3) { field.error = 'Must be at least 3 characters'; }
+      else if (value.length > 64) { field.error = 'Must be 64 characters or fewer'; }
+      else if (!/^[a-zA-Z]/.test(value)) { field.error = 'Must start with a letter'; }
+      else { field.valid = true; }
+    }
+
+    this._updateFieldUI(fieldName);
+    this._emitValidation();
+  }
+
+  _validateAllFields() {
+    this._validateField('workspace');
+    this._validateField('capacity');
+    this._validateField('lakehouse');
+    this._validateField('notebook');
+  }
+
+  _updateFieldUI(fieldName) {
+    var field = this._fields[fieldName];
+    var inputEl, errorEl, iconEl;
+
+    if (fieldName === 'workspace') {
+      inputEl = this._wsInput;
+      errorEl = this._containerEl.querySelector('#iw-ws-error');
+    } else if (fieldName === 'capacity') {
+      inputEl = this._capSelect;
+      errorEl = this._containerEl.querySelector('#iw-cap-error');
+    } else if (fieldName === 'lakehouse') {
+      inputEl = this._lhInput;
+      errorEl = this._containerEl.querySelector('#iw-lh-error');
+      iconEl = this._containerEl.querySelector('#iw-lh-icon');
+    } else if (fieldName === 'notebook') {
+      inputEl = this._nbInput;
+      errorEl = this._containerEl.querySelector('#iw-nb-error');
+      iconEl = this._containerEl.querySelector('#iw-nb-icon');
+    }
+
+    if (!inputEl) return;
+
+    inputEl.classList.remove('error', 'valid');
+    if (field.touched && field.error) {
+      inputEl.classList.add('error');
+      if (errorEl) { errorEl.textContent = field.error; errorEl.classList.add('show'); }
+      if (iconEl) iconEl.style.display = 'none';
+    } else if (field.touched && field.valid) {
+      inputEl.classList.add('valid');
+      if (errorEl) { errorEl.textContent = ''; errorEl.classList.remove('show'); }
+      if (iconEl) iconEl.style.display = '';
+    } else {
+      if (errorEl) { errorEl.textContent = ''; errorEl.classList.remove('show'); }
+      if (iconEl) iconEl.style.display = 'none';
+    }
+  }
+
+  _emitValidation() {
+    var allValid = this._fields.workspace.valid &&
+                   this._fields.capacity.valid &&
+                   this._fields.lakehouse.valid &&
+                   this._fields.notebook.valid;
+    if (this._onValidationChange) this._onValidationChange(allValid);
+  }
+
+  /* --- Capacity Loading --- */
+
+  _loadCapacities() {
+    var self = this;
+    this._capacityLoading = true;
+    this._capSelect.classList.add('loading');
+
+    var isMock = new URLSearchParams(window.location.search).has('mock');
+    if (isMock) {
+      // Mock data for development
+      setTimeout(function() {
+        self._capacities = [
+          { id: 'f4-east',  displayName: 'F4 \u2014 East US', state: 'Active', sku: 'F4' },
+          { id: 'f8-west',  displayName: 'F8 \u2014 West US 2', state: 'Active', sku: 'F8' },
+          { id: 'f16-eu',   displayName: 'F16 \u2014 North Europe', state: 'Suspended', sku: 'F16' },
+          { id: 'f2-sea',   displayName: 'F2 \u2014 Southeast Asia', state: 'Active', sku: 'F2' }
+        ];
+        self._renderCapacityOptions();
+      }, 500);
+      return;
+    }
+
+    this._api.listCapacities().then(function(data) {
+      self._capacities = (data && data.value) || [];
+      self._renderCapacityOptions();
+    }).catch(function(err) {
+      self._capacities = [];
+      self._renderCapacityOptions();
+      self._fields.capacity.error = 'Failed to load capacities: ' + err.message;
+      self._updateFieldUI('capacity');
+    });
+  }
+
+  _renderCapacityOptions() {
+    this._capacityLoading = false;
+    this._capSelect.classList.remove('loading');
+    var html = '<option value="" disabled selected>Select capacity\u2026</option>';
+    if (this._capacities && this._capacities.length > 0) {
+      for (var i = 0; i < this._capacities.length; i++) {
+        var cap = this._capacities[i];
+        var stateLabel = cap.state === 'Active' ? 'Running' : cap.state === 'Suspended' ? 'Paused' : cap.state;
+        html += '<option value="' + cap.id + '">' +
+          (cap.sku || '') + ' \u2014 ' + cap.displayName + ' (' + stateLabel + ')' +
+        '</option>';
+      }
+    } else {
+      html = '<option value="" disabled selected>No capacities available</option>';
+    }
+    this._capSelect.innerHTML = html;
+  }
+}
