@@ -336,6 +336,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "cache" => (NexusDependencyId.Cache, false),
                 "retry" => (NexusDependencyId.RetrySystem, false),
                 "fileop" => (NexusDependencyId.Filesystem, true),
+                "catalog" => (NexusDependencyId.FabricApi, false),
                 "capacity" => (NexusDependencyId.Capacity, false),
                 _ => (NexusDependencyId.Unknown, false),
             };

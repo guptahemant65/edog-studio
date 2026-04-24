@@ -29,7 +29,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("telemetry", 5000);
             RegisterTopic("fileop", 2000);
             RegisterTopic("spark", 200);
-            RegisterTopic("token", 500);
+            RegisterTopic("token", 1000);
             RegisterTopic("cache", 2000);
             RegisterTopic("http", 2000);
             RegisterTopic("retry", 500);
@@ -37,6 +37,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("di", 100);
             RegisterTopic("perf", 5000);
             RegisterTopic("capacity", 500);
+            RegisterTopic("catalog", 200);  // Catalog discovery events (start/complete/fail)
             RegisterTopic("nexus", 100);  // Nexus aggregated snapshots (low volume, high value)
         }
 

@@ -42,6 +42,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 RegisterCacheInterceptor();
                 RegisterSparkSessionInterceptor();
                 RegisterDiRegistryCapture();
+                RegisterTokenLifecycleInterceptor();
+                RegisterCatalogInterceptor();
 
                 // Nexus aggregator — consumes topic events, emits dependency graph snapshots
                 StartNexusAggregator();
@@ -197,6 +199,42 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex)
             {
                 Console.WriteLine($"[EDOG] ✗ DI registry capture failed: {ex.Message}");
+            }
+        }
+
+        private static void RegisterTokenLifecycleInterceptor()
+        {
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.TokenManagement.ITokenManager>();
+                if (inner is EdogTokenLifecycleInterceptor) return;
+                var wrapper = new EdogTokenLifecycleInterceptor(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.TokenManagement.ITokenManager>(wrapper);
+                Console.WriteLine("[EDOG] ✓ TokenLifecycle interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ TokenLifecycle interceptor failed: {ex.Message}");
+            }
+        }
+
+        private static void RegisterCatalogInterceptor()
+        {
+            try
+            {
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.Catalog.ICatalogHandler>();
+                if (inner is EdogCatalogInterceptor) return;
+                var wrapper = new EdogCatalogInterceptor(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    Microsoft.LiveTable.Service.Catalog.ICatalogHandler>(wrapper);
+                Console.WriteLine("[EDOG] ✓ Catalog interceptor registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ Catalog interceptor failed: {ex.Message}");
             }
         }
 
