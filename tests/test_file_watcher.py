@@ -74,6 +74,31 @@ class TestFileWatcherExclusions:
         assert len(files) == 1
         assert files[0].name == "Code.cs"
 
+    def test_edog_patch_file_excluded(self, tmp_path):
+        """The .edog-changes.patch file is always excluded."""
+        service = tmp_path / "Service"
+        service.mkdir()
+        (service / ".edog-changes.patch").write_text("patch content")
+        (service / "Code.cs").write_text("class A {}")
+
+        watcher = FileWatcher(str(service))
+        files = watcher._scan_files()
+        names = [f.name for f in files]
+        assert ".edog-changes.patch" not in names
+        assert "Code.cs" in names
+
+    def test_testresults_directory_excluded(self, tmp_path):
+        """TestResults/ directory is excluded."""
+        service = tmp_path / "Service"
+        (service / "TestResults").mkdir(parents=True)
+        (service / "TestResults" / "results.json").write_text("{}")
+        (service / "Code.cs").write_text("class A {}")
+
+        watcher = FileWatcher(str(service))
+        files = watcher._scan_files()
+        assert len(files) == 1
+        assert files[0].name == "Code.cs"
+
 
 class TestFileWatcherFingerprints:
     """Test content-hash based change detection."""

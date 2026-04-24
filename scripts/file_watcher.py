@@ -93,14 +93,14 @@ class FileWatcher:
 
         Call this periodically (e.g., every 3 seconds).
         """
-        if not self._active:
-            return []
-
         changed = []
         current_files = self._scan_files()
         new_hashes = {}
 
         with self._lock:
+            if not self._active:
+                return []
+
             for path in current_files:
                 key = str(path.resolve())
                 current_hash = _file_hash(path)
