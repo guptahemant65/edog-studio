@@ -1535,3 +1535,46 @@
   0% { transform: translate(0,0) scale(1); opacity: 1; }
   100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
 }
+
+/* Capacity picker in workspace creation */
+.ws-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--accent);
+  margin-bottom: var(--space-1);
+}
+.ws-create-form .ws-create-row {
+  padding: 0;
+  height: auto;
+}
+.ws-create-select {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1);
+  outline: none;
+  flex: 1;
+  height: 22px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.ws-create-select:focus {
+  border-color: var(--accent);
+}
+.ws-create-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 1px;
+}
+.ws-create-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}

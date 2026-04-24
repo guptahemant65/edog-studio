@@ -472,71 +472,139 @@ class WorkspaceExplorer {
     header.appendChild(addBtn);
   }
 
-  /** Show inline input at top of tree for creating a new workspace. */
+  /** Show inline form at top of tree for creating a new workspace with optional capacity. */
   _showCreateWorkspaceInput() {
     if (!this._treeEl) return;
-    // Avoid duplicates
-    if (this._treeEl.querySelector('.ws-create-row')) return;
+    if (this._treeEl.querySelector('.ws-create-form')) return;
 
-    const row = document.createElement('div');
-    row.className = 'ws-create-row';
-    row.style.paddingLeft = '12px';
+    var self = this;
+    var form = document.createElement('div');
+    form.className = 'ws-create-form';
 
-    const input = document.createElement('input');
-    input.className = 'ws-create-input';
-    input.type = 'text';
-    input.placeholder = 'New workspace name';
-    input.setAttribute('aria-label', 'New workspace name');
-    row.appendChild(input);
+    // -- Name row --
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-create-label';
+    nameLabel.textContent = 'WORKSPACE NAME';
+    form.appendChild(nameLabel);
 
-    this._treeEl.insertBefore(row, this._treeEl.firstChild);
-    input.focus();
+    var nameRow = document.createElement('div');
+    nameRow.className = 'ws-create-row';
+    var nameInput = document.createElement('input');
+    nameInput.className = 'ws-create-input';
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Enter workspace name';
+    nameInput.setAttribute('aria-label', 'New workspace name');
+    nameRow.appendChild(nameInput);
+    form.appendChild(nameRow);
 
-    let committed = false;
-    const commit = async () => {
-      const name = input.value.trim();
+    // -- Capacity row --
+    var capLabel = document.createElement('div');
+    capLabel.className = 'ws-create-label';
+    capLabel.textContent = 'CAPACITY (OPTIONAL)';
+    form.appendChild(capLabel);
+
+    var capRow = document.createElement('div');
+    capRow.className = 'ws-create-row';
+    var capSelect = document.createElement('select');
+    capSelect.className = 'ws-create-select';
+    capSelect.setAttribute('aria-label', 'Select capacity');
+    var defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'Default capacity';
+    capSelect.appendChild(defaultOpt);
+    capRow.appendChild(capSelect);
+    form.appendChild(capRow);
+
+    // Hint
+    var hint = document.createElement('div');
+    hint.className = 'ws-create-hint';
+    hint.textContent = 'Enter \u2193 Tab to select capacity, Enter to create, Esc to cancel';
+    form.appendChild(hint);
+
+    this._treeEl.insertBefore(form, this._treeEl.firstChild);
+    nameInput.focus();
+
+    // Load capacities async
+    self._loadCapacityOptions(capSelect);
+
+    var committed = false;
+    var commit = function() {
+      var name = nameInput.value.trim();
+      var capacityId = capSelect.value || null;
       cleanup();
       if (!name) return;
-      try {
-        const result = await this._api.createWorkspace(name);
-        this._toast(`Created workspace "${name}"`, 'success');
-        await this.loadWorkspaces();
-        // Expand the new workspace
-        if (result && result.id) {
-          this._expanded.add(result.id);
-          this._renderTree();
-        }
-      } catch (err) {
-        this._toast(`Create failed: ${err.message}`, 'error');
-      }
+      self._createWorkspaceWithCapacity(name, capacityId);
     };
 
-    const cleanup = () => {
-      if (row.parentNode) row.remove();
-      input.removeEventListener('keydown', onKey);
-      input.removeEventListener('blur', onBlur);
+    var cleanup = function() {
+      if (form.parentNode) form.remove();
     };
 
-    const onKey = (e) => {
+    var onKey = function(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        committed = true;
-        commit();
+        if (document.activeElement === nameInput && nameInput.value.trim()) {
+          capSelect.focus();
+        } else if (document.activeElement === capSelect) {
+          committed = true;
+          commit();
+        } else if (nameInput.value.trim()) {
+          committed = true;
+          commit();
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         committed = true;
         cleanup();
       }
     };
-    const onBlur = () => {
-      if (!committed) {
-        committed = true;
-        commit();
-      }
-    };
 
-    input.addEventListener('keydown', onKey);
-    input.addEventListener('blur', onBlur);
+    nameInput.addEventListener('keydown', onKey);
+    capSelect.addEventListener('keydown', onKey);
+  }
+
+  /** Fetch capacities and populate a select element. */
+  _loadCapacityOptions(selectEl) {
+    var self = this;
+    if (this._isMock) {
+      var caps = window.MockEdogData ? window.MockEdogData.capacities : [];
+      for (var i = 0; i < caps.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = caps[i].id;
+        opt.textContent = caps[i].displayName + ' (' + caps[i].sku + ')';
+        selectEl.appendChild(opt);
+      }
+      return;
+    }
+    this._api.listCapacities().then(function(resp) {
+      var caps = (resp && resp.value) ? resp.value : [];
+      for (var i = 0; i < caps.length; i++) {
+        var opt = document.createElement('option');
+        opt.value = caps[i].id;
+        var label = caps[i].displayName || caps[i].id;
+        if (caps[i].sku) label = label + ' (' + caps[i].sku + ')';
+        opt.textContent = label;
+        selectEl.appendChild(opt);
+      }
+    }).catch(function() {
+      // Silently degrade — user can still create with default capacity
+    });
+  }
+
+  /** Create workspace and optionally assign to capacity. */
+  _createWorkspaceWithCapacity(name, capacityId) {
+    var self = this;
+    this._api.createWorkspace(name, capacityId).then(function(result) {
+      self._toast('Created workspace "' + name + '"', 'success');
+      return self.loadWorkspaces().then(function() {
+        if (result && result.id) {
+          self._expanded.add(result.id);
+          self._renderTree();
+        }
+      });
+    }).catch(function(err) {
+      self._toast('Create failed: ' + err.message, 'error');
+    });
   }
 
   /** Context menu action: create lakehouse inside selected workspace. */
