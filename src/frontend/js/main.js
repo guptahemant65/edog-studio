@@ -108,6 +108,7 @@ class EdogLogViewer {
     this.sidebar = new Sidebar();
     this.runtimeView = new RuntimeView(this.ws);
     this.workspaceExplorer = new WorkspaceExplorer(this.apiClient);
+    window.edogWorkspaceExplorer = this.workspaceExplorer;
     this.commandPalette = new CommandPalette(this.sidebar, this.workspaceExplorer);
     this.fileWatcher = new FileChangeWatcher();
 

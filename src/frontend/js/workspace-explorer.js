@@ -194,6 +194,8 @@ class WorkspaceExplorer {
       items.push({ label: 'Create Lakehouse', action: () => this._ctxCreateLakehouse() });
       items.push({ label: 'Create Notebook', action: () => this._ctxCreateNotebook() });
       items.push({ sep: true });
+      items.push({ label: 'New Infrastructure\u2026', cls: 'accent', action: () => this._ctxNewInfra() });
+      items.push({ sep: true });
       items.push({ label: 'Rename', action: () => this._ctxRename() });
       items.push({ label: 'Delete', cls: 'danger', action: () => this._ctxDelete() });
       items.push({ sep: true });
@@ -244,6 +246,19 @@ class WorkspaceExplorer {
   }
 
   // Context menu actions
+
+  _ctxNewInfra() {
+    if (InfraWizardDialog.isActive()) {
+      InfraWizardDialog.getActive().restore();
+      return;
+    }
+    const wizard = new InfraWizardDialog(this._api, {
+      existingWorkspaces: this._workspaces
+    });
+    wizard.onClose = () => { this._refreshAll(); };
+    wizard.onComplete = () => { this._refreshAll(); };
+    wizard.open();
+  }
 
   _ctxDeploy() {
     const t = this._ctxTarget;
