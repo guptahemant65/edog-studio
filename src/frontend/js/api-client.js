@@ -203,11 +203,14 @@ class FabricApiClient {
   }
 
   /**
-   * Create a new workspace.
+   * Create a new workspace, optionally in a specific capacity.
    * @param {string} name - Display name for the new workspace.
+   * @param {string} [capacityId] - Optional capacity GUID.
    */
-  async createWorkspace(name) {
-    return this._fabricPost('/workspaces', { displayName: name });
+  async createWorkspace(name, capacityId) {
+    var body = { displayName: name };
+    if (capacityId) body.capacityId = capacityId;
+    return this._fabricPost('/workspaces', body);
   }
 
   /**
@@ -217,6 +220,32 @@ class FabricApiClient {
    */
   async createLakehouse(workspaceId, name) {
     return this._fabricPost(`/workspaces/${workspaceId}/lakehouses`, { displayName: name });
+  }
+
+  /**
+   * List available capacities the user has access to.
+   * @returns {Promise<{value: Array}>} Array of capacity objects.
+   */
+  async listCapacities() {
+    return this._fabricGet('/capacities');
+  }
+
+  /**
+   * Create a new notebook inside a workspace.
+   * @param {string} workspaceId - Parent workspace GUID.
+   * @param {string} name - Display name for the new notebook.
+   */
+  async createNotebook(workspaceId, name) {
+    return this._fabricPost('/workspaces/' + workspaceId + '/notebooks', { displayName: name });
+  }
+
+  /**
+   * Assign a workspace to a specific capacity.
+   * @param {string} workspaceId - Workspace GUID.
+   * @param {string} capacityId - Capacity GUID to assign.
+   */
+  async assignToCapacity(workspaceId, capacityId) {
+    return this._fabricPost('/workspaces/' + workspaceId + '/assignToCapacity', { capacityId: capacityId });
   }
 
   // --- Notebook APIs (server-side LRO handling) ---
