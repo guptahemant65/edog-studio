@@ -119,3 +119,144 @@
   cursor: pointer; padding: var(--space-1) 0; font-family: var(--font-body);
 }
 .api-header-add:hover { text-decoration: underline; }
+
+/* ── JSON Tree ── */
+.json-tree { font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.7; }
+.json-node { white-space: nowrap; }
+.json-node-header { display: flex; align-items: center; cursor: pointer; }
+.json-node-header:hover { background: var(--surface-2); border-radius: var(--radius-sm); }
+.json-toggle {
+  display: inline-block; width: 16px; text-align: center;
+  color: var(--text-muted); font-size: 10px; user-select: none; flex-shrink: 0;
+}
+.json-toggle:hover { color: var(--accent); }
+.json-children { padding-left: 16px; }
+.json-key { color: var(--accent); }
+.json-string { color: var(--status-succeeded); }
+.json-number { color: var(--level-warning); }
+.json-boolean { color: #c084fc; }
+.json-null { color: var(--text-muted); font-style: italic; }
+.json-bracket { color: var(--text-muted); }
+.json-count { color: var(--text-muted); font-size: 10px; font-style: italic; }
+.json-tree-controls {
+  display: flex; gap: var(--space-2); padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.json-tree-btn {
+  font-size: var(--text-xs); color: var(--text-muted); background: none;
+  border: none; cursor: pointer; font-family: var(--font-body);
+}
+.json-tree-btn:hover { color: var(--accent); }
+
+/* ── Endpoint Catalog Dropdown ── */
+.api-catalog-trigger {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface-2);
+  color: var(--text-dim); font-size: var(--text-xs); cursor: pointer;
+  font-family: var(--font-body); white-space: nowrap;
+}
+.api-catalog-trigger:hover { border-color: var(--border-bright); color: var(--text); }
+.api-catalog-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  z-index: 100; max-height: 400px; overflow-y: auto;
+  margin-top: var(--space-1);
+}
+.api-catalog-search {
+  width: 100%; padding: var(--space-2) var(--space-3);
+  border: none; border-bottom: 1px solid var(--border);
+  background: var(--surface); color: var(--text);
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  outline: none;
+}
+.api-catalog-group { padding: var(--space-1) var(--space-3); }
+.api-catalog-group-label {
+  font-size: 10px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: var(--space-1) 0;
+}
+.api-catalog-item {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm);
+  cursor: pointer; font-size: var(--text-xs);
+}
+.api-catalog-item:hover { background: var(--surface-2); }
+.api-catalog-item .method-pill { font-size: 9px; padding: 0 var(--space-1); min-width: 36px; text-align: center; }
+.api-catalog-item-name { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.api-catalog-item-url { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.api-catalog-empty { padding: var(--space-3); text-align: center; color: var(--text-muted); font-size: var(--text-xs); }
+
+/* ── Loading & Empty States ── */
+.api-loading {
+  display: flex; align-items: center; justify-content: center;
+  flex: 1; color: var(--text-muted); font-size: var(--text-sm);
+  gap: var(--space-2);
+}
+.api-spinner {
+  width: 16px; height: 16px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: api-spin 0.6s linear infinite;
+}
+@keyframes api-spin { to { transform: rotate(360deg); } }
+.api-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; color: var(--text-muted); font-size: var(--text-sm); gap: var(--space-2);
+  padding: var(--space-6);
+}
+.api-empty-hint { font-size: var(--text-xs); color: var(--text-muted); }
+
+/* ── Response Tabs ── */
+.api-resp-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.api-resp-tab {
+  padding: var(--space-1) var(--space-3); border: none; background: none;
+  color: var(--text-muted); font-size: var(--text-xs); font-family: var(--font-body);
+  cursor: pointer; border-bottom: 2px solid transparent;
+}
+.api-resp-tab:hover { color: var(--text); }
+.api-resp-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Method Pill Colors ── */
+.method-pill {
+  padding: 1px var(--space-1); border-radius: 2px;
+  font-family: var(--font-mono); font-weight: 600; font-size: 9px;
+  text-transform: uppercase; letter-spacing: 0.02em;
+}
+.method-pill.get { background: rgba(5,150,105,0.15); color: var(--status-succeeded); }
+.method-pill.post { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.method-pill.put { background: rgba(217,119,6,0.15); color: var(--level-warning); }
+.method-pill.patch { background: rgba(168,85,247,0.15); color: #c084fc; }
+.method-pill.delete { background: rgba(220,38,38,0.15); color: var(--level-error); }
+
+/* ── Cancel Button ── */
+.api-cancel-btn {
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-2); color: var(--level-error);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: var(--text-xs); cursor: pointer; display: none;
+}
+.api-cancel-btn.visible { display: inline-block; }
+
+/* ── Danger Level ── */
+.api-danger-caution { color: var(--level-warning); }
+.api-danger-destructive { color: var(--level-error); }
+
+/* ── URL Template Variable Highlight ── */
+.api-tpl-var {
+  background: rgba(217,119,6,0.12); color: var(--level-warning);
+  padding: 0 2px; border-radius: 2px;
+}
+
+/* ── Request Section Position (for catalog dropdown) ── */
+.api-request-section { position: relative; }
+
+/* ── Response Headers Table ── */
+.api-resp-headers-table { width: 100%; font-size: var(--text-xs); font-family: var(--font-mono); }
+.api-resp-headers-table td {
+  padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.api-resp-headers-table td:first-child { color: var(--accent); white-space: nowrap; width: 200px; }
