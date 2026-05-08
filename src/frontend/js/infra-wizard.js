@@ -101,6 +101,7 @@ var IW_EVENTS = {
   EXECUTION_STEP:      'execution:step',
   EXECUTION_COMPLETE:  'execution:complete',
   EXECUTION_FAILED:    'execution:failed',
+  NAVIGATE_WORKSPACE:  'iw:navigate-workspace',
 
   // Undo/Redo events (C14)
   UNDO:                'undo:performed',
@@ -489,6 +490,16 @@ class InfraWizardDialog {
         self._trapFocus(e);
       }
     });
+
+    // Navigate to workspace (post-creation)
+    if (this._eventBus) {
+      this._eventBus.on(IW_EVENTS.NAVIGATE_WORKSPACE, function(data) {
+        self._performClose();
+        document.dispatchEvent(new CustomEvent('edog:select-workspace', {
+          detail: { id: data.workspaceId }
+        }));
+      });
+    }
   }
 
   _unbindEvents() {
@@ -782,8 +793,36 @@ class InfraWizardDialog {
   }
 
   _showLockInConfirmation() {
-    // Move to execution page (Page 4) — execution starts automatically on activate
-    this._goToPage(4, true);
+    var self = this;
+    // Show confirmation overlay before proceeding to execution
+    var confirmEl = document.createElement('div');
+    confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.innerHTML =
+      '<div class="iw-confirm-panel">' +
+        '<div class="iw-confirm-icon">\u25C6</div>' +
+        '<div class="iw-confirm-title">Confirm Environment Creation</div>' +
+        '<div class="iw-confirm-body">You are about to create real cloud resources. This will:</div>' +
+        '<ul class="iw-confirm-list">' +
+          '<li>Create a Fabric workspace</li>' +
+          '<li>Assign capacity (may incur costs)</li>' +
+          '<li>Create a lakehouse with schema support</li>' +
+          '<li>Create and execute a notebook</li>' +
+        '</ul>' +
+        '<div class="iw-confirm-footer-text">This action cannot be undone.</div>' +
+        '<div class="iw-confirm-actions">' +
+          '<button class="iw-btn iw-btn-ghost" id="iw-lockin-cancel">Cancel</button>' +
+          '<button class="iw-btn iw-btn-create" id="iw-lockin-confirm">Confirm & Create</button>' +
+        '</div>' +
+      '</div>';
+    this._dialogEl.appendChild(confirmEl);
+
+    confirmEl.querySelector('#iw-lockin-cancel').addEventListener('click', function() {
+      confirmEl.parentNode.removeChild(confirmEl);
+    });
+    confirmEl.querySelector('#iw-lockin-confirm').addEventListener('click', function() {
+      confirmEl.parentNode.removeChild(confirmEl);
+      self._goToPage(4, true);
+    });
   }
 
   _minimizeToFloatingBadge() {

@@ -1009,11 +1009,10 @@ class ExecutionPipeline {
     if (artifacts.workspaceId) {
       var self = this;
       var navBtn = document.createElement('button');
-      navBtn.className = 'iw-btn iw-btn-primary';
-      navBtn.textContent = 'Navigate to Workspace';
+      navBtn.className = 'iw-btn iw-btn-primary iw-exec-navigate-btn';
+      navBtn.textContent = 'Open Workspace \u2192';
       navBtn.addEventListener('click', function() {
-        var url = 'https://app.fabric.microsoft.com/groups/' + artifacts.workspaceId;
-        window.open(url, '_blank');
+        self._emit(IW_EVENTS.NAVIGATE_WORKSPACE, { workspaceId: artifacts.workspaceId });
       });
       summaryEl.appendChild(navBtn);
     }
