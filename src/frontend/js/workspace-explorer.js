@@ -53,6 +53,8 @@ class WorkspaceExplorer {
     this._renderFavorites();
     this._bindRefresh();
     this._bindTreeHeaderAdd();
+    this._bindNewEnvironment();
+    this._bindWorkspaceSelectEvent();
     this._bindGlobalKeys();
     this._showEmptyContent();
     this._clearInspector();
@@ -486,6 +488,46 @@ class WorkspaceExplorer {
     addBtn.setAttribute('aria-label', 'Create workspace');
     addBtn.addEventListener('click', () => this._showCreateWorkspaceInput());
     header.appendChild(addBtn);
+  }
+
+  /** Bind "New Environment" button in the tree header to open Infra Wizard. */
+  _bindNewEnvironment() {
+    var header = document.querySelector('.ws-tree-header');
+    if (!header) return;
+    if (header.querySelector('.ws-new-env-btn')) return;
+
+    var newEnvBtn = document.createElement('button');
+    newEnvBtn.className = 'ws-toolbar-btn ws-new-env-btn';
+    newEnvBtn.title = 'Create new test environment';
+    newEnvBtn.textContent = '+ New Environment';
+    newEnvBtn.addEventListener('click', function() {
+      if (window.InfraWizardDialog) {
+        var wizard = new window.InfraWizardDialog();
+        wizard.open();
+      }
+    });
+    header.appendChild(newEnvBtn);
+  }
+
+  /** Listen for post-creation workspace navigation from Infra Wizard. */
+  _bindWorkspaceSelectEvent() {
+    var self = this;
+    document.addEventListener('edog:select-workspace', function(e) {
+      if (e.detail && e.detail.id) {
+        self.selectWorkspace(e.detail.id);
+      }
+    });
+  }
+
+  /** Select a workspace by ID — refreshes list and highlights the target. */
+  selectWorkspace(id) {
+    var self = this;
+    this.loadWorkspaces().then(function() {
+      var ws = self._workspaces.find(function(w) { return w.id === id; });
+      if (ws) {
+        self._selectWorkspace(ws);
+      }
+    });
   }
 
   /** Show inline form at top of tree for creating a new workspace with optional capacity. */

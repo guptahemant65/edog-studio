@@ -894,6 +894,22 @@
   color: var(--accent);
   background: var(--accent-dim);
 }
+.ws-new-env-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  margin-left: var(--space-1);
+}
+.ws-new-env-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
 
 /* ── Rich Lakehouse Header ── */
 .ws-header-badges {
