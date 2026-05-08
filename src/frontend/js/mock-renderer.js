@@ -1594,12 +1594,7 @@ class MockRenderer {
   }
 
   _showToast(msg) {
-    const toast = document.getElementById('edog-toast');
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.add('visible');
-    clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => toast.classList.remove('visible'), 2000);
+    window.edogToast(msg, 'info');
   }
 
   // ── Deploy Flow ──

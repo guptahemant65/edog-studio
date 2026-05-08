@@ -1172,14 +1172,6 @@ class TelemetryTab {
      ═══════════════════════════════════════════════════════════════ */
 
   _showToast(msg, icon) {
-    icon = icon || '\u2713';
-    const container = this._dom.toasts;
-    const el = this._ce('div', 'tl-toast');
-    el.innerHTML = '<span class="tl-toast-icon">' + icon + '</span> ' + this._esc(msg);
-    container.appendChild(el);
-    setTimeout(() => {
-      el.classList.add('tl-toast--leaving');
-      setTimeout(() => el.remove(), 200);
-    }, 2500);
+    window.edogToast(msg, 'info');
   }
 }

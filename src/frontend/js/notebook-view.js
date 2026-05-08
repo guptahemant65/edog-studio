@@ -1159,38 +1159,7 @@ class NotebookView {
   // ── Toast ─────────────────────────────────────────────────────
 
   _showToast(message, type = 'info') {
-    // Reuse existing toast or create one
-    let toast = this._container.querySelector('.nb-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.className = 'nb-toast';
-      toast.style.cssText = `
-        position:fixed;bottom:var(--space-8);right:var(--space-8);
-        padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);
-        font-size:var(--text-sm);font-family:var(--font-body);
-        box-shadow:var(--shadow-md);z-index:9999;
-        transition:opacity var(--transition-normal);
-        max-width:400px;
-      `;
-      document.body.appendChild(toast);
-    }
-
-    const colors = {
-      success: 'background:var(--comp-dag-bg);color:var(--status-succeeded);border:1px solid var(--status-succeeded)',
-      error: 'background:var(--row-error-tint);color:var(--status-failed);border:1px solid var(--status-failed)',
-      warning: 'background:var(--level-warning-tint);color:var(--level-warning);border:1px solid var(--level-warning)',
-      info: 'background:var(--surface);color:var(--text-dim);border:1px solid var(--border-bright)',
-    };
-
-    toast.style.cssText += colors[type] || colors.info;
-    toast.textContent = message;
-    toast.style.opacity = '1';
-
-    clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    window.edogToast(message, type);
   }
 
   // ── Helpers ───────────────────────────────────────────────────

@@ -1265,35 +1265,16 @@ class EdogLogViewer {
   }
 
   showExportToast = (countOrMessage, formatOrType) => {
-    // Remove any existing toast
-    const prev = document.querySelector('.export-toast');
-    if (prev) prev.remove();
-
     const formatLabels = { json: 'JSON', csv: 'CSV', txt: 'Plain Text' };
-    let message, variant;
-
+    var message, variant;
     if (typeof countOrMessage === 'number') {
-      message = `Exported ${countOrMessage.toLocaleString()} entries as ${formatLabels[formatOrType] || formatOrType}`;
-      variant = '';
+      message = 'Exported ' + countOrMessage.toLocaleString() + ' entries as ' + (formatLabels[formatOrType] || formatOrType);
+      variant = 'success';
     } else {
       message = countOrMessage;
-      variant = formatOrType || '';
+      variant = formatOrType || 'info';
     }
-
-    const toast = document.createElement('div');
-    toast.className = 'export-toast';
-    if (variant) toast.classList.add(variant);
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => toast.classList.add('visible'));
-
-    setTimeout(() => {
-      toast.classList.remove('visible');
-      toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-      // Fallback removal if transitionend doesn't fire
-      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 500);
-    }, 3000);
+    window.edogToast(message, variant);
   }
 
   exportLogs = () => {
