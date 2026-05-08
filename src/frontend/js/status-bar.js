@@ -1,0 +1,1 @@
+/* StatusBar — footer status bar */
