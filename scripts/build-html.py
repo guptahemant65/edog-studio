@@ -117,6 +117,8 @@ JS_MODULES = [
     "js/wizard-dag-canvas.js",
     "js/wizard-node-palette.js",
     "js/wizard-code-preview.js",
+    "js/wizard-dag-presets.js",
+    "js/wizard-node-popover.js",
     "js/wizard-dag-canvas-page.js",
     "js/wizard-review-summary.js",
     "js/wizard-template-mgr.js",

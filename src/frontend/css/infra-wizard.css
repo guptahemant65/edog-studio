@@ -2757,3 +2757,410 @@
 .iw-exec-navigate-btn {
   margin-top: 16px;
 }
+/* ═══════════════════════════════════════════════════════════════════
+   DAG Presets Overlay (wizard-dag-presets.js)
+   CSS prefix: .iw-dag-presets-*
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes iw-dag-presets-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes iw-dag-presets-card-enter {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.iw-dag-presets-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface, #ffffff) 85%, transparent);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+.iw-dag-presets-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.iw-dag-presets-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 620px;
+  width: 100%;
+  padding: 32px 24px;
+  animation: iw-dag-presets-fade-in 350ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)) both;
+}
+
+/* ─── Header ─── */
+.iw-dag-presets-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.iw-dag-presets-heading {
+  font-size: var(--text-lg, 15px);
+  font-weight: 700;
+  color: var(--text, #1a1d23);
+  letter-spacing: -0.01em;
+}
+.iw-dag-presets-subheading {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-muted, #8e95a5);
+}
+
+/* ─── Card Grid ─── */
+.iw-dag-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+@media (max-width: 560px) {
+  .iw-dag-presets-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ─── Card ─── */
+.iw-dag-presets-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--s1, #f8f9fb);
+  border: 1px solid var(--border, rgba(0,0,0,0.06));
+  border-radius: var(--r-m, 8px);
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 120ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  animation: iw-dag-presets-card-enter 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)) both;
+  animation-delay: var(--delay, 0ms);
+}
+.iw-dag-presets-card:hover {
+  border-color: var(--accent, #6d5cff);
+  background: var(--s2, #f0f1f5);
+  box-shadow: 0 2px 8px rgba(109,92,255,0.10);
+  transform: translateY(-2px);
+}
+.iw-dag-presets-card:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* ─── SVG Preview ─── */
+.iw-dag-presets-svg-wrap {
+  background: var(--surface, #ffffff);
+  border-radius: var(--r-s, 4px);
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border, rgba(0,0,0,0.04));
+}
+.iw-dag-presets-svg {
+  width: 100%;
+  height: 40px;
+  display: block;
+}
+.iw-dag-presets-dot {
+  fill: var(--text-muted, #8e95a5);
+  transition: fill 120ms;
+}
+.iw-dag-presets-dot--source {
+  fill: var(--accent, #6d5cff);
+}
+.iw-dag-presets-dot--target {
+  fill: var(--text-muted, #8e95a5);
+}
+.iw-dag-presets-dot--gold {
+  fill: #d4a017;
+}
+.iw-dag-presets-card:hover .iw-dag-presets-dot--target {
+  fill: var(--accent, #6d5cff);
+}
+.iw-dag-presets-line {
+  stroke: var(--text-muted, #8e95a5);
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+.iw-dag-presets-line--cross {
+  stroke-dasharray: 3 2;
+  opacity: 0.4;
+}
+.iw-dag-presets-card:hover .iw-dag-presets-line {
+  stroke: var(--accent, #6d5cff);
+  opacity: 0.8;
+}
+
+/* ─── Card Body ─── */
+.iw-dag-presets-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.iw-dag-presets-card-title {
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  color: var(--text, #1a1d23);
+}
+.iw-dag-presets-card-subtitle {
+  font-size: 11px;
+  color: var(--text-muted, #8e95a5);
+  line-height: 1.3;
+}
+
+/* ─── Stats + Badge ─── */
+.iw-dag-presets-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.iw-dag-presets-stat {
+  font-size: 10px;
+  color: var(--text-muted, #8e95a5);
+}
+.iw-dag-presets-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--r-s, 4px);
+  background: var(--s3, #e8eaef);
+  color: var(--text-muted, #8e95a5);
+}
+.iw-dag-presets-badge--beginner {
+  background: rgba(46,204,113,0.12);
+  color: #1e8449;
+}
+.iw-dag-presets-badge--intermediate {
+  background: rgba(241,196,15,0.14);
+  color: #9a7d0a;
+}
+.iw-dag-presets-badge--advanced {
+  background: rgba(231,76,60,0.12);
+  color: #c0392b;
+}
+
+/* ─── Scratch Link ─── */
+.iw-dag-presets-scratch {
+  background: none;
+  border: none;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-muted, #8e95a5);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--r-s, 4px);
+  transition: all 100ms;
+  margin-top: 4px;
+}
+.iw-dag-presets-scratch:hover {
+  color: var(--accent, #6d5cff);
+  background: var(--s1, #f8f9fb);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MARQUEE SELECTION (C04-#13)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.iw-dag-marquee {
+  fill: rgba(109, 92, 255, 0.08);
+  stroke: var(--accent, #6d5cff);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NODE POPOVER (C04 Edit)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.iw-node-popover {
+  position: absolute;
+  z-index: 200;
+  width: 220px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-bright, rgba(0,0,0,0.12));
+  border-radius: var(--r-m, 8px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+  padding: var(--s3, 12px);
+  font-family: var(--font, 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif);
+  font-size: var(--md, 13px);
+  color: var(--text, #1a1d23);
+}
+
+.iw-node-popover-arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-bright, rgba(0,0,0,0.12));
+  transform: rotate(45deg);
+}
+
+.iw-node-popover-arrow--left {
+  left: -5px;
+  top: 18px;
+  border-right: none;
+  border-top: none;
+}
+
+.iw-node-popover-arrow--right {
+  right: -5px;
+  top: 18px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.iw-node-popover-content {
+  position: relative;
+}
+
+.iw-node-popover-row {
+  margin-bottom: var(--s2, 8px);
+}
+
+.iw-node-popover-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted, #8e95a5);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.iw-node-popover-input,
+.iw-node-popover-select {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: var(--md, 13px);
+  font-family: inherit;
+  color: var(--text, #1a1d23);
+  background: var(--s1, #f8f9fb);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-radius: var(--r-s, 4px);
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+  box-sizing: border-box;
+}
+
+.iw-node-popover-input:focus,
+.iw-node-popover-select:focus {
+  border-color: var(--accent, #6d5cff);
+  box-shadow: 0 0 0 2px var(--accent-glow, rgba(109,92,255,0.15));
+}
+
+.iw-node-popover-divider {
+  height: 1px;
+  background: var(--border, rgba(0,0,0,0.08));
+  margin: var(--s3, 12px) 0;
+}
+
+.iw-node-popover-delete {
+  display: block;
+  width: 100%;
+  padding: 6px 0;
+  font-size: var(--md, 13px);
+  font-family: inherit;
+  color: var(--danger, #e53e3e);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  border-radius: var(--r-s, 4px);
+  transition: background 150ms;
+}
+
+.iw-node-popover-delete:hover {
+  background: rgba(229, 62, 62, 0.08);
+}
+
+/* ─── DAG Context Menu ─── */
+.iw-dag-ctx-menu {
+  position: absolute;
+  z-index: 100;
+  min-width: 180px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--s3, #e2e5ea);
+  border-radius: var(--r-m, 8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.08);
+  padding: 4px 0;
+  animation: iw-ctx-in 120ms ease-out;
+}
+@keyframes iw-ctx-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.iw-dag-ctx-item {
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--text, #1e2330);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 80ms;
+}
+.iw-dag-ctx-item:hover {
+  background: var(--s1, #f8f9fb);
+  color: var(--accent, #6d5cff);
+}
+.iw-dag-ctx-sep {
+  height: 1px;
+  margin: 4px 10px;
+  background: var(--s3, #e2e5ea);
+}
+
+/* ─── DAG Zoom Controls ─── */
+.iw-dag-zoom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--s3, #e2e5ea);
+  border-radius: var(--r-m, 8px);
+  padding: 3px 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.iw-dag-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: var(--r-s, 4px);
+  color: var(--text, #1e2330);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 80ms, color 80ms;
+}
+.iw-dag-zoom-btn:hover {
+  background: var(--s1, #f8f9fb);
+  color: var(--accent, #6d5cff);
+}
+.iw-dag-zoom-btn:active {
+  background: var(--s2, #f0f1f4);
+}
+.iw-dag-zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted, #8e95a5);
+  user-select: none;
+}

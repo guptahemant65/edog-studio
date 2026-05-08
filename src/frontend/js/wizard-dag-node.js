@@ -166,6 +166,13 @@ class DagNode {
     }
   }
 
+  /** Update node with new data (name, type, schema) */
+  update(data) {
+    if (data.name !== undefined) this.setName(data.name);
+    if (data.type !== undefined) this.setType(data.type);
+    if (data.schema !== undefined) this.setSchema(data.schema);
+  }
+
   /** Get input port center position in canvas space */
   getInputPortPosition() {
     return {

@@ -7,7 +7,7 @@
  * @author Pixel — EDOG Studio hivemind
  */
 
-/* global DagCanvas, NodePalette, CodePreviewPanel, CodeGenerationEngine, WizardEventBus, UndoRedoManager, AutoLayoutEngine, IW_EVENTS */
+/* global DagCanvas, NodePalette, CodePreviewPanel, CodeGenerationEngine, WizardEventBus, UndoRedoManager, AutoLayoutEngine, DagPresets, NodePopover, IW_EVENTS */
 
 class DagCanvasPage {
   constructor(options) {
@@ -66,6 +66,20 @@ class DagCanvasPage {
       codeGen: this._codeGen
     });
 
+    this._presets = new DagPresets({
+      containerEl: this._canvasContainer,
+      dagCanvas: this._canvas,
+      eventBus: this._eventBus,
+      schemas: this._schemas
+    });
+
+    this._nodePopover = new NodePopover({
+      containerEl: this._canvasContainer,
+      canvas: this._canvas,
+      eventBus: this._eventBus,
+      schemas: this._schemas
+    });
+
     // Wire state-change notifications back to the wizard
     this._unsubs = [];
     this._unsubs.push(
@@ -82,6 +96,11 @@ class DagCanvasPage {
 
     this._schemas = state.schemas || this._schemas;
     this._theme = state.theme || this._theme;
+
+    // Keep presets schema-aware
+    if (this._presets) {
+      this._presets.updateSchemas(this._schemas);
+    }
 
     // Restore canvas state when re-entering or loading a template
     if (state.nodes && state.nodes.length > 0) {
@@ -157,6 +176,14 @@ class DagCanvasPage {
     this._unsubs = [];
 
     // Destroy sub-components in reverse creation order
+    if (this._nodePopover) {
+      this._nodePopover.destroy();
+      this._nodePopover = null;
+    }
+    if (this._presets) {
+      this._presets.destroy();
+      this._presets = null;
+    }
     if (this._codePanel) {
       this._codePanel.destroy();
       this._codePanel = null;

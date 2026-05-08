@@ -60,6 +60,7 @@ class DagCanvas {
     this._nodes = {};           // nodeId -> DagNode instance
     this._nodeData = {};        // nodeId -> DagNodeData plain object
     this._selectedNodeId = null;
+    this._selectedNodeIds = []; // multi-select support
     this._nextNodeId = 1;
     this._nextConnectionId = 1;
     this._viewport = { panX: 0, panY: 0, zoom: 1.0 };
@@ -79,9 +80,22 @@ class DagCanvas {
     this._isPanning = false;
     this._panStart = null;
 
+    // Marquee selection state
+    this._isMarquee = false;
+    this._marqueeStart = null;
+    this._marqueeEl = null;
+    this._marqueeThreshold = 4;
+
     // Connection-drag state
     this._isConnecting = false;
     this._connectSourceNodeId = null;
+
+    // Context menu state
+    this._ctxMenuEl = null;
+
+    // Zoom controls
+    this._zoomControlsEl = null;
+    this._zoomLevelEl = null;
 
     // Bound handlers (stored for cleanup)
     this._boundWheel = function(e) { self._onWheel(e); };
@@ -91,9 +105,14 @@ class DagCanvas {
     this._boundKeyDown = function(e) { self._onKeyDown(e); };
     this._boundConnectMove = function(e) { self._onConnectMove(e); };
     this._boundConnectUp = function(e) { self._onConnectUp(e); };
+    this._boundMarqueeMove = function(e) { self._onMarqueeMove(e); };
+    this._boundMarqueeUp = function(e) { self._onMarqueeUp(e); };
+    this._boundContextMenu = function(e) { self._onContextMenu(e); };
+    this._boundDismissCtxMenu = function(e) { self._onDismissCtxMenu(e); };
 
     // Build
     this._buildSVG();
+    this._buildZoomControls();
     this._bindEvents();
   }
 
@@ -245,6 +264,10 @@ class DagCanvas {
       this._selectedNodeId = null;
       this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     }
+    var idx = this._selectedNodeIds.indexOf(nodeId);
+    if (idx !== -1) {
+      this._selectedNodeIds.splice(idx, 1);
+    }
 
     // Undo: re-add node and connections
     this._undoManager.push({
@@ -272,6 +295,9 @@ class DagCanvas {
    * @param {string|null} nodeId — null to clear selection
    */
   selectNode(nodeId) {
+    // Clear multi-selection
+    this._clearMultiSelect();
+
     // Deselect previous
     if (this._selectedNodeId && this._nodes[this._selectedNodeId]) {
       this._nodes[this._selectedNodeId].setSelected(false);
@@ -284,11 +310,88 @@ class DagCanvas {
 
     if (nodeId && this._nodes[nodeId]) {
       this._nodes[nodeId].setSelected(true);
+      this._selectedNodeIds = [nodeId];
       this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: nodeId });
+    } else {
+      this._selectedNodeId = null;
+      this._selectedNodeIds = [];
+      this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
+    }
+  }
+
+  /**
+   * Select multiple nodes (marquee selection).
+   * @param {Array<string>} nodeIds
+   * @param {boolean} [additive] — if true, add to existing selection
+   */
+  selectNodes(nodeIds, additive) {
+    var i;
+    if (!additive) {
+      this._clearMultiSelect();
+    }
+
+    for (i = 0; i < nodeIds.length; i++) {
+      var id = nodeIds[i];
+      if (this._nodes[id] && this._selectedNodeIds.indexOf(id) === -1) {
+        this._nodes[id].setSelected(true);
+        this._selectedNodeIds.push(id);
+      }
+    }
+
+    // Update single selection pointer
+    if (this._selectedNodeIds.length === 1) {
+      this._selectedNodeId = this._selectedNodeIds[0];
+      this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: this._selectedNodeId });
+    } else if (this._selectedNodeIds.length > 1) {
+      this._selectedNodeId = null;
+      this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     } else {
       this._selectedNodeId = null;
       this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     }
+  }
+
+  /**
+   * Get all selected node IDs.
+   * @returns {Array<string>}
+   */
+  getSelectedNodeIds() {
+    return this._selectedNodeIds.slice();
+  }
+
+  /**
+   * Get node data by ID.
+   * @param {string} nodeId
+   * @returns {object|null}
+   */
+  getNodeData(nodeId) {
+    var nd = this._nodeData[nodeId];
+    return nd ? this._cloneNodeData(nd) : null;
+  }
+
+  /**
+   * Update a node's properties (name, type, schema).
+   * @param {string} nodeId
+   * @param {object} changes — {name?, type?, schema?}
+   */
+  updateNode(nodeId, changes) {
+    var data = this._nodeData[nodeId];
+    var node = this._nodes[nodeId];
+    if (!data || !node) return;
+
+    if (changes.name !== undefined) {
+      data.name = changes.name;
+      node.setName(changes.name);
+    }
+    if (changes.type !== undefined) {
+      data.type = changes.type;
+      node.setType(changes.type);
+    }
+    if (changes.schema !== undefined) {
+      data.schema = changes.schema;
+      node.setSchema(changes.schema);
+    }
+    this._emitStateChanged();
   }
 
   /**
@@ -566,11 +669,13 @@ class DagCanvas {
    */
   destroy() {
     this._clearAll();
+    this._hideContextMenu();
 
     // Unbind SVG events
     if (this._svgEl) {
       this._svgEl.removeEventListener('wheel', this._boundWheel);
       this._svgEl.removeEventListener('mousedown', this._boundMouseDown);
+      this._svgEl.removeEventListener('contextmenu', this._boundContextMenu);
     }
 
     // Unbind document events
@@ -578,13 +683,23 @@ class DagCanvas {
     document.removeEventListener('mouseup', this._boundMouseUp);
     document.removeEventListener('mousemove', this._boundConnectMove);
     document.removeEventListener('mouseup', this._boundConnectUp);
+    document.removeEventListener('mousemove', this._boundMarqueeMove);
+    document.removeEventListener('mouseup', this._boundMarqueeUp);
     document.removeEventListener('keydown', this._boundKeyDown);
+    document.removeEventListener('mousedown', this._boundDismissCtxMenu);
 
     // Destroy connection manager
     if (this._connectionMgr) {
       this._connectionMgr.destroy();
       this._connectionMgr = null;
     }
+
+    // Remove zoom controls
+    if (this._zoomControlsEl && this._zoomControlsEl.parentNode) {
+      this._zoomControlsEl.parentNode.removeChild(this._zoomControlsEl);
+    }
+    this._zoomControlsEl = null;
+    this._zoomLevelEl = null;
 
     // Remove SVG from container
     if (this._svgEl && this._svgEl.parentNode) {
@@ -680,6 +795,190 @@ class DagCanvas {
     this._containerEl.appendChild(this._svgEl);
   }
 
+  /**
+   * Build floating zoom controls panel (bottom-right of canvas).
+   */
+  _buildZoomControls() {
+    var self = this;
+    var el = document.createElement('div');
+    el.className = 'iw-dag-zoom-controls';
+
+    var btnOut = document.createElement('button');
+    btnOut.className = 'iw-dag-zoom-btn';
+    btnOut.setAttribute('data-action', 'zoom-out');
+    btnOut.setAttribute('title', 'Zoom out');
+    btnOut.textContent = '\u2212';
+
+    var levelSpan = document.createElement('span');
+    levelSpan.className = 'iw-dag-zoom-level';
+    levelSpan.textContent = '100%';
+    this._zoomLevelEl = levelSpan;
+
+    var btnIn = document.createElement('button');
+    btnIn.className = 'iw-dag-zoom-btn';
+    btnIn.setAttribute('data-action', 'zoom-in');
+    btnIn.setAttribute('title', 'Zoom in');
+    btnIn.textContent = '+';
+
+    var btnFit = document.createElement('button');
+    btnFit.className = 'iw-dag-zoom-btn';
+    btnFit.setAttribute('data-action', 'fit');
+    btnFit.setAttribute('title', 'Fit to content');
+    btnFit.textContent = '\u229E';
+
+    el.appendChild(btnOut);
+    el.appendChild(levelSpan);
+    el.appendChild(btnIn);
+    el.appendChild(btnFit);
+
+    el.addEventListener('click', function(e) {
+      var btn = e.target.closest('.iw-dag-zoom-btn');
+      if (!btn) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'zoom-in') {
+        var vIn = self._viewport;
+        self.setViewport(vIn.panX, vIn.panY, vIn.zoom * DAG_CANVAS_ZOOM_IN_FACTOR);
+      } else if (action === 'zoom-out') {
+        var vOut = self._viewport;
+        self.setViewport(vOut.panX, vOut.panY, vOut.zoom * DAG_CANVAS_ZOOM_OUT_FACTOR);
+      } else if (action === 'fit') {
+        self.fitToContent();
+      }
+    });
+
+    // Listen for zoom changes to update display
+    this._eventBus.on(IW_EVENTS.ZOOM_CHANGED, function(vp) {
+      self._updateZoomDisplay(vp.zoom);
+    });
+
+    this._zoomControlsEl = el;
+    this._containerEl.appendChild(el);
+  }
+
+  /**
+   * Update the zoom percentage display.
+   * @param {number} zoom
+   */
+  _updateZoomDisplay(zoom) {
+    if (this._zoomLevelEl) {
+      this._zoomLevelEl.textContent = Math.round(zoom * 100) + '%';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Context Menu
+     ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Handle contextmenu event on the SVG canvas.
+   * @param {MouseEvent} e
+   */
+  _onContextMenu(e) {
+    // Only show menu when right-clicking on empty canvas (background/grid)
+    var isBackground = e.target === this._svgEl ||
+                       e.target.classList.contains('iw-dag-grid-bg');
+    if (!isBackground) return;
+
+    e.preventDefault();
+
+    var rect = this._containerEl.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    var canvasPos = this._screenToCanvas(e.clientX, e.clientY);
+
+    this._showContextMenu(x, y, canvasPos.x, canvasPos.y);
+  }
+
+  /**
+   * Build and show the context menu at a position.
+   * @param {number} x — pixels from container left
+   * @param {number} y — pixels from container top
+   * @param {number} canvasX — canvas-space X for node placement
+   * @param {number} canvasY — canvas-space Y for node placement
+   */
+  _showContextMenu(x, y, canvasX, canvasY) {
+    var self = this;
+    this._hideContextMenu();
+
+    var menu = document.createElement('div');
+    menu.className = 'iw-dag-ctx-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+
+    var items = [
+      { action: 'add-sql-table', label: '\u25C7 Add SQL Table' },
+      { action: 'add-sql-mlv', label: '\u25C6 Add SQL MLV' },
+      { action: 'add-pyspark-mlv', label: '\u25C6 Add PySpark MLV' },
+      { action: 'separator' },
+      { action: 'auto-arrange', label: 'Auto Arrange' },
+      { action: 'zoom-fit', label: 'Zoom to Fit' }
+    ];
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.action === 'separator') {
+        var sep = document.createElement('div');
+        sep.className = 'iw-dag-ctx-sep';
+        menu.appendChild(sep);
+      } else {
+        var div = document.createElement('div');
+        div.className = 'iw-dag-ctx-item';
+        div.setAttribute('data-action', item.action);
+        div.textContent = item.label;
+        menu.appendChild(div);
+      }
+    }
+
+    menu.addEventListener('click', function(e) {
+      var target = e.target.closest('.iw-dag-ctx-item');
+      if (!target) return;
+      var action = target.getAttribute('data-action');
+
+      if (action === 'add-sql-table') {
+        self.addNode('sql-table', { x: canvasX, y: canvasY });
+      } else if (action === 'add-sql-mlv') {
+        self.addNode('sql-mlv', { x: canvasX, y: canvasY });
+      } else if (action === 'add-pyspark-mlv') {
+        self.addNode('pyspark-mlv', { x: canvasX, y: canvasY });
+      } else if (action === 'auto-arrange') {
+        self.autoLayout();
+      } else if (action === 'zoom-fit') {
+        self.fitToContent();
+      }
+
+      self._hideContextMenu();
+    });
+
+    this._ctxMenuEl = menu;
+    this._containerEl.appendChild(menu);
+
+    // Dismiss on click outside or escape
+    setTimeout(function() {
+      document.addEventListener('mousedown', self._boundDismissCtxMenu);
+    }, 0);
+  }
+
+  /**
+   * Hide the context menu.
+   */
+  _hideContextMenu() {
+    if (this._ctxMenuEl && this._ctxMenuEl.parentNode) {
+      this._ctxMenuEl.parentNode.removeChild(this._ctxMenuEl);
+    }
+    this._ctxMenuEl = null;
+    document.removeEventListener('mousedown', this._boundDismissCtxMenu);
+  }
+
+  /**
+   * Dismiss handler for clicks outside the context menu.
+   * @param {MouseEvent} e
+   */
+  _onDismissCtxMenu(e) {
+    if (this._ctxMenuEl && !this._ctxMenuEl.contains(e.target)) {
+      this._hideContextMenu();
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════════
      PRIVATE — Event Binding
      ═══════════════════════════════════════════════════════════════ */
@@ -687,6 +986,7 @@ class DagCanvas {
   _bindEvents() {
     this._svgEl.addEventListener('wheel', this._boundWheel, { passive: false });
     this._svgEl.addEventListener('mousedown', this._boundMouseDown);
+    this._svgEl.addEventListener('contextmenu', this._boundContextMenu);
     document.addEventListener('keydown', this._boundKeyDown);
   }
 
@@ -718,12 +1018,8 @@ class DagCanvas {
     var isBackground = event.target === this._svgEl ||
                        event.target.classList.contains('iw-dag-grid-bg');
 
-    if (isMiddle || (event.button === 0 && isBackground)) {
-      // Left-click on background also clears selection
-      if (event.button === 0 && isBackground) {
-        this.selectNode(null);
-      }
-
+    if (isMiddle) {
+      // Middle-click always pans
       this._isPanning = true;
       this._panStart = {
         x: event.clientX,
@@ -731,10 +1027,21 @@ class DagCanvas {
         panX: this._viewport.panX,
         panY: this._viewport.panY
       };
-
       document.addEventListener('mousemove', this._boundMouseMove);
       document.addEventListener('mouseup', this._boundMouseUp);
       event.preventDefault();
+    } else if (event.button === 0 && isBackground) {
+      // Left-click on background: start marquee selection
+      event.preventDefault();
+      this._marqueeStart = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        shiftKey: event.shiftKey
+      };
+      this._isMarquee = false;
+
+      document.addEventListener('mousemove', this._boundMarqueeMove);
+      document.addEventListener('mouseup', this._boundMarqueeUp);
     }
   }
 
@@ -756,15 +1063,31 @@ class DagCanvas {
   }
 
   _onKeyDown(event) {
+    // Escape — dismiss context menu or cancel marquee
+    if (event.key === 'Escape') {
+      this._hideContextMenu();
+      if (this._isMarquee) {
+        this._cancelMarquee();
+        event.preventDefault();
+        return;
+      }
+    }
+
     // Only handle if canvas or a child has focus
     if (!this._svgEl) return;
     if (!this._svgEl.contains(document.activeElement) && document.activeElement !== this._svgEl) {
       return;
     }
 
-    // Delete / Backspace — remove selected node or connection
+    // Delete / Backspace — remove selected node(s) or connection
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      if (this._selectedNodeId) {
+      if (this._selectedNodeIds.length > 1) {
+        var ids = this._selectedNodeIds.slice();
+        for (var i = 0; i < ids.length; i++) {
+          this.removeNode(ids[i]);
+        }
+        event.preventDefault();
+      } else if (this._selectedNodeId) {
         this.removeNode(this._selectedNodeId);
         event.preventDefault();
       }
@@ -841,6 +1164,133 @@ class DagCanvas {
     this._isConnecting = false;
     this._connectSourceNodeId = null;
     this._connectTargetNodeId = null;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Marquee Selection
+     ═══════════════════════════════════════════════════════════════ */
+
+  _onMarqueeMove(event) {
+    if (!this._marqueeStart) return;
+
+    var dx = event.clientX - this._marqueeStart.clientX;
+    var dy = event.clientY - this._marqueeStart.clientY;
+
+    // Threshold check — only start marquee after 4px
+    if (!this._isMarquee) {
+      if (Math.abs(dx) < this._marqueeThreshold && Math.abs(dy) < this._marqueeThreshold) {
+        return;
+      }
+      this._isMarquee = true;
+      // Clear selection unless shift is held
+      if (!this._marqueeStart.shiftKey) {
+        this.selectNode(null);
+      }
+      this._createMarqueeRect();
+    }
+
+    // Update marquee rect in SVG (canvas space)
+    var startCanvas = this._screenToCanvas(this._marqueeStart.clientX, this._marqueeStart.clientY);
+    var endCanvas = this._screenToCanvas(event.clientX, event.clientY);
+
+    var x = Math.min(startCanvas.x, endCanvas.x);
+    var y = Math.min(startCanvas.y, endCanvas.y);
+    var w = Math.abs(endCanvas.x - startCanvas.x);
+    var h = Math.abs(endCanvas.y - startCanvas.y);
+
+    this._marqueeEl.setAttribute('x', String(x));
+    this._marqueeEl.setAttribute('y', String(y));
+    this._marqueeEl.setAttribute('width', String(w));
+    this._marqueeEl.setAttribute('height', String(h));
+  }
+
+  _onMarqueeUp(event) {
+    document.removeEventListener('mousemove', this._boundMarqueeMove);
+    document.removeEventListener('mouseup', this._boundMarqueeUp);
+
+    if (!this._isMarquee) {
+      // No marquee started — this was just a click on background
+      if (!this._marqueeStart || !this._marqueeStart.shiftKey) {
+        this.selectNode(null);
+      }
+      this._marqueeStart = null;
+      return;
+    }
+
+    // Compute final marquee bounds in canvas space
+    var startCanvas = this._screenToCanvas(this._marqueeStart.clientX, this._marqueeStart.clientY);
+    var endCanvas = this._screenToCanvas(event.clientX, event.clientY);
+
+    var rect = {
+      x: Math.min(startCanvas.x, endCanvas.x),
+      y: Math.min(startCanvas.y, endCanvas.y),
+      width: Math.abs(endCanvas.x - startCanvas.x),
+      height: Math.abs(endCanvas.y - startCanvas.y)
+    };
+
+    // Hit test all nodes
+    var hitIds = [];
+    var ids = Object.keys(this._nodeData);
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var nd = this._nodeData[ids[i]];
+      if (this._intersectsRect(nd, rect)) {
+        hitIds.push(ids[i]);
+      }
+    }
+
+    // Select intersecting nodes
+    if (hitIds.length > 0) {
+      this.selectNodes(hitIds, this._marqueeStart.shiftKey);
+    }
+
+    this._removeMarqueeRect();
+    this._isMarquee = false;
+    this._marqueeStart = null;
+  }
+
+  _cancelMarquee() {
+    document.removeEventListener('mousemove', this._boundMarqueeMove);
+    document.removeEventListener('mouseup', this._boundMarqueeUp);
+    this._removeMarqueeRect();
+    this._isMarquee = false;
+    this._marqueeStart = null;
+  }
+
+  _createMarqueeRect() {
+    if (this._marqueeEl) return;
+    var ns = DAG_CANVAS_SVG_NS;
+    this._marqueeEl = document.createElementNS(ns, 'rect');
+    this._marqueeEl.setAttribute('class', 'iw-dag-marquee');
+    this._marqueeEl.setAttribute('x', '0');
+    this._marqueeEl.setAttribute('y', '0');
+    this._marqueeEl.setAttribute('width', '0');
+    this._marqueeEl.setAttribute('height', '0');
+    // Append to root group (above nodes layer)
+    this._rootGroup.appendChild(this._marqueeEl);
+  }
+
+  _removeMarqueeRect() {
+    if (this._marqueeEl && this._marqueeEl.parentNode) {
+      this._marqueeEl.parentNode.removeChild(this._marqueeEl);
+    }
+    this._marqueeEl = null;
+  }
+
+  _intersectsRect(node, rect) {
+    return !(node.x + node.width < rect.x ||
+             node.x > rect.x + rect.width ||
+             node.y + node.height < rect.y ||
+             node.y > rect.y + rect.height);
+  }
+
+  _clearMultiSelect() {
+    var i;
+    for (i = 0; i < this._selectedNodeIds.length; i++) {
+      var n = this._nodes[this._selectedNodeIds[i]];
+      if (n) n.setSelected(false);
+    }
+    this._selectedNodeIds = [];
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -1019,6 +1469,10 @@ class DagCanvas {
     if (this._selectedNodeId === nodeId) {
       this._selectedNodeId = null;
     }
+    var idx = this._selectedNodeIds.indexOf(nodeId);
+    if (idx !== -1) {
+      this._selectedNodeIds.splice(idx, 1);
+    }
   }
 
   /**
@@ -1033,6 +1487,7 @@ class DagCanvas {
     this._nodes = {};
     this._nodeData = {};
     this._selectedNodeId = null;
+    this._selectedNodeIds = [];
 
     if (this._connectionMgr) {
       this._connectionMgr.loadConnections([]);

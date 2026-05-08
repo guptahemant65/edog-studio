@@ -12236,6 +12236,414 @@ mark {
 .iw-exec-navigate-btn {
   margin-top: 16px;
 }
+/* ═══════════════════════════════════════════════════════════════════
+   DAG Presets Overlay (wizard-dag-presets.js)
+   CSS prefix: .iw-dag-presets-*
+   ═══════════════════════════════════════════════════════════════════ */
+
+@keyframes iw-dag-presets-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes iw-dag-presets-card-enter {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.iw-dag-presets-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--surface, #ffffff) 85%, transparent);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+.iw-dag-presets-overlay--visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.iw-dag-presets-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  max-width: 620px;
+  width: 100%;
+  padding: 32px 24px;
+  animation: iw-dag-presets-fade-in 350ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)) both;
+}
+
+/* ─── Header ─── */
+.iw-dag-presets-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.iw-dag-presets-heading {
+  font-size: var(--text-lg, 15px);
+  font-weight: 700;
+  color: var(--text, #1a1d23);
+  letter-spacing: -0.01em;
+}
+.iw-dag-presets-subheading {
+  font-size: var(--text-sm, 12px);
+  color: var(--text-muted, #8e95a5);
+}
+
+/* ─── Card Grid ─── */
+.iw-dag-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+@media (max-width: 560px) {
+  .iw-dag-presets-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ─── Card ─── */
+.iw-dag-presets-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: var(--s1, #f8f9fb);
+  border: 1px solid var(--border, rgba(0,0,0,0.06));
+  border-radius: var(--r-m, 8px);
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 120ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  animation: iw-dag-presets-card-enter 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)) both;
+  animation-delay: var(--delay, 0ms);
+}
+.iw-dag-presets-card:hover {
+  border-color: var(--accent, #6d5cff);
+  background: var(--s2, #f0f1f5);
+  box-shadow: 0 2px 8px rgba(109,92,255,0.10);
+  transform: translateY(-2px);
+}
+.iw-dag-presets-card:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* ─── SVG Preview ─── */
+.iw-dag-presets-svg-wrap {
+  background: var(--surface, #ffffff);
+  border-radius: var(--r-s, 4px);
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border, rgba(0,0,0,0.04));
+}
+.iw-dag-presets-svg {
+  width: 100%;
+  height: 40px;
+  display: block;
+}
+.iw-dag-presets-dot {
+  fill: var(--text-muted, #8e95a5);
+  transition: fill 120ms;
+}
+.iw-dag-presets-dot--source {
+  fill: var(--accent, #6d5cff);
+}
+.iw-dag-presets-dot--target {
+  fill: var(--text-muted, #8e95a5);
+}
+.iw-dag-presets-dot--gold {
+  fill: #d4a017;
+}
+.iw-dag-presets-card:hover .iw-dag-presets-dot--target {
+  fill: var(--accent, #6d5cff);
+}
+.iw-dag-presets-line {
+  stroke: var(--text-muted, #8e95a5);
+  stroke-width: 1.5;
+  opacity: 0.6;
+}
+.iw-dag-presets-line--cross {
+  stroke-dasharray: 3 2;
+  opacity: 0.4;
+}
+.iw-dag-presets-card:hover .iw-dag-presets-line {
+  stroke: var(--accent, #6d5cff);
+  opacity: 0.8;
+}
+
+/* ─── Card Body ─── */
+.iw-dag-presets-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.iw-dag-presets-card-title {
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  color: var(--text, #1a1d23);
+}
+.iw-dag-presets-card-subtitle {
+  font-size: 11px;
+  color: var(--text-muted, #8e95a5);
+  line-height: 1.3;
+}
+
+/* ─── Stats + Badge ─── */
+.iw-dag-presets-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.iw-dag-presets-stat {
+  font-size: 10px;
+  color: var(--text-muted, #8e95a5);
+}
+.iw-dag-presets-badge {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: var(--r-s, 4px);
+  background: var(--s3, #e8eaef);
+  color: var(--text-muted, #8e95a5);
+}
+.iw-dag-presets-badge--beginner {
+  background: rgba(46,204,113,0.12);
+  color: #1e8449;
+}
+.iw-dag-presets-badge--intermediate {
+  background: rgba(241,196,15,0.14);
+  color: #9a7d0a;
+}
+.iw-dag-presets-badge--advanced {
+  background: rgba(231,76,60,0.12);
+  color: #c0392b;
+}
+
+/* ─── Scratch Link ─── */
+.iw-dag-presets-scratch {
+  background: none;
+  border: none;
+  font-size: var(--text-sm, 12px);
+  color: var(--text-muted, #8e95a5);
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--r-s, 4px);
+  transition: all 100ms;
+  margin-top: 4px;
+}
+.iw-dag-presets-scratch:hover {
+  color: var(--accent, #6d5cff);
+  background: var(--s1, #f8f9fb);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MARQUEE SELECTION (C04-#13)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.iw-dag-marquee {
+  fill: rgba(109, 92, 255, 0.08);
+  stroke: var(--accent, #6d5cff);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NODE POPOVER (C04 Edit)
+   ═══════════════════════════════════════════════════════════════════ */
+
+.iw-node-popover {
+  position: absolute;
+  z-index: 200;
+  width: 220px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-bright, rgba(0,0,0,0.12));
+  border-radius: var(--r-m, 8px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+  padding: var(--s3, 12px);
+  font-family: var(--font, 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif);
+  font-size: var(--md, 13px);
+  color: var(--text, #1a1d23);
+}
+
+.iw-node-popover-arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border-bright, rgba(0,0,0,0.12));
+  transform: rotate(45deg);
+}
+
+.iw-node-popover-arrow--left {
+  left: -5px;
+  top: 18px;
+  border-right: none;
+  border-top: none;
+}
+
+.iw-node-popover-arrow--right {
+  right: -5px;
+  top: 18px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.iw-node-popover-content {
+  position: relative;
+}
+
+.iw-node-popover-row {
+  margin-bottom: var(--s2, 8px);
+}
+
+.iw-node-popover-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted, #8e95a5);
+  margin-bottom: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.iw-node-popover-input,
+.iw-node-popover-select {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: var(--md, 13px);
+  font-family: inherit;
+  color: var(--text, #1a1d23);
+  background: var(--s1, #f8f9fb);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-radius: var(--r-s, 4px);
+  outline: none;
+  transition: border-color 150ms, box-shadow 150ms;
+  box-sizing: border-box;
+}
+
+.iw-node-popover-input:focus,
+.iw-node-popover-select:focus {
+  border-color: var(--accent, #6d5cff);
+  box-shadow: 0 0 0 2px var(--accent-glow, rgba(109,92,255,0.15));
+}
+
+.iw-node-popover-divider {
+  height: 1px;
+  background: var(--border, rgba(0,0,0,0.08));
+  margin: var(--s3, 12px) 0;
+}
+
+.iw-node-popover-delete {
+  display: block;
+  width: 100%;
+  padding: 6px 0;
+  font-size: var(--md, 13px);
+  font-family: inherit;
+  color: var(--danger, #e53e3e);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: center;
+  border-radius: var(--r-s, 4px);
+  transition: background 150ms;
+}
+
+.iw-node-popover-delete:hover {
+  background: rgba(229, 62, 62, 0.08);
+}
+
+/* ─── DAG Context Menu ─── */
+.iw-dag-ctx-menu {
+  position: absolute;
+  z-index: 100;
+  min-width: 180px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--s3, #e2e5ea);
+  border-radius: var(--r-m, 8px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.08);
+  padding: 4px 0;
+  animation: iw-ctx-in 120ms ease-out;
+}
+@keyframes iw-ctx-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.iw-dag-ctx-item {
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--text, #1e2330);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 80ms;
+}
+.iw-dag-ctx-item:hover {
+  background: var(--s1, #f8f9fb);
+  color: var(--accent, #6d5cff);
+}
+.iw-dag-ctx-sep {
+  height: 1px;
+  margin: 4px 10px;
+  background: var(--s3, #e2e5ea);
+}
+
+/* ─── DAG Zoom Controls ─── */
+.iw-dag-zoom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--s3, #e2e5ea);
+  border-radius: var(--r-m, 8px);
+  padding: 3px 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.iw-dag-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: var(--r-s, 4px);
+  color: var(--text, #1e2330);
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 80ms, color 80ms;
+}
+.iw-dag-zoom-btn:hover {
+  background: var(--s1, #f8f9fb);
+  color: var(--accent, #6d5cff);
+}
+.iw-dag-zoom-btn:active {
+  background: var(--s2, #f0f1f4);
+}
+.iw-dag-zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted, #8e95a5);
+  user-select: none;
+}
+
     /* === css/runtime.css === */
 /* ===== Runtime View Shell =====
  * Tab bar, connection bar, phase overlays, Internals dropdown.
@@ -51717,6 +52125,13 @@ class DagNode {
     }
   }
 
+  /** Update node with new data (name, type, schema) */
+  update(data) {
+    if (data.name !== undefined) this.setName(data.name);
+    if (data.type !== undefined) this.setType(data.type);
+    if (data.schema !== undefined) this.setSchema(data.schema);
+  }
+
   /** Get input port center position in canvas space */
   getInputPortPosition() {
     return {
@@ -52508,6 +52923,7 @@ class DagCanvas {
     this._nodes = {};           // nodeId -> DagNode instance
     this._nodeData = {};        // nodeId -> DagNodeData plain object
     this._selectedNodeId = null;
+    this._selectedNodeIds = []; // multi-select support
     this._nextNodeId = 1;
     this._nextConnectionId = 1;
     this._viewport = { panX: 0, panY: 0, zoom: 1.0 };
@@ -52527,9 +52943,22 @@ class DagCanvas {
     this._isPanning = false;
     this._panStart = null;
 
+    // Marquee selection state
+    this._isMarquee = false;
+    this._marqueeStart = null;
+    this._marqueeEl = null;
+    this._marqueeThreshold = 4;
+
     // Connection-drag state
     this._isConnecting = false;
     this._connectSourceNodeId = null;
+
+    // Context menu state
+    this._ctxMenuEl = null;
+
+    // Zoom controls
+    this._zoomControlsEl = null;
+    this._zoomLevelEl = null;
 
     // Bound handlers (stored for cleanup)
     this._boundWheel = function(e) { self._onWheel(e); };
@@ -52539,9 +52968,14 @@ class DagCanvas {
     this._boundKeyDown = function(e) { self._onKeyDown(e); };
     this._boundConnectMove = function(e) { self._onConnectMove(e); };
     this._boundConnectUp = function(e) { self._onConnectUp(e); };
+    this._boundMarqueeMove = function(e) { self._onMarqueeMove(e); };
+    this._boundMarqueeUp = function(e) { self._onMarqueeUp(e); };
+    this._boundContextMenu = function(e) { self._onContextMenu(e); };
+    this._boundDismissCtxMenu = function(e) { self._onDismissCtxMenu(e); };
 
     // Build
     this._buildSVG();
+    this._buildZoomControls();
     this._bindEvents();
   }
 
@@ -52693,6 +53127,10 @@ class DagCanvas {
       this._selectedNodeId = null;
       this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     }
+    var idx = this._selectedNodeIds.indexOf(nodeId);
+    if (idx !== -1) {
+      this._selectedNodeIds.splice(idx, 1);
+    }
 
     // Undo: re-add node and connections
     this._undoManager.push({
@@ -52720,6 +53158,9 @@ class DagCanvas {
    * @param {string|null} nodeId — null to clear selection
    */
   selectNode(nodeId) {
+    // Clear multi-selection
+    this._clearMultiSelect();
+
     // Deselect previous
     if (this._selectedNodeId && this._nodes[this._selectedNodeId]) {
       this._nodes[this._selectedNodeId].setSelected(false);
@@ -52732,11 +53173,88 @@ class DagCanvas {
 
     if (nodeId && this._nodes[nodeId]) {
       this._nodes[nodeId].setSelected(true);
+      this._selectedNodeIds = [nodeId];
       this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: nodeId });
+    } else {
+      this._selectedNodeId = null;
+      this._selectedNodeIds = [];
+      this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
+    }
+  }
+
+  /**
+   * Select multiple nodes (marquee selection).
+   * @param {Array<string>} nodeIds
+   * @param {boolean} [additive] — if true, add to existing selection
+   */
+  selectNodes(nodeIds, additive) {
+    var i;
+    if (!additive) {
+      this._clearMultiSelect();
+    }
+
+    for (i = 0; i < nodeIds.length; i++) {
+      var id = nodeIds[i];
+      if (this._nodes[id] && this._selectedNodeIds.indexOf(id) === -1) {
+        this._nodes[id].setSelected(true);
+        this._selectedNodeIds.push(id);
+      }
+    }
+
+    // Update single selection pointer
+    if (this._selectedNodeIds.length === 1) {
+      this._selectedNodeId = this._selectedNodeIds[0];
+      this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: this._selectedNodeId });
+    } else if (this._selectedNodeIds.length > 1) {
+      this._selectedNodeId = null;
+      this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     } else {
       this._selectedNodeId = null;
       this._eventBus.emit(IW_EVENTS.SELECTION_CLEARED);
     }
+  }
+
+  /**
+   * Get all selected node IDs.
+   * @returns {Array<string>}
+   */
+  getSelectedNodeIds() {
+    return this._selectedNodeIds.slice();
+  }
+
+  /**
+   * Get node data by ID.
+   * @param {string} nodeId
+   * @returns {object|null}
+   */
+  getNodeData(nodeId) {
+    var nd = this._nodeData[nodeId];
+    return nd ? this._cloneNodeData(nd) : null;
+  }
+
+  /**
+   * Update a node's properties (name, type, schema).
+   * @param {string} nodeId
+   * @param {object} changes — {name?, type?, schema?}
+   */
+  updateNode(nodeId, changes) {
+    var data = this._nodeData[nodeId];
+    var node = this._nodes[nodeId];
+    if (!data || !node) return;
+
+    if (changes.name !== undefined) {
+      data.name = changes.name;
+      node.setName(changes.name);
+    }
+    if (changes.type !== undefined) {
+      data.type = changes.type;
+      node.setType(changes.type);
+    }
+    if (changes.schema !== undefined) {
+      data.schema = changes.schema;
+      node.setSchema(changes.schema);
+    }
+    this._emitStateChanged();
   }
 
   /**
@@ -53014,11 +53532,13 @@ class DagCanvas {
    */
   destroy() {
     this._clearAll();
+    this._hideContextMenu();
 
     // Unbind SVG events
     if (this._svgEl) {
       this._svgEl.removeEventListener('wheel', this._boundWheel);
       this._svgEl.removeEventListener('mousedown', this._boundMouseDown);
+      this._svgEl.removeEventListener('contextmenu', this._boundContextMenu);
     }
 
     // Unbind document events
@@ -53026,13 +53546,23 @@ class DagCanvas {
     document.removeEventListener('mouseup', this._boundMouseUp);
     document.removeEventListener('mousemove', this._boundConnectMove);
     document.removeEventListener('mouseup', this._boundConnectUp);
+    document.removeEventListener('mousemove', this._boundMarqueeMove);
+    document.removeEventListener('mouseup', this._boundMarqueeUp);
     document.removeEventListener('keydown', this._boundKeyDown);
+    document.removeEventListener('mousedown', this._boundDismissCtxMenu);
 
     // Destroy connection manager
     if (this._connectionMgr) {
       this._connectionMgr.destroy();
       this._connectionMgr = null;
     }
+
+    // Remove zoom controls
+    if (this._zoomControlsEl && this._zoomControlsEl.parentNode) {
+      this._zoomControlsEl.parentNode.removeChild(this._zoomControlsEl);
+    }
+    this._zoomControlsEl = null;
+    this._zoomLevelEl = null;
 
     // Remove SVG from container
     if (this._svgEl && this._svgEl.parentNode) {
@@ -53128,6 +53658,190 @@ class DagCanvas {
     this._containerEl.appendChild(this._svgEl);
   }
 
+  /**
+   * Build floating zoom controls panel (bottom-right of canvas).
+   */
+  _buildZoomControls() {
+    var self = this;
+    var el = document.createElement('div');
+    el.className = 'iw-dag-zoom-controls';
+
+    var btnOut = document.createElement('button');
+    btnOut.className = 'iw-dag-zoom-btn';
+    btnOut.setAttribute('data-action', 'zoom-out');
+    btnOut.setAttribute('title', 'Zoom out');
+    btnOut.textContent = '\u2212';
+
+    var levelSpan = document.createElement('span');
+    levelSpan.className = 'iw-dag-zoom-level';
+    levelSpan.textContent = '100%';
+    this._zoomLevelEl = levelSpan;
+
+    var btnIn = document.createElement('button');
+    btnIn.className = 'iw-dag-zoom-btn';
+    btnIn.setAttribute('data-action', 'zoom-in');
+    btnIn.setAttribute('title', 'Zoom in');
+    btnIn.textContent = '+';
+
+    var btnFit = document.createElement('button');
+    btnFit.className = 'iw-dag-zoom-btn';
+    btnFit.setAttribute('data-action', 'fit');
+    btnFit.setAttribute('title', 'Fit to content');
+    btnFit.textContent = '\u229E';
+
+    el.appendChild(btnOut);
+    el.appendChild(levelSpan);
+    el.appendChild(btnIn);
+    el.appendChild(btnFit);
+
+    el.addEventListener('click', function(e) {
+      var btn = e.target.closest('.iw-dag-zoom-btn');
+      if (!btn) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'zoom-in') {
+        var vIn = self._viewport;
+        self.setViewport(vIn.panX, vIn.panY, vIn.zoom * DAG_CANVAS_ZOOM_IN_FACTOR);
+      } else if (action === 'zoom-out') {
+        var vOut = self._viewport;
+        self.setViewport(vOut.panX, vOut.panY, vOut.zoom * DAG_CANVAS_ZOOM_OUT_FACTOR);
+      } else if (action === 'fit') {
+        self.fitToContent();
+      }
+    });
+
+    // Listen for zoom changes to update display
+    this._eventBus.on(IW_EVENTS.ZOOM_CHANGED, function(vp) {
+      self._updateZoomDisplay(vp.zoom);
+    });
+
+    this._zoomControlsEl = el;
+    this._containerEl.appendChild(el);
+  }
+
+  /**
+   * Update the zoom percentage display.
+   * @param {number} zoom
+   */
+  _updateZoomDisplay(zoom) {
+    if (this._zoomLevelEl) {
+      this._zoomLevelEl.textContent = Math.round(zoom * 100) + '%';
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Context Menu
+     ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Handle contextmenu event on the SVG canvas.
+   * @param {MouseEvent} e
+   */
+  _onContextMenu(e) {
+    // Only show menu when right-clicking on empty canvas (background/grid)
+    var isBackground = e.target === this._svgEl ||
+                       e.target.classList.contains('iw-dag-grid-bg');
+    if (!isBackground) return;
+
+    e.preventDefault();
+
+    var rect = this._containerEl.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    var canvasPos = this._screenToCanvas(e.clientX, e.clientY);
+
+    this._showContextMenu(x, y, canvasPos.x, canvasPos.y);
+  }
+
+  /**
+   * Build and show the context menu at a position.
+   * @param {number} x — pixels from container left
+   * @param {number} y — pixels from container top
+   * @param {number} canvasX — canvas-space X for node placement
+   * @param {number} canvasY — canvas-space Y for node placement
+   */
+  _showContextMenu(x, y, canvasX, canvasY) {
+    var self = this;
+    this._hideContextMenu();
+
+    var menu = document.createElement('div');
+    menu.className = 'iw-dag-ctx-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+
+    var items = [
+      { action: 'add-sql-table', label: '\u25C7 Add SQL Table' },
+      { action: 'add-sql-mlv', label: '\u25C6 Add SQL MLV' },
+      { action: 'add-pyspark-mlv', label: '\u25C6 Add PySpark MLV' },
+      { action: 'separator' },
+      { action: 'auto-arrange', label: 'Auto Arrange' },
+      { action: 'zoom-fit', label: 'Zoom to Fit' }
+    ];
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      if (item.action === 'separator') {
+        var sep = document.createElement('div');
+        sep.className = 'iw-dag-ctx-sep';
+        menu.appendChild(sep);
+      } else {
+        var div = document.createElement('div');
+        div.className = 'iw-dag-ctx-item';
+        div.setAttribute('data-action', item.action);
+        div.textContent = item.label;
+        menu.appendChild(div);
+      }
+    }
+
+    menu.addEventListener('click', function(e) {
+      var target = e.target.closest('.iw-dag-ctx-item');
+      if (!target) return;
+      var action = target.getAttribute('data-action');
+
+      if (action === 'add-sql-table') {
+        self.addNode('sql-table', { x: canvasX, y: canvasY });
+      } else if (action === 'add-sql-mlv') {
+        self.addNode('sql-mlv', { x: canvasX, y: canvasY });
+      } else if (action === 'add-pyspark-mlv') {
+        self.addNode('pyspark-mlv', { x: canvasX, y: canvasY });
+      } else if (action === 'auto-arrange') {
+        self.autoLayout();
+      } else if (action === 'zoom-fit') {
+        self.fitToContent();
+      }
+
+      self._hideContextMenu();
+    });
+
+    this._ctxMenuEl = menu;
+    this._containerEl.appendChild(menu);
+
+    // Dismiss on click outside or escape
+    setTimeout(function() {
+      document.addEventListener('mousedown', self._boundDismissCtxMenu);
+    }, 0);
+  }
+
+  /**
+   * Hide the context menu.
+   */
+  _hideContextMenu() {
+    if (this._ctxMenuEl && this._ctxMenuEl.parentNode) {
+      this._ctxMenuEl.parentNode.removeChild(this._ctxMenuEl);
+    }
+    this._ctxMenuEl = null;
+    document.removeEventListener('mousedown', this._boundDismissCtxMenu);
+  }
+
+  /**
+   * Dismiss handler for clicks outside the context menu.
+   * @param {MouseEvent} e
+   */
+  _onDismissCtxMenu(e) {
+    if (this._ctxMenuEl && !this._ctxMenuEl.contains(e.target)) {
+      this._hideContextMenu();
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════════
      PRIVATE — Event Binding
      ═══════════════════════════════════════════════════════════════ */
@@ -53135,6 +53849,7 @@ class DagCanvas {
   _bindEvents() {
     this._svgEl.addEventListener('wheel', this._boundWheel, { passive: false });
     this._svgEl.addEventListener('mousedown', this._boundMouseDown);
+    this._svgEl.addEventListener('contextmenu', this._boundContextMenu);
     document.addEventListener('keydown', this._boundKeyDown);
   }
 
@@ -53166,12 +53881,8 @@ class DagCanvas {
     var isBackground = event.target === this._svgEl ||
                        event.target.classList.contains('iw-dag-grid-bg');
 
-    if (isMiddle || (event.button === 0 && isBackground)) {
-      // Left-click on background also clears selection
-      if (event.button === 0 && isBackground) {
-        this.selectNode(null);
-      }
-
+    if (isMiddle) {
+      // Middle-click always pans
       this._isPanning = true;
       this._panStart = {
         x: event.clientX,
@@ -53179,10 +53890,21 @@ class DagCanvas {
         panX: this._viewport.panX,
         panY: this._viewport.panY
       };
-
       document.addEventListener('mousemove', this._boundMouseMove);
       document.addEventListener('mouseup', this._boundMouseUp);
       event.preventDefault();
+    } else if (event.button === 0 && isBackground) {
+      // Left-click on background: start marquee selection
+      event.preventDefault();
+      this._marqueeStart = {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        shiftKey: event.shiftKey
+      };
+      this._isMarquee = false;
+
+      document.addEventListener('mousemove', this._boundMarqueeMove);
+      document.addEventListener('mouseup', this._boundMarqueeUp);
     }
   }
 
@@ -53204,15 +53926,31 @@ class DagCanvas {
   }
 
   _onKeyDown(event) {
+    // Escape — dismiss context menu or cancel marquee
+    if (event.key === 'Escape') {
+      this._hideContextMenu();
+      if (this._isMarquee) {
+        this._cancelMarquee();
+        event.preventDefault();
+        return;
+      }
+    }
+
     // Only handle if canvas or a child has focus
     if (!this._svgEl) return;
     if (!this._svgEl.contains(document.activeElement) && document.activeElement !== this._svgEl) {
       return;
     }
 
-    // Delete / Backspace — remove selected node or connection
+    // Delete / Backspace — remove selected node(s) or connection
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      if (this._selectedNodeId) {
+      if (this._selectedNodeIds.length > 1) {
+        var ids = this._selectedNodeIds.slice();
+        for (var i = 0; i < ids.length; i++) {
+          this.removeNode(ids[i]);
+        }
+        event.preventDefault();
+      } else if (this._selectedNodeId) {
         this.removeNode(this._selectedNodeId);
         event.preventDefault();
       }
@@ -53289,6 +54027,133 @@ class DagCanvas {
     this._isConnecting = false;
     this._connectSourceNodeId = null;
     this._connectTargetNodeId = null;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Marquee Selection
+     ═══════════════════════════════════════════════════════════════ */
+
+  _onMarqueeMove(event) {
+    if (!this._marqueeStart) return;
+
+    var dx = event.clientX - this._marqueeStart.clientX;
+    var dy = event.clientY - this._marqueeStart.clientY;
+
+    // Threshold check — only start marquee after 4px
+    if (!this._isMarquee) {
+      if (Math.abs(dx) < this._marqueeThreshold && Math.abs(dy) < this._marqueeThreshold) {
+        return;
+      }
+      this._isMarquee = true;
+      // Clear selection unless shift is held
+      if (!this._marqueeStart.shiftKey) {
+        this.selectNode(null);
+      }
+      this._createMarqueeRect();
+    }
+
+    // Update marquee rect in SVG (canvas space)
+    var startCanvas = this._screenToCanvas(this._marqueeStart.clientX, this._marqueeStart.clientY);
+    var endCanvas = this._screenToCanvas(event.clientX, event.clientY);
+
+    var x = Math.min(startCanvas.x, endCanvas.x);
+    var y = Math.min(startCanvas.y, endCanvas.y);
+    var w = Math.abs(endCanvas.x - startCanvas.x);
+    var h = Math.abs(endCanvas.y - startCanvas.y);
+
+    this._marqueeEl.setAttribute('x', String(x));
+    this._marqueeEl.setAttribute('y', String(y));
+    this._marqueeEl.setAttribute('width', String(w));
+    this._marqueeEl.setAttribute('height', String(h));
+  }
+
+  _onMarqueeUp(event) {
+    document.removeEventListener('mousemove', this._boundMarqueeMove);
+    document.removeEventListener('mouseup', this._boundMarqueeUp);
+
+    if (!this._isMarquee) {
+      // No marquee started — this was just a click on background
+      if (!this._marqueeStart || !this._marqueeStart.shiftKey) {
+        this.selectNode(null);
+      }
+      this._marqueeStart = null;
+      return;
+    }
+
+    // Compute final marquee bounds in canvas space
+    var startCanvas = this._screenToCanvas(this._marqueeStart.clientX, this._marqueeStart.clientY);
+    var endCanvas = this._screenToCanvas(event.clientX, event.clientY);
+
+    var rect = {
+      x: Math.min(startCanvas.x, endCanvas.x),
+      y: Math.min(startCanvas.y, endCanvas.y),
+      width: Math.abs(endCanvas.x - startCanvas.x),
+      height: Math.abs(endCanvas.y - startCanvas.y)
+    };
+
+    // Hit test all nodes
+    var hitIds = [];
+    var ids = Object.keys(this._nodeData);
+    var i;
+    for (i = 0; i < ids.length; i++) {
+      var nd = this._nodeData[ids[i]];
+      if (this._intersectsRect(nd, rect)) {
+        hitIds.push(ids[i]);
+      }
+    }
+
+    // Select intersecting nodes
+    if (hitIds.length > 0) {
+      this.selectNodes(hitIds, this._marqueeStart.shiftKey);
+    }
+
+    this._removeMarqueeRect();
+    this._isMarquee = false;
+    this._marqueeStart = null;
+  }
+
+  _cancelMarquee() {
+    document.removeEventListener('mousemove', this._boundMarqueeMove);
+    document.removeEventListener('mouseup', this._boundMarqueeUp);
+    this._removeMarqueeRect();
+    this._isMarquee = false;
+    this._marqueeStart = null;
+  }
+
+  _createMarqueeRect() {
+    if (this._marqueeEl) return;
+    var ns = DAG_CANVAS_SVG_NS;
+    this._marqueeEl = document.createElementNS(ns, 'rect');
+    this._marqueeEl.setAttribute('class', 'iw-dag-marquee');
+    this._marqueeEl.setAttribute('x', '0');
+    this._marqueeEl.setAttribute('y', '0');
+    this._marqueeEl.setAttribute('width', '0');
+    this._marqueeEl.setAttribute('height', '0');
+    // Append to root group (above nodes layer)
+    this._rootGroup.appendChild(this._marqueeEl);
+  }
+
+  _removeMarqueeRect() {
+    if (this._marqueeEl && this._marqueeEl.parentNode) {
+      this._marqueeEl.parentNode.removeChild(this._marqueeEl);
+    }
+    this._marqueeEl = null;
+  }
+
+  _intersectsRect(node, rect) {
+    return !(node.x + node.width < rect.x ||
+             node.x > rect.x + rect.width ||
+             node.y + node.height < rect.y ||
+             node.y > rect.y + rect.height);
+  }
+
+  _clearMultiSelect() {
+    var i;
+    for (i = 0; i < this._selectedNodeIds.length; i++) {
+      var n = this._nodes[this._selectedNodeIds[i]];
+      if (n) n.setSelected(false);
+    }
+    this._selectedNodeIds = [];
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -53467,6 +54332,10 @@ class DagCanvas {
     if (this._selectedNodeId === nodeId) {
       this._selectedNodeId = null;
     }
+    var idx = this._selectedNodeIds.indexOf(nodeId);
+    if (idx !== -1) {
+      this._selectedNodeIds.splice(idx, 1);
+    }
   }
 
   /**
@@ -53481,6 +54350,7 @@ class DagCanvas {
     this._nodes = {};
     this._nodeData = {};
     this._selectedNodeId = null;
+    this._selectedNodeIds = [];
 
     if (this._connectionMgr) {
       this._connectionMgr.loadConnections([]);
@@ -54391,6 +55261,727 @@ class CodePreviewPanel {
 
 window.CodePreviewPanel = CodePreviewPanel;
 
+// === js/wizard-dag-presets.js ===
+/**
+ * DagPresets — Empty-canvas overlay showing preset DAG topologies.
+ *
+ * Displays a centered card grid when the DAG canvas has 0 nodes.
+ * User clicks a preset to auto-populate nodes + connections, or
+ * clicks "Start from scratch" to dismiss without adding anything.
+ *
+ * CEO-approved decision D6: "Show preset cards on empty canvas,
+ * but user may skip them."
+ *
+ * CSS prefix: .iw-dag-presets-*
+ * @author Pixel — EDOG Studio hivemind
+ */
+
+/* global DagCanvas, WizardEventBus, IW_EVENTS */
+
+var DAG_PRESETS_DATA = [
+  {
+    id: 'simple-chain',
+    title: 'Simple Chain',
+    subtitle: 'Hello World of DAGs.',
+    nodeCount: 2,
+    badge: 'Beginner',
+    build: function(canvas, schemas) {
+      var s = _dagPresetsPickSchema(schemas, 'source');
+      var t = _dagPresetsPickSchema(schemas, 'target');
+      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'orders', schema: s.schema });
+      var n2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'orders_view', schema: t.schema });
+      canvas.addConnection(n1.id, n2.id);
+    },
+    // SVG path data for mini topology preview
+    svg: function() {
+      return '<circle cx="30" cy="30" r="8" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="90" cy="30" r="8" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<line x1="38" y1="30" x2="82" y2="30" class="iw-dag-presets-line"/>';
+    }
+  },
+  {
+    id: 'fan-out',
+    title: 'Fan-Out',
+    subtitle: 'One source, many views.',
+    nodeCount: 4,
+    badge: 'Beginner',
+    build: function(canvas, schemas) {
+      var s = _dagPresetsPickSchema(schemas, 'source');
+      var t = _dagPresetsPickSchema(schemas, 'target');
+      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'customers', schema: s.schema });
+      var n2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'customers_active', schema: t.schema });
+      var n3 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'customers_churned', schema: t.schema });
+      var n4 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'customers_summary', schema: t.schema });
+      canvas.addConnection(n1.id, n2.id);
+      canvas.addConnection(n1.id, n3.id);
+      canvas.addConnection(n1.id, n4.id);
+    },
+    svg: function() {
+      return '<circle cx="20" cy="30" r="7" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="90" cy="12" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="90" cy="30" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="90" cy="48" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<line x1="27" y1="28" x2="84" y2="12" class="iw-dag-presets-line"/>'
+        + '<line x1="27" y1="30" x2="84" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="27" y1="32" x2="84" y2="48" class="iw-dag-presets-line"/>';
+    }
+  },
+  {
+    id: 'diamond',
+    title: 'Diamond',
+    subtitle: 'Converging pipeline.',
+    nodeCount: 5,
+    badge: 'Intermediate',
+    build: function(canvas, schemas) {
+      var s = _dagPresetsPickSchema(schemas, 'source');
+      var t = _dagPresetsPickSchema(schemas, 'target');
+      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'sales', schema: s.schema });
+      var n2 = canvas.addNode('sql-table', null, { name: s.prefix + 'inventory', schema: s.schema });
+      var n3 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'sales_clean', schema: t.schema });
+      var n4 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'inventory_clean', schema: t.schema });
+      var n5 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'merged_report', schema: t.schema });
+      canvas.addConnection(n1.id, n3.id);
+      canvas.addConnection(n2.id, n4.id);
+      canvas.addConnection(n3.id, n5.id);
+      canvas.addConnection(n4.id, n5.id);
+      canvas.addConnection(n1.id, n4.id);
+      canvas.addConnection(n2.id, n3.id);
+    },
+    svg: function() {
+      return '<circle cx="15" cy="16" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="15" cy="44" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="55" cy="16" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="55" cy="44" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="100" cy="30" r="7" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<line x1="21" y1="16" x2="49" y2="16" class="iw-dag-presets-line"/>'
+        + '<line x1="21" y1="44" x2="49" y2="44" class="iw-dag-presets-line"/>'
+        + '<line x1="61" y1="18" x2="93" y2="28" class="iw-dag-presets-line"/>'
+        + '<line x1="61" y1="42" x2="93" y2="32" class="iw-dag-presets-line"/>'
+        + '<line x1="21" y1="20" x2="49" y2="40" class="iw-dag-presets-line iw-dag-presets-line--cross"/>'
+        + '<line x1="21" y1="40" x2="49" y2="20" class="iw-dag-presets-line iw-dag-presets-line--cross"/>';
+    }
+  },
+  {
+    id: 'medallion',
+    title: 'Medallion Pipeline',
+    subtitle: 'Bronze \u2192 Silver \u2192 Gold.',
+    nodeCount: 7,
+    badge: 'Intermediate',
+    build: function(canvas, schemas) {
+      var hasMedallion = schemas.bronze || schemas.silver || schemas.gold;
+      var bSchema = hasMedallion ? 'bronze' : 'dbo';
+      var sSchema = hasMedallion ? 'silver' : 'dbo';
+      var gSchema = hasMedallion ? 'gold' : 'dbo';
+      var bPre = hasMedallion ? 'brz_' : '';
+      var sPre = hasMedallion ? 'slv_' : '';
+      var gPre = hasMedallion ? 'gld_' : '';
+
+      var b1 = canvas.addNode('sql-table', null, { name: bPre + 'raw_orders', schema: bSchema });
+      var b2 = canvas.addNode('sql-table', null, { name: bPre + 'raw_customers', schema: bSchema });
+      var b3 = canvas.addNode('sql-table', null, { name: bPre + 'raw_products', schema: bSchema });
+      var s1 = canvas.addNode('sql-mlv', null, { name: sPre + 'orders_clean', schema: sSchema });
+      var s2 = canvas.addNode('sql-mlv', null, { name: sPre + 'customers_clean', schema: sSchema });
+      var s3 = canvas.addNode('sql-mlv', null, { name: sPre + 'products_clean', schema: sSchema });
+      var g1 = canvas.addNode('pyspark-mlv', null, { name: gPre + 'analytics_gold', schema: gSchema });
+
+      canvas.addConnection(b1.id, s1.id);
+      canvas.addConnection(b2.id, s2.id);
+      canvas.addConnection(b3.id, s3.id);
+      canvas.addConnection(s1.id, g1.id);
+      canvas.addConnection(s2.id, g1.id);
+      canvas.addConnection(s3.id, g1.id);
+    },
+    svg: function() {
+      return '<circle cx="10" cy="10" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="10" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="10" cy="50" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="55" cy="10" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="55" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="55" cy="50" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="105" cy="30" r="7" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<line x1="15" y1="10" x2="50" y2="10" class="iw-dag-presets-line"/>'
+        + '<line x1="15" y1="30" x2="50" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="15" y1="50" x2="50" y2="50" class="iw-dag-presets-line"/>'
+        + '<line x1="60" y1="12" x2="98" y2="27" class="iw-dag-presets-line"/>'
+        + '<line x1="60" y1="30" x2="98" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="60" y1="48" x2="98" y2="33" class="iw-dag-presets-line"/>';
+    }
+  },
+  {
+    id: 'full-pipeline',
+    title: 'Full Pipeline',
+    subtitle: 'Production-grade topology.',
+    nodeCount: 8,
+    badge: 'Advanced',
+    build: function(canvas, schemas) {
+      var s = _dagPresetsPickSchema(schemas, 'source');
+      var t = _dagPresetsPickSchema(schemas, 'target');
+
+      var t1 = canvas.addNode('sql-table', null, { name: s.prefix + 'events', schema: s.schema });
+      var t2 = canvas.addNode('sql-table', null, { name: s.prefix + 'users', schema: s.schema });
+      var t3 = canvas.addNode('sql-table', null, { name: s.prefix + 'products', schema: s.schema });
+      var m1 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'events_enriched', schema: t.schema });
+      var m2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'user_profiles', schema: t.schema });
+      var m3 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'product_catalog', schema: t.schema });
+      var p1 = canvas.addNode('pyspark-mlv', null, { name: t.prefix + 'recommendations', schema: t.schema });
+      var p2 = canvas.addNode('pyspark-mlv', null, { name: t.prefix + 'anomaly_detect', schema: t.schema });
+
+      canvas.addConnection(t1.id, m1.id);
+      canvas.addConnection(t2.id, m2.id);
+      canvas.addConnection(t3.id, m3.id);
+      canvas.addConnection(m1.id, p1.id);
+      canvas.addConnection(m2.id, p1.id);
+      canvas.addConnection(m3.id, p1.id);
+      canvas.addConnection(m1.id, p2.id);
+      canvas.addConnection(m2.id, p2.id);
+    },
+    svg: function() {
+      return '<circle cx="8" cy="10" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="8" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="8" cy="50" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="45" cy="10" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="45" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="45" cy="50" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="95" cy="18" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<circle cx="95" cy="42" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<line x1="13" y1="10" x2="40" y2="10" class="iw-dag-presets-line"/>'
+        + '<line x1="13" y1="30" x2="40" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="13" y1="50" x2="40" y2="50" class="iw-dag-presets-line"/>'
+        + '<line x1="50" y1="12" x2="89" y2="17" class="iw-dag-presets-line"/>'
+        + '<line x1="50" y1="30" x2="89" y2="19" class="iw-dag-presets-line"/>'
+        + '<line x1="50" y1="48" x2="89" y2="20" class="iw-dag-presets-line"/>'
+        + '<line x1="50" y1="12" x2="89" y2="40" class="iw-dag-presets-line iw-dag-presets-line--cross"/>'
+        + '<line x1="50" y1="30" x2="89" y2="42" class="iw-dag-presets-line iw-dag-presets-line--cross"/>';
+    }
+  }
+];
+
+// ── Schema helper ──────────────────────────────────────────────────
+
+function _dagPresetsPickSchema(schemas, role) {
+  if (role === 'source') {
+    if (schemas.bronze) return { schema: 'bronze', prefix: 'brz_' };
+    return { schema: 'dbo', prefix: '' };
+  }
+  // target
+  if (schemas.silver) return { schema: 'silver', prefix: 'slv_' };
+  if (schemas.gold) return { schema: 'gold', prefix: 'gld_' };
+  return { schema: 'dbo', prefix: '' };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DagPresets CLASS
+// ═══════════════════════════════════════════════════════════════════
+
+class DagPresets {
+
+  /**
+   * @param {object} options
+   * @param {HTMLElement} options.containerEl — the DAG canvas container element
+   * @param {DagCanvas} options.dagCanvas — DagCanvas instance
+   * @param {WizardEventBus} options.eventBus — event bus
+   * @param {object} options.schemas — enabled schemas from wizard state
+   */
+  constructor(options) {
+    var self = this;
+    this._containerEl = options.containerEl;
+    this._canvas = options.dagCanvas;
+    this._eventBus = options.eventBus;
+    this._schemas = options.schemas || { dbo: true, bronze: false, silver: false, gold: false };
+    this._dismissed = false;
+    this._destroyed = false;
+    this._overlayEl = null;
+    this._unsubs = [];
+
+    this._render();
+    this._updateVisibility();
+
+    // Listen for node add/remove to show/hide
+    this._unsubs.push(
+      this._eventBus.on(IW_EVENTS.NODE_ADDED, function() {
+        self._updateVisibility();
+      })
+    );
+    this._unsubs.push(
+      this._eventBus.on(IW_EVENTS.NODE_REMOVED, function() {
+        self._dismissed = false;
+        self._updateVisibility();
+      })
+    );
+  }
+
+  // ── Public ──────────────────────────────────────────────────────
+
+  updateSchemas(schemas) {
+    this._schemas = schemas || this._schemas;
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+    var i;
+    for (i = 0; i < this._unsubs.length; i++) {
+      this._unsubs[i]();
+    }
+    this._unsubs = [];
+    if (this._overlayEl && this._overlayEl.parentNode) {
+      this._overlayEl.parentNode.removeChild(this._overlayEl);
+    }
+    this._overlayEl = null;
+    this._containerEl = null;
+    this._canvas = null;
+    this._eventBus = null;
+  }
+
+  // ── Private: Render ─────────────────────────────────────────────
+
+  _render() {
+    var self = this;
+    var overlay = document.createElement('div');
+    overlay.className = 'iw-dag-presets-overlay';
+
+    var inner = document.createElement('div');
+    inner.className = 'iw-dag-presets-inner';
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'iw-dag-presets-header';
+    header.innerHTML = '<span class="iw-dag-presets-heading">Start with a Preset</span>'
+      + '<span class="iw-dag-presets-subheading">Pick a topology to auto-populate your canvas, or start from scratch.</span>';
+    inner.appendChild(header);
+
+    // Card grid
+    var grid = document.createElement('div');
+    grid.className = 'iw-dag-presets-grid';
+
+    var i;
+    for (i = 0; i < DAG_PRESETS_DATA.length; i++) {
+      var card = this._buildCard(DAG_PRESETS_DATA[i], i);
+      grid.appendChild(card);
+    }
+    inner.appendChild(grid);
+
+    // "Start from scratch" link
+    var scratch = document.createElement('button');
+    scratch.className = 'iw-dag-presets-scratch';
+    scratch.type = 'button';
+    scratch.textContent = 'Start from scratch';
+    scratch.addEventListener('click', function(e) {
+      e.stopPropagation();
+      self._dismiss();
+    });
+    inner.appendChild(scratch);
+
+    overlay.appendChild(inner);
+    this._overlayEl = overlay;
+    this._containerEl.appendChild(overlay);
+  }
+
+  _buildCard(preset, index) {
+    var self = this;
+    var card = document.createElement('button');
+    card.className = 'iw-dag-presets-card';
+    card.type = 'button';
+    card.style.animationDelay = (index * 60) + 'ms';
+
+    // Mini SVG preview
+    var svgWrap = document.createElement('div');
+    svgWrap.className = 'iw-dag-presets-svg-wrap';
+    svgWrap.innerHTML = '<svg viewBox="0 0 120 60" class="iw-dag-presets-svg">'
+      + preset.svg() + '</svg>';
+    card.appendChild(svgWrap);
+
+    // Text content
+    var body = document.createElement('div');
+    body.className = 'iw-dag-presets-card-body';
+
+    var title = document.createElement('div');
+    title.className = 'iw-dag-presets-card-title';
+    title.textContent = preset.title;
+    body.appendChild(title);
+
+    var subtitle = document.createElement('div');
+    subtitle.className = 'iw-dag-presets-card-subtitle';
+    subtitle.textContent = preset.subtitle;
+    body.appendChild(subtitle);
+
+    // Stats line
+    var stats = document.createElement('div');
+    stats.className = 'iw-dag-presets-card-stats';
+    stats.innerHTML = '<span class="iw-dag-presets-stat">' + preset.nodeCount + ' nodes</span>'
+      + '<span class="iw-dag-presets-badge iw-dag-presets-badge--' + preset.badge.toLowerCase() + '">'
+      + preset.badge + '</span>';
+    body.appendChild(stats);
+
+    card.appendChild(body);
+
+    card.addEventListener('click', function(e) {
+      e.stopPropagation();
+      self._applyPreset(preset);
+    });
+
+    return card;
+  }
+
+  // ── Private: Logic ──────────────────────────────────────────────
+
+  _applyPreset(preset) {
+    if (!this._canvas) return;
+    preset.build(this._canvas, this._schemas);
+    this._canvas.autoLayout();
+    this._dismissed = true;
+    this._updateVisibility();
+  }
+
+  _dismiss() {
+    this._dismissed = true;
+    this._updateVisibility();
+  }
+
+  _updateVisibility() {
+    if (this._destroyed || !this._overlayEl) return;
+    var nodeCount = this._canvas ? this._canvas.getNodeCount() : 0;
+    var shouldShow = nodeCount === 0 && !this._dismissed;
+    if (shouldShow) {
+      this._overlayEl.classList.add('iw-dag-presets-overlay--visible');
+    } else {
+      this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+    }
+  }
+}
+
+window.DagPresets = DagPresets;
+
+// === js/wizard-node-popover.js ===
+/**
+ * NodePopover — Edit popover for DAG canvas nodes.
+ *
+ * Shows when a node is selected, positioned to the right (or left if near edge).
+ * Allows inline editing of: name, type, schema. Plus delete action.
+ *
+ * CSS prefix: .iw-node-popover-*
+ * @author Pixel — EDOG Studio hivemind
+ */
+
+/* global DagCanvas, IW_EVENTS */
+
+class NodePopover {
+
+  /**
+   * @param {object} options
+   * @param {HTMLElement} options.containerEl — parent element to attach popover to
+   * @param {object} options.canvas — DagCanvas instance
+   * @param {object} options.eventBus — WizardEventBus instance
+   * @param {object} [options.schemas] — enabled schemas {dbo: true, ...}
+   */
+  constructor(options) {
+    var self = this;
+    this._containerEl = options.containerEl;
+    this._canvas = options.canvas;
+    this._eventBus = options.eventBus;
+    this._schemas = options.schemas || { dbo: true, bronze: false, silver: false, gold: false };
+    this._currentNodeId = null;
+    this._destroyed = false;
+
+    // Build DOM
+    this._popoverEl = document.createElement('div');
+    this._popoverEl.className = 'iw-node-popover';
+    this._popoverEl.style.display = 'none';
+
+    this._arrowEl = document.createElement('div');
+    this._arrowEl.className = 'iw-node-popover-arrow';
+    this._popoverEl.appendChild(this._arrowEl);
+
+    this._contentEl = document.createElement('div');
+    this._contentEl.className = 'iw-node-popover-content';
+    this._popoverEl.appendChild(this._contentEl);
+
+    this._buildFields();
+    this._containerEl.appendChild(this._popoverEl);
+
+    // Event subscriptions
+    this._unsubs = [];
+    this._unsubs.push(
+      this._eventBus.on(IW_EVENTS.NODE_SELECTED, function(data) {
+        self._show(data.nodeId);
+      })
+    );
+    this._unsubs.push(
+      this._eventBus.on(IW_EVENTS.SELECTION_CLEARED, function() {
+        self._hide();
+      })
+    );
+
+    // Dismiss on click outside
+    this._boundOutsideClick = function(e) { self._onOutsideClick(e); };
+    document.addEventListener('mousedown', this._boundOutsideClick);
+
+    // Dismiss on Escape
+    this._boundKeyDown = function(e) { self._onKeyDown(e); };
+    document.addEventListener('keydown', this._boundKeyDown);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PUBLIC API
+     ═══════════════════════════════════════════════════════════════ */
+
+  updateSchemas(schemas) {
+    this._schemas = schemas;
+  }
+
+  destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
+
+    var i;
+    for (i = 0; i < this._unsubs.length; i++) {
+      this._unsubs[i]();
+    }
+    this._unsubs = [];
+
+    document.removeEventListener('mousedown', this._boundOutsideClick);
+    document.removeEventListener('keydown', this._boundKeyDown);
+
+    if (this._popoverEl && this._popoverEl.parentNode) {
+      this._popoverEl.parentNode.removeChild(this._popoverEl);
+    }
+
+    this._popoverEl = null;
+    this._contentEl = null;
+    this._arrowEl = null;
+    this._containerEl = null;
+    this._canvas = null;
+    this._eventBus = null;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Build
+     ═══════════════════════════════════════════════════════════════ */
+
+  _buildFields() {
+    var self = this;
+
+    // Name field
+    var nameRow = document.createElement('div');
+    nameRow.className = 'iw-node-popover-row';
+    var nameLabel = document.createElement('label');
+    nameLabel.className = 'iw-node-popover-label';
+    nameLabel.textContent = 'Name';
+    this._nameInput = document.createElement('input');
+    this._nameInput.type = 'text';
+    this._nameInput.className = 'iw-node-popover-input';
+    this._nameInput.addEventListener('blur', function() { self._commitName(); });
+    this._nameInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        self._commitName();
+        self._nameInput.blur();
+      }
+    });
+    nameRow.appendChild(nameLabel);
+    nameRow.appendChild(this._nameInput);
+    this._contentEl.appendChild(nameRow);
+
+    // Type dropdown
+    var typeRow = document.createElement('div');
+    typeRow.className = 'iw-node-popover-row';
+    var typeLabel = document.createElement('label');
+    typeLabel.className = 'iw-node-popover-label';
+    typeLabel.textContent = 'Type';
+    this._typeSelect = document.createElement('select');
+    this._typeSelect.className = 'iw-node-popover-select';
+    var types = [
+      { value: 'sql-table', label: 'SQL Table' },
+      { value: 'sql-mlv', label: 'SQL MLV' },
+      { value: 'pyspark-mlv', label: 'PySpark MLV' }
+    ];
+    var i;
+    for (i = 0; i < types.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = types[i].value;
+      opt.textContent = types[i].label;
+      this._typeSelect.appendChild(opt);
+    }
+    this._typeSelect.addEventListener('change', function() { self._commitType(); });
+    typeRow.appendChild(typeLabel);
+    typeRow.appendChild(this._typeSelect);
+    this._contentEl.appendChild(typeRow);
+
+    // Schema dropdown
+    var schemaRow = document.createElement('div');
+    schemaRow.className = 'iw-node-popover-row';
+    var schemaLabel = document.createElement('label');
+    schemaLabel.className = 'iw-node-popover-label';
+    schemaLabel.textContent = 'Schema';
+    this._schemaSelect = document.createElement('select');
+    this._schemaSelect.className = 'iw-node-popover-select';
+    this._schemaSelect.addEventListener('change', function() { self._commitSchema(); });
+    schemaRow.appendChild(schemaLabel);
+    schemaRow.appendChild(this._schemaSelect);
+    this._contentEl.appendChild(schemaRow);
+
+    // Divider
+    var divider = document.createElement('div');
+    divider.className = 'iw-node-popover-divider';
+    this._contentEl.appendChild(divider);
+
+    // Delete button
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'iw-node-popover-delete';
+    deleteBtn.textContent = 'Delete Node';
+    deleteBtn.addEventListener('click', function() { self._commitDelete(); });
+    this._contentEl.appendChild(deleteBtn);
+  }
+
+  _populateSchemaOptions() {
+    // Clear existing
+    while (this._schemaSelect.firstChild) {
+      this._schemaSelect.removeChild(this._schemaSelect.firstChild);
+    }
+
+    // Always include dbo
+    var opt = document.createElement('option');
+    opt.value = 'dbo';
+    opt.textContent = 'dbo';
+    this._schemaSelect.appendChild(opt);
+
+    var names = ['bronze', 'silver', 'gold'];
+    var i;
+    for (i = 0; i < names.length; i++) {
+      if (this._schemas[names[i]]) {
+        var o = document.createElement('option');
+        o.value = names[i];
+        o.textContent = names[i];
+        this._schemaSelect.appendChild(o);
+      }
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Show/Hide
+     ═══════════════════════════════════════════════════════════════ */
+
+  _show(nodeId) {
+    if (this._destroyed) return;
+    this._currentNodeId = nodeId;
+
+    var nodeData = this._canvas.getNodeData(nodeId);
+    if (!nodeData) {
+      this._hide();
+      return;
+    }
+
+    // Populate fields
+    this._nameInput.value = nodeData.name;
+    this._typeSelect.value = nodeData.type;
+    this._populateSchemaOptions();
+    this._schemaSelect.value = nodeData.schema;
+
+    // Show and position
+    this._popoverEl.style.display = '';
+    this._position(nodeData);
+  }
+
+  _hide() {
+    if (this._destroyed) return;
+    this._popoverEl.style.display = 'none';
+    this._currentNodeId = null;
+  }
+
+  _position(nodeData) {
+    var viewport = this._canvas.getViewport();
+    var containerRect = this._containerEl.getBoundingClientRect();
+
+    // Node position in screen coords
+    var nodeScreenX = nodeData.x * viewport.zoom + viewport.panX;
+    var nodeScreenY = nodeData.y * viewport.zoom + viewport.panY;
+    var nodeScreenW = nodeData.width * viewport.zoom;
+    var nodeScreenH = nodeData.height * viewport.zoom;
+
+    var popoverWidth = 220;
+    var gap = 12;
+
+    // Default: place to the right
+    var left = nodeScreenX + nodeScreenW + gap;
+    var top = nodeScreenY;
+    var arrowSide = 'left';
+
+    // If near right edge, place to the left
+    if (left + popoverWidth > containerRect.width) {
+      left = nodeScreenX - popoverWidth - gap;
+      arrowSide = 'right';
+    }
+
+    // Clamp top
+    if (top < 8) top = 8;
+    if (top + 200 > containerRect.height) {
+      top = containerRect.height - 208;
+    }
+
+    this._popoverEl.style.left = left + 'px';
+    this._popoverEl.style.top = top + 'px';
+
+    // Arrow direction
+    this._arrowEl.className = 'iw-node-popover-arrow iw-node-popover-arrow--' + arrowSide;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Commit changes
+     ═══════════════════════════════════════════════════════════════ */
+
+  _commitName() {
+    if (!this._currentNodeId) return;
+    var value = this._nameInput.value.trim();
+    if (!value) return;
+    this._canvas.updateNode(this._currentNodeId, { name: value });
+    this._eventBus.emit(IW_EVENTS.NODE_RENAMED, { nodeId: this._currentNodeId, name: value });
+  }
+
+  _commitType() {
+    if (!this._currentNodeId) return;
+    var value = this._typeSelect.value;
+    this._canvas.updateNode(this._currentNodeId, { type: value });
+    this._eventBus.emit(IW_EVENTS.NODE_TYPE_CHANGED, { nodeId: this._currentNodeId, type: value });
+  }
+
+  _commitSchema() {
+    if (!this._currentNodeId) return;
+    var value = this._schemaSelect.value;
+    this._canvas.updateNode(this._currentNodeId, { schema: value });
+    this._eventBus.emit(IW_EVENTS.NODE_SCHEMA_CHANGED, { nodeId: this._currentNodeId, schema: value });
+  }
+
+  _commitDelete() {
+    if (!this._currentNodeId) return;
+    var nodeId = this._currentNodeId;
+    this._hide();
+    this._canvas.removeNode(nodeId);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Dismiss handlers
+     ═══════════════════════════════════════════════════════════════ */
+
+  _onOutsideClick(e) {
+    if (!this._currentNodeId) return;
+    if (this._popoverEl.contains(e.target)) return;
+    // Let canvas node clicks handle themselves via the event bus
+  }
+
+  _onKeyDown(e) {
+    if (!this._currentNodeId) return;
+    if (e.key === 'Escape') {
+      this._hide();
+      this._canvas.selectNode(null);
+    }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   EXPORT
+   ═══════════════════════════════════════════════════════════════════ */
+window.NodePopover = NodePopover;
+
 // === js/wizard-dag-canvas-page.js ===
 /**
  * DagCanvasPage — Composite page component for the DAG canvas (Page 3).
@@ -54401,7 +55992,7 @@ window.CodePreviewPanel = CodePreviewPanel;
  * @author Pixel — EDOG Studio hivemind
  */
 
-/* global DagCanvas, NodePalette, CodePreviewPanel, CodeGenerationEngine, WizardEventBus, UndoRedoManager, AutoLayoutEngine, IW_EVENTS */
+/* global DagCanvas, NodePalette, CodePreviewPanel, CodeGenerationEngine, WizardEventBus, UndoRedoManager, AutoLayoutEngine, DagPresets, NodePopover, IW_EVENTS */
 
 class DagCanvasPage {
   constructor(options) {
@@ -54460,6 +56051,20 @@ class DagCanvasPage {
       codeGen: this._codeGen
     });
 
+    this._presets = new DagPresets({
+      containerEl: this._canvasContainer,
+      dagCanvas: this._canvas,
+      eventBus: this._eventBus,
+      schemas: this._schemas
+    });
+
+    this._nodePopover = new NodePopover({
+      containerEl: this._canvasContainer,
+      canvas: this._canvas,
+      eventBus: this._eventBus,
+      schemas: this._schemas
+    });
+
     // Wire state-change notifications back to the wizard
     this._unsubs = [];
     this._unsubs.push(
@@ -54476,6 +56081,11 @@ class DagCanvasPage {
 
     this._schemas = state.schemas || this._schemas;
     this._theme = state.theme || this._theme;
+
+    // Keep presets schema-aware
+    if (this._presets) {
+      this._presets.updateSchemas(this._schemas);
+    }
 
     // Restore canvas state when re-entering or loading a template
     if (state.nodes && state.nodes.length > 0) {
@@ -54551,6 +56161,14 @@ class DagCanvasPage {
     this._unsubs = [];
 
     // Destroy sub-components in reverse creation order
+    if (this._nodePopover) {
+      this._nodePopover.destroy();
+      this._nodePopover = null;
+    }
+    if (this._presets) {
+      this._presets.destroy();
+      this._presets = null;
+    }
     if (this._codePanel) {
       this._codePanel.destroy();
       this._codePanel = null;
