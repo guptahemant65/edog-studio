@@ -1,1 +1,101 @@
-/* Status bar styles */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Footer Status Bar
+   VS Code-style 24px bar pinned to bottom. Phase, coverage, feedback.
+   Replaces sidebar footer.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-dim);
+  z-index: 100;
+}
+
+.sb-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb-phase-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sb-phase-dot.connected { background: var(--status-success, #18a058); }
+.sb-phase-dot.deploying { background: var(--status-warning, #e5940c); }
+.sb-phase-dot.disconnected { background: var(--text-muted); }
+
+.sb-phase-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sb-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.sb-coverage {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 80ms ease-out, color 80ms ease-out;
+}
+
+.sb-coverage:hover {
+  background: var(--hover, rgba(0,0,0,0.04));
+  color: var(--text);
+}
+
+.sb-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sb-feedback {
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 80ms ease-out, color 80ms ease-out;
+}
+
+.sb-feedback:hover {
+  background: var(--hover, rgba(0,0,0,0.04));
+  color: var(--accent);
+}
+
+.sb-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cockpit-body {
+  padding-bottom: 24px;
+}

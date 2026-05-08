@@ -1,1 +1,197 @@
-/* Deploy context strip styles */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Deploy Context Strip
+   Persistent notification bar showing deploy target info.
+   Renders in .notification-zone above #file-change-bar.
+   Green accent for connected state. Breadcrumb hierarchy pattern.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.deploy-strip {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  height: 38px;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(24,160,88,0.15);
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text-dim);
+  overflow: hidden;
+  animation: dsSlideDown 360ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  position: relative;
+}
+
+.deploy-strip::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--status-success, #18a058);
+  box-shadow: 0 0 12px rgba(24,160,88,0.35), 4px 0 20px rgba(24,160,88,0.08);
+}
+
+.deploy-strip::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(24,160,88,0.04) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.deploy-strip.active { display: flex; }
+
+.deploy-strip .ds-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 10px;
+  background: rgba(24,160,88,0.08);
+  border: 1px solid rgba(24,160,88,0.15);
+  border-radius: 100px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.deploy-strip .ds-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--status-success, #18a058);
+  box-shadow: 0 0 0 3px rgba(24,160,88,0.12), 0 0 8px rgba(24,160,88,0.4);
+  animation: dsPulse 2.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.deploy-strip .ds-badge-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-success, #18a058);
+  letter-spacing: 0.01em;
+}
+
+.deploy-strip .ds-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+
+.deploy-strip .ds-path-seg {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.deploy-strip .ds-path-seg.bold {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deploy-strip .ds-chevron {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.deploy-strip .ds-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-alt, rgba(0,0,0,0.12));
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.deploy-strip .ds-commit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms ease-out;
+  border: 1px solid transparent;
+  z-index: 1;
+}
+
+.deploy-strip .ds-commit:hover {
+  background: rgba(109,92,255,0.06);
+  border-color: rgba(109,92,255,0.12);
+  box-shadow: 0 2px 8px rgba(109,92,255,0.08);
+}
+
+.deploy-strip .ds-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.deploy-strip .ds-msg {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-strip .ds-spacer { flex: 1; z-index: 1; }
+
+.deploy-strip .ds-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.ds-tooltip {
+  position: fixed;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-alt, rgba(0,0,0,0.12));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  z-index: 500;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  max-width: 360px;
+  font-size: 12px;
+  font-family: var(--font-body);
+}
+
+.ds-tooltip.visible { opacity: 1; transform: translateY(0); }
+
+.ds-tooltip .dt-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ds-tooltip .dt-msg {
+  color: var(--text);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.ds-tooltip .dt-author {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@keyframes dsSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dsPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(24,160,88,0.12), 0 0 8px rgba(24,160,88,0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(24,160,88,0.06), 0 0 12px rgba(24,160,88,0.25); }
+}

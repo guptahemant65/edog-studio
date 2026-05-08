@@ -1,1 +1,89 @@
-/* Toast notification styles */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Toast Notification System
+   Unified toast manager — replaces all fragmented _showToast implementations.
+   Position: fixed bottom-right, stacks upward. Max 3 visible.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.toast-container {
+  position: fixed;
+  bottom: calc(var(--footer-height, 24px) + 12px);
+  right: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 320px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text);
+  pointer-events: auto;
+  animation: toastSlideIn 300ms ease-out forwards;
+  border-left: 3px solid var(--accent);
+}
+
+.toast-item.variant-success { border-left-color: var(--status-success, #18a058); }
+.toast-item.variant-warning { border-left-color: var(--status-warning, #e5940c); }
+.toast-item.variant-error   { border-left-color: var(--status-error, #e5453b); }
+.toast-item.variant-info    { border-left-color: var(--accent); }
+
+.toast-item.exiting {
+  animation: toastSlideOut 200ms ease-in forwards;
+}
+
+.toast-msg {
+  flex: 1;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.toast-action {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  transition: opacity 80ms ease-out;
+}
+
+.toast-action:hover { opacity: 0.7; }
+
+.toast-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 80ms ease-out;
+  flex-shrink: 0;
+}
+
+.toast-dismiss:hover { color: var(--text); }
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(100%); }
+}
