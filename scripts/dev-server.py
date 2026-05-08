@@ -980,6 +980,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(426, {"error": "ws_not_here", "message": "WebSocket available on FLT port after deploy"})
         elif self.path == "/api/studio/file-changes":
             self._serve_file_changes()
+        elif self.path == "/api/templates":
+            self._serve_templates_list()
+        elif self.path.startswith("/api/templates/"):
+            self._serve_template_get()
         else:
             self.send_error(404)
 
@@ -992,6 +996,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def do_DELETE(self):
         if self.path.startswith("/api/fabric/"):
             self._proxy_fabric("DELETE")
+        elif self.path.startswith("/api/templates/"):
+            self._serve_template_delete()
         else:
             self.send_error(404)
 
@@ -1024,6 +1030,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_undeploy()
         elif self.path == "/api/studio/file-changes/dismiss":
             self._serve_file_changes_dismiss()
+        elif self.path == "/api/templates":
+            self._serve_template_save()
         else:
             self.send_error(404)
 
@@ -1181,6 +1189,89 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if _file_watcher:
             _file_watcher.dismiss(version)
         self._json_response(200, {"ok": True})
+
+    # ── Template CRUD ──────────────────────────────────────────────
+
+    def _get_templates_path(self) -> Path:
+        return Path(__file__).parent.parent / "data" / "edog-templates.json"
+
+    def _read_templates(self) -> dict:
+        path = self._get_templates_path()
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({"version": "1.0", "templates": []}, indent=2))
+        return json.loads(path.read_text())
+
+    def _write_templates(self, data: dict) -> None:
+        path = self._get_templates_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, indent=2))
+
+    def _serve_templates_list(self):
+        """GET /api/templates — list all saved template summaries."""
+        data = self._read_templates()
+        summaries = []
+        for t in data.get("templates", []):
+            summaries.append({
+                "id": t["id"],
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "createdAt": t["createdAt"],
+                "updatedAt": t.get("updatedAt", t["createdAt"]),
+                "nodeCount": len(t.get("state", {}).get("nodes", [])),
+                "theme": t.get("state", {}).get("theme", ""),
+            })
+        self._json_response(200, {"templates": summaries})
+
+    def _serve_template_get(self):
+        """GET /api/templates/<id> — return a single template with full state."""
+        template_id = self.path.split("/api/templates/")[1]
+        data = self._read_templates()
+        for t in data.get("templates", []):
+            if t["id"] == template_id:
+                self._json_response(200, t)
+                return
+        self._json_response(404, {"error": "Template not found"})
+
+    def _serve_template_save(self):
+        """POST /api/templates — save a new template."""
+        body_len = int(self.headers.get("Content-Length", 0))
+        body = json.loads(self.rfile.read(body_len)) if body_len > 0 else {}
+
+        name = body.get("name", "").strip()
+        if not name:
+            self._json_response(400, {"error": "Template name is required"})
+            return
+
+        now = datetime.utcnow().isoformat() + "Z"
+        template_id = "tpl-" + str(int(time.time() * 1000))
+
+        template = {
+            "id": template_id,
+            "name": name,
+            "description": body.get("description", ""),
+            "createdAt": now,
+            "updatedAt": now,
+            "state": body.get("state", {}),
+        }
+
+        data = self._read_templates()
+        data["templates"].append(template)
+        self._write_templates(data)
+
+        self._json_response(201, {"id": template_id, "name": name, "savedAt": now, "success": True})
+
+    def _serve_template_delete(self):
+        """DELETE /api/templates/<id> — remove a template."""
+        template_id = self.path.split("/api/templates/")[1]
+        data = self._read_templates()
+        original_count = len(data.get("templates", []))
+        data["templates"] = [t for t in data.get("templates", []) if t["id"] != template_id]
+        if len(data["templates"]) == original_count:
+            self._json_response(404, {"error": "Template not found"})
+            return
+        self._write_templates(data)
+        self._json_response(200, {"success": True, "deleted": template_id})
 
     def _serve_deploy_start(self):
         """POST /api/command/deploy — start deploy pipeline.

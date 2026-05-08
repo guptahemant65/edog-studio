@@ -2,7 +2,7 @@
  * InfraWizardDialog — Modal wizard for creating Fabric infrastructure.
  *
  * 5-step wizard: Setup -> Theme -> Build -> Review -> Deploy
- * Phase 1 implements pages 1 (Setup) and 2 (Theme). Pages 3-5 are stubs.
+ * Phase 1 implements pages 1 (Setup) and 2 (Theme). Phase 2A implements page 3 (Build/DAG Canvas).
  *
  * CSS prefix: .iw-
  * Singleton: Only one wizard can be open at a time.
@@ -23,24 +23,124 @@ var IW_STEPS = [
 
 /* ═══════════════════════════════════════════════════════════════════
    WIZARD STATE FACTORY
+
+   Central WizardState — owned by InfraWizardDialog (C01).
+   Passed to all child page components by reference.
+   Serialized by TemplateManager (C12) for save/load.
+   Frozen (Object.freeze) before passing to ExecutionPipeline (C10).
+
+   Data shapes (canonical contracts — all components build against these):
+
+   DagNodeData: {
+     id: string,                  // "node-1", "node-2", ...
+     name: string,                // user-editable, e.g. "orders"
+     type: string,                // 'sql-table' | 'sql-mlv' | 'pyspark-mlv'
+     schema: string,              // 'dbo' | 'bronze' | 'silver' | 'gold'
+     x: number,                   // canvas position (top-left corner)
+     y: number,
+     width: number,               // default 180
+     height: number,              // default 72
+     sequenceNumber: number,      // auto-name counter per type
+     createdAt: number            // Date.now() for tiebreaking
+   }
+
+   ConnectionData: {
+     id: string,                  // "conn-1", "conn-2", ...
+     sourceNodeId: string,        // parent/upstream node
+     targetNodeId: string         // child/downstream node
+   }
+
+   ViewportState: {
+     panX: number,                // canvas-space translation
+     panY: number,
+     zoom: number                 // 0.25 to 4.0 (25% to 400%)
+   }
+
    ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Event Name Constants ─── */
+var IW_EVENTS = {
+  // Canvas events (C04)
+  NODE_ADDED:          'canvas:node-added',
+  NODE_REMOVED:        'canvas:node-removed',
+  NODE_MOVED:          'canvas:node-moved',
+  NODE_SELECTED:       'canvas:node-selected',
+  SELECTION_CLEARED:   'canvas:selection-cleared',
+  ZOOM_CHANGED:        'canvas:zoom-changed',
+  STATE_CHANGED:       'canvas:state-changed',
+  LAYOUT_COMPLETE:     'canvas:layout-complete',
+
+  // Connection events (C07)
+  CONNECTION_CREATED:  'connection:created',
+  CONNECTION_REMOVED:  'connection:removed',
+  CONNECTION_STARTED:  'connection:started',
+  CONNECTION_CANCELLED:'connection:cancelled',
+
+  // DagNode events (C06)
+  NODE_RENAMED:        'node:renamed',
+  NODE_TYPE_CHANGED:   'node:type-changed',
+  NODE_SCHEMA_CHANGED: 'node:schema-changed',
+
+  // Code generation (C08)
+  CODE_STALE:          'code:stale',
+  CODE_REGENERATED:    'code:regenerated',
+
+  // Wizard navigation (C01)
+  PAGE_CHANGED:        'wizard:page-changed',
+  STATE_DIRTY:         'wizard:state-dirty',
+
+  // Template events (C12)
+  TEMPLATE_LOADED:     'template:loaded',
+  TEMPLATE_SAVED:      'template:saved',
+
+  // Review events (C09)
+  REVIEW_VALIDATED:    'review:validated',
+
+  // Execution events (C10)
+  EXECUTION_STARTED:   'execution:started',
+  EXECUTION_STEP:      'execution:step',
+  EXECUTION_COMPLETE:  'execution:complete',
+  EXECUTION_FAILED:    'execution:failed',
+
+  // Undo/Redo events (C14)
+  UNDO:                'undo:performed',
+  REDO:                'redo:performed'
+};
+
 function createWizardState() {
   return {
+    // Page 0: Infrastructure Setup (C02)
     workspaceName: '',
-    capacityId: '',
+    workspaceNameManuallyEdited: false,
+    capacityId: null,
     capacityDisplayName: '',
+    capacitySku: '',
+    capacityRegion: '',
     lakehouseName: '',
+    lakehouseNameManuallyEdited: false,
     notebookName: '',
-    lakehouseManuallyEdited: false,
-    notebookManuallyEdited: false,
+    notebookNameManuallyEdited: false,
+
+    // Page 1: Theme & Schema (C03)
     theme: null,
     schemas: { dbo: true, bronze: false, silver: false, gold: false },
+
+    // Page 2: DAG Canvas (C04-C08, C13-C14)
     nodes: [],
     connections: [],
     nextNodeId: 1,
+    nextConnectionId: 1,
+    viewport: { panX: 0, panY: 0, zoom: 1.0 },
+
+    // Page 4: Execution (C10) — null until "Lock In & Create"
     execution: null,
+
+    // Meta
+    currentPage: 0,
+    highestVisitedPage: 0,
     createdAt: null,
     templateName: null,
+    templateId: null,
     dirty: false
   };
 }
@@ -86,6 +186,15 @@ class InfraWizardDialog {
     this._boundEsc = null;
     this._boundResize = null;
 
+    // Per-instance EventBus (shared across all page components)
+    this._eventBus = null;
+
+    // Template manager (lazy — created on open)
+    this._templateMgr = null;
+
+    // Floating badge for minimized execution state
+    this._floatingBadge = null;
+
     // Callbacks
     this.onComplete = null;
     this.onClose = null;
@@ -120,6 +229,8 @@ class InfraWizardDialog {
     }
     InfraWizardDialog._activeInstance = this;
     this._state.createdAt = Date.now();
+    this._eventBus = new WizardEventBus();
+    this._templateMgr = new TemplateManager({ eventBus: this._eventBus });
     this._createDOM();
     this._bindEvents();
     this._initializePages();
@@ -129,9 +240,9 @@ class InfraWizardDialog {
 
   close() {
     if (this._dialogState === 'closed') return;
-    // If executing, minimize instead
-    if (this._currentPage === 4 && this._state.execution && this._state.execution.status === 'running') {
-      this.minimize();
+    // If executing (Page 4 active, pipeline running), minimize to badge instead
+    if (this._currentPage === 4 && this._pages[4] && this._pages[4]._state && this._pages[4]._state.status === 'executing') {
+      this._minimizeToFloatingBadge();
       return;
     }
     // If dirty, show confirmation
@@ -143,17 +254,12 @@ class InfraWizardDialog {
   }
 
   minimize() {
-    // Phase 1 stub — will implement FloatingBadge in Phase 4
-    this._dialogState = 'minimized';
-    if (this._overlayEl) this._overlayEl.style.display = 'none';
-    if (this._dialogEl) this._dialogEl.style.display = 'none';
+    this._minimizeToFloatingBadge();
   }
 
   restore() {
     if (this._dialogState !== 'minimized') return;
-    this._dialogState = 'open';
-    if (this._overlayEl) this._overlayEl.style.display = '';
-    if (this._dialogEl) this._dialogEl.style.display = '';
+    this._restoreFromBadge();
   }
 
   getState() {
@@ -168,6 +274,15 @@ class InfraWizardDialog {
     this._removeDOM();
     this._unbindEvents();
     this._destroyPages();
+    if (this._eventBus) {
+      this._eventBus.destroy();
+      this._eventBus = null;
+    }
+    if (this._floatingBadge) {
+      this._floatingBadge.destroy();
+      this._floatingBadge = null;
+    }
+    this._templateMgr = null;
     InfraWizardDialog._activeInstance = null;
     this._dialogState = 'closed';
   }
@@ -407,19 +522,43 @@ class InfraWizardDialog {
       onValidationChange: function(isValid) { self._onPageValidationChange(isValid); }
     });
 
-    // Pages 2-4: Stubs (Phase 2-4)
-    for (var i = 2; i <= 4; i++) {
-      var stubContent = this._pageContainerEl.querySelector('#iw-page-' + i + ' .iw-page-content');
-      stubContent.innerHTML = '<div class="iw-stub-page">Phase ' + (i <= 2 ? '2' : i <= 3 ? '3' : '4') + ' \u2014 ' + IW_STEPS[i].label + ' (coming soon)</div>';
-      this._pages[i] = {
-        activate: function() {},
-        deactivate: function() {},
-        validate: function() { return null; },
-        collectState: function() {},
-        destroy: function() {},
-        getElement: function() { return null; }
-      };
-    }
+    // Page 2: DAG Canvas (Build)
+    var page2Content = this._pageContainerEl.querySelector('#iw-page-2 .iw-page-content');
+    this._pages[2] = new DagCanvasPage({
+      eventBus: this._eventBus,
+      schemas: this._state.schemas,
+      theme: this._state.theme,
+      onStateChange: function() {
+        self._state.dirty = true;
+        if (self.onStateChange) self.onStateChange(self._state);
+      }
+    });
+    page2Content.appendChild(this._pages[2].getElement());
+
+    // Page 3: Review Summary
+    var page3Content = this._pageContainerEl.querySelector('#iw-page-3 .iw-page-content');
+    this._pages[3] = new ReviewSummaryPage({
+      eventBus: this._eventBus,
+      onNavigateToPage: function(pageIndex) { self._goToPage(pageIndex, true); },
+      onConfirm: function() { self._showLockInConfirmation(); }
+    });
+    page3Content.appendChild(this._pages[3].getElement());
+
+    // Page 4: Execution Pipeline
+    var page4Content = this._pageContainerEl.querySelector('#iw-page-4 .iw-page-content');
+    this._pages[4] = new ExecutionPipeline({
+      eventBus: this._eventBus,
+      onMinimize: function() { self._minimizeToFloatingBadge(); },
+      onComplete: function(artifacts) {
+        self._state.execution = { status: 'succeeded', artifacts: artifacts };
+        if (self.onComplete) self.onComplete(self._state);
+      },
+      onFailed: function(error) {
+        self._state.execution = { status: 'failed', error: error };
+        if (self.onError) self.onError(error);
+      }
+    });
+    page4Content.appendChild(this._pages[4].getElement());
   }
 
   _destroyPages() {
@@ -491,6 +630,10 @@ class InfraWizardDialog {
     }
 
     this._currentPage = targetIndex;
+    this._state.currentPage = targetIndex;
+    if (targetIndex > this._state.highestVisitedPage) {
+      this._state.highestVisitedPage = targetIndex;
+    }
 
     // Activate target page
     if (this._pages[targetIndex] && this._pages[targetIndex].activate) {
@@ -515,10 +658,17 @@ class InfraWizardDialog {
     if (!page) return;
 
     // Validate current page
-    var error = page.validate ? page.validate() : null;
-    if (error) {
-      // Validation failed — page component shows inline errors
-      return;
+    // Pages return either a string (legacy) or {valid, errors, warnings} (Phase 2+)
+    var result = page.validate ? page.validate() : null;
+    if (result) {
+      if (typeof result === 'string') {
+        // Legacy string error — page handles inline display
+        return;
+      }
+      if (typeof result === 'object' && result.valid === false) {
+        // Structured validation — page handles inline display
+        return;
+      }
     }
 
     // Collect state
@@ -632,9 +782,59 @@ class InfraWizardDialog {
   }
 
   _showLockInConfirmation() {
-    // Phase 4 will implement the full "Lock In & Create" flow
-    // For Phase 1, just move to page 4 (stub)
+    // Move to execution page (Page 4) — execution starts automatically on activate
     this._goToPage(4, true);
+  }
+
+  _minimizeToFloatingBadge() {
+    var self = this;
+    // Hide the dialog but keep execution running
+    if (this._dialogEl) this._dialogEl.style.display = 'none';
+    if (this._overlayEl) this._overlayEl.style.display = 'none';
+    this._dialogState = 'minimized';
+
+    // Create floating badge
+    this._floatingBadge = new FloatingBadge({
+      onRestore: function() { self._restoreFromBadge(); }
+    });
+
+    // Show badge with current step info
+    var pipeline = this._pages[4];
+    if (pipeline && pipeline._state) {
+      var activeIdx = pipeline._state.activeStepIndex || 0;
+      var stepName = pipeline._state.steps[activeIdx] ? pipeline._state.steps[activeIdx].name : 'Executing';
+      this._floatingBadge.show(activeIdx, stepName);
+    } else {
+      this._floatingBadge.show(0, 'Executing');
+    }
+
+    // Listen for step updates to keep badge in sync
+    if (this._eventBus) {
+      this._eventBus.on('execution:step', function(data) {
+        if (self._floatingBadge && data) {
+          if (data.status === 'running') {
+            self._floatingBadge.updateStep(data.stepIndex, data.stepName || '');
+          }
+        }
+      });
+      this._eventBus.on('execution:complete', function() {
+        if (self._floatingBadge) self._floatingBadge.showSuccess();
+      });
+      this._eventBus.on('execution:failed', function() {
+        if (self._floatingBadge) self._floatingBadge.showFailure('Execution failed');
+      });
+    }
+  }
+
+  _restoreFromBadge() {
+    // Destroy badge and restore dialog
+    if (this._floatingBadge) {
+      this._floatingBadge.hide();
+      this._floatingBadge = null;
+    }
+    if (this._dialogEl) this._dialogEl.style.display = '';
+    if (this._overlayEl) this._overlayEl.style.display = '';
+    this._dialogState = 'open';
   }
 
   _performClose() {
@@ -647,6 +847,11 @@ class InfraWizardDialog {
       self._removeDOM();
       self._unbindEvents();
       self._destroyPages();
+      if (self._eventBus) {
+        self._eventBus.destroy();
+        self._eventBus = null;
+      }
+      self._templateMgr = null;
       InfraWizardDialog._activeInstance = null;
       self._dialogState = 'closed';
       if (self.onClose) self.onClose();
@@ -816,8 +1021,8 @@ class InfraSetupPage {
       this._fields.lakehouse.value = wizardState.lakehouseName;
       this._nbInput.value = wizardState.notebookName;
       this._fields.notebook.value = wizardState.notebookName;
-      this._lakehouseManual = wizardState.lakehouseManuallyEdited || false;
-      this._notebookManual = wizardState.notebookManuallyEdited || false;
+      this._lakehouseManual = wizardState.lakehouseNameManuallyEdited || false;
+      this._notebookManual = wizardState.notebookNameManuallyEdited || false;
       if (wizardState.capacityId && this._capSelect) {
         this._capSelect.value = wizardState.capacityId;
         this._fields.capacity.value = wizardState.capacityId;
@@ -840,12 +1045,24 @@ class InfraSetupPage {
 
   collectState(state) {
     state.workspaceName = this._fields.workspace.value;
-    state.capacityId = this._fields.capacity.value;
+    state.capacityId = this._fields.capacity.value || null;
     state.capacityDisplayName = this._capSelect ? this._capSelect.options[this._capSelect.selectedIndex].text : '';
+    // Extract SKU and region from the selected capacity object
+    var selectedCap = null;
+    if (this._capacities && state.capacityId) {
+      for (var ci = 0; ci < this._capacities.length; ci++) {
+        if (this._capacities[ci].id === state.capacityId) {
+          selectedCap = this._capacities[ci];
+          break;
+        }
+      }
+    }
+    state.capacitySku = selectedCap ? (selectedCap.sku || '') : '';
+    state.capacityRegion = selectedCap ? (selectedCap.region || selectedCap.displayName || '') : '';
     state.lakehouseName = this._fields.lakehouse.value;
     state.notebookName = this._fields.notebook.value;
-    state.lakehouseManuallyEdited = this._lakehouseManual;
-    state.notebookManuallyEdited = this._notebookManual;
+    state.lakehouseNameManuallyEdited = this._lakehouseManual;
+    state.notebookNameManuallyEdited = this._notebookManual;
     state.dirty = true;
   }
 
