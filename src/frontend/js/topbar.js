@@ -48,6 +48,8 @@ class TopBar {
       if (!configResp.ok) {
         this._updateServiceStatus('stopped');
         this._updateTokenDisplay(null);
+        if (window.edogDeployStrip) window.edogDeployStrip.hide();
+        if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
         return null;
       }
 
@@ -102,6 +104,26 @@ class TopBar {
         window.edogWs.setPort(config.fltPort);
       }
 
+      // F1: Update deploy context strip
+      if (window.edogDeployStrip) {
+        fetch('/api/studio/status').then(function(r) {
+          return r.ok ? r.json() : null;
+        }).then(function(s) {
+          if (s) window.edogDeployStrip.update(s);
+        }).catch(function() {});
+      }
+
+      // F3: Sync footer status bar phase
+      if (window.edogStatusBar) {
+        if (config.studioPhase === 'running') {
+          window.edogStatusBar.setPhase('connected');
+        } else if (config.studioPhase === 'deploying') {
+          window.edogStatusBar.setPhase('deploying');
+        } else {
+          window.edogStatusBar.setPhase('disconnected');
+        }
+      }
+
       // Refresh inspector if open
       if (this._inspectorEl && this._inspectorEl.classList.contains('open')) {
         this._populateInspector();
@@ -111,6 +133,8 @@ class TopBar {
     } catch {
       this._updateServiceStatus('stopped');
       this._updateTokenDisplay(null);
+      if (window.edogDeployStrip) window.edogDeployStrip.hide();
+      if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
       return null;
     }
   }
