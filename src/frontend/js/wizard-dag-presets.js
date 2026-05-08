@@ -255,6 +255,7 @@ class DagPresets {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._releaseFocusTrap();
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
       this._unsubs[i]();
@@ -275,6 +276,8 @@ class DagPresets {
     var self = this;
     var overlay = document.createElement('div');
     overlay.className = 'iw-dag-presets-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
 
     var inner = document.createElement('div');
     inner.className = 'iw-dag-presets-inner';
@@ -282,8 +285,10 @@ class DagPresets {
     // Header
     var header = document.createElement('div');
     header.className = 'iw-dag-presets-header';
-    header.innerHTML = '<span class="iw-dag-presets-heading">Start with a Preset</span>'
+    var headingId = 'iw-presets-heading-' + Date.now();
+    header.innerHTML = '<span class="iw-dag-presets-heading" id="' + headingId + '">Start with a Preset</span>'
       + '<span class="iw-dag-presets-subheading">Pick a topology to auto-populate your canvas, or start from scratch.</span>';
+    overlay.setAttribute('aria-labelledby', headingId);
     inner.appendChild(header);
 
     // Card grid
@@ -363,8 +368,16 @@ class DagPresets {
 
   _applyPreset(preset) {
     if (!this._canvas) return;
-    preset.build(this._canvas, this._schemas);
-    this._canvas.autoLayout();
+    var canvas = this._canvas;
+    var schemas = this._schemas;
+    if (typeof canvas.batchOperation === 'function') {
+      canvas.batchOperation(function() {
+        preset.build(canvas, schemas);
+      });
+    } else {
+      preset.build(canvas, schemas);
+    }
+    canvas.autoLayout();
     this._dismissed = true;
     this._updateVisibility();
   }
@@ -379,10 +392,56 @@ class DagPresets {
     var nodeCount = this._canvas ? this._canvas.getNodeCount() : 0;
     var shouldShow = nodeCount === 0 && !this._dismissed;
     if (shouldShow) {
+      this._overlayEl.classList.remove('iw-dag-presets-overlay--exiting');
       this._overlayEl.classList.add('iw-dag-presets-overlay--visible');
+      this._trapFocus();
     } else {
-      this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+      // Animate out if currently visible
+      if (this._overlayEl.classList.contains('iw-dag-presets-overlay--visible')) {
+        var overlay = this._overlayEl;
+        overlay.classList.add('iw-dag-presets-overlay--exiting');
+        setTimeout(function() {
+          overlay.classList.remove('iw-dag-presets-overlay--visible');
+          overlay.classList.remove('iw-dag-presets-overlay--exiting');
+        }, 200);
+      } else {
+        this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+      }
+      this._releaseFocusTrap();
     }
+  }
+
+  /** Trap focus inside the presets overlay */
+  _trapFocus() {
+    var self = this;
+    this._releaseFocusTrap();
+    var container = this._overlayEl;
+    this._focusTrapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    container.addEventListener('keydown', this._focusTrapHandler);
+    // Focus first interactive element
+    var firstBtn = container.querySelector('button');
+    if (firstBtn) firstBtn.focus();
+  }
+
+  /** Release focus trap */
+  _releaseFocusTrap() {
+    if (this._focusTrapHandler && this._overlayEl) {
+      this._overlayEl.removeEventListener('keydown', this._focusTrapHandler);
+    }
+    this._focusTrapHandler = null;
   }
 }
 

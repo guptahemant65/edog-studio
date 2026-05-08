@@ -69,6 +69,9 @@ class DagNode {
       'transform',
       'translate(' + this._data.x + ', ' + this._data.y + ')'
     );
+    this._groupEl.setAttribute('role', 'button');
+    this._groupEl.setAttribute('tabindex', '0');
+    this._updateAriaLabel();
 
     this._buildOutline();
     this._buildForeignObject();
@@ -79,6 +82,13 @@ class DagNode {
     if (options.parentGroup) {
       options.parentGroup.appendChild(this._groupEl);
     }
+
+    /* ─── Enter animation ─── */
+    this._groupEl.classList.add('iw-node--entering');
+    var enterGroup = this._groupEl;
+    setTimeout(function() {
+      if (enterGroup) enterGroup.classList.remove('iw-node--entering');
+    }, 250);
 
     /* ─── Bound handlers (stored for cleanup) ─── */
     this._boundDragMove = function(e) { self._handleDragMove(e); };
@@ -91,6 +101,11 @@ class DagNode {
 
   /** @returns {SVGGElement} The root <g> element */
   getElement() {
+    return this._groupEl;
+  }
+
+  /** @returns {SVGGElement|null} The root <g> element (alias for animation) */
+  getGroupEl() {
     return this._groupEl;
   }
 
@@ -117,13 +132,33 @@ class DagNode {
     this._groupEl.setAttribute('transform', 'translate(' + x + ', ' + y + ')');
   }
 
+  /**
+   * Show or hide this node for viewport culling.
+   * Hidden nodes have display:none on their group element.
+   * @param {boolean} visible
+   */
+  setVisible(visible) {
+    if (this._visible === visible) return;
+    this._visible = visible;
+    if (this._groupEl) {
+      this._groupEl.style.display = visible ? '' : 'none';
+    }
+  }
+
+  /** @returns {boolean} */
+  isVisible() {
+    return this._visible !== false;
+  }
+
   /** Select/deselect this node visually */
   setSelected(selected) {
     this._selected = !!selected;
     if (this._selected) {
       this._groupEl.classList.add('iw-dag-node-selected');
+      this._groupEl.setAttribute('aria-pressed', 'true');
     } else {
       this._groupEl.classList.remove('iw-dag-node-selected');
+      this._groupEl.setAttribute('aria-pressed', 'false');
     }
   }
 
@@ -139,6 +174,7 @@ class DagNode {
       this._nameEl.textContent = name;
       this._nameEl.setAttribute('title', name);
     }
+    this._updateAriaLabel();
   }
 
   /** Change node type (sql-table, sql-mlv, pyspark-mlv) */
@@ -156,6 +192,7 @@ class DagNode {
       // Remove all badge classes, then add the correct one
       this._badgeEl.className = 'iw-dag-node-badge ' + info.badgeClass;
     }
+    this._updateAriaLabel();
   }
 
   /** Change node schema */
@@ -164,6 +201,7 @@ class DagNode {
     if (this._schemaEl) {
       this._schemaEl.textContent = schema;
     }
+    this._updateAriaLabel();
   }
 
   /** Update node with new data (name, type, schema) */
@@ -198,18 +236,25 @@ class DagNode {
     }
   }
 
-  /** Destroy — remove SVG element, clean up listeners */
+  /** Destroy — animate out then remove SVG element, clean up listeners */
   destroy() {
+    var self = this;
+
     // Remove drag listeners from document if active
     document.removeEventListener('mousemove', this._boundDragMove);
     document.removeEventListener('mouseup', this._boundDragEnd);
 
-    // Remove SVG group from parent
-    if (this._groupEl && this._groupEl.parentNode) {
-      this._groupEl.parentNode.removeChild(this._groupEl);
+    var group = this._groupEl;
+    if (group) {
+      group.classList.add('iw-node--exiting');
+      setTimeout(function() {
+        if (group && group.parentNode) {
+          group.parentNode.removeChild(group);
+        }
+      }, 180);
     }
 
-    // Null out references
+    // Null out references (allow GC; DOM removal is deferred)
     this._groupEl = null;
     this._data = null;
     this._eventBus = null;
@@ -236,6 +281,14 @@ class DagNode {
   /* ═══════════════════════════════════════════════════════════════
      BUILD HELPERS (private)
      ═══════════════════════════════════════════════════════════════ */
+
+  /** Update ARIA label from current data */
+  _updateAriaLabel() {
+    if (!this._groupEl || !this._data) return;
+    var typeLabel = this._data.type.replace(/-/g, ' ');
+    this._groupEl.setAttribute('aria-label',
+      typeLabel + ': ' + this._data.name + ' \u2014 ' + this._data.schema + ' schema');
+  }
 
   /** Build the selection/hover outline rect */
   _buildOutline() {
@@ -359,6 +412,16 @@ class DagNode {
       if (e.target === self._portIn || e.target === self._portOut) return;
       if (self._onSelect) {
         self._onSelect(self, e);
+      }
+    });
+
+    /* ─── Keyboard: Enter/Space → select ─── */
+    this._groupEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (self._onSelect) {
+          self._onSelect(self, e);
+        }
       }
     });
 

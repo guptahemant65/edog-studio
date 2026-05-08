@@ -21,6 +21,50 @@
 
 /* global DagNode, ConnectionManager, AutoLayoutEngine, WizardEventBus, UndoRedoManager, IW_EVENTS */
 
+// ── Performance utilities ────────────────────────────────────────
+
+/**
+ * Debounce a function — delay execution until `ms` after last call.
+ * @param {Function} fn
+ * @param {number} ms
+ * @returns {Function}
+ */
+function _dagDebounce(fn, ms) {
+  var timer = null;
+  var wrapped = function() {
+    var self = this;
+    var args = arguments;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function() {
+      timer = null;
+      fn.apply(self, args);
+    }, ms);
+  };
+  wrapped.cancel = function() {
+    if (timer) { clearTimeout(timer); timer = null; }
+  };
+  return wrapped;
+}
+
+/**
+ * Throttle to requestAnimationFrame — at most one call per frame (~60fps).
+ * @param {Function} fn
+ * @returns {Function}
+ */
+function _dagThrottle(fn) {
+  var scheduled = false;
+  return function() {
+    if (scheduled) return;
+    scheduled = true;
+    var self = this;
+    var args = arguments;
+    requestAnimationFrame(function() {
+      scheduled = false;
+      fn.apply(self, args);
+    });
+  };
+}
+
 var DAG_CANVAS_SVG_NS = 'http://www.w3.org/2000/svg';
 var DAG_CANVAS_MAX_NODES = 100;
 var DAG_CANVAS_ZOOM_MIN = 0.25;
@@ -55,6 +99,7 @@ class DagCanvas {
     this._eventBus = options.eventBus;
     this._undoManager = options.undoManager;
     this._schemas = options.schemas || { dbo: true, bronze: false, silver: false, gold: false };
+    this._liveRegion = options.liveRegion || null;
 
     // State
     this._nodes = {};           // nodeId -> DagNode instance
@@ -65,6 +110,26 @@ class DagCanvas {
     this._nextConnectionId = 1;
     this._viewport = { panX: 0, panY: 0, zoom: 1.0 };
     this._seqCounters = { 'sql-table': 0, 'sql-mlv': 0, 'pyspark-mlv': 0 };
+
+    // Batching state — suppresses intermediate state-change events
+    this._isBatching = false;
+
+    // Debounced state emission (150ms batching window)
+    this._debouncedEmit = _dagDebounce(function() {
+      if (self._eventBus) {
+        self._eventBus.emit(IW_EVENTS.STATE_CHANGED);
+      }
+    }, 150);
+
+    // Debounced visibility update (100ms after last pan/zoom)
+    this._debouncedVisibility = _dagDebounce(function() {
+      self._updateVisibility();
+    }, 100);
+
+    // Debounced window resize (200ms)
+    this._debouncedResize = _dagDebounce(function() {
+      self._updateVisibility();
+    }, 200);
 
     // Sub-components
     this._connectionMgr = null;
@@ -98,7 +163,7 @@ class DagCanvas {
     this._zoomLevelEl = null;
 
     // Bound handlers (stored for cleanup)
-    this._boundWheel = function(e) { self._onWheel(e); };
+    this._boundWheel = _dagThrottle(function(e) { self._onWheel(e); });
     this._boundMouseDown = function(e) { self._onMouseDown(e); };
     this._boundMouseMove = function(e) { self._onMouseMove(e); };
     this._boundMouseUp = function(e) { self._onMouseUp(e); };
@@ -109,6 +174,7 @@ class DagCanvas {
     this._boundMarqueeUp = function(e) { self._onMarqueeUp(e); };
     this._boundContextMenu = function(e) { self._onContextMenu(e); };
     this._boundDismissCtxMenu = function(e) { self._onDismissCtxMenu(e); };
+    this._boundResize = function() { self._debouncedResize(); };
 
     // Build
     this._buildSVG();
@@ -236,6 +302,7 @@ class DagCanvas {
 
     this._eventBus.emit(IW_EVENTS.NODE_ADDED, { nodeId: id, type: type });
     this._emitStateChanged();
+    this._announce('Node ' + nodeData.name + ' added');
 
     return nodeData;
   }
@@ -286,6 +353,7 @@ class DagCanvas {
 
     this._eventBus.emit(IW_EVENTS.NODE_REMOVED, { nodeId: nodeId });
     this._emitStateChanged();
+    this._announce('Node ' + capturedData.name + ' removed');
 
     return capturedData;
   }
@@ -437,8 +505,33 @@ class DagCanvas {
 
     this._eventBus.emit(IW_EVENTS.CONNECTION_CREATED, connData);
     this._emitStateChanged();
+    var srcName = this._nodeData[sourceNodeId] ? this._nodeData[sourceNodeId].name : sourceNodeId;
+    var tgtName = this._nodeData[targetNodeId] ? this._nodeData[targetNodeId].name : targetNodeId;
+    this._announce('Connection created from ' + srcName + ' to ' + tgtName);
 
     return connData;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     BATCH OPERATIONS
+     ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Run a function that adds/removes multiple nodes without intermediate
+   * state-change events or connection path updates.
+   * After the function completes, all paths are updated once and a single
+   * state-changed event is emitted.
+   * @param {Function} fn — receives this canvas as argument
+   */
+  batchOperation(fn) {
+    this._isBatching = true;
+    try {
+      fn(this);
+    } finally {
+      this._isBatching = false;
+      this._connectionMgr.updateAllPaths();
+      this._emitStateChanged();
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -469,6 +562,9 @@ class DagCanvas {
     this._viewport.zoom = Math.max(DAG_CANVAS_ZOOM_MIN, Math.min(DAG_CANVAS_ZOOM_MAX, zoom));
     this._applyViewportTransform();
     this._eventBus.emit(IW_EVENTS.ZOOM_CHANGED, this.getViewport());
+    this._announce('Zoom ' + Math.round(this._viewport.zoom * 100) + '%');
+    this._debouncedVisibility();
+    this._connectionMgr.setSimplePaths(this._viewport.zoom < 0.5);
   }
 
   /**
@@ -524,8 +620,8 @@ class DagCanvas {
     var result = this._layoutEngine.layout(nodes, connections);
     var newPositions = result.positions;
 
-    // Apply new positions
-    this._applyPositions(newPositions);
+    // Apply new positions with animation
+    this._animateToPositions(newPositions);
 
     // Fit viewport
     var rect = this._svgEl.getBoundingClientRect();
@@ -550,6 +646,7 @@ class DagCanvas {
     this._connectionMgr.updateAllPaths();
     this._eventBus.emit(IW_EVENTS.LAYOUT_COMPLETE);
     this._emitStateChanged();
+    this._announce('Layout applied \u2014 ' + ids.length + ' nodes arranged');
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -687,6 +784,12 @@ class DagCanvas {
     document.removeEventListener('mouseup', this._boundMarqueeUp);
     document.removeEventListener('keydown', this._boundKeyDown);
     document.removeEventListener('mousedown', this._boundDismissCtxMenu);
+    window.removeEventListener('resize', this._boundResize);
+
+    // Cancel pending debounced timers
+    if (this._debouncedEmit && this._debouncedEmit.cancel) this._debouncedEmit.cancel();
+    if (this._debouncedVisibility && this._debouncedVisibility.cancel) this._debouncedVisibility.cancel();
+    if (this._debouncedResize && this._debouncedResize.cancel) this._debouncedResize.cancel();
 
     // Destroy connection manager
     if (this._connectionMgr) {
@@ -732,6 +835,8 @@ class DagCanvas {
     this._svgEl.setAttribute('class', 'iw-dag-svg');
     this._svgEl.setAttribute('xmlns', ns);
     this._svgEl.setAttribute('tabindex', '0');
+    this._svgEl.setAttribute('role', 'application');
+    this._svgEl.setAttribute('aria-label', 'DAG canvas \u2014 0 nodes, 0 connections');
 
     // Defs — grid pattern
     var defs = document.createElementNS(ns, 'defs');
@@ -807,23 +912,27 @@ class DagCanvas {
     btnOut.className = 'iw-dag-zoom-btn';
     btnOut.setAttribute('data-action', 'zoom-out');
     btnOut.setAttribute('title', 'Zoom out');
+    btnOut.setAttribute('aria-label', 'Zoom out');
     btnOut.textContent = '\u2212';
 
     var levelSpan = document.createElement('span');
     levelSpan.className = 'iw-dag-zoom-level';
     levelSpan.textContent = '100%';
+    levelSpan.setAttribute('aria-live', 'off');
     this._zoomLevelEl = levelSpan;
 
     var btnIn = document.createElement('button');
     btnIn.className = 'iw-dag-zoom-btn';
     btnIn.setAttribute('data-action', 'zoom-in');
     btnIn.setAttribute('title', 'Zoom in');
+    btnIn.setAttribute('aria-label', 'Zoom in');
     btnIn.textContent = '+';
 
     var btnFit = document.createElement('button');
     btnFit.className = 'iw-dag-zoom-btn';
     btnFit.setAttribute('data-action', 'fit');
     btnFit.setAttribute('title', 'Fit to content');
+    btnFit.setAttribute('aria-label', 'Fit to content');
     btnFit.textContent = '\u229E';
 
     el.appendChild(btnOut);
@@ -902,6 +1011,8 @@ class DagCanvas {
 
     var menu = document.createElement('div');
     menu.className = 'iw-dag-ctx-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Canvas context menu');
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
 
@@ -924,6 +1035,8 @@ class DagCanvas {
         var div = document.createElement('div');
         div.className = 'iw-dag-ctx-item';
         div.setAttribute('data-action', item.action);
+        div.setAttribute('role', 'menuitem');
+        div.setAttribute('tabindex', '-1');
         div.textContent = item.label;
         menu.appendChild(div);
       }
@@ -959,11 +1072,17 @@ class DagCanvas {
   }
 
   /**
-   * Hide the context menu.
+   * Hide the context menu with exit animation.
    */
   _hideContextMenu() {
-    if (this._ctxMenuEl && this._ctxMenuEl.parentNode) {
-      this._ctxMenuEl.parentNode.removeChild(this._ctxMenuEl);
+    var el = this._ctxMenuEl;
+    if (el) {
+      el.classList.add('iw-dag-ctx-menu--exiting');
+      setTimeout(function() {
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      }, 80);
     }
     this._ctxMenuEl = null;
     document.removeEventListener('mousedown', this._boundDismissCtxMenu);
@@ -988,6 +1107,7 @@ class DagCanvas {
     this._svgEl.addEventListener('mousedown', this._boundMouseDown);
     this._svgEl.addEventListener('contextmenu', this._boundContextMenu);
     document.addEventListener('keydown', this._boundKeyDown);
+    window.addEventListener('resize', this._boundResize);
   }
 
   _onWheel(event) {
@@ -1010,6 +1130,9 @@ class DagCanvas {
 
     this._applyViewportTransform();
     this._eventBus.emit(IW_EVENTS.ZOOM_CHANGED, this.getViewport());
+    this._debouncedVisibility();
+    // Switch connection paths to simple lines at low zoom
+    this._connectionMgr.setSimplePaths(newZoom < 0.5);
   }
 
   _onMouseDown(event) {
@@ -1059,6 +1182,7 @@ class DagCanvas {
       this._panStart = null;
       document.removeEventListener('mousemove', this._boundMouseMove);
       document.removeEventListener('mouseup', this._boundMouseUp);
+      this._debouncedVisibility();
     }
   }
 
@@ -1076,6 +1200,41 @@ class DagCanvas {
     // Only handle if canvas or a child has focus
     if (!this._svgEl) return;
     if (!this._svgEl.contains(document.activeElement) && document.activeElement !== this._svgEl) {
+      return;
+    }
+
+    // Ctrl+A — select all nodes
+    if (event.key === 'a' && (event.ctrlKey || event.metaKey)) {
+      var allIds = Object.keys(this._nodeData);
+      if (allIds.length > 0) {
+        this.selectNodes(allIds);
+        this._announce(allIds.length + ' nodes selected');
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Arrow keys — navigate between nodes when canvas focused
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' ||
+        event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      this._navigateNodes(event.key);
+      event.preventDefault();
+      return;
+    }
+
+    // Enter — open popover for selected node
+    if (event.key === 'Enter' && this._selectedNodeId) {
+      this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: this._selectedNodeId });
+      event.preventDefault();
+      return;
+    }
+
+    // Space — toggle selection of focused node
+    if (event.key === ' ') {
+      if (this._selectedNodeId) {
+        this.selectNode(null);
+      }
+      event.preventDefault();
       return;
     }
 
@@ -1157,6 +1316,9 @@ class DagCanvas {
       });
       this._eventBus.emit(IW_EVENTS.CONNECTION_CREATED, connData);
       this._emitStateChanged();
+      var srcName2 = this._nodeData[connData.sourceNodeId] ? this._nodeData[connData.sourceNodeId].name : connData.sourceNodeId;
+      var tgtName2 = this._nodeData[connData.targetNodeId] ? this._nodeData[connData.targetNodeId].name : connData.targetNodeId;
+      this._announce('Connection created from ' + srcName2 + ' to ' + tgtName2);
     } else {
       this._eventBus.emit(IW_EVENTS.CONNECTION_CANCELLED);
     }
@@ -1242,6 +1404,7 @@ class DagCanvas {
     // Select intersecting nodes
     if (hitIds.length > 0) {
       this.selectNodes(hitIds, this._marqueeStart.shiftKey);
+      this._announce(hitIds.length + ' nodes selected');
     }
 
     this._removeMarqueeRect();
@@ -1291,6 +1454,52 @@ class DagCanvas {
       if (n) n.setSelected(false);
     }
     this._selectedNodeIds = [];
+  }
+
+  /**
+   * Navigate between nodes using arrow keys.
+   * Left/Right = horizontal neighbors, Up/Down = vertical neighbors.
+   * @param {string} key — ArrowLeft, ArrowRight, ArrowUp, ArrowDown
+   */
+  _navigateNodes(key) {
+    var ids = Object.keys(this._nodeData);
+    if (ids.length === 0) return;
+
+    // If no selection, select the first node
+    if (!this._selectedNodeId) {
+      this.selectNode(ids[0]);
+      return;
+    }
+
+    var current = this._nodeData[this._selectedNodeId];
+    if (!current) return;
+
+    var bestId = null;
+    var bestDist = Infinity;
+    var i, nd, dx, dy, dist;
+
+    for (i = 0; i < ids.length; i++) {
+      if (ids[i] === this._selectedNodeId) continue;
+      nd = this._nodeData[ids[i]];
+      dx = nd.x - current.x;
+      dy = nd.y - current.y;
+
+      // Filter by direction
+      if (key === 'ArrowRight' && dx <= 0) continue;
+      if (key === 'ArrowLeft' && dx >= 0) continue;
+      if (key === 'ArrowDown' && dy <= 0) continue;
+      if (key === 'ArrowUp' && dy >= 0) continue;
+
+      dist = Math.abs(dx) + Math.abs(dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = ids[i];
+      }
+    }
+
+    if (bestId) {
+      this.selectNode(bestId);
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -1358,6 +1567,40 @@ class DagCanvas {
         data.y = pos.y;
       }
     }
+  }
+
+  /**
+   * Animate nodes to new positions using CSS transitions.
+   * Applies iw-node--animating class, sets new positions, and cleans up.
+   * @param {object} newPositions — nodeId -> {x, y}
+   */
+  _animateToPositions(newPositions) {
+    var self = this;
+    var ids = Object.keys(newPositions);
+
+    // Add animating class to all nodes (enables CSS transition)
+    for (var i = 0; i < ids.length; i++) {
+      var node = this._nodes[ids[i]];
+      if (node && node.getGroupEl) {
+        var el = node.getGroupEl();
+        if (el) el.classList.add('iw-node--animating');
+      }
+    }
+
+    // Apply new positions (CSS transition handles the animation)
+    this._applyPositions(newPositions);
+
+    // Remove class after animation completes and update connections
+    setTimeout(function() {
+      for (var j = 0; j < ids.length; j++) {
+        var n = self._nodes[ids[j]];
+        if (n && n.getGroupEl) {
+          var grp = n.getGroupEl();
+          if (grp) grp.classList.remove('iw-node--animating');
+        }
+      }
+      self._connectionMgr.updateAllPaths();
+    }, 450);
   }
 
   /**
@@ -1494,13 +1737,74 @@ class DagCanvas {
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Viewport Culling
+     ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Check which nodes are visible in the current viewport and show/hide.
+   * Nodes outside the viewport (with 100px buffer) get display:none.
+   * Called via debounce after pan/zoom changes settle.
+   */
+  _updateVisibility() {
+    if (!this._svgEl) return;
+    var rect = this._svgEl.getBoundingClientRect();
+    var buffer = 100;
+    var vp = this._viewport;
+
+    // Viewport bounds in canvas space
+    var viewLeft = (-vp.panX - buffer) / vp.zoom;
+    var viewTop = (-vp.panY - buffer) / vp.zoom;
+    var viewRight = (rect.width - vp.panX + buffer) / vp.zoom;
+    var viewBottom = (rect.height - vp.panY + buffer) / vp.zoom;
+
+    var ids = Object.keys(this._nodeData);
+    for (var i = 0; i < ids.length; i++) {
+      var nd = this._nodeData[ids[i]];
+      var node = this._nodes[ids[i]];
+      if (!node) continue;
+
+      var visible = !(nd.x + nd.width < viewLeft || nd.x > viewRight ||
+                      nd.y + nd.height < viewTop || nd.y > viewBottom);
+      node.setVisible(visible);
+    }
+  }
+
   /**
    * Emit a generic state-changed event.
+   * Suppressed during batch operations. Uses debounced emission
+   * to coalesce rapid changes (150ms window).
    */
   _emitStateChanged() {
-    if (this._eventBus) {
+    if (this._isBatching) return;
+    this._updateSvgAriaLabel();
+    if (this._debouncedEmit) {
+      this._debouncedEmit();
+    } else if (this._eventBus) {
       this._eventBus.emit(IW_EVENTS.STATE_CHANGED);
     }
+  }
+
+  /**
+   * Update the SVG aria-label with current node/connection counts.
+   */
+  _updateSvgAriaLabel() {
+    if (!this._svgEl) return;
+    var nodeCount = Object.keys(this._nodeData).length;
+    var connCount = this._connectionMgr ? this._connectionMgr.getConnections().length : 0;
+    this._svgEl.setAttribute('aria-label',
+      'DAG canvas \u2014 ' + nodeCount + ' nodes, ' + connCount + ' connections');
+  }
+
+  /**
+   * Announce a message to screen readers via live region.
+   * @param {string} message
+   */
+  _announce(message) {
+    if (!this._liveRegion) return;
+    this._liveRegion.textContent = '';
+    var region = this._liveRegion;
+    setTimeout(function() { region.textContent = message; }, 50);
   }
 }
 

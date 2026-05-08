@@ -29,6 +29,11 @@ class ConnectionManager {
     this._previewStart = null;
     this._selectedId = null;
     this._nextId = 1;
+
+    // Path cache: connId -> { d: string, sx: number, sy: number, tx: number, ty: number }
+    this._pathCache = {};
+    // When true, use straight lines instead of cubic bezier
+    this._simplePaths = false;
   }
 
   /**
@@ -96,6 +101,7 @@ class ConnectionManager {
 
     var data = entry.data;
     delete this._connections[connectionId];
+    delete this._pathCache[connectionId];
 
     if (this._selectedId === connectionId) {
       this._selectedId = null;
@@ -124,16 +130,33 @@ class ConnectionManager {
 
   /**
    * Update all connection paths (after node move/layout).
+   * Batches DOM writes for minimal reflows.
    */
   updateAllPaths() {
     var connIds = Object.keys(this._connections);
+    // Collect all path data first, then write DOM once
+    var updates = [];
     for (var i = 0; i < connIds.length; i++) {
-      this._updateConnectionPath(connIds[i]);
+      var id = connIds[i];
+      var d = this._computePathData(id);
+      if (d !== null) {
+        updates.push({ id: id, d: d });
+      }
+    }
+    // Apply all DOM updates
+    for (var j = 0; j < updates.length; j++) {
+      var entry = this._connections[updates[j].id];
+      if (!entry) continue;
+      var paths = entry.groupEl.querySelectorAll('path');
+      for (var k = 0; k < paths.length; k++) {
+        paths[k].setAttribute('d', updates[j].d);
+      }
     }
   }
 
   /**
    * Update paths for connections involving a specific node.
+   * Only recomputes paths connected to that node.
    * @param {string} nodeId
    */
   updatePathsForNode(nodeId) {
@@ -144,6 +167,19 @@ class ConnectionManager {
         this._updateConnectionPath(connIds[i]);
       }
     }
+  }
+
+  /**
+   * Enable or disable simple (straight-line) paths for low-zoom rendering.
+   * When enabled, connections use straight lines instead of cubic bezier curves.
+   * @param {boolean} simple
+   */
+  setSimplePaths(simple) {
+    if (this._simplePaths === simple) return;
+    this._simplePaths = simple;
+    // Invalidate cache and redraw
+    this._pathCache = {};
+    this.updateAllPaths();
   }
 
   /**
@@ -314,6 +350,7 @@ class ConnectionManager {
   destroy() {
     this._clearAll();
     this._removePreview();
+    this._pathCache = {};
     this._connectionLayer = null;
     this._eventBus = null;
     this._getNodeById = null;
@@ -322,7 +359,8 @@ class ConnectionManager {
   // ── Private helpers ──────────────────────────────────────────────
 
   /**
-   * Calculate cubic bezier path string for vertical-flow connection.
+   * Calculate path string for vertical-flow connection.
+   * Uses cubic bezier by default, or straight line when _simplePaths is true.
    * @param {number} x1 — source X
    * @param {number} y1 — source Y
    * @param {number} x2 — target X
@@ -330,6 +368,9 @@ class ConnectionManager {
    * @returns {string}
    */
   _calculateBezierPath(x1, y1, x2, y2) {
+    if (this._simplePaths) {
+      return 'M ' + x1 + ' ' + y1 + ' L ' + x2 + ' ' + y2;
+    }
     var offset = Math.max(40, Math.abs(y2 - y1) * 0.4);
     return 'M ' + x1 + ' ' + y1 + ' C ' + x1 + ' ' + (y1 + offset) + ', ' + x2 + ' ' + (y2 - offset) + ', ' + x2 + ' ' + y2;
   }
@@ -359,9 +400,14 @@ class ConnectionManager {
     hitPath.setAttribute('fill', 'none');
 
     var linePath = document.createElementNS(SVG_NS, 'path');
-    linePath.setAttribute('class', 'iw-dag-connection-line');
+    linePath.setAttribute('class', 'iw-dag-connection-line iw-conn--entering');
     linePath.setAttribute('d', d);
     linePath.setAttribute('fill', 'none');
+
+    // Remove entering class after animation completes
+    setTimeout(function() {
+      linePath.classList.remove('iw-conn--entering');
+    }, 300);
 
     hitPath.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -378,22 +424,48 @@ class ConnectionManager {
   }
 
   /**
+   * Compute SVG path `d` attribute for a connection, using cache.
+   * Returns null if nodes/ports are unavailable.
+   * @param {string} connectionId
+   * @returns {string|null}
+   */
+  _computePathData(connectionId) {
+    var entry = this._connections[connectionId];
+    if (!entry) return null;
+
+    var sourceNode = this._getNodeById(entry.data.sourceNodeId);
+    var targetNode = this._getNodeById(entry.data.targetNodeId);
+    if (!sourceNode || !targetNode) return null;
+
+    var sourcePort = sourceNode.getOutputPort();
+    var targetPort = targetNode.getInputPort();
+    if (!sourcePort || !targetPort) return null;
+
+    // Check cache — only recompute if port positions changed
+    var cached = this._pathCache[connectionId];
+    if (cached &&
+        cached.sx === sourcePort.x && cached.sy === sourcePort.y &&
+        cached.tx === targetPort.x && cached.ty === targetPort.y) {
+      return cached.d;
+    }
+
+    var d = this._calculateBezierPath(sourcePort.x, sourcePort.y, targetPort.x, targetPort.y);
+    this._pathCache[connectionId] = {
+      d: d, sx: sourcePort.x, sy: sourcePort.y, tx: targetPort.x, ty: targetPort.y
+    };
+    return d;
+  }
+
+  /**
    * Re-read port positions and update path `d` attribute for a single connection.
    * @param {string} connectionId
    */
   _updateConnectionPath(connectionId) {
+    var d = this._computePathData(connectionId);
+    if (d === null) return;
+
     var entry = this._connections[connectionId];
     if (!entry) return;
-
-    var sourceNode = this._getNodeById(entry.data.sourceNodeId);
-    var targetNode = this._getNodeById(entry.data.targetNodeId);
-    if (!sourceNode || !targetNode) return;
-
-    var sourcePort = sourceNode.getOutputPort();
-    var targetPort = targetNode.getInputPort();
-    if (!sourcePort || !targetPort) return;
-
-    var d = this._calculateBezierPath(sourcePort.x, sourcePort.y, targetPort.x, targetPort.y);
     var paths = entry.groupEl.querySelectorAll('path');
     for (var i = 0; i < paths.length; i++) {
       paths[i].setAttribute('d', d);
@@ -424,6 +496,7 @@ class ConnectionManager {
       }
     }
     this._connections = {};
+    this._pathCache = {};
     this._selectedId = null;
   }
 }

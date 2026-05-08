@@ -40,6 +40,13 @@ class DagCanvasPage {
     this._rootEl.appendChild(this._canvasContainer);
     this._rootEl.appendChild(this._codeContainer);
 
+    // Live region for screen reader announcements
+    this._liveRegion = document.createElement('div');
+    this._liveRegion.className = 'iw-sr-only';
+    this._liveRegion.setAttribute('aria-live', 'polite');
+    this._liveRegion.setAttribute('aria-atomic', 'true');
+    this._rootEl.appendChild(this._liveRegion);
+
     // Shared utilities
     this._undoManager = new UndoRedoManager({ eventBus: this._eventBus });
     this._codeGen = new CodeGenerationEngine();
@@ -49,7 +56,8 @@ class DagCanvasPage {
       containerEl: this._canvasContainer,
       eventBus: this._eventBus,
       undoManager: this._undoManager,
-      schemas: this._schemas
+      schemas: this._schemas,
+      liveRegion: this._liveRegion
     });
 
     this._palette = new NodePalette({
@@ -81,10 +89,21 @@ class DagCanvasPage {
     });
 
     // Wire state-change notifications back to the wizard
+    // Debounce code preview refresh (300ms after last topology change)
+    this._debouncedCodeRefresh = null;
+    if (typeof _dagDebounce === 'function') {
+      this._debouncedCodeRefresh = _dagDebounce(function() {
+        self._refreshCodePreview();
+      }, 300);
+    }
+
     this._unsubs = [];
     this._unsubs.push(
       this._eventBus.on(IW_EVENTS.STATE_CHANGED, function() {
         self._onStateChange();
+        if (self._debouncedCodeRefresh) {
+          self._debouncedCodeRefresh();
+        }
       })
     );
   }
@@ -168,6 +187,11 @@ class DagCanvasPage {
     if (this._destroyed) return;
     this._destroyed = true;
 
+    // Cancel debounced timers
+    if (this._debouncedCodeRefresh && this._debouncedCodeRefresh.cancel) {
+      this._debouncedCodeRefresh.cancel();
+    }
+
     // Unsubscribe from events
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
@@ -209,6 +233,7 @@ class DagCanvasPage {
     this._paletteContainer = null;
     this._canvasContainer = null;
     this._codeContainer = null;
+    this._liveRegion = null;
     this._eventBus = null;
     this._codeGen = null;
   }

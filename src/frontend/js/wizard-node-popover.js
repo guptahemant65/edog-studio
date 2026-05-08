@@ -32,6 +32,9 @@ class NodePopover {
     this._popoverEl = document.createElement('div');
     this._popoverEl.className = 'iw-node-popover';
     this._popoverEl.style.display = 'none';
+    this._popoverEl.setAttribute('role', 'dialog');
+    this._focusTrapHandler = null;
+    this._triggerEl = null;
 
     this._arrowEl = document.createElement('div');
     this._arrowEl.className = 'iw-node-popover-arrow';
@@ -77,6 +80,8 @@ class NodePopover {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+
+    this._releaseFocusTrap();
 
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
@@ -210,6 +215,9 @@ class NodePopover {
     if (this._destroyed) return;
     this._currentNodeId = nodeId;
 
+    // Remember trigger for focus return
+    this._triggerEl = document.activeElement;
+
     var nodeData = this._canvas.getNodeData(nodeId);
     if (!nodeData) {
       this._hide();
@@ -222,15 +230,51 @@ class NodePopover {
     this._populateSchemaOptions();
     this._schemaSelect.value = nodeData.schema;
 
-    // Show and position
+    // ARIA
+    this._popoverEl.setAttribute('aria-label', 'Edit node ' + nodeData.name);
+
+    // Show and position with enter animation
     this._popoverEl.style.display = '';
+    this._popoverEl.classList.remove('iw-node-popover--exiting');
+    this._popoverEl.classList.add('iw-node-popover--entering');
     this._position(nodeData);
+
+    var popEl = this._popoverEl;
+    setTimeout(function() {
+      if (popEl) popEl.classList.remove('iw-node-popover--entering');
+    }, 150);
+
+    // Focus trap and initial focus
+    this._installFocusTrap();
+    this._nameInput.focus();
   }
 
   _hide() {
     if (this._destroyed) return;
-    this._popoverEl.style.display = 'none';
+    var self = this;
+    var el = this._popoverEl;
+
+    // Release focus trap
+    this._releaseFocusTrap();
+
+    if (el && el.style.display !== 'none') {
+      el.classList.add('iw-node-popover--exiting');
+      setTimeout(function() {
+        if (el) {
+          el.classList.remove('iw-node-popover--exiting');
+          el.style.display = 'none';
+        }
+      }, 100);
+    } else if (el) {
+      el.style.display = 'none';
+    }
     this._currentNodeId = null;
+
+    // Return focus to trigger element
+    if (this._triggerEl && this._triggerEl.focus) {
+      this._triggerEl.focus();
+      this._triggerEl = null;
+    }
   }
 
   _position(nodeData) {
@@ -301,6 +345,37 @@ class NodePopover {
     var nodeId = this._currentNodeId;
     this._hide();
     this._canvas.removeNode(nodeId);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Focus Trap
+     ═══════════════════════════════════════════════════════════════ */
+
+  _installFocusTrap() {
+    this._releaseFocusTrap();
+    var container = this._popoverEl;
+    this._focusTrapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    container.addEventListener('keydown', this._focusTrapHandler);
+  }
+
+  _releaseFocusTrap() {
+    if (this._focusTrapHandler && this._popoverEl) {
+      this._popoverEl.removeEventListener('keydown', this._focusTrapHandler);
+    }
+    this._focusTrapHandler = null;
   }
 
   /* ═══════════════════════════════════════════════════════════════
