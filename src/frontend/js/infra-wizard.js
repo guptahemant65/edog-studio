@@ -773,10 +773,14 @@ class InfraWizardDialog {
     var self = this;
     var confirmEl = document.createElement('div');
     confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.setAttribute('role', 'alertdialog');
+    confirmEl.setAttribute('aria-modal', 'true');
+    confirmEl.setAttribute('aria-labelledby', 'iw-confirm-close-title');
+    confirmEl.setAttribute('aria-describedby', 'iw-confirm-close-text');
     confirmEl.innerHTML =
       '<div class="iw-confirm-box">' +
-        '<div class="iw-confirm-title">Discard wizard?</div>' +
-        '<div class="iw-confirm-text">All entered data will be lost. This action cannot be undone.</div>' +
+        '<div class="iw-confirm-title" id="iw-confirm-close-title">Discard wizard?</div>' +
+        '<div class="iw-confirm-text" id="iw-confirm-close-text">All entered data will be lost. This action cannot be undone.</div>' +
         '<div class="iw-confirm-actions">' +
           '<button class="iw-btn iw-btn-ghost" id="iw-confirm-cancel">Cancel</button>' +
           '<button class="iw-btn iw-btn-danger" id="iw-confirm-discard">Discard</button>' +
@@ -784,10 +788,32 @@ class InfraWizardDialog {
       '</div>';
     this._dialogEl.appendChild(confirmEl);
 
-    confirmEl.querySelector('#iw-confirm-cancel').addEventListener('click', function() {
+    // Focus trap
+    var triggerEl = document.activeElement;
+    var trapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = confirmEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    confirmEl.addEventListener('keydown', trapHandler);
+
+    var cancelBtn = confirmEl.querySelector('#iw-confirm-cancel');
+    cancelBtn.focus();
+
+    cancelBtn.addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       confirmEl.parentNode.removeChild(confirmEl);
+      if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
     confirmEl.querySelector('#iw-confirm-discard').addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       self._performClose();
     });
   }
@@ -797,11 +823,15 @@ class InfraWizardDialog {
     // Show confirmation overlay before proceeding to execution
     var confirmEl = document.createElement('div');
     confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.setAttribute('role', 'alertdialog');
+    confirmEl.setAttribute('aria-modal', 'true');
+    confirmEl.setAttribute('aria-labelledby', 'iw-lockin-title');
+    confirmEl.setAttribute('aria-describedby', 'iw-lockin-body');
     confirmEl.innerHTML =
       '<div class="iw-confirm-panel">' +
         '<div class="iw-confirm-icon">\u25C6</div>' +
-        '<div class="iw-confirm-title">Confirm Environment Creation</div>' +
-        '<div class="iw-confirm-body">You are about to create real cloud resources. This will:</div>' +
+        '<div class="iw-confirm-title" id="iw-lockin-title">Confirm Environment Creation</div>' +
+        '<div class="iw-confirm-body" id="iw-lockin-body">You are about to create real cloud resources. This will:</div>' +
         '<ul class="iw-confirm-list">' +
           '<li>Create a Fabric workspace</li>' +
           '<li>Assign capacity (may incur costs)</li>' +
@@ -816,10 +846,32 @@ class InfraWizardDialog {
       '</div>';
     this._dialogEl.appendChild(confirmEl);
 
-    confirmEl.querySelector('#iw-lockin-cancel').addEventListener('click', function() {
+    // Focus trap
+    var triggerEl = document.activeElement;
+    var trapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = confirmEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    confirmEl.addEventListener('keydown', trapHandler);
+
+    var cancelBtn = confirmEl.querySelector('#iw-lockin-cancel');
+    cancelBtn.focus();
+
+    cancelBtn.addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       confirmEl.parentNode.removeChild(confirmEl);
+      if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
     confirmEl.querySelector('#iw-lockin-confirm').addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       confirmEl.parentNode.removeChild(confirmEl);
       self._goToPage(4, true);
     });
