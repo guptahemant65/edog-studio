@@ -90,8 +90,12 @@ class QaPanel {
     this._updatePhaseGate();
 
     // Initialize sub-modules
-    var inputMod = new QaInput(this);
-    inputMod.init();
+    new QaInput(this).init();
+    new QaAnalysis(this).init();
+    new QaCuration(this).init();
+    new QaExecution(this).init();
+    new QaResults(this).init();
+    new QaEditor(this).init();
   }
 
   // ── Lifecycle ──
