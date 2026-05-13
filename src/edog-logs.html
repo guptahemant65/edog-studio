@@ -28990,17 +28990,17 @@ class FabricApiClient {
   // --- FLT Service APIs (MWC token, connected mode) ---
 
   async getLatestDag() {
-    if (!this._fabricBaseUrl || !this._mwcToken) return null;
+    if (!this._mwcToken) return null;
     return this._fltFetch('/liveTable/getLatestDag?showExtendedLineage=true');
   }
 
   async runDag(iterationId) {
-    if (!this._fabricBaseUrl || !this._mwcToken) return null;
+    if (!this._mwcToken) return null;
     return this._fltFetch(`/liveTableSchedule/runDAG/${iterationId}`, { method: 'POST' });
   }
 
   async cancelDag(iterationId) {
-    if (!this._fabricBaseUrl || !this._mwcToken) return null;
+    if (!this._mwcToken) return null;
     return this._fltFetch(`/liveTableSchedule/cancelDAG/${iterationId}`, { method: 'POST' });
   }
 
@@ -36340,6 +36340,8 @@ class DagStudio {
 
   async _loadDag() {
     try {
+      // Refresh config so MWC token and fabricBaseUrl are current
+      await this._api.fetchConfig();
       var dag = await this._api.getLatestDag();
       if (!dag || !dag.nodes) {
         this._renderEmpty('No DAG found. Ensure FLT is configured.');
@@ -73742,6 +73744,9 @@ class EdogLogViewer {
   
   loadInitialData = async () => {
     try {
+      // Refresh API client config so tokens/phase are current after deploy
+      await this.apiClient.fetchConfig();
+
       // Load logs — batch add directly to state (skip pendingLogs buffer)
       const logsResponse = await fetch('/api/logs');
       if (logsResponse.ok) {

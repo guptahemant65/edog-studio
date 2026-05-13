@@ -427,17 +427,17 @@ class FabricApiClient {
   // --- FLT Service APIs (MWC token, connected mode) ---
 
   async getLatestDag() {
-    if (!this._fabricBaseUrl || !this._mwcToken) return null;
+    if (!this._mwcToken) return null;
     return this._fltFetch('/liveTable/getLatestDag?showExtendedLineage=true');
   }
 
   async runDag(iterationId) {
-    if (!this._fabricBaseUrl || !this._mwcToken) return null;
+    if (!this._mwcToken) return null;
     return this._fltFetch(`/liveTableSchedule/runDAG/${iterationId}`, { method: 'POST' });
   }
 
   async cancelDag(iterationId) {
-    if (!this._fabricBaseUrl || !this._mwcToken) return null;
+    if (!this._mwcToken) return null;
     return this._fltFetch(`/liveTableSchedule/cancelDAG/${iterationId}`, { method: 'POST' });
   }
 

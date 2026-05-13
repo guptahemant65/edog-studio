@@ -1075,8 +1075,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             or self.path.startswith("/api/telemetry")
             or self.path.startswith("/api/stats")
             or self.path.startswith("/api/executions")
-            or self.path.startswith("/api/flt-proxy/")
         ):
+            self._proxy_to_log_server("GET")
+        elif self.path.startswith("/api/flt-proxy/"):
             self._proxy_to_flt("GET")
         elif self.path == "/ws/logs":
             # WebSocket upgrade request — can't handle in stdlib HTTP server.
@@ -1155,20 +1156,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             config = json.loads(CONFIG_PATH.read_text())
 
         bearer, _ = _read_cache(BEARER_CACHE)
-        mwc, mwc_exp = _read_cache(MWC_CACHE)
+
+        # MWC tokens are generated on-demand by the proxy — signal availability
+        # when deploy is active (fltPort set) and bearer token exists
+        has_flt = bool(_studio_state.get("fltPort"))
+        mwc_available = bool(bearer and has_flt and config.get("workspace_id") and config.get("capacity_id"))
 
         resp = {
             "workspaceId": config.get("workspace_id", ""),
             "artifactId": config.get("artifact_id", ""),
             "capacityId": config.get("capacity_id", ""),
-            "tokenExpiryMinutes": int((mwc_exp - time.time()) / 60) if mwc_exp else 0,
-            "tokenExpired": mwc is None,
-            "mwcToken": mwc,
-            "fabricBaseUrl": f"http://localhost:{_studio_state.get('fltPort')}"
-            if _studio_state.get("fltPort")
-            else None,
+            "tokenExpiryMinutes": 0,
+            "tokenExpired": not mwc_available,
+            "mwcToken": "proxy-managed" if mwc_available else None,
+            "fabricBaseUrl": None,  # routing handled by proxy, not direct localhost
             "bearerToken": bearer,
-            "phase": "connected" if mwc else "disconnected",
+            "phase": "connected" if mwc_available else "disconnected",
             "fltPort": _studio_state.get("fltPort"),
             "studioPhase": _studio_state.get("phase", "idle"),
         }
@@ -1688,31 +1691,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             time.sleep(0.5)
 
-    def _proxy_to_flt(self, method="GET"):
-        """Proxy REST request to FLT service on internal port.
-
-        Supports two path styles:
-        - /api/flt-proxy/... → strips prefix, forwards /... to FLT
-        - /api/logs, /api/telemetry, etc. → forwards as-is
-        """
+    def _proxy_to_log_server(self, method="GET"):
+        """Proxy request to the EDOG log server running inside FLT on localhost."""
         with _studio_lock:
             port = _studio_state.get("fltPort")
         if not port:
-            self._json_response(
-                503,
-                {
-                    "error": "flt_not_running",
-                    "message": "FLT service not running",
-                },
-            )
+            self._json_response(503, {"error": "flt_not_running", "message": "FLT service not running"})
             return
 
-        # Strip /api/flt-proxy prefix so FLT receives the original path
-        flt_path = self.path
-        if flt_path.startswith("/api/flt-proxy/"):
-            flt_path = flt_path[len("/api/flt-proxy"):]
-
-        target_url = f"http://localhost:{port}{flt_path}"
+        target_url = f"http://localhost:{port}{self.path}"
         try:
             body = None
             if method in ("POST", "PUT", "PATCH"):
@@ -1723,15 +1710,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             ct = self.headers.get("Content-Type")
             if ct:
                 req.add_header("Content-Type", ct)
-
-            # For flt-proxy routes, inject MWC token server-side
-            if self.path.startswith("/api/flt-proxy/"):
-                mwc, _ = _read_cache(MWC_CACHE)
-                if mwc:
-                    req.add_header("Authorization", f"MwcToken {mwc}")
-            # Forward client Authorization header for other proxy paths
             auth = self.headers.get("Authorization")
-            if auth and "Authorization" not in dict(req.header_items()):
+            if auth:
                 req.add_header("Authorization", auth)
 
             with urllib.request.urlopen(req, timeout=10) as resp:
@@ -1742,7 +1722,83 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(resp_body)
         except urllib.error.HTTPError as e:
-            self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e)})
+            self._json_response(e.code, {"error": "log_proxy_error", "message": str(e)})
+        except Exception as e:
+            self._json_response(502, {"error": "log_proxy_error", "message": str(e)})
+
+    def _proxy_to_flt(self, method="GET"):
+        """Proxy REST request to FLT service through Fabric capacity endpoint.
+
+        FLT API controllers are only accessible through the Fabric infrastructure,
+        not via localhost. The proxy generates an MWC token on-demand and routes
+        through: https://{host}/webapi/capacities/{capId}/workloads/LiveTable/
+        LiveTableService/automatic/v1/workspaces/{wsId}/lakehouses/{artId}{path}
+        """
+        # Read config for workspace/artifact/capacity IDs
+        cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        ws_id = cfg.get("workspace_id", "")
+        art_id = cfg.get("artifact_id", "")
+        cap_id = cfg.get("capacity_id", "")
+        if not ws_id or not art_id or not cap_id:
+            self._json_response(
+                503,
+                {
+                    "error": "flt_not_configured",
+                    "message": "Missing workspace/artifact/capacity IDs in config",
+                },
+            )
+            return
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_bearer", "message": "No bearer token available"})
+            return
+
+        # Strip /api/flt-proxy prefix to get the controller-relative path
+        flt_path = self.path
+        if flt_path.startswith("/api/flt-proxy/"):
+            flt_path = flt_path[len("/api/flt-proxy"):]
+
+        try:
+            mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id)
+        except Exception as e:
+            self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
+            return
+
+        # Build full capacity endpoint URL
+        target_url = (
+            f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
+            f"/LiveTableService/automatic"
+            f"/v1/workspaces/{ws_id}/lakehouses/{art_id}{flt_path}"
+        )
+
+        try:
+            body = None
+            if method in ("POST", "PUT", "PATCH"):
+                cl = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(cl) if cl else None
+
+            req = urllib.request.Request(target_url, data=body, method=method)
+            ct = self.headers.get("Content-Type")
+            if ct:
+                req.add_header("Content-Type", ct)
+            req.add_header("Authorization", f"MwcToken {mwc_token}")
+
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                resp_body = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Length", str(len(resp_body)))
+                self.end_headers()
+                self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            err_body = ""
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")[:500]
+            except Exception:
+                pass
+            self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
         except Exception as e:
             self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
 
