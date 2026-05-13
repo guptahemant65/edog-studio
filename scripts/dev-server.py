@@ -1673,7 +1673,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         )
         try:
             ctx = ssl.create_default_context()
-            with urllib.request.urlopen(req, timeout=120, context=ctx) as resp:
+            with urllib.request.urlopen(req, timeout=300, context=ctx) as resp:
                 resp_data = json.loads(resp.read())
 
             # Translate Responses API response → Chat Completions response
@@ -1718,7 +1718,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         except urllib.error.URLError as e:
             self._json_response(502, {"error": "openai_unreachable", "message": str(e.reason)})
         except TimeoutError:
-            self._json_response(504, {"error": "openai_timeout", "message": "Azure OpenAI request timed out (120s)"})
+            self._json_response(504, {"error": "openai_timeout", "message": "Azure OpenAI request timed out (300s)"})
         except Exception as e:
             print(f"  [OpenAI] Error: {e}")
             self._json_response(500, {"error": "openai_proxy_error", "message": str(e)})

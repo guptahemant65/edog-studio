@@ -25,7 +25,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     internal sealed class EdogQaLlmProvider : ILlmProvider, IDisposable
     {
         private const int MaxDiffChars = 8000;
-        private const int HttpTimeoutSeconds = 120;
+        private const int HttpTimeoutSeconds = 300;
         private const string DevServerProxyUrl = "http://localhost:5555/api/openai-proxy/chat";
 
         private readonly HttpClient _httpClient;
@@ -418,7 +418,7 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                     new { role = "user", content = userMessage }
                 },
                 temperature = 0.3,
-                max_tokens = 16000,
+                max_tokens = 8192,
                 response_format = new { type = "json_object" }
             };
 
