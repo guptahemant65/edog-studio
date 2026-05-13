@@ -125,5 +125,5 @@ result2 = check_clean(repo2, "Revert after double-apply")
 # Restore FILES
 edog.FILES.update(old_files)
 
-os.chdir("C:\\")
+os.chdir(tempfile.gettempdir())
 print(f"\nAll passed: {result1 and result2}")
