@@ -1613,7 +1613,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(500, {"error": "internal_error", "message": str(e)})
 
     def _serve_openai_proxy(self):
-        """POST /api/openai-proxy/chat — proxy Azure OpenAI Chat Completions API calls."""
+        """POST /api/openai-proxy/chat — proxy to Azure OpenAI Responses API.
+
+        Accepts Chat Completions format from C# callers and translates to the
+        Responses API format (``/openai/responses``).  Translates the response
+        back to Chat Completions shape so callers don't need to change.
+        """
         global _openai_config
         if not _openai_config:
             _openai_config = _load_openai_config()
@@ -1623,26 +1628,89 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length)
+        raw_body = self.rfile.read(content_length)
 
         cfg = _openai_config
-        url = (f"{cfg['endpoint'].rstrip('/')}/openai/deployments/{cfg['deployment']}"
-               f"/chat/completions?api-version={cfg['api_version']}")
+        url = f"{cfg['endpoint'].rstrip('/')}/openai/responses?api-version={cfg['api_version']}"
 
-        print(f"  [OpenAI] Proxying chat completion → {cfg['endpoint']} / {cfg['deployment']}")
+        # Translate Chat Completions request → Responses API request
+        try:
+            chat_req = json.loads(raw_body)
+        except json.JSONDecodeError as e:
+            self._json_response(400, {"error": "invalid_json", "message": str(e)})
+            return
+
+        # Convert messages → input (system→developer, rest stay same)
+        messages = chat_req.get("messages", [])
+        resp_input = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            if role == "system":
+                role = "developer"
+            resp_input.append({"role": role, "content": msg.get("content", "")})
+
+        resp_body_req: dict = {
+            "model": cfg["deployment"],
+            "input": resp_input,
+        }
+
+        # max_tokens / max_completion_tokens → max_output_tokens
+        max_tok = chat_req.get("max_completion_tokens") or chat_req.get("max_tokens")
+        if max_tok:
+            resp_body_req["max_output_tokens"] = max_tok
+
+        # response_format → text.format
+        rf = chat_req.get("response_format")
+        if rf:
+            resp_body_req["text"] = {"format": rf}
+
+        out_body = json.dumps(resp_body_req).encode()
+
+        print(f"  [OpenAI] Proxying via Responses API → {cfg['endpoint']} / {cfg['deployment']}")
         req = urllib.request.Request(
-            url, data=body, method="POST",
+            url, data=out_body, method="POST",
             headers={"Content-Type": "application/json", "api-key": cfg["api_key"]},
         )
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                resp_body = resp.read()
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=120, context=ctx) as resp:
+                resp_data = json.loads(resp.read())
+
+            # Translate Responses API response → Chat Completions response
+            content_text = ""
+            for item in resp_data.get("output", []):
+                if item.get("type") == "message":
+                    for c in item.get("content", []):
+                        if c.get("type") == "output_text":
+                            content_text = c.get("text", "")
+                            break
+                    if content_text:
+                        break
+
+            usage = resp_data.get("usage", {})
+            chat_resp = {
+                "id": resp_data.get("id", ""),
+                "object": "chat.completion",
+                "model": resp_data.get("model", cfg["deployment"]),
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": content_text},
+                    "finish_reason": "stop",
+                }],
+                "usage": {
+                    "prompt_tokens": usage.get("input_tokens", 0),
+                    "completion_tokens": usage.get("output_tokens", 0),
+                    "total_tokens": usage.get("total_tokens", 0),
+                },
+            }
+            chat_resp_bytes = json.dumps(chat_resp).encode()
+
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp_body)))
+            self.send_header("Content-Length", str(len(chat_resp_bytes)))
             self._cors_headers()
             self.end_headers()
-            self.wfile.write(resp_body)
+            self.wfile.write(chat_resp_bytes)
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", errors="replace")[:2000]
             print(f"  [OpenAI] API error {e.code}: {err_body[:200]}")
