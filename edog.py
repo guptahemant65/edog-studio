@@ -3144,44 +3144,48 @@ Examples:
             sys.exit(1)
         sys.exit(headless_deploy(repo_root))
 
-    # All other commands need repo_root
-    repo_root = get_repo_root()
-    if not repo_root:
+    # Commands that need repo_root
+    if args.install_hook or args.uninstall_hook or args.revert or args.status:
+        repo_root = get_repo_root()
+        if not repo_root:
+            sys.exit(1)
+
+        if args.install_hook:
+            install_git_hook(repo_root)
+        elif args.uninstall_hook:
+            uninstall_git_hook(repo_root)
+        elif args.revert:
+            revert_all_changes(repo_root)
+        elif args.status:
+            check_status(repo_root)
+        sys.exit(0)
+
+    # Default: Launch EDOG Studio (dev-server) — the web UI handles auth,
+    # workspace selection, and deploy. No CLI token dance needed.
+    dev_server = Path(__file__).parent / "scripts" / "dev-server.py"
+    if not dev_server.exists():
+        print(f"❌ Dev server not found: {dev_server}")
         sys.exit(1)
 
-    if args.install_hook:
-        install_git_hook(repo_root)
-        sys.exit(0)
-    elif args.uninstall_hook:
-        uninstall_git_hook(repo_root)
-        sys.exit(0)
-    elif args.revert:
-        revert_all_changes(repo_root)
-        sys.exit(0)
-    elif args.status:
-        check_status(repo_root)
-        sys.exit(0)
-    else:
-        # Run daemon mode - get config first
-        config = load_config()
+    import webbrowser
 
-        # Override with command line args if provided
-        username = args.username or config.get("username") or DEFAULT_USERNAME
-        workspace_id = args.workspace or config.get("workspace_id")
-        artifact_id = args.artifact or config.get("artifact_id")
-        capacity_id = args.capacity or config.get("capacity_id")
+    print("🐕 Starting EDOG Studio...")
+    print("   Server: http://localhost:5555")
+    print("   Press Ctrl+C to stop\n")
 
-        # If still missing, prompt user
-        if not workspace_id or not artifact_id or not capacity_id:
-            config = ensure_config()
-            if not config:
-                print("\n❌ Cannot proceed without config")
-                sys.exit(1)
-            username = config.get("username") or DEFAULT_USERNAME
-            workspace_id = config["workspace_id"]
-            artifact_id = config["artifact_id"]
-            capacity_id = config["capacity_id"]
-
-        sys.exit(
-            run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, launch_service=not args.no_launch)
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(dev_server)],
+            cwd=str(Path(__file__).parent),
         )
+        # Give server a moment to bind, then open browser
+        import time
+
+        time.sleep(1.5)
+        webbrowser.open("http://localhost:5555")
+        proc.wait()
+    except KeyboardInterrupt:
+        print("\n\nShutting down EDOG Studio...")
+        proc.terminate()
+        proc.wait(timeout=5)
+    sys.exit(0)
