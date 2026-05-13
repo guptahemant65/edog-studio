@@ -168,6 +168,26 @@ class QaAnalysis {
     }
   }
 
+  onWarning(data) {
+    // data: { warning, message }
+    var msg = data.message || data.warning || 'Unknown warning';
+    console.warn('[QA] Pipeline warning:', msg);
+
+    // Show degradation indicator on the active phase
+    for (var i = 0; i < this._phases.length; i++) {
+      var p = this._phases[i];
+      if (p.el.classList.contains('active')) {
+        p.el.classList.add('degraded');
+        var existing = p.detailEl.textContent;
+        p.detailEl.textContent = (existing ? existing + ' ' : '') + '\u26A0 ' + msg;
+        break;
+      }
+    }
+
+    // Also toast the warning
+    if (window.edogToast) window.edogToast.show(msg, 'warning');
+  }
+
   onScenarioGenerated(data) {
     // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, ... } }
     var scn = data.scenario;

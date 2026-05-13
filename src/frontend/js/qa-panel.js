@@ -255,6 +255,9 @@ class QaPanel {
       case 'QaAnalysisProgress':
         if (this._analysis) this._analysis.onProgress(d);
         break;
+      case 'QaAnalysisWarning':
+        if (this._analysis) this._analysis.onWarning(d);
+        break;
       case 'QaAnalysisCancelled':
         if (this._analysis) this._analysis.onCancelled(d);
         break;

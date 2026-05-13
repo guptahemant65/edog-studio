@@ -1048,32 +1048,87 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 try
                 {
-                    // Phase 2: Blast radius
-                    await BroadcastAnalysisProgressAsync(correlationId, analysisId, "roslyn_blast_radius", 1, 6, 25,
-                        "Analyzing blast radius via code-review-graph + Graphify...", sw.ElapsedMilliseconds).ConfigureAwait(false);
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Delay(800, ct).ConfigureAwait(false);
+                    // Phase-to-UI mapping: analyzer phases → frontend phase indices
+                    // Frontend phases: 0=fetching_diff, 1=roslyn_blast_radius, 2=semantic_analysis,
+                    //                  3=di_validation, 4=scenario_generation, 5=complete
+                    Action<AnalysisProgress> progressCallback = progress =>
+                    {
+                        if (progress.Phase == "warning")
+                        {
+                            // Surface degradation warnings to frontend
+                            _ = BroadcastQaEventAsync("QaAnalysisWarning", new
+                            {
+                                eventType = "QaAnalysisWarning",
+                                correlationId,
+                                analysisId,
+                                timestamp = DateTimeOffset.UtcNow,
+                                warning = "pipeline_degradation",
+                                message = progress.Message,
+                            });
+                            return;
+                        }
 
-                    // Phase 3: Semantic analysis
-                    await BroadcastAnalysisProgressAsync(correlationId, analysisId, "semantic_analysis", 2, 6, 50,
-                        "Running OmniSharp/Roslyn semantic enrichment...", sw.ElapsedMilliseconds).ConfigureAwait(false);
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Delay(600, ct).ConfigureAwait(false);
+                        int phaseIndex;
+                        string uiPhase;
+                        switch (progress.Phase)
+                        {
+                            case "diff_parsing":
+                                phaseIndex = 0; uiPhase = "fetching_diff"; break;
+                            case "graph_construction":
+                                phaseIndex = 1; uiPhase = "roslyn_blast_radius"; break;
+                            case "semantic_enrichment":
+                                phaseIndex = 2; uiPhase = "semantic_analysis"; break;
+                            case "di_validation":
+                            case "clustering":
+                            case "entry_points":
+                                phaseIndex = 3; uiPhase = "di_validation"; break;
+                            case "llm_generation":
+                                phaseIndex = 4; uiPhase = "scenario_generation"; break;
+                            case "complete":
+                                phaseIndex = 5; uiPhase = "complete"; break;
+                            default:
+                                phaseIndex = 3; uiPhase = progress.Phase; break;
+                        }
 
-                    // Phase 4: DI validation
-                    await BroadcastAnalysisProgressAsync(correlationId, analysisId, "di_validation", 3, 6, 65,
-                        "Validating against runtime DI registry...", sw.ElapsedMilliseconds).ConfigureAwait(false);
-                    ct.ThrowIfCancellationRequested();
-                    await Task.Delay(400, ct).ConfigureAwait(false);
+                        _ = BroadcastAnalysisProgressAsync(correlationId, analysisId,
+                            uiPhase, phaseIndex, 6, progress.PercentComplete,
+                            progress.Message, progress.ElapsedMs);
+                    };
 
-                    // Run the real analyzer with the PR diff
-                    var result = await analyzer.AnalyzeAsync(diffToAnalyze, ct).ConfigureAwait(false);
+                    // Run the real analyzer with live progress callback
+                    var result = await analyzer.AnalyzeAsync(diffToAnalyze, ct, progressCallback).ConfigureAwait(false);
                     scenarios = result?.Scenarios;
+
+                    // Surface degradation flags as warnings
+                    if (result?.DegradationFlags?.Count > 0)
+                    {
+                        foreach (var flag in result.DegradationFlags)
+                        {
+                            await BroadcastQaEventAsync("QaAnalysisWarning", new
+                            {
+                                eventType = "QaAnalysisWarning",
+                                correlationId,
+                                analysisId,
+                                timestamp = DateTimeOffset.UtcNow,
+                                warning = flag,
+                                message = $"Analysis degraded: {flag.Replace('_', ' ')}",
+                            }).ConfigureAwait(false);
+                        }
+                    }
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[QA] CodeAnalyzer failed, falling back to synthetic: {ex.Message}");
+                    await BroadcastQaEventAsync("QaAnalysisWarning", new
+                    {
+                        eventType = "QaAnalysisWarning",
+                        correlationId,
+                        analysisId,
+                        timestamp = DateTimeOffset.UtcNow,
+                        warning = "analyzer_failed",
+                        message = $"Code analyzer failed: {ex.Message}. Using synthetic scenarios.",
+                    }).ConfigureAwait(false);
                 }
             }
             else

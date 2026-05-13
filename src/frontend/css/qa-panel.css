@@ -624,6 +624,14 @@
   background: rgba(24, 160, 88, 0.06);
 }
 
+.qa-analysis-phase.degraded {
+  border-left: 2px solid var(--warning, #e2a727);
+}
+
+.qa-analysis-phase.degraded .qa-phase-detail {
+  color: var(--warning, #e2a727);
+}
+
 .qa-phase-icon {
   width: 20px;
   height: 20px;

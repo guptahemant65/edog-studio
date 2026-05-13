@@ -303,6 +303,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         private readonly IDiRegistryProvider _diRegistryProvider;
         private readonly Action<AnalysisProgress> _onProgress;
 
+        // Per-call override for progress callback (set by Hub for real-time SignalR broadcast)
+        private volatile Action<AnalysisProgress> _activeCallback;
+
         // 16 valid interceptor topics from EdogTopicRouter.Initialize()
         private static readonly List<string> ValidTopics = new()
         {
@@ -339,10 +342,27 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         /// <param name="unifiedDiff">Raw unified diff text from ADO REST API.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="progressOverride">Optional per-call progress callback (overrides constructor callback).</param>
         /// <returns>Analysis result with scenarios, impact zones, and degradation flags.</returns>
         public async Task<AnalysisResult> AnalyzeAsync(
             string unifiedDiff,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            Action<AnalysisProgress> progressOverride = null)
+        {
+            _activeCallback = progressOverride;
+            try
+            {
+                return await AnalyzeInternalAsync(unifiedDiff, cancellationToken);
+            }
+            finally
+            {
+                _activeCallback = null;
+            }
+        }
+
+        private async Task<AnalysisResult> AnalyzeInternalAsync(
+            string unifiedDiff,
+            CancellationToken cancellationToken)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var result = new AnalysisResult();
@@ -1106,7 +1126,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             if (percent <= 5) _analysisStartMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            _onProgress(new AnalysisProgress
+            var cb = _activeCallback ?? _onProgress;
+            cb(new AnalysisProgress
             {
                 Phase = phase,
                 PercentComplete = percent,
@@ -1121,6 +1142,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             try
             {
                 Console.WriteLine($"[EDOG-QA] ⚠ {message}");
+
+                // Surface through progress callback so Hub can broadcast to frontend
+                var cb = _activeCallback ?? _onProgress;
+                cb(new AnalysisProgress
+                {
+                    Phase = "warning",
+                    PercentComplete = -1,
+                    Message = message,
+                    Warnings = new List<string> { message },
+                    ElapsedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _analysisStartMs,
+                });
             }
             catch
             {
