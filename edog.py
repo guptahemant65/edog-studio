@@ -2932,31 +2932,34 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
     print(f"Auto-launch: {'Yes' if launch_service else 'No'}")
     print("=" * 70)
 
-    # Check for cached token first
+    # Check for cached token first — but don't block startup on failure.
+    # The web UI's onboarding screen handles auth interactively.
+    mwc_token = None
+    token_expiry = None
     cached_token, cached_expiry = load_cached_token()
     if cached_token:
         print(f"\n✅ Using cached token (expires: {cached_expiry.strftime('%H:%M:%S')})")
         mwc_token = cached_token
         token_expiry = cached_expiry
     else:
-        # Initial token fetch
+        # Try token fetch — non-blocking, failures are OK
         mwc_token = fetch_token_with_retry(username, workspace_id, artifact_id, capacity_id)
-        if not mwc_token:
-            print("\n❌ Failed to fetch initial token after all retries")
-            return 1
+        if mwc_token:
+            token_expiry = parse_jwt_expiry(mwc_token)
+            print(f"\n✅ Token acquired (expires: {token_expiry.strftime('%H:%M:%S') if token_expiry else 'unknown'})")
+            if token_expiry:
+                cache_token(mwc_token, token_expiry.timestamp())
+        else:
+            print("\n⚠️  Token not available — authenticate via the web UI at http://localhost:5555")
 
-        token_expiry = parse_jwt_expiry(mwc_token)
-        print(f"\n✅ Token acquired (expires: {token_expiry.strftime('%H:%M:%S') if token_expiry else 'unknown'})")
-
-        # Cache the token
-        if token_expiry:
-            cache_token(mwc_token, token_expiry.timestamp())
-
-    # Apply changes
-    if not apply_all_changes(mwc_token, repo_root):
-        print("\n⚠️  Some changes could not be applied")
-
-    print("\n✅ Code changes applied successfully")
+    # Apply changes only if we have a token
+    if mwc_token:
+        if not apply_all_changes(mwc_token, repo_root):
+            print("\n⚠️  Some changes could not be applied")
+        else:
+            print("\n✅ Code changes applied successfully")
+    else:
+        print("   Code patching deferred until authentication completes.")
 
     # Start FLT service if requested
     service_process = None
@@ -2964,7 +2967,7 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
     output_thread = None
     popup_thread = None
 
-    if launch_service:
+    if launch_service and mwc_token:
         print("\n" + "=" * 70)
         print("🚀 Starting FLT Service...")
         print("=" * 70)

@@ -1362,8 +1362,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       startApp();
     });
   } else {
-    // Already authenticated — go straight to dashboard
-    startApp();
+    // Token looks valid locally — verify it actually works against Fabric
+    const tokenWorks = await onboarding.verifyToken();
+    if (tokenWorks) {
+      startApp();
+    } else {
+      // Token expired or tenant rotated — force re-auth
+      await onboarding.show(function onAuthComplete(result) {
+        startApp();
+      });
+    }
   }
 
   // Initialize mock data rendering — only when ?mock=true is in the URL

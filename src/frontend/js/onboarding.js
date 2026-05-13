@@ -112,6 +112,20 @@ class OnboardingScreen {
   }
 
   /**
+   * Verify the cached bearer token actually works against Fabric APIs.
+   * Catches expired tenants where the JWT hasn't expired but the tenant has.
+   * @returns {Promise<boolean>} true if the token is usable.
+   */
+  async verifyToken() {
+    try {
+      const resp = await fetch('/api/fabric/workspaces');
+      return resp.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Show the onboarding overlay and begin the auth flow.
    * @param {function} onComplete - Called with {token, username} on success.
    */
