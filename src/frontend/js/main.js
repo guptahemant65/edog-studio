@@ -135,6 +135,9 @@ class EdogLogViewer {
     // DAG Studio (lazy-initialized on first view activation)
     this.dagStudio = null;
 
+    // QA Testing (F27) — lazy-initialized on first view activation
+    this.qaPanel = null;
+
     // Smart feature modules
     this.autoDetector = new AutoDetector(this.state);
     this.smartContext = new SmartContextBar(this.autoDetector);
@@ -287,6 +290,7 @@ class EdogLogViewer {
                 this.topbar.setDeployStatus('connected');
                 this.sidebar.setPhase('connected');
                 if (this.runtimeView) this.runtimeView.setPhase('connected');
+                if (this.qaPanel) this.qaPanel.setPhase('connected');
                 if (s.fltPort && this.ws) {
                   this.ws.setPort(s.fltPort);
                   if (this.runtimeView) this.runtimeView.setPort(s.fltPort);
@@ -306,6 +310,7 @@ class EdogLogViewer {
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
         if (this.runtimeView) this.runtimeView.setPhase('connected');
+        if (this.qaPanel) this.qaPanel.setPhase('connected');
         this.topbar.setDeployStatus('connected');
         if (state.fltPort) {
           this.ws.setPort(state.fltPort);
@@ -827,6 +832,17 @@ class EdogLogViewer {
       this.dagStudio.activate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
+      if (this.qaPanel) this.qaPanel.deactivate();
+    } else if (viewId === 'qa') {
+      if (!this.qaPanel) {
+        this.qaPanel = new QaPanel(this.ws);
+        this.qaPanel.init();
+        this.qaPanel.setPhase(this.sidebar._phase);
+      }
+      this.qaPanel.activate();
+      if (this.dagStudio) this.dagStudio.deactivate();
+      if (this.apiPlayground) this.apiPlayground.deactivate();
+      if (this.controlPanel) this.controlPanel.deactivate();
     } else if (viewId === 'api') {
       if (!this.apiPlayground) {
         this.apiPlayground = new ApiPlayground(
@@ -842,6 +858,7 @@ class EdogLogViewer {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
+      if (this.qaPanel) this.qaPanel.deactivate();
     }
   }
 

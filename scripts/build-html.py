@@ -63,6 +63,7 @@ CSS_MODULES = [
     "css/tab-nexus.css",
     "css/mock-components.css",
     "css/onboarding.css",
+    "css/qa-panel.css",
 ]
 
 # Vendor libraries — inlined BEFORE our JS modules (order matters)
@@ -136,6 +137,14 @@ JS_MODULES = [
     "js/api-playground.js",
     "js/mock-renderer.js",
     "js/onboarding.js",
+    # QA Testing modules (F27) — panel first, then sub-modules
+    "js/qa-panel.js",
+    "js/qa-input.js",
+    "js/qa-analysis.js",
+    "js/qa-curation.js",
+    "js/qa-execution.js",
+    "js/qa-results.js",
+    "js/qa-editor.js",
     "js/main.js",
 ]
 

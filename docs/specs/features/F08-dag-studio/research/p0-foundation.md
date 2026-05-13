@@ -2,8 +2,24 @@
 
 > **Author:** Sana Reeves (Architect & FLT Domain Expert)
 > **Date:** 2026-04-14
-> **Status:** COMPLETE
-> **Scope:** FLT DAG API deep dive · Existing EDOG UI audit · Graph rendering reference analysis
+> **Updated:** 2026-04-24 — Deep source analysis of FLT execution internals (P0.4)
+> **Status:** COMPLETE (with corrections)
+> **Scope:** FLT DAG API deep dive · Existing EDOG UI audit · Graph rendering reference analysis · **Execution engine deep dive**
+
+### ⚠ P0.4 Corrections (2026-04-24)
+
+The original P0 (sections 1–3) was written from API surface analysis. On 2026-04-24,
+a deep source-code analysis of `workload-fabriclivetable` was conducted, revealing
+corrections and new internals critical for DAG Studio design. See **P0.4** below.
+
+**Key corrections to earlier assumptions:**
+
+| Assumption (P0.1–P0.3) | Reality (P0.4 source analysis) | Source |
+|---|---|---|
+| SessionId/ReplId not available post-execution | **WRONG** — Both have `[JsonProperty]` and ARE persisted to `node_{id}_metrics.json` | `NodeExecutionMetrics.cs:159-167` |
+| No single-node execution possible | **WRONG** — `ExecutionMode.SelectedOnly` + `SelectedMLVs` allows running specific nodes | `ExecutionMode.cs:27-33`, `Dag.cs:611-624` |
+| Cross-lakehouse only | **INCOMPLETE** — Nodes carry `ExternalWorkspaceId` + `ExternalWorkspaceName` too | `Node.cs:125-152` |
+| SVG recommended for rendering | **OVERRIDDEN** — CEO confirmed Canvas 2D with LOD. Not SVG. | CEO decision |
 
 ---
 
@@ -995,6 +1011,322 @@ control-panel.js (REFACTOR)
 
 ---
 
-*"The whole board is visible now. The DAG API is rich — 16 endpoints, 17 model classes, every field documented. The existing ControlPanel gives us API integration and state management for free. The reference implementation proves Canvas 2D works at 300 nodes. But for EDOG's 50-node target with our CSS-first, accessible, keyboard-navigable requirements — SVG is the right call. Build the Sugiyama layout engine first, everything else follows from positioned nodes."*
+*"The whole board is visible now. The DAG API is rich — 16 endpoints, 17 model classes, every field documented. The existing ControlPanel gives us API integration and state management for free. The reference implementation proves Canvas 2D works at 300 nodes."*
 
 — Sana Reeves, Architect
+
+> ⚠ **P0.3 Rendering Conclusion Overridden:** CEO confirmed Canvas 2D with 3-level LOD.
+> The SVG recommendation above is superseded. See `spec.md` line 7.
+
+---
+
+## P0.4: Execution Engine Deep Dive (Source Code Analysis)
+
+> **Date:** 2026-04-24
+> **Source:** `workload-fabriclivetable/Service/Microsoft.LiveTable.Service/`
+> **Method:** Direct source code analysis, not API surface inference
+
+This section grounds DAG Studio design in the actual FLT execution engine internals.
+
+---
+
+### 4.1 Core Data Structures (Actual C# Classes)
+
+**`Dag`** — `DataModel/Dag/Dag.cs`
+
+| Property | Type | Design Implication |
+|---|---|---|
+| `Name` | `string` | Display in header; default = `artifactId`, per-schedule = `mlvDefinitionId` |
+| `WorkspaceId` | `Guid` | Context for API calls |
+| `LakehouseId` | `Guid` | Context for API calls |
+| `WorkspaceName` | `string` | Display in breadcrumb |
+| `LakehouseName` | `string` | Display in breadcrumb |
+| `Nodes` | `List<Node>` | Canvas rendering source |
+| `Edges` | `List<Edge>` | Edge rendering source |
+| `NotebookExecutionContexts` | `ConcurrentDictionary<Guid, NotebookExecutionContext>` | Spark session mapping |
+
+**Construction:** `Dag.CreateFromCatalogTablesAsync()` builds from catalog. Cycle detection on `AddEdge()`.
+
+**`Node`** — `DataModel/Dag/Node.cs`
+
+| Property | Type | Design Implication |
+|---|---|---|
+| `NodeId` | `Guid` | Unique key for all lookups |
+| `Name` | `string` | Format: `schema.table` — display as-is |
+| `Kind` | `string` | `"sql"` or `"pyspark"` — badge on node card |
+| `TableType` | `TableType` | `MANAGED` (source, non-executable), `MATERIALIZED_LAKE_VIEW` (executable) |
+| `Children` | `List<Guid>` | Downstream dependents — edge targets |
+| `Parents` | `List<Guid>` | Upstream dependencies — edge sources |
+| `Executable` | `bool?` | **KEY:** Determines if node can be run. `false` for externals, shortcuts, MANAGED |
+| `RefreshPolicy` | `string` | `"FullRefresh"` or `"IncrementalRefresh"` — show on node detail |
+| `IsFaulted` | `bool` | Pre-execution error state — show warning on node |
+| `FLTErrorCode` | `ErrorCode?` | Faulted reason code |
+| `CodeReference` | `NotebookBasedCodeReference` | PySpark notebook link |
+| `DqCodeReference` | `NotebookBasedCodeReference` | Data Quality notebook link |
+| `ExternalWorkspaceId` | `Guid?` | Non-null = **cross-workspace** node |
+| `ExternalWorkspaceName` | `string` | Human-readable workspace name for external nodes |
+| `ExternalLakehouseId` | `Guid?` | Non-null = **cross-lakehouse** node |
+| `ExternalLakehouseName` | `string` | Human-readable lakehouse name for external nodes |
+| `IsShortcut` | `bool?` | Shortcut tables are non-executable |
+| `AbfsPath` | `string` | OneLake path |
+
+**Executability rule** (line 505): `Executable = IsMaterializedLakeView && !ExternalLakehouseId.HasValue && IsShortcut != true`
+
+**`Edge`** — `DataModel/Dag/Edge.cs`
+
+| Property | Type | Note |
+|---|---|---|
+| `EdgeId` | `Guid` | Unique edge ID |
+| `From` | `Guid` | Source node (parent) |
+| `To` | `Guid` | Target node (child) |
+
+**`TableType`** — `DataModel/Dag/TableType.cs`
+
+| Value | Byte | Executable? | Visual Treatment |
+|---|---|---|---|
+| `NONE` | 0 | No | Hidden or grey |
+| `MANAGED` | 1 | No | Source table — left side of graph, grey/muted |
+| `MATERIALIZED_LAKE_VIEW` | 2 | Yes | Primary nodes — full color, actionable |
+| `MATERIALIZED_VIEW` | 3 | Yes (deprecated) | Treat same as MLV |
+
+---
+
+### 4.2 Execution Engine Internals
+
+**Orchestrator:** `DagExecutionHandlerV2` — `Core/V2/DagExecutionHandlerV2.cs`
+Implements `ITypedReliableOperationHandler` (FLT reliable operations framework).
+
+**Execution Flow:**
+```
+1. ExecuteAsync()                      — entry via reliable operations
+2. Create DagExecutionContext           — workspace, lakehouse, iteration IDs
+3. Acquire MWC token, fetch DAG         — from catalog tables
+4. CheckDagExecCanContinueAsync()       — acquire lock, validate prerequisites
+5. OnDagExecutionBeginAsync()           — status → Running
+6. DagUtils.PerformTopologicalSort()    — Kahn's algorithm
+7. ExecuteInternalAsync()               — recursive scheduling loop
+8. Per batch: Task.Run() per node       — NodeExecutor.ExecuteNodeAsync()
+9. On node complete: recurse            — schedule newly-ready nodes
+10. All visited → terminal status       — fire hooks → unlock
+```
+
+**Topological Sort:** `DagUtils.PerformTopologicalSort()` — Kahn's Algorithm (in-degree queue, parent-first).
+
+**Parallel Execution:**
+- `ParallelNodeLimit` — configurable (default from host param, per-DAG via `DagSettings`, range 2–25)
+- Tracking: `visiting` (ConcurrentDictionary, currently executing), `visited` (completed), `failed` (ConcurrentBag)
+- Scheduling: only starts node when ALL parents complete successfully AND `visiting.Count < ParallelNodeLimit`
+
+---
+
+### 4.3 State Machines (Canonical Source)
+
+**`NodeExecutionStatus`** — `DataModel/Dag/NodeExecutionStatus.cs`
+
+```
+None ──→ Running ──→ Completed
+                 ├──→ Failed
+                 ├──→ Cancelled
+                 └──→ Skipped
+         Running ──→ Cancelling ──→ Cancelled
+```
+
+| Transition Method | From → To | Sets |
+|---|---|---|
+| `OnNodeExecutionBeginAsync()` | None → Running | `StartedAt`, `SessionId`, `ReplId` |
+| `OnNodeExecutionEndAsync()` | Running → terminal | `EndedAt`, errors, row counts |
+| `OnNodeExecutionSkipAsync()` | None → Skipped | Parent failed/cancelled |
+
+**`DagExecutionStatus`** — `DataModel/Dag/DagExecutionStatus.cs`
+
+```
+NotStarted ──→ Running ──→ Completed
+                        ├──→ Failed
+                        ├──→ Cancelled
+                        └──→ Skipped (lock conflict)
+              Running ──→ Cancelling ──→ Cancelled
+```
+
+| Transition Method | From → To | Sets |
+|---|---|---|
+| `OnDagExecutionBeginAsync()` | NotStarted → Running | `StartedAt`, `RefreshMode`, `ParallelNodeLimit` |
+| `OnDagExecutionEndAsync()` | Running → terminal | `EndedAt`, `ErrorCode`, `ErrorMessage` |
+| `OnDagCancellationBeginAsync()` | Running → Cancelling | `CancellationRequestedAt` |
+| `OnDagExecutionSkipAsync()` | NotStarted → Skipped | Lock held by another iteration |
+
+**Error Cascade Rules:**
+- Parent Failed/Skipped → Child **Skipped** (fail-fast)
+- Parent Cancelled → Child **Cancelled** (cascading)
+- DAG-level error: `ComputeDagLevelErrorFromFailedNodes()` — System > User > Unknown priority
+
+---
+
+### 4.4 Lock Mechanism
+
+**What's locked:** One DAG type within one lakehouse. One execution at a time.
+
+**Lock storage:** OneLake empty files with metadata:
+```
+{LakehouseId}/LiveTableSystem/DagExecutionMetrics/{dagName}.lock
+```
+- `dagName` = `artifactId` (default) or `mlvDefinitionId` (per-schedule)
+- Metadata: `{ "LockedIterationId": "<guid>" }`
+
+**Lock semantics:**
+- **Single attempt** — no retry loop. Failure → `DagExecutionStatus.Skipped`
+- **Reentrant** — same `IterationId` can re-acquire (idempotent)
+- **TTL-based expiry** — `maxDagExecutionTime + LockFileExpiryDeltaTime` → OneLake auto-removes
+- **Force unlock API** — `POST .../forceUnlockDAGExecution/{lockedIterationId}`
+
+**Per-schedule locking:** Each `MLVExecutionDefinition` gets its own lock file → concurrent schedule execution is possible.
+
+**In-memory locks:** `ConcurrentDictionary<Guid, AsyncLock>` in `DagExecutionStore` — protects memory cache, separate from OneLake locks.
+
+---
+
+### 4.5 Multi-Schedule & SelectedOnly Execution
+
+**`ExecutionMode`** — `DataModel/Dag/ExecutionMode.cs`
+
+| Mode | Behavior | `SelectedMLVs` | DAG Scope |
+|---|---|---|---|
+| `CurrentLakehouse` (default) | All MLVs in current lakehouse | Ignored if empty | Current lakehouse only |
+| `SelectedOnly` | **Only explicitly listed MLVs execute** | Required (fails if empty) | No sublineage fetching |
+| `FullLineage` | Cross-lakehouse within workspace | Optional filter | Respects Include/Exclude lakehouses |
+
+**`MLVExecutionDefinition`** — `DataModel/MLVExecutionDefinition.cs`
+
+| Property | Type | Note |
+|---|---|---|
+| `Id` | `Guid` | Unique schedule ID |
+| `Name` | `string` | User-facing schedule name |
+| `SelectedMLVs` | `List<string>` | Table names to execute (for SelectedOnly) |
+| `ExecutionMode` | `ExecutionMode` | Scope of execution |
+| `IncludedLakehouses` | `List<Guid>` | FullLineage lakehouse filter |
+| `DagSettings` | `DagSettings` | Per-schedule DAG config (parallelism, etc.) |
+| `DqScheduleSettings` | `DqScheduleSettings` | Data quality config |
+
+**Single-node execution flow:**
+1. Create `MLVExecutionDefinition` with `ExecutionMode = SelectedOnly`, `SelectedMLVs = ["schema.tableName"]`
+2. Call `runDAG/{iterationId}` with that definition's ID
+3. DAG builds with ALL nodes, but only selected are marked `Executable = true`
+4. Non-selected MLVs: `node.Executable = false` (Dag.cs:749)
+5. Execution engine runs only executable nodes
+
+**Design implication:** DAG Studio CAN offer a "Run this node" action on individual MLV nodes. It creates a new iteration (new lock, new metrics), not a retry.
+
+---
+
+### 4.6 Cross-Workspace & Cross-Lakehouse Nodes
+
+**Source:** `Node.cs:125-152`
+
+A node in the DAG can reference an **external workspace and/or external lakehouse**:
+
+| Field | Non-null means | Visual treatment |
+|---|---|---|
+| `ExternalWorkspaceId` + `ExternalWorkspaceName` | Node is from a different workspace | Badge: "External Workspace: {name}" |
+| `ExternalLakehouseId` + `ExternalLakehouseName` | Node is from a different lakehouse | Badge: "External Lakehouse: {name}" |
+| Both null | Node is local to this DAG's lakehouse | Normal rendering |
+
+**Executability:** External nodes are NEVER executable (line 505: `!ExternalLakehouseId.HasValue`). They are read-only lineage context in the graph.
+
+**Extended lineage:** `showExtendedLineage=true` on `getLatestDag` API fetches the complete cross-workspace dependency chain recursively.
+
+**FullLineage mode:** `ExecutionMode.FullLineage` crosses lakehouse boundaries within the current workspace, with `IncludedLakehouses` filter for fine-grained control.
+
+---
+
+### 4.7 Execution History Persistence
+
+**OneLake structure:**
+```
+{Lakehouse}/LiveTableSystem/DagExecutionMetrics/
+├── {iterationId}/
+│   ├── dag.json                     — Full DAG definition snapshot
+│   ├── dag_metrics.json             — DagExecutionMetrics
+│   └── node_{nodeId}_metrics.json   — Per-node NodeExecutionMetrics
+├── Index_StartTime_{artifactId}/    — Index for history listing
+│   └── {reverseEpoch}_{iterationId}_{status}_{endEpoch}
+```
+
+**`NodeExecutionMetrics`** (persisted fields — all have `[JsonProperty]`):
+
+| Field | Type | Note |
+|---|---|---|
+| `Status` | `NodeExecutionStatus` | Terminal state |
+| `StartedAt` / `EndedAt` | `DateTime?` | Timing |
+| `SessionId` | `Guid?` | ✅ **Persisted** — Spark session ID |
+| `ReplId` | `Guid?` | ✅ **Persisted** — HC session REPL ID |
+| `RequestId` | `Guid?` | Internal tracking |
+| `AddedRowsCount` | `long` | Rows added (-1 if unavailable) |
+| `DroppedRowsCount` | `long` | DQ violations |
+| `ErrorCode` / `ErrorMessage` | `string` | Error details |
+| `NodeErrorDetails` | `string` | Structured error info |
+| `DqCheckResults` | `List<DqCheckResult>` | Per-constraint violations |
+| `RefreshPolicy` | `string` | Full vs Incremental |
+| `MlvNamespace` / `MlvName` / `MlvId` | `string` / `Guid` | MLV identity |
+| `DetailsPageLink` | `string` | UI navigation link |
+| `Warnings` | `List<string>` | Non-fatal warnings |
+| `TotalRowsProcessed` | `long` | Total rows |
+| `TotalViolations` | `long` | DQ violation count |
+
+**Retention:** Max 500 records per lakehouse. In-memory cache ~10 min post-execution.
+
+**Insights Delta Tables** (`_mlv_system` schema): `sys_run_metrics`, `sys_node_metrics`, `sys_error_metrics` — written post-execution by hooks. NOT real-time.
+
+---
+
+### 4.8 SignalR Integration (Existing EDOG Interceptors)
+
+**Already built** in `edog-studio/src/backend/DevMode/`:
+
+**`EdogDagExecutionHook`** (implements `IDagExecutionHook`):
+- Publishes `DagTerminal` event to `"dag"` topic
+- Payload: `{ dagId, iterationId, status, totalNodes, completedNodes, failedNodes, skippedNodes, parallelLimit, durationMs, errorCode, errorMessage, errorSource }`
+
+**`EdogNodeExecutorWrapper`** (decorates `INodeExecutor`):
+- `NodeStarted`: `{ nodeId, dagId, iterationId, timestamp }`
+- `NodeCompleted`: `{ nodeId, dagId, iterationId, durationMs }`
+- `NodeFailed`: `{ nodeId, dagId, iterationId, durationMs, errorType, errorMessage }`
+
+**Data Flow:**
+```
+FLT DagExecutionHandlerV2
+  ├─ EdogDagExecutionHook     → "dag" topic → DagTerminal
+  └─ EdogNodeExecutorWrapper  → "dag" topic → NodeStarted/Completed/Failed
+       ↓
+EdogTopicRouter → TopicBuffer (ring buffer + live channel)
+       ↓
+EdogPlaygroundHub.SubscribeToTopic("dag") → ChannelReader<TopicEvent>
+       ↓
+Frontend WebSocket (snapshot + live streaming, gap detection via SequenceId)
+```
+
+---
+
+### 4.9 Corrected Design Constraints
+
+| # | Constraint | Evidence | Design Impact |
+|---|---|---|---|
+| 1 | **No single-node cancel** | `CascadingCancellation.CancelAsync()` cancels ALL tokens in `ctsDictionary`. No `CancelNodeAsync()` exists. Only `cancelDAG/{iterationId}` API. | Cancel button is DAG-level only. No per-node cancel. |
+| 2 | **No intra-node progress** | Zero matches for `progress`/`Progress`/`percent` across all NodeExecution files. Status is binary: `None → Running → terminal`. | No progress bar on nodes. Show running animation, not %. |
+| 3 | **Single-node execution IS possible** | `ExecutionMode.SelectedOnly` + `SelectedMLVs = ["name"]` → only that node executes. | DAG Studio CAN offer "Run this node" on individual MLV nodes. |
+| 4 | **SessionId/ReplId ARE persisted** | `NodeExecutionMetrics.cs:159-167` — both have `[JsonProperty]` and are serialized to `node_{id}_metrics.json`. | Can show Spark session link in node detail panel. |
+
+---
+
+### 4.10 API Summary (Run/Cancel/Status)
+
+| Action | Endpoint | Method | Returns | Notes |
+|---|---|---|---|---|
+| Run DAG | `/liveTableSchedule/runDAG/{iterationId}` | POST | 202 | Accepts optional `mlvExecutionDefinitionId` for scoped execution |
+| Cancel DAG | `/liveTableSchedule/cancelDAG/{iterationId}` | DELETE | 202 | Cascading cancellation — all nodes |
+| Get Status | `/liveTableSchedule/getDAGExecStatus/{iterationId}` | GET | 200 | Full `DagExecutionMetrics` |
+| Force Unlock | `/liveTableSchedule/forceUnlockDAGExecution/{lockedIterationId}` | POST | 200 | Emergency lock release |
+
+---
+
+*"Now we see the engine, not just the dashboard. The execution engine is Kahn's algorithm with bounded parallelism. The state machines are clean. SelectedOnly gives us single-node execution. SessionId is persisted. Cross-workspace is real. These aren't assumptions — they're verified from source."*
+
+— Sana Reeves, Architect (Updated 2026-04-24)

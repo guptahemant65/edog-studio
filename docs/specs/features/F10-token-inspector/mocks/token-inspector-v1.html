@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDOG Studio — Token Inspector (F10)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   EDOG Studio — Token Inspector v1 (F10)
+   Interactive mock: JWT decode, expiry visualization, scope pills,
+   claims table, MWC tab, auto-expiry warning, spring animations.
+   Single self-contained HTML — zero external dependencies.
+   Phantom manifestation #3.
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  /* ── Light Theme (Default — CEO mandate) ── */
+  --bg:#f4f5f7;--surface:#ffffff;--surface-2:#f8f9fb;--surface-3:#ebedf0;
+  --border:rgba(0,0,0,0.06);--border-bright:rgba(0,0,0,0.12);
+  --text:#1a1d23;--text-dim:#5a6070;--text-muted:#8e95a5;
+  --accent:#6d5cff;--accent-dim:rgba(109,92,255,0.07);--accent-glow:rgba(109,92,255,0.15);
+  --text-on-accent:#ffffff;
+  --green:#18a058;--green-dim:rgba(24,160,88,0.08);--green-glow:rgba(24,160,88,0.18);
+  --amber:#e5940c;--amber-dim:rgba(229,148,12,0.08);--amber-glow:rgba(229,148,12,0.18);
+  --red:#e5453b;--red-dim:rgba(229,69,59,0.08);--red-glow:rgba(229,69,59,0.18);
+  --blue:#2d7ff9;--blue-dim:rgba(45,127,249,0.08);
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Code','Fira Code','Consolas',monospace;
+  --xs:10px;--sm:12px;--md:13px;--lg:15px;--xl:18px;--xxl:22px;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;--s8:32px;--s10:40px;--s12:48px;
+  --r-s:4px;--r-m:6px;--r-l:10px;--r-f:100px;
+  --sh-s:0 1px 2px rgba(0,0,0,0.04);
+  --sh-m:0 2px 8px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+  --sh-l:0 4px 16px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  --sh-xl:0 12px 40px rgba(0,0,0,0.10),0 4px 12px rgba(0,0,0,0.06);
+  --ease:cubic-bezier(0.4,0,0.2,1);--spring:cubic-bezier(0.34,1.56,0.64,1);
+  --tf:80ms;--tn:150ms;--ts:360ms;
+  --hover-bg:rgba(0,0,0,0.03);--selected-bg:rgba(109,92,255,0.07);
+  --overlay-bg:rgba(0,0,0,0.18);
+  --scrollbar-thumb:rgba(0,0,0,0.12);
+  --topbar-h:44px;--drawer-w:320px;
+  /* JWT segment colors */
+  --jwt-header:#e5453b;--jwt-header-dim:rgba(229,69,59,0.08);
+  --jwt-payload:#6d5cff;--jwt-payload-dim:rgba(109,92,255,0.08);
+  --jwt-sig:#18a058;--jwt-sig-dim:rgba(24,160,88,0.08);
+}
+
+[data-theme="dark"] {
+  --bg:#0c0e14;--surface:#14171f;--surface-2:#1c2029;--surface-3:#282d3a;
+  --border:rgba(255,255,255,0.06);--border-bright:rgba(255,255,255,0.10);
+  --text:#e4e7ed;--text-dim:#8a91a3;--text-muted:#555d70;
+  --accent:#8577ff;--accent-dim:rgba(133,119,255,0.10);--accent-glow:rgba(133,119,255,0.20);
+  --text-on-accent:#ffffff;
+  --green:#34d399;--green-dim:rgba(52,211,153,0.12);--green-glow:rgba(52,211,153,0.20);
+  --amber:#f0b429;--amber-dim:rgba(240,180,41,0.12);--amber-glow:rgba(240,180,41,0.18);
+  --red:#ff6b6b;--red-dim:rgba(255,107,107,0.12);--red-glow:rgba(255,107,107,0.18);
+  --blue:#5b9bff;--blue-dim:rgba(91,155,255,0.12);
+  --hover-bg:rgba(255,255,255,0.03);--selected-bg:rgba(133,119,255,0.10);
+  --overlay-bg:rgba(0,0,0,0.45);
+  --scrollbar-thumb:rgba(255,255,255,0.10);
+  --sh-s:0 1px 2px rgba(0,0,0,0.12);--sh-m:0 2px 8px rgba(0,0,0,0.18);
+  --sh-l:0 4px 16px rgba(0,0,0,0.24);--sh-xl:0 12px 40px rgba(0,0,0,0.30);
+  --jwt-header:#ff6b6b;--jwt-header-dim:rgba(255,107,107,0.12);
+  --jwt-payload:#8577ff;--jwt-payload-dim:rgba(133,119,255,0.12);
+  --jwt-sig:#34d399;--jwt-sig-dim:rgba(52,211,153,0.12);
+}
+
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);font-size:var(--md);color:var(--text);background:var(--bg);line-height:1.4;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px}
+::-webkit-scrollbar-track{background:transparent}
+button{cursor:pointer;border:none;background:none;font-family:inherit;color:inherit}
+::selection{background:rgba(109,92,255,0.2);color:var(--text)}
+
+/* ═══════ LAYOUT ═══════ */
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* ═══════ TOPBAR ═══════ */
+.topbar{height:var(--topbar-h);display:flex;align-items:center;padding:0 var(--s4);border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;gap:var(--s3);z-index:100}
+.topbar-brand{font-size:var(--md);font-weight:600;display:flex;align-items:center;gap:var(--s2);letter-spacing:.3px}
+.topbar-brand .ico{color:var(--accent);font-size:15px}
+.topbar-brand .sep{color:var(--text-muted);font-weight:400}
+.topbar-badge{padding:2px 8px;border-radius:var(--r-f);background:var(--accent-dim);color:var(--accent);font-size:var(--xs);font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:var(--s2)}
+.topbar-btn{width:28px;height:28px;border-radius:var(--r-m);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-dim);transition:all var(--tf) var(--ease)}
+.topbar-btn:hover{background:var(--hover-bg);color:var(--text)}
+.divider-v{width:1px;height:20px;background:var(--border-bright);flex-shrink:0}
+.conn-chip{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r-f);font-size:var(--xs);font-family:var(--mono);color:var(--text-dim);background:rgba(0,0,0,0.03);transition:all var(--tn)}
+[data-theme="dark"] .conn-chip{background:rgba(255,255,255,0.04)}
+.conn-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px rgba(52,211,153,0.4);flex-shrink:0}
+
+/* ── Token Health Indicator ── */
+.token-health{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:var(--r-f);cursor:pointer;transition:all var(--tn) var(--ease);user-select:none;border:1px solid transparent}
+.token-health:hover{background:var(--hover-bg);border-color:var(--border)}
+.token-health:active{transform:scale(0.97)}
+.token-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;transition:all var(--tn)}
+.token-dot.green{background:var(--green);box-shadow:0 0 6px var(--green-glow)}
+.token-dot.amber{background:var(--amber);box-shadow:0 0 6px var(--amber-glow);animation:pulseAmber 2s ease-in-out infinite}
+.token-dot.red{background:var(--red);box-shadow:0 0 8px var(--red-glow);animation:pulseRed 1.2s ease-in-out infinite}
+.token-label{font-size:var(--xs);font-family:var(--mono);font-weight:500;color:var(--text-dim);letter-spacing:.02em}
+.token-label.expired{color:var(--red);font-weight:600}
+
+/* ═══════ MAIN CONTENT ═══════ */
+.main-area{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.content-placeholder{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:var(--s4);color:var(--text-muted);font-size:var(--sm)}
+.content-placeholder .hint{display:flex;align-items:center;gap:var(--s2);padding:var(--s2) var(--s4);border-radius:var(--r-m);background:var(--surface);border:1px solid var(--border);font-size:var(--sm);color:var(--text-dim)}
+.content-placeholder .hint .arrow{color:var(--accent);font-size:var(--lg);animation:bounceRight 1.5s ease-in-out infinite}
+
+/* ═══════ OVERLAY ═══════ */
+.drawer-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:var(--overlay-bg);z-index:199;opacity:0;pointer-events:none;transition:opacity var(--tn) var(--ease)}
+.drawer-overlay.visible{opacity:1;pointer-events:auto}
+
+/* ═══════ TOKEN INSPECTOR DRAWER ═══════ */
+.token-drawer{position:fixed;top:var(--topbar-h);right:0;width:var(--drawer-w);height:calc(100vh - var(--topbar-h));background:var(--surface);border-left:1px solid var(--border);transform:translateX(100%);z-index:200;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,0.06),-2px 0 8px rgba(0,0,0,0.03);overflow:hidden;transition:transform var(--ts) var(--spring)}
+.token-drawer.open{transform:translateX(0)}
+.token-drawer.expired-glow{border-left:2px solid transparent;box-shadow:-8px 0 32px rgba(0,0,0,0.06),-2px 0 8px rgba(0,0,0,0.03),inset 3px 0 12px var(--red-glow)}
+
+/* ── Drawer Header ── */
+.td-header{display:flex;align-items:center;justify-content:space-between;padding:var(--s3) var(--s4);border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+.td-title{font-size:var(--lg);font-weight:600;color:var(--text);display:flex;align-items:center;gap:var(--s2)}
+.td-title .td-ico{color:var(--accent);font-size:14px}
+.td-close{width:26px;height:26px;border-radius:var(--r-m);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px;transition:all var(--tf)}
+.td-close:hover{background:var(--hover-bg);color:var(--text)}
+.td-close:active{transform:scale(0.9)}
+
+/* ── Tabs ── */
+.td-tabs{display:flex;align-items:center;padding:0 var(--s4);border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface);position:relative}
+.td-tab{padding:0 var(--s4);height:34px;display:flex;align-items:center;gap:6px;font-size:var(--sm);font-weight:500;color:var(--text-muted);cursor:pointer;position:relative;transition:color var(--tf);user-select:none}
+.td-tab:hover{color:var(--text-dim)}
+.td-tab.active{color:var(--text);font-weight:600}
+.td-tab::after{content:'';position:absolute;bottom:0;left:50%;width:0;height:2px;background:var(--accent);transition:all var(--tn) var(--ease);transform:translateX(-50%);border-radius:2px 2px 0 0}
+.td-tab.active::after{width:100%}
+.td-tab .tab-badge{padding:1px 6px;border-radius:var(--r-f);background:var(--surface-3);font-size:9px;font-weight:500;font-family:var(--mono);color:var(--text-muted);margin-left:2px}
+.td-tab-right{margin-left:auto;display:flex;align-items:center;gap:var(--s1)}
+
+/* ── Drawer Body ── */
+.td-body{flex:1;overflow-y:auto;padding:var(--s4);display:flex;flex-direction:column;gap:var(--s4)}
+.td-pane{display:none}
+.td-pane.active{display:flex;flex-direction:column;gap:var(--s4)}
+
+/* ═══════ JWT VISUALIZATION (Hero) ═══════ */
+.jwt-viz{border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden;background:var(--surface-2)}
+.jwt-viz-header{display:flex;align-items:center;justify-content:space-between;padding:var(--s2) var(--s3);border-bottom:1px solid var(--border)}
+.jwt-viz-label{font-size:var(--xs);font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.jwt-viz-legend{display:flex;gap:var(--s3);font-size:9px;color:var(--text-muted)}
+.jwt-viz-legend span{display:flex;align-items:center;gap:3px;cursor:pointer;transition:color var(--tf)}
+.jwt-viz-legend span:hover{color:var(--text-dim)}
+.jwt-viz-legend .leg-dot{width:6px;height:6px;border-radius:50%}
+.jwt-viz-legend .leg-header .leg-dot{background:var(--jwt-header)}
+.jwt-viz-legend .leg-payload .leg-dot{background:var(--jwt-payload)}
+.jwt-viz-legend .leg-sig .leg-dot{background:var(--jwt-sig)}
+.jwt-raw{padding:var(--s3);font-family:var(--mono);font-size:10px;line-height:1.6;word-break:break-all;cursor:default;position:relative}
+.jwt-segment{transition:all var(--tn);border-radius:2px;padding:1px 0;cursor:pointer}
+.jwt-segment:hover{filter:brightness(1.15)}
+.jwt-seg-header{color:var(--jwt-header);opacity:.6}
+.jwt-seg-header:hover,.jwt-seg-header.highlight{opacity:1;background:var(--jwt-header-dim)}
+.jwt-seg-payload{color:var(--jwt-payload);opacity:.85}
+.jwt-seg-payload:hover,.jwt-seg-payload.highlight{opacity:1;background:var(--jwt-payload-dim)}
+.jwt-seg-sig{color:var(--jwt-sig);opacity:.6}
+.jwt-seg-sig:hover,.jwt-seg-sig.highlight{opacity:1;background:var(--jwt-sig-dim)}
+.jwt-dot{color:var(--text-muted);opacity:.4;margin:0 1px;font-weight:700}
+
+/* ═══════ EXPIRY PROGRESS BAR ═══════ */
+.expiry-section{display:flex;flex-direction:column;gap:var(--s2)}
+.expiry-bar-wrap{position:relative;height:4px;background:var(--surface-3);border-radius:2px;overflow:hidden}
+.expiry-bar-fill{height:100%;border-radius:2px;transition:width 1s linear,background var(--tn)}
+.expiry-bar-fill.green{background:var(--green)}
+.expiry-bar-fill.amber{background:var(--amber)}
+.expiry-bar-fill.red{background:var(--red)}
+.expiry-meta{display:flex;align-items:center;justify-content:space-between}
+.expiry-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r-f);font-size:var(--xs);font-weight:600;font-family:var(--mono);transition:all var(--tn)}
+.expiry-badge.green{background:var(--green-dim);color:var(--green)}
+.expiry-badge.amber{background:var(--amber-dim);color:var(--amber)}
+.expiry-badge.red{background:var(--red-dim);color:var(--red)}
+.expiry-badge .badge-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.expiry-badge.green .badge-dot{background:var(--green)}
+.expiry-badge.amber .badge-dot{background:var(--amber)}
+.expiry-badge.red .badge-dot{background:var(--red)}
+.expiry-issued{font-size:9px;color:var(--text-muted);font-family:var(--mono)}
+
+/* ═══════ CLAIMS TABLE ═══════ */
+.claims-section{border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
+.claims-header{display:flex;align-items:center;justify-content:space-between;padding:var(--s2) var(--s3);background:var(--surface-2);border-bottom:1px solid var(--border)}
+.claims-title{font-size:var(--xs);font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.claims-count{font-size:9px;font-family:var(--mono);color:var(--text-muted);padding:1px 6px;border-radius:var(--r-f);background:var(--surface-3)}
+.claims-grid{display:grid;grid-template-columns:72px 1fr;font-size:var(--sm)}
+.claim-row{display:contents;cursor:default}
+.claim-row:hover .claim-key,.claim-row:hover .claim-val{background:var(--hover-bg)}
+.claim-row.expired-row .claim-key,.claim-row.expired-row .claim-val{background:var(--red-dim)}
+.claim-key{padding:5px var(--s3);font-weight:600;color:var(--text-muted);font-size:var(--xs);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);display:flex;align-items:center}
+.claim-val{padding:5px var(--s3);font-family:var(--mono);font-size:10px;color:var(--text);border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px;min-width:0;word-break:break-all;position:relative}
+.claim-val .cv-primary{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;transition:all var(--tf)}
+.claim-val .cv-primary:hover{color:var(--accent)}
+.claim-val .cv-primary.expanded{white-space:normal;word-break:break-all}
+.claim-val .cv-sub{font-size:9px;color:var(--text-muted);font-style:italic}
+.claim-val .cv-expired{color:var(--red);font-weight:600}
+
+/* ═══════ SCOPE PILLS ═══════ */
+.scopes-section{display:flex;flex-direction:column;gap:var(--s2)}
+.scopes-header{display:flex;align-items:center;gap:var(--s2)}
+.scopes-label{font-size:var(--xs);font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+.scopes-count{font-size:9px;font-family:var(--mono);padding:1px 6px;border-radius:var(--r-f);background:var(--accent-dim);color:var(--accent);font-weight:600}
+.scopes-wrap{display:flex;flex-wrap:wrap;gap:var(--s1)}
+.scope-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:var(--r-f);font-size:10px;font-family:var(--mono);font-weight:500;background:var(--surface-2);color:var(--text-dim);border:1px solid var(--border);transition:all var(--tf);cursor:default;user-select:none}
+.scope-pill:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);transform:translateY(-1px)}
+
+/* ═══════ ACTION BUTTONS ═══════ */
+.actions-row{display:flex;gap:var(--s2);flex-wrap:wrap;padding-top:var(--s2);border-top:1px solid var(--border)}
+.act-btn{display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 14px;border-radius:var(--r-m);font-size:var(--sm);font-weight:500;transition:all var(--tf) var(--ease);white-space:nowrap;border:1px solid transparent;position:relative;overflow:hidden}
+.act-btn:active{transform:scale(0.97)}
+.act-btn.primary{background:var(--accent);color:var(--text-on-accent);border-color:var(--accent);flex:1}
+.act-btn.primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px var(--accent-glow)}
+.act-btn.secondary{background:var(--surface);color:var(--text-dim);border-color:var(--border-bright);flex:1}
+.act-btn.secondary:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.act-btn.tertiary{background:none;color:var(--text-muted);font-size:var(--xs);padding:4px 8px}
+.act-btn.tertiary:hover{color:var(--accent)}
+.act-btn.tertiary .ext-ico{font-size:8px;opacity:.6}
+.act-btn .spinner{display:none;width:12px;height:12px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 600ms linear infinite}
+.act-btn.loading .spinner{display:block}
+.act-btn.loading .lbl{display:none}
+
+/* ═══════ MWC CARD ═══════ */
+.mwc-card{border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
+.mwc-card-header{display:flex;align-items:center;justify-content:space-between;padding:var(--s2) var(--s3);background:var(--surface-2);border-bottom:1px solid var(--border)}
+.mwc-card-header .mwc-title{font-size:var(--sm);font-weight:600;color:var(--text)}
+.mwc-card-header .mwc-badge{font-size:9px;padding:1px 6px;border-radius:var(--r-f);font-weight:500;font-family:var(--mono)}
+.mwc-grid{display:grid;grid-template-columns:80px 1fr;font-size:var(--sm)}
+.mwc-key{padding:5px var(--s3);font-weight:600;color:var(--text-muted);font-size:var(--xs);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);display:flex;align-items:center}
+.mwc-val{padding:5px var(--s3);font-family:var(--mono);font-size:10px;color:var(--text);border-bottom:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ═══════ EMPTY STATE ═══════ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s4);padding:var(--s12) var(--s6);text-align:center;flex:1}
+.empty-ico{width:48px;height:48px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text-muted);animation:breathe 3s ease-in-out infinite}
+.empty-title{font-size:var(--md);font-weight:600;color:var(--text-dim)}
+.empty-hint{font-size:var(--sm);color:var(--text-muted);max-width:240px;line-height:1.5}
+.empty-cmd{display:inline-flex;padding:2px 8px;border-radius:var(--r-s);background:var(--surface-3);font-family:var(--mono);font-size:var(--xs);color:var(--accent);font-weight:500;margin-top:var(--s1)}
+
+/* ═══════ TOAST ═══════ */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);padding:8px 20px;border-radius:var(--r-m);background:var(--text);color:var(--bg);font-size:var(--sm);font-weight:500;box-shadow:var(--sh-l);opacity:0;pointer-events:none;z-index:500;transition:all var(--tn) var(--spring)}
+.toast.visible{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ═══════ CONTROLS BAR (Mock Controls) ═══════ */
+.controls-bar{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);border-top:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.ctrl-label{font-size:var(--xs);font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);white-space:nowrap}
+.ctrl-btn{padding:3px 10px;border-radius:var(--r-s);font-size:var(--xs);font-weight:500;border:1px solid var(--border-bright);color:var(--text-dim);background:var(--surface);transition:all var(--tf)}
+.ctrl-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.ctrl-btn.active{background:var(--red-dim);border-color:var(--red);color:var(--red)}
+.ctrl-btn.active:hover{background:rgba(229,69,59,0.14)}
+.ctrl-sep{width:1px;height:18px;background:var(--border-bright);flex-shrink:0}
+.ctrl-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.ctrl-toggle input{display:none}
+.ctrl-track{width:28px;height:16px;border-radius:8px;background:var(--surface-3);position:relative;transition:background var(--tn);flex-shrink:0}
+.ctrl-toggle input:checked+.ctrl-track{background:var(--accent)}
+.ctrl-thumb{width:12px;height:12px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;box-shadow:var(--sh-s);transition:transform var(--tn) var(--spring)}
+.ctrl-toggle input:checked+.ctrl-track .ctrl-thumb{transform:translateX(12px)}
+.ctrl-toggle-label{font-size:var(--xs);color:var(--text-dim)}
+
+/* ═══════ KEYFRAME ANIMATIONS ═══════ */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulseAmber{0%,100%{box-shadow:0 0 4px var(--amber-glow)}50%{box-shadow:0 0 10px var(--amber-glow)}}
+@keyframes pulseRed{0%,100%{box-shadow:0 0 4px var(--red-glow)}50%{box-shadow:0 0 12px var(--red-glow)}}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.05);opacity:1}}
+@keyframes bounceRight{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+@keyframes slideInRight{from{transform:translateX(30px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fadeInUp{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes scaleSpring{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes checkPop{0%{transform:scale(0)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
+@keyframes shimmer{0%{background-position:-200px 0}100%{background-position:200px 0}}
+@keyframes barTick{from{width:var(--bar-from)}to{width:var(--bar-to)}}
+@keyframes glowPulse{0%,100%{box-shadow:inset 3px 0 8px var(--red-glow)}50%{box-shadow:inset 3px 0 16px var(--red-glow)}}
+@keyframes expiredFlash{0%,100%{opacity:1}50%{opacity:.7}}
+@keyframes toastIn{from{transform:translateX(-50%) translateY(20px) scale(.95);opacity:0}to{transform:translateX(-50%) translateY(0) scale(1);opacity:1}}
+@keyframes pillIn{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes claimRowIn{from{transform:translateX(12px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes headerGlow{0%,100%{text-shadow:none}50%{text-shadow:0 0 8px var(--jwt-header-dim)}}
+@keyframes payloadGlow{0%,100%{text-shadow:none}50%{text-shadow:0 0 8px var(--jwt-payload-dim)}}
+@keyframes sigGlow{0%,100%{text-shadow:none}50%{text-shadow:0 0 8px var(--jwt-sig-dim)}}
+@keyframes countdownTick{from{opacity:1}to{opacity:.8}}
+@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+@keyframes drawerSlideOut{from{transform:translateX(0)}to{transform:translateX(100%)}}
+@keyframes segmentHover{from{background:transparent}to{background:var(--jwt-payload-dim)}}
+@keyframes refreshSpin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+@keyframes badgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+@keyframes expiredBarPulse{0%,100%{opacity:1}50%{opacity:.7}}
+@keyframes dotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+@keyframes contentStagger{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Staggered content animation */
+.td-pane.active .jwt-viz{animation:contentStagger var(--ts) var(--ease) both;animation-delay:50ms}
+.td-pane.active .expiry-section{animation:contentStagger var(--ts) var(--ease) both;animation-delay:100ms}
+.td-pane.active .claims-section{animation:contentStagger var(--ts) var(--ease) both;animation-delay:150ms}
+.td-pane.active .scopes-section{animation:contentStagger var(--ts) var(--ease) both;animation-delay:200ms}
+.td-pane.active .actions-row{animation:contentStagger var(--ts) var(--ease) both;animation-delay:250ms}
+.td-pane.active .mwc-card{animation:contentStagger var(--ts) var(--ease) both;animation-delay:50ms}
+
+/* Claim row stagger */
+.claim-row{animation:claimRowIn var(--tn) var(--ease) both}
+.claim-row:nth-child(1){animation-delay:40ms}.claim-row:nth-child(2){animation-delay:60ms}
+.claim-row:nth-child(3){animation-delay:80ms}.claim-row:nth-child(4){animation-delay:100ms}
+.claim-row:nth-child(5){animation-delay:120ms}.claim-row:nth-child(6){animation-delay:140ms}
+.claim-row:nth-child(7){animation-delay:160ms}.claim-row:nth-child(8){animation-delay:180ms}
+.claim-row:nth-child(9){animation-delay:200ms}
+
+/* Pill stagger */
+.scope-pill{animation:pillIn var(--tn) var(--spring) both}
+.scope-pill:nth-child(1){animation-delay:80ms}.scope-pill:nth-child(2){animation-delay:110ms}
+.scope-pill:nth-child(3){animation-delay:140ms}.scope-pill:nth-child(4){animation-delay:170ms}
+.scope-pill:nth-child(5){animation-delay:200ms}.scope-pill:nth-child(6){animation-delay:230ms}
+.scope-pill:nth-child(7){animation-delay:260ms}
+
+/* Expired state animations */
+.token-drawer.expired-glow{animation:glowPulse 2s ease-in-out infinite}
+.expiry-badge.expired-flash{animation:expiredFlash 1.2s ease-in-out infinite}
+.expiry-bar-fill.expired-pulse{animation:expiredBarPulse 1.2s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ═══════ TOPBAR ═══════ -->
+  <div class="topbar">
+    <div class="topbar-brand">
+      <span class="ico">◆</span>
+      <span>EDOG Studio</span>
+      <span class="sep">/</span>
+      <span style="font-weight:400;color:var(--text-dim)">Lakehouse_Sales</span>
+    </div>
+    <span class="topbar-badge">F10 Mock</span>
+    <div class="topbar-right">
+      <div class="conn-chip"><span class="conn-dot"></span> Connected</div>
+      <div class="divider-v"></div>
+
+      <!-- Token Health Indicator — THE TRIGGER -->
+      <div class="token-health" id="tokenHealthTrigger" title="Click to open Token Inspector">
+        <span class="token-dot green" id="tokenDot"></span>
+        <span class="token-label" id="tokenCountdown">42m 18s</span>
+      </div>
+
+      <div class="divider-v"></div>
+      <button class="topbar-btn" id="themeToggle" title="Toggle theme">◐</button>
+    </div>
+  </div>
+
+  <!-- ═══════ MAIN AREA ═══════ -->
+  <div class="main-area">
+    <div class="content-placeholder">
+      <div style="font-size:28px;color:var(--text-muted);opacity:.4">◆</div>
+      <div>Token Inspector Mock — Click the health indicator above</div>
+      <div class="hint">
+        <span class="arrow">▸</span>
+        <span>Click the <strong style="color:var(--accent)">green dot + countdown</strong> in the top bar</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ MOCK CONTROLS ═══════ -->
+  <div class="controls-bar">
+    <span class="ctrl-label">Mock Controls</span>
+    <button class="ctrl-btn" id="ctrlExpired">Simulate Expired</button>
+    <button class="ctrl-btn" id="ctrlAmber">Simulate Warning (5m)</button>
+    <button class="ctrl-btn" id="ctrlGreen">Reset to Healthy</button>
+    <span class="ctrl-sep"></span>
+    <button class="ctrl-btn" id="ctrlEmpty">Show Empty State</button>
+    <button class="ctrl-btn" id="ctrlToken">Show Token</button>
+    <span class="ctrl-sep"></span>
+    <label class="ctrl-toggle">
+      <input type="checkbox" id="ctrlDark">
+      <span class="ctrl-track"><span class="ctrl-thumb"></span></span>
+      <span class="ctrl-toggle-label">Dark Mode</span>
+    </label>
+  </div>
+</div>
+
+<!-- ═══════ OVERLAY ═══════ -->
+<div class="drawer-overlay" id="drawerOverlay"></div>
+
+<!-- ═══════ TOKEN INSPECTOR DRAWER ═══════ -->
+<div class="token-drawer" id="tokenDrawer">
+  <div class="td-header">
+    <span class="td-title"><span class="td-ico">◇</span> Token Inspector</span>
+    <button class="td-close" id="drawerClose">✕</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="td-tabs">
+    <div class="td-tab active" data-tab="bearer">Bearer</div>
+    <div class="td-tab" data-tab="mwc">MWC <span class="tab-badge">connected</span></div>
+  </div>
+
+  <!-- Tab Bodies -->
+  <div class="td-body">
+    <!-- ═══ BEARER PANE ═══ -->
+    <div class="td-pane active" id="pane-bearer"></div>
+
+    <!-- ═══ MWC PANE ═══ -->
+    <div class="td-pane" id="pane-mwc"></div>
+
+    <!-- ═══ EMPTY STATE PANE ═══ -->
+    <div class="td-pane" id="pane-empty">
+      <div class="empty-state">
+        <div class="empty-ico">◇</div>
+        <div class="empty-title">No bearer token available</div>
+        <div class="empty-hint">Authenticate with your Entra ID credentials to inspect and manage tokens.</div>
+        <code class="empty-cmd">edog auth login</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ TOAST ═══════ -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   Token Inspector — Interactive Mock Engine
+   Phantom manifestation #3: JWT decode, live countdown, spring drawer
+   ═══════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── Simulated JWT ── */
+  function base64url(obj) {
+    return btoa(JSON.stringify(obj))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const iat = now - 1080; // issued 18 minutes ago
+  let expiryOffsetSec = 42 * 60 + 18; // 42m 18s from now
+  let tokenExpired = false;
+  let showEmpty = false;
+
+  const jwtHeader = { alg: 'RS256', typ: 'JWT', kid: 'nOo3ZDrODXEK1jKWhXslHR_KXEg', x5t: 'nOo3ZDrODXEK1jKWhXslHR' };
+  const jwtPayload = {
+    aud: 'https://analysis.windows.net/powerbi/api',
+    iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+    iat: iat,
+    nbf: iat,
+    exp: now + expiryOffsetSec,
+    aio: 'AVQAq/8UAAAA3kQXvX9HJ7YqB+Kn3GkR+5m5fH',
+    appid: '871c010f-5e61-4fb1-83ac-98610a7e9110',
+    appidacr: '1',
+    idp: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+    name: 'Zara Okonkwo',
+    oid: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    sub: 'xH9kLmP2-nQr5tUv8wXy1zA3bC5dE7fG9hI0jK2l',
+    tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+    uti: 'Vk3fH8gMtUeXR9Yp2bKJAA',
+    ver: '1.0',
+    scp: 'Workspace.ReadWrite.All Lakehouse.Read.All Item.Execute Dataset.ReadWrite.All Capacity.ReadWrite.All OneLake.ReadWrite.All Dataflow.ReadWrite.All',
+    roles: ['FabricLiveTable.Developer', 'Workspace.Admin'],
+  };
+  const jwtSignature = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk2GQ8-kLzPnF_2HP8oNS3Dlw5JfPrV_sKa3OZplQ5WeLf_5cWQKbKzNNvXI7XdS';
+
+  const headerB64 = base64url(jwtHeader);
+  const payloadB64 = base64url(jwtPayload);
+  const sigB64 = jwtSignature;
+  const fullJwt = headerB64 + '.' + payloadB64 + '.' + sigB64;
+
+  /* ── MWC Token (also a JWT — same decode treatment) ── */
+  const mwcIat = now - 1500; // issued 25 minutes ago
+  let mwcExpiryOffsetSec = 35 * 60 + 12; // 35m 12s from now
+  let mwcExpired = false;
+  let mwcExpiresAt = Date.now() + mwcExpiryOffsetSec * 1000;
+
+  const mwcJwtHeader = { alg: 'RS256', typ: 'JWT', kid: 'qF7kR3mWxTv2nHpLsY9jA', x5t: 'qF7kR3mWxTv2nHpLsY9' };
+  const mwcJwtPayload = {
+    aud: 'https://pbidedicated.westus2.asazure.windows.net',
+    iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+    iat: mwcIat,
+    nbf: mwcIat,
+    exp: now + mwcExpiryOffsetSec,
+    appid: '871c010f-5e61-4fb1-83ac-98610a7e9110',
+    appidacr: '1',
+    idp: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+    artifactId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+    capacityId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+    workspaceId: '8b2e4a6c-d1f3-49e7-a5c8-3b9d7e2f1a04',
+    endpoint: 'pbidedicated.westus2.asazure.windows.net',
+    name: 'Zara Okonkwo',
+    oid: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    sub: 'xH9kLmP2-nQr5tUv8wXy1zA3bC5dE7fG9hI0jK2l',
+    tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+    ver: '1.0',
+    scp: 'Capacity.Execute Artifact.ReadWrite Lakehouse.Execute OneLake.Read Workspace.Operate',
+    roles: ['FabricLiveTable.CapacityUser'],
+  };
+  const mwcJwtSignature = 'Xt7fRp2kLmN9qVwB3jC8sD5gH1aE6iO4uY0tZxWcKbPnMlSvJrFhGdQ7yAeUoIp3kRmT2xLfWn';
+
+  const mwcHeaderB64 = base64url(mwcJwtHeader);
+  const mwcPayloadB64 = base64url(mwcJwtPayload);
+  const mwcSigB64 = mwcJwtSignature;
+  const fullMwcJwt = mwcHeaderB64 + '.' + mwcPayloadB64 + '.' + mwcSigB64;
+
+  /* ── DOM refs ── */
+  const $  = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+
+  const drawer     = $('#tokenDrawer');
+  const overlay    = $('#drawerOverlay');
+  const trigger    = $('#tokenHealthTrigger');
+  const closeBtn   = $('#drawerClose');
+  const dot        = $('#tokenDot');
+  const countdown  = $('#tokenCountdown');
+  const toast      = $('#toast');
+  const tabs       = $$('.td-tab');
+
+  let drawerOpen   = false;
+  let currentTab   = 'bearer';
+  let countdownInterval = null;
+  let toastTimeout = null;
+  let expiresAt    = Date.now() + expiryOffsetSec * 1000;
+
+  /* ═══════ DRAWER OPEN/CLOSE ═══════ */
+  function openDrawer() {
+    if (drawerOpen) return;
+    drawerOpen = true;
+    drawer.classList.add('open');
+    overlay.classList.add('visible');
+    renderCurrentTab();
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDrawer() {
+    if (!drawerOpen) return;
+    drawerOpen = false;
+    drawer.classList.remove('open');
+    overlay.classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+
+  trigger.addEventListener('click', openDrawer);
+  closeBtn.addEventListener('click', closeDrawer);
+  overlay.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && drawerOpen) closeDrawer();
+  });
+
+  /* ═══════ TAB SWITCHING ═══════ */
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTab = tab.dataset.tab;
+      renderCurrentTab();
+    });
+  });
+
+  function renderCurrentTab() {
+    $$('.td-pane').forEach(p => p.classList.remove('active'));
+    if (showEmpty) {
+      $('#pane-empty').classList.add('active');
+      return;
+    }
+    const pane = $('#pane-' + currentTab);
+    if (pane) pane.classList.add('active');
+
+    if (currentTab === 'bearer') renderBearerPane();
+    else if (currentTab === 'mwc') renderMWCPane();
+  }
+
+  /* ═══════ BEARER PANE RENDERING ═══════ */
+  function renderBearerPane() {
+    const pane = $('#pane-bearer');
+    const secRemaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+    const min = Math.floor(secRemaining / 60);
+    const sec = secRemaining % 60;
+    const totalLifetime = 3600; // 1 hour token
+    const pct = tokenExpired ? 0 : Math.max(0, (secRemaining / totalLifetime) * 100);
+    const color = tokenExpired ? 'red' : min > 10 ? 'green' : min > 5 ? 'amber' : 'red';
+    const expEpoch = tokenExpired ? (now - 300) : (now + secRemaining);
+    const expDate = new Date(expEpoch * 1000);
+    const iatDate = new Date(iat * 1000);
+    const expiredClass = tokenExpired ? ' expired-row' : '';
+    const expiredBarClass = tokenExpired ? ' expired-pulse' : '';
+    const badgeExpiredClass = tokenExpired ? ' expired-flash' : '';
+
+    const claims = [
+      { key: 'sub', val: jwtPayload.sub },
+      { key: 'aud', val: jwtPayload.aud },
+      { key: 'iss', val: jwtPayload.iss },
+      { key: 'exp', val: expEpoch.toString(), sub: formatDateTime(expDate), expired: tokenExpired },
+      { key: 'iat', val: iat.toString(), sub: formatDateTime(iatDate) },
+      { key: 'name', val: jwtPayload.name },
+      { key: 'tid', val: jwtPayload.tid },
+      { key: 'oid', val: jwtPayload.oid },
+      { key: 'roles', val: jwtPayload.roles.join(', ') },
+    ];
+
+    const scopes = jwtPayload.scp.split(' ');
+
+    pane.innerHTML = `
+      <!-- JWT Visualization -->
+      <div class="jwt-viz">
+        <div class="jwt-viz-header">
+          <span class="jwt-viz-label">Raw JWT</span>
+          <div class="jwt-viz-legend">
+            <span class="leg-header" data-seg="header"><span class="leg-dot"></span> Header</span>
+            <span class="leg-payload" data-seg="payload"><span class="leg-dot"></span> Payload</span>
+            <span class="leg-sig" data-seg="sig"><span class="leg-dot"></span> Signature</span>
+          </div>
+        </div>
+        <div class="jwt-raw" id="jwtRaw">
+          <span class="jwt-segment jwt-seg-header" data-target="bearerClaimsSection" title="Click to scroll to decoded header">${headerB64}</span><span class="jwt-dot">.</span><span class="jwt-segment jwt-seg-payload" data-target="bearerClaimsSection" title="Click to scroll to decoded claims">${payloadB64}</span><span class="jwt-dot">.</span><span class="jwt-segment jwt-seg-sig" title="Signature (RS256)">${sigB64}</span>
+        </div>
+      </div>
+
+      <!-- Expiry Progress Bar -->
+      <div class="expiry-section">
+        <div class="expiry-bar-wrap">
+          <div class="expiry-bar-fill ${color}${expiredBarClass}" id="expiryBar" style="width:${pct}%"></div>
+        </div>
+        <div class="expiry-meta">
+          <span class="expiry-badge ${color}${badgeExpiredClass}" id="expiryBadge">
+            <span class="badge-dot"></span>
+            ${tokenExpired ? 'EXPIRED' : min + 'm ' + String(sec).padStart(2, '0') + 's remaining'}
+          </span>
+          <span class="expiry-issued">Issued ${formatTimeAgo(iatDate)}</span>
+        </div>
+      </div>
+
+      <!-- Claims Table -->
+      <div class="claims-section" id="bearerClaimsSection">
+        <div class="claims-header">
+          <span class="claims-title">Decoded Claims</span>
+          <span class="claims-count">${claims.length} fields</span>
+        </div>
+        <div class="claims-grid">
+          ${claims.map((c, i) => `
+            <div class="claim-row${c.expired ? ' expired-row' : ''}" style="animation-delay:${40 + i * 25}ms">
+              <div class="claim-key">${c.key}</div>
+              <div class="claim-val">
+                <span class="cv-primary" title="Click to expand">${c.expired ? '<span class="cv-expired">' + c.val + '</span>' : c.val}</span>
+                ${c.sub ? '<span class="cv-sub">' + (c.expired ? '<span class="cv-expired">' + c.sub + ' — EXPIRED</span>' : c.sub) + '</span>' : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Scope Pills -->
+      <div class="scopes-section">
+        <div class="scopes-header">
+          <span class="scopes-label">Scopes</span>
+          <span class="scopes-count">${scopes.length} scopes</span>
+        </div>
+        <div class="scopes-wrap">
+          ${scopes.map((s, i) => `<span class="scope-pill" style="animation-delay:${80 + i * 30}ms">${s}</span>`).join('')}
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions-row">
+        <button class="act-btn primary js-refresh"><span class="lbl">Refresh Token</span><span class="spinner"></span></button>
+        <button class="act-btn secondary js-copy">Copy Token</button>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <button class="act-btn tertiary js-decode">Decode on jwt.ms <span class="ext-ico">↗</span></button>
+      </div>
+    `;
+
+    wireBearer();
+  }
+
+  function wireBearer() {
+    wirePane('#pane-bearer', fullJwt, 'bearer');
+  }
+
+  /* ═══════ REUSABLE PANE WIRING ═══════ */
+  function wirePane(paneSelector, rawJwt, tokenType) {
+    const pane = document.querySelector(paneSelector);
+    if (!pane) return;
+
+    // JWT segment click → scroll to claims
+    pane.querySelectorAll('.jwt-segment').forEach(seg => {
+      seg.addEventListener('click', () => {
+        const target = seg.dataset.target;
+        if (target) {
+          const el = pane.querySelector('#' + target);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        seg.classList.add('highlight');
+        setTimeout(() => seg.classList.remove('highlight'), 800);
+      });
+    });
+
+    // Legend hover → highlight segments
+    pane.querySelectorAll('.jwt-viz-legend span').forEach(leg => {
+      leg.addEventListener('mouseenter', () => {
+        const segType = leg.dataset.seg;
+        const segEl = pane.querySelector('.jwt-seg-' + segType);
+        if (segEl) segEl.classList.add('highlight');
+      });
+      leg.addEventListener('mouseleave', () => {
+        const segType = leg.dataset.seg;
+        const segEl = pane.querySelector('.jwt-seg-' + segType);
+        if (segEl) segEl.classList.remove('highlight');
+      });
+    });
+
+    // Expand claim values on click
+    pane.querySelectorAll('.cv-primary').forEach(el => {
+      el.addEventListener('click', () => {
+        el.classList.toggle('expanded');
+      });
+    });
+
+    // Refresh button
+    const refreshBtn = pane.querySelector('.js-refresh');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        refreshBtn.classList.add('loading');
+        setTimeout(() => {
+          refreshBtn.classList.remove('loading');
+          if (tokenType === 'bearer') {
+            tokenExpired = false;
+            expiresAt = Date.now() + 3600 * 1000;
+            updateHealthIndicator();
+            renderBearerPane();
+          } else {
+            mwcExpired = false;
+            mwcExpiresAt = Date.now() + 3600 * 1000;
+            renderMWCPane();
+          }
+          showToast((tokenType === 'bearer' ? 'Bearer' : 'MWC') + ' token refreshed');
+        }, 1200);
+      });
+    }
+
+    // Copy button
+    const copyBtn = pane.querySelector('.js-copy');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(rawJwt).then(() => {
+            showToast('Copied to clipboard');
+          });
+        } else {
+          showToast('Copied to clipboard');
+        }
+      });
+    }
+
+    // Decode button
+    const decodeBtn = pane.querySelector('.js-decode');
+    if (decodeBtn) {
+      decodeBtn.addEventListener('click', () => {
+        showToast('Would open jwt.ms in browser');
+      });
+    }
+  }
+
+  /* ═══════ MWC PANE RENDERING (Full JWT Decode — First-Class Citizen) ═══════ */
+  function renderMWCPane() {
+    const pane = $('#pane-mwc');
+    const mwcSecRemaining = mwcExpired ? 0 : Math.max(0, Math.floor((mwcExpiresAt - Date.now()) / 1000));
+    const mwcMin = Math.floor(mwcSecRemaining / 60);
+    const mwcSec = mwcSecRemaining % 60;
+    const totalLifetime = 3600;
+    const mwcPct = mwcExpired ? 0 : Math.max(0, (mwcSecRemaining / totalLifetime) * 100);
+    const mwcColor = mwcExpired ? 'red' : mwcMin > 10 ? 'green' : mwcMin > 5 ? 'amber' : 'red';
+    const mwcExpEpoch = mwcExpired ? (now - 180) : (now + mwcSecRemaining);
+    const mwcExpDate = new Date(mwcExpEpoch * 1000);
+    const mwcIatDate = new Date(mwcIat * 1000);
+    const mwcExpiredBarClass = mwcExpired ? ' expired-pulse' : '';
+    const mwcBadgeExpiredClass = mwcExpired ? ' expired-flash' : '';
+
+    const mwcClaims = [
+      { key: 'aud', val: mwcJwtPayload.aud },
+      { key: 'iss', val: mwcJwtPayload.iss },
+      { key: 'artifact', val: mwcJwtPayload.artifactId },
+      { key: 'capacity', val: mwcJwtPayload.capacityId },
+      { key: 'workspace', val: mwcJwtPayload.workspaceId },
+      { key: 'endpoint', val: mwcJwtPayload.endpoint },
+      { key: 'exp', val: mwcExpEpoch.toString(), sub: formatDateTime(mwcExpDate), expired: mwcExpired },
+      { key: 'iat', val: mwcIat.toString(), sub: formatDateTime(mwcIatDate) },
+      { key: 'roles', val: mwcJwtPayload.roles.join(', ') },
+    ];
+
+    const mwcScopes = mwcJwtPayload.scp.split(' ');
+
+    pane.innerHTML = `
+      <!-- MWC JWT Visualization -->
+      <div class="jwt-viz">
+        <div class="jwt-viz-header">
+          <span class="jwt-viz-label">Raw JWT</span>
+          <div class="jwt-viz-legend">
+            <span class="leg-header" data-seg="header"><span class="leg-dot"></span> Header</span>
+            <span class="leg-payload" data-seg="payload"><span class="leg-dot"></span> Payload</span>
+            <span class="leg-sig" data-seg="sig"><span class="leg-dot"></span> Signature</span>
+          </div>
+        </div>
+        <div class="jwt-raw">
+          <span class="jwt-segment jwt-seg-header" data-target="mwcClaimsSection" title="Click to scroll to decoded header">${mwcHeaderB64}</span><span class="jwt-dot">.</span><span class="jwt-segment jwt-seg-payload" data-target="mwcClaimsSection" title="Click to scroll to decoded claims">${mwcPayloadB64}</span><span class="jwt-dot">.</span><span class="jwt-segment jwt-seg-sig" title="Signature (RS256)">${mwcSigB64}</span>
+        </div>
+      </div>
+
+      <!-- MWC Expiry Progress Bar -->
+      <div class="expiry-section">
+        <div class="expiry-bar-wrap">
+          <div class="expiry-bar-fill ${mwcColor}${mwcExpiredBarClass}" id="mwcExpiryBar" style="width:${mwcPct}%"></div>
+        </div>
+        <div class="expiry-meta">
+          <span class="expiry-badge ${mwcColor}${mwcBadgeExpiredClass}" id="mwcExpiryBadge">
+            <span class="badge-dot"></span>
+            ${mwcExpired ? 'EXPIRED' : mwcMin + 'm ' + String(mwcSec).padStart(2, '0') + 's remaining'}
+          </span>
+          <span class="expiry-issued">Issued ${formatTimeAgo(mwcIatDate)}</span>
+        </div>
+      </div>
+
+      <!-- MWC Decoded Claims Table -->
+      <div class="claims-section" id="mwcClaimsSection">
+        <div class="claims-header">
+          <span class="claims-title">Decoded Claims</span>
+          <span class="claims-count">${mwcClaims.length} fields</span>
+        </div>
+        <div class="claims-grid">
+          ${mwcClaims.map((c, i) => `
+            <div class="claim-row${c.expired ? ' expired-row' : ''}" style="animation-delay:${40 + i * 25}ms">
+              <div class="claim-key">${c.key}</div>
+              <div class="claim-val">
+                <span class="cv-primary" title="Click to expand">${c.expired ? '<span class="cv-expired">' + c.val + '</span>' : c.val}</span>
+                ${c.sub ? '<span class="cv-sub">' + (c.expired ? '<span class="cv-expired">' + c.sub + ' — EXPIRED</span>' : c.sub) + '</span>' : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- MWC Scope Pills -->
+      <div class="scopes-section">
+        <div class="scopes-header">
+          <span class="scopes-label">Scopes</span>
+          <span class="scopes-count">${mwcScopes.length} scopes</span>
+        </div>
+        <div class="scopes-wrap">
+          ${mwcScopes.map((s, i) => `<span class="scope-pill" style="animation-delay:${80 + i * 30}ms">${s}</span>`).join('')}
+        </div>
+      </div>
+
+      <!-- MWC Action Buttons -->
+      <div class="actions-row">
+        <button class="act-btn primary js-refresh"><span class="lbl">Refresh Token</span><span class="spinner"></span></button>
+        <button class="act-btn secondary js-copy">Copy Token</button>
+      </div>
+      <div style="display:flex;justify-content:center">
+        <button class="act-btn tertiary js-decode">Decode on jwt.ms <span class="ext-ico">↗</span></button>
+      </div>
+    `;
+
+    wirePane('#pane-mwc', fullMwcJwt, 'mwc');
+  }
+
+  /* ═══════ HEALTH INDICATOR + COUNTDOWN ═══════ */
+  function updateHealthIndicator() {
+    const secRemaining = tokenExpired ? 0 : Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+    const min = Math.floor(secRemaining / 60);
+    const sec = secRemaining % 60;
+
+    // Determine bearer color
+    let color;
+    if (tokenExpired || secRemaining === 0) {
+      color = 'red';
+    } else if (min > 10) {
+      color = 'green';
+    } else if (min > 5) {
+      color = 'amber';
+    } else {
+      color = 'red';
+    }
+
+    // Update dot — show worst status of bearer/mwc
+    const mwcSec = mwcExpired ? 0 : Math.max(0, Math.floor((mwcExpiresAt - Date.now()) / 1000));
+    const worstSec = Math.min(secRemaining, mwcSec);
+    const worstMin = Math.floor(worstSec / 60);
+    let dotColor;
+    if (tokenExpired || mwcExpired || worstSec === 0) dotColor = 'red';
+    else if (worstMin > 10) dotColor = 'green';
+    else if (worstMin > 5) dotColor = 'amber';
+    else dotColor = 'red';
+    dot.className = 'token-dot ' + dotColor;
+
+    // Update countdown — show nearest expiry
+    if (tokenExpired && mwcExpired) {
+      countdown.textContent = 'EXPIRED';
+      countdown.classList.add('expired');
+    } else if (tokenExpired) {
+      countdown.textContent = 'EXPIRED';
+      countdown.classList.add('expired');
+    } else {
+      countdown.textContent = min + 'm ' + String(sec).padStart(2, '0') + 's';
+      countdown.classList.remove('expired');
+    }
+
+    // Update drawer glow
+    if (tokenExpired || mwcExpired) {
+      drawer.classList.add('expired-glow');
+    } else {
+      drawer.classList.remove('expired-glow');
+    }
+
+    // Auto-detect bearer expiry
+    if (secRemaining === 0 && !tokenExpired) {
+      tokenExpired = true;
+      updateHealthIndicator();
+      if (drawerOpen) renderCurrentTab();
+    }
+
+    // Auto-detect MWC expiry
+    if (mwcSec === 0 && !mwcExpired) {
+      mwcExpired = true;
+      if (drawerOpen && currentTab === 'mwc') renderCurrentTab();
+    }
+
+    // Live-tick bearer expiry bar
+    if (drawerOpen && currentTab === 'bearer' && !showEmpty) {
+      const bar = $('#expiryBar');
+      const badge = $('#expiryBadge');
+      if (bar) {
+        const pct = tokenExpired ? 0 : Math.max(0, (secRemaining / 3600) * 100);
+        bar.style.width = pct + '%';
+        bar.className = 'expiry-bar-fill ' + color + (tokenExpired ? ' expired-pulse' : '');
+      }
+      if (badge) {
+        badge.className = 'expiry-badge ' + color + (tokenExpired ? ' expired-flash' : '');
+        if (tokenExpired) {
+          badge.innerHTML = '<span class="badge-dot"></span> EXPIRED';
+        } else {
+          badge.innerHTML = '<span class="badge-dot"></span> ' + min + 'm ' + String(sec).padStart(2, '0') + 's remaining';
+        }
+      }
+    }
+
+    // Live-tick MWC expiry bar
+    if (drawerOpen && currentTab === 'mwc' && !showEmpty) {
+      const mwcMinR = Math.floor(mwcSec / 60);
+      const mwcSecR = mwcSec % 60;
+      const mwcColor = mwcExpired ? 'red' : mwcMinR > 10 ? 'green' : mwcMinR > 5 ? 'amber' : 'red';
+      const mBar = $('#mwcExpiryBar');
+      const mBadge = $('#mwcExpiryBadge');
+      if (mBar) {
+        const mPct = mwcExpired ? 0 : Math.max(0, (mwcSec / 3600) * 100);
+        mBar.style.width = mPct + '%';
+        mBar.className = 'expiry-bar-fill ' + mwcColor + (mwcExpired ? ' expired-pulse' : '');
+      }
+      if (mBadge) {
+        mBadge.className = 'expiry-badge ' + mwcColor + (mwcExpired ? ' expired-flash' : '');
+        if (mwcExpired) {
+          mBadge.innerHTML = '<span class="badge-dot"></span> EXPIRED';
+        } else {
+          mBadge.innerHTML = '<span class="badge-dot"></span> ' + mwcMinR + 'm ' + String(mwcSecR).padStart(2, '0') + 's remaining';
+        }
+      }
+    }
+  }
+
+  // Start countdown ticker
+  countdownInterval = setInterval(updateHealthIndicator, 1000);
+  updateHealthIndicator();
+
+  /* ═══════ TOAST ═══════ */
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => toast.classList.remove('visible'), 2000);
+  }
+
+  /* ═══════ HELPERS ═══════ */
+  function formatDateTime(d) {
+    const opts = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+    return d.toLocaleDateString('en-US', opts);
+  }
+
+  function formatTimeAgo(d) {
+    const diffMs = Date.now() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 60) return diffMin + 'm ago';
+    const diffHr = Math.floor(diffMin / 60);
+    return diffHr + 'h ' + (diffMin % 60) + 'm ago';
+  }
+
+  /* ═══════ MOCK CONTROLS ═══════ */
+  // Simulate expired (both tokens)
+  $('#ctrlExpired').addEventListener('click', function() {
+    tokenExpired = true;
+    mwcExpired = true;
+    expiresAt = Date.now() - 300000;
+    mwcExpiresAt = Date.now() - 180000;
+    updateHealthIndicator();
+    if (drawerOpen) renderCurrentTab();
+    openDrawer();
+    this.classList.add('active');
+    $('#ctrlAmber').classList.remove('active');
+    $('#ctrlGreen').classList.remove('active');
+  });
+
+  // Simulate warning (5 min — both tokens)
+  $('#ctrlAmber').addEventListener('click', function() {
+    tokenExpired = false;
+    mwcExpired = false;
+    expiresAt = Date.now() + 5 * 60 * 1000 + 30000;
+    mwcExpiresAt = Date.now() + 7 * 60 * 1000;
+    updateHealthIndicator();
+    if (drawerOpen) renderCurrentTab();
+    openDrawer();
+    this.classList.add('active');
+    $('#ctrlExpired').classList.remove('active');
+    $('#ctrlGreen').classList.remove('active');
+  });
+
+  // Reset to healthy (both tokens)
+  $('#ctrlGreen').addEventListener('click', function() {
+    tokenExpired = false;
+    mwcExpired = false;
+    expiresAt = Date.now() + 42 * 60 * 1000 + 18000;
+    mwcExpiresAt = Date.now() + 35 * 60 * 1000 + 12000;
+    updateHealthIndicator();
+    if (drawerOpen) renderCurrentTab();
+    this.classList.add('active');
+    $('#ctrlExpired').classList.remove('active');
+    $('#ctrlAmber').classList.remove('active');
+  });
+
+  // Show empty state
+  $('#ctrlEmpty').addEventListener('click', function() {
+    showEmpty = true;
+    if (drawerOpen) renderCurrentTab();
+    openDrawer();
+  });
+
+  // Show token (restore from empty)
+  $('#ctrlToken').addEventListener('click', function() {
+    showEmpty = false;
+    if (drawerOpen) renderCurrentTab();
+    openDrawer();
+  });
+
+  // Dark mode toggle
+  $('#ctrlDark').addEventListener('change', function() {
+    document.documentElement.dataset.theme = this.checked ? 'dark' : 'light';
+  });
+  $('#themeToggle').addEventListener('click', function() {
+    const isDark = document.documentElement.dataset.theme === 'dark';
+    document.documentElement.dataset.theme = isDark ? 'light' : 'dark';
+    $('#ctrlDark').checked = !isDark;
+  });
+
+  /* ═══════ INITIAL RENDER ═══════ */
+  // Auto-open drawer on load for the mock
+  setTimeout(openDrawer, 600);
+
+})();
+</script>
+</body>
+</html>

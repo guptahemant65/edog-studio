@@ -90,6 +90,7 @@ window.onerror = function(msg, src, line, col, err) {
         <div class="nav-item" data-view="api" tabindex="0" role="button" aria-label="API Playground"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div><span class="nav-label">API Playground</span><span class="nav-shortcut">3</span></div>
         <div class="nav-item" data-view="environment" tabindex="0" role="button" aria-label="Environment"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span class="nav-label">Environment</span><span class="nav-shortcut">4</span></div>
         <div class="nav-item connected-only" data-view="dag" tabindex="0" role="button" aria-label="DAG Studio"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h4M14 5l3 5M14 19l3-5"/></svg></div><span class="nav-label">DAG Studio</span><span class="nav-shortcut">5</span></div>
+        <div class="nav-item connected-only" data-view="qa" tabindex="0" role="button" aria-label="QA Testing"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div><span class="nav-label">QA Testing</span><span class="nav-shortcut">6</span></div>
       </div>
 
     </nav>
@@ -332,6 +333,119 @@ window.onerror = function(msg, src, line, col, err) {
           </div>
           <!-- Node Detail Panel (slides from right) -->
           <div class="dag-node-detail" id="dagNodeDetail"></div>
+        </div>
+      </div>
+
+      <!-- View 6: QA Testing (connected mode only) -->
+      <div id="view-qa" class="view-panel" data-view="qa">
+        <div class="qa-panel" id="qaPanel">
+          <!-- Stage breadcrumb bar -->
+          <div class="qa-stage-bar" id="qaStageBar">
+            <div class="qa-stage-item active" data-stage="input">
+              <span class="qa-stage-num">1</span>
+              <span class="qa-stage-label">PR Input</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="analysis">
+              <span class="qa-stage-num">2</span>
+              <span class="qa-stage-label">Analysis</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="curation">
+              <span class="qa-stage-num">3</span>
+              <span class="qa-stage-label">Curation</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="execution">
+              <span class="qa-stage-num">4</span>
+              <span class="qa-stage-label">Execution</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="results">
+              <span class="qa-stage-num">5</span>
+              <span class="qa-stage-label">Results</span>
+            </div>
+            <!-- Kill switch (right-aligned, shown during execution) -->
+            <div class="qa-kill-switch" id="qaKillSwitch" style="display:none">
+              <button class="qa-kill-btn" id="qaKillBtn" title="Abort execution">&#10005; Kill</button>
+            </div>
+          </div>
+
+          <!-- Phase 1 overlay (requires Connected phase) -->
+          <div class="qa-phase1-overlay" id="qaPhase1Overlay">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+            </svg>
+            <div class="qa-phase1-title">QA Testing requires a running FLT service</div>
+            <div class="qa-phase1-desc">Deploy and connect to enable AI-powered PR validation.</div>
+          </div>
+
+          <!-- Stage containers (only one visible at a time) -->
+          <div class="qa-stages" id="qaStages">
+            <!-- Stage 1: PR Input -->
+            <div class="qa-stage active" id="qaStageInput" data-stage="input">
+              <div class="qa-input-container">
+                <div class="qa-input-header">
+                  <h3 class="qa-input-title">Enter Pull Request</h3>
+                  <p class="qa-input-desc">Paste a PR URL or enter a PR number to begin code analysis.</p>
+                </div>
+                <div class="qa-input-field">
+                  <input type="text" id="qaPrInput" class="qa-pr-input" placeholder="https://dev.azure.com/.../pullrequest/12345 or PR #12345" autocomplete="off" />
+                  <button class="qa-btn primary" id="qaAnalyzeBtn" disabled>Analyze</button>
+                </div>
+                <div class="qa-input-error" id="qaInputError"></div>
+                <div class="qa-input-history" id="qaInputHistory">
+                  <div class="qa-history-title">Recent PRs</div>
+                  <div class="qa-history-list" id="qaHistoryList"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 2: Analysis -->
+            <div class="qa-stage" id="qaStageAnalysis" data-stage="analysis">
+              <div class="qa-analysis-container" id="qaAnalysisContainer">
+                <!-- Populated by qa-analysis.js -->
+              </div>
+            </div>
+
+            <!-- Stage 3: Curation -->
+            <div class="qa-stage" id="qaStageCuration" data-stage="curation">
+              <div class="qa-curation-container" id="qaCurationContainer">
+                <!-- Populated by qa-curation.js -->
+              </div>
+            </div>
+
+            <!-- Stage 4: Execution -->
+            <div class="qa-stage" id="qaStageExecution" data-stage="execution">
+              <div class="qa-execution-container" id="qaExecutionContainer">
+                <!-- Populated by qa-execution.js -->
+              </div>
+            </div>
+
+            <!-- Stage 5: Results -->
+            <div class="qa-stage" id="qaStageResults" data-stage="results">
+              <div class="qa-results-container" id="qaResultsContainer">
+                <!-- Populated by qa-results.js -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Scenario Editor (overlay, slide from right) -->
+          <div class="qa-editor-overlay" id="qaEditorOverlay">
+            <div class="qa-editor-panel" id="qaEditorPanel">
+              <div class="qa-editor-header">
+                <h3 class="qa-editor-title" id="qaEditorTitle">Edit Scenario</h3>
+                <button class="qa-editor-close" id="qaEditorClose">&#10005;</button>
+              </div>
+              <div class="qa-editor-body" id="qaEditorBody">
+                <!-- Populated by qa-editor.js -->
+              </div>
+              <div class="qa-editor-footer">
+                <button class="qa-btn" id="qaEditorCancel">Cancel</button>
+                <button class="qa-btn primary" id="qaEditorSave">Save Changes</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

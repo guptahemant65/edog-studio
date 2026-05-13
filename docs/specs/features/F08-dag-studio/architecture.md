@@ -1,10 +1,11 @@
 # F08 DAG Studio — Architecture Spec
 
-> **Author:** Vex (Senior Backend Engineer)
-> **Reviewers:** Sana Reeves (Architecture), Pixel (Frontend)
-> **Date:** 2026-04-15
-> **Status:** DRAFT — Requires Sana sign-off
+> **Author:** Sana Reeves (Architecture Lead)
+> **Reviewers:** Vex (Backend), Pixel (Frontend), Sentinel (QA)
+> **Date:** 2026-04-17
+> **Status:** DRAFT
 > **Prerequisite Reading:** `spec.md` §3, `research/p0-foundation.md`, `docs/specs/SIGNALR_PROTOCOL.md`
+> **Design System:** Light theme tokens — reference by name, never raw hex.
 
 ---
 
@@ -13,8 +14,6 @@
 ```
                             ┌──────────────────────────────────────────────────┐
                             │               FLT Service Process               │
-                            │  (Capacity Host, port varies per deployment)    │
-                            │                                                  │
                             │  ┌─────────────────┐   ┌──────────────────────┐ │
                             │  │  FLT REST APIs   │   │  EdogPlaygroundHub   │ │
                             │  │  /liveTable/*     │   │  /hub/playground     │ │
@@ -24,121 +23,91 @@
                                         │                         │
                        ┌────────────────┤                         │
                        │  MWC-authenticated                       │  WebSocket
-                       │  (direct from browser)                   │  (direct from browser)
-                       │                                          │
-                       │  Some calls proxied                      │
-                       │  through dev-server                      │
+                       │  (direct from browser)                   │  (direct)
                        ▼                                          ▼
 ┌──────────────────────────────────┐       ┌──────────────────────────────────┐
 │  dev-server.py (:5555)           │       │  SignalRManager                  │
 │  /api/flt/config → config+tokens │       │  .subscribeTopic('telemetry')    │
 │  /api/dag/*      → FLT proxy     │       │  .subscribeTopic('log')          │
-│  /api/fabric/*   → Fabric proxy  │       │  .on('telemetry', cb)            │
-└────────────┬─────────────────────┘       │  .on('log', cb)                  │
-             │                              └──────────┬───────────────────────┘
-             │  fetch('/api/dag/...')                   │  stream events
-             │  or _fltFetch() direct                   │
-             ▼                                          ▼
+└────────────┬─────────────────────┘       └──────────┬───────────────────────┘
+             │                                        │
+             ▼                                        ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  FabricApiClient (api-client.js)                                            │
-│  .getLatestDag()         — GET /liveTable/getLatestDag                      │
-│  .getDagExecMetrics(id)  — GET /liveTable/getDAGExecMetrics/{id}            │
-│  .runDag(id)             — POST /liveTableSchedule/runDAG/{id}              │
-│  ... (11 DAG methods)                                                       │
+│  FabricApiClient (api-client.js) — 13 DAG methods                           │
+│  .getLatestDag()  .getDagExecMetrics(id)  .getDagExecStatus(id)             │
+│  .runDag(id)  .cancelDag(id)  .listDagExecutions(opts)                      │
+│  .getLockedExecution()  .forceUnlockDag(id)  .getDagSettings()              │
+│  .updateDagSettings(body)  .listMlvDefinitions()  .createMlvDefinition(body)│
 └─────────────────────────────────┬────────────────────────────────────────────┘
                                   │
-                                  │  Data objects: Dag, DagExecutionInstance,
-                                  │  DagExecutionIteration, DagSettings, etc.
                                   ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  DagStudio (dag-studio.js) — ORCHESTRATOR                                   │
-│  Owns: view lifecycle, data coordination, user action dispatch              │
-│  Receives: API responses + AutoDetector callbacks + SignalR telemetry        │
-│                                                                              │
+│  DagStudio (dag-studio.js) — ORCHESTRATOR                                    │
 │  ._loadDag()             → DagLayout → DagCanvasRenderer.setData()          │
 │  ._runDag()              → FabricApiClient.runDag() → subscribe updates     │
 │  ._onTelemetryEvent(evt) → ExecutionStateManager.processTelemetry()         │
 │  ._onLogEntry(entry)     → AutoDetector.processLog()                        │
 │  ._onExecutionUpdated()  → DagCanvasRenderer + DagGantt + ControlsBar      │
-└──────────────┬────────────────┬──────────────────┬───────────────────────────┘
-               │                │                  │
+└──────────────┬────────────────┬──────────────────┬──────────────────────────┘
                ▼                ▼                  ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌────────────────┐ ┌──────────────┐
 │ DagCanvasRenderer│ │ DagGantt         │ │ ControlsBar    │ │ HistoryPanel │
 │ (dag-graph.js)   │ │ (dag-gantt.js)   │ │ (dag-studio.js)│ │ (dag-studio) │
 │ Canvas 2D + LOD  │ │ Canvas 2D bars   │ │ Run/Cancel/etc │ │ Past runs    │
-│ updateNodeState()│ │ updateBar()      │ │ status display │ │ Comparison   │
 └──────────────────┘ └──────────────────┘ └────────────────┘ └──────────────┘
 ```
 
 ### Data Flow Narratives
 
-**Flow 1 — Initial Load (View Activation)**
+**Flow 1 — Initial Load**
 
 ```
-1. User clicks DAG Studio sidebar icon (view=dag)
-2. DagStudio.activate()
-3.   → FabricApiClient.fetchConfig()         // refresh tokens
-4.   → FabricApiClient.getLatestDag()         // GET via _fltFetch (direct to FLT)
-5.   → DagLayout.layout(dag.nodes, dag.edges) // Sugiyama → positioned nodes
-6.   → DagCanvasRenderer.setData(positioned)  // first render
-7.   → DagCanvasRenderer.fitToScreen()        // auto-center
-8.   → FabricApiClient.listDagExecutions({historyCount: 20})
-9.   → HistoryPanel.render(iterations)
-10.  → DagStudio._checkLockState()            // poll for stuck locks
-11.  → SignalRManager.subscribeTopic('telemetry')  // start telemetry stream
-12.  → SignalRManager.subscribeTopic('log')         // start log stream (for AutoDetector)
+1. User clicks DAG Studio → DagStudio.activate()
+2. → fetchConfig()                               // refresh MWC tokens
+3. → getLatestDag()                               // GET direct to FLT
+4. → DagLayout.layout(dag.nodes, dag.edges)       // Sugiyama → positions
+5. → DagCanvasRenderer.setData(positioned)        // first render
+6. → DagCanvasRenderer.fitToScreen()              // auto-center, 40px padding
+7. → listDagExecutions({historyCount: 20})        // populate history
+8. → HistoryPanel.render(iterations)
+9. → _checkLockState()                            // detect stuck locks
+10. → subscribeTopic('telemetry') + ('log')       // start real-time streams
 ```
 
-**Flow 2 — Run DAG (User-Triggered Execution)**
+**Flow 2 — Run DAG**
 
 ```
 1. User clicks "Run DAG"
-2. DagStudio._runDag()
-3.   → iterationId = crypto.randomUUID()
-4.   → FabricApiClient.runDag(iterationId)    // POST → 202 Accepted
-5.   → ExecutionStateManager.startTracking(iterationId)
-6.   → ControlsBar: disable Run, enable Cancel, show "Running" status
-7.   → DagCanvasRenderer: all executable nodes → "pending" state
+2. → iterationId = crypto.randomUUID()
+3. → runDag(iterationId)                          // POST → 202 Accepted
+4. → ExecutionStateManager.startTracking(iterationId)
+5. → ControlsBar: disable Run, enable Cancel, show "Running"
+6. → All executable nodes → pending (--status-pending)
 ```
 
-**Flow 3 — Real-Time Node Updates (During Execution)**
+**Flow 3 — Real-Time Node Updates**
 
 ```
-1. FLT emits telemetry event via EdogTelemetryInterceptor
-2.   → EdogTopicRouter.Publish('telemetry', telemetryEvent)
-3.   → EdogPlaygroundHub streams to client via ChannelReader
-4.   → SignalRManager dispatches to listeners via .on('telemetry', cb)
-5.   → DagStudio._onTelemetryEvent(event)
-6.   → ExecutionStateManager.processTelemetry(event)
-7.     if event.activityName contains node name:
-8.       → map event to node → update node status + timing
-9.       → emit 'nodeStateChanged' callback
-10.  → DagCanvasRenderer.updateNodeState(nodeId, newStatus)  // recolor node
-11. → DagGantt.updateBar(nodeId, {status, startedAt, endedAt})  // grow bar
+Primary (telemetry — structured, ~50ms latency):
+  FLT emits → EdogTopicRouter → EdogPlaygroundHub → SignalR →
+  DagStudio._onTelemetryEvent → ExecutionStateManager.processTelemetry →
+  DagCanvasRenderer.updateNodeState + DagGantt.updateBar
 
-Parallel path (log-based, backup detection):
-1. FLT emits log entry via EdogLogInterceptor
-2.   → SignalR 'log' topic → SignalRManager → DagStudio._onLogEntry(entry)
-3.   → AutoDetector.processLog(entry)
-4.     → pattern match: "Executing node X" / "Executed node X"
-5.     → AutoDetector.onExecutionUpdated(id, exec)
-6.   → ExecutionStateManager.processAutoDetectorUpdate(exec)
-7.     → reconcile with telemetry-sourced state (telemetry wins on conflict)
+Backup (log — pattern-based, ~200ms latency):
+  FLT emits log → SignalR 'log' → DagStudio._onLogEntry →
+  AutoDetector.processLog → onExecutionUpdated →
+  ExecutionStateManager.processAutoDetectorUpdate →
+  reconcile with telemetry (telemetry wins on conflict)
 ```
 
 **Flow 4 — Load Historical Execution**
 
 ```
-1. User clicks a row in HistoryPanel
-2. DagStudio._loadExecution(iterationId)
-3.   → FabricApiClient.getDagExecMetrics(iterationId)
-4.   → response: DagExecutionInstance with nodeExecutionMetrices map
-5.   → For each node in dag:
-6.       metrics = instance.nodeExecutionMetrices[node.nodeId]
-7.       DagCanvasRenderer.updateNodeState(nodeId, metrics.status)
-8.   → DagGantt.renderExecution(instance)
-9.   → ControlsBar: show historical status (non-interactive)
+1. User clicks HistoryPanel row
+2. → getDagExecMetrics(iterationId)
+3. → For each node: updateNodeState(nodeId, metrics.status)
+4. → DagGantt.renderExecution(instance)
+5. → ControlsBar: show historical status (non-interactive)
 ```
 
 ---
@@ -147,103 +116,73 @@ Parallel path (log-based, backup detection):
 
 ### Existing Methods (Reuse As-Is)
 
-| Method | HTTP Call | Notes |
-|--------|----------|-------|
-| `getLatestDag()` | `GET {fabricBaseUrl}/liveTable/getLatestDag?showExtendedLineage=true` | Already exists. Direct FLT call via `_fltFetch`. |
-| `runDag(iterationId)` | `POST {fabricBaseUrl}/liveTableSchedule/runDAG/{iterationId}` | Already exists. Body is empty for ad-hoc runs. |
-| `fetchConfig()` | `GET /api/flt/config` | Already exists. Returns tokens, workspace/lakehouse IDs. |
+| Method | HTTP | Notes |
+|--------|------|-------|
+| `getLatestDag()` | `GET .../liveTable/getLatestDag?showExtendedLineage=true` | Direct `_fltFetch` |
+| `runDag(iterationId)` | `POST .../liveTableSchedule/runDAG/{id}` | Empty body for ad-hoc |
+| `fetchConfig()` | `GET /api/flt/config` | Proxied, returns tokens |
+| `cancelDag(iterationId)` | `GET .../liveTableSchedule/cancelDAG/{id}` | Cancel is GET, not POST — FLT convention |
 
-### Existing Method Requiring Fix
+### New Methods
 
-| Method | Current | Correct | Issue |
-|--------|---------|---------|-------|
-| `cancelDag(iterationId)` | `POST .../cancelDAG/{id}` | `GET .../cancelDAG/{id}` | FLT convention: cancel is GET, not POST. Current code sends POST — will 404 or 405 on real FLT. |
-
-### New Methods to Add
-
-All new methods use `_fltFetch()` (direct MWC-authenticated calls to FLT). Error handling is centralized in the `_fltFetchStrict()` wrapper described below.
-
-#### 2.1 `getDagExecMetrics(iterationId)`
+#### 2.1 getDagExecMetrics(iterationId)
 
 ```javascript
 /**
  * Fetch full execution metrics for a completed/running DAG iteration.
  * @param {string} iterationId - Execution iteration GUID.
  * @returns {Promise<DagExecutionInstance>} Per-node metrics, timing, errors.
- * @throws {ApiError} 404 if iteration not found, 401/403 if auth expired.
+ * @throws {FltApiError} 404 if not found, 401/403 if auth expired.
  */
 async getDagExecMetrics(iterationId) {
-  return this._fltFetchStrict(
-    `/liveTable/getDAGExecMetrics/${iterationId}`
-  );
+  return this._fltFetchStrict(`/liveTable/getDAGExecMetrics/${iterationId}`);
 }
 ```
 
-- **HTTP:** `GET {fabricBaseUrl}/liveTable/getDAGExecMetrics/{iterationId}`
-- **Auth:** MWC token via `Authorization: MwcToken {token}`
-- **Returns:** `DagExecutionInstance` — contains `dagExecutionMetrics` (overall) + `nodeExecutionMetrices` (Map<Guid, NodeExecutionMetrics>)
-- **Error:** 404 = iteration not found (show "Execution not found" toast), 401 = re-auth needed
+**HTTP:** `GET {fabricBaseUrl}/liveTable/getDAGExecMetrics/{iterationId}`
+**Returns:** `{ dagExecutionMetrics, nodeExecutionMetrices: Map<Guid, NodeMetrics> }`
 
-#### 2.2 `listDagExecutions(opts)`
+#### 2.2 listDagExecutions(opts)
 
 ```javascript
 /**
- * List DAG execution iterations with optional filtering and pagination.
- * @param {object} opts
- * @param {number} [opts.historyCount=20] - Max results (max 500).
- * @param {string[]} [opts.statuses] - Filter: 'completed','failed','cancelled','running'.
- * @param {string} [opts.continuationToken] - Pagination token from previous response.
+ * List execution iterations with filtering and pagination.
+ * @param {object} opts - { historyCount?, statuses?, startTime?, endTime?, continuationToken? }
  * @returns {Promise<{iterations: DagExecutionIteration[], continuationToken: string|null}>}
  */
 async listDagExecutions(opts = {}) {
   const params = new URLSearchParams();
   params.set('historyCount', String(opts.historyCount || 20));
   if (opts.statuses) opts.statuses.forEach(s => params.append('statuses', s));
-  if (opts.startTime) params.set('startTime', opts.startTime);
-  if (opts.endTime) params.set('endTime', opts.endTime);
-
-  const resp = await this._fltFetchRaw(
-    `/liveTable/listDAGExecutionIterationIds?${params}`
-  );
+  if (opts.continuationToken) params.set('continuationToken', opts.continuationToken);
+  const resp = await this._fltFetchRaw(`/liveTable/listDAGExecutionIterationIds?${params}`);
   const data = await resp.json();
-  return {
-    iterations: data,
-    continuationToken: resp.headers.get('x-ms-continuation-token') || null,
-  };
+  return { iterations: data, continuationToken: resp.headers.get('x-ms-continuation-token') || null };
 }
 ```
 
-- **HTTP:** `GET {fabricBaseUrl}/liveTable/listDAGExecutionIterationIds?historyCount=20&statuses=...`
-- **Returns:** `List<DagExecutionIteration>` + continuation token in response header
-- **Pagination:** Client passes `continuationToken` from previous response as query param. FLT returns next page.
-- **Error:** 404 = lakehouse not deployed, 429 = rate limited
+**HTTP:** `GET .../liveTable/listDAGExecutionIterationIds?historyCount=20&statuses=...`
 
-#### 2.3 `getLockedExecution()`
+#### 2.3 getLockedExecution()
 
 ```javascript
 /**
  * Check for stuck/locked DAG execution.
- * @returns {Promise<string|string[]|null>} Locked iteration ID(s), or null if unlocked.
+ * @returns {Promise<string|string[]|null>} Locked iteration ID(s), or null.
  */
 async getLockedExecution() {
-  // Note: URL has intentional typo "Maintanance" — matches FLT route
-  return this._fltFetchStrict(
-    '/liveTableMaintanance/getLockedDAGExecutionIteration'
-  );
+  // URL typo "Maintanance" is intentional — matches real FLT route
+  return this._fltFetchStrict('/liveTableMaintanance/getLockedDAGExecutionIteration');
 }
 ```
 
-- **HTTP:** `GET {fabricBaseUrl}/liveTableMaintanance/getLockedDAGExecutionIteration`
-- **⚠ Typo in URL is real** — `Maintanance` (missing 'e'). This is the actual FLT route.
-- **Returns:** `string` or `List<Guid>` — locked iteration IDs. Empty/null means no lock.
-
-#### 2.4 `forceUnlockDag(lockedIterationId)`
+#### 2.4 forceUnlockDag(lockedIterationId)
 
 ```javascript
 /**
- * Force unlock a stuck DAG execution. Requires confirmation before calling.
- * @param {string} lockedIterationId - The locked iteration GUID.
- * @returns {Promise<string>} Confirmation message ("Force unlocked Dag").
+ * Force unlock a stuck DAG execution. UI must gate behind confirmation dialog.
+ * @param {string} lockedIterationId - Locked iteration GUID.
+ * @returns {Promise<string>} "Force unlocked Dag"
  */
 async forceUnlockDag(lockedIterationId) {
   return this._fltFetchStrict(
@@ -253,150 +192,111 @@ async forceUnlockDag(lockedIterationId) {
 }
 ```
 
-- **HTTP:** `POST {fabricBaseUrl}/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}`
-- **Returns:** `string` — `"Force unlocked Dag"`
-- **⚠ Dangerous operation.** UI must show confirmation dialog with lock age and iteration ID before calling.
-
-#### 2.5 `getDagSettings()`
+#### 2.5 getDagSettings() / 2.6 updateDagSettings(body)
 
 ```javascript
-/**
- * Get current DAG settings (parallel limit, refresh mode, environment).
- * @returns {Promise<DagSettingsResponseBody>}
- */
+/** @returns {Promise<{environment, refreshMode, parallelNodeLimit}>} */
 async getDagSettings() {
   return this._fltFetchStrict('/liveTable/settings');
 }
-```
 
-- **HTTP:** `GET {fabricBaseUrl}/liveTable/settings`
-- **Returns:** `{ environment, refreshMode, parallelNodeLimit }`
-
-#### 2.6 `updateDagSettings(body)`
-
-```javascript
 /**
- * Update DAG settings.
- * @param {object} body - Partial settings: { parallelNodeLimit?, refreshMode?, environment? }
- * @returns {Promise<DagSettingsResponseBody>} Updated settings.
+ * Partial update. parallelNodeLimit must be 2-25 (validate client-side).
+ * @param {object} body - { parallelNodeLimit?, refreshMode?, environment? }
  */
 async updateDagSettings(body) {
   return this._fltFetchStrict('/liveTable/settings', {
-    method: 'PATCH',
-    body: JSON.stringify(body),
+    method: 'PATCH', body: JSON.stringify(body),
   });
 }
 ```
 
-- **HTTP:** `PATCH {fabricBaseUrl}/liveTable/settings`
-- **Body:** `{ parallelNodeLimit: 10, refreshMode: "Full" }` (partial update)
-- **Validation:** `parallelNodeLimit` must be 2–25. Client should validate before sending.
-
-#### 2.7 `listMlvDefinitions()`
+#### 2.7 listMlvDefinitions() / 2.8 createMlvDefinition(body)
 
 ```javascript
-/**
- * List named MLV execution definitions (subsets for targeted runs).
- * @returns {Promise<MLVExecutionDefinitionResponse[]>}
- */
+/** @returns {Promise<MLVExecutionDefinitionResponse[]>} */
 async listMlvDefinitions() {
   return this._fltFetchStrict('/liveTable/mlvExecutionDefinitions');
 }
-```
 
-- **HTTP:** `GET {fabricBaseUrl}/liveTable/mlvExecutionDefinitions`
-- **Returns:** Array of `{ id, name, description, selectedMLVs, executionMode, dagSettings }`
-
-#### 2.8 `createMlvDefinition(body)`
-
-```javascript
-/**
- * Create a named MLV execution definition.
- * @param {object} body - { name, description?, selectedMLVs, executionMode?, dagSettings? }
- * @returns {Promise<MLVExecutionDefinitionResponse>}
- */
+/** @param {object} body - { name, description?, selectedMLVs, executionMode?, dagSettings? } */
 async createMlvDefinition(body) {
   return this._fltFetchStrict('/liveTable/mlvExecutionDefinitions', {
-    method: 'POST',
-    body: JSON.stringify(body),
+    method: 'POST', body: JSON.stringify(body),
   });
 }
 ```
 
-- **HTTP:** `POST {fabricBaseUrl}/liveTable/mlvExecutionDefinitions`
-- **Body:** `{ name: "Sales only", selectedMLVs: ["RefreshSales", "AggSales"] }`
-
-### New Internal Wrapper: `_fltFetchStrict()`
-
-The existing `_fltFetch()` silently swallows errors and returns `null`. DAG Studio needs structured error handling. New wrapper:
+#### 2.9 getDagExecStatus(iterationId)
 
 ```javascript
 /**
- * FLT API fetch with structured error handling (throws instead of returning null).
- * @param {string} path - API path appended to fabricBaseUrl.
+ * Lightweight status poll — cheaper than getDagExecMetrics.
+ * Used during reconnection to sync state without full metrics.
+ * @param {string} iterationId
+ * @returns {Promise<{status, startTime, endTime}>}
+ */
+async getDagExecStatus(iterationId) {
+  return this._fltFetchStrict(`/liveTableSchedule/getDAGExecStatus/${iterationId}`);
+}
+```
+
+### Internal Wrappers
+
+```javascript
+/**
+ * FLT fetch with structured errors (throws FltApiError, never returns null).
+ * @param {string} path - Appended to fabricBaseUrl.
  * @param {object} [options] - fetch options.
- * @returns {Promise<object>} Parsed JSON response.
- * @throws {FltApiError} With .status, .errorCode, .message, .path.
+ * @returns {Promise<object>} Parsed JSON.
+ * @throws {FltApiError} With .status, .body, .path.
  */
 async _fltFetchStrict(path, options = {}) {
   if (!this._fabricBaseUrl || !this._mwcToken) {
-    const err = new Error('FLT service not connected — deploy to a lakehouse first');
-    err.status = 0;
-    err.path = path;
-    throw err;
+    const err = new Error('FLT service not connected');
+    err.status = 0; err.path = path; throw err;
   }
-  const url = this._fabricBaseUrl + path;
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `MwcToken ${this._mwcToken}`,
-    ...options.headers,
-  };
-  const resp = await fetch(url, { ...options, headers });
+  const resp = await fetch(this._fabricBaseUrl + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json',
+      'Authorization': `MwcToken ${this._mwcToken}`, ...options.headers },
+  });
   if (!resp.ok) {
-    const body = await resp.text().catch(() => '');
     const err = new Error(`FLT API error: ${resp.status} ${path}`);
-    err.status = resp.status;
-    err.body = body;
-    err.path = path;
-    throw err;
+    err.status = resp.status; err.body = await resp.text().catch(() => '');
+    err.path = path; throw err;
   }
   const text = await resp.text();
   return text ? JSON.parse(text) : {};
 }
 
 /**
- * FLT API fetch returning raw Response (for reading headers like continuation tokens).
+ * FLT fetch returning raw Response (for reading headers like continuation tokens).
  */
 async _fltFetchRaw(path, options = {}) {
-  if (!this._fabricBaseUrl || !this._mwcToken) {
-    throw new Error('FLT service not connected');
-  }
-  const url = this._fabricBaseUrl + path;
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `MwcToken ${this._mwcToken}`,
-  };
-  const resp = await fetch(url, { ...options, headers });
+  if (!this._fabricBaseUrl || !this._mwcToken) throw new Error('FLT not connected');
+  const resp = await fetch(this._fabricBaseUrl + path, {
+    ...options, headers: { 'Content-Type': 'application/json',
+      'Authorization': `MwcToken ${this._mwcToken}` },
+  });
   if (!resp.ok) {
     const err = new Error(`FLT API error: ${resp.status} ${path}`);
-    err.status = resp.status;
-    err.path = path;
-    throw err;
+    err.status = resp.status; err.path = path; throw err;
   }
   return resp;
 }
 ```
 
-### Error Handling Strategy (All DAG API Methods)
+### Error Handling Table
 
 | HTTP Status | User Message | Action |
 |-------------|-------------|--------|
-| 0 / Network | "Connection lost — check FLT service" | Show reconnect timer, auto-retry in 10s |
-| 401 | "Authentication expired" | Trigger re-auth flow via `/api/edog/auth` |
-| 403 | "Access denied — check workspace permissions" | Show error banner, no retry |
-| 404 | "DAG not found — deploy a lakehouse first" | Show onboarding prompt |
-| 429 | "Rate limited — retrying in {N}s" | Read `Retry-After` header, auto-retry |
-| 500 | "FLT service error: {errorCode}" | Show error detail + manual retry button |
+| 0 / Network | "Connection lost — check FLT service" | Auto-retry, exponential backoff (1s → 30s max) |
+| 401 | "Authentication expired" | Trigger re-auth via `/api/edog/auth` |
+| 403 | "Access denied — check permissions" | Error banner (`--status-failed`), no retry |
+| 404 | "DAG not found — deploy a lakehouse" | Onboarding prompt (`--accent` CTA) |
+| 429 | "Rate limited — retrying in {N}s" | Read `Retry-After`, auto-retry |
+| 500 | "FLT error: {errorCode}" | Error detail + manual retry button |
 
 ---
 
@@ -404,221 +304,158 @@ async _fltFetchRaw(path, options = {}) {
 
 ### Purpose
 
-`ExecutionStateManager` is the single source of truth for the state of a DAG execution in progress. It merges two data sources:
-
-1. **SignalR telemetry events** — structured, reliable, lower latency
-2. **AutoDetector log parsing** — pattern-based, higher latency, but works without `EdogTelemetryInterceptor`
-
-The manager reconciles both streams, deduplicates updates, and emits callbacks to the rendering layer.
+Single source of truth for DAG execution state. Merges two data sources — SignalR telemetry (primary, ~50ms latency) and AutoDetector log parsing (backup, ~200ms) — with deduplication and enforced state transitions.
 
 ### Class Design
 
 ```javascript
 /**
- * ExecutionStateManager — Tracks per-node execution state during a DAG run.
+ * ExecutionStateManager — Tracks per-node state during a DAG run.
  *
- * Two input channels:
- *   1. processTelemetry(event)       — SignalR telemetry events
- *   2. processAutoDetectorUpdate(exec) — AutoDetector log-parsed state
- *
- * Output callbacks:
- *   onNodeStateChanged(nodeId, {status, startedAt, endedAt, errorCode})
- *   onExecutionStateChanged(iterationId, {status, startedAt, endedAt})
- *   onExecutionComplete(iterationId, finalStatus)
+ * Input:  processTelemetry(event), processAutoDetectorUpdate(exec)
+ * Output: onNodeStateChanged, onExecutionStateChanged, onExecutionComplete
  */
 class ExecutionStateManager {
   constructor() {
     this._activeIterationId = null;
-    this._executionStatus = 'idle';     // idle | running | completed | failed | cancelled
-    this._nodeStates = new Map();       // nodeId → { status, startedAt, endedAt, errorCode, source }
-    this._dagNodes = new Map();         // nodeId → Node (from DAG definition, for name→ID lookup)
-    this._nodeNameIndex = new Map();    // lowercase(nodeName) → nodeId (for log-based matching)
+    this._executionStatus = 'idle';  // idle | running | completed | failed | cancelled
+    this._nodeStates = new Map();    // nodeId → { status, startedAt, endedAt, errorCode, source }
+    this._dagNodes = new Map();      // nodeId → DagNode (definition)
+    this._nodeNameIndex = new Map(); // lowercase(name) → nodeId
     this._startedAt = null;
     this._endedAt = null;
 
-    // Callbacks
-    this.onNodeStateChanged = null;     // (nodeId, state) => void
-    this.onExecutionStateChanged = null; // (iterationId, state) => void
-    this.onExecutionComplete = null;     // (iterationId, finalStatus) => void
+    this.onNodeStateChanged = null;      // (nodeId, state) => void
+    this.onExecutionStateChanged = null;  // (iterationId, state) => void
+    this.onExecutionComplete = null;      // (iterationId, finalStatus) => void
   }
-```
 
-### Initialization
-
-```javascript
-/**
- * Prepare the manager for a new execution. Must be called before
- * startTracking() — loads the DAG definition for name→ID resolution.
- * @param {Dag} dag - Current DAG definition with nodes[] and edges[].
- */
-setDag(dag) {
-  this._dagNodes.clear();
-  this._nodeNameIndex.clear();
-  for (const node of dag.nodes) {
-    this._dagNodes.set(node.nodeId, node);
-    this._nodeNameIndex.set(node.name.toLowerCase(), node.nodeId);
-  }
-}
-
-/**
- * Begin tracking a new execution.
- * @param {string} iterationId - UUID of the execution.
- */
-startTracking(iterationId) {
-  this._activeIterationId = iterationId;
-  this._executionStatus = 'running';
-  this._startedAt = Date.now();
-  this._endedAt = null;
-  this._nodeStates.clear();
-
-  // Initialize all executable nodes to 'pending'
-  for (const [nodeId, node] of this._dagNodes) {
-    if (node.executable !== false) {
-      this._nodeStates.set(nodeId, {
-        status: 'pending',
-        startedAt: null,
-        endedAt: null,
-        errorCode: null,
-        source: 'init',
-      });
+  /** Load DAG definition for name→ID resolution. Call before startTracking(). */
+  setDag(dag) {
+    this._dagNodes.clear();
+    this._nodeNameIndex.clear();
+    for (const node of dag.nodes) {
+      this._dagNodes.set(node.nodeId, node);
+      this._nodeNameIndex.set(node.name.toLowerCase(), node.nodeId);
     }
   }
 
-  this._emitExecutionState();
-}
-```
-
-### Telemetry Event Processing
-
-SignalR telemetry events from the `telemetry` topic arrive as `TelemetryEvent` envelopes:
-
-```json
-{
-  "sequenceId": 4215,
-  "timestamp": "2026-04-12T10:42:31.847Z",
-  "topic": "telemetry",
-  "data": {
-    "activityName": "RunDAG",
-    "activityStatus": "Succeeded",
-    "durationMs": 12400,
-    "iterationId": "abc-123",
-    "attributes": { "nodeCount": "7", "nodeName": "RefreshSales" }
-  }
-}
-```
-
-#### Telemetry → Node Mapping Rules
-
-| `activityName` Pattern | `activityStatus` | Maps To | Node Resolution |
-|------------------------|-------------------|---------|-----------------|
-| `RunDAG` | `Started` | Execution started | `iterationId` match |
-| `RunDAG` | `Succeeded` | Execution completed | `iterationId` match |
-| `RunDAG` | `Failed` | Execution failed | `iterationId` match |
-| Contains node name (e.g., `RefreshSalesData`) | `Started` | Node running | `attributes.nodeName` or substring match in `activityName` |
-| Contains node name | `Succeeded` | Node completed | Same |
-| Contains node name | `Failed` | Node failed | Same + extract `errorCode` from attributes |
-| `ExecuteNode` / `ExecuteMLV` | Any | Node state change | `attributes.nodeName` or `attributes.mlvName` |
-
-```javascript
-/**
- * Process a telemetry event from SignalR stream.
- * @param {TopicEvent} event - Envelope with .data containing TelemetryEvent.
- */
-processTelemetry(event) {
-  const t = event.data;
-  if (!t || !t.activityName) return;
-
-  // Filter to active iteration
-  if (t.iterationId && t.iterationId !== this._activeIterationId) return;
-
-  // Overall execution state
-  if (t.activityName === 'RunDAG') {
-    this._processExecutionTelemetry(t);
-    return;
-  }
-
-  // Per-node state
-  const nodeId = this._resolveNodeId(t);
-  if (nodeId) {
-    this._processNodeTelemetry(nodeId, t, event.timestamp);
-  }
-}
-
-_resolveNodeId(telemetry) {
-  // Priority 1: explicit nodeName in attributes
-  const attrName = telemetry.attributes?.nodeName || telemetry.attributes?.mlvName;
-  if (attrName) {
-    const id = this._nodeNameIndex.get(attrName.toLowerCase());
-    if (id) return id;
-  }
-
-  // Priority 2: activityName contains a known node name
-  const activity = telemetry.activityName.toLowerCase();
-  for (const [name, id] of this._nodeNameIndex) {
-    if (activity.includes(name)) return id;
-  }
-
-  return null;
-}
-```
-
-### AutoDetector Integration (Backup Channel)
-
-The existing `AutoDetector` class already parses log entries for DAG execution patterns. Its `execution` object contains a `nodes` Map with per-node state:
-
-```javascript
-// AutoDetector execution object shape:
-{
-  dagName, status, startTime, endTime,
-  nodeCount, completedNodes, failedNodes, skippedNodes,
-  parallelLimit, refreshMode, duration,
-  errors: [{code, message, timestamp, node}],
-  nodes: Map<name, {status, duration, errorCode, timestamp}>
-}
-```
-
-```javascript
-/**
- * Process an AutoDetector execution update (log-based detection).
- * Only applies updates for fields not already set by telemetry
- * (telemetry wins on conflict because it is structured and lower latency).
- * @param {object} exec - AutoDetector execution object.
- */
-processAutoDetectorUpdate(exec) {
-  // Overall execution state: only update if telemetry hasn't set it
-  if (exec.status && this._executionStatus === 'running') {
-    const mapped = this._mapAutoDetectorStatus(exec.status);
-    if (mapped === 'completed' || mapped === 'failed' || mapped === 'cancelled') {
-      this._executionStatus = mapped;
-      this._endedAt = Date.now();
-      this._emitExecutionState();
-      this._checkCompletion();
-    }
-  }
-
-  // Per-node updates
-  if (exec.nodes) {
-    for (const [name, nodeState] of exec.nodes) {
-      const nodeId = this._nodeNameIndex.get(name.toLowerCase());
-      if (!nodeId) continue;
-
-      const current = this._nodeStates.get(nodeId);
-      if (!current) continue;
-
-      // Only apply if telemetry hasn't already set a terminal state
-      if (current.source === 'telemetry' && this._isTerminal(current.status)) continue;
-
-      const newStatus = this._mapNodeStatus(nodeState.status);
-      if (newStatus !== current.status) {
-        this._updateNodeState(nodeId, {
-          status: newStatus,
-          startedAt: nodeState.timestamp || current.startedAt,
-          endedAt: this._isTerminal(newStatus) ? (nodeState.timestamp || Date.now()) : null,
-          errorCode: nodeState.errorCode || null,
-          source: 'autodetector',
+  /** Begin tracking. Initializes all executable nodes to 'pending'. */
+  startTracking(iterationId) {
+    this._activeIterationId = iterationId;
+    this._executionStatus = 'running';
+    this._startedAt = Date.now();
+    this._endedAt = null;
+    this._nodeStates.clear();
+    for (const [nodeId, node] of this._dagNodes) {
+      if (node.executable !== false) {
+        this._nodeStates.set(nodeId, {
+          status: 'pending', startedAt: null, endedAt: null,
+          errorCode: null, source: 'init',
         });
       }
     }
+    this._emitExecutionState();
+  }
+
+  /** Process SignalR telemetry event (primary channel). */
+  processTelemetry(event) {
+    const t = event.data;
+    if (!t || !t.activityName) return;
+    if (t.iterationId && t.iterationId !== this._activeIterationId) return;
+    if (t.activityName === 'RunDAG') { this._processExecutionTelemetry(t); return; }
+    const nodeId = this._resolveNodeId(t);
+    if (nodeId) this._processNodeTelemetry(nodeId, t, event.timestamp);
+  }
+
+  /** Process AutoDetector update (backup). Telemetry wins on conflict. */
+  processAutoDetectorUpdate(exec) {
+    if (exec.status && this._executionStatus === 'running') {
+      const mapped = this._mapAutoDetectorStatus(exec.status);
+      if (this._isTerminal(mapped)) {
+        this._executionStatus = mapped;
+        this._endedAt = Date.now();
+        this._emitExecutionState();
+      }
+    }
+    if (!exec.nodes) return;
+    for (const [name, ns] of exec.nodes) {
+      const nodeId = this._nodeNameIndex.get(name.toLowerCase());
+      if (!nodeId) continue;
+      const current = this._nodeStates.get(nodeId);
+      if (!current || (current.source === 'telemetry' && this._isTerminal(current.status))) continue;
+      const newStatus = this._mapNodeStatus(ns.status);
+      if (newStatus !== current.status) {
+        this._updateNodeState(nodeId, {
+          status: newStatus,
+          startedAt: ns.timestamp || current.startedAt,
+          endedAt: this._isTerminal(newStatus) ? (ns.timestamp || Date.now()) : null,
+          errorCode: ns.errorCode || null, source: 'autodetector',
+        });
+      }
+    }
+  }
+
+  /** Reset to idle. Called on view deactivation or after completion acknowledgment. */
+  reset() {
+    this._activeIterationId = null;
+    this._executionStatus = 'idle';
+    this._nodeStates.clear();
+    this._startedAt = null;
+    this._endedAt = null;
+  }
+
+  // ── Private ──
+
+  /** Resolve telemetry to nodeId. Priority: attributes.nodeName → substring match. */
+  _resolveNodeId(telemetry) {
+    const attrName = telemetry.attributes?.nodeName || telemetry.attributes?.mlvName;
+    if (attrName) {
+      const id = this._nodeNameIndex.get(attrName.toLowerCase());
+      if (id) return id;
+    }
+    const activity = telemetry.activityName.toLowerCase();
+    for (const [name, id] of this._nodeNameIndex) {
+      if (activity.includes(name)) return id;
+    }
+    return null;
+  }
+
+  /** All terminal → execution complete. */
+  _checkCompletion() {
+    let allTerminal = true, anyFailed = false, anyCancelled = false;
+    for (const [, state] of this._nodeStates) {
+      if (!this._isTerminal(state.status)) { allTerminal = false; break; }
+      if (state.status === 'failed') anyFailed = true;
+      if (state.status === 'cancelled') anyCancelled = true;
+    }
+    if (allTerminal && this._executionStatus === 'running') {
+      this._executionStatus = anyFailed ? 'failed' : anyCancelled ? 'cancelled' : 'completed';
+      this._endedAt = Date.now();
+      this._emitExecutionState();
+      this.onExecutionComplete?.(this._activeIterationId, this._executionStatus);
+    }
+  }
+
+  _isTerminal(s) {
+    return s === 'completed' || s === 'failed' || s === 'cancelled' || s === 'skipped';
+  }
+
+  /** Enforce valid transitions. Invalid ones are logged and ignored. */
+  _updateNodeState(nodeId, state) {
+    const current = this._nodeStates.get(nodeId);
+    if (!current) return;
+    const valid = {
+      pending: ['running', 'skipped'], running: ['completed', 'failed', 'cancelled', 'cancelling'],
+      cancelling: ['cancelled'],
+    };
+    if (!valid[current.status]?.includes(state.status)) {
+      console.warn(`[ESM] Invalid: ${current.status} → ${state.status} for ${nodeId}`);
+      return;
+    }
+    this._nodeStates.set(nodeId, state);
+    this.onNodeStateChanged?.(nodeId, state);
+    this._checkCompletion();
   }
 }
 ```
@@ -629,27 +466,21 @@ processAutoDetectorUpdate(exec) {
                         ┌─────────┐
                         │ pending │  (initial — all executable nodes)
                         └────┬────┘
-                             │  "Executing node X" / telemetry Started
+                             │  telemetry Started / "Executing node X"
                              ▼
                         ┌─────────┐
             ┌───────────│ running │───────────┐
             │           └────┬────┘           │
-            │                │                │
-            │   "Executed    │  Error or      │  "Cancelled" /
-            │   node X" +    │  "Failed"      │  telemetry Cancelled
-            │   success      │                │
             ▼                ▼                ▼
       ┌───────────┐   ┌──────────┐   ┌────────────┐
       │ completed │   │  failed  │   │ cancelled  │
       └───────────┘   └──────────┘   └────────────┘
 
-Special transitions:
-  pending → skipped     (dependency failed → DAG_FAULTED_NODES)
-  running → cancelling  (cancel requested, awaiting confirmation)
-  cancelling → cancelled
+  Special: pending → skipped (dependency failed, DAG_FAULTED_NODES)
+           running → cancelling → cancelled
 ```
 
-Valid state transitions (enforced — invalid transitions are logged and ignored):
+### Valid Transitions (enforced — invalid logged and ignored)
 
 | From | To | Trigger |
 |------|----|---------|
@@ -661,311 +492,347 @@ Valid state transitions (enforced — invalid transitions are logged and ignored
 | `running` | `cancelling` | Cancel requested |
 | `cancelling` | `cancelled` | Cancel confirmed |
 
-### Execution Completion Detection
+### Telemetry → Node Mapping
 
-The manager detects execution completion when **all executable nodes are in a terminal state** (`completed`, `failed`, `cancelled`, `skipped`):
+| `activityName` | `activityStatus` | Maps To | Resolution |
+|----------------|-------------------|---------|------------|
+| `RunDAG` | `Started` | Execution started | `iterationId` match |
+| `RunDAG` | `Succeeded`/`Failed` | Execution ended | `iterationId` match |
+| Contains node name | `Started` | Node running | `attributes.nodeName` or substring |
+| Contains node name | `Succeeded` | Node completed | Same |
+| Contains node name | `Failed` | Node failed | Same + `errorCode` |
+| `ExecuteNode`/`ExecuteMLV` | Any | Node change | `attributes.nodeName`/`mlvName` |
 
-```javascript
-_checkCompletion() {
-  let allTerminal = true;
-  let anyFailed = false;
-  let anyCancelled = false;
-
-  for (const [nodeId, state] of this._nodeStates) {
-    if (!this._isTerminal(state.status)) {
-      allTerminal = false;
-      break;
-    }
-    if (state.status === 'failed') anyFailed = true;
-    if (state.status === 'cancelled') anyCancelled = true;
-  }
-
-  if (allTerminal && this._executionStatus === 'running') {
-    this._executionStatus = anyFailed ? 'failed' : anyCancelled ? 'cancelled' : 'completed';
-    this._endedAt = Date.now();
-    this._emitExecutionState();
-    if (this.onExecutionComplete) {
-      this.onExecutionComplete(this._activeIterationId, this._executionStatus);
-    }
-  }
-}
-
-_isTerminal(status) {
-  return status === 'completed' || status === 'failed'
-      || status === 'cancelled' || status === 'skipped';
-}
-```
-
-### Reconciliation Strategy (Dual-Source)
+### Reconciliation Strategy
 
 | Conflict | Resolution | Rationale |
 |----------|-----------|-----------|
-| Telemetry says `running`, AutoDetector says `completed` | Accept `completed` | AutoDetector parsed the "Executed node" log line before telemetry event arrived |
-| Telemetry says `completed`, AutoDetector says `running` | Keep `completed` | Telemetry is authoritative for terminal states |
-| Both report same transition | Deduplicate (ignore second) | `_updateNodeState` checks `current.status !== new.status` |
-| Telemetry has no iterationId match | Ignore | Stale event from previous run |
-| AutoDetector detects node not in DAG | Ignore | External node or name mismatch |
+| Telemetry `running`, AutoDetector `completed` | Accept `completed` | Log parsed before telemetry arrived |
+| Telemetry `completed`, AutoDetector `running` | Keep `completed` | Telemetry authoritative for terminal states |
+| Both report same transition | Deduplicate | `_updateNodeState` checks current !== new |
+| Telemetry has wrong iterationId | Ignore | Stale event from previous run |
+| AutoDetector node not in DAG | Ignore | External node or name mismatch |
 
-Rule: **The first source to report a terminal state wins.** Subsequent reports of the same terminal state are ignored.
+**Rule:** First source to report a terminal state wins.
 
 ---
 
 ## 4. Real-Time Updates
 
-### SignalR Topics Required
+### SignalR Topics
 
-| Topic | Purpose | Subscriber | Buffer Size |
-|-------|---------|------------|-------------|
-| `telemetry` | Structured execution events — `ActivityName`, `IterationId`, per-node status | `DagStudio._onTelemetryEvent()` | 5,000 events |
-| `log` | Raw log entries — parsed by AutoDetector for DAG patterns | `DagStudio._onLogEntry()` → `AutoDetector.processLog()` | 10,000 entries |
+| Topic | Purpose | Buffer |
+|-------|---------|--------|
+| `telemetry` | Structured execution events | 5,000 |
+| `log` | Raw log entries → AutoDetector | 10,000 |
 
-**No new topics required.** DAG Studio consumes the existing `telemetry` and `log` topics. Both are already defined in `SIGNALR_PROTOCOL.md` and implemented in `EdogPlaygroundHub`.
+No new topics. Existing `telemetry` and `log` from `SIGNALR_PROTOCOL.md`.
 
 ### Subscription Lifecycle
 
 ```javascript
-// DagStudio.activate() — called when user switches to DAG view
 activate() {
   this._signalR.on('telemetry', this._onTelemetryEvent);
   this._signalR.on('log', this._onLogEntry);
   this._signalR.subscribeTopic('telemetry');
-  // 'log' is auto-subscribed on connect, but ensure it's active
   this._signalR.subscribeTopic('log');
 }
 
-// DagStudio.deactivate() — called when user leaves DAG view
 deactivate() {
   this._signalR.off('telemetry', this._onTelemetryEvent);
   this._signalR.off('log', this._onLogEntry);
-  // Do NOT unsubscribe topics — other views (Logs, Telemetry) may need them
+  // Do NOT unsubscribe — other views may need the topics
   this._canvasRenderer.pauseRendering();
 }
 ```
 
-### How the Graph Knows When a Node Starts/Finishes
-
-**Primary path (telemetry topic):**
-
-```
-TelemetryEvent arrives → data.activityName checked
-  → "RunDAG" + "Started"  → execution started
-  → "RunDAG" + "Succeeded" → execution completed
-  → activityName contains node name → resolve nodeId via _nodeNameIndex
-    → activityStatus "Started" → node is running
-    → activityStatus "Succeeded" → node completed
-    → activityStatus "Failed" → node failed
-```
-
-**Backup path (log topic → AutoDetector):**
-
-```
-LogEntry arrives → AutoDetector.processLog(entry)
-  → entry.message matches "[DAG STATUS] Running" → execution started
-  → entry.message matches "Executing node RefreshSales" → node running
-  → entry.message matches "Executed node RefreshSales. Status: Completed" → node completed
-  → entry.message matches "[DAG_FAULTED_NODES]" → parse faulted nodes → mark skipped
-```
-
 ### Latency Budget
 
-| Segment | Target | Measured Basis |
-|---------|--------|----------------|
-| FLT emits → EdogTopicRouter.Publish() | < 1ms | In-process, synchronous snapshot |
-| TopicBuffer → ChannelReader → SignalR wire | < 50ms | JSON over WebSocket, localhost |
-| SignalR client → SignalRManager dispatch | < 5ms | JS event loop, single `forEach` |
-| ExecutionStateManager processing | < 2ms | Map lookup + state comparison |
-| DagCanvasRenderer.updateNodeState() | < 5ms | Change fill color, mark dirty |
-| Next requestAnimationFrame render | < 16ms | 60fps = 16.67ms per frame |
-| **Total: event emission → pixel on screen** | **< 80ms** | Well under 500ms target |
-
-The 500ms latency target from the spec has ~420ms of margin. Even with network jitter on non-localhost deployments, this budget is safe.
+| Segment | Target |
+|---------|--------|
+| FLT → EdogTopicRouter.Publish() | < 1ms |
+| TopicBuffer → SignalR wire | < 50ms |
+| SignalR client → dispatch | < 5ms |
+| ExecutionStateManager processing | < 2ms |
+| DagCanvasRenderer.updateNodeState() | < 5ms |
+| Next requestAnimationFrame | < 16ms |
+| **Total: emit → pixel** | **< 80ms** (420ms margin under 500ms spec) |
 
 ### Reconnection Handling
 
 ```
-SignalR disconnects
-  → SignalRManager.onreconnecting() fires
-  → DagStudio: show "Reconnecting..." status in toolbar
-  → DagCanvasRenderer: freeze animation (keep last known state)
-
-SignalR reconnects
-  → SignalRManager.onreconnected() fires
-  → SignalRManager._resubscribeAll() re-streams topics
-  → Telemetry snapshot hydrates missed events (ChannelReader pattern)
-  → ExecutionStateManager replays snapshot events
-  → If execution was in progress:
-      → Poll getDagExecMetrics(activeIterationId) once to sync state
-      → Reconcile API response with stream state
+Disconnect → show "Reconnecting..." (--status-cancelled amber) → freeze render
+Reconnect  → resubscribe all topics → ChannelReader snapshot hydrates missed events
+           → if execution in progress: poll getDagExecStatus() to sync
+           → reconcile API response with stream state → resume live render
 ```
 
-**Gap risk:** The `ChannelReader` snapshot+stream pattern (per `SIGNALR_PROTOCOL.md`) means the client receives **all buffered events** then **live events** with zero gap. However, if the telemetry buffer (5,000 events) overflowed during disconnect, events may be lost. Mitigation: after reconnect, poll `getDagExecMetrics()` once to get authoritative state.
+Buffer overflow risk: if telemetry buffer (5,000) overflowed during disconnect, events are lost. Mitigation: poll `getDagExecMetrics()` once after reconnect.
 
 ---
 
-## 5. Proxy Layer
+## 5. Module Structure
 
-### Routing Architecture
+### dag-graph.js (~800 lines)
 
-DAG Studio uses **two authentication paths**, each with different routing:
+**Classes:** `DagCanvasRenderer`, `DagLayout`
 
+Canvas 2D rendering with 3-level LOD:
+- **LOD 0** (zoom < 0.3): Dots — solid circles with status color
+- **LOD 1** (zoom 0.3–0.7): Compact rectangles with name + status indicator
+- **LOD 2** (zoom > 0.7): Full detail — name, type badge, status, duration, error code
+
+**Public API:** `setData(nodes, edges)`, `fitToScreen()`, `updateNodeState(nodeId, status)`, `setCamera(x, y, zoom)`, `hitTest(screenX, screenY)`, `highlightNode(nodeId)`, `clearHighlight()`, `pauseRendering()`, `resumeRendering()`, `destroy()`
+
+**Callbacks:** `onNodeSelected(nodeId)`, `onNodeHovered(nodeId)`, `onNodeUnhovered()`, `onViewportChanged({x, y, zoom})`
+
+### dag-gantt.js (~400 lines)
+
+**Class:** `DagGantt`
+
+Canvas 2D horizontal bars + DOM overlay for labels. Timeline with per-node bars, time axis, cross-highlighting.
+
+**Public API:** `renderExecution(instance)`, `updateBar(nodeId, {status, startedAt, endedAt})`, `highlightNode(nodeId)`, `hoverNode(nodeId, x, y)`, `unhoverNode()`, `renderComparison(base, compare)`, `exitComparison()`, `setTimeZoom(level)`, `resize()`, `destroy()`
+
+**Callbacks:** `onNodeSelected(nodeId)`, `onNodeHovered(nodeId)`, `onNodeUnhovered()`
+
+### dag-studio.js (~600 lines)
+
+**Classes:** `DagStudio` (orchestrator), `ExecutionStateManager` (inline)
+
+Responsibilities:
+- View lifecycle (activate/deactivate)
+- Data coordination (API → state → renderers)
+- Cross-highlighting between graph ↔ gantt
+- Execution mode selection, comparison flow
+- Contains ControlsBar logic + HistoryPanel logic
+
+```javascript
+// Cross-highlighting wiring
+this._canvasRenderer.onNodeHovered = (nodeId) => this._gantt.highlightNode(nodeId);
+this._gantt.onNodeHovered = (nodeId) => this._canvasRenderer.highlightNode(nodeId);
+
+// State → all renderers
+this._esm.onNodeStateChanged = (nodeId, state) => {
+  this._canvasRenderer.updateNodeState(nodeId, state.status);
+  this._gantt.updateBar(nodeId, state);
+};
 ```
-Browser (localhost:5555)
-│
-├── Fabric Public APIs (bearer token)
-│   └── fetch('/api/fabric/workspaces/...')
-│       → dev-server.py :5555 proxy
-│       → api.fabric.microsoft.com
-│       → Used by: WorkspaceExplorer (Phase 1)
-│       → NOT used by DAG Studio
-│
-├── FLT Service APIs (MWC token)
-│   └── fetch('{fabricBaseUrl}/liveTable/...')
-│       → DIRECT to FLT capacity host (CORS allowed)
-│       → MWC token in Authorization header
-│       → Used by: ALL DAG Studio API calls
-│
-├── DAG Proxy Routes (NEW — MWC token, server-side)
-│   └── fetch('/api/dag/...')
-│       → dev-server.py :5555 proxy
-│       → FLT capacity host with server-side MWC token
-│       → Used by: calls needing server-side token refresh
-│
-└── SignalR (WebSocket)
-    └── ws://localhost:5557/hub/playground
-        → DIRECT to EdogPlaygroundHub in FLT process
-        → No proxy needed (same machine, no CORS)
-```
-
-### Which Calls Go Where
-
-| Call | Route | Reason |
-|------|-------|--------|
-| `getLatestDag()` | Direct to FLT (`_fltFetch`) | MWC token already in browser |
-| `getDagExecMetrics(id)` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `listDagExecutions(opts)` | Direct to FLT (`_fltFetchRaw`) | Need response headers for pagination |
-| `runDag(id)` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `cancelDag(id)` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `getLockedExecution()` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `forceUnlockDag(id)` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `getDagSettings()` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `updateDagSettings(body)` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `listMlvDefinitions()` | Direct to FLT (`_fltFetchStrict`) | Same |
-| `createMlvDefinition(body)` | Direct to FLT (`_fltFetchStrict`) | Same |
-| SignalR telemetry stream | Direct WebSocket to :5557 | Already established |
-| SignalR log stream | Direct WebSocket to :5557 | Already established |
-
-### New Proxy Routes in dev-server.py
-
-**Required: One new route group for DAG API fallback.**
-
-When the MWC token expires mid-session, the browser's direct FLT calls will 401. Rather than interrupt the user, `dev-server.py` can proxy DAG calls using a server-side refreshed token:
-
-```python
-# In EdogDevHandler.do_GET():
-elif self.path.startswith("/api/dag/"):
-    self._proxy_dag_to_flt("GET")
-
-# In EdogDevHandler.do_POST():
-elif self.path.startswith("/api/dag/"):
-    self._proxy_dag_to_flt("POST")
-
-# In EdogDevHandler.do_PATCH():
-elif self.path.startswith("/api/dag/"):
-    self._proxy_dag_to_flt("PATCH")
-```
-
-```python
-def _proxy_dag_to_flt(self, method: str) -> None:
-    """Proxy /api/dag/* requests to FLT service with server-side MWC token.
-
-    Route mapping:
-      /api/dag/latest       → GET  .../liveTable/getLatestDag?showExtendedLineage=true
-      /api/dag/exec/{id}    → GET  .../liveTable/getDAGExecMetrics/{id}
-      /api/dag/history      → GET  .../liveTable/listDAGExecutionIterationIds?...
-      /api/dag/run/{id}     → POST .../liveTableSchedule/runDAG/{id}
-      /api/dag/cancel/{id}  → GET  .../liveTableSchedule/cancelDAG/{id}
-      /api/dag/lock          → GET  .../liveTableMaintanance/getLockedDAGExecutionIteration
-      /api/dag/unlock/{id}  → POST .../liveTableMaintanance/forceUnlockDAGExecution/{id}
-      /api/dag/settings     → GET/PATCH .../liveTable/settings
-      /api/dag/definitions  → GET/POST .../liveTable/mlvExecutionDefinitions
-    """
-    # Strip /api/dag prefix → map to FLT path
-    # Attach MWC token from server-side config
-    # Forward request, return response
-```
-
-**Risk assessment:** This proxy is a **fallback** path. Primary path is direct browser→FLT. The proxy exists for:
-1. Token refresh without user interruption
-2. Future CORS restrictions if FLT moves to a different host
-3. Request logging/debugging (all proxied calls visible in dev-server logs)
-
-**Implementation priority:** LOW — direct FLT calls work today. Add proxy when token refresh UX is built.
 
 ---
 
-## 6. File Map
+## 6. Layout Engine (Sugiyama Algorithm)
 
-### New Files
+Five-step layered layout, the standard for DAG visualization:
 
-| File | Class | Purpose | Dependencies | Est. Lines |
-|------|-------|---------|-------------|------------|
-| `src/frontend/js/dag-graph.js` | `DagCanvasRenderer`, `DagLayout` | Canvas 2D graph with 3-level LOD, Sugiyama layout, pan/zoom/select, minimap | None (standalone rendering) | ~800 |
-| `src/frontend/js/dag-gantt.js` | `DagGantt` | Canvas 2D Gantt timeline with horizontal bars, time axis, cross-highlighting | None (standalone rendering) | ~400 |
-| `src/frontend/js/dag-studio.js` | `DagStudio`, `ExecutionStateManager` | Orchestrator: view lifecycle, API calls, state management, wiring renderers | `api-client.js`, `signalr-manager.js`, `auto-detect.js`, `dag-graph.js`, `dag-gantt.js` | ~700 |
-| `src/frontend/css/dag-graph.css` | — | Canvas container, zoom controls, minimap overlay, node detail panel styles | `variables.css`, `dag.css` | ~120 |
+### Step 1 — Layer Assignment
 
-### Modified Files
+Kahn's topological sort. Nodes with no incoming edges → layer 0. Each subsequent layer holds nodes whose dependencies are all in earlier layers. **O(V + E).**
 
-| File | Changes | Risk |
-|------|---------|------|
-| `src/frontend/js/api-client.js` | Add 8 new DAG methods + `_fltFetchStrict()` + `_fltFetchRaw()` + fix `cancelDag` GET/POST bug | **Medium** — new methods are additive, but `_fltFetchStrict` is a new pattern. Existing `_fltFetch` callers unaffected. |
-| `src/frontend/js/control-panel.js` | Deprecate in favor of `dag-studio.js`. Keep for backward compat but mark methods as legacy. | **Low** — no current UI references `ControlPanel` (no DOM container in `index.html`). |
-| `src/frontend/index.html` | Add `#view-dag` container with canvas element, toolbar, bottom panel structure. Add sidebar nav item for DAG Studio. | **Medium** — structural change to HTML template. Must coordinate with Pixel. |
-| `src/frontend/css/dag.css` | Minor additions for Canvas-specific styles (existing file covers DOM/SVG patterns, needs Canvas container rules). | **Low** — additive only. |
-| `scripts/build-html.py` | Add `dag-graph.js`, `dag-gantt.js`, `dag-studio.js` to JS concatenation order. Add `dag-graph.css` to CSS order. | **Medium** — wrong order breaks the build. `dag-graph.js` and `dag-gantt.js` must load before `dag-studio.js`, which must load before `main.js`. |
-| `scripts/dev-server.py` | Add `/api/dag/*` proxy routes (future, low priority). | **Low** — additive, behind new URL prefix. |
+### Step 2 — Dummy Node Insertion
 
-### Build Order (JS Concatenation)
+Edges spanning > 1 layer get dummy nodes at intermediate layers. Dummies are invisible but participate in crossing minimization. Rendered as edge waypoints with rounded corners. **O(E).**
 
-Current order (relevant section):
+### Step 3 — Crossing Minimization
+
+Barycenter heuristic, 2-pass (top-down then bottom-up). For each node, compute average position of neighbors in adjacent layer, sort by barycenter. Heuristic — not optimal, but good for typical FLT DAGs. **O(V²) per pass.**
+
+### Step 4 — Coordinate Assignment
 
 ```
-... auto-detect.js → control-panel.js → ... → main.js
+LAYER_SPACING = 200px    NODE_SPACING = 80px
+NODE_WIDTH    = 160px    NODE_HEIGHT  = 56px
+
+For each layer L, position p:
+  x = L * LAYER_SPACING
+  y = p * NODE_SPACING - (layerSize * NODE_SPACING / 2)
 ```
 
-New order:
+Simple centering. Brandes-Kopf alignment deferred to P1. **O(V).**
 
-```
-... auto-detect.js → control-panel.js → dag-graph.js → dag-gantt.js → dag-studio.js → ... → main.js
-```
+### Step 5 — Edge Routing
 
-Rationale:
-- `dag-graph.js` and `dag-gantt.js` are standalone renderers with no dependencies on other EDOG modules
-- `dag-studio.js` depends on `DagCanvasRenderer`, `DagGantt`, `AutoDetector`, and `FabricApiClient` — must load after all of them
-- `main.js` instantiates `DagStudio` — must load last
+Adjacent layers: bezier with 40px control point offset. Through dummy nodes: orthogonal path with 8px corner radius.
 
-### Build Order (CSS Concatenation)
+### Complexity Summary
 
-```
-... dag.css → dag-graph.css → ...
-```
-
-`dag-graph.css` extends `dag.css` with Canvas-specific rules. Must load after `dag.css` and `variables.css`.
+| Step | Complexity |
+|------|-----------|
+| Layer assignment | O(V + E) |
+| Dummy insertion | O(E) |
+| Crossing minimization | O(V²) |
+| Coordinate assignment | O(V) |
+| Edge routing | O(E) |
+| **Total** | **O(V² + E)** — < 50ms for 300 nodes |
 
 ---
 
-## 7. Open Questions for Sana
+## 7. Performance Budget
 
-1. **SignalR telemetry event shape for per-node tracking:** The `telemetry` topic envelope is defined in `SIGNALR_PROTOCOL.md`, but the exact `activityName` patterns for per-node execution events need confirmation from FLT source code. Are `ExecuteNode` / `ExecuteMLV` the actual activity names, or do we only get `RunDAG` at the execution level?
+| Metric | Target |
+|--------|--------|
+| DAG load + layout (50 nodes) | < 100ms |
+| DAG load + layout (300 nodes) | < 500ms |
+| Live frame time | < 16ms (60fps) |
+| Event → pixel latency | < 80ms |
+| Hit-test | < 1ms |
+| Memory (50 nodes) | < 5MB |
+| Memory (300 nodes) | < 15MB |
+| Gantt render (50 nodes) | < 50ms |
+| History panel load (20 items) | < 30ms |
 
-2. **`cancelDag` HTTP method:** Current `api-client.js` sends POST, but spec says FLT expects GET. Which is correct for the current FLT build? Both paths should be tested.
-
-3. **Token expiry during long DAG runs:** A DAG run can take 10+ minutes. MWC tokens may expire mid-execution. The monitoring (telemetry/log streams) works via SignalR (no token needed after connect), but API calls like `getDagExecMetrics` will fail. Should we implement server-side token refresh now, or add the `/api/dag/*` proxy as a follow-up?
-
-4. **`NodeExecutionMetrices` field name typo:** FLT uses `nodeExecutionMetrices` (missing an 't'). Should we normalize this in `_fltFetchStrict` or handle it in `DagStudio`?
+Canvas 2D over WebGL for simplicity and Chromium compatibility. WebGL deferred to P2 if 300+ node performance is insufficient.
 
 ---
 
-*"The data flows through three channels: REST for structure, SignalR for real-time, AutoDetector for resilience. Each can fail independently. The architecture survives any single channel going down — that's not paranoia, that's engineering."*
+## 8. Error Handling
 
-— Vex, Backend Engineer
+### Network Retry
+
+Exponential backoff: 1s → 2s → 4s → 8s → 16s → 30s (max). Jitter ±500ms. No retry on 401/403.
+
+```javascript
+async _retryWithBackoff(fn, maxRetries = 5) {
+  for (let i = 0; i < maxRetries; i++) {
+    try { return await fn(); }
+    catch (err) {
+      if (err.status === 401 || err.status === 403) throw err;
+      const delay = Math.min(1000 * Math.pow(2, i), 30000) + (Math.random() * 1000 - 500);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+### Stale Data
+
+Sequence-based gap detection from TopicBuffer. If `sequenceId` gap detected: continue processing (events are idempotent), then poll `getDagExecStatus()` after 5s without missing events arriving.
+
+### Lock Conflicts
+
+`_checkLockState()` → locked → disable Run, show "Force Unlock" (behind confirmation dialog showing lock age + iteration ID).
+
+### Auth Expiry
+
+SignalR: unaffected after connect. API calls: 401 → re-auth via `/api/edog/auth` → retry. Failure → "Session expired" banner.
+
+---
+
+## 9. Integration Points
+
+| Module | Integration | Changes Required |
+|--------|------------|-----------------|
+| **auto-detect.js** | Subscribe to `onExecutionUpdated` for backup detection | None — existing callback |
+| **state-manager.js** | View activation/deactivation routing | Add `case 'dag'` in view router |
+| **api-client.js** | 9 new methods + `_fltFetchStrict` + `_fltFetchRaw` | Additive — existing callers unaffected |
+| **signalr-manager.js** | `.on()` / `.subscribeTopic()` | None — existing API |
+| **log-viewer.js** | Shared `log` topic stream, separate handlers | None — no data duplication |
+
+---
+
+## 10. Three Execution Modes
+
+| Mode | API Parameter | Behavior |
+|------|---------------|----------|
+| CurrentLakehouse (default) | `refreshMode: "CurrentLakehouse"` | All MLVs in current lakehouse |
+| SelectedOnly | `refreshMode: "SelectedOnly"` + `selectedMLVs: [...]` | Only listed MLVs execute |
+| FullLineage | `refreshMode: "Full"` | Cross-lakehouse within workspace |
+
+### Mode Selection UI
+
+Segmented control in ControlsBar (styled with `--color-border` dividers, `--accent-dim` active background):
+
+```
+┌─────────────────────┬──────────────┬───────────────┐
+│ ● Current Lakehouse │  Selected    │  Full Lineage │
+└─────────────────────┴──────────────┴───────────────┘
+```
+
+"Selected" mode → node picker overlay. Checked nodes get `--accent-dim` background in graph.
+
+---
+
+## 11. Lock Mechanism
+
+FLT uses OneLake lock files to prevent concurrent DAG executions.
+
+### Lock Semantics
+
+| Property | Behavior |
+|----------|----------|
+| **Acquisition** | Single attempt, no retry. Failure → Skipped. |
+| **Reentrant** | Same iteration can re-acquire its own lock. |
+| **TTL** | Configurable timeout (default 60 min). |
+| **Force unlock** | `forceUnlockDag()` API — requires confirmation dialog. |
+| **Per-schedule** | Each MLVExecutionDefinition gets own lock → concurrent possible. |
+
+### Lock File
+
+```json
+{ "LockedIterationId": "<guid>", "LockedAt": "2026-04-17T10:30:00Z" }
+```
+
+Location: `{Lakehouse}/LiveTableSystem/.lock`
+
+### Force Unlock Flow
+
+1. Lock detected → show indicator, disable "Run DAG"
+2. User clicks "Force Unlock" → confirmation dialog (lock age, iteration ID, warning)
+3. Confirm → `forceUnlockDag(lockedIterationId)` → refresh state → re-enable "Run DAG"
+
+---
+
+## 12. Execution History Persistence
+
+### OneLake Structure
+
+```
+{Lakehouse}/LiveTableSystem/DagExecutionMetrics/{iterationId}/
+  ├── dag.json                     // DAG definition snapshot
+  ├── dag_metrics.json             // Overall execution metrics
+  └── node_{nodeId}_metrics.json   // Per-node metrics (one per node)
+```
+
+**Max 500 records** per lakehouse. Older records pruned FIFO by FLT.
+
+### Insights Delta Tables (Post-Execution Only)
+
+| Table | Contents | Written |
+|-------|----------|---------|
+| `sys_run_metrics` | One row per execution | After completion |
+| `sys_node_metrics` | One row per node per execution | After completion |
+| `sys_error_metrics` | One row per error | After completion |
+
+**Critical:** These tables are **post-execution**, NOT real-time. DAG Studio must use telemetry stream + `getDagExecMetrics()` for live status — never Delta Tables.
+
+---
+
+## 13. Open Questions / Risks
+
+### Open Questions
+
+1. **Telemetry activity names for per-node tracking.** Are `ExecuteNode` / `ExecuteMLV` the actual `activityName` values, or do we only get `RunDAG` at execution level? Determines `_resolveNodeId` accuracy.
+
+2. **Token expiry during long runs.** DAG runs take 10+ minutes. SignalR is unaffected, but API calls 401. Implement server-side refresh now or defer proxy to P1?
+
+3. **`nodeExecutionMetrices` typo.** FLT returns this misspelled field. Handle as-is (do not transform API contracts) or normalize in `_fltFetchStrict`?
+
+4. **Parallel limit effect timing.** When user changes `parallelNodeLimit` via Settings, does it take effect on next run or require DAG restart?
+
+### Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| Telemetry buffer overflow on long runs | Low | Medium | Poll `getDagExecMetrics()` on reconnect |
+| Node name collision in `_resolveNodeId` | Low | Medium | `attributes.nodeName` (Priority 1) before substring |
+| Canvas perf with 300+ nodes | Medium | High | 3-level LOD; defer WebGL to P2 |
+| Lock file corruption on crash | Low | High | Force unlock API + TTL expiry |
+| MWC token expiry mid-run | High | Medium | SignalR unaffected; re-auth retry in `_fltFetchStrict` |
+| FLT API breaking changes | Low | High | Pin API version; response shape validation |
+
+---
+
+*"Three channels, two renderers, one source of truth. The architecture assumes failure and recovers from it. Every data path has a backup. Every state transition is validated. That is the difference between a prototype and production."*
+
+— Sana Reeves, Architecture Lead

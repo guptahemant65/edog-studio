@@ -6128,6 +6128,399 @@ mark {
   to { opacity: 1; transform: translateY(0); }
 }
 
+    /* === css/toast.css === */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Toast Notification System
+   Unified toast manager — replaces all fragmented _showToast implementations.
+   Position: fixed bottom-right, stacks upward. Max 3 visible.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.toast-container {
+  position: fixed;
+  bottom: calc(var(--footer-height, 24px) + 12px);
+  right: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 320px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text);
+  pointer-events: auto;
+  animation: toastSlideIn 300ms ease-out forwards;
+  border-left: 3px solid var(--accent);
+}
+
+.toast-item.variant-success { border-left-color: var(--status-success, #18a058); }
+.toast-item.variant-warning { border-left-color: var(--status-warning, #e5940c); }
+.toast-item.variant-error   { border-left-color: var(--status-error, #e5453b); }
+.toast-item.variant-info    { border-left-color: var(--accent); }
+
+.toast-item.exiting {
+  animation: toastSlideOut 200ms ease-in forwards;
+}
+
+.toast-msg {
+  flex: 1;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.toast-action {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+  transition: opacity 80ms ease-out;
+}
+
+.toast-action:hover { opacity: 0.7; }
+
+.toast-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 80ms ease-out;
+  flex-shrink: 0;
+}
+
+.toast-dismiss:hover { color: var(--text); }
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(100%); }
+}
+
+    /* === css/deploy-strip.css === */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Deploy Context Strip
+   Persistent notification bar showing deploy target info.
+   Renders in .notification-zone above #file-change-bar.
+   Green accent for connected state. Breadcrumb hierarchy pattern.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.deploy-strip {
+  display: none;
+  align-items: center;
+  gap: 14px;
+  height: 38px;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(24,160,88,0.15);
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text-dim);
+  overflow: hidden;
+  animation: dsSlideDown 360ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  position: relative;
+}
+
+.deploy-strip::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--status-success, #18a058);
+  box-shadow: 0 0 12px rgba(24,160,88,0.35), 4px 0 20px rgba(24,160,88,0.08);
+}
+
+.deploy-strip::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(24,160,88,0.04) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.deploy-strip.active { display: flex; }
+
+.deploy-strip .ds-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px 4px 10px;
+  background: rgba(24,160,88,0.08);
+  border: 1px solid rgba(24,160,88,0.15);
+  border-radius: 100px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.deploy-strip .ds-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--status-success, #18a058);
+  box-shadow: 0 0 0 3px rgba(24,160,88,0.12), 0 0 8px rgba(24,160,88,0.4);
+  animation: dsPulse 2.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+.deploy-strip .ds-badge-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-success, #18a058);
+  letter-spacing: 0.01em;
+}
+
+.deploy-strip .ds-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+
+.deploy-strip .ds-path-seg {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.deploy-strip .ds-path-seg.bold {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deploy-strip .ds-chevron {
+  font-size: 14px;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.deploy-strip .ds-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-alt, rgba(0,0,0,0.12));
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.deploy-strip .ds-commit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 150ms ease-out;
+  border: 1px solid transparent;
+  z-index: 1;
+}
+
+.deploy-strip .ds-commit:hover {
+  background: rgba(109,92,255,0.06);
+  border-color: rgba(109,92,255,0.12);
+  box-shadow: 0 2px 8px rgba(109,92,255,0.08);
+}
+
+.deploy-strip .ds-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.deploy-strip .ds-msg {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-dim);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deploy-strip .ds-spacer { flex: 1; z-index: 1; }
+
+.deploy-strip .ds-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.ds-tooltip {
+  position: fixed;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-alt, rgba(0,0,0,0.12));
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  z-index: 500;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  max-width: 360px;
+  font-size: 12px;
+  font-family: var(--font-body);
+}
+
+.ds-tooltip.visible { opacity: 1; transform: translateY(0); }
+
+.ds-tooltip .dt-sha {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.ds-tooltip .dt-msg {
+  color: var(--text);
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.ds-tooltip .dt-author {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+@keyframes dsSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dsPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(24,160,88,0.12), 0 0 8px rgba(24,160,88,0.4); }
+  50%      { box-shadow: 0 0 0 5px rgba(24,160,88,0.06), 0 0 12px rgba(24,160,88,0.25); }
+}
+
+    /* === css/status-bar.css === */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Footer Status Bar
+   VS Code-style 24px bar pinned to bottom. Phase, coverage, feedback.
+   Replaces sidebar footer.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-dim);
+  z-index: 100;
+}
+
+.sb-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb-phase-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sb-phase-dot.connected { background: var(--status-success, #18a058); }
+.sb-phase-dot.deploying { background: var(--status-warning, #e5940c); }
+.sb-phase-dot.disconnected { background: var(--text-muted); }
+
+.sb-phase-label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sb-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.sb-coverage {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 80ms ease-out, color 80ms ease-out;
+}
+
+.sb-coverage:hover {
+  background: var(--hover, rgba(0,0,0,0.04));
+  color: var(--text);
+}
+
+.sb-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sb-feedback {
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 4px;
+  transition: background 80ms ease-out, color 80ms ease-out;
+}
+
+.sb-feedback:hover {
+  background: var(--hover, rgba(0,0,0,0.04));
+  color: var(--accent);
+}
+
+.sb-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.cockpit-body {
+  padding-bottom: 24px;
+}
+
     /* === css/control.css === */
 /* === Control Panel — Command Center (Tab 4) === */
 
@@ -10240,18 +10633,36 @@ mark {
 
 /* ─── Keyframes (Phase 2A) ─── */
 @keyframes iw-node-enter {
-  0%   { opacity: 0; transform: scale(0.3); }
-  60%  { opacity: 1; transform: scale(1.08); }
-  80%  { transform: scale(0.97); }
-  100% { transform: scale(1); }
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }
 @keyframes iw-node-exit {
-  0%   { opacity: 1; transform: scale(1) rotate(0deg); }
-  100% { opacity: 0; transform: scale(0.3) rotate(10deg); }
+  from { transform: scale(1); opacity: 1; }
+  to   { transform: scale(0.8); opacity: 0; }
 }
 @keyframes iw-conn-draw {
-  from { stroke-dashoffset: 300; }
+  from { stroke-dashoffset: var(--path-length, 200); }
   to   { stroke-dashoffset: 0; }
+}
+
+/* Node enter/exit animation classes */
+.iw-node--entering {
+  animation: iw-node-enter 250ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.iw-node--exiting {
+  animation: iw-node-exit 180ms ease-out both;
+  pointer-events: none;
+}
+
+/* Auto-layout transition */
+.iw-node--animating {
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Connection draw animation */
+.iw-conn--entering {
+  stroke-dasharray: var(--path-length, 200);
+  animation: iw-conn-draw 300ms ease-in-out both;
 }
 @keyframes iw-port-pulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--ok-glow, rgba(24,160,88,0.15)); }
@@ -11862,11 +12273,40 @@ mark {
 .iw-step--running {
   background: rgba(124, 92, 252, 0.06);
   box-shadow: inset 0 0 0 1px rgba(124, 92, 252, 0.15);
+  transition: background 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
 }
 
 .iw-step--failed {
   background: rgba(248, 113, 113, 0.06);
   box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.15);
+  transition: background 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+}
+
+.iw-step--done {
+  transition: background 300ms ease, box-shadow 300ms ease, border-color 300ms ease;
+}
+
+/* Running step indicator pulse */
+@keyframes iw-step-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow, rgba(109,92,255,0.3)); }
+  50%      { box-shadow: 0 0 0 4px transparent; }
+}
+.iw-step--running .iw-step-indicator {
+  animation: iw-step-pulse 1.5s ease-in-out infinite;
+}
+.iw-step--running .iw-step-icon {
+  animation: iw-step-pulse 1.5s ease-in-out infinite;
+}
+
+/* Done step checkmark spring */
+@keyframes iw-step-check-pop {
+  from { transform: scale(0); }
+  60%  { transform: scale(1.2); }
+  to   { transform: scale(1); }
+}
+.iw-step--done .iw-step-check,
+.iw-step--succeeded .iw-step-check {
+  animation: iw-step-check-pop 300ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 /* --- Step Detail Panel --- */
@@ -12267,6 +12707,10 @@ mark {
   opacity: 1;
   pointer-events: auto;
 }
+.iw-dag-presets-overlay--exiting {
+  opacity: 0;
+  pointer-events: none;
+}
 
 .iw-dag-presets-inner {
   display: flex;
@@ -12565,6 +13009,23 @@ mark {
   background: rgba(229, 62, 62, 0.08);
 }
 
+/* Popover enter/exit animations */
+@keyframes iw-popover-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes iw-popover-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.iw-node-popover--entering {
+  animation: iw-popover-enter 150ms ease-out both;
+}
+.iw-node-popover--exiting {
+  animation: iw-popover-exit 100ms ease-out both;
+  pointer-events: none;
+}
+
 /* ─── DAG Context Menu ─── */
 .iw-dag-ctx-menu {
   position: absolute;
@@ -12575,11 +13036,20 @@ mark {
   border-radius: var(--r-m, 8px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.14), 0 2px 6px rgba(0,0,0,0.08);
   padding: 4px 0;
-  animation: iw-ctx-in 120ms ease-out;
+  animation: iw-ctx-enter 120ms ease-out both;
+  transform-origin: var(--ctx-origin-x, 0) var(--ctx-origin-y, 0);
 }
-@keyframes iw-ctx-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to   { opacity: 1; transform: scale(1); }
+@keyframes iw-ctx-enter {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes iw-ctx-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.iw-dag-ctx-menu--exiting {
+  animation: iw-ctx-exit 80ms ease-out both;
+  pointer-events: none;
 }
 .iw-dag-ctx-item {
   padding: 7px 14px;
@@ -12600,6 +13070,10 @@ mark {
 }
 
 /* ─── DAG Zoom Controls ─── */
+@keyframes iw-zoom-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 .iw-dag-zoom-controls {
   position: absolute;
   bottom: 12px;
@@ -12613,6 +13087,7 @@ mark {
   border-radius: var(--r-m, 8px);
   padding: 3px 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  animation: iw-zoom-enter 200ms ease-out 300ms both;
 }
 .iw-dag-zoom-btn {
   display: flex;
@@ -12642,6 +13117,51 @@ mark {
   font-weight: 500;
   color: var(--text-muted, #8e95a5);
   user-select: none;
+}
+
+/* ─── Screen-Reader Only (Accessibility) ─── */
+.iw-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.iw-dag-svg:focus {
+  outline: 2px solid var(--accent, #6d5cff);
+  outline-offset: -2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Reduced Motion — disable all infra-wizard animations
+   ═══════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  .iw-node--entering,
+  .iw-node--exiting,
+  .iw-conn--entering,
+  .iw-dag-ctx-menu,
+  .iw-dag-ctx-menu--exiting,
+  .iw-node-popover--entering,
+  .iw-node-popover--exiting,
+  .iw-dag-zoom-controls,
+  .iw-dag-presets-inner,
+  .iw-dag-presets-card,
+  .iw-step--running .iw-step-indicator,
+  .iw-step--running .iw-step-icon,
+  .iw-step--done .iw-step-check,
+  .iw-step--succeeded .iw-step-check {
+    animation: none !important;
+  }
+  .iw-node--animating,
+  .iw-step--running,
+  .iw-step--failed,
+  .iw-step--done {
+    transition: none !important;
+  }
 }
 
     /* === css/runtime.css === */
@@ -24696,6 +25216,1308 @@ mark {
 }
 
 
+    /* === css/qa-panel.css === */
+/* ── QA Testing Panel (F27) ──
+ * Stage-based workflow: PR Input → Analysis → Curation → Execution → Results
+ * Connected-mode only. Uses design tokens from variables.css.
+ */
+
+/* ── QA Panel Shell ── */
+.qa-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── Stage Bar (breadcrumb navigation) ── */
+.qa-stage-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-height: 44px;
+}
+
+.qa-stage-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  cursor: default;
+  transition: color var(--transition-normal), background var(--transition-normal);
+  user-select: none;
+}
+
+.qa-stage-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.qa-stage-item.active .qa-stage-num {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.qa-stage-item.completed {
+  color: var(--status-succeeded);
+  cursor: pointer;
+}
+
+.qa-stage-item.completed .qa-stage-num {
+  background: var(--status-succeeded);
+  color: var(--text-on-accent);
+}
+
+.qa-stage-item.completed:hover {
+  background: rgba(24, 160, 88, 0.06);
+}
+
+.qa-stage-item.disabled {
+  color: var(--text-muted);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.qa-stage-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: background var(--transition-normal), color var(--transition-normal);
+}
+
+.qa-stage-label {
+  white-space: nowrap;
+}
+
+.qa-stage-sep {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  opacity: 0.5;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Kill switch */
+.qa-kill-switch {
+  margin-left: auto;
+}
+
+.qa-kill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--level-error);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--level-error);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.qa-kill-btn:hover {
+  background: var(--level-error);
+  color: var(--text-on-accent);
+}
+
+.qa-kill-btn:focus-visible {
+  outline: 2px solid var(--level-error);
+  outline-offset: 2px;
+}
+
+.qa-kill-btn.pulsing {
+  animation: qa-kill-pulse 1.2s ease infinite;
+}
+
+@keyframes qa-kill-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ── Phase 1 Overlay ── */
+.qa-phase1-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  flex: 1;
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.qa-phase1-overlay svg {
+  opacity: 0.3;
+}
+
+.qa-phase1-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.qa-phase1-desc {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 360px;
+}
+
+/* ── Stage Containers ── */
+.qa-stages {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.qa-stage {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.qa-stage.active {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Stage 1: PR Input ── */
+.qa-input-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: var(--space-8);
+  max-width: 600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.qa-input-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.qa-input-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: var(--space-2);
+  font-family: var(--font-body);
+}
+
+.qa-input-desc {
+  font-size: var(--text-md);
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.qa-input-field {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+  margin-bottom: var(--space-3);
+}
+
+.qa-pr-input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-family: var(--font-mono);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.qa-pr-input::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+
+.qa-pr-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+
+.qa-input-error {
+  width: 100%;
+  font-size: var(--text-sm);
+  color: var(--level-error);
+  min-height: var(--space-5);
+  padding: 0 var(--space-1);
+}
+
+/* ── Buttons ── */
+.qa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.qa-btn:hover {
+  background: var(--surface-2);
+}
+
+.qa-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.qa-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.qa-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+.qa-btn.primary:hover {
+  opacity: 0.9;
+}
+
+/* ── PR History ── */
+.qa-input-history {
+  width: 100%;
+  margin-top: var(--space-6);
+}
+
+.qa-history-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-2);
+}
+
+.qa-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.qa-history-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.qa-history-item:hover {
+  background: var(--surface-2);
+}
+
+.qa-history-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.qa-history-pr {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.qa-history-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-history-time {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ── Stage content containers (populated by JS) ── */
+.qa-analysis-container,
+.qa-curation-container,
+.qa-execution-container,
+.qa-results-container {
+  flex: 1;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+/* ── Scenario Editor Overlay ── */
+.qa-editor-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-detail);
+  display: none;
+}
+
+.qa-editor-overlay.open {
+  display: flex;
+}
+
+.qa-editor-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.qa-editor-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 500px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(100%);
+  transition: transform var(--transition-normal);
+  z-index: 1;
+}
+
+.qa-editor-overlay.open .qa-editor-panel {
+  transform: translateX(0);
+}
+
+.qa-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.qa-editor-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-body);
+}
+
+.qa-editor-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-md);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.qa-editor-close:hover {
+  background: var(--surface-2);
+}
+
+.qa-editor-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.qa-editor-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.qa-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Verdict Badges ── */
+.qa-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.qa-verdict.passed {
+  color: var(--status-succeeded);
+  background: rgba(24, 160, 88, 0.08);
+}
+
+.qa-verdict.failed {
+  color: var(--level-error);
+  background: rgba(229, 69, 59, 0.08);
+}
+
+.qa-verdict.timeout {
+  color: var(--level-warning);
+  background: rgba(229, 148, 12, 0.08);
+}
+
+.qa-verdict.skipped {
+  color: var(--text-muted);
+  background: var(--surface-3);
+}
+
+/* ── Common QA Components ── */
+.qa-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition: border-color var(--transition-fast);
+}
+
+.qa-card:hover {
+  border-color: var(--border-bright);
+}
+
+.qa-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: var(--surface-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.qa-progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 300ms ease;
+}
+
+.qa-progress-bar-fill.success {
+  background: var(--status-succeeded);
+}
+
+.qa-progress-bar-fill.error {
+  background: var(--level-error);
+}
+
+.qa-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-12);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.qa-empty-state svg {
+  opacity: 0.25;
+}
+
+/* ── Section Headers (reusable within stages) ── */
+.qa-section-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-2);
+}
+
+/* ── Button Variants ── */
+.qa-btn-sm {
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.qa-btn-danger {
+  color: var(--level-error);
+  border-color: var(--level-error);
+  background: transparent;
+}
+
+.qa-btn-danger:hover {
+  background: rgba(229, 69, 59, 0.06);
+  border-color: var(--level-error);
+}
+
+/* ── History Item ── */
+.qa-history-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.qa-history-item:hover {
+  background: var(--surface-2);
+}
+
+/* ── Analysis Stage Components ── */
+.qa-analysis-tracker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.qa-analysis-phase {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  opacity: 0.5;
+  transition: opacity var(--transition-normal), background var(--transition-normal);
+}
+
+.qa-analysis-phase.active {
+  opacity: 1;
+  background: var(--accent-dim);
+}
+
+.qa-analysis-phase.completed {
+  opacity: 1;
+  background: rgba(24, 160, 88, 0.06);
+}
+
+.qa-phase-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  flex-shrink: 0;
+}
+
+.qa-phase-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.qa-phase-detail {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.qa-analysis-metrics {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.qa-analysis-actions {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.qa-analysis-scenario-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.qa-scenario-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+}
+
+.qa-analysis-scenarios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.qa-scenario-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.qa-scenario-preview:hover {
+  border-color: var(--border-bright);
+}
+
+.qa-scenario-preview-title {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+.qa-scenario-preview-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.qa-category-badge {
+  display: inline-flex;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+
+.qa-confidence {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ── Curation Stage Components ── */
+.qa-curation-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.qa-curation-stats {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.qa-curation-bulk {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.qa-curation-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  overflow-y: auto;
+}
+
+.qa-curation-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.qa-curation-card {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.qa-curation-card:hover {
+  border-color: var(--border-bright);
+}
+
+.qa-curation-card.excluded {
+  opacity: 0.5;
+  border-style: dashed;
+}
+
+.qa-curation-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.qa-curation-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.qa-curation-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.qa-curation-title {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-priority-badge {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.qa-curation-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+}
+
+.qa-stimulus-badge {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+
+.qa-exp-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.qa-curation-desc {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.qa-curation-actions {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+/* ── Execution Stage Components ── */
+.qa-exec-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.qa-exec-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.qa-exec-stats {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+
+.qa-exec-timer {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.qa-exec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.qa-exec-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  align-items: center;
+  font-size: var(--text-sm);
+  transition: background var(--transition-fast);
+}
+
+.qa-exec-row.pending {
+  opacity: 0.5;
+}
+
+.qa-exec-row.running {
+  background: var(--accent-dim);
+  border-left: 2px solid var(--accent);
+}
+
+.qa-exec-row.completed {
+  opacity: 1;
+}
+
+.qa-exec-status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  flex-shrink: 0;
+}
+
+.qa-exec-row.running .qa-exec-status {
+  background: var(--accent);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.qa-exec-row.completed .qa-exec-status {
+  background: var(--status-succeeded);
+}
+
+.qa-exec-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.qa-exec-phase {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.qa-exec-detail {
+  grid-column: 1 / -1;
+  padding: var(--space-2) 0 0 28px;
+  border-top: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.qa-exec-exp {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-xs);
+}
+
+.qa-exec-exp.pending {
+  color: var(--text-muted);
+}
+
+.qa-exec-exp.passed {
+  color: var(--status-succeeded);
+}
+
+.qa-exec-exp.failed {
+  color: var(--level-error);
+}
+
+.qa-exec-exp.timeout {
+  color: var(--level-warning);
+}
+
+.qa-exec-exp-icon {
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.qa-exec-exp-desc {
+  flex: 1;
+  min-width: 0;
+}
+
+.qa-exec-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  padding: var(--space-3) 0;
+}
+
+/* ── Results Stage Components ── */
+.qa-results-summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.qa-results-overall {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  text-align: center;
+  padding: var(--space-3) 0;
+}
+
+.qa-results-overall.passed {
+  color: var(--status-succeeded);
+}
+
+.qa-results-overall.failed {
+  color: var(--level-error);
+}
+
+.qa-results-counts {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+}
+
+.qa-results-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.qa-results-count-num {
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.qa-results-count-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.qa-results-count.passed .qa-results-count-num {
+  color: var(--status-succeeded);
+}
+
+.qa-results-count.failed .qa-results-count-num {
+  color: var(--level-error);
+}
+
+.qa-results-count.timeout .qa-results-count-num {
+  color: var(--level-warning);
+}
+
+.qa-results-count.skipped .qa-results-count-num {
+  color: var(--text-muted);
+}
+
+.qa-results-duration {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
+.qa-results-list-header {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-2);
+}
+
+.qa-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.qa-results-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+
+.qa-result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.qa-result-card:hover {
+  border-color: var(--border-bright);
+}
+
+.qa-result-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.qa-result-num {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.qa-result-title {
+  flex: 1;
+  font-weight: 500;
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-result-detail {
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: var(--space-2);
+  display: none;
+}
+
+.qa-result-card.expanded .qa-result-detail {
+  display: block;
+}
+
+.qa-result-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  padding: var(--space-1) 0;
+}
+
+.qa-result-timing {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.qa-result-expectations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+}
+
+.qa-result-exp {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.qa-result-exp.passed {
+  color: var(--status-succeeded);
+  background: rgba(24, 160, 88, 0.05);
+}
+
+.qa-result-exp.failed {
+  color: var(--level-error);
+  background: rgba(229, 69, 59, 0.05);
+}
+
+.qa-result-exp-icon {
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.qa-result-exp-desc {
+  flex: 1;
+}
+
+.qa-result-failure {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: rgba(229, 69, 59, 0.06);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--level-error);
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+/* ── Editor Form Elements ── */
+.qa-editor-label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: var(--space-1);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.qa-editor-input {
+  width: 100%;
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.qa-editor-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.qa-editor-textarea {
+  width: 100%;
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
+  min-height: 80px;
+  resize: vertical;
+}
+
+.qa-editor-textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.qa-editor-select {
+  width: 100%;
+  padding: var(--space-2);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--transition-fast);
+  appearance: none;
+  cursor: pointer;
+}
+
+.qa-editor-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.qa-editor-invalid {
+  border-color: var(--level-error);
+}
+
+/* ── Responsive: collapse stage labels on narrow viewports ── */
+@media (max-width: 800px) {
+  .qa-stage-label {
+    display: none;
+  }
+
+  .qa-stage-item {
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .qa-editor-panel {
+    width: 100%;
+  }
+}
+
   </style>
 </head>
 <body>
@@ -24742,6 +26564,7 @@ window.onerror = function(msg, src, line, col, err) {
 
   <!-- Notification Zone (collapses when empty) -->
   <div class="notification-zone">
+    <div id="deploy-context-strip" class="deploy-strip"></div>
     <div id="file-change-bar" class="file-change-bar"></div>
     <div id="smart-context-bar" class="smart-context-bar"></div>
     <div id="api-toast" class="api-toast"></div>
@@ -24777,18 +26600,9 @@ window.onerror = function(msg, src, line, col, err) {
         <div class="nav-item" data-view="api" tabindex="0" role="button" aria-label="API Playground"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div><span class="nav-label">API Playground</span><span class="nav-shortcut">3</span></div>
         <div class="nav-item" data-view="environment" tabindex="0" role="button" aria-label="Environment"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span class="nav-label">Environment</span><span class="nav-shortcut">4</span></div>
         <div class="nav-item connected-only" data-view="dag" tabindex="0" role="button" aria-label="DAG Studio"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h4M14 5l3 5M14 19l3-5"/></svg></div><span class="nav-label">DAG Studio</span><span class="nav-shortcut">5</span></div>
+        <div class="nav-item connected-only" data-view="qa" tabindex="0" role="button" aria-label="QA Testing"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div><span class="nav-label">QA Testing</span><span class="nav-shortcut">6</span></div>
       </div>
-      <div class="sidebar-footer">
-        <div class="phase-row">
-          <div class="phase-dot-container"><div class="phase-dot disconnected" id="sidebar-phase-dot"></div></div>
-          <span class="phase-label" id="sidebar-phase-label">Browsing</span>
-        </div>
-        <div class="sidebar-token-health">
-          <div class="token-ring-container"><div class="token-ring"><svg viewBox="0 0 22 22"><circle class="ring-bg" cx="11" cy="11" r="8.5"/><circle class="ring-fg" id="sidebar-token-ring-fg" cx="11" cy="11" r="8.5" stroke-dasharray="53.4" stroke-dashoffset="53.4"/></svg></div></div>
-          <span class="token-label">Token</span>
-          <span class="token-time" id="sidebar-token-time"></span>
-        </div>
-      </div>
+
     </nav>
 
     <!-- Content Area -->
@@ -25032,6 +26846,119 @@ window.onerror = function(msg, src, line, col, err) {
         </div>
       </div>
 
+      <!-- View 6: QA Testing (connected mode only) -->
+      <div id="view-qa" class="view-panel" data-view="qa">
+        <div class="qa-panel" id="qaPanel">
+          <!-- Stage breadcrumb bar -->
+          <div class="qa-stage-bar" id="qaStageBar">
+            <div class="qa-stage-item active" data-stage="input">
+              <span class="qa-stage-num">1</span>
+              <span class="qa-stage-label">PR Input</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="analysis">
+              <span class="qa-stage-num">2</span>
+              <span class="qa-stage-label">Analysis</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="curation">
+              <span class="qa-stage-num">3</span>
+              <span class="qa-stage-label">Curation</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="execution">
+              <span class="qa-stage-num">4</span>
+              <span class="qa-stage-label">Execution</span>
+            </div>
+            <div class="qa-stage-sep">&#9656;</div>
+            <div class="qa-stage-item" data-stage="results">
+              <span class="qa-stage-num">5</span>
+              <span class="qa-stage-label">Results</span>
+            </div>
+            <!-- Kill switch (right-aligned, shown during execution) -->
+            <div class="qa-kill-switch" id="qaKillSwitch" style="display:none">
+              <button class="qa-kill-btn" id="qaKillBtn" title="Abort execution">&#10005; Kill</button>
+            </div>
+          </div>
+
+          <!-- Phase 1 overlay (requires Connected phase) -->
+          <div class="qa-phase1-overlay" id="qaPhase1Overlay">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+            </svg>
+            <div class="qa-phase1-title">QA Testing requires a running FLT service</div>
+            <div class="qa-phase1-desc">Deploy and connect to enable AI-powered PR validation.</div>
+          </div>
+
+          <!-- Stage containers (only one visible at a time) -->
+          <div class="qa-stages" id="qaStages">
+            <!-- Stage 1: PR Input -->
+            <div class="qa-stage active" id="qaStageInput" data-stage="input">
+              <div class="qa-input-container">
+                <div class="qa-input-header">
+                  <h3 class="qa-input-title">Enter Pull Request</h3>
+                  <p class="qa-input-desc">Paste a PR URL or enter a PR number to begin code analysis.</p>
+                </div>
+                <div class="qa-input-field">
+                  <input type="text" id="qaPrInput" class="qa-pr-input" placeholder="https://dev.azure.com/.../pullrequest/12345 or PR #12345" autocomplete="off" />
+                  <button class="qa-btn primary" id="qaAnalyzeBtn" disabled>Analyze</button>
+                </div>
+                <div class="qa-input-error" id="qaInputError"></div>
+                <div class="qa-input-history" id="qaInputHistory">
+                  <div class="qa-history-title">Recent PRs</div>
+                  <div class="qa-history-list" id="qaHistoryList"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stage 2: Analysis -->
+            <div class="qa-stage" id="qaStageAnalysis" data-stage="analysis">
+              <div class="qa-analysis-container" id="qaAnalysisContainer">
+                <!-- Populated by qa-analysis.js -->
+              </div>
+            </div>
+
+            <!-- Stage 3: Curation -->
+            <div class="qa-stage" id="qaStageCuration" data-stage="curation">
+              <div class="qa-curation-container" id="qaCurationContainer">
+                <!-- Populated by qa-curation.js -->
+              </div>
+            </div>
+
+            <!-- Stage 4: Execution -->
+            <div class="qa-stage" id="qaStageExecution" data-stage="execution">
+              <div class="qa-execution-container" id="qaExecutionContainer">
+                <!-- Populated by qa-execution.js -->
+              </div>
+            </div>
+
+            <!-- Stage 5: Results -->
+            <div class="qa-stage" id="qaStageResults" data-stage="results">
+              <div class="qa-results-container" id="qaResultsContainer">
+                <!-- Populated by qa-results.js -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Scenario Editor (overlay, slide from right) -->
+          <div class="qa-editor-overlay" id="qaEditorOverlay">
+            <div class="qa-editor-panel" id="qaEditorPanel">
+              <div class="qa-editor-header">
+                <h3 class="qa-editor-title" id="qaEditorTitle">Edit Scenario</h3>
+                <button class="qa-editor-close" id="qaEditorClose">&#10005;</button>
+              </div>
+              <div class="qa-editor-body" id="qaEditorBody">
+                <!-- Populated by qa-editor.js -->
+              </div>
+              <div class="qa-editor-footer">
+                <button class="qa-btn" id="qaEditorCancel">Cancel</button>
+                <button class="qa-btn primary" id="qaEditorSave">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -25065,6 +26992,21 @@ window.onerror = function(msg, src, line, col, err) {
       <div id="cp-results" class="cp-results"></div>
     </div>
   </div>
+
+  <!-- Footer Status Bar (F3) -->
+  <footer id="status-bar" class="status-bar">
+    <div class="sb-left">
+      <span class="sb-phase-dot disconnected" id="sb-phase-dot"></span>
+      <span class="sb-phase-label" id="sb-phase-label">Disconnected</span>
+    </div>
+    <div class="sb-center">
+      <button class="sb-coverage" id="sb-coverage" title="Coverage details">--</button>
+    </div>
+    <div class="sb-right">
+      <button class="sb-feedback" id="sb-feedback" title="Send feedback">Feedback &#9670;</button>
+      <span class="sb-version" id="sb-version"></span>
+    </div>
+  </footer>
 
   <script>
 // === lib/signalr.min.js ===
@@ -25853,6 +27795,155 @@ class LogViewerState {
     else if (status === 'failed') this.stats.failed++;
   }
 }
+
+// === js/toast.js ===
+/**
+ * ToastManager — unified notification system.
+ *
+ * Replaces all fragmented _showToast implementations.
+ * API: window.edogToast(message, variant, options)
+ *
+ * @author Pixel — EDOG Studio hivemind
+ */
+class ToastManager {
+  constructor() {
+    this._container = null;
+    this._toasts = new Map();
+    this._queue = [];
+    this._maxVisible = 3;
+    this._init();
+  }
+
+  _init() {
+    this._container = document.createElement('div');
+    this._container.className = 'toast-container';
+    document.body.appendChild(this._container);
+  }
+
+  /**
+   * Show a toast notification.
+   * @param {string} message — text content
+   * @param {string} [variant='info'] — 'info' | 'success' | 'warning' | 'error'
+   * @param {object} [opts] — { duration, action, id }
+   * @returns {string} toast ID
+   */
+  show(message, variant, opts) {
+    variant = variant || 'info';
+    opts = opts || {};
+    var duration = opts.duration !== undefined ? opts.duration : 4000;
+    var id = opts.id || ('t-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6));
+
+    // Dedup: if same ID exists, update message and reset timer
+    if (this._toasts.has(id)) {
+      var existing = this._toasts.get(id);
+      var msgEl = existing.el.querySelector('.toast-msg');
+      if (msgEl) msgEl.textContent = message;
+      if (existing.timer) clearTimeout(existing.timer);
+      if (duration > 0) {
+        existing.timer = setTimeout(this.dismiss.bind(this, id), duration);
+      }
+      return id;
+    }
+
+    // Queue if at max
+    var visible = this._container.children.length;
+    if (visible >= this._maxVisible) {
+      this._queue.push({ message: message, variant: variant, opts: opts });
+      return id;
+    }
+
+    this._render(id, message, variant, duration, opts.action || null);
+    return id;
+  }
+
+  _render(id, message, variant, duration, action) {
+    var self = this;
+    var el = document.createElement('div');
+    el.className = 'toast-item variant-' + variant;
+    el.dataset.toastId = id;
+
+    var msgSpan = document.createElement('span');
+    msgSpan.className = 'toast-msg';
+    msgSpan.textContent = message;
+    el.appendChild(msgSpan);
+
+    if (action) {
+      var btn = document.createElement('button');
+      btn.className = 'toast-action';
+      btn.textContent = action.label;
+      btn.addEventListener('click', function() {
+        if (action.onClick) action.onClick();
+        self.dismiss(id);
+      });
+      el.appendChild(btn);
+    }
+
+    var dismiss = document.createElement('button');
+    dismiss.className = 'toast-dismiss';
+    dismiss.textContent = '\u2715';
+    dismiss.addEventListener('click', function() { self.dismiss(id); });
+    el.appendChild(dismiss);
+
+    this._container.appendChild(el);
+
+    var timer = null;
+    if (duration > 0) {
+      timer = setTimeout(function() { self.dismiss(id); }, duration);
+    }
+
+    this._toasts.set(id, { el: el, timer: timer });
+  }
+
+  /**
+   * Dismiss a toast by ID.
+   * @param {string} id
+   */
+  dismiss(id) {
+    var entry = this._toasts.get(id);
+    if (!entry) return;
+    if (entry.timer) clearTimeout(entry.timer);
+    entry.el.classList.add('exiting');
+    var self = this;
+    entry.el.addEventListener('animationend', function() {
+      if (entry.el.parentNode) entry.el.remove();
+      self._toasts.delete(id);
+      self._drainQueue();
+    }, { once: true });
+    // Fallback if animationend doesn't fire
+    setTimeout(function() {
+      if (entry.el.parentNode) entry.el.remove();
+      self._toasts.delete(id);
+      self._drainQueue();
+    }, 300);
+  }
+
+  /** Dismiss all toasts. */
+  clear() {
+    var self = this;
+    this._toasts.forEach(function(_, id) { self.dismiss(id); });
+    this._queue = [];
+  }
+
+  _drainQueue() {
+    if (this._queue.length === 0) return;
+    if (this._container.children.length >= this._maxVisible) return;
+    var next = this._queue.shift();
+    this.show(next.message, next.variant, next.opts);
+  }
+}
+
+// Global singleton
+window.edogToastManager = new ToastManager();
+
+/**
+ * Global toast function.
+ * @param {string} message
+ * @param {string} [variant='info']
+ * @param {object} [opts]
+ */
+window.edogToast = function(message, variant, opts) {
+  return window.edogToastManager.show(message, variant, opts);
+};
 
 // === js/signalr-manager.js ===
 /**
@@ -28245,38 +30336,7 @@ class NotebookView {
   // ── Toast ─────────────────────────────────────────────────────
 
   _showToast(message, type = 'info') {
-    // Reuse existing toast or create one
-    let toast = this._container.querySelector('.nb-toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.className = 'nb-toast';
-      toast.style.cssText = `
-        position:fixed;bottom:var(--space-8);right:var(--space-8);
-        padding:var(--space-3) var(--space-4);border-radius:var(--radius-md);
-        font-size:var(--text-sm);font-family:var(--font-body);
-        box-shadow:var(--shadow-md);z-index:9999;
-        transition:opacity var(--transition-normal);
-        max-width:400px;
-      `;
-      document.body.appendChild(toast);
-    }
-
-    const colors = {
-      success: 'background:var(--comp-dag-bg);color:var(--status-succeeded);border:1px solid var(--status-succeeded)',
-      error: 'background:var(--row-error-tint);color:var(--status-failed);border:1px solid var(--status-failed)',
-      warning: 'background:var(--level-warning-tint);color:var(--level-warning);border:1px solid var(--level-warning)',
-      info: 'background:var(--surface);color:var(--text-dim);border:1px solid var(--border-bright)',
-    };
-
-    toast.style.cssText += colors[type] || colors.info;
-    toast.textContent = message;
-    toast.style.opacity = '1';
-
-    clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 4000);
+    window.edogToast(message, type);
   }
 
   // ── Helpers ───────────────────────────────────────────────────
@@ -35029,6 +37089,8 @@ class TopBar {
       if (!configResp.ok) {
         this._updateServiceStatus('stopped');
         this._updateTokenDisplay(null);
+        if (window.edogDeployStrip) window.edogDeployStrip.hide();
+        if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
         return null;
       }
 
@@ -35083,6 +37145,26 @@ class TopBar {
         window.edogWs.setPort(config.fltPort);
       }
 
+      // F1: Update deploy context strip
+      if (window.edogDeployStrip) {
+        fetch('/api/studio/status').then(function(r) {
+          return r.ok ? r.json() : null;
+        }).then(function(s) {
+          if (s) window.edogDeployStrip.update(s);
+        }).catch(function() {});
+      }
+
+      // F3: Sync footer status bar phase
+      if (window.edogStatusBar) {
+        if (config.studioPhase === 'running') {
+          window.edogStatusBar.setPhase('connected');
+        } else if (config.studioPhase === 'deploying') {
+          window.edogStatusBar.setPhase('deploying');
+        } else {
+          window.edogStatusBar.setPhase('disconnected');
+        }
+      }
+
       // Refresh inspector if open
       if (this._inspectorEl && this._inspectorEl.classList.contains('open')) {
         this._populateInspector();
@@ -35092,6 +37174,8 @@ class TopBar {
     } catch {
       this._updateServiceStatus('stopped');
       this._updateTokenDisplay(null);
+      if (window.edogDeployStrip) window.edogDeployStrip.hide();
+      if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
       return null;
     }
   }
@@ -35781,6 +37865,248 @@ class TopBar {
   }
 }
 
+// === js/deploy-strip.js ===
+/**
+ * DeployContextStrip — persistent deploy context notification.
+ *
+ * Shows tenant, capacity, workspace, lakehouse, commit SHA in a breadcrumb
+ * strip when FLT is connected. Renders into #deploy-context-strip.
+ *
+ * @author Pixel — EDOG Studio hivemind
+ */
+class DeployContextStrip {
+  constructor() {
+    this._el = document.getElementById('deploy-context-strip');
+    this._tooltip = null;
+    this._deployedAt = null;
+    this._timeTimer = null;
+    this._createTooltip();
+  }
+
+  /**
+   * Update strip with deploy config data.
+   * @param {object|null} status — from /api/studio/status
+   */
+  update(status) {
+    if (!this._el) return;
+
+    if (!status || !status.deployTarget || status.phase === 'idle' || status.phase === 'stopped') {
+      this._el.classList.remove('active');
+      if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
+      return;
+    }
+
+    var t = status.deployTarget;
+    var self = this;
+
+    this._el.innerHTML = '';
+
+    // Badge
+    var badge = document.createElement('div');
+    badge.className = 'ds-badge';
+    badge.innerHTML = '<span class="ds-dot"></span><span class="ds-badge-label">Connected</span>';
+    this._el.appendChild(badge);
+
+    // Breadcrumb path: tenant > capacity > workspace > lakehouse
+    var path = document.createElement('div');
+    path.className = 'ds-path';
+    var segments = [
+      { text: t.tenantName || 'tenant', bold: false },
+      { text: t.capacityId || 'capacity', bold: false },
+      { text: t.workspaceName || t.workspaceId || 'workspace', bold: true },
+      { text: t.lakehouseName || t.artifactId || 'lakehouse', bold: true },
+    ];
+    segments.forEach(function(seg, i) {
+      if (i > 0) {
+        var chev = document.createElement('span');
+        chev.className = 'ds-chevron';
+        chev.textContent = '\u203A';
+        path.appendChild(chev);
+      }
+      var span = document.createElement('span');
+      span.className = 'ds-path-seg' + (seg.bold ? ' bold' : '');
+      span.textContent = seg.text;
+      path.appendChild(span);
+    });
+    this._el.appendChild(path);
+
+    // Divider
+    var div = document.createElement('div');
+    div.className = 'ds-divider';
+    this._el.appendChild(div);
+
+    // Commit chip
+    if (t.commitSha) {
+      var commit = document.createElement('div');
+      commit.className = 'ds-commit';
+      var sha = document.createElement('span');
+      sha.className = 'ds-sha';
+      sha.textContent = t.commitSha.substring(0, 7);
+      commit.appendChild(sha);
+      if (t.commitMessage) {
+        var msg = document.createElement('span');
+        msg.className = 'ds-msg';
+        msg.textContent = t.commitMessage;
+        commit.appendChild(msg);
+      }
+      commit.addEventListener('mouseenter', function(e) {
+        self._showTooltip(e, t);
+      });
+      commit.addEventListener('mouseleave', function() {
+        self._hideTooltip();
+      });
+      this._el.appendChild(commit);
+    }
+
+    // Spacer
+    var spacer = document.createElement('div');
+    spacer.className = 'ds-spacer';
+    this._el.appendChild(spacer);
+
+    // Time
+    this._deployedAt = this._deployedAt || Date.now();
+    var time = document.createElement('span');
+    time.className = 'ds-time';
+    time.id = 'ds-time';
+    this._el.appendChild(time);
+    this._updateTime();
+    if (!this._timeTimer) {
+      this._timeTimer = setInterval(function() { self._updateTime(); }, 60000);
+    }
+
+    this._el.classList.add('active');
+  }
+
+  _updateTime() {
+    var el = document.getElementById('ds-time');
+    if (!el || !this._deployedAt) return;
+    var sec = Math.floor((Date.now() - this._deployedAt) / 1000);
+    if (sec < 60) el.textContent = 'just now';
+    else if (sec < 3600) el.textContent = Math.floor(sec / 60) + 'm ago';
+    else el.textContent = Math.floor(sec / 3600) + 'h ago';
+  }
+
+  _createTooltip() {
+    this._tooltip = document.createElement('div');
+    this._tooltip.className = 'ds-tooltip';
+    document.body.appendChild(this._tooltip);
+  }
+
+  _showTooltip(event, target) {
+    if (!this._tooltip) return;
+    this._tooltip.innerHTML =
+      '<div class="dt-sha">' + this._esc(target.commitSha || '') + '</div>' +
+      '<div class="dt-msg">' + this._esc(target.commitMessage || '') + '</div>' +
+      '<div class="dt-author">' + this._esc(target.commitAuthor || '') + '</div>';
+    var rect = event.currentTarget.getBoundingClientRect();
+    this._tooltip.style.left = rect.left + 'px';
+    this._tooltip.style.top = (rect.bottom + 6) + 'px';
+    this._tooltip.classList.add('visible');
+  }
+
+  _hideTooltip() {
+    if (this._tooltip) this._tooltip.classList.remove('visible');
+  }
+
+  _esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  /** Hide strip and stop timers. */
+  hide() {
+    if (this._el) this._el.classList.remove('active');
+    if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
+    this._deployedAt = null;
+  }
+}
+
+window.edogDeployStrip = new DeployContextStrip();
+
+// === js/status-bar.js ===
+/**
+ * StatusBar — footer status bar.
+ *
+ * VS Code-style 24px bar at bottom of viewport.
+ * Left: phase indicator. Center: coverage badge. Right: feedback + version.
+ * Replaces sidebar footer.
+ *
+ * @author Pixel — EDOG Studio hivemind
+ */
+class StatusBar {
+  constructor() {
+    this._phaseDot = document.getElementById('sb-phase-dot');
+    this._phaseLabel = document.getElementById('sb-phase-label');
+    this._coverageBtn = document.getElementById('sb-coverage');
+    this._feedbackBtn = document.getElementById('sb-feedback');
+    this._versionEl = document.getElementById('sb-version');
+    this._bindEvents();
+    this._fetchVersion();
+  }
+
+  _bindEvents() {
+    var self = this;
+    if (this._feedbackBtn) {
+      this._feedbackBtn.addEventListener('click', function() { self._openFeedback(); });
+    }
+  }
+
+  /**
+   * Update phase indicator.
+   * @param {string} phase — 'connected' | 'disconnected' | 'deploying'
+   */
+  setPhase(phase) {
+    if (this._phaseDot) {
+      this._phaseDot.className = 'sb-phase-dot ' + phase;
+    }
+    if (this._phaseLabel) {
+      var labels = { connected: 'Connected', disconnected: 'Disconnected', deploying: 'Deploying' };
+      this._phaseLabel.textContent = labels[phase] || phase;
+    }
+  }
+
+  /**
+   * Update coverage badge text.
+   * @param {string} text — e.g., "72% L · 65% B · 80% M" or "--"
+   */
+  setCoverage(text) {
+    if (this._coverageBtn) {
+      this._coverageBtn.textContent = text || '--';
+    }
+  }
+
+  _fetchVersion() {
+    var self = this;
+    fetch('/api/edog/health').then(function(r) {
+      return r.ok ? r.json() : null;
+    }).then(function(h) {
+      if (h && h.version && self._versionEl) {
+        self._versionEl.textContent = 'EDOG v' + h.version;
+      }
+    }).catch(function() {});
+  }
+
+  _openFeedback() {
+    var title = prompt('Feedback title:');
+    if (!title) return;
+    var body = prompt('Description (optional):') || '';
+
+    fetch('/api/studio/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: title, body: body }),
+    }).then(function(r) {
+      if (r.ok) return r.json();
+      throw new Error('Backend feedback failed');
+    }).then(function(data) {
+      window.edogToast('Feedback submitted' + (data.issueNumber ? ' \u2014 issue #' + data.issueNumber : ''), 'success');
+    }).catch(function() {
+      var url = 'https://github.com/guptahemant65/edog-studio/issues/new?title=' + encodeURIComponent('[Feedback] ' + title) + '&body=' + encodeURIComponent(body);
+      window.open(url, '_blank');
+      window.edogToast('Opened feedback form in browser', 'info');
+    });
+  }
+}
+
+window.edogStatusBar = new StatusBar();
+
 // === js/deploy-flow.js ===
 /**
  * DeployFlow — 5-step deploy stepper with SSE streaming and terminal.
@@ -36415,7 +38741,7 @@ class FileChangeWatcher {
  * Public API (backward-compatible with main.js):
  *   constructor()
  *   init()
- *   switchView(viewId)        — 'workspace' | 'runtime' | 'api' | 'environment' | 'dag'
+ *   switchView(viewId)        — 'workspace' | 'runtime' | 'api' | 'environment' | 'dag' | 'qa'
  *   setPhase(phase)           — 'disconnected' | 'connected'
  *   getActiveView()           — returns current viewId
  *   onViewChange              — callback: (viewId) => void
@@ -39553,15 +41879,7 @@ class TelemetryTab {
      ═══════════════════════════════════════════════════════════════ */
 
   _showToast(msg, icon) {
-    icon = icon || '\u2713';
-    const container = this._dom.toasts;
-    const el = this._ce('div', 'tl-toast');
-    el.innerHTML = '<span class="tl-toast-icon">' + icon + '</span> ' + this._esc(msg);
-    container.appendChild(el);
-    setTimeout(() => {
-      el.classList.add('tl-toast--leaving');
-      setTimeout(() => el.remove(), 200);
-    }, 2500);
+    window.edogToast(msg, 'info');
   }
 }
 
@@ -52028,6 +54346,9 @@ class DagNode {
       'transform',
       'translate(' + this._data.x + ', ' + this._data.y + ')'
     );
+    this._groupEl.setAttribute('role', 'button');
+    this._groupEl.setAttribute('tabindex', '0');
+    this._updateAriaLabel();
 
     this._buildOutline();
     this._buildForeignObject();
@@ -52038,6 +54359,13 @@ class DagNode {
     if (options.parentGroup) {
       options.parentGroup.appendChild(this._groupEl);
     }
+
+    /* ─── Enter animation ─── */
+    this._groupEl.classList.add('iw-node--entering');
+    var enterGroup = this._groupEl;
+    setTimeout(function() {
+      if (enterGroup) enterGroup.classList.remove('iw-node--entering');
+    }, 250);
 
     /* ─── Bound handlers (stored for cleanup) ─── */
     this._boundDragMove = function(e) { self._handleDragMove(e); };
@@ -52050,6 +54378,11 @@ class DagNode {
 
   /** @returns {SVGGElement} The root <g> element */
   getElement() {
+    return this._groupEl;
+  }
+
+  /** @returns {SVGGElement|null} The root <g> element (alias for animation) */
+  getGroupEl() {
     return this._groupEl;
   }
 
@@ -52076,13 +54409,33 @@ class DagNode {
     this._groupEl.setAttribute('transform', 'translate(' + x + ', ' + y + ')');
   }
 
+  /**
+   * Show or hide this node for viewport culling.
+   * Hidden nodes have display:none on their group element.
+   * @param {boolean} visible
+   */
+  setVisible(visible) {
+    if (this._visible === visible) return;
+    this._visible = visible;
+    if (this._groupEl) {
+      this._groupEl.style.display = visible ? '' : 'none';
+    }
+  }
+
+  /** @returns {boolean} */
+  isVisible() {
+    return this._visible !== false;
+  }
+
   /** Select/deselect this node visually */
   setSelected(selected) {
     this._selected = !!selected;
     if (this._selected) {
       this._groupEl.classList.add('iw-dag-node-selected');
+      this._groupEl.setAttribute('aria-pressed', 'true');
     } else {
       this._groupEl.classList.remove('iw-dag-node-selected');
+      this._groupEl.setAttribute('aria-pressed', 'false');
     }
   }
 
@@ -52098,6 +54451,7 @@ class DagNode {
       this._nameEl.textContent = name;
       this._nameEl.setAttribute('title', name);
     }
+    this._updateAriaLabel();
   }
 
   /** Change node type (sql-table, sql-mlv, pyspark-mlv) */
@@ -52115,6 +54469,7 @@ class DagNode {
       // Remove all badge classes, then add the correct one
       this._badgeEl.className = 'iw-dag-node-badge ' + info.badgeClass;
     }
+    this._updateAriaLabel();
   }
 
   /** Change node schema */
@@ -52123,6 +54478,7 @@ class DagNode {
     if (this._schemaEl) {
       this._schemaEl.textContent = schema;
     }
+    this._updateAriaLabel();
   }
 
   /** Update node with new data (name, type, schema) */
@@ -52157,18 +54513,25 @@ class DagNode {
     }
   }
 
-  /** Destroy — remove SVG element, clean up listeners */
+  /** Destroy — animate out then remove SVG element, clean up listeners */
   destroy() {
+    var self = this;
+
     // Remove drag listeners from document if active
     document.removeEventListener('mousemove', this._boundDragMove);
     document.removeEventListener('mouseup', this._boundDragEnd);
 
-    // Remove SVG group from parent
-    if (this._groupEl && this._groupEl.parentNode) {
-      this._groupEl.parentNode.removeChild(this._groupEl);
+    var group = this._groupEl;
+    if (group) {
+      group.classList.add('iw-node--exiting');
+      setTimeout(function() {
+        if (group && group.parentNode) {
+          group.parentNode.removeChild(group);
+        }
+      }, 180);
     }
 
-    // Null out references
+    // Null out references (allow GC; DOM removal is deferred)
     this._groupEl = null;
     this._data = null;
     this._eventBus = null;
@@ -52195,6 +54558,14 @@ class DagNode {
   /* ═══════════════════════════════════════════════════════════════
      BUILD HELPERS (private)
      ═══════════════════════════════════════════════════════════════ */
+
+  /** Update ARIA label from current data */
+  _updateAriaLabel() {
+    if (!this._groupEl || !this._data) return;
+    var typeLabel = this._data.type.replace(/-/g, ' ');
+    this._groupEl.setAttribute('aria-label',
+      typeLabel + ': ' + this._data.name + ' \u2014 ' + this._data.schema + ' schema');
+  }
 
   /** Build the selection/hover outline rect */
   _buildOutline() {
@@ -52318,6 +54689,16 @@ class DagNode {
       if (e.target === self._portIn || e.target === self._portOut) return;
       if (self._onSelect) {
         self._onSelect(self, e);
+      }
+    });
+
+    /* ─── Keyboard: Enter/Space → select ─── */
+    this._groupEl.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (self._onSelect) {
+          self._onSelect(self, e);
+        }
       }
     });
 
@@ -52459,6 +54840,11 @@ class ConnectionManager {
     this._previewStart = null;
     this._selectedId = null;
     this._nextId = 1;
+
+    // Path cache: connId -> { d: string, sx: number, sy: number, tx: number, ty: number }
+    this._pathCache = {};
+    // When true, use straight lines instead of cubic bezier
+    this._simplePaths = false;
   }
 
   /**
@@ -52526,6 +54912,7 @@ class ConnectionManager {
 
     var data = entry.data;
     delete this._connections[connectionId];
+    delete this._pathCache[connectionId];
 
     if (this._selectedId === connectionId) {
       this._selectedId = null;
@@ -52554,16 +54941,33 @@ class ConnectionManager {
 
   /**
    * Update all connection paths (after node move/layout).
+   * Batches DOM writes for minimal reflows.
    */
   updateAllPaths() {
     var connIds = Object.keys(this._connections);
+    // Collect all path data first, then write DOM once
+    var updates = [];
     for (var i = 0; i < connIds.length; i++) {
-      this._updateConnectionPath(connIds[i]);
+      var id = connIds[i];
+      var d = this._computePathData(id);
+      if (d !== null) {
+        updates.push({ id: id, d: d });
+      }
+    }
+    // Apply all DOM updates
+    for (var j = 0; j < updates.length; j++) {
+      var entry = this._connections[updates[j].id];
+      if (!entry) continue;
+      var paths = entry.groupEl.querySelectorAll('path');
+      for (var k = 0; k < paths.length; k++) {
+        paths[k].setAttribute('d', updates[j].d);
+      }
     }
   }
 
   /**
    * Update paths for connections involving a specific node.
+   * Only recomputes paths connected to that node.
    * @param {string} nodeId
    */
   updatePathsForNode(nodeId) {
@@ -52574,6 +54978,19 @@ class ConnectionManager {
         this._updateConnectionPath(connIds[i]);
       }
     }
+  }
+
+  /**
+   * Enable or disable simple (straight-line) paths for low-zoom rendering.
+   * When enabled, connections use straight lines instead of cubic bezier curves.
+   * @param {boolean} simple
+   */
+  setSimplePaths(simple) {
+    if (this._simplePaths === simple) return;
+    this._simplePaths = simple;
+    // Invalidate cache and redraw
+    this._pathCache = {};
+    this.updateAllPaths();
   }
 
   /**
@@ -52744,6 +55161,7 @@ class ConnectionManager {
   destroy() {
     this._clearAll();
     this._removePreview();
+    this._pathCache = {};
     this._connectionLayer = null;
     this._eventBus = null;
     this._getNodeById = null;
@@ -52752,7 +55170,8 @@ class ConnectionManager {
   // ── Private helpers ──────────────────────────────────────────────
 
   /**
-   * Calculate cubic bezier path string for vertical-flow connection.
+   * Calculate path string for vertical-flow connection.
+   * Uses cubic bezier by default, or straight line when _simplePaths is true.
    * @param {number} x1 — source X
    * @param {number} y1 — source Y
    * @param {number} x2 — target X
@@ -52760,6 +55179,9 @@ class ConnectionManager {
    * @returns {string}
    */
   _calculateBezierPath(x1, y1, x2, y2) {
+    if (this._simplePaths) {
+      return 'M ' + x1 + ' ' + y1 + ' L ' + x2 + ' ' + y2;
+    }
     var offset = Math.max(40, Math.abs(y2 - y1) * 0.4);
     return 'M ' + x1 + ' ' + y1 + ' C ' + x1 + ' ' + (y1 + offset) + ', ' + x2 + ' ' + (y2 - offset) + ', ' + x2 + ' ' + y2;
   }
@@ -52789,9 +55211,14 @@ class ConnectionManager {
     hitPath.setAttribute('fill', 'none');
 
     var linePath = document.createElementNS(SVG_NS, 'path');
-    linePath.setAttribute('class', 'iw-dag-connection-line');
+    linePath.setAttribute('class', 'iw-dag-connection-line iw-conn--entering');
     linePath.setAttribute('d', d);
     linePath.setAttribute('fill', 'none');
+
+    // Remove entering class after animation completes
+    setTimeout(function() {
+      linePath.classList.remove('iw-conn--entering');
+    }, 300);
 
     hitPath.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -52808,22 +55235,48 @@ class ConnectionManager {
   }
 
   /**
+   * Compute SVG path `d` attribute for a connection, using cache.
+   * Returns null if nodes/ports are unavailable.
+   * @param {string} connectionId
+   * @returns {string|null}
+   */
+  _computePathData(connectionId) {
+    var entry = this._connections[connectionId];
+    if (!entry) return null;
+
+    var sourceNode = this._getNodeById(entry.data.sourceNodeId);
+    var targetNode = this._getNodeById(entry.data.targetNodeId);
+    if (!sourceNode || !targetNode) return null;
+
+    var sourcePort = sourceNode.getOutputPort();
+    var targetPort = targetNode.getInputPort();
+    if (!sourcePort || !targetPort) return null;
+
+    // Check cache — only recompute if port positions changed
+    var cached = this._pathCache[connectionId];
+    if (cached &&
+        cached.sx === sourcePort.x && cached.sy === sourcePort.y &&
+        cached.tx === targetPort.x && cached.ty === targetPort.y) {
+      return cached.d;
+    }
+
+    var d = this._calculateBezierPath(sourcePort.x, sourcePort.y, targetPort.x, targetPort.y);
+    this._pathCache[connectionId] = {
+      d: d, sx: sourcePort.x, sy: sourcePort.y, tx: targetPort.x, ty: targetPort.y
+    };
+    return d;
+  }
+
+  /**
    * Re-read port positions and update path `d` attribute for a single connection.
    * @param {string} connectionId
    */
   _updateConnectionPath(connectionId) {
+    var d = this._computePathData(connectionId);
+    if (d === null) return;
+
     var entry = this._connections[connectionId];
     if (!entry) return;
-
-    var sourceNode = this._getNodeById(entry.data.sourceNodeId);
-    var targetNode = this._getNodeById(entry.data.targetNodeId);
-    if (!sourceNode || !targetNode) return;
-
-    var sourcePort = sourceNode.getOutputPort();
-    var targetPort = targetNode.getInputPort();
-    if (!sourcePort || !targetPort) return;
-
-    var d = this._calculateBezierPath(sourcePort.x, sourcePort.y, targetPort.x, targetPort.y);
     var paths = entry.groupEl.querySelectorAll('path');
     for (var i = 0; i < paths.length; i++) {
       paths[i].setAttribute('d', d);
@@ -52854,12 +55307,12 @@ class ConnectionManager {
       }
     }
     this._connections = {};
+    this._pathCache = {};
     this._selectedId = null;
   }
 }
 
 window.ConnectionManager = ConnectionManager;
-
 // === js/wizard-dag-canvas.js ===
 /**
  * DagCanvas — Central SVG canvas for the DAG builder.
@@ -52883,6 +55336,50 @@ window.ConnectionManager = ConnectionManager;
  */
 
 /* global DagNode, ConnectionManager, AutoLayoutEngine, WizardEventBus, UndoRedoManager, IW_EVENTS */
+
+// ── Performance utilities ────────────────────────────────────────
+
+/**
+ * Debounce a function — delay execution until `ms` after last call.
+ * @param {Function} fn
+ * @param {number} ms
+ * @returns {Function}
+ */
+function _dagDebounce(fn, ms) {
+  var timer = null;
+  var wrapped = function() {
+    var self = this;
+    var args = arguments;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function() {
+      timer = null;
+      fn.apply(self, args);
+    }, ms);
+  };
+  wrapped.cancel = function() {
+    if (timer) { clearTimeout(timer); timer = null; }
+  };
+  return wrapped;
+}
+
+/**
+ * Throttle to requestAnimationFrame — at most one call per frame (~60fps).
+ * @param {Function} fn
+ * @returns {Function}
+ */
+function _dagThrottle(fn) {
+  var scheduled = false;
+  return function() {
+    if (scheduled) return;
+    scheduled = true;
+    var self = this;
+    var args = arguments;
+    requestAnimationFrame(function() {
+      scheduled = false;
+      fn.apply(self, args);
+    });
+  };
+}
 
 var DAG_CANVAS_SVG_NS = 'http://www.w3.org/2000/svg';
 var DAG_CANVAS_MAX_NODES = 100;
@@ -52918,6 +55415,7 @@ class DagCanvas {
     this._eventBus = options.eventBus;
     this._undoManager = options.undoManager;
     this._schemas = options.schemas || { dbo: true, bronze: false, silver: false, gold: false };
+    this._liveRegion = options.liveRegion || null;
 
     // State
     this._nodes = {};           // nodeId -> DagNode instance
@@ -52928,6 +55426,26 @@ class DagCanvas {
     this._nextConnectionId = 1;
     this._viewport = { panX: 0, panY: 0, zoom: 1.0 };
     this._seqCounters = { 'sql-table': 0, 'sql-mlv': 0, 'pyspark-mlv': 0 };
+
+    // Batching state — suppresses intermediate state-change events
+    this._isBatching = false;
+
+    // Debounced state emission (150ms batching window)
+    this._debouncedEmit = _dagDebounce(function() {
+      if (self._eventBus) {
+        self._eventBus.emit(IW_EVENTS.STATE_CHANGED);
+      }
+    }, 150);
+
+    // Debounced visibility update (100ms after last pan/zoom)
+    this._debouncedVisibility = _dagDebounce(function() {
+      self._updateVisibility();
+    }, 100);
+
+    // Debounced window resize (200ms)
+    this._debouncedResize = _dagDebounce(function() {
+      self._updateVisibility();
+    }, 200);
 
     // Sub-components
     this._connectionMgr = null;
@@ -52961,7 +55479,7 @@ class DagCanvas {
     this._zoomLevelEl = null;
 
     // Bound handlers (stored for cleanup)
-    this._boundWheel = function(e) { self._onWheel(e); };
+    this._boundWheel = _dagThrottle(function(e) { self._onWheel(e); });
     this._boundMouseDown = function(e) { self._onMouseDown(e); };
     this._boundMouseMove = function(e) { self._onMouseMove(e); };
     this._boundMouseUp = function(e) { self._onMouseUp(e); };
@@ -52972,6 +55490,7 @@ class DagCanvas {
     this._boundMarqueeUp = function(e) { self._onMarqueeUp(e); };
     this._boundContextMenu = function(e) { self._onContextMenu(e); };
     this._boundDismissCtxMenu = function(e) { self._onDismissCtxMenu(e); };
+    this._boundResize = function() { self._debouncedResize(); };
 
     // Build
     this._buildSVG();
@@ -53099,6 +55618,7 @@ class DagCanvas {
 
     this._eventBus.emit(IW_EVENTS.NODE_ADDED, { nodeId: id, type: type });
     this._emitStateChanged();
+    this._announce('Node ' + nodeData.name + ' added');
 
     return nodeData;
   }
@@ -53149,6 +55669,7 @@ class DagCanvas {
 
     this._eventBus.emit(IW_EVENTS.NODE_REMOVED, { nodeId: nodeId });
     this._emitStateChanged();
+    this._announce('Node ' + capturedData.name + ' removed');
 
     return capturedData;
   }
@@ -53300,8 +55821,33 @@ class DagCanvas {
 
     this._eventBus.emit(IW_EVENTS.CONNECTION_CREATED, connData);
     this._emitStateChanged();
+    var srcName = this._nodeData[sourceNodeId] ? this._nodeData[sourceNodeId].name : sourceNodeId;
+    var tgtName = this._nodeData[targetNodeId] ? this._nodeData[targetNodeId].name : targetNodeId;
+    this._announce('Connection created from ' + srcName + ' to ' + tgtName);
 
     return connData;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     BATCH OPERATIONS
+     ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Run a function that adds/removes multiple nodes without intermediate
+   * state-change events or connection path updates.
+   * After the function completes, all paths are updated once and a single
+   * state-changed event is emitted.
+   * @param {Function} fn — receives this canvas as argument
+   */
+  batchOperation(fn) {
+    this._isBatching = true;
+    try {
+      fn(this);
+    } finally {
+      this._isBatching = false;
+      this._connectionMgr.updateAllPaths();
+      this._emitStateChanged();
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -53332,6 +55878,9 @@ class DagCanvas {
     this._viewport.zoom = Math.max(DAG_CANVAS_ZOOM_MIN, Math.min(DAG_CANVAS_ZOOM_MAX, zoom));
     this._applyViewportTransform();
     this._eventBus.emit(IW_EVENTS.ZOOM_CHANGED, this.getViewport());
+    this._announce('Zoom ' + Math.round(this._viewport.zoom * 100) + '%');
+    this._debouncedVisibility();
+    this._connectionMgr.setSimplePaths(this._viewport.zoom < 0.5);
   }
 
   /**
@@ -53387,8 +55936,8 @@ class DagCanvas {
     var result = this._layoutEngine.layout(nodes, connections);
     var newPositions = result.positions;
 
-    // Apply new positions
-    this._applyPositions(newPositions);
+    // Apply new positions with animation
+    this._animateToPositions(newPositions);
 
     // Fit viewport
     var rect = this._svgEl.getBoundingClientRect();
@@ -53413,6 +55962,7 @@ class DagCanvas {
     this._connectionMgr.updateAllPaths();
     this._eventBus.emit(IW_EVENTS.LAYOUT_COMPLETE);
     this._emitStateChanged();
+    this._announce('Layout applied \u2014 ' + ids.length + ' nodes arranged');
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -53550,6 +56100,12 @@ class DagCanvas {
     document.removeEventListener('mouseup', this._boundMarqueeUp);
     document.removeEventListener('keydown', this._boundKeyDown);
     document.removeEventListener('mousedown', this._boundDismissCtxMenu);
+    window.removeEventListener('resize', this._boundResize);
+
+    // Cancel pending debounced timers
+    if (this._debouncedEmit && this._debouncedEmit.cancel) this._debouncedEmit.cancel();
+    if (this._debouncedVisibility && this._debouncedVisibility.cancel) this._debouncedVisibility.cancel();
+    if (this._debouncedResize && this._debouncedResize.cancel) this._debouncedResize.cancel();
 
     // Destroy connection manager
     if (this._connectionMgr) {
@@ -53595,6 +56151,8 @@ class DagCanvas {
     this._svgEl.setAttribute('class', 'iw-dag-svg');
     this._svgEl.setAttribute('xmlns', ns);
     this._svgEl.setAttribute('tabindex', '0');
+    this._svgEl.setAttribute('role', 'application');
+    this._svgEl.setAttribute('aria-label', 'DAG canvas \u2014 0 nodes, 0 connections');
 
     // Defs — grid pattern
     var defs = document.createElementNS(ns, 'defs');
@@ -53670,23 +56228,27 @@ class DagCanvas {
     btnOut.className = 'iw-dag-zoom-btn';
     btnOut.setAttribute('data-action', 'zoom-out');
     btnOut.setAttribute('title', 'Zoom out');
+    btnOut.setAttribute('aria-label', 'Zoom out');
     btnOut.textContent = '\u2212';
 
     var levelSpan = document.createElement('span');
     levelSpan.className = 'iw-dag-zoom-level';
     levelSpan.textContent = '100%';
+    levelSpan.setAttribute('aria-live', 'off');
     this._zoomLevelEl = levelSpan;
 
     var btnIn = document.createElement('button');
     btnIn.className = 'iw-dag-zoom-btn';
     btnIn.setAttribute('data-action', 'zoom-in');
     btnIn.setAttribute('title', 'Zoom in');
+    btnIn.setAttribute('aria-label', 'Zoom in');
     btnIn.textContent = '+';
 
     var btnFit = document.createElement('button');
     btnFit.className = 'iw-dag-zoom-btn';
     btnFit.setAttribute('data-action', 'fit');
     btnFit.setAttribute('title', 'Fit to content');
+    btnFit.setAttribute('aria-label', 'Fit to content');
     btnFit.textContent = '\u229E';
 
     el.appendChild(btnOut);
@@ -53765,6 +56327,8 @@ class DagCanvas {
 
     var menu = document.createElement('div');
     menu.className = 'iw-dag-ctx-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Canvas context menu');
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
 
@@ -53787,6 +56351,8 @@ class DagCanvas {
         var div = document.createElement('div');
         div.className = 'iw-dag-ctx-item';
         div.setAttribute('data-action', item.action);
+        div.setAttribute('role', 'menuitem');
+        div.setAttribute('tabindex', '-1');
         div.textContent = item.label;
         menu.appendChild(div);
       }
@@ -53822,11 +56388,17 @@ class DagCanvas {
   }
 
   /**
-   * Hide the context menu.
+   * Hide the context menu with exit animation.
    */
   _hideContextMenu() {
-    if (this._ctxMenuEl && this._ctxMenuEl.parentNode) {
-      this._ctxMenuEl.parentNode.removeChild(this._ctxMenuEl);
+    var el = this._ctxMenuEl;
+    if (el) {
+      el.classList.add('iw-dag-ctx-menu--exiting');
+      setTimeout(function() {
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
+        }
+      }, 80);
     }
     this._ctxMenuEl = null;
     document.removeEventListener('mousedown', this._boundDismissCtxMenu);
@@ -53851,6 +56423,7 @@ class DagCanvas {
     this._svgEl.addEventListener('mousedown', this._boundMouseDown);
     this._svgEl.addEventListener('contextmenu', this._boundContextMenu);
     document.addEventListener('keydown', this._boundKeyDown);
+    window.addEventListener('resize', this._boundResize);
   }
 
   _onWheel(event) {
@@ -53873,6 +56446,9 @@ class DagCanvas {
 
     this._applyViewportTransform();
     this._eventBus.emit(IW_EVENTS.ZOOM_CHANGED, this.getViewport());
+    this._debouncedVisibility();
+    // Switch connection paths to simple lines at low zoom
+    this._connectionMgr.setSimplePaths(newZoom < 0.5);
   }
 
   _onMouseDown(event) {
@@ -53922,6 +56498,7 @@ class DagCanvas {
       this._panStart = null;
       document.removeEventListener('mousemove', this._boundMouseMove);
       document.removeEventListener('mouseup', this._boundMouseUp);
+      this._debouncedVisibility();
     }
   }
 
@@ -53939,6 +56516,41 @@ class DagCanvas {
     // Only handle if canvas or a child has focus
     if (!this._svgEl) return;
     if (!this._svgEl.contains(document.activeElement) && document.activeElement !== this._svgEl) {
+      return;
+    }
+
+    // Ctrl+A — select all nodes
+    if (event.key === 'a' && (event.ctrlKey || event.metaKey)) {
+      var allIds = Object.keys(this._nodeData);
+      if (allIds.length > 0) {
+        this.selectNodes(allIds);
+        this._announce(allIds.length + ' nodes selected');
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Arrow keys — navigate between nodes when canvas focused
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' ||
+        event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      this._navigateNodes(event.key);
+      event.preventDefault();
+      return;
+    }
+
+    // Enter — open popover for selected node
+    if (event.key === 'Enter' && this._selectedNodeId) {
+      this._eventBus.emit(IW_EVENTS.NODE_SELECTED, { nodeId: this._selectedNodeId });
+      event.preventDefault();
+      return;
+    }
+
+    // Space — toggle selection of focused node
+    if (event.key === ' ') {
+      if (this._selectedNodeId) {
+        this.selectNode(null);
+      }
+      event.preventDefault();
       return;
     }
 
@@ -54020,6 +56632,9 @@ class DagCanvas {
       });
       this._eventBus.emit(IW_EVENTS.CONNECTION_CREATED, connData);
       this._emitStateChanged();
+      var srcName2 = this._nodeData[connData.sourceNodeId] ? this._nodeData[connData.sourceNodeId].name : connData.sourceNodeId;
+      var tgtName2 = this._nodeData[connData.targetNodeId] ? this._nodeData[connData.targetNodeId].name : connData.targetNodeId;
+      this._announce('Connection created from ' + srcName2 + ' to ' + tgtName2);
     } else {
       this._eventBus.emit(IW_EVENTS.CONNECTION_CANCELLED);
     }
@@ -54105,6 +56720,7 @@ class DagCanvas {
     // Select intersecting nodes
     if (hitIds.length > 0) {
       this.selectNodes(hitIds, this._marqueeStart.shiftKey);
+      this._announce(hitIds.length + ' nodes selected');
     }
 
     this._removeMarqueeRect();
@@ -54154,6 +56770,52 @@ class DagCanvas {
       if (n) n.setSelected(false);
     }
     this._selectedNodeIds = [];
+  }
+
+  /**
+   * Navigate between nodes using arrow keys.
+   * Left/Right = horizontal neighbors, Up/Down = vertical neighbors.
+   * @param {string} key — ArrowLeft, ArrowRight, ArrowUp, ArrowDown
+   */
+  _navigateNodes(key) {
+    var ids = Object.keys(this._nodeData);
+    if (ids.length === 0) return;
+
+    // If no selection, select the first node
+    if (!this._selectedNodeId) {
+      this.selectNode(ids[0]);
+      return;
+    }
+
+    var current = this._nodeData[this._selectedNodeId];
+    if (!current) return;
+
+    var bestId = null;
+    var bestDist = Infinity;
+    var i, nd, dx, dy, dist;
+
+    for (i = 0; i < ids.length; i++) {
+      if (ids[i] === this._selectedNodeId) continue;
+      nd = this._nodeData[ids[i]];
+      dx = nd.x - current.x;
+      dy = nd.y - current.y;
+
+      // Filter by direction
+      if (key === 'ArrowRight' && dx <= 0) continue;
+      if (key === 'ArrowLeft' && dx >= 0) continue;
+      if (key === 'ArrowDown' && dy <= 0) continue;
+      if (key === 'ArrowUp' && dy >= 0) continue;
+
+      dist = Math.abs(dx) + Math.abs(dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestId = ids[i];
+      }
+    }
+
+    if (bestId) {
+      this.selectNode(bestId);
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -54221,6 +56883,40 @@ class DagCanvas {
         data.y = pos.y;
       }
     }
+  }
+
+  /**
+   * Animate nodes to new positions using CSS transitions.
+   * Applies iw-node--animating class, sets new positions, and cleans up.
+   * @param {object} newPositions — nodeId -> {x, y}
+   */
+  _animateToPositions(newPositions) {
+    var self = this;
+    var ids = Object.keys(newPositions);
+
+    // Add animating class to all nodes (enables CSS transition)
+    for (var i = 0; i < ids.length; i++) {
+      var node = this._nodes[ids[i]];
+      if (node && node.getGroupEl) {
+        var el = node.getGroupEl();
+        if (el) el.classList.add('iw-node--animating');
+      }
+    }
+
+    // Apply new positions (CSS transition handles the animation)
+    this._applyPositions(newPositions);
+
+    // Remove class after animation completes and update connections
+    setTimeout(function() {
+      for (var j = 0; j < ids.length; j++) {
+        var n = self._nodes[ids[j]];
+        if (n && n.getGroupEl) {
+          var grp = n.getGroupEl();
+          if (grp) grp.classList.remove('iw-node--animating');
+        }
+      }
+      self._connectionMgr.updateAllPaths();
+    }, 450);
   }
 
   /**
@@ -54357,13 +57053,74 @@ class DagCanvas {
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Viewport Culling
+     ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Check which nodes are visible in the current viewport and show/hide.
+   * Nodes outside the viewport (with 100px buffer) get display:none.
+   * Called via debounce after pan/zoom changes settle.
+   */
+  _updateVisibility() {
+    if (!this._svgEl) return;
+    var rect = this._svgEl.getBoundingClientRect();
+    var buffer = 100;
+    var vp = this._viewport;
+
+    // Viewport bounds in canvas space
+    var viewLeft = (-vp.panX - buffer) / vp.zoom;
+    var viewTop = (-vp.panY - buffer) / vp.zoom;
+    var viewRight = (rect.width - vp.panX + buffer) / vp.zoom;
+    var viewBottom = (rect.height - vp.panY + buffer) / vp.zoom;
+
+    var ids = Object.keys(this._nodeData);
+    for (var i = 0; i < ids.length; i++) {
+      var nd = this._nodeData[ids[i]];
+      var node = this._nodes[ids[i]];
+      if (!node) continue;
+
+      var visible = !(nd.x + nd.width < viewLeft || nd.x > viewRight ||
+                      nd.y + nd.height < viewTop || nd.y > viewBottom);
+      node.setVisible(visible);
+    }
+  }
+
   /**
    * Emit a generic state-changed event.
+   * Suppressed during batch operations. Uses debounced emission
+   * to coalesce rapid changes (150ms window).
    */
   _emitStateChanged() {
-    if (this._eventBus) {
+    if (this._isBatching) return;
+    this._updateSvgAriaLabel();
+    if (this._debouncedEmit) {
+      this._debouncedEmit();
+    } else if (this._eventBus) {
       this._eventBus.emit(IW_EVENTS.STATE_CHANGED);
     }
+  }
+
+  /**
+   * Update the SVG aria-label with current node/connection counts.
+   */
+  _updateSvgAriaLabel() {
+    if (!this._svgEl) return;
+    var nodeCount = Object.keys(this._nodeData).length;
+    var connCount = this._connectionMgr ? this._connectionMgr.getConnections().length : 0;
+    this._svgEl.setAttribute('aria-label',
+      'DAG canvas \u2014 ' + nodeCount + ' nodes, ' + connCount + ' connections');
+  }
+
+  /**
+   * Announce a message to screen readers via live region.
+   * @param {string} message
+   */
+  _announce(message) {
+    if (!this._liveRegion) return;
+    this._liveRegion.textContent = '';
+    var region = this._liveRegion;
+    setTimeout(function() { region.textContent = message; }, 50);
   }
 }
 
@@ -55519,6 +58276,7 @@ class DagPresets {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._releaseFocusTrap();
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
       this._unsubs[i]();
@@ -55539,6 +58297,8 @@ class DagPresets {
     var self = this;
     var overlay = document.createElement('div');
     overlay.className = 'iw-dag-presets-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
 
     var inner = document.createElement('div');
     inner.className = 'iw-dag-presets-inner';
@@ -55546,8 +58306,10 @@ class DagPresets {
     // Header
     var header = document.createElement('div');
     header.className = 'iw-dag-presets-header';
-    header.innerHTML = '<span class="iw-dag-presets-heading">Start with a Preset</span>'
+    var headingId = 'iw-presets-heading-' + Date.now();
+    header.innerHTML = '<span class="iw-dag-presets-heading" id="' + headingId + '">Start with a Preset</span>'
       + '<span class="iw-dag-presets-subheading">Pick a topology to auto-populate your canvas, or start from scratch.</span>';
+    overlay.setAttribute('aria-labelledby', headingId);
     inner.appendChild(header);
 
     // Card grid
@@ -55627,8 +58389,16 @@ class DagPresets {
 
   _applyPreset(preset) {
     if (!this._canvas) return;
-    preset.build(this._canvas, this._schemas);
-    this._canvas.autoLayout();
+    var canvas = this._canvas;
+    var schemas = this._schemas;
+    if (typeof canvas.batchOperation === 'function') {
+      canvas.batchOperation(function() {
+        preset.build(canvas, schemas);
+      });
+    } else {
+      preset.build(canvas, schemas);
+    }
+    canvas.autoLayout();
     this._dismissed = true;
     this._updateVisibility();
   }
@@ -55643,10 +58413,56 @@ class DagPresets {
     var nodeCount = this._canvas ? this._canvas.getNodeCount() : 0;
     var shouldShow = nodeCount === 0 && !this._dismissed;
     if (shouldShow) {
+      this._overlayEl.classList.remove('iw-dag-presets-overlay--exiting');
       this._overlayEl.classList.add('iw-dag-presets-overlay--visible');
+      this._trapFocus();
     } else {
-      this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+      // Animate out if currently visible
+      if (this._overlayEl.classList.contains('iw-dag-presets-overlay--visible')) {
+        var overlay = this._overlayEl;
+        overlay.classList.add('iw-dag-presets-overlay--exiting');
+        setTimeout(function() {
+          overlay.classList.remove('iw-dag-presets-overlay--visible');
+          overlay.classList.remove('iw-dag-presets-overlay--exiting');
+        }, 200);
+      } else {
+        this._overlayEl.classList.remove('iw-dag-presets-overlay--visible');
+      }
+      this._releaseFocusTrap();
     }
+  }
+
+  /** Trap focus inside the presets overlay */
+  _trapFocus() {
+    var self = this;
+    this._releaseFocusTrap();
+    var container = this._overlayEl;
+    this._focusTrapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    container.addEventListener('keydown', this._focusTrapHandler);
+    // Focus first interactive element
+    var firstBtn = container.querySelector('button');
+    if (firstBtn) firstBtn.focus();
+  }
+
+  /** Release focus trap */
+  _releaseFocusTrap() {
+    if (this._focusTrapHandler && this._overlayEl) {
+      this._overlayEl.removeEventListener('keydown', this._focusTrapHandler);
+    }
+    this._focusTrapHandler = null;
   }
 }
 
@@ -55687,6 +58503,9 @@ class NodePopover {
     this._popoverEl = document.createElement('div');
     this._popoverEl.className = 'iw-node-popover';
     this._popoverEl.style.display = 'none';
+    this._popoverEl.setAttribute('role', 'dialog');
+    this._focusTrapHandler = null;
+    this._triggerEl = null;
 
     this._arrowEl = document.createElement('div');
     this._arrowEl.className = 'iw-node-popover-arrow';
@@ -55732,6 +58551,8 @@ class NodePopover {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+
+    this._releaseFocusTrap();
 
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
@@ -55865,6 +58686,9 @@ class NodePopover {
     if (this._destroyed) return;
     this._currentNodeId = nodeId;
 
+    // Remember trigger for focus return
+    this._triggerEl = document.activeElement;
+
     var nodeData = this._canvas.getNodeData(nodeId);
     if (!nodeData) {
       this._hide();
@@ -55877,15 +58701,51 @@ class NodePopover {
     this._populateSchemaOptions();
     this._schemaSelect.value = nodeData.schema;
 
-    // Show and position
+    // ARIA
+    this._popoverEl.setAttribute('aria-label', 'Edit node ' + nodeData.name);
+
+    // Show and position with enter animation
     this._popoverEl.style.display = '';
+    this._popoverEl.classList.remove('iw-node-popover--exiting');
+    this._popoverEl.classList.add('iw-node-popover--entering');
     this._position(nodeData);
+
+    var popEl = this._popoverEl;
+    setTimeout(function() {
+      if (popEl) popEl.classList.remove('iw-node-popover--entering');
+    }, 150);
+
+    // Focus trap and initial focus
+    this._installFocusTrap();
+    this._nameInput.focus();
   }
 
   _hide() {
     if (this._destroyed) return;
-    this._popoverEl.style.display = 'none';
+    var self = this;
+    var el = this._popoverEl;
+
+    // Release focus trap
+    this._releaseFocusTrap();
+
+    if (el && el.style.display !== 'none') {
+      el.classList.add('iw-node-popover--exiting');
+      setTimeout(function() {
+        if (el) {
+          el.classList.remove('iw-node-popover--exiting');
+          el.style.display = 'none';
+        }
+      }, 100);
+    } else if (el) {
+      el.style.display = 'none';
+    }
     this._currentNodeId = null;
+
+    // Return focus to trigger element
+    if (this._triggerEl && this._triggerEl.focus) {
+      this._triggerEl.focus();
+      this._triggerEl = null;
+    }
   }
 
   _position(nodeData) {
@@ -55959,6 +58819,37 @@ class NodePopover {
   }
 
   /* ═══════════════════════════════════════════════════════════════
+     PRIVATE — Focus Trap
+     ═══════════════════════════════════════════════════════════════ */
+
+  _installFocusTrap() {
+    this._releaseFocusTrap();
+    var container = this._popoverEl;
+    this._focusTrapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    container.addEventListener('keydown', this._focusTrapHandler);
+  }
+
+  _releaseFocusTrap() {
+    if (this._focusTrapHandler && this._popoverEl) {
+      this._popoverEl.removeEventListener('keydown', this._focusTrapHandler);
+    }
+    this._focusTrapHandler = null;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
      PRIVATE — Dismiss handlers
      ═══════════════════════════════════════════════════════════════ */
 
@@ -56025,6 +58916,13 @@ class DagCanvasPage {
     this._rootEl.appendChild(this._canvasContainer);
     this._rootEl.appendChild(this._codeContainer);
 
+    // Live region for screen reader announcements
+    this._liveRegion = document.createElement('div');
+    this._liveRegion.className = 'iw-sr-only';
+    this._liveRegion.setAttribute('aria-live', 'polite');
+    this._liveRegion.setAttribute('aria-atomic', 'true');
+    this._rootEl.appendChild(this._liveRegion);
+
     // Shared utilities
     this._undoManager = new UndoRedoManager({ eventBus: this._eventBus });
     this._codeGen = new CodeGenerationEngine();
@@ -56034,7 +58932,8 @@ class DagCanvasPage {
       containerEl: this._canvasContainer,
       eventBus: this._eventBus,
       undoManager: this._undoManager,
-      schemas: this._schemas
+      schemas: this._schemas,
+      liveRegion: this._liveRegion
     });
 
     this._palette = new NodePalette({
@@ -56066,10 +58965,21 @@ class DagCanvasPage {
     });
 
     // Wire state-change notifications back to the wizard
+    // Debounce code preview refresh (300ms after last topology change)
+    this._debouncedCodeRefresh = null;
+    if (typeof _dagDebounce === 'function') {
+      this._debouncedCodeRefresh = _dagDebounce(function() {
+        self._refreshCodePreview();
+      }, 300);
+    }
+
     this._unsubs = [];
     this._unsubs.push(
       this._eventBus.on(IW_EVENTS.STATE_CHANGED, function() {
         self._onStateChange();
+        if (self._debouncedCodeRefresh) {
+          self._debouncedCodeRefresh();
+        }
       })
     );
   }
@@ -56153,6 +59063,11 @@ class DagCanvasPage {
     if (this._destroyed) return;
     this._destroyed = true;
 
+    // Cancel debounced timers
+    if (this._debouncedCodeRefresh && this._debouncedCodeRefresh.cancel) {
+      this._debouncedCodeRefresh.cancel();
+    }
+
     // Unsubscribe from events
     var i;
     for (i = 0; i < this._unsubs.length; i++) {
@@ -56194,6 +59109,7 @@ class DagCanvasPage {
     this._paletteContainer = null;
     this._canvasContainer = null;
     this._codeContainer = null;
+    this._liveRegion = null;
     this._eventBus = null;
     this._codeGen = null;
   }
@@ -58912,10 +61828,14 @@ class InfraWizardDialog {
     var self = this;
     var confirmEl = document.createElement('div');
     confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.setAttribute('role', 'alertdialog');
+    confirmEl.setAttribute('aria-modal', 'true');
+    confirmEl.setAttribute('aria-labelledby', 'iw-confirm-close-title');
+    confirmEl.setAttribute('aria-describedby', 'iw-confirm-close-text');
     confirmEl.innerHTML =
       '<div class="iw-confirm-box">' +
-        '<div class="iw-confirm-title">Discard wizard?</div>' +
-        '<div class="iw-confirm-text">All entered data will be lost. This action cannot be undone.</div>' +
+        '<div class="iw-confirm-title" id="iw-confirm-close-title">Discard wizard?</div>' +
+        '<div class="iw-confirm-text" id="iw-confirm-close-text">All entered data will be lost. This action cannot be undone.</div>' +
         '<div class="iw-confirm-actions">' +
           '<button class="iw-btn iw-btn-ghost" id="iw-confirm-cancel">Cancel</button>' +
           '<button class="iw-btn iw-btn-danger" id="iw-confirm-discard">Discard</button>' +
@@ -58923,10 +61843,32 @@ class InfraWizardDialog {
       '</div>';
     this._dialogEl.appendChild(confirmEl);
 
-    confirmEl.querySelector('#iw-confirm-cancel').addEventListener('click', function() {
+    // Focus trap
+    var triggerEl = document.activeElement;
+    var trapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = confirmEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    confirmEl.addEventListener('keydown', trapHandler);
+
+    var cancelBtn = confirmEl.querySelector('#iw-confirm-cancel');
+    cancelBtn.focus();
+
+    cancelBtn.addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       confirmEl.parentNode.removeChild(confirmEl);
+      if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
     confirmEl.querySelector('#iw-confirm-discard').addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       self._performClose();
     });
   }
@@ -58936,11 +61878,15 @@ class InfraWizardDialog {
     // Show confirmation overlay before proceeding to execution
     var confirmEl = document.createElement('div');
     confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.setAttribute('role', 'alertdialog');
+    confirmEl.setAttribute('aria-modal', 'true');
+    confirmEl.setAttribute('aria-labelledby', 'iw-lockin-title');
+    confirmEl.setAttribute('aria-describedby', 'iw-lockin-body');
     confirmEl.innerHTML =
       '<div class="iw-confirm-panel">' +
         '<div class="iw-confirm-icon">\u25C6</div>' +
-        '<div class="iw-confirm-title">Confirm Environment Creation</div>' +
-        '<div class="iw-confirm-body">You are about to create real cloud resources. This will:</div>' +
+        '<div class="iw-confirm-title" id="iw-lockin-title">Confirm Environment Creation</div>' +
+        '<div class="iw-confirm-body" id="iw-lockin-body">You are about to create real cloud resources. This will:</div>' +
         '<ul class="iw-confirm-list">' +
           '<li>Create a Fabric workspace</li>' +
           '<li>Assign capacity (may incur costs)</li>' +
@@ -58955,10 +61901,32 @@ class InfraWizardDialog {
       '</div>';
     this._dialogEl.appendChild(confirmEl);
 
-    confirmEl.querySelector('#iw-lockin-cancel').addEventListener('click', function() {
+    // Focus trap
+    var triggerEl = document.activeElement;
+    var trapHandler = function(e) {
+      if (e.key !== 'Tab') return;
+      var focusable = confirmEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { last.focus(); e.preventDefault(); }
+      } else {
+        if (document.activeElement === last) { first.focus(); e.preventDefault(); }
+      }
+    };
+    confirmEl.addEventListener('keydown', trapHandler);
+
+    var cancelBtn = confirmEl.querySelector('#iw-lockin-cancel');
+    cancelBtn.focus();
+
+    cancelBtn.addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       confirmEl.parentNode.removeChild(confirmEl);
+      if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
     confirmEl.querySelector('#iw-lockin-confirm').addEventListener('click', function() {
+      confirmEl.removeEventListener('keydown', trapHandler);
       confirmEl.parentNode.removeChild(confirmEl);
       self._goToPage(4, true);
     });
@@ -66075,12 +69043,7 @@ class MockRenderer {
   }
 
   _showToast(msg) {
-    const toast = document.getElementById('edog-toast');
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.add('visible');
-    clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => toast.classList.remove('visible'), 2000);
+    window.edogToast(msg, 'info');
   }
 
   // ── Deploy Flow ──
@@ -67278,6 +70241,2004 @@ class OnboardingScreen {
 }
 
 
+// === js/qa-panel.js ===
+/**
+ * QA Testing Panel — Stage-based workflow orchestrator.
+ *
+ * Manages 5-stage pipeline: PR Input -> Analysis -> Curation -> Execution -> Results.
+ * Connected-mode only. Subscribes to 'qa' SignalR topic for server events.
+ *
+ * Public API:
+ *   constructor(ws)       — takes SignalRManager instance
+ *   init()                — one-time DOM setup, event binding
+ *   activate()            — called when view becomes visible
+ *   deactivate()          — called when view is hidden
+ *   setPhase(phase)       — 'disconnected' | 'connected'
+ *   destroy()             — cleanup all listeners
+ */
+class QaPanel {
+  constructor(ws) {
+    this._ws = ws;
+    this._phase = 'disconnected';
+    this._activeStage = 'input';
+    this._isActive = false;
+    this._correlationId = null;
+    this._analysisId = null;
+    this._runId = null;
+
+    // Sub-module references (set after init via register*())
+    this._input = null;
+    this._analysis = null;
+    this._curation = null;
+    this._execution = null;
+    this._results = null;
+    this._editor = null;
+
+    // DOM references (cached in init())
+    this._panel = null;
+    this._stageBar = null;
+    this._stageItems = null;
+    this._stages = null;
+    this._phaseOverlay = null;
+    this._killSwitch = null;
+    this._killBtn = null;
+    this._editorOverlay = null;
+
+    // Bound handlers for cleanup
+    this._keyHandler = (e) => this._handleKeyDown(e);
+    this._qaEventHandler = (event) => this._handleQaEvent(event);
+  }
+
+  // ── One-time Setup ──
+
+  init() {
+    this._panel = document.getElementById('qaPanel');
+    this._stageBar = document.getElementById('qaStageBar');
+    this._stageItems = this._stageBar
+      ? Array.from(this._stageBar.querySelectorAll('.qa-stage-item'))
+      : [];
+    this._stages = {
+      input: document.getElementById('qaStageInput'),
+      analysis: document.getElementById('qaStageAnalysis'),
+      curation: document.getElementById('qaStageCuration'),
+      execution: document.getElementById('qaStageExecution'),
+      results: document.getElementById('qaStageResults')
+    };
+    this._phaseOverlay = document.getElementById('qaPhase1Overlay');
+    this._killSwitch = document.getElementById('qaKillSwitch');
+    this._killBtn = document.getElementById('qaKillBtn');
+    this._editorOverlay = document.getElementById('qaEditorOverlay');
+
+    // Stage bar: click completed stages to navigate back
+    if (this._stageBar) {
+      this._stageBar.addEventListener('click', (e) => {
+        const item = e.target.closest('.qa-stage-item');
+        if (item && item.classList.contains('completed')) {
+          this._navigateToStage(item.dataset.stage);
+        }
+      });
+    }
+
+    // Kill switch
+    if (this._killBtn) {
+      this._killBtn.addEventListener('click', () => this._handleKillSwitch());
+    }
+
+    // Subscribe to QA server events via topic bus
+    this._ws.on('qa', this._qaEventHandler);
+
+    // Restore crash-recovery state
+    this._restoreState();
+
+    // Apply phase gate
+    this._updatePhaseGate();
+  }
+
+  // ── Lifecycle ──
+
+  activate() {
+    this._isActive = true;
+    document.addEventListener('keydown', this._keyHandler);
+    this._ws.subscribeTopic('qa');
+    this._updatePhaseGate();
+  }
+
+  deactivate() {
+    this._isActive = false;
+    document.removeEventListener('keydown', this._keyHandler);
+    this._ws.unsubscribeTopic('qa');
+  }
+
+  setPhase(phase) {
+    this._phase = phase;
+    this._updatePhaseGate();
+  }
+
+  destroy() {
+    document.removeEventListener('keydown', this._keyHandler);
+    this._ws.off('qa', this._qaEventHandler);
+    this._ws.unsubscribeTopic('qa');
+  }
+
+  // ── Stage Navigation ──
+
+  _navigateToStage(stage) {
+    const stageOrder = ['input', 'analysis', 'curation', 'execution', 'results'];
+    const targetIdx = stageOrder.indexOf(stage);
+    const currentIdx = stageOrder.indexOf(this._activeStage);
+    if (targetIdx < 0 || targetIdx === currentIdx) return;
+
+    // Can only go back to completed stages, not forward
+    if (targetIdx > currentIdx) return;
+
+    // Confirm if navigating back from a running execution (data loss)
+    if (this._activeStage === 'execution' && this._isRunning()) {
+      this._confirmBack(stage);
+      return;
+    }
+
+    this._setStage(stage);
+  }
+
+  _setStage(stage) {
+    this._activeStage = stage;
+
+    const stageOrder = ['input', 'analysis', 'curation', 'execution', 'results'];
+    const activeIdx = stageOrder.indexOf(stage);
+
+    // Update stage bar indicators
+    this._stageItems.forEach((item, i) => {
+      item.classList.remove('active', 'completed', 'disabled');
+      if (i < activeIdx) {
+        item.classList.add('completed');
+        item.style.cursor = 'pointer';
+      } else if (i === activeIdx) {
+        item.classList.add('active');
+        item.style.cursor = 'default';
+      } else {
+        item.classList.add('disabled');
+        item.style.cursor = 'default';
+      }
+    });
+
+    // Show only the active stage container
+    const stageKeys = Object.keys(this._stages);
+    for (let i = 0; i < stageKeys.length; i++) {
+      const el = this._stages[stageKeys[i]];
+      if (el) {
+        if (stageKeys[i] === stage) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      }
+    }
+
+    // Kill switch visible only during execution
+    if (this._killSwitch) {
+      this._killSwitch.style.display = (stage === 'execution') ? '' : 'none';
+    }
+
+    this._saveState();
+  }
+
+  // ── Correlation ID ──
+
+  _newCorrelationId() {
+    this._correlationId = 'corr-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    return this._correlationId;
+  }
+
+  // ── Phase Gate ──
+
+  _updatePhaseGate() {
+    if (!this._phaseOverlay) return;
+    const stagesEl = document.getElementById('qaStages');
+
+    if (this._phase !== 'connected') {
+      this._phaseOverlay.style.display = '';
+      if (stagesEl) stagesEl.style.display = 'none';
+      if (this._stageBar) this._stageBar.style.pointerEvents = 'none';
+    } else {
+      this._phaseOverlay.style.display = 'none';
+      if (stagesEl) stagesEl.style.display = '';
+      if (this._stageBar) this._stageBar.style.pointerEvents = '';
+    }
+  }
+
+  // ── Kill Switch ──
+
+  _handleKillSwitch() {
+    if (!this._runId || !this._isRunning()) return;
+
+    const corrId = this._newCorrelationId();
+    this._ws.connection.invoke('QaCancelRun', corrId, this._runId).then((result) => {
+      if (result && result.success) {
+        if (window.edogToast) window.edogToast.show('Run cancelled', 'warning');
+      }
+    }).catch((err) => {
+      console.error('[QA] Kill failed:', err);
+      if (window.edogToast) window.edogToast.show('Failed to cancel run', 'error');
+    });
+  }
+
+  _isRunning() {
+    return this._execution && this._execution._isRunning;
+  }
+
+  // ── Confirm Back Dialog ──
+
+  _confirmBack(targetStage) {
+    if (confirm('Going back will cancel the current execution. Continue?')) {
+      this._handleKillSwitch();
+      this._setStage(targetStage);
+    }
+  }
+
+  // ── Server Event Router ──
+
+  _handleQaEvent(event) {
+    if (!event || !event.data) return;
+    const d = event.data;
+    const type = d.eventType || d.EventType;
+
+    // Ignore stale events from a different correlation/run
+    const evtCorr = d.correlationId || d.CorrelationId;
+    if (evtCorr && this._correlationId && evtCorr !== this._correlationId) return;
+
+    switch (type) {
+      // Analysis events -> qa-analysis.js
+      case 'QaAnalysisProgress':
+        if (this._analysis) this._analysis.onProgress(d);
+        break;
+      case 'QaAnalysisCancelled':
+        if (this._analysis) this._analysis.onCancelled(d);
+        break;
+      case 'QaScenarioGenerated':
+        if (this._analysis) this._analysis.onScenarioGenerated(d);
+        break;
+
+      // Execution events -> qa-execution.js
+      case 'QaRunStarted':
+        if (this._execution) this._execution.onRunStarted(d);
+        break;
+      case 'QaScenarioStarted':
+        if (this._execution) this._execution.onScenarioStarted(d);
+        break;
+      case 'QaScenarioPhaseChanged':
+        if (this._execution) this._execution.onPhaseChanged(d);
+        break;
+      case 'QaExpectationMatched':
+        if (this._execution) this._execution.onExpectationMatched(d);
+        break;
+      case 'QaScenarioCompleted':
+        if (this._execution) this._execution.onScenarioCompleted(d);
+        break;
+      case 'QaRunCompleted':
+        if (this._execution) this._execution.onRunCompleted(d);
+        this._setStage('results');
+        if (this._results) this._results.loadRun(d.runId || this._runId);
+        break;
+
+      // Error events
+      case 'QaError':
+        this._handleError(d);
+        break;
+    }
+  }
+
+  // ── Error Handling ──
+
+  _handleError(data) {
+    const msg = (data && data.message) || 'Unknown QA error';
+    console.error('[QA] Server error:', msg);
+    if (window.edogToast) window.edogToast.show(msg, 'error');
+  }
+
+  // ── Keyboard Shortcuts ──
+
+  _handleKeyDown(e) {
+    if (!this._isActive) return;
+
+    // Escape closes editor overlay if open
+    if (e.key === 'Escape' && this._editorOverlay && this._editorOverlay.classList.contains('open')) {
+      if (this._editor) this._editor.close();
+      e.preventDefault();
+    }
+  }
+
+  // ── State Persistence (localStorage) ──
+
+  _saveState() {
+    try {
+      const state = {
+        activeStage: this._activeStage,
+        analysisId: this._analysisId,
+        runId: this._runId,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('edog-qa-panel-state', JSON.stringify(state));
+    } catch { /* quota exceeded */ }
+  }
+
+  _restoreState() {
+    try {
+      const raw = localStorage.getItem('edog-qa-panel-state');
+      if (!raw) return;
+
+      const state = JSON.parse(raw);
+
+      // Discard state older than 1 hour
+      if (Date.now() - state.timestamp > 3600000) {
+        localStorage.removeItem('edog-qa-panel-state');
+        return;
+      }
+
+      if (state.analysisId) this._analysisId = state.analysisId;
+      if (state.runId) this._runId = state.runId;
+      if (state.activeStage) this._setStage(state.activeStage);
+    } catch { /* corrupt state */ }
+  }
+
+  // ── Sub-Module Registration ──
+
+  registerInput(mod) { this._input = mod; }
+  registerAnalysis(mod) { this._analysis = mod; }
+  registerCuration(mod) { this._curation = mod; }
+  registerExecution(mod) { this._execution = mod; }
+  registerResults(mod) { this._results = mod; }
+  registerEditor(mod) { this._editor = mod; }
+
+  // ── Public API for Sub-Modules ──
+
+  /** Navigate to a stage (used by sub-modules to advance the pipeline). */
+  goToStage(stage) { this._setStage(stage); }
+
+  /** Get current correlation ID or create a new one. */
+  getCorrelationId() { return this._correlationId || this._newCorrelationId(); }
+
+  /** Set/get the analysis ID (set by qa-input.js after starting analysis). */
+  setAnalysisId(id) { this._analysisId = id; this._saveState(); }
+  getAnalysisId() { return this._analysisId; }
+
+  /** Set/get the run ID (set by qa-curation.js after submitting scenarios). */
+  setRunId(id) { this._runId = id; this._saveState(); }
+  getRunId() { return this._runId; }
+
+  /** Get the SignalR connection for hub invocations. */
+  getConnection() { return this._ws.connection; }
+
+  /** Open the scenario editor overlay. */
+  openEditor(scenario) {
+    if (this._editor) this._editor.open(scenario);
+  }
+
+  /** Close the scenario editor overlay. */
+  closeEditor() {
+    if (this._editor) this._editor.close();
+  }
+}
+
+// === js/qa-input.js ===
+/**
+ * QA Input Stage — PR URL entry, validation, and analysis trigger.
+ *
+ * Owns Stage 1 DOM. Validates PR URL format, calls QaStartCodeAnalysis
+ * via SignalR, persists recent PRs to localStorage.
+ */
+class QaInput {
+  constructor(panel) {
+    this._panel = panel;    // QaPanel reference (for getConnection, goToStage, etc.)
+    this._input = null;     // input element
+    this._btn = null;       // analyze button
+    this._errorEl = null;   // error display
+    this._historyEl = null; // history list
+    this._isAnalyzing = false;
+  }
+
+  // ── Lifecycle ──
+
+  init() {
+    this._input = document.getElementById('qaPrInput');
+    this._btn = document.getElementById('qaAnalyzeBtn');
+    this._errorEl = document.getElementById('qaInputError');
+    this._historyEl = document.getElementById('qaHistoryList');
+
+    if (this._input) {
+      this._input.addEventListener('input', () => this._validate());
+      this._input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !this._btn.disabled) this._startAnalysis();
+      });
+    }
+    if (this._btn) {
+      this._btn.addEventListener('click', () => this._startAnalysis());
+    }
+
+    this._renderHistory();
+    this._panel.registerInput(this);
+  }
+
+  // ── Validation ──
+
+  _validate() {
+    var val = (this._input.value || '').trim();
+    this._clearError();
+
+    if (!val) {
+      this._btn.disabled = true;
+      return;
+    }
+
+    var parsed = this._parsePrInput(val);
+    this._btn.disabled = !parsed;
+  }
+
+  /**
+   * Parse PR input — accepts ADO PR URL, #NNN, or bare number.
+   * @returns {{ prUrl: string|null, prId: number }|null}
+   */
+  _parsePrInput(val) {
+    // Full ADO PR URL
+    var urlMatch = val.match(/pullrequest\/(\d+)/i);
+    if (urlMatch) return { prUrl: val, prId: parseInt(urlMatch[1], 10) };
+
+    // PR #12345 or #12345
+    var hashMatch = val.match(/^#?(\d+)$/);
+    if (hashMatch) return { prId: parseInt(hashMatch[1], 10), prUrl: null };
+
+    // Just a number
+    var numMatch = val.match(/^\d+$/);
+    if (numMatch) return { prId: parseInt(val, 10), prUrl: null };
+
+    return null;
+  }
+
+  // ── Analysis ──
+
+  _startAnalysis() {
+    if (this._isAnalyzing) return;
+    var val = (this._input.value || '').trim();
+    var parsed = this._parsePrInput(val);
+    if (!parsed) {
+      this._showError('Enter a valid PR URL or PR number');
+      return;
+    }
+
+    var conn = this._panel.getConnection();
+    if (!conn) {
+      this._showError('Not connected to FLT service');
+      return;
+    }
+
+    this._isAnalyzing = true;
+    this._btn.disabled = true;
+    this._btn.textContent = 'Analyzing\u2026';
+    this._clearError();
+
+    var corrId = this._panel.getCorrelationId();
+    var request = {
+      correlationId: corrId,
+      prUrl: parsed.prUrl || null,
+      prId: parsed.prId || null,
+      options: {
+        maxScenarios: 30,
+        categories: ['happy_path', 'error_path', 'edge_case', 'regression', 'performance'],
+        priorityThreshold: 5,
+        includeChaosSuggestions: true,
+        timeoutMs: 120000
+      }
+    };
+
+    var self = this;
+    conn.invoke('QaStartCodeAnalysis', request).then(function (result) {
+      self._isAnalyzing = false;
+      self._btn.textContent = 'Analyze';
+
+      if (result && result.success) {
+        self._panel.setAnalysisId(result.analysisId);
+        self._addToHistory(parsed.prId, val);
+        self._panel.goToStage('analysis');
+      } else {
+        self._showError((result && result.message) || 'Analysis failed');
+        self._btn.disabled = false;
+      }
+    }).catch(function (err) {
+      self._isAnalyzing = false;
+      self._btn.textContent = 'Analyze';
+      self._btn.disabled = false;
+      self._showError('Connection error: ' + (err.message || err));
+    });
+  }
+
+  // ── Error Display ──
+
+  _showError(msg) {
+    if (this._errorEl) {
+      this._errorEl.textContent = msg;
+      this._errorEl.style.display = '';
+    }
+  }
+
+  _clearError() {
+    if (this._errorEl) {
+      this._errorEl.textContent = '';
+      this._errorEl.style.display = 'none';
+    }
+  }
+
+  // ── History (localStorage) ──
+
+  _getHistory() {
+    try {
+      return JSON.parse(localStorage.getItem('edog-qa-pr-history') || '[]');
+    } catch (e) { return []; }
+  }
+
+  _addToHistory(prId, inputVal) {
+    var history = this._getHistory();
+    history = history.filter(function (h) { return h.prId !== prId; });
+    history.unshift({ prId: prId, input: inputVal, timestamp: Date.now() });
+    if (history.length > 10) history = history.slice(0, 10);
+    try {
+      localStorage.setItem('edog-qa-pr-history', JSON.stringify(history));
+    } catch (e) { /* quota exceeded — safe to ignore */ }
+    this._renderHistory();
+  }
+
+  _renderHistory() {
+    if (!this._historyEl) return;
+    var history = this._getHistory();
+    var parentEl = document.getElementById('qaInputHistory');
+
+    if (!history.length) {
+      if (parentEl) parentEl.style.display = 'none';
+      return;
+    }
+    if (parentEl) parentEl.style.display = '';
+
+    this._historyEl.innerHTML = '';
+    for (var i = 0; i < history.length; i++) {
+      var item = history[i];
+      var el = document.createElement('div');
+      el.className = 'qa-history-item';
+      el.textContent = 'PR #' + item.prId;
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      el.dataset.pr = item.input;
+      el.addEventListener('click', this._onHistoryClick.bind(this));
+      el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') e.currentTarget.click();
+      });
+      this._historyEl.appendChild(el);
+    }
+  }
+
+  _onHistoryClick(e) {
+    var val = e.currentTarget.dataset.pr;
+    this._input.value = val;
+    this._validate();
+  }
+
+  // ── Public API ──
+
+  /** Reset input for a new PR. */
+  reset() {
+    if (this._input) this._input.value = '';
+    if (this._btn) {
+      this._btn.disabled = true;
+      this._btn.textContent = 'Analyze';
+    }
+    this._clearError();
+    this._isAnalyzing = false;
+  }
+}
+
+// === js/qa-analysis.js ===
+/**
+ * QA Analysis Stage — Five-layer code understanding progress display.
+ *
+ * Owns the qaAnalysisContainer DOM. Renders analysis phases as a vertical
+ * progress tracker with real-time metrics. Scenarios appear as cards as
+ * they're generated by the LLM layer.
+ */
+class QaAnalysis {
+  constructor(panel) {
+    this._panel = panel;
+    this._container = null;
+    this._phases = [];        // phase DOM elements
+    this._scenarios = [];     // received scenarios
+    this._scenarioListEl = null;
+    this._cancelBtn = null;
+    this._metricsEl = null;
+    this._isComplete = false;
+    this._isCancelled = false;
+  }
+
+  init() {
+    this._container = document.getElementById('qaAnalysisContainer');
+    this._panel.registerAnalysis(this);
+    this._render();
+  }
+
+  _render() {
+    if (!this._container) return;
+    this._container.innerHTML = '';
+
+    // ── Progress tracker ──
+    var tracker = document.createElement('div');
+    tracker.className = 'qa-analysis-tracker';
+
+    var phaseNames = [
+      { id: 'fetching_diff', label: 'Fetching PR Diff', icon: '\u25CB' },
+      { id: 'roslyn_blast_radius', label: 'Blast Radius Analysis', icon: '\u25CB' },
+      { id: 'semantic_analysis', label: 'Semantic Analysis (Roslyn)', icon: '\u25CB' },
+      { id: 'di_validation', label: 'DI Registry Validation', icon: '\u25CB' },
+      { id: 'scenario_generation', label: 'Scenario Generation (LLM)', icon: '\u25CB' },
+      { id: 'complete', label: 'Complete', icon: '\u25CB' }
+    ];
+
+    this._phases = [];
+    for (var i = 0; i < phaseNames.length; i++) {
+      var p = phaseNames[i];
+      var phaseEl = document.createElement('div');
+      phaseEl.className = 'qa-analysis-phase';
+      phaseEl.dataset.phase = p.id;
+
+      var iconEl = document.createElement('span');
+      iconEl.className = 'qa-phase-icon';
+      iconEl.textContent = p.icon;
+
+      var labelEl = document.createElement('span');
+      labelEl.className = 'qa-phase-label';
+      labelEl.textContent = p.label;
+
+      var detailEl = document.createElement('span');
+      detailEl.className = 'qa-phase-detail';
+
+      phaseEl.appendChild(iconEl);
+      phaseEl.appendChild(labelEl);
+      phaseEl.appendChild(detailEl);
+      tracker.appendChild(phaseEl);
+      this._phases.push({ el: phaseEl, iconEl: iconEl, detailEl: detailEl, id: p.id });
+    }
+
+    this._container.appendChild(tracker);
+
+    // ── Metrics bar ──
+    var metricsBar = document.createElement('div');
+    metricsBar.className = 'qa-analysis-metrics';
+    metricsBar.id = 'qaAnalysisMetrics';
+    this._container.appendChild(metricsBar);
+    this._metricsEl = metricsBar;
+
+    // ── Cancel button ──
+    var cancelRow = document.createElement('div');
+    cancelRow.className = 'qa-analysis-actions';
+    this._cancelBtn = document.createElement('button');
+    this._cancelBtn.className = 'qa-btn';
+    this._cancelBtn.textContent = 'Cancel Analysis';
+    this._cancelBtn.addEventListener('click', () => this._cancelAnalysis());
+    cancelRow.appendChild(this._cancelBtn);
+    this._container.appendChild(cancelRow);
+
+    // ── Scenario list (appears as scenarios stream in) ──
+    var scenarioHeader = document.createElement('div');
+    scenarioHeader.className = 'qa-analysis-scenario-header';
+    scenarioHeader.style.display = 'none';
+    scenarioHeader.id = 'qaScenarioHeader';
+
+    var headerTitle = document.createElement('h4');
+    headerTitle.textContent = 'Generated Scenarios';
+    scenarioHeader.appendChild(headerTitle);
+
+    var countEl = document.createElement('span');
+    countEl.className = 'qa-scenario-count';
+    countEl.id = 'qaScenarioCount';
+    scenarioHeader.appendChild(countEl);
+    this._container.appendChild(scenarioHeader);
+
+    this._scenarioListEl = document.createElement('div');
+    this._scenarioListEl.className = 'qa-analysis-scenarios';
+    this._container.appendChild(this._scenarioListEl);
+  }
+
+  // ── Event Handlers (called by QaPanel) ──
+
+  onProgress(data) {
+    // data: { phase, phaseIndex, totalPhases, percentComplete, detail, metrics }
+    this._isComplete = false;
+    this._isCancelled = false;
+
+    // Update phase tracker
+    for (var i = 0; i < this._phases.length; i++) {
+      var p = this._phases[i];
+      if (i < data.phaseIndex) {
+        p.el.classList.add('completed');
+        p.el.classList.remove('active');
+        p.iconEl.textContent = '\u25CF'; // ●
+      } else if (i === data.phaseIndex) {
+        p.el.classList.add('active');
+        p.el.classList.remove('completed');
+        p.iconEl.textContent = '\u25D4'; // ◔
+        p.detailEl.textContent = data.detail || '';
+      } else {
+        p.el.classList.remove('active', 'completed');
+        p.iconEl.textContent = '\u25CB'; // ○
+        p.detailEl.textContent = '';
+      }
+    }
+
+    // Update metrics
+    if (data.metrics && this._metricsEl) {
+      var parts = [];
+      if (data.metrics.filesAnalyzed != null) parts.push(data.metrics.filesAnalyzed + ' files');
+      if (data.metrics.linesChanged != null) parts.push(data.metrics.linesChanged + ' lines');
+      if (data.metrics.impactZonesFound != null) parts.push(data.metrics.impactZonesFound + ' impact zones');
+      if (data.metrics.elapsedMs != null) parts.push((data.metrics.elapsedMs / 1000).toFixed(1) + 's');
+      this._metricsEl.textContent = parts.join(' \u00B7 '); // middle dot separator
+    }
+
+    // If complete phase, enable proceed
+    if (data.phase === 'complete') {
+      this._isComplete = true;
+      if (this._cancelBtn) this._cancelBtn.style.display = 'none';
+      this._showProceedButton();
+    }
+  }
+
+  onCancelled(data) {
+    this._isCancelled = true;
+    // Mark the active phase as cancelled
+    for (var i = 0; i < this._phases.length; i++) {
+      var p = this._phases[i];
+      if (p.el.classList.contains('active')) {
+        p.el.classList.remove('active');
+        p.iconEl.textContent = '\u2715'; // ✕
+        p.detailEl.textContent = 'Cancelled: ' + (data.reason || 'user');
+        break;
+      }
+    }
+    if (this._cancelBtn) {
+      this._cancelBtn.textContent = 'Back to Input';
+      this._cancelBtn.onclick = () => this._panel.goToStage('input');
+    }
+  }
+
+  onScenarioGenerated(data) {
+    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, ... } }
+    var scn = data.scenario;
+    if (!scn) return;
+    this._scenarios.push(scn);
+
+    // Show header
+    var header = document.getElementById('qaScenarioHeader');
+    if (header) header.style.display = '';
+    var countEl = document.getElementById('qaScenarioCount');
+    if (countEl) countEl.textContent = this._scenarios.length + (data.totalExpected ? ' / ~' + data.totalExpected : '');
+
+    // Add scenario card
+    if (this._scenarioListEl) {
+      var card = document.createElement('div');
+      card.className = 'qa-card qa-scenario-preview';
+
+      var titleEl = document.createElement('div');
+      titleEl.className = 'qa-scenario-preview-title';
+      titleEl.textContent = scn.title;
+
+      var metaEl = document.createElement('div');
+      metaEl.className = 'qa-scenario-preview-meta';
+      var catBadge = document.createElement('span');
+      catBadge.className = 'qa-category-badge qa-cat-' + (scn.category || 'unknown').replace(/_/g, '-');
+      catBadge.textContent = (scn.category || 'unknown').replace(/_/g, ' ');
+      metaEl.appendChild(catBadge);
+
+      if (scn.metadata && scn.metadata.confidence != null) {
+        var confEl = document.createElement('span');
+        confEl.className = 'qa-confidence';
+        confEl.textContent = Math.round(scn.metadata.confidence * 100) + '% confidence';
+        metaEl.appendChild(confEl);
+      }
+
+      card.appendChild(titleEl);
+      card.appendChild(metaEl);
+      this._scenarioListEl.appendChild(card);
+
+      // Scroll to bottom
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // ── Actions ──
+
+  _cancelAnalysis() {
+    var conn = this._panel.getConnection();
+    if (!conn) return;
+    var corrId = this._panel.getCorrelationId();
+    conn.invoke('QaCancelAnalysis', corrId).catch(function(err) {
+      console.error('[QA] Cancel analysis failed:', err);
+    });
+  }
+
+  _showProceedButton() {
+    if (!this._container) return;
+    var row = document.createElement('div');
+    row.className = 'qa-analysis-actions';
+    var btn = document.createElement('button');
+    btn.className = 'qa-btn primary';
+    btn.textContent = 'Review Scenarios \u25B8';
+    btn.addEventListener('click', () => {
+      // Pass scenarios to curation stage
+      if (this._panel._curation) {
+        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId());
+      }
+      this._panel.goToStage('curation');
+    });
+    row.appendChild(btn);
+    this._container.appendChild(row);
+  }
+
+  /** Get the generated scenarios */
+  getScenarios() { return this._scenarios.slice(); }
+
+  /** Reset for a new analysis */
+  reset() {
+    this._scenarios = [];
+    this._isComplete = false;
+    this._isCancelled = false;
+    this._render();
+  }
+}
+
+// === js/qa-curation.js ===
+/**
+ * QA Curation Stage — Review, edit, approve/exclude AI-generated scenarios.
+ *
+ * Owns the qaCurationContainer DOM. Receives scenarios from QaAnalysis via
+ * loadScenarios(). Submits curated set via QaSubmitCuratedScenarios SignalR call.
+ */
+class QaCuration {
+  constructor(panel) {
+    this._panel = panel;
+    this._container = null;
+    this._listEl = null;
+    this._submitBtn = null;
+    this._scenarios = [];       // full scenario objects
+    this._approved = new Set(); // set of approved scenario IDs
+    this._analysisId = null;
+  }
+
+  init() {
+    this._container = document.getElementById('qaCurationContainer');
+    this._panel.registerCuration(this);
+  }
+
+  /** Load scenarios from analysis stage. */
+  loadScenarios(scenarios, analysisId) {
+    this._scenarios = scenarios.slice();
+    this._analysisId = analysisId;
+    this._approved = new Set(this._scenarios.map(function (s) { return s.id; }));
+    this._render();
+  }
+
+  // ── Render ──
+
+  _render() {
+    if (!this._container) return;
+    this._container.innerHTML = '';
+
+    // Header with stats
+    var header = document.createElement('div');
+    header.className = 'qa-curation-header';
+
+    var title = document.createElement('h3');
+    title.textContent = 'Review Scenarios';
+    header.appendChild(title);
+
+    var stats = document.createElement('div');
+    stats.className = 'qa-curation-stats';
+    stats.id = 'qaCurationStats';
+    this._updateStats(stats);
+    header.appendChild(stats);
+    this._container.appendChild(header);
+
+    // Bulk actions
+    var bulkBar = document.createElement('div');
+    bulkBar.className = 'qa-curation-bulk';
+
+    var self = this;
+
+    var selectAll = document.createElement('button');
+    selectAll.className = 'qa-btn';
+    selectAll.textContent = 'Select All';
+    selectAll.addEventListener('click', function () {
+      self._approved = new Set(self._scenarios.map(function (s) { return s.id; }));
+      self._renderList();
+      self._updateStats();
+    });
+    bulkBar.appendChild(selectAll);
+
+    var deselectAll = document.createElement('button');
+    deselectAll.className = 'qa-btn';
+    deselectAll.textContent = 'Deselect All';
+    deselectAll.addEventListener('click', function () {
+      self._approved.clear();
+      self._renderList();
+      self._updateStats();
+    });
+    bulkBar.appendChild(deselectAll);
+
+    this._container.appendChild(bulkBar);
+
+    // Scenario list
+    this._listEl = document.createElement('div');
+    this._listEl.className = 'qa-curation-list';
+    this._container.appendChild(this._listEl);
+    this._renderList();
+
+    // Footer with navigation + submit
+    var footer = document.createElement('div');
+    footer.className = 'qa-curation-footer';
+
+    var backBtn = document.createElement('button');
+    backBtn.className = 'qa-btn';
+    backBtn.textContent = '\u25C2 Back';
+    backBtn.addEventListener('click', function () { self._panel.goToStage('analysis'); });
+    footer.appendChild(backBtn);
+
+    this._submitBtn = document.createElement('button');
+    this._submitBtn.className = 'qa-btn primary';
+    this._submitBtn.textContent = 'Run Approved (' + this._approved.size + ') \u25B8';
+    this._submitBtn.addEventListener('click', function () { self._submit(); });
+    footer.appendChild(this._submitBtn);
+
+    this._container.appendChild(footer);
+  }
+
+  _renderList() {
+    if (!this._listEl) return;
+    this._listEl.innerHTML = '';
+
+    // Sort by priority (lower number = higher priority)
+    var sorted = this._scenarios.slice().sort(function (a, b) {
+      return (a.priority || 99) - (b.priority || 99);
+    });
+
+    for (var i = 0; i < sorted.length; i++) {
+      this._listEl.appendChild(this._createScenarioCard(sorted[i]));
+    }
+  }
+
+  _createScenarioCard(scn) {
+    var self = this;
+    var isApproved = this._approved.has(scn.id);
+
+    var card = document.createElement('div');
+    card.className = 'qa-card qa-curation-card';
+    if (!isApproved) card.classList.add('excluded');
+    card.dataset.scenarioId = scn.id;
+
+    // Checkbox toggle
+    var checkbox = document.createElement('div');
+    checkbox.className = 'qa-curation-check';
+    checkbox.tabIndex = 0;
+    checkbox.setAttribute('role', 'checkbox');
+    checkbox.setAttribute('aria-checked', isApproved ? 'true' : 'false');
+    checkbox.textContent = isApproved ? '\u2611' : '\u2610';
+    checkbox.addEventListener('click', function () { self._toggleScenario(scn.id); });
+    checkbox.addEventListener('keydown', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        self._toggleScenario(scn.id);
+      }
+    });
+    card.appendChild(checkbox);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'qa-curation-body';
+
+    var titleRow = document.createElement('div');
+    titleRow.className = 'qa-curation-title-row';
+
+    var titleEl = document.createElement('div');
+    titleEl.className = 'qa-curation-title';
+    titleEl.textContent = scn.title;
+    titleRow.appendChild(titleEl);
+
+    var prioEl = document.createElement('span');
+    prioEl.className = 'qa-priority-badge';
+    prioEl.textContent = 'P' + (scn.priority || '?');
+    titleRow.appendChild(prioEl);
+
+    body.appendChild(titleRow);
+
+    // Category + stimulus metadata
+    var metaEl = document.createElement('div');
+    metaEl.className = 'qa-curation-meta';
+
+    var catBadge = document.createElement('span');
+    var catKey = (scn.category || 'unknown').replace(/_/g, '-');
+    catBadge.className = 'qa-category-badge qa-cat-' + catKey;
+    catBadge.textContent = (scn.category || 'unknown').replace(/_/g, ' ');
+    metaEl.appendChild(catBadge);
+
+    if (scn.stimulus && scn.stimulus.type) {
+      var stimEl = document.createElement('span');
+      stimEl.className = 'qa-stimulus-badge';
+      stimEl.textContent = scn.stimulus.type.replace(/_/g, ' ');
+      metaEl.appendChild(stimEl);
+    }
+
+    var expCount = document.createElement('span');
+    expCount.className = 'qa-exp-count';
+    var n = scn.expectations ? scn.expectations.length : 0;
+    expCount.textContent = n + ' expectation' + (n !== 1 ? 's' : '');
+    metaEl.appendChild(expCount);
+
+    body.appendChild(metaEl);
+
+    if (scn.description) {
+      var descEl = document.createElement('div');
+      descEl.className = 'qa-curation-desc';
+      descEl.textContent = scn.description;
+      body.appendChild(descEl);
+    }
+
+    card.appendChild(body);
+
+    // Actions
+    var actions = document.createElement('div');
+    actions.className = 'qa-curation-actions';
+
+    var editBtn = document.createElement('button');
+    editBtn.className = 'qa-btn qa-btn-sm';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      self._panel.openEditor(scn);
+    });
+    actions.appendChild(editBtn);
+
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'qa-btn qa-btn-sm qa-btn-danger';
+    deleteBtn.textContent = '\u2715';
+    deleteBtn.title = 'Remove scenario';
+    deleteBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      self._deleteScenario(scn.id);
+    });
+    actions.appendChild(deleteBtn);
+
+    card.appendChild(actions);
+    return card;
+  }
+
+  // ── Toggle / Delete ──
+
+  _toggleScenario(id) {
+    if (this._approved.has(id)) {
+      this._approved.delete(id);
+    } else {
+      this._approved.add(id);
+    }
+    this._renderList();
+    this._updateStats();
+  }
+
+  _deleteScenario(id) {
+    this._scenarios = this._scenarios.filter(function (s) { return s.id !== id; });
+    this._approved.delete(id);
+    this._renderList();
+    this._updateStats();
+  }
+
+  _updateStats(el) {
+    var statsEl = el || document.getElementById('qaCurationStats');
+    if (!statsEl) return;
+    statsEl.textContent = this._approved.size + ' of ' + this._scenarios.length + ' approved';
+    if (this._submitBtn) {
+      this._submitBtn.textContent = 'Run Approved (' + this._approved.size + ') \u25B8';
+      this._submitBtn.disabled = this._approved.size === 0;
+    }
+  }
+
+  // ── Submit ──
+
+  _submit() {
+    var self = this;
+    var approved = this._scenarios.filter(function (s) { return self._approved.has(s.id); });
+    if (!approved.length) return;
+
+    var conn = this._panel.getConnection();
+    if (!conn) return;
+
+    this._submitBtn.disabled = true;
+    this._submitBtn.textContent = 'Submitting\u2026';
+
+    var corrId = this._panel.getCorrelationId();
+    var submission = {
+      correlationId: corrId,
+      analysisId: this._analysisId,
+      scenarios: approved
+    };
+
+    conn.invoke('QaSubmitCuratedScenarios', submission).then(function (result) {
+      if (result && result.success) {
+        self._panel.setRunId(result.runId);
+        var runRequest = {
+          correlationId: self._panel.getCorrelationId(),
+          runId: result.runId,
+          scenarioIds: null,
+          options: {
+            stopOnFirstFailure: false,
+            interScenarioDelayMs: 500,
+            globalTimeoutMs: 1800000
+          }
+        };
+        return conn.invoke('QaStartRun', runRequest);
+      }
+      throw new Error((result && result.message) || 'Submission failed');
+    }).then(function (runResult) {
+      if (runResult && runResult.success) {
+        if (self._panel._execution) {
+          self._panel._execution.startTracking(approved);
+        }
+        self._panel.goToStage('execution');
+        return;
+      }
+      throw new Error((runResult && runResult.message) || 'Run start failed');
+    }).catch(function (err) {
+      self._submitBtn.disabled = false;
+      self._submitBtn.textContent = 'Run Approved (' + self._approved.size + ') \u25B8';
+      if (window.edogToast) {
+        window.edogToast.show('Submission error: ' + (err.message || err), 'error');
+      }
+    });
+  }
+
+  /** Update a scenario after editing in the overlay. */
+  updateScenario(updated) {
+    for (var i = 0; i < this._scenarios.length; i++) {
+      if (this._scenarios[i].id === updated.id) {
+        this._scenarios[i] = updated;
+        break;
+      }
+    }
+    this._renderList();
+  }
+}
+
+// === js/qa-execution.js ===
+/**
+ * QA Execution Stage — Real-time scenario execution display.
+ *
+ * Owns qaExecutionContainer. Renders scenarios as a vertical list with
+ * expandable detail for the active scenario. Phase progress, expectation
+ * matches, and verdicts update in real-time via SignalR events.
+ */
+class QaExecution {
+  constructor(panel) {
+    this._panel = panel;
+    this._container = null;
+    this._scenarios = [];       // scenario definitions
+    this._scenarioEls = {};     // id -> DOM element
+    this._activeScenarioId = null;
+    this._isRunning = false;    // used by QaPanel for kill switch
+    this._runStartedAt = null;
+    this._timerInterval = null;
+    this._headerEl = null;
+  }
+
+  init() {
+    this._container = document.getElementById('qaExecutionContainer');
+    this._panel.registerExecution(this);
+  }
+
+  /** Called by QaCuration when submitting scenarios */
+  startTracking(scenarios) {
+    this._scenarios = scenarios.slice();
+    this._isRunning = true;
+    this._activeScenarioId = null;
+    this._runStartedAt = Date.now();
+    this._render();
+    this._startTimer();
+  }
+
+  _render() {
+    if (!this._container) return;
+    this._container.innerHTML = '';
+    this._scenarioEls = {};
+
+    // ── Header with progress ──
+    this._headerEl = document.createElement('div');
+    this._headerEl.className = 'qa-exec-header';
+
+    var titleEl = document.createElement('h3');
+    titleEl.textContent = 'Executing ' + this._scenarios.length + ' scenarios';
+    this._headerEl.appendChild(titleEl);
+
+    var progressEl = document.createElement('div');
+    progressEl.className = 'qa-exec-progress';
+
+    var barOuter = document.createElement('div');
+    barOuter.className = 'qa-progress-bar';
+    var barInner = document.createElement('div');
+    barInner.className = 'qa-progress-bar-fill';
+    barInner.id = 'qaExecProgressFill';
+    barInner.style.width = '0%';
+    barOuter.appendChild(barInner);
+    progressEl.appendChild(barOuter);
+
+    var statsEl = document.createElement('span');
+    statsEl.className = 'qa-exec-stats';
+    statsEl.id = 'qaExecStats';
+    statsEl.textContent = '0 / ' + this._scenarios.length;
+    progressEl.appendChild(statsEl);
+
+    var timerEl = document.createElement('span');
+    timerEl.className = 'qa-exec-timer';
+    timerEl.id = 'qaExecTimer';
+    timerEl.textContent = '0:00';
+    progressEl.appendChild(timerEl);
+
+    this._headerEl.appendChild(progressEl);
+    this._container.appendChild(this._headerEl);
+
+    // ── Scenario list ──
+    var list = document.createElement('div');
+    list.className = 'qa-exec-list';
+    list.id = 'qaExecList';
+
+    for (var i = 0; i < this._scenarios.length; i++) {
+      var scn = this._scenarios[i];
+      var row = this._createScenarioRow(scn, i);
+      list.appendChild(row);
+      this._scenarioEls[scn.id] = row;
+    }
+
+    this._container.appendChild(list);
+  }
+
+  _createScenarioRow(scn, index) {
+    var row = document.createElement('div');
+    row.className = 'qa-exec-row pending';
+    row.dataset.scenarioId = scn.id;
+
+    // ── Index + Status icon ──
+    var statusEl = document.createElement('span');
+    statusEl.className = 'qa-exec-status';
+    statusEl.textContent = (index + 1) + '.';
+    row.appendChild(statusEl);
+
+    // ── Title ──
+    var titleEl = document.createElement('span');
+    titleEl.className = 'qa-exec-title';
+    titleEl.textContent = scn.title;
+    row.appendChild(titleEl);
+
+    // ── Phase indicator ──
+    var phaseEl = document.createElement('span');
+    phaseEl.className = 'qa-exec-phase';
+    phaseEl.dataset.field = 'phase';
+    row.appendChild(phaseEl);
+
+    // ── Verdict badge ──
+    var verdictEl = document.createElement('span');
+    verdictEl.className = 'qa-verdict';
+    verdictEl.dataset.field = 'verdict';
+    row.appendChild(verdictEl);
+
+    // ── Expandable detail (expectations) ──
+    var detail = document.createElement('div');
+    detail.className = 'qa-exec-detail';
+    detail.dataset.field = 'detail';
+    detail.style.display = 'none';
+
+    // Pre-render expectation rows
+    if (scn.expectations) {
+      for (var j = 0; j < scn.expectations.length; j++) {
+        var exp = scn.expectations[j];
+        var expRow = document.createElement('div');
+        expRow.className = 'qa-exec-exp pending';
+        expRow.dataset.expId = exp.id;
+
+        var expIcon = document.createElement('span');
+        expIcon.className = 'qa-exec-exp-icon';
+        expIcon.textContent = '\u25CB'; // ○
+
+        var expDesc = document.createElement('span');
+        expDesc.className = 'qa-exec-exp-desc';
+        expDesc.textContent = exp.description || exp.id;
+
+        expRow.appendChild(expIcon);
+        expRow.appendChild(expDesc);
+        detail.appendChild(expRow);
+      }
+    }
+
+    row.appendChild(detail);
+    return row;
+  }
+
+  // ── Event Handlers ──
+
+  onRunStarted(data) {
+    this._isRunning = true;
+    this._runStartedAt = Date.now();
+  }
+
+  onScenarioStarted(data) {
+    this._activeScenarioId = data.scenarioId;
+    var row = this._scenarioEls[data.scenarioId];
+    if (!row) return;
+
+    row.classList.remove('pending');
+    row.classList.add('running');
+
+    // Show detail
+    var detail = row.querySelector('[data-field="detail"]');
+    if (detail) detail.style.display = '';
+
+    // Set phase
+    var phaseEl = row.querySelector('[data-field="phase"]');
+    if (phaseEl) phaseEl.textContent = data.phase || 'isolate';
+
+    // Scroll into view
+    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  onPhaseChanged(data) {
+    var row = this._scenarioEls[data.scenarioId];
+    if (!row) return;
+    var phaseEl = row.querySelector('[data-field="phase"]');
+    if (phaseEl) phaseEl.textContent = data.phase || '';
+  }
+
+  onExpectationMatched(data) {
+    var row = this._scenarioEls[data.scenarioId];
+    if (!row) return;
+    var expRow = row.querySelector('[data-exp-id="' + data.expectationId + '"]');
+    if (!expRow) return;
+
+    var icon = expRow.querySelector('.qa-exec-exp-icon');
+    expRow.classList.remove('pending');
+
+    if (data.status === 'passed') {
+      expRow.classList.add('passed');
+      if (icon) icon.textContent = '\u25CF'; // ●
+    } else if (data.status === 'failed') {
+      expRow.classList.add('failed');
+      if (icon) icon.textContent = '\u2715'; // ✕
+    } else if (data.status === 'timeout') {
+      expRow.classList.add('timeout');
+      if (icon) icon.textContent = '\u25D4'; // ◔
+    }
+  }
+
+  onScenarioCompleted(data) {
+    var row = this._scenarioEls[data.scenarioId];
+    if (!row) return;
+
+    row.classList.remove('running');
+    row.classList.add('completed');
+
+    // Collapse detail
+    var detail = row.querySelector('[data-field="detail"]');
+    if (detail) detail.style.display = 'none';
+
+    // Set verdict
+    var verdictEl = row.querySelector('[data-field="verdict"]');
+    if (verdictEl) {
+      var verdict = data.verdict || data.overallVerdict || 'unknown';
+      verdictEl.textContent = verdict;
+      verdictEl.className = 'qa-verdict ' + verdict.toLowerCase();
+    }
+
+    // Clear phase
+    var phaseEl = row.querySelector('[data-field="phase"]');
+    if (phaseEl) phaseEl.textContent = '';
+
+    // Update progress
+    this._updateProgress();
+  }
+
+  onRunCompleted(data) {
+    this._isRunning = false;
+    this._stopTimer();
+
+    // Update header
+    if (this._headerEl) {
+      var title = this._headerEl.querySelector('h3');
+      if (title) title.textContent = 'Execution Complete';
+    }
+
+    // Show "View Results" button
+    if (this._container) {
+      var self = this;
+      var footer = document.createElement('div');
+      footer.className = 'qa-exec-footer';
+      var btn = document.createElement('button');
+      btn.className = 'qa-btn primary';
+      btn.textContent = 'View Results \u25B8';
+      btn.addEventListener('click', function () {
+        self._panel.goToStage('results');
+        if (self._panel._results) {
+          self._panel._results.loadRun(self._panel.getRunId());
+        }
+      });
+      footer.appendChild(btn);
+      this._container.appendChild(footer);
+    }
+  }
+
+  // ── Progress ──
+
+  _updateProgress() {
+    var completed = 0;
+    var els = this._container ? this._container.querySelectorAll('.qa-exec-row.completed') : [];
+    completed = els.length;
+
+    var fill = document.getElementById('qaExecProgressFill');
+    if (fill) fill.style.width = Math.round((completed / this._scenarios.length) * 100) + '%';
+
+    var stats = document.getElementById('qaExecStats');
+    if (stats) stats.textContent = completed + ' / ' + this._scenarios.length;
+  }
+
+  // ── Timer ──
+
+  _startTimer() {
+    this._stopTimer();
+    var self = this;
+    this._timerInterval = setInterval(function () {
+      var elapsed = Date.now() - self._runStartedAt;
+      var secs = Math.floor(elapsed / 1000);
+      var mins = Math.floor(secs / 60);
+      secs = secs % 60;
+      var el = document.getElementById('qaExecTimer');
+      if (el) el.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+    }, 1000);
+  }
+
+  _stopTimer() {
+    if (this._timerInterval) {
+      clearInterval(this._timerInterval);
+      this._timerInterval = null;
+    }
+  }
+
+  /** Reset for a new run */
+  reset() {
+    this._isRunning = false;
+    this._stopTimer();
+    this._scenarios = [];
+    this._scenarioEls = {};
+    this._activeScenarioId = null;
+    if (this._container) this._container.innerHTML = '';
+  }
+}
+
+// === js/qa-results.js ===
+/**
+ * QA Results Stage — Run results display with summary and detail cards.
+ *
+ * Owns qaResultsContainer. Loads run results from QaGetRunDetail.
+ * Shows overall summary, per-scenario verdicts, expectation outcomes.
+ */
+class QaResults {
+  constructor(panel) {
+    this._panel = panel;
+    this._container = null;
+    this._runResult = null;
+    this._history = [];
+  }
+
+  init() {
+    this._container = document.getElementById('qaResultsContainer');
+    this._panel.registerResults(this);
+  }
+
+  /** Load results for a specific run */
+  loadRun(runId) {
+    if (!runId || !this._container) return;
+
+    this._container.innerHTML = '';
+    this._showLoading();
+
+    var conn = this._panel.getConnection();
+    if (!conn) {
+      this._showError('Not connected');
+      return;
+    }
+
+    var corrId = this._panel.getCorrelationId();
+    conn.invoke('QaGetRunDetail', corrId, runId).then(result => {
+      this._runResult = result;
+      this._render();
+    }).catch(err => {
+      this._showError('Failed to load results: ' + (err.message || err));
+    });
+  }
+
+  _showLoading() {
+    if (!this._container) return;
+    var el = document.createElement('div');
+    el.className = 'qa-empty-state';
+    el.textContent = 'Loading results\u2026';
+    this._container.appendChild(el);
+  }
+
+  _showError(msg) {
+    if (!this._container) return;
+    this._container.innerHTML = '';
+    var el = document.createElement('div');
+    el.className = 'qa-empty-state';
+    el.textContent = msg;
+    this._container.appendChild(el);
+  }
+
+  _render() {
+    if (!this._container || !this._runResult) return;
+    this._container.innerHTML = '';
+
+    var run = this._runResult;
+
+    // ── Summary Card ──
+    var summary = document.createElement('div');
+    summary.className = 'qa-results-summary';
+
+    var overallEl = document.createElement('div');
+    overallEl.className = 'qa-results-overall ' + (run.overallPass ? 'passed' : 'failed');
+    overallEl.textContent = run.overallPass ? 'ALL PASSED' : 'FAILURES DETECTED';
+    summary.appendChild(overallEl);
+
+    // Verdict counts
+    var countsEl = document.createElement('div');
+    countsEl.className = 'qa-results-counts';
+    var s = run.summary || {};
+    var countItems = [
+      { label: 'Passed', value: s.passed || 0, cls: 'passed' },
+      { label: 'Failed', value: s.failed || 0, cls: 'failed' },
+      { label: 'Timeout', value: s.timedOut || 0, cls: 'timeout' },
+      { label: 'Skipped', value: s.skipped || 0, cls: 'skipped' }
+    ];
+    for (var i = 0; i < countItems.length; i++) {
+      var ci = countItems[i];
+      var countEl = document.createElement('div');
+      countEl.className = 'qa-results-count ' + ci.cls;
+      var numEl = document.createElement('span');
+      numEl.className = 'qa-results-count-num';
+      numEl.textContent = ci.value;
+      var lblEl = document.createElement('span');
+      lblEl.className = 'qa-results-count-label';
+      lblEl.textContent = ci.label;
+      countEl.appendChild(numEl);
+      countEl.appendChild(lblEl);
+      countsEl.appendChild(countEl);
+    }
+    summary.appendChild(countsEl);
+
+    // Duration
+    if (run.totalDurationMs) {
+      var durEl = document.createElement('div');
+      durEl.className = 'qa-results-duration';
+      durEl.textContent = 'Duration: ' + (run.totalDurationMs / 1000).toFixed(1) + 's';
+      summary.appendChild(durEl);
+    }
+
+    this._container.appendChild(summary);
+
+    // ── Scenario Detail Cards ──
+    var scenarios = run.scenarios || run.scenarioResults || [];
+    if (scenarios.length) {
+      var listHeader = document.createElement('h4');
+      listHeader.className = 'qa-results-list-header';
+      listHeader.textContent = 'Scenario Results (' + scenarios.length + ')';
+      this._container.appendChild(listHeader);
+
+      var list = document.createElement('div');
+      list.className = 'qa-results-list';
+
+      for (var j = 0; j < scenarios.length; j++) {
+        list.appendChild(this._createResultCard(scenarios[j], j));
+      }
+      this._container.appendChild(list);
+    }
+
+    // ── Actions ──
+    var actions = document.createElement('div');
+    actions.className = 'qa-results-actions';
+
+    var rerunBtn = document.createElement('button');
+    rerunBtn.className = 'qa-btn';
+    rerunBtn.textContent = '\u21BB Re-run';
+    rerunBtn.addEventListener('click', () => {
+      this._panel.goToStage('curation');
+    });
+    actions.appendChild(rerunBtn);
+
+    var newPrBtn = document.createElement('button');
+    newPrBtn.className = 'qa-btn primary';
+    newPrBtn.textContent = 'New PR \u25B8';
+    newPrBtn.addEventListener('click', () => {
+      if (this._panel._input) this._panel._input.reset();
+      this._panel.goToStage('input');
+    });
+    actions.appendChild(newPrBtn);
+
+    this._container.appendChild(actions);
+  }
+
+  _createResultCard(scn, index) {
+    var card = document.createElement('div');
+    card.className = 'qa-card qa-result-card';
+    card.tabIndex = 0;
+
+    // ── Header row ──
+    var header = document.createElement('div');
+    header.className = 'qa-result-header';
+
+    var numEl = document.createElement('span');
+    numEl.className = 'qa-result-num';
+    numEl.textContent = (index + 1) + '.';
+    header.appendChild(numEl);
+
+    var titleEl = document.createElement('span');
+    titleEl.className = 'qa-result-title';
+    titleEl.textContent = scn.title || scn.scenarioId || 'Scenario';
+    header.appendChild(titleEl);
+
+    var verdict = scn.verdict || scn.overallVerdict || 'unknown';
+    var verdictEl = document.createElement('span');
+    verdictEl.className = 'qa-verdict ' + verdict.toLowerCase();
+    verdictEl.textContent = verdict.toUpperCase();
+    header.appendChild(verdictEl);
+
+    card.appendChild(header);
+
+    // ── Expandable detail ──
+    var detail = document.createElement('div');
+    detail.className = 'qa-result-detail';
+    detail.style.display = 'none';
+
+    // Category + timing
+    var metaEl = document.createElement('div');
+    metaEl.className = 'qa-result-meta';
+    if (scn.category) {
+      var catBadge = document.createElement('span');
+      catBadge.className = 'qa-category-badge qa-cat-' + scn.category.replace(/_/g, '-');
+      catBadge.textContent = scn.category.replace(/_/g, ' ');
+      metaEl.appendChild(catBadge);
+    }
+    if (scn.durationMs != null) {
+      var timingEl = document.createElement('span');
+      timingEl.className = 'qa-result-timing';
+      timingEl.textContent = (scn.durationMs / 1000).toFixed(2) + 's';
+      metaEl.appendChild(timingEl);
+    }
+    detail.appendChild(metaEl);
+
+    // Expectations
+    var expectations = scn.expectations || scn.expectationResults || [];
+    if (expectations.length) {
+      var expList = document.createElement('div');
+      expList.className = 'qa-result-expectations';
+      for (var k = 0; k < expectations.length; k++) {
+        var exp = expectations[k];
+        var expRow = document.createElement('div');
+        expRow.className = 'qa-result-exp ' + (exp.status || 'unknown');
+
+        var expIcon = document.createElement('span');
+        expIcon.className = 'qa-result-exp-icon';
+        if (exp.status === 'passed') expIcon.textContent = '\u25CF';
+        else if (exp.status === 'failed') expIcon.textContent = '\u2715';
+        else if (exp.status === 'timeout') expIcon.textContent = '\u25D4';
+        else expIcon.textContent = '\u25CB';
+
+        var expDesc = document.createElement('span');
+        expDesc.className = 'qa-result-exp-desc';
+        expDesc.textContent = exp.description || exp.id || exp.expectationId || '';
+
+        expRow.appendChild(expIcon);
+        expRow.appendChild(expDesc);
+        expList.appendChild(expRow);
+      }
+      detail.appendChild(expList);
+    }
+
+    // Failure message
+    if (scn.failureMessage) {
+      var failEl = document.createElement('div');
+      failEl.className = 'qa-result-failure';
+      failEl.textContent = scn.failureMessage;
+      detail.appendChild(failEl);
+    }
+
+    card.appendChild(detail);
+
+    // ── Toggle expand ──
+    header.addEventListener('click', function() {
+      var isOpen = detail.style.display !== 'none';
+      detail.style.display = isOpen ? 'none' : '';
+      card.classList.toggle('expanded', !isOpen);
+    });
+    header.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        header.click();
+      }
+    });
+
+    return card;
+  }
+
+  /** Load run history */
+  loadHistory() {
+    var conn = this._panel.getConnection();
+    if (!conn) return;
+    var corrId = this._panel.getCorrelationId();
+    conn.invoke('QaGetRunHistory', {
+      correlationId: corrId,
+      prId: null,
+      limit: 20,
+      offset: 0
+    }).then(results => {
+      this._history = results || [];
+    }).catch(function() { /* ignore */ });
+  }
+
+  reset() {
+    this._runResult = null;
+    if (this._container) this._container.innerHTML = '';
+  }
+}
+
+// === js/qa-editor.js ===
+/**
+ * QA Scenario Editor — Slide-from-right overlay for editing scenarios.
+ *
+ * Owns qaEditorOverlay. Opens via panel.openEditor(scenario),
+ * closes via panel.closeEditor() or Escape key. Updates scenario
+ * in QaCuration on save.
+ */
+class QaEditor {
+  constructor(panel) {
+    this._panel = panel;
+    this._overlay = null;
+    this._bodyEl = null;
+    this._titleEl = null;
+    this._scenario = null;     // the scenario being edited (deep copy)
+    this._isOpen = false;
+    this._boundKeydown = this._onKeydown.bind(this);
+  }
+
+  // ── Lifecycle ──
+
+  init() {
+    this._overlay = document.getElementById('qaEditorOverlay');
+    this._bodyEl = document.getElementById('qaEditorBody');
+    this._titleEl = document.getElementById('qaEditorTitle');
+
+    var closeBtn = document.getElementById('qaEditorClose');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.close());
+
+    var cancelBtn = document.getElementById('qaEditorCancel');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => this.close());
+
+    var saveBtn = document.getElementById('qaEditorSave');
+    if (saveBtn) saveBtn.addEventListener('click', () => this._save());
+
+    // Backdrop click closes
+    if (this._overlay) {
+      this._overlay.addEventListener('click', (e) => {
+        if (e.target === this._overlay) this.close();
+      });
+    }
+
+    this._panel.registerEditor(this);
+  }
+
+  // ── Public API ──
+
+  open(scenario) {
+    if (!scenario || !this._overlay) return;
+    this._scenario = JSON.parse(JSON.stringify(scenario));
+    this._isOpen = true;
+    this._overlay.classList.add('open');
+    if (this._titleEl) {
+      this._titleEl.textContent = 'Edit: ' + (scenario.title || scenario.id);
+    }
+    this._renderForm();
+    document.addEventListener('keydown', this._boundKeydown);
+    // Focus first input after slide animation
+    setTimeout(() => {
+      var first = this._bodyEl && this._bodyEl.querySelector('input, textarea, select');
+      if (first) first.focus();
+    }, 100);
+  }
+
+  close() {
+    this._isOpen = false;
+    if (this._overlay) this._overlay.classList.remove('open');
+    this._scenario = null;
+    document.removeEventListener('keydown', this._boundKeydown);
+  }
+
+  get isOpen() { return this._isOpen; }
+
+  // ── Keyboard ──
+
+  _onKeydown(e) {
+    if (!this._isOpen) return;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      this.close();
+      return;
+    }
+    // Focus trap: Tab cycles within the panel
+    if (e.key === 'Tab') {
+      var panel = document.getElementById('qaEditorPanel');
+      if (!panel) return;
+      var focusable = panel.querySelectorAll(
+        'input, textarea, select, button, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+  }
+
+  // ── Form Rendering ──
+
+  _renderForm() {
+    if (!this._bodyEl || !this._scenario) return;
+    this._bodyEl.innerHTML = '';
+    var scn = this._scenario;
+
+    // Title
+    this._addField('Title', 'text', scn.title, 'qa-editor-title-input',
+      function(val) { scn.title = val; });
+
+    // Category
+    this._addSelect('Category',
+      ['happy_path', 'error_path', 'edge_case', 'regression', 'performance'],
+      scn.category, function(val) { scn.category = val; });
+
+    // Priority
+    this._addField('Priority', 'number', scn.priority, 'qa-editor-priority',
+      function(val) { scn.priority = parseInt(val, 10) || 1; },
+      { min: 1, max: 10 });
+
+    // Timeout
+    this._addField('Timeout (ms)', 'number', scn.timeout, 'qa-editor-timeout',
+      function(val) { scn.timeout = parseInt(val, 10) || 20000; },
+      { min: 1000, max: 60000, step: 1000 });
+
+    // Stimulus (JSON)
+    var stimLabel = document.createElement('label');
+    stimLabel.className = 'qa-editor-label';
+    stimLabel.textContent = 'Stimulus (JSON)';
+    this._bodyEl.appendChild(stimLabel);
+
+    var stimArea = document.createElement('textarea');
+    stimArea.className = 'qa-editor-textarea';
+    stimArea.rows = 6;
+    stimArea.value = JSON.stringify(scn.stimulus || {}, null, 2);
+    stimArea.addEventListener('input', function() {
+      try {
+        scn.stimulus = JSON.parse(stimArea.value);
+        stimArea.classList.remove('qa-editor-invalid');
+      } catch (_) {
+        stimArea.classList.add('qa-editor-invalid');
+      }
+    });
+    this._bodyEl.appendChild(stimArea);
+
+    // Expectations (JSON array)
+    var expCount = scn.expectations ? scn.expectations.length : 0;
+    var expLabel = document.createElement('label');
+    expLabel.className = 'qa-editor-label';
+    expLabel.textContent = 'Expectations (' + expCount + ')';
+    this._bodyEl.appendChild(expLabel);
+
+    var expArea = document.createElement('textarea');
+    expArea.className = 'qa-editor-textarea';
+    expArea.rows = 10;
+    expArea.value = JSON.stringify(scn.expectations || [], null, 2);
+    expArea.addEventListener('input', function() {
+      try {
+        var parsed = JSON.parse(expArea.value);
+        if (Array.isArray(parsed)) {
+          scn.expectations = parsed;
+          expArea.classList.remove('qa-editor-invalid');
+        }
+      } catch (_) {
+        expArea.classList.add('qa-editor-invalid');
+      }
+    });
+    this._bodyEl.appendChild(expArea);
+
+    // Description
+    this._addField('Description', 'textarea', scn.description || '', 'qa-editor-desc',
+      function(val) { scn.description = val; });
+  }
+
+  // ── Field Helpers ──
+
+  _addField(label, type, value, id, onChange, attrs) {
+    var labelEl = document.createElement('label');
+    labelEl.className = 'qa-editor-label';
+    labelEl.textContent = label;
+    this._bodyEl.appendChild(labelEl);
+
+    var input;
+    if (type === 'textarea') {
+      input = document.createElement('textarea');
+      input.className = 'qa-editor-textarea';
+      input.rows = 3;
+      input.value = value || '';
+    } else {
+      input = document.createElement('input');
+      input.className = 'qa-editor-input';
+      input.type = type;
+      input.value = value != null ? value : '';
+    }
+    if (id) input.id = id;
+    if (attrs) {
+      for (var key in attrs) {
+        if (Object.prototype.hasOwnProperty.call(attrs, key)) {
+          input[key] = attrs[key];
+        }
+      }
+    }
+    input.addEventListener('input', function() { onChange(input.value); });
+    this._bodyEl.appendChild(input);
+    return input;
+  }
+
+  _addSelect(label, options, current, onChange) {
+    var labelEl = document.createElement('label');
+    labelEl.className = 'qa-editor-label';
+    labelEl.textContent = label;
+    this._bodyEl.appendChild(labelEl);
+
+    var select = document.createElement('select');
+    select.className = 'qa-editor-select';
+    for (var i = 0; i < options.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = options[i];
+      opt.textContent = options[i].replace(/_/g, ' ');
+      if (options[i] === current) opt.selected = true;
+      select.appendChild(opt);
+    }
+    select.addEventListener('change', function() { onChange(select.value); });
+    this._bodyEl.appendChild(select);
+    return select;
+  }
+
+  // ── Save ──
+
+  _save() {
+    if (!this._scenario) return;
+    if (this._panel._curation) {
+      this._panel._curation.updateScenario(this._scenario);
+    }
+    window.edogToast && window.edogToast.show('Scenario updated', 'info');
+    this.close();
+  }
+}
+
 // === js/main.js ===
 /**
  * EDOG Studio — Main Application Orchestrator
@@ -67415,6 +72376,9 @@ class EdogLogViewer {
 
     // DAG Studio (lazy-initialized on first view activation)
     this.dagStudio = null;
+
+    // QA Testing (F27) — lazy-initialized on first view activation
+    this.qaPanel = null;
 
     // Smart feature modules
     this.autoDetector = new AutoDetector(this.state);
@@ -67568,6 +72532,7 @@ class EdogLogViewer {
                 this.topbar.setDeployStatus('connected');
                 this.sidebar.setPhase('connected');
                 if (this.runtimeView) this.runtimeView.setPhase('connected');
+                if (this.qaPanel) this.qaPanel.setPhase('connected');
                 if (s.fltPort && this.ws) {
                   this.ws.setPort(s.fltPort);
                   if (this.runtimeView) this.runtimeView.setPort(s.fltPort);
@@ -67587,6 +72552,7 @@ class EdogLogViewer {
       } else if (state.phase === 'running') {
         this.sidebar.setPhase('connected');
         if (this.runtimeView) this.runtimeView.setPhase('connected');
+        if (this.qaPanel) this.qaPanel.setPhase('connected');
         this.topbar.setDeployStatus('connected');
         if (state.fltPort) {
           this.ws.setPort(state.fltPort);
@@ -68108,6 +73074,17 @@ class EdogLogViewer {
       this.dagStudio.activate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
+      if (this.qaPanel) this.qaPanel.deactivate();
+    } else if (viewId === 'qa') {
+      if (!this.qaPanel) {
+        this.qaPanel = new QaPanel(this.ws);
+        this.qaPanel.init();
+        this.qaPanel.setPhase(this.sidebar._phase);
+      }
+      this.qaPanel.activate();
+      if (this.dagStudio) this.dagStudio.deactivate();
+      if (this.apiPlayground) this.apiPlayground.deactivate();
+      if (this.controlPanel) this.controlPanel.deactivate();
     } else if (viewId === 'api') {
       if (!this.apiPlayground) {
         this.apiPlayground = new ApiPlayground(
@@ -68123,6 +73100,7 @@ class EdogLogViewer {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
+      if (this.qaPanel) this.qaPanel.deactivate();
     }
   }
 
@@ -68546,35 +73524,16 @@ class EdogLogViewer {
   }
 
   showExportToast = (countOrMessage, formatOrType) => {
-    // Remove any existing toast
-    const prev = document.querySelector('.export-toast');
-    if (prev) prev.remove();
-
     const formatLabels = { json: 'JSON', csv: 'CSV', txt: 'Plain Text' };
-    let message, variant;
-
+    var message, variant;
     if (typeof countOrMessage === 'number') {
-      message = `Exported ${countOrMessage.toLocaleString()} entries as ${formatLabels[formatOrType] || formatOrType}`;
-      variant = '';
+      message = 'Exported ' + countOrMessage.toLocaleString() + ' entries as ' + (formatLabels[formatOrType] || formatOrType);
+      variant = 'success';
     } else {
       message = countOrMessage;
-      variant = formatOrType || '';
+      variant = formatOrType || 'info';
     }
-
-    const toast = document.createElement('div');
-    toast.className = 'export-toast';
-    if (variant) toast.classList.add(variant);
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    requestAnimationFrame(() => toast.classList.add('visible'));
-
-    setTimeout(() => {
-      toast.classList.remove('visible');
-      toast.addEventListener('transitionend', () => toast.remove(), { once: true });
-      // Fallback removal if transitionend doesn't fire
-      setTimeout(() => { if (toast.parentNode) toast.remove(); }, 500);
-    }, 3000);
+    window.edogToast(message, variant);
   }
 
   exportLogs = () => {

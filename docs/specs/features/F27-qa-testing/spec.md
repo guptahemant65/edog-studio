@@ -1160,23 +1160,18 @@ Pipeline YAML snippet:
 
 ---
 
-## 11. Open Questions for CEO
+## 11. Design Decisions (Resolved)
 
-1. **Scenario persistence across PRs:** Should scenarios generated for PR #100 be available as templates when a similar change appears in PR #200? (Pro: reduces generation time. Con: stale scenarios if code evolved.)
-
-2. **PR gate strictness:** When integrated with CI, should ANY failure block the PR, or should there be a configurable threshold (e.g., "80% pass rate is acceptable")? Current design: configurable, default 100%.
-
-3. **Multi-developer conflict:** If two developers run F27 simultaneously against the same FLT instance, scenarios will interfere. Should F27 enforce single-writer lock, or support multiple recording sessions with correlation ID isolation?
-
-4. **Scope of code access for Roslyn:** The full FLT solution is ~400K lines. Should Roslyn analyze the full solution on every run (slow but thorough), or only the changed files + 4 levels of callers (fast but might miss long-range effects)?
-
-5. **Cost allocation:** GPT-5.4-pro calls cost ~$0.05-0.15 per PR analysis. Should this be metered per-developer, per-team, or unlimited within the EDOG license?
-
-6. **Scenario library:** Should there be a shared team-wide library of "blessed" scenarios that are always run regardless of PR content (regression suite)? Or is F27 purely PR-diff-driven?
-
-7. **Notification on completion:** For CI runs that take minutes, should F27 notify via Teams/email when done, or is PR comment sufficient?
-
-8. **Known interceptor gaps priority:** Should F27 V1 ship with a prominent "coverage gap" indicator showing which code paths in the PR are NOT observable by interceptors? This would explicitly set expectations about what F27 CAN'T test.
+| # | Question | Decision | Rationale |
+|---|----------|----------|-----------|
+| 1 | Scenario persistence across PRs | **Yes — reuse as templates** | Scenarios from PR #100 available as templates when similar code changes appear in PR #200. Reduces generation time. Stale scenarios auto-detected by Roslyn (if referenced method no longer exists). |
+| 2 | PR gate strictness | **100% strict** | ANY failure blocks the PR. No configurable threshold. If a scenario fails, it must be investigated. Zero-tolerance ensures trust in the system. |
+| 3 | Multi-developer conflict | **Not a concern** | Each developer uses their own capacity + workspace + lakehouse + notebook. Single FLT instance per dev. No shared state, no concurrency issue. |
+| 4 | Roslyn analysis scope | **Full solution always** | Analyze all 400K lines. Thoroughness over speed. Long-range effects must not be missed. Cache the workspace after first load to amortize cost (~10s first run, <2s subsequent). |
+| 5 | Cost allocation | **Not a concern for now** | GPT-5.4-pro costs absorbed. No metering, no budgets. Revisit if usage explodes. |
+| 6 | Scenario library | **Purely PR-diff-driven** | No blessed regression suite. Every run is fresh, driven by what THIS PR changes. Templates from Q1 provide continuity without a static library. |
+| 7 | Notification on completion | **Configurable** | Default: PR comment only. Optionally: Teams webhook, email. Configured in `~/.edog/config.json` under `qa.notifications`. |
+| 8 | Coverage gap indicator | **Yes — prominent warning** | Results display a visible "⚠ Unobservable Paths" section listing code touched by the PR that interceptors cannot observe (Spark/GTS, Notebook API, Orchestrator). Sets honest expectations about what F27 CAN'T test. |
 
 ---
 

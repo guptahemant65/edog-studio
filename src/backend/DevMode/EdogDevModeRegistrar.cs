@@ -50,6 +50,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // patch to DagExecutionHandlerV2.cs — adds our hook to the inline hook list.
                 // NodeExecutor wrapping needs a patch at the creation point. See gaps-roadmap.md Gap 2.
 
+                // QA Testing engines (F27) — singletons, initialized once
+                RegisterQaServices();
+
                 // Nexus aggregator — consumes topic events, emits dependency graph snapshots
                 StartNexusAggregator();
 
@@ -322,5 +325,120 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Console.WriteLine($"[EDOG] ✗ Nexus aggregator failed: {ex.Message}");
             }
         }
+
+        private static void RegisterQaServices()
+        {
+            try
+            {
+                // Register the "qa" topic buffer for QA engine status/progress events
+                EdogTopicRouter.RegisterTopic("qa", 500);
+
+                // Stub providers — real implementations wire in during Connected phase
+                var codeAnalyzer = new EdogQaCodeAnalyzer(
+                    new NullGraphProvider(),
+                    new NullOmniSharpProvider(),
+                    new NullLlmProvider(),
+                    new NullDiRegistryProvider());
+
+                // Minimal service provider for engines that require IServiceProvider
+                var serviceProvider = new Microsoft.Extensions.DependencyInjection.ServiceCollection()
+                    .BuildServiceProvider();
+
+                // Resolve IHttpClientFactory if already registered, otherwise null
+                System.Net.Http.IHttpClientFactory httpClientFactory = null;
+                try
+                {
+                    httpClientFactory = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                        System.Net.Http.IHttpClientFactory>();
+                }
+                catch { /* Not yet registered — handlers degrade gracefully */ }
+
+                var loggerFactory = Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
+
+                var stimulusDispatcher = new EdogQaStimulusDispatcher(
+                    httpClientFactory,
+                    serviceProvider,
+                    5555,
+                    loggerFactory.CreateLogger("EdogQaStimulusDispatcher"));
+
+                var executionEngine = new EdogQaExecutionEngine(
+                    stimulusDispatcher,
+                    null,  // ResultAggregator is per-run — created at execution time
+                    codeAnalyzer,
+                    loggerFactory.CreateLogger<EdogQaExecutionEngine>(),
+                    serviceProvider);
+
+                // Populate service locator for hub access
+                EdogQaServiceLocator.ExecutionEngine = executionEngine;
+                EdogQaServiceLocator.CodeAnalyzer = codeAnalyzer;
+
+                Console.WriteLine("[EDOG] ✓ QA Testing engines registered");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ QA Testing engines failed: {ex.Message}");
+            }
+        }
+
+        // ─── Stub providers for QA CodeAnalyzer (pre-Connected phase) ───
+
+        private sealed class NullGraphProvider : IGraphProvider
+        {
+            public System.Threading.Tasks.Task<CodeGraph> BuildStructuralGraphAsync(
+                System.Collections.Generic.List<ChangedSymbol> changedSymbols,
+                int maxDepth = 4,
+                System.Threading.CancellationToken cancellationToken = default)
+                => System.Threading.Tasks.Task.FromResult(new CodeGraph());
+        }
+
+        private sealed class NullOmniSharpProvider : IOmniSharpProvider
+        {
+            public bool IsReady => false;
+
+            public System.Threading.Tasks.Task WarmUpAsync(
+                string solutionPath,
+                System.Threading.CancellationToken cancellationToken = default)
+                => System.Threading.Tasks.Task.CompletedTask;
+
+            public System.Threading.Tasks.Task EnrichGraphAsync(
+                CodeGraph graph,
+                System.Collections.Generic.List<ChangedSymbol> changedSymbols,
+                int maxConcurrentQueries = 4,
+                System.Threading.CancellationToken cancellationToken = default)
+                => System.Threading.Tasks.Task.CompletedTask;
+
+            public System.Threading.Tasks.Task<System.Collections.Generic.List<string>> FindImplementationsAsync(
+                string interfaceType,
+                System.Threading.CancellationToken cancellationToken = default)
+                => System.Threading.Tasks.Task.FromResult(new System.Collections.Generic.List<string>());
+
+            public System.Threading.Tasks.Task<System.Collections.Generic.List<CallerInfo>> GetIncomingCallsAsync(
+                string filePath,
+                string methodName,
+                int maxDepth = 4,
+                System.Threading.CancellationToken cancellationToken = default)
+                => System.Threading.Tasks.Task.FromResult(new System.Collections.Generic.List<CallerInfo>());
+        }
+
+        private sealed class NullLlmProvider : ILlmProvider
+        {
+            public System.Threading.Tasks.Task<System.Collections.Generic.List<Scenario>> GenerateScenariosAsync(
+                LlmPromptRequest request,
+                System.Threading.CancellationToken cancellationToken = default)
+                => System.Threading.Tasks.Task.FromResult(new System.Collections.Generic.List<Scenario>());
+        }
+
+        private sealed class NullDiRegistryProvider : IDiRegistryProvider
+        {
+            public bool IsAvailable => false;
+            public void LoadSnapshot() { }
+            public DiRegistration Resolve(string interfaceType) => null;
+            public System.Collections.Generic.List<DiRegistration> GetAll()
+                => new System.Collections.Generic.List<DiRegistration>();
+            public InterfaceValidation ValidateMapping(string interfaceType, string inferredImpl)
+                => new InterfaceValidation { Status = "unregistered", ConfidenceDelta = 0.0 };
+        }
     }
+
+    // EdogQaServiceLocator is defined in EdogPlaygroundHub.cs
 }

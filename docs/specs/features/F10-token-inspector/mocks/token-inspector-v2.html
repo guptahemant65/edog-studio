@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F10 Token Inspector v2 — List → Decode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════
+   TOKEN INSPECTOR v2 — PHANTOM EDITION
+   List → Decode UX · All token types · Full JWT decode
+   ══════════════════════════════════════════════════════ */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* ── Light Theme (Default) ── */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --text-on-accent: #ffffff;
+
+  /* Token type colors */
+  --tok-bearer: #2d7ff9;
+  --tok-bearer-dim: rgba(45,127,249,0.08);
+  --tok-bearer-glow: rgba(45,127,249,0.15);
+  --tok-mwc: #8b5cf6;
+  --tok-mwc-dim: rgba(139,92,246,0.08);
+  --tok-mwc-glow: rgba(139,92,246,0.15);
+  --tok-s2s: #f59e0b;
+  --tok-s2s-dim: rgba(245,158,11,0.08);
+  --tok-s2s-glow: rgba(245,158,11,0.15);
+  --tok-obo: #10b981;
+  --tok-obo-dim: rgba(16,185,129,0.08);
+  --tok-obo-glow: rgba(16,185,129,0.15);
+  --tok-unknown: #8e95a5;
+  --tok-unknown-dim: rgba(142,149,165,0.08);
+  --tok-unknown-glow: rgba(142,149,165,0.15);
+
+  /* Health colors */
+  --health-green: #18a058;
+  --health-green-dim: rgba(24,160,88,0.08);
+  --health-amber: #e5940c;
+  --health-amber-dim: rgba(229,148,12,0.08);
+  --health-red: #e5453b;
+  --health-red-dim: rgba(229,69,59,0.08);
+
+  /* JWT segment colors */
+  --jwt-header: #0d9488;
+  --jwt-header-bg: rgba(13,148,136,0.08);
+  --jwt-payload: #8b5cf6;
+  --jwt-payload-bg: rgba(139,92,246,0.08);
+  --jwt-signature: #8e95a5;
+  --jwt-signature-bg: rgba(142,149,165,0.06);
+  --jwt-dot: #e5453b;
+
+  /* Fonts */
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+
+  /* Spacing — 4px grid */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px;
+
+  /* Typography scale */
+  --text-xs: 10px; --text-sm: 12px; --text-md: 13px; --text-lg: 15px; --text-xl: 18px; --text-2xl: 22px;
+
+  /* Radius */
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px; --radius-full: 100px;
+
+  /* Elevation — compound shadows */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
+  --shadow-drawer: -8px 0 32px rgba(0,0,0,0.08), -2px 0 8px rgba(0,0,0,0.04);
+
+  /* Transitions */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-fast: 80ms; --t-normal: 150ms; --t-slow: 360ms;
+
+  /* Z-index */
+  --z-overlay: 1000;
+  --z-drawer: 1001;
+  --z-toast: 1100;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0e14;
+  --surface: #14171f;
+  --surface-2: #1c2029;
+  --surface-3: #282d3a;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.10);
+  --text: #e4e7ed;
+  --text-dim: #8a91a3;
+  --text-muted: #555d70;
+  --accent: #8577ff;
+  --accent-dim: rgba(133,119,255,0.10);
+  --accent-glow: rgba(133,119,255,0.20);
+  --text-on-accent: #ffffff;
+
+  --tok-bearer: #5b9bff;
+  --tok-bearer-dim: rgba(91,155,255,0.12);
+  --tok-bearer-glow: rgba(91,155,255,0.20);
+  --tok-mwc: #a78bfa;
+  --tok-mwc-dim: rgba(167,139,250,0.12);
+  --tok-mwc-glow: rgba(167,139,250,0.20);
+  --tok-s2s: #fbbf24;
+  --tok-s2s-dim: rgba(251,191,36,0.12);
+  --tok-s2s-glow: rgba(251,191,36,0.20);
+  --tok-obo: #34d399;
+  --tok-obo-dim: rgba(52,211,153,0.12);
+  --tok-obo-glow: rgba(52,211,153,0.20);
+  --tok-unknown: #8a91a3;
+  --tok-unknown-dim: rgba(138,145,163,0.10);
+  --tok-unknown-glow: rgba(138,145,163,0.15);
+
+  --health-green: #34d399;
+  --health-green-dim: rgba(52,211,153,0.12);
+  --health-amber: #f0b429;
+  --health-amber-dim: rgba(240,180,41,0.12);
+  --health-red: #ff6b6b;
+  --health-red-dim: rgba(255,107,107,0.12);
+
+  --jwt-header: #2dd4bf;
+  --jwt-header-bg: rgba(45,212,191,0.12);
+  --jwt-payload: #a78bfa;
+  --jwt-payload-bg: rgba(167,139,250,0.12);
+  --jwt-signature: #8a91a3;
+  --jwt-signature-bg: rgba(138,145,163,0.10);
+  --jwt-dot: #ff6b6b;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.16), 0 0 1px rgba(0,0,0,0.12);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.24), 0 1px 2px rgba(0,0,0,0.16);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.32), 0 2px 4px rgba(0,0,0,0.20);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.40), 0 4px 12px rgba(0,0,0,0.28);
+  --shadow-drawer: -8px 0 32px rgba(0,0,0,0.30), -2px 0 8px rgba(0,0,0,0.20);
+}
+
+html { font-size: 13px; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ═══════ KEYFRAME ANIMATIONS (35 named) ═══════ */
+
+@keyframes drawerSlideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes drawerSlideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes cardExit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-20px); }
+}
+@keyframes scaleSpring {
+  0% { transform: scale(0.85); opacity: 0; }
+  60% { transform: scale(1.03); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes decodeSlideIn {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes decodeSlideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(40px); opacity: 0; }
+}
+@keyframes listSlideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-40px); opacity: 0; }
+}
+@keyframes listSlideIn {
+  from { transform: translateX(-40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes pulseHealth {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes pulseExpired {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--health-red-dim); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes breatheGlow {
+  0%, 100% { box-shadow: var(--shadow-sm); }
+  50% { box-shadow: var(--shadow-md), 0 0 0 2px var(--accent-glow); }
+}
+@keyframes shimmerLoad {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes countdownTick {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+@keyframes barFill {
+  from { width: 0; }
+}
+@keyframes checkPop {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes emptyFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes segmentHighlight {
+  0% { background-size: 0% 100%; }
+  100% { background-size: 100% 100%; }
+}
+@keyframes claimRowIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pillBounce {
+  0% { transform: scale(0) translateY(4px); }
+  60% { transform: scale(1.1) translateY(-1px); }
+  100% { transform: scale(1) translateY(0); }
+}
+@keyframes toastIn {
+  from { transform: translateY(10px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes toastOut {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(10px); opacity: 0; }
+}
+@keyframes headerSlideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes ripple {
+  to { transform: scale(2.5); opacity: 0; }
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.6); }
+}
+@keyframes progressShrink {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+@keyframes spinRefresh {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes jwtReveal {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 300px; }
+}
+@keyframes sectionExpand {
+  from { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
+  to { opacity: 1; max-height: 2000px; }
+}
+@keyframes accentBorder {
+  0%, 100% { border-color: var(--border); }
+  50% { border-color: var(--accent); }
+}
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════ HOST PAGE (SIMULATED EDOG STUDIO) ═══════ */
+
+.host-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.topbar {
+  height: 44px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  gap: var(--space-3);
+  flex-shrink: 0;
+  z-index: 10;
+}
+.topbar-logo {
+  font-weight: 700;
+  font-size: var(--text-lg);
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+.topbar-logo span { color: var(--accent); }
+.topbar-sep { width: 1px; height: 20px; background: var(--border-bright); }
+.topbar-status {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.topbar-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--health-green);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.topbar-btn {
+  background: none; border: 1px solid transparent;
+  color: var(--text-muted); cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; gap: var(--space-2);
+  transition: all 150ms ease;
+  position: relative;
+}
+.topbar-btn:hover { color: var(--text); background: var(--surface-2); border-color: var(--border); }
+.topbar-btn.active { color: var(--accent); background: var(--accent-dim); border-color: rgba(109,92,255,0.12); }
+.topbar-btn svg { width: 16px; height: 16px; fill: currentColor; }
+.topbar-btn .badge {
+  position: absolute; top: -2px; right: -2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); color: var(--text-on-accent);
+  font-size: 9px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  animation: badgePop 0.3s var(--ease-spring);
+}
+
+.host-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  gap: var(--space-3);
+}
+.host-content svg { width: 20px; height: 20px; fill: var(--text-muted); }
+
+/* ═══════ OVERLAY ═══════ */
+
+.ti-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.18);
+  z-index: var(--z-overlay);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  backdrop-filter: blur(2px);
+}
+.ti-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+  animation: overlayFadeIn 200ms ease forwards;
+}
+.ti-overlay.closing {
+  animation: overlayFadeOut 200ms ease forwards;
+}
+
+[data-theme="dark"] .ti-overlay { background: rgba(0,0,0,0.45); }
+
+/* ═══════ DRAWER SHELL ═══════ */
+
+.token-drawer {
+  position: fixed;
+  top: 0; right: 0;
+  width: 400px;
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-drawer);
+  transform: translateX(100%);
+  will-change: transform;
+}
+.token-drawer.open {
+  animation: drawerSlideIn 360ms var(--ease-out) forwards;
+}
+.token-drawer.closing {
+  animation: drawerSlideOut 250ms ease-in forwards;
+}
+
+/* ── Drawer Header ── */
+.td-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: var(--space-3);
+  min-height: 48px;
+}
+.td-back {
+  display: none;
+  background: none; border: none;
+  color: var(--accent);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease;
+  white-space: nowrap;
+}
+.td-back:hover { background: var(--accent-dim); }
+.td-back.visible { display: flex; align-items: center; gap: var(--space-1); }
+
+.td-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+.td-count {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  transition: all 200ms ease;
+}
+.td-close {
+  background: none; border: none;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: all 120ms ease;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.td-close:hover { color: var(--text); background: var(--surface-2); }
+
+/* ═══════ TOKEN LIST VIEW ═══════ */
+
+.td-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  scroll-behavior: smooth;
+}
+.td-list::-webkit-scrollbar { width: 6px; }
+.td-list::-webkit-scrollbar-track { background: transparent; }
+.td-list::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+.td-list::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Token Card ── */
+.tok-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 180ms ease;
+  overflow: hidden;
+  position: relative;
+  animation: cardEnter 260ms var(--ease-out) backwards;
+  box-shadow: var(--shadow-sm);
+}
+.tok-card:nth-child(1) { animation-delay: 0ms; }
+.tok-card:nth-child(2) { animation-delay: 40ms; }
+.tok-card:nth-child(3) { animation-delay: 80ms; }
+.tok-card:nth-child(4) { animation-delay: 120ms; }
+.tok-card:nth-child(5) { animation-delay: 160ms; }
+.tok-card:nth-child(6) { animation-delay: 200ms; }
+
+.tok-card:hover {
+  border-color: var(--border-bright);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.tok-card:active { transform: translateY(0); }
+.tok-card.expired { border-color: var(--health-red-dim); }
+.tok-card.expired:hover { border-color: var(--health-red); }
+
+.tok-card-inner {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ── Card top row: badge + ttl ── */
+.tok-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tok-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  animation: badgePop 0.3s var(--ease-spring);
+}
+.tok-type-badge svg {
+  width: 12px; height: 12px;
+  fill: currentColor;
+}
+.tok-type-badge.bearer { background: var(--tok-bearer-dim); color: var(--tok-bearer); }
+.tok-type-badge.mwc { background: var(--tok-mwc-dim); color: var(--tok-mwc); }
+.tok-type-badge.s2s { background: var(--tok-s2s-dim); color: var(--tok-s2s); }
+.tok-type-badge.obo { background: var(--tok-obo-dim); color: var(--tok-obo); }
+.tok-type-badge.unknown { background: var(--tok-unknown-dim); color: var(--tok-unknown); }
+
+.tok-ttl {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+.tok-ttl.green { color: var(--health-green); }
+.tok-ttl.amber { color: var(--health-amber); }
+.tok-ttl.red { color: var(--health-red); }
+.tok-ttl.expired { color: var(--health-red); animation: pulseHealth 1.2s ease-in-out infinite; }
+
+.tok-health-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tok-health-dot.green { background: var(--health-green); }
+.tok-health-dot.amber { background: var(--health-amber); animation: dotPulse 2s ease-in-out infinite; }
+.tok-health-dot.red { background: var(--health-red); animation: pulseHealth 0.8s ease-in-out infinite; }
+.tok-health-dot.expired { background: var(--health-red); animation: pulseExpired 1s ease-in-out infinite; }
+
+/* ── Audience — NEVER TRUNCATED ── */
+.tok-audience {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+/* ── Card bottom row: issued time + decode CTA ── */
+.tok-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.tok-issued {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.tok-decode-cta {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--accent);
+  display: flex; align-items: center; gap: 2px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: all 150ms ease;
+}
+.tok-card:hover .tok-decode-cta {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ── Health Bar ── */
+.tok-health-bar {
+  height: 3px;
+  background: var(--surface-3);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+}
+.tok-health-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s linear;
+  animation: barFill 600ms ease-out;
+}
+.tok-health-fill.green { background: var(--health-green); }
+.tok-health-fill.amber { background: var(--health-amber); }
+.tok-health-fill.red { background: var(--health-red); }
+.tok-health-fill.expired { background: var(--health-red); animation: pulseHealth 1s ease-in-out infinite; width: 100% !important; }
+
+/* ═══════ EMPTY STATE ═══════ */
+
+.tok-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  text-align: center;
+  animation: scaleSpring 400ms var(--ease-spring);
+}
+.tok-empty-icon {
+  width: 48px; height: 48px;
+  fill: var(--text-muted);
+  opacity: 0.4;
+  animation: emptyFloat 3s ease-in-out infinite;
+}
+.tok-empty-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.tok-empty-desc {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-width: 260px;
+  line-height: 1.6;
+}
+.tok-empty-cmd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  background: var(--surface-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+/* ═══════ DECODE VIEW ═══════ */
+
+.td-decode {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: none;
+  flex-direction: column;
+  gap: 0;
+  scroll-behavior: smooth;
+}
+.td-decode.visible {
+  display: flex;
+  animation: decodeSlideIn 300ms var(--ease-out);
+}
+.td-decode::-webkit-scrollbar { width: 6px; }
+.td-decode::-webkit-scrollbar-track { background: transparent; }
+.td-decode::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+/* ── Decode Identity Header ── */
+.dec-identity {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface);
+  position: sticky; top: 0;
+  z-index: 2;
+}
+.dec-identity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.dec-audience {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  word-break: break-all;
+  line-height: 1.5;
+}
+.dec-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ── JWT Raw String ── */
+.dec-section {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.dec-section-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.jwt-raw {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  word-break: break-all;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  position: relative;
+  animation: jwtReveal 400ms ease-out;
+  overflow: hidden;
+}
+.jwt-header-seg {
+  color: var(--jwt-header);
+  background: var(--jwt-header-bg);
+  padding: 1px 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.jwt-header-seg:hover { background: rgba(13,148,136,0.18); }
+.jwt-payload-seg {
+  color: var(--jwt-payload);
+  background: var(--jwt-payload-bg);
+  padding: 1px 2px;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.jwt-payload-seg:hover { background: rgba(139,92,246,0.18); }
+.jwt-sig-seg {
+  color: var(--jwt-signature);
+  background: var(--jwt-signature-bg);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+.jwt-dot {
+  color: var(--jwt-dot);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* ── JWT Legend ── */
+.jwt-legend {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.jwt-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.jwt-legend-dot {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+}
+
+/* ── Decoded Claims Table ── */
+.dec-claims {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.dec-claim-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-xs);
+  animation: claimRowIn 200ms ease-out backwards;
+}
+.dec-claim-row:last-child { border-bottom: none; }
+.dec-claim-key {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-dim);
+  word-break: break-all;
+}
+.dec-claim-key .security-icon {
+  display: inline-block;
+  color: var(--health-amber);
+  margin-left: var(--space-1);
+  font-size: 10px;
+}
+.dec-claim-val {
+  font-family: var(--font-mono);
+  color: var(--text);
+  word-break: break-all;
+  line-height: 1.6;
+}
+.dec-claim-val.timestamp {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dec-claim-val .ts-human {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+/* ── Scope Pills ── */
+.dec-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.dec-scope-pill {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid rgba(109,92,255,0.12);
+  animation: pillBounce 0.3s var(--ease-spring) backwards;
+}
+.dec-scope-pill:nth-child(1) { animation-delay: 0ms; }
+.dec-scope-pill:nth-child(2) { animation-delay: 40ms; }
+.dec-scope-pill:nth-child(3) { animation-delay: 80ms; }
+.dec-scope-pill:nth-child(4) { animation-delay: 120ms; }
+.dec-scope-pill:nth-child(5) { animation-delay: 160ms; }
+
+/* ── Expiry Progress Bar ── */
+.dec-expiry-bar {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.dec-expiry-track {
+  height: 6px;
+  background: var(--surface-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.dec-expiry-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s linear;
+}
+.dec-expiry-fill.green { background: var(--health-green); }
+.dec-expiry-fill.amber { background: var(--health-amber); }
+.dec-expiry-fill.red { background: var(--health-red); }
+.dec-expiry-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Action Buttons ── */
+.dec-actions {
+  padding: var(--space-4);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.dec-btn {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-family: var(--font-body);
+  border: 1px solid var(--border-bright);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex; align-items: center; gap: var(--space-2);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+.dec-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--border-bright);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.dec-btn:active { transform: translateY(0); box-shadow: none; }
+.dec-btn.primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+.dec-btn.primary:hover { opacity: 0.9; box-shadow: var(--shadow-md); }
+.dec-btn svg { width: 14px; height: 14px; fill: currentColor; }
+.dec-btn.spinning svg { animation: spinRefresh 0.6s linear infinite; }
+.dec-link {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background 120ms ease;
+}
+.dec-link:hover { background: var(--accent-dim); }
+
+/* ═══════ MOCK CONTROL BAR ═══════ */
+
+.mock-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 48px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-4);
+  gap: var(--space-2);
+  z-index: 50;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+}
+.mock-label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-right: var(--space-2);
+}
+.mock-btn {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  font-family: var(--font-body);
+  border: 1px solid var(--border-bright);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.mock-btn:hover { background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-sm); }
+.mock-btn.active { background: var(--accent-dim); color: var(--accent); border-color: rgba(109,92,255,0.2); }
+.mock-sep { flex: 1; }
+.mock-theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+.theme-switch {
+  width: 36px; height: 20px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  cursor: pointer;
+  position: relative;
+  transition: all 200ms ease;
+}
+.theme-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: all 200ms var(--ease-spring);
+}
+.theme-switch.dark { background: var(--accent-dim); border-color: var(--accent); }
+.theme-switch.dark::after { left: 18px; background: var(--accent); }
+
+/* ═══════ TOAST ═══════ */
+.toast {
+  position: fixed;
+  bottom: 60px; left: 50%; transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  background: var(--text);
+  color: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-toast);
+  animation: toastIn 200ms var(--ease-spring);
+  pointer-events: none;
+}
+.toast.out { animation: toastOut 200ms ease forwards; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ HOST PAGE ═══════ -->
+<div class="host-page">
+  <div class="topbar">
+    <div class="topbar-logo">EDOG <span>Studio</span></div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-status">
+      <div class="topbar-dot"></div>
+      Connected
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-btn" id="tokenBtn" aria-label="Open Token Inspector">
+        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+        Tokens
+        <span class="badge" id="tokenBadge" style="display:none">0</span>
+      </button>
+    </div>
+  </div>
+  <div class="host-content">
+    <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+    Click "Tokens" in the topbar or use mock controls below
+  </div>
+</div>
+
+<!-- ═══════ OVERLAY ═══════ -->
+<div class="ti-overlay" id="overlay"></div>
+
+<!-- ═══════ TOKEN DRAWER ═══════ -->
+<div class="token-drawer" id="drawer">
+  <!-- Header -->
+  <div class="td-header">
+    <button class="td-back" id="backBtn">&#9666; Back to tokens</button>
+    <div class="td-title" id="drawerTitle">Token Inspector</div>
+    <span class="td-count" id="drawerCount">0</span>
+    <button class="td-close" id="closeBtn" aria-label="Close drawer">&#10005;</button>
+  </div>
+  <!-- List View -->
+  <div class="td-list" id="tokenList"></div>
+  <!-- Decode View -->
+  <div class="td-decode" id="decodeView"></div>
+</div>
+
+<!-- ═══════ MOCK CONTROL BAR ═══════ -->
+<div class="mock-bar">
+  <span class="mock-label">Mock Controls</span>
+  <button class="mock-btn" id="btnLoad">Load Sample Tokens</button>
+  <button class="mock-btn" id="btnClear">Clear All</button>
+  <button class="mock-btn" id="btnExpire">Expire First</button>
+  <div class="mock-sep"></div>
+  <div class="mock-theme-toggle">
+    Light
+    <div class="theme-switch" id="themeSwitch"></div>
+    Dark
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   TOKEN INSPECTOR v2 — Full Interactive Prototype
+   ═══════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  // ═══════ SVG ICONS ═══════
+  const ICONS = {
+    bearer:  '<svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>',
+    mwc:     '<svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>',
+    s2s:     '<svg viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></svg>',
+    obo:     '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+    unknown: '<svg viewBox="0 0 24 24"><path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/></svg>',
+    refresh: '<svg viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>',
+    copy:    '<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>',
+    external:'<svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 00-2 2v14a2 2 0 002 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>',
+    shield:  '<svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>'
+  };
+
+  // ═══════ CLAIM TOOLTIPS ═══════
+  const CLAIM_DESC = {
+    aud: 'Audience', iss: 'Issuer', iat: 'Issued At', nbf: 'Not Before',
+    exp: 'Expiration', oid: 'Object ID', tid: 'Tenant ID',
+    preferred_username: 'Username', roles: 'Roles', scp: 'Scopes',
+    sub: 'Subject', appid: 'Application ID', name: 'Display Name',
+    workspaceId: 'Workspace ID', artifactId: 'Artifact ID',
+    capacityId: 'Capacity ID', ver: 'Token Version',
+    endpoint: 'Target Endpoint', azp: 'Authorized Party',
+    azpacr: 'Auth Context Ref', aio: 'Internal Token Info',
+    rh: 'Redirect Hint', uti: 'Unique Token Identifier',
+    idtyp: 'Identity Type', xms_idrel: 'Identity Relationship'
+  };
+  const SECURITY_CLAIMS = new Set(['exp', 'aud', 'roles', 'scp', 'iss', 'tid']);
+
+  // ═══════ STATE ═══════
+  let tokens = [];
+  let drawerOpen = false;
+  let decodeMode = false;
+  let selectedIdx = -1;
+  let tickTimer = null;
+
+  // ═══════ DOM REFS ═══════
+  const $ = (s) => document.querySelector(s);
+  const drawer = $('#drawer');
+  const overlay = $('#overlay');
+  const tokenList = $('#tokenList');
+  const decodeView = $('#decodeView');
+  const backBtn = $('#backBtn');
+  const closeBtn = $('#closeBtn');
+  const drawerTitle = $('#drawerTitle');
+  const drawerCount = $('#drawerCount');
+  const tokenBtn = $('#tokenBtn');
+  const tokenBadge = $('#tokenBadge');
+
+  // ═══════ DRAWER OPEN/CLOSE ═══════
+
+  function openDrawer() {
+    drawerOpen = true;
+    drawer.classList.remove('closing');
+    drawer.classList.add('open');
+    overlay.classList.remove('closing');
+    overlay.classList.add('visible');
+    tokenBtn.classList.add('active');
+    showList();
+    startTick();
+  }
+
+  function closeDrawer() {
+    drawerOpen = false;
+    drawer.classList.add('closing');
+    drawer.classList.remove('open');
+    overlay.classList.add('closing');
+    overlay.classList.remove('visible');
+    tokenBtn.classList.remove('active');
+    stopTick();
+    setTimeout(() => {
+      drawer.classList.remove('closing');
+      overlay.classList.remove('closing');
+    }, 260);
+  }
+
+  tokenBtn.addEventListener('click', () => {
+    if (drawerOpen) closeDrawer();
+    else openDrawer();
+  });
+  closeBtn.addEventListener('click', closeDrawer);
+  overlay.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawerOpen) closeDrawer();
+  });
+
+  // ═══════ LIST / DECODE NAVIGATION ═══════
+
+  function showList() {
+    decodeMode = false;
+    selectedIdx = -1;
+    backBtn.classList.remove('visible');
+    drawerTitle.textContent = 'Token Inspector';
+    drawerCount.style.display = '';
+    tokenList.style.display = '';
+    decodeView.style.display = 'none';
+    decodeView.classList.remove('visible');
+    tokenList.style.animation = 'listSlideIn 250ms ease-out';
+    renderList();
+  }
+
+  function showDecode(idx) {
+    decodeMode = true;
+    selectedIdx = idx;
+    backBtn.classList.add('visible');
+    drawerTitle.textContent = '';
+    drawerCount.style.display = 'none';
+    tokenList.style.display = 'none';
+    decodeView.style.display = 'flex';
+    decodeView.classList.add('visible');
+    renderDecode(tokens[idx]);
+  }
+
+  backBtn.addEventListener('click', showList);
+
+  // ═══════ TOKEN LIST RENDERING ═══════
+
+  function renderList() {
+    updateBadge();
+    drawerCount.textContent = tokens.length;
+
+    if (!tokens.length) {
+      renderEmpty();
+      return;
+    }
+
+    let html = '';
+    tokens.forEach((tok, i) => {
+      const ttl = getTTL(tok);
+      const hc = healthClass(tok);
+      const ttlStr = formatTTL(tok);
+      const issuedStr = formatRelative(tok.issuedAt);
+      const frac = ttlFrac(tok);
+
+      html += '<div class="tok-card' + (hc === 'expired' ? ' expired' : '') + '" data-idx="' + i + '">' +
+        '<div class="tok-card-inner">' +
+          '<div class="tok-card-top">' +
+            '<span class="tok-type-badge ' + tok.type + '">' + ICONS[tok.type] + ' ' + tok.label + '</span>' +
+            '<span class="tok-ttl ' + hc + '"><span class="tok-health-dot ' + hc + '"></span> ' + ttlStr + '</span>' +
+          '</div>' +
+          '<div class="tok-audience">' + escHtml(tok.audience) + '</div>' +
+          '<div class="tok-card-bottom">' +
+            '<span class="tok-issued">Issued ' + issuedStr + '</span>' +
+            '<span class="tok-decode-cta">Decode &#9656;</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="tok-health-bar"><div class="tok-health-fill ' + hc + '" style="width:' + Math.round(frac * 100) + '%"></div></div>' +
+      '</div>';
+    });
+
+    tokenList.innerHTML = html;
+
+    tokenList.querySelectorAll('.tok-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const idx = parseInt(card.dataset.idx);
+        showDecode(idx);
+      });
+    });
+  }
+
+  function renderEmpty() {
+    tokenList.innerHTML =
+      '<div class="tok-empty">' +
+        '<svg class="tok-empty-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>' +
+        '<div class="tok-empty-title">No tokens available</div>' +
+        '<div class="tok-empty-desc">Tokens will appear here when your FLT service makes authenticated API calls</div>' +
+        '<div class="tok-empty-cmd">edog auth login</div>' +
+      '</div>';
+  }
+
+  // ═══════ DECODE VIEW RENDERING ═══════
+
+  function renderDecode(tok) {
+    const hc = healthClass(tok);
+    const ttlStr = formatTTL(tok);
+    const frac = ttlFrac(tok);
+    const jwt = tok.rawJwt || generateFakeJwt(tok);
+    const parts = jwt.split('.');
+
+    let html = '';
+
+    // ── Identity Header ──
+    html += '<div class="dec-identity">' +
+      '<div class="dec-identity-row">' +
+        '<span class="tok-type-badge ' + tok.type + '">' + ICONS[tok.type] + ' ' + tok.label + '</span>' +
+        '<span class="tok-ttl ' + hc + '"><span class="tok-health-dot ' + hc + '"></span> ' + ttlStr + '</span>' +
+      '</div>' +
+      '<div class="dec-audience">' + escHtml(tok.audience) + '</div>' +
+      '<div class="dec-meta">' +
+        '<span>Issued ' + formatRelative(tok.issuedAt) + '</span>' +
+        '<span>Expires ' + new Date(tok.expiresAt).toLocaleTimeString() + '</span>' +
+      '</div>' +
+    '</div>';
+
+    // ── JWT Raw String ──
+    html += '<div class="dec-section" id="jwtSection">' +
+      '<div class="dec-section-title">JWT Token</div>' +
+      '<div class="jwt-raw">' +
+        '<span class="jwt-header-seg" data-scroll="headerSection">' + escHtml(parts[0] || '') + '</span>' +
+        '<span class="jwt-dot">.</span>' +
+        '<span class="jwt-payload-seg" data-scroll="payloadSection">' + escHtml(parts[1] || '') + '</span>' +
+        '<span class="jwt-dot">.</span>' +
+        '<span class="jwt-sig-seg">' + escHtml(parts[2] || '') + '</span>' +
+      '</div>' +
+      '<div class="jwt-legend">' +
+        '<span class="jwt-legend-item"><span class="jwt-legend-dot" style="background:var(--jwt-header)"></span> Header</span>' +
+        '<span class="jwt-legend-item"><span class="jwt-legend-dot" style="background:var(--jwt-payload)"></span> Payload</span>' +
+        '<span class="jwt-legend-item"><span class="jwt-legend-dot" style="background:var(--jwt-signature)"></span> Signature</span>' +
+      '</div>' +
+    '</div>';
+
+    // ── Decoded Header ──
+    const headerObj = tok.jwtHeader || { alg: 'RS256', typ: 'JWT', kid: 'x5t-' + randHex(8) };
+    html += '<div class="dec-section" id="headerSection">' +
+      '<div class="dec-section-title">Decoded Header</div>' +
+      '<div class="dec-claims">';
+    Object.entries(headerObj).forEach(([k, v], i) => {
+      html += claimRow(k, v, i);
+    });
+    html += '</div></div>';
+
+    // ── Decoded Payload ──
+    html += '<div class="dec-section" id="payloadSection">' +
+      '<div class="dec-section-title">Decoded Payload</div>' +
+      '<div class="dec-claims">';
+    const claims = tok.claims || {};
+    let rowIdx = 0;
+    Object.entries(claims).forEach(([k, v]) => {
+      html += claimRow(k, v, rowIdx++);
+    });
+    html += '</div>';
+
+    // ── Scope Pills ──
+    const scopes = extractScopes(claims);
+    if (scopes.length) {
+      html += '<div style="margin-top:var(--space-3)">' +
+        '<div class="dec-section-title" style="margin-bottom:var(--space-2)">Scopes / Roles</div>' +
+        '<div class="dec-scopes">';
+      scopes.forEach(s => {
+        html += '<span class="dec-scope-pill">' + escHtml(s) + '</span>';
+      });
+      html += '</div></div>';
+    }
+
+    // ── Expiry Progress Bar ──
+    html += '<div class="dec-expiry-bar">' +
+      '<div class="dec-expiry-track"><div class="dec-expiry-fill ' + hc + '" style="width:' + Math.round(frac * 100) + '%"></div></div>' +
+      '<div class="dec-expiry-labels">' +
+        '<span>' + new Date(tok.issuedAt).toLocaleTimeString() + '</span>' +
+        '<span>' + ttlStr + '</span>' +
+        '<span>' + new Date(tok.expiresAt).toLocaleTimeString() + '</span>' +
+      '</div>' +
+    '</div>';
+
+    html += '</div>';
+
+    // ── Actions ──
+    html += '<div class="dec-actions">' +
+      '<button class="dec-btn primary" data-action="refresh">' + ICONS.refresh + ' Refresh Token</button>' +
+      '<button class="dec-btn" data-action="copy">' + ICONS.copy + ' Copy Token</button>' +
+      '<a class="dec-link" href="https://jwt.ms" target="_blank" rel="noopener">' + ICONS.external + ' jwt.ms</a>' +
+    '</div>';
+
+    decodeView.innerHTML = html;
+
+    // ── Wire interactions ──
+    decodeView.querySelectorAll('[data-scroll]').forEach(el => {
+      el.addEventListener('click', () => {
+        const target = document.getElementById(el.dataset.scroll);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    decodeView.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const action = btn.dataset.action;
+        if (action === 'copy') {
+          const jwt = tok.rawJwt || generateFakeJwt(tok);
+          navigator.clipboard.writeText(jwt).catch(() => {});
+          showToast('Token copied to clipboard');
+        } else if (action === 'refresh') {
+          btn.classList.add('spinning');
+          setTimeout(() => {
+            btn.classList.remove('spinning');
+            tok.issuedAt = Date.now();
+            tok.expiresAt = Date.now() + 3600000;
+            showToast('Token refreshed');
+            if (decodeMode && selectedIdx >= 0) renderDecode(tokens[selectedIdx]);
+          }, 800);
+        }
+      });
+    });
+  }
+
+  function claimRow(key, value, idx) {
+    const isSecurity = SECURITY_CLAIMS.has(key);
+    const desc = CLAIM_DESC[key] || key;
+    let displayVal = '';
+
+    if (key === 'exp' || key === 'iat' || key === 'nbf') {
+      const ts = typeof value === 'number' ? value : parseInt(value);
+      const d = new Date(ts > 1e12 ? ts : ts * 1000);
+      displayVal = '<span class="timestamp">' + ts + '<span class="ts-human">' + d.toLocaleString() + '</span></span>';
+    } else if (Array.isArray(value)) {
+      displayVal = escHtml(JSON.stringify(value));
+    } else if (typeof value === 'object' && value !== null) {
+      displayVal = escHtml(JSON.stringify(value, null, 2));
+    } else {
+      displayVal = escHtml(String(value));
+    }
+
+    return '<div class="dec-claim-row" style="animation-delay:' + (idx * 25) + 'ms" title="' + escHtml(desc) + '">' +
+      '<div class="dec-claim-key">' + escHtml(key) + (isSecurity ? ' <span class="security-icon">&#9670;</span>' : '') + '</div>' +
+      '<div class="dec-claim-val">' + displayVal + '</div>' +
+    '</div>';
+  }
+
+  function extractScopes(claims) {
+    let scopes = [];
+    if (claims.scp) scopes = scopes.concat(String(claims.scp).split(' '));
+    if (claims.roles && Array.isArray(claims.roles)) scopes = scopes.concat(claims.roles);
+    return scopes.filter(s => s.trim());
+  }
+
+  // ═══════ SAMPLE TOKEN DATA ═══════
+
+  function generateSampleTokens() {
+    const now = Date.now();
+    return [
+      {
+        type: 'bearer', label: 'Bearer',
+        audience: 'https://api.fabric.microsoft.com',
+        issuedAt: now - 18 * 60000,
+        expiresAt: now + 42 * 60000,
+        jwtHeader: { alg: 'RS256', typ: 'JWT', kid: 'x5t-nOo3ZDrODXEK1jKWhXslHR_KXEg' },
+        claims: {
+          aud: 'https://api.fabric.microsoft.com',
+          iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+          iat: Math.floor((now - 18 * 60000) / 1000),
+          nbf: Math.floor((now - 18 * 60000) / 1000),
+          exp: Math.floor((now + 42 * 60000) / 1000),
+          oid: '8a2c4e6f-1234-5678-9abc-def012345678',
+          tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+          preferred_username: 'hemant.gupta@microsoft.com',
+          name: 'Hemant Gupta',
+          sub: 'AbC123xYz-aBcDeFgHiJkLmNoPqRsTuVwXyZ012345',
+          scp: 'Lakehouse.ReadWrite.All Item.ReadWrite.All Workspace.Read.All',
+          ver: '2.0',
+          azp: '18fbca16-2224-45f6-85b0-f7b9a1ceaec1',
+          idtyp: 'user',
+          aio: 'ATQAy/8TAAAA...'
+        },
+        rawJwt: null
+      },
+      {
+        type: 'bearer', label: 'Bearer',
+        audience: 'https://storage.azure.com/',
+        issuedAt: now - 53 * 60000,
+        expiresAt: now + 7 * 60000,
+        jwtHeader: { alg: 'RS256', typ: 'JWT', kid: 'x5t-2ZQpJM3Oi3YR1cGqpZO5kVcxp' },
+        claims: {
+          aud: 'https://storage.azure.com/',
+          iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+          iat: Math.floor((now - 53 * 60000) / 1000),
+          exp: Math.floor((now + 7 * 60000) / 1000),
+          oid: '8a2c4e6f-1234-5678-9abc-def012345678',
+          tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+          preferred_username: 'hemant.gupta@microsoft.com',
+          name: 'Hemant Gupta',
+          scp: 'user_impersonation',
+          ver: '1.0',
+          appid: '18fbca16-2224-45f6-85b0-f7b9a1ceaec1'
+        },
+        rawJwt: null
+      },
+      {
+        type: 'mwc', label: 'MWC',
+        audience: 'https://api.fabric.microsoft.com',
+        issuedAt: now - 2 * 60000,
+        expiresAt: now + 58 * 60000,
+        jwtHeader: { alg: 'HS256', typ: 'JWT' },
+        claims: {
+          aud: 'https://api.fabric.microsoft.com',
+          iss: 'fabric-internal-mwc-issuer',
+          iat: Math.floor((now - 2 * 60000) / 1000),
+          exp: Math.floor((now + 58 * 60000) / 1000),
+          artifactId: 'b14d2a3f-7890-4abc-def0-123456789abc',
+          capacityId: 'a1b2c3d4-e5f6-7890-abcd-ef0123456789',
+          workspaceId: 'd4e5f6a7-b8c9-0123-4567-89abcdef0123',
+          endpoint: 'https://onelake.dfs.fabric.microsoft.com',
+          roles: ['DataReader', 'DataWriter', 'MetadataReader']
+        },
+        rawJwt: null
+      },
+      {
+        type: 's2s', label: 'S2S',
+        audience: 'https://management.azure.com/',
+        issuedAt: now - 65 * 60000,
+        expiresAt: now - 5 * 60000,
+        jwtHeader: { alg: 'RS256', typ: 'JWT', kid: 'x5t-kYp2N3wPtQH_iOwJW4R4CkdGJzc' },
+        claims: {
+          aud: 'https://management.azure.com/',
+          iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+          iat: Math.floor((now - 65 * 60000) / 1000),
+          exp: Math.floor((now - 5 * 60000) / 1000),
+          appid: '1fec8e78-bce4-4aaf-ab1b-5451cc387264',
+          idtyp: 'app',
+          roles: ['Contributor'],
+          tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+          sub: '1fec8e78-bce4-4aaf-ab1b-5451cc387264',
+          ver: '1.0'
+        },
+        rawJwt: null
+      },
+      {
+        type: 's2s', label: 'S2S',
+        audience: 'https://graph.microsoft.com',
+        issuedAt: now - 30 * 60000,
+        expiresAt: now + 30 * 60000,
+        jwtHeader: { alg: 'RS256', typ: 'JWT', kid: 'x5t-HBxF4oV1Jh5Jrs0pVzCFuTQ' },
+        claims: {
+          aud: 'https://graph.microsoft.com',
+          iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+          iat: Math.floor((now - 30 * 60000) / 1000),
+          exp: Math.floor((now + 30 * 60000) / 1000),
+          appid: '1fec8e78-bce4-4aaf-ab1b-5451cc387264',
+          idtyp: 'app',
+          roles: ['User.Read.All', 'Directory.Read.All', 'GroupMember.Read.All'],
+          tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+          ver: '1.0'
+        },
+        rawJwt: null
+      },
+      {
+        type: 'obo', label: 'OBO',
+        audience: 'https://analysis.windows.net/powerbi/api',
+        issuedAt: now - 10 * 60000,
+        expiresAt: now + 50 * 60000,
+        jwtHeader: { alg: 'RS256', typ: 'JWT', kid: 'x5t-J3kRLAzh3c4xGn_9Q8dh6q7R8' },
+        claims: {
+          aud: 'https://analysis.windows.net/powerbi/api',
+          iss: 'https://sts.windows.net/72f988bf-86f1-41af-91ab-2d7cd011db47/',
+          iat: Math.floor((now - 10 * 60000) / 1000),
+          exp: Math.floor((now + 50 * 60000) / 1000),
+          oid: '8a2c4e6f-1234-5678-9abc-def012345678',
+          tid: '72f988bf-86f1-41af-91ab-2d7cd011db47',
+          preferred_username: 'hemant.gupta@microsoft.com',
+          name: 'Hemant Gupta',
+          scp: 'Dataset.ReadWrite.All Report.Read.All',
+          azp: '18fbca16-2224-45f6-85b0-f7b9a1ceaec1',
+          azpacr: '1',
+          ver: '2.0'
+        },
+        rawJwt: null
+      }
+    ];
+  }
+
+  // ═══════ FAKE JWT GENERATOR ═══════
+
+  function generateFakeJwt(tok) {
+    if (tok.rawJwt) return tok.rawJwt;
+    const header = btoa(JSON.stringify(tok.jwtHeader || { alg: 'RS256', typ: 'JWT' })).replace(/=/g, '');
+    const payload = btoa(JSON.stringify(tok.claims || {})).replace(/=/g, '');
+    const sig = randBase64(43);
+    tok.rawJwt = header + '.' + payload + '.' + sig;
+    return tok.rawJwt;
+  }
+
+  function randBase64(len) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let out = '';
+    for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+    return out;
+  }
+
+  function randHex(len) {
+    let out = '';
+    for (let i = 0; i < len; i++) out += '0123456789abcdef'[Math.floor(Math.random() * 16)];
+    return out;
+  }
+
+  // ═══════ TIME UTILITIES ═══════
+
+  function getTTL(tok) {
+    return tok.expiresAt - Date.now();
+  }
+
+  function healthClass(tok) {
+    const ms = getTTL(tok);
+    if (ms <= 0) return 'expired';
+    if (ms < 5 * 60000) return 'red';
+    if (ms < 10 * 60000) return 'amber';
+    return 'green';
+  }
+
+  function formatTTL(tok) {
+    const ms = getTTL(tok);
+    if (ms <= 0) return 'EXPIRED';
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    if (m > 0) return m + 'm ' + String(s).padStart(2, '0') + 's';
+    return s + 's';
+  }
+
+  function ttlFrac(tok) {
+    const total = tok.expiresAt - tok.issuedAt;
+    const remaining = tok.expiresAt - Date.now();
+    if (total <= 0) return 0;
+    return Math.max(0, Math.min(1, remaining / total));
+  }
+
+  function formatRelative(ts) {
+    const diff = Date.now() - ts;
+    if (diff < 0) return 'just now';
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) return sec + 's ago';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return min + 'm ago';
+    const hr = Math.floor(min / 60);
+    return hr + 'h ago';
+  }
+
+  // ═══════ TICK (LIVE COUNTDOWNS) ═══════
+
+  function startTick() {
+    stopTick();
+    tickTimer = setInterval(() => {
+      if (!drawerOpen) return;
+      if (decodeMode && selectedIdx >= 0) {
+        renderDecode(tokens[selectedIdx]);
+      } else {
+        updateListTimes();
+      }
+    }, 1000);
+  }
+
+  function stopTick() {
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  }
+
+  function updateListTimes() {
+    const cards = tokenList.querySelectorAll('.tok-card');
+    cards.forEach(card => {
+      const idx = parseInt(card.dataset.idx);
+      const tok = tokens[idx];
+      if (!tok) return;
+      const hc = healthClass(tok);
+      const ttlStr = formatTTL(tok);
+      const frac = ttlFrac(tok);
+      const ttlEl = card.querySelector('.tok-ttl');
+      const dotEl = card.querySelector('.tok-health-dot');
+      const fillEl = card.querySelector('.tok-health-fill');
+      if (ttlEl) {
+        ttlEl.className = 'tok-ttl ' + hc;
+        ttlEl.innerHTML = '<span class="tok-health-dot ' + hc + '"></span> ' + ttlStr;
+      }
+      if (fillEl) {
+        fillEl.className = 'tok-health-fill ' + hc;
+        fillEl.style.width = Math.round(frac * 100) + '%';
+      }
+      if (hc === 'expired') card.classList.add('expired');
+    });
+  }
+
+  // ═══════ BADGE ═══════
+
+  function updateBadge() {
+    if (tokens.length > 0) {
+      tokenBadge.style.display = '';
+      tokenBadge.textContent = tokens.length;
+    } else {
+      tokenBadge.style.display = 'none';
+    }
+  }
+
+  // ═══════ TOAST ═══════
+
+  function showToast(msg) {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => {
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 200);
+    }, 2000);
+  }
+
+  // ═══════ UTILS ═══════
+
+  function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  // ═══════ MOCK CONTROLS ═══════
+
+  $('#btnLoad').addEventListener('click', () => {
+    tokens = generateSampleTokens();
+    updateBadge();
+    if (drawerOpen) {
+      if (decodeMode) showList();
+      else renderList();
+    } else {
+      openDrawer();
+    }
+    showToast('Loaded ' + tokens.length + ' sample tokens');
+  });
+
+  $('#btnClear').addEventListener('click', () => {
+    tokens = [];
+    updateBadge();
+    if (drawerOpen) {
+      if (decodeMode) showList();
+      else renderList();
+    }
+    showToast('All tokens cleared');
+  });
+
+  $('#btnExpire').addEventListener('click', () => {
+    if (tokens.length === 0) { showToast('No tokens to expire'); return; }
+    tokens[0].expiresAt = Date.now() - 60000;
+    if (drawerOpen) {
+      if (decodeMode && selectedIdx === 0) renderDecode(tokens[0]);
+      else if (!decodeMode) renderList();
+    }
+    showToast('First token expired');
+  });
+
+  // ═══════ THEME TOGGLE ═══════
+
+  const themeSwitch = $('#themeSwitch');
+  themeSwitch.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (isDark) {
+      document.documentElement.removeAttribute('data-theme');
+      themeSwitch.classList.remove('dark');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      themeSwitch.classList.add('dark');
+    }
+  });
+
+  // ═══════ INIT ═══════
+  updateBadge();
+
+})();
+</script>
+</body>
+</html>

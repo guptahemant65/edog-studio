@@ -1,67 +1,115 @@
-# Gantt Chart — Component Deep Spec
+# Gantt Chart — Deep Component Spec
 
 > **Feature:** F08 DAG Studio — Section 2.3
+> **Component:** `DagGantt`
+> **Source File:** `dag-gantt.js` (~400 lines)
 > **Owner:** Pixel (Frontend) · Reviewed by Sana (Architecture)
-> **Status:** SPEC PHASE
+> **Author:** Sana Reeves
+> **Status:** DRAFT
 > **Prerequisite:** `research/p0-foundation.md` (NodeExecutionMetrics model)
-> **Rendering Decision:** Canvas 2D for bar grid + DOM overlay for axis labels/tooltips — settled.
+> **Rendering Decision:** Canvas 2D for bar grid + DOM overlay for axis labels/tooltips — settled (ADR-002).
+
+---
+
+## Table of Contents
+
+1. [Purpose](#1-purpose)
+2. [Layout Architecture](#2-layout-architecture)
+3. [Time Axis](#3-time-axis)
+4. [Node Bars](#4-node-bars)
+5. [Parallelism Visualization](#5-parallelism-visualization)
+6. [Synchronization with DAG Graph](#6-synchronization-with-dag-graph)
+7. [Live Execution](#7-live-execution)
+8. [Comparison Mode](#8-comparison-mode)
+9. [Rendering Strategy](#9-rendering-strategy)
+10. [Scroll and Zoom](#10-scroll-and-zoom)
+11. [Resize (Drag Handle)](#11-resize-drag-handle)
+12. [Tooltip](#12-tooltip)
+13. [Keyboard Interactions](#13-keyboard-interactions)
+14. [Performance Budget](#14-performance-budget)
+15. [Error Handling](#15-error-handling)
+16. [DagGantt Class API](#16-daggantt-class-api)
+17. [Data Flow](#17-data-flow)
+18. [Accessibility](#18-accessibility)
+19. [Open Questions](#19-open-questions)
 
 ---
 
 ## 1. Purpose
 
-The Gantt chart is the timing panel beneath the DAG graph canvas. It answers the question every FLT engineer asks during and after a DAG run: **"Which nodes ran when, for how long, and what ran in parallel?"**
+The Gantt chart is the timing panel beneath the DAG graph canvas. It answers the
+question every FLT engineer asks during and after a DAG run:
 
-It shows per-node execution as horizontal bars on a shared time axis. During live execution, bars grow in real-time. During historical review, the full timeline renders instantly. In comparison mode, two runs overlay so regressions jump off the screen.
+> **"Which nodes ran when, for how long, and what ran in parallel?"**
+
+It shows per-node execution as horizontal bars on a shared time axis. During live
+execution, bars grow in real-time. During historical review, the full timeline
+renders instantly. In comparison mode, two runs overlay so regressions jump off
+the screen.
+
+The component is implemented as a single vanilla JS class (`DagGantt`) that owns
+a hybrid Canvas 2D + DOM overlay rendering surface. It communicates with the rest
+of DAG Studio exclusively through callbacks — never by direct reference to the
+graph canvas or history panel.
 
 ---
 
 ## 2. Layout Architecture
 
+### 2.1 Structural Diagram
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ DAG Graph Canvas (top 60%)                                          │
+│  DAG Graph Canvas (top 60%)                                         │
 ├═══════════════════ drag handle (8px, cursor: row-resize) ═══════════┤
-│ Tab Bar: [Gantt] [History] [Detail]                                 │
+│  Tab Bar: [Gantt] [History] [Detail]                                │
 │┌────────────┬───────────────────────────────────────────────────────┐│
-││ Node Labels │ Canvas: Bar Grid + Time Axis                        ││
-││ (fixed 160px)│                                                     ││
-││             │  ┌──────────┐                                       ││
+││ Node Labels │  Time Axis (24px)                                   ││
+││ (fixed 160px)│  0s   5s  10s  15s  20s  25s  30s  35s             ││
+││             │  ┬────┬────┬────┬────┬────┬────┬────┬──             ││
 ││ SourceA     │  │██████████│                                       ││
 ││ SourceB     │  │████████████████│                                  ││
+││ ─ ─ ─ ─ ─ ─│─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ (layer sep)  ││
 ││ Transform1  │       │██████████████│                               ││
 ││ Transform2  │       │████████│                                     ││
+││ ─ ─ ─ ─ ─ ─│─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─              ││
 ││ MergeStep   │                  │███████████████████│               ││
-││ FinalView   │                                     │██████│        ││
-││             │  ──┼────┼────┼────┼────┼────┼────┼── ▼ Now          ││
-││             │  0s   5s  10s  15s  20s  25s  30s  35s              ││
+││ ─ ─ ─ ─ ─ ─│─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─              ││
+││ FinalView   │                                     │██████│  ▼ Now ││
 │└────────────┴───────────────────────────────────────────────────────┘│
 │  Σ 35.2s │ 6/8 nodes │ max ∥ 3 │ ● Running                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.1 Structural Regions
+### 2.2 Structural Regions
 
 | Region | Implementation | Size | Scroll |
 |--------|---------------|------|--------|
 | **Node label column** | DOM `<div>` list | Fixed 160px width | Vertical — synced with bar grid |
 | **Bar grid** | Canvas 2D `<canvas>` | Fills remaining width | Vertical + horizontal (time axis) |
-| **Time axis** | DOM overlay positioned over canvas top | Fixed 24px height | Horizontal — synced with bar grid |
+| **Time axis** | DOM overlay above canvas | Fixed 24px height | Horizontal — synced with bar grid |
 | **Summary footer** | DOM `<div>` | Fixed 28px height | None |
 | **Drag handle** | DOM `<div>` between graph and panel | 8px height | None |
 
-### 2.2 Dimensions (4px Grid)
+All DOM regions use `--color-bg` (`#ffffff`) as their background colour. The
+label column uses `--color-bg-secondary` (`#f5f5f7`) to subtly differentiate it
+from the canvas area.
 
-| Element | Value | Notes |
-|---------|-------|-------|
-| Row height | 28px | 4px padding top + 20px bar + 4px padding bottom |
-| Bar height | 20px | Within row |
-| Bar corner radius | 4px | Consistent with card styling |
-| Label column width | 160px | Truncated with `…` if name exceeds |
-| Time axis height | 24px | Tick labels in `--color-text-secondary` |
-| Footer height | 28px | Summary stats |
-| Minimum bar width | 3px | Below this: render as a 3px sliver, full info in tooltip |
-| Layer gap | 4px | Hairline between layer groups |
+### 2.3 Dimensions (4px Grid)
+
+All measurements align to the 4px spatial grid (`--space-1` = 4px).
+
+| Element | Value | Tokens / Notes |
+|---------|-------|----------------|
+| Row height | 28px | `--space-1` top + 20px bar + `--space-1` bottom |
+| Bar height | 20px | 5 × `--space-1` |
+| Bar corner radius | 4px | `--space-1`, consistent with card radius |
+| Label column width | 160px | Truncated with `…` if name overflows |
+| Time axis height | 24px | 6 × `--space-1` |
+| Footer height | 28px | 7 × `--space-1` |
+| Minimum bar width | 3px | Below this: render 3px sliver, full info in tooltip |
+| Layer gap | 4px | 1px separator + 3px spacing |
+| Comparison row height | 48px | 12 × `--space-1` — doubled for overlaid bars |
 
 ---
 
@@ -69,19 +117,22 @@ It shows per-node execution as horizontal bars on a shared time axis. During liv
 
 ### 3.1 Auto-Scaling Algorithm
 
-The time axis scales automatically based on execution duration to avoid illegible tick bunching or wasteful whitespace.
+The time axis scales automatically based on total execution duration. The
+algorithm targets 8–15 visible ticks to avoid illegible bunching or wasteful
+whitespace.
 
-```
+```javascript
 function calculateTimeScale(startTime, endTime, canvasWidth) {
     const totalMs = endTime - startTime
     const totalSec = totalMs / 1000
 
-    // Choose unit
+    // Choose display unit
+    let unit
     if (totalSec < 120)       unit = 'seconds'
     else if (totalSec < 7200) unit = 'minutes'
     else                      unit = 'hours'
 
-    // Choose tick interval: target 8–15 ticks visible
+    // Target 12 ticks, snap to "nice" intervals
     const targetTicks = 12
     const rawInterval = totalSec / targetTicks
     const niceIntervals = {
@@ -89,13 +140,22 @@ function calculateTimeScale(startTime, endTime, canvasWidth) {
         minutes: [60, 120, 300, 600, 900, 1800],
         hours:   [3600, 7200, 14400]
     }
-    // Snap to nearest nice interval
-    tickInterval = snapToNearest(rawInterval, niceIntervals[unit])
+    const tickInterval = snapToNearest(rawInterval, niceIntervals[unit])
 
     // Pixels per second
-    pxPerSec = canvasWidth / totalSec
+    const pxPerSec = canvasWidth / totalSec
 
     return { unit, tickInterval, pxPerSec, totalSec }
+}
+
+function snapToNearest(value, candidates) {
+    let best = candidates[0]
+    let bestDist = Math.abs(value - best)
+    for (const c of candidates) {
+        const dist = Math.abs(value - c)
+        if (dist < bestDist) { best = c; bestDist = dist }
+    }
+    return best
 }
 ```
 
@@ -104,33 +164,33 @@ function calculateTimeScale(startTime, endTime, canvasWidth) {
 | Duration Range | Unit | Tick Examples | Label Format |
 |----------------|------|---------------|--------------|
 | < 2 min | Seconds | 0s, 5s, 10s, 15s … | `{n}s` |
-| 2 min – 2 hr | Minutes | 0:00, 0:30, 1:00, 1:30 … | `{m}:{ss}` |
+| 2 min – 2 hr | Minutes | 0:00, 0:30, 1:00 … | `{m}:{ss}` |
 | > 2 hr | Hours | 0:00, 1:00, 2:00 … | `{h}:{mm}` |
 
-**Tick rendering details:**
+**Tick visual details:**
 
-- Major ticks: full-height hairline (`--color-border`, 1px, 0.3 opacity) — at every labelled interval
-- Minor ticks: half-height hairline (0.15 opacity) — subdivisions between major ticks
-- Labels: 11px `--font-mono`, `--color-text-secondary`, centered below tick
-- Zero label: "0s" at the left edge, anchored
+- **Major ticks:** full-height vertical hairline — `--color-border` at 0.3 opacity, 1px
+- **Minor ticks:** half-height vertical hairline — `--color-border` at 0.15 opacity, 1px
+- **Tick labels:** 11px `--font-mono`, colour `--color-text-secondary`, centered below tick mark
+- **Zero label:** `0s` anchored flush-left at the origin
 
 ### 3.3 "Now" Marker (Live Execution)
 
-During active execution, a vertical marker shows current wall-clock time:
+During active execution, a vertical marker tracks current wall-clock time:
 
 | Property | Value |
 |----------|-------|
-| Line | 1.5px solid `--color-accent` (OKLCH blue), full grid height |
-| Label | "Now" badge: 11px, `--color-accent` background, white text, pinned to time axis row |
-| Animation | `requestAnimationFrame` — moves rightward at real-time pace (1px per pxPerSec) |
-| Beyond viewport | Marker clamps to right edge with a `▸` arrow indicator and elapsed time label |
+| Line | 1.5px solid `--accent`, full grid height |
+| Label | "Now" badge — 11px, `--accent` background, `--color-bg` text, pill shape, pinned to time axis |
+| Animation | `requestAnimationFrame` — advances rightward at real-time pace |
+| Beyond viewport | Marker clamps to right edge with `▸` arrow and elapsed time |
 
 ### 3.4 Total Duration Label
 
 - Positioned at the right end of the time axis
 - Format: `Σ {duration}` (e.g., `Σ 1m 23s`)
 - During live execution: updates every frame
-- Color: `--color-text-primary`
+- Colour: `--color-text`
 
 ---
 
@@ -140,24 +200,44 @@ During active execution, a vertical marker shows current wall-clock time:
 
 Nodes are sorted top-to-bottom by:
 
-1. **Layer** (from Sugiyama layout) — source layer first, then each subsequent layer
-2. **Start time within layer** — earlier-started nodes first
-3. **Alphabetical** as tiebreaker within same layer + start time
+1. **Layer** (from Sugiyama layout) — source layer first, then each subsequent
+2. **Start time within layer** — earlier-started nodes appear higher
+3. **Alphabetical** tiebreaker when layer and start time match
 
-Layer grouping makes parallelism visually obvious: nodes in the same layer that started near-simultaneously appear as stacked bars at the same horizontal position.
+Layer grouping makes parallelism visually obvious: nodes in the same layer that
+started near-simultaneously appear as stacked bars at the same horizontal offset.
 
 ### 4.2 Visual Encoding
 
-| Status | Fill | Pattern | Opacity | Border | Animation |
-|--------|------|---------|---------|--------|-----------|
-| **Completed** | `oklch(0.70 0.18 145)` — green | Solid | 0.85 | None | None |
-| **Running** | `oklch(0.65 0.18 250)` — blue | Solid | 0.90 | None | Pulse: opacity oscillates 0.7–1.0 over 1.5s. Bar width grows rightward. |
-| **Failed** | `oklch(0.60 0.22 25)` — red | Diagonal hatch (45°, 3px spacing) | 0.85 | None | None |
-| **Cancelled** | `oklch(0.72 0.15 85)` — amber | Vertical stripe (4px spacing) | 0.75 | None | None |
-| **Cancelling** | `oklch(0.72 0.15 85)` — amber | Vertical stripe | 0.75 | 1px dashed `--color-border` | Pulse: slow opacity oscillation |
-| **Skipped** | `oklch(0.45 0.00 0)` — grey | Solid | 0.40 | 1px dotted `--color-border` | None |
-| **Pending** | None (empty row) | — | — | 1px dashed `--color-border` at row midline | None |
-| **None** | None (empty row) | — | — | Grey dashed midline | None |
+All colours reference design tokens. No raw hex or OKLCH values.
+
+| Status | Fill Token | Pattern | Animation |
+|--------|-----------|---------|-----------|
+| **Completed** | `--status-succeeded` | Solid | None |
+| **Running** | `--accent` | Solid | Pulse: opacity oscillates 0.7–1.0 over 1.5s. Bar grows rightward. |
+| **Failed** | `--status-failed` | Diagonal hatch (45°, 3px spacing) | None |
+| **Cancelled** | `--status-cancelled` | Vertical stripe (4px spacing) | None |
+| **Cancelling** | `--status-cancelled` | Vertical stripe | Pulse: slow opacity oscillation (2s period) |
+| **Skipped** | `--status-pending` | Solid, 0.40 opacity | None — 1px dotted `--color-border` outline |
+| **Pending** | None (empty row) | — | 1px dashed `--color-border` at row midline |
+
+**Sort-order pseudocode:**
+
+```javascript
+function sortNodes(nodes, dagLayout) {
+    return nodes.slice().sort((a, b) => {
+        const layerA = dagLayout.getLayer(a.id)
+        const layerB = dagLayout.getLayer(b.id)
+        if (layerA !== layerB) return layerA - layerB
+
+        const startA = a.startedAt ?? Infinity
+        const startB = b.startedAt ?? Infinity
+        if (startA !== startB) return startA - startB
+
+        return a.name.localeCompare(b.name)
+    })
+}
+```
 
 ### 4.3 Bar Content (Adaptive)
 
@@ -165,28 +245,37 @@ Content inside a bar adapts based on available pixel width:
 
 | Bar Width | Content Rendered |
 |-----------|-----------------|
-| ≥ 120px | Node name (truncated) + duration (e.g., `SourceA  2.3s`) |
+| >= 120px | Node name (truncated) + duration (e.g., `SourceA  2.3s`) |
 | 60–119px | Duration only (e.g., `2.3s`) |
 | 20–59px | Duration abbreviated (e.g., `2s`) |
 | 3–19px | Nothing inside — tooltip only |
 | < 3px | 3px minimum-width sliver — tooltip only |
 
 **Text rendering on canvas:**
-- Font: 11px `--font-mono`
-- Color: white (`oklch(1.00 0 0)`) with 1px shadow for contrast on colored bars
-- Alignment: left-padded 6px from bar left edge, vertically centered
-- Overflow: clip at bar right edge minus 4px
 
-### 4.4 Bar Positioning
+- **Font:** 11px `--font-mono`
+- **Colour:** `--color-bg` (white text on coloured bars) with 1px `rgba(0,0,0,0.3)` shadow for contrast
+- **Alignment:** left-padded 6px from bar left edge, vertically centered in bar
+- **Overflow:** clip at bar right edge minus `--space-1`
 
-```
+### 4.4 Bar Positioning Formula
+
+```javascript
+// Constants
+const ROW_HEIGHT    = 28   // px
+const BAR_HEIGHT    = 20   // px
+const ROW_PAD_TOP   = 4    // px — (ROW_HEIGHT - BAR_HEIGHT) / 2
+
+// Per-bar calculation
 barX      = (node.startedAt - execution.startedAt) * pxPerSec
-barWidth  = node.duration * pxPerSec  // or (now - node.startedAt) if running
-barY      = rowIndex * ROW_HEIGHT + ROW_PADDING_TOP
-barHeight = BAR_HEIGHT  // 20px
+barWidth  = node.duration * pxPerSec       // static
+barWidth  = (Date.now() - node.startedAt) * pxPerSec  // running
+barY      = rowIndex * ROW_HEIGHT + ROW_PAD_TOP
+barHeight = BAR_HEIGHT
 ```
 
-For running nodes: `barWidth` recalculates every animation frame to produce the growth effect.
+For running nodes, `barWidth` recalculates every animation frame to produce the
+growth effect.
 
 ---
 
@@ -194,34 +283,46 @@ For running nodes: `barWidth` recalculates every animation frame to produce the 
 
 ### 5.1 Layer Grouping
 
-Nodes from the same DAG layer that overlap in time are stacked vertically, visually demonstrating concurrent execution:
+Nodes from the same DAG layer that overlap in time stack vertically, visually
+demonstrating concurrent execution:
 
 ```
 Layer 1: ├──SourceA──────┤├──SourceB─────────┤├──SourceC────┤
+         ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ (separator)
 Layer 2:                  ├──Transform1────────┤
                           ├──Transform2──────┤
+         ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
 Layer 3:                                       ├──Merge──────────────┤
 ```
 
-A thin horizontal separator (1px, `--color-border`, 0.2 opacity) appears between layer groups.
+A thin horizontal separator (1px, `--color-border` at 0.2 opacity) appears
+between layer groups.
 
 ### 5.2 Parallel Limit Line
 
-- Horizontal marker at `parallelNodeLimit` rows from top (if count of concurrent nodes at any point equals the limit)
-- Rendered as a dashed line (`--color-accent`, 0.4 opacity, `[4, 4]` dash pattern)
-- Label: `∥ limit: {N}` at the right end, 10px `--font-mono`, `--color-text-secondary`
-- Only shown when at least one time slice hits the parallel limit
+When at least one time slice reaches the `parallelNodeLimit`:
+
+| Property | Value |
+|----------|-------|
+| Style | Dashed line — `--accent` at 0.4 opacity, `[4, 4]` dash pattern |
+| Position | Horizontal, drawn at the Y offset of the `parallelNodeLimit`-th concurrent row |
+| Label | `∥ limit: {N}` — 10px `--font-mono`, `--color-text-secondary`, right-aligned |
+| Visibility | Only when at least one time slice equals the configured limit |
 
 ### 5.3 Bottleneck Highlighting
 
-A node is flagged as a bottleneck when:
-- It is the **only running node** for > 20% of the total execution duration
-- All other nodes in subsequent layers are blocked waiting for it
+A node is flagged as a **bottleneck** when:
 
-Visual treatment:
-- 2px left border in `oklch(0.70 0.20 30)` (warm orange)
-- Row background: subtle warm tint `oklch(0.20 0.02 30 / 0.15)`
-- Tooltip appends: `⚠ Bottleneck — blocked pipeline for {duration}`
+- It is the **only running node** for > 20% of total execution duration
+- All subsequent-layer nodes are blocked waiting for it
+
+**Visual treatment (light theme):**
+
+| Element | Value |
+|---------|-------|
+| Left border | 2px solid `--status-cancelled` (amber — warmth indicates caution) |
+| Row background | `--accent-dim` tinted toward amber (`rgba(229, 148, 12, 0.06)`) |
+| Tooltip addendum | `◆ Bottleneck — blocked pipeline for {duration}` |
 
 ---
 
@@ -229,32 +330,36 @@ Visual treatment:
 
 ### 6.1 Two-Way Binding Contract
 
-The Gantt chart and DAG graph canvas share a `selectedNodeId` via the `DagStudio` orchestrator. Neither component directly references the other — they communicate through callbacks.
+The Gantt chart and DAG graph canvas share a `selectedNodeId` via the
+`DagStudio` orchestrator. Neither component directly references the other —
+communication flows exclusively through callbacks.
 
-| Source Action | Gantt Behavior | Graph Behavior |
+| Source Action | Gantt Behaviour | Graph Behaviour |
 |---------------|----------------|----------------|
-| Click Gantt bar | Set `selectedNodeId` → fire `onNodeSelected(id)` | Graph receives callback → pan to node, apply selection highlight |
-| Click graph node | — | Set `selectedNodeId` → fire `onNodeSelected(id)` |
-| Gantt receives `onNodeSelected(id)` | Highlight bar (2px outline `--color-accent`), scroll row into view | — |
-| Graph receives `onNodeSelected(id)` | — | Pan viewport to node, apply selection glow |
+| Click Gantt bar | Set `selectedNodeId`, fire `onNodeSelected(id)` | Pan to node, apply selection glow |
+| Click graph node | — | Set `selectedNodeId`, fire `onNodeSelected(id)` |
+| Gantt receives `highlightNode(id)` | 2px outline `--accent`, scroll row into view | — |
+| Graph receives selection | — | Pan viewport, apply selection glow |
 | Hover Gantt bar | Emit `onNodeHovered(id)` | Graph highlights node with hover ring |
-| Hover graph node | Gantt highlights row with background tint | — |
-| Clear selection (click empty area) | Remove bar highlight | Remove node highlight |
+| Hover graph node | Gantt highlights row with `--color-bg-tertiary` | — |
+| Click empty area | Clear bar highlight | Clear node highlight |
 
 ### 6.2 Cross-Highlight Visuals
 
 | State | Gantt Bar Treatment | Label Treatment |
 |-------|--------------------|-----------------| 
-| Hovered (from either source) | Row background: `oklch(0.22 0 0 / 0.5)` | Label text: `--color-text-primary` (from secondary) |
-| Selected (from either source) | 2px outline: `--color-accent`, row background: `oklch(0.22 0.03 250 / 0.3)` | Label text: `--color-accent`, bold weight |
-| Neither | No row highlight | Label text: `--color-text-secondary` |
+| **Hovered** (from either source) | Row background: `--color-bg-tertiary` | Label: `--color-text` (promoted from secondary) |
+| **Selected** (from either source) | 2px outline: `--accent`, row background: `--accent-dim` | Label: `--accent`, `font-weight: 600` |
+| **Neither** | No row highlight, `--color-bg` | Label: `--color-text-secondary` |
 
 ### 6.3 Scroll-Into-View
 
 When a node is selected from the graph and its Gantt bar is not visible:
+
 1. Smooth-scroll the bar grid vertically to center the target row
-2. If the bar's time range is outside the horizontal viewport, smooth-scroll horizontally to show the bar with 20% padding on each side
-3. Animation: 200ms ease-out scroll
+2. If the bar's time range is outside the horizontal viewport, smooth-scroll
+   horizontally to show the bar with 20% padding on each side
+3. Animation: 200ms `ease-out` scroll via `element.scrollTo({ behavior: 'smooth' })`
 
 ---
 
@@ -264,13 +369,13 @@ When a node is selected from the graph and its Gantt bar is not visible:
 
 During active DAG execution (`DagExecutionStatus === 'running'`):
 
-1. **Animation loop**: `requestAnimationFrame` at 60fps redraw
-2. For each node with `status === 'running'`:
+1. **Animation loop:** `requestAnimationFrame` drives 60fps redraw
+2. For each node with `status === Running`:
    - `barWidth = (Date.now() - node.startedAt) * pxPerSec`
-   - Repaint only the dirty region (bar's previous rect + new extent)
+   - Repaint only the dirty region (bar's previous rect union new extent)
 3. **Now marker** advances with wall-clock time
-4. **Time axis** extends if execution exceeds initial viewport:
-   - When Now marker reaches 85% of canvas width, the time scale compresses smoothly (200ms transition) to add 30% headroom
+4. **Time axis auto-extend:** when the Now marker reaches 85% of canvas width,
+   the time scale compresses smoothly (200ms transition) to add 30% headroom
 
 ### 7.2 Node Lifecycle Events
 
@@ -278,29 +383,31 @@ Events arrive via `AutoDetector.onExecutionUpdated()`:
 
 | Event | Gantt Action |
 |-------|-------------|
-| `Executing node {name}` | Create new bar at current time position. Status = running. Begin growth animation. |
-| `Executed node {name}` (success) | Freeze bar width at final duration. Set status = completed. Apply green fill. |
-| `Executed node {name}` (failed) | Freeze bar width. Set status = failed. Apply red hatched fill. |
-| Node skipped | Render empty row with skipped styling. No bar, grey dashed midline. |
-| Node cancelled | Freeze bar at current width. Set status = cancelled. Apply amber striped fill. |
-| Execution completed | Stop animation loop. Render total duration. Hide Now marker. |
+| `Executing node {name}` | Create bar at current time. Status = Running. Begin growth animation. |
+| `Executed node {name}` (success) | Freeze bar width. Status = Completed. Fill with `--status-succeeded`. |
+| `Executed node {name}` (failed) | Freeze bar width. Status = Failed. Apply `--status-failed` + hatch. |
+| Node skipped | Render row with Skipped styling. Dashed midline, muted `--status-pending`. |
+| Node cancelled | Freeze bar. Status = Cancelled. Apply `--status-cancelled` + stripe. |
+| Execution completed | Stop animation loop. Final duration in footer. Hide Now marker. |
 
 ### 7.3 New Node Appearance
 
 When a new node starts executing:
+
 1. Insert row at correct sort position (by layer, then start time)
-2. Slide existing rows down with 150ms ease transition (CSS `transform: translateY`)
-3. New bar fades in from 0 → 1 opacity over 100ms
-4. If the new row is below the visible scroll area, do **not** auto-scroll (avoid jank during busy execution). Exception: if the node is failed, auto-scroll to it.
+2. Slide existing rows down — 150ms `ease` transition via CSS `transform: translateY`
+3. New bar fades in: 0 → 1 opacity over 100ms
+4. Do **not** auto-scroll if the new row is off-screen (avoids jank during busy
+   execution). **Exception:** if the new node is `Failed`, auto-scroll to it.
 
 ### 7.4 Idle vs Active Rendering
 
 | State | Render Strategy |
 |-------|----------------|
 | No execution loaded | Static — render once. No animation loop. |
-| Historical execution viewed | Static — render once. No animation loop. |
-| Live execution in progress | 60fps `requestAnimationFrame` loop. Dirty-rect repainting. |
-| Live execution, Gantt tab not visible | Pause animation loop. Resume on tab switch. Track elapsed time to catch up. |
+| Historical execution | Static — render once. No animation loop. |
+| Live execution in progress | 60fps `requestAnimationFrame`. Dirty-rect repaint. |
+| Live execution, Gantt tab hidden | Pause loop. Resume on tab switch. Track elapsed to catch up. |
 
 ---
 
@@ -308,7 +415,8 @@ When a new node starts executing:
 
 ### 8.1 Trigger
 
-Activated from the Execution History table: user selects two rows → clicks "Compare" → Gantt enters comparison mode.
+Activated from the Execution History table: user selects two rows, clicks
+"Compare". Gantt enters comparison mode.
 
 ### 8.2 Visual Design
 
@@ -317,119 +425,161 @@ Two runs overlaid on the same time axis, aligned to execution start (t=0):
 | Run | Bar Style | Label |
 |-----|-----------|-------|
 | **Run A** (older) | Solid fill at 0.5 opacity | `A` badge on label |
-| **Run B** (newer) | Striped pattern overlay at 0.7 opacity | `B` badge on label |
+| **Run B** (newer) | Striped pattern at 0.7 opacity | `B` badge on label |
 
-Each node gets two bars stacked vertically within its row:
-- Row height doubles to 48px (4px padding + 20px bar A + 4px gap + 20px bar B + 0px)
-- Bar A on top, Bar B below
-- Bars use their status color but with the solid/striped differentiation
+Each node gets two bars stacked vertically:
+
+```
+┌────────────────────────────────────────────────┐
+│ 4px pad                                        │
+│ ├───── Run A bar (solid, 0.5 opacity) ────┤    │  20px
+│ 4px gap                                        │
+│ ├───── Run B bar (striped, 0.7 opacity) ──────┤│  20px
+│ 0px                                            │
+└────────────────────────────────────────────────┘
+              Total row: 48px
+```
+
+Row height doubles to 48px (4px + 20px + 4px + 20px). Bar A on top, Bar B
+below. Both bars use their respective status colour but with solid vs striped
+differentiation.
 
 ### 8.3 Timing Difference Indicators
 
 | Condition | Visual |
 |-----------|--------|
-| Run B faster (> 10% improvement) | Green `▾ −{diff}` badge at bar end |
-| Run B slower (> 10% regression) | Red `▴ +{diff}` badge at bar end |
-| Similar (within 10%) | No badge |
-| Node missing in one run | Single bar with `(only in A)` or `(only in B)` label, muted opacity |
-| Status changed | Status pill showing `A:● → B:●` transition in label column |
+| Run B faster (> 10% improvement) | `--status-succeeded` badge: `▾ −{diff}` at bar end |
+| Run B slower (> 10% regression) | `--status-failed` badge: `▴ +{diff}` at bar end |
+| Within 10% | No badge |
+| Node only in one run | Single bar with `(only in A)` or `(only in B)` label, 0.4 opacity |
+| Status changed between runs | Status pill: `A:● → B:●` in label column |
 
 ### 8.4 Comparison Summary Footer
 
-Replaces the standard footer with comparison stats:
+Replaces the standard footer:
 
 ```
 Run A: 45.2s ● Completed │ Run B: 1m 12s ● Failed │ Δ +26.8s (+59%) │ 3 regressions │ 1 new failure
 ```
 
+- Status dots use the corresponding `--status-*` token
+- Delta positive (regression): `--status-failed` colour
+- Delta negative (improvement): `--status-succeeded` colour
+
 ### 8.5 Exit Comparison
 
-- Click "Exit Compare" button in summary footer → return to single-run view
-- Pressing `Escape` also exits comparison mode
-- Row heights animate back to 28px over 200ms
+- "Exit Compare" button in summary footer → single-run view
+- `Escape` key also exits comparison mode
+- Row heights animate 48px → 28px over 200ms `ease-out`
 
 ---
 
 ## 9. Rendering Strategy
 
-### 9.1 Canvas 2D vs HTML/CSS Analysis
+### 9.1 Canvas 2D vs DOM Analysis
 
-| Factor | HTML/CSS (`<div>` bars) | Canvas 2D | Decision |
-|--------|------------------------|-----------|----------|
-| 50 nodes | ✅ Trivial — 50 divs, CSS transitions | ✅ Easy | Tie |
-| 300 nodes | 🟡 300 divs with scroll — DOM overhead, reflow during animation | ✅ Single draw call, dirty-rect repaint | Canvas |
-| Real-time growth | 🟡 CSS `width` transition per bar = N reflows/frame | ✅ Redraw dirty rect only | Canvas |
-| Text in bars | ✅ Native DOM text | 🟡 `ctx.fillText` — no subpixel hinting | HTML better |
-| Tooltips | ✅ Native CSS `:hover` + tooltip div | 🟡 Manual hit-test + positioned overlay | HTML better |
-| Time axis labels | ✅ Positioned divs | 🟡 Canvas text less crisp | HTML better |
-| Horizontal scroll/zoom | 🟡 `overflow-x: auto` + JS zoom logic | ✅ Transform matrix, efficient | Canvas |
-| Comparison mode (2× bars) | 🟡 600 divs, more reflow | ✅ Same canvas, double the bars | Canvas |
-| Accessibility | ✅ ARIA roles on divs | ❌ Opaque canvas | HTML better |
+| Factor | DOM (`<div>` bars) | Canvas 2D | Winner |
+|--------|-------------------|-----------|--------|
+| 50 nodes | Trivial — 50 divs | Easy | Tie |
+| 300 nodes | 300 divs, reflow during animation | Single draw call, dirty-rect | Canvas |
+| Real-time growth | CSS `width` = N reflows/frame | Redraw dirty rect only | Canvas |
+| Text in bars | Native DOM text, crisp | `ctx.fillText` — adequate | DOM |
+| Tooltips | Native CSS hover | Manual hit-test + overlay | DOM |
+| Time axis labels | Positioned divs | Canvas text less crisp | DOM |
+| Scroll/zoom | `overflow` + JS zoom | Transform matrix, efficient | Canvas |
+| Comparison (2x bars) | 600 divs, reflow | Same canvas, double bars | Canvas |
+| Accessibility | ARIA roles | Opaque canvas | DOM |
 
-**Decision: Hybrid approach (matches spec Section 2.3)**
+**Decision: Hybrid approach**
 
-- **Canvas 2D** for the bar grid: all colored bars, hatching patterns, gridlines, bottleneck highlights. Gives us dirty-rect repaint for live execution and scales to 300 nodes.
-- **DOM overlay** for: time axis labels, node name labels (left column), tooltips, comparison badges, summary footer. Gives us crisp text, native events, accessibility.
+- **Canvas 2D** for the bar grid: bars, hatching, gridlines, bottleneck indicators,
+  selection outlines. Dirty-rect repaint scales to 300 nodes.
+- **DOM overlay** for: time axis labels, node name labels (left column), tooltips,
+  comparison badges, summary footer. Crisp text, native events, accessible.
 
 ### 9.2 Canvas Rendering Pipeline
 
-Each frame (during live execution) or on demand (static):
+Each frame (live) or on demand (static). Seven ordered passes:
 
 ```
-1. Clear dirty region (or full canvas on resize/zoom)
-2. Draw gridlines
-   - Major ticks: full-height vertical lines
-   - Minor ticks: half-height vertical lines
-   - Layer separators: horizontal hairlines
-3. Draw bars (bottom to top for correct z-order)
-   For each node in sorted order:
-     - Calculate barX, barWidth, barY from time scale
-     - ctx.fillStyle = statusColor
-     - ctx.fillRect(barX, barY, barWidth, BAR_HEIGHT)
-     - If failed: overlay hatch pattern (pre-rendered to offscreen canvas)
-     - If cancelled: overlay stripe pattern
-     - If running: apply pulsing opacity (sinusoidal, 1.5s period)
-     - If width >= 60px: ctx.fillText(label) inside bar
-4. Draw Now marker (if live)
-   - Vertical line at currentTime position
-5. Draw selection highlight
-   - 2px stroke rect around selected bar
-6. Draw bottleneck indicators
-   - Left border + row tint for flagged nodes
-7. Draw parallel limit line (if applicable)
+┌─────────────────────────────────────────────┐
+│ Pass 1: Clear dirty region                  │
+│         (full canvas on resize/zoom)        │
+├─────────────────────────────────────────────┤
+│ Pass 2: Draw gridlines                      │
+│         Major ticks  → --color-border 0.3   │
+│         Minor ticks  → --color-border 0.15  │
+│         Layer seps   → --color-border 0.2   │
+├─────────────────────────────────────────────┤
+│ Pass 3: Draw bars (sorted order)            │
+│         status colour → fill → pattern      │
+│         → text (if width >= 60px)           │
+├─────────────────────────────────────────────┤
+│ Pass 4: Draw Now marker (if live)           │
+│         1.5px --accent vertical line        │
+├─────────────────────────────────────────────┤
+│ Pass 5: Draw selection highlight            │
+│         2px --accent stroke rect            │
+├─────────────────────────────────────────────┤
+│ Pass 6: Draw bottleneck indicators          │
+│         Left border + row tint              │
+├─────────────────────────────────────────────┤
+│ Pass 7: Draw parallel limit line            │
+│         Dashed --accent at 0.4 opacity      │
+└─────────────────────────────────────────────┘
 ```
 
 ### 9.3 Offscreen Pattern Canvases
 
-Hatch and stripe patterns are pre-rendered to small offscreen canvases once, then used as `ctx.createPattern()` fills:
+Hatch and stripe patterns are pre-rendered once to tiny offscreen canvases, then
+reused via `ctx.createPattern()`:
 
-| Pattern | Canvas Size | Drawing |
-|---------|------------|---------|
-| Failed hatch | 8×8px | Two 1px diagonal lines at 45° in semi-transparent white |
-| Cancelled stripe | 8×8px | Two 2px vertical lines in semi-transparent white |
+| Pattern | Canvas | Drawing | Used For |
+|---------|--------|---------|----------|
+| Diagonal hatch | 8×8px | Two 1px lines at 45° in `rgba(255,255,255,0.35)` | Failed bars |
+| Vertical stripe | 8×8px | Two 2px vertical lines in `rgba(255,255,255,0.30)` | Cancelled bars |
+| Comparison stripe | 8×8px | Alternating 2px bars in `rgba(255,255,255,0.25)` | Run B bars |
 
-### 9.4 Hit Testing
-
-Since bars are on Canvas, mouse events require manual hit-testing:
-
-```
-function hitTest(mouseX, mouseY) {
-    // mouseX/Y already adjusted for scroll offset
-    const rowIndex = Math.floor(mouseY / ROW_HEIGHT)
-    if (rowIndex < 0 || rowIndex >= nodes.length) return null
-
-    const node = sortedNodes[rowIndex]
-    const barX = (node.startedAt - execStart) * pxPerSec
-    const barW = node.duration * pxPerSec
-
-    if (mouseX >= barX && mouseX <= barX + barW) {
-        return node.id
-    }
-    return null  // clicked empty space in the row
+```javascript
+function createHatchPattern() {
+    const c = document.createElement('canvas')
+    c.width = 8; c.height = 8
+    const ctx = c.getContext('2d')
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(0, 8); ctx.lineTo(8, 0)
+    ctx.moveTo(-2, 2); ctx.lineTo(2, -2)
+    ctx.moveTo(6, 10); ctx.lineTo(10, 6)
+    ctx.stroke()
+    return ctx.createPattern(c, 'repeat')
 }
 ```
 
-Complexity: O(1) — direct row index calculation, no spatial indexing needed.
+### 9.4 Hit Testing
+
+Canvas bars require manual hit-testing on mouse events. The algorithm is O(1)
+thanks to direct row-index calculation:
+
+```javascript
+function hitTest(mouseX, mouseY, scrollOffsetY) {
+    const adjustedY = mouseY + scrollOffsetY
+    const rowIndex = Math.floor(adjustedY / ROW_HEIGHT)
+    if (rowIndex < 0 || rowIndex >= this._sortedNodes.length) return null
+
+    const node = this._sortedNodes[rowIndex]
+    if (!node.startedAt) return null  // pending node — no bar
+
+    const barX = (node.startedAt - this._execStart) * this._pxPerSec
+    const barW = (node.duration ?? (Date.now() - node.startedAt)) * this._pxPerSec
+    const clampedW = Math.max(barW, 3)  // minimum bar width
+
+    if (mouseX >= barX && mouseX <= barX + clampedW) {
+        return node.id
+    }
+    return null
+}
+```
 
 ---
 
@@ -437,39 +587,40 @@ Complexity: O(1) — direct row index calculation, no spatial indexing needed.
 
 ### 10.1 Vertical Scroll
 
-- Standard scrollbar on the label column and bar grid, synchronized
-- Implementation: single scroll container wrapping both label column and canvas, OR synced `scrollTop` via JS event listener (label column is DOM, grid is canvas — sync required)
-- Scroll approach: label column `overflow-y: auto` is the scroll leader. On scroll event, update canvas render offset.
+- Label column and bar grid share a synchronised vertical scroll position
+- Label column (`overflow-y: auto`) is the scroll leader
+- On scroll event: update canvas render offset `_scrollY`, trigger repaint
+- Scrollbar styled with `--color-border` track and `--color-text-tertiary` thumb
 
 ### 10.2 Horizontal Zoom (Time Axis)
 
 | Input | Action |
 |-------|--------|
-| `Ctrl+Scroll` (mousewheel) | Zoom time axis in/out, centered on cursor position |
-| Pinch gesture | Same as above (touch devices) |
-| `+` / `-` keys (when Gantt focused) | Zoom in/out by 20% step, centered on viewport center |
-| `0` key | Reset zoom to fit entire execution in viewport |
+| `Ctrl+Scroll` (mousewheel) | Zoom time axis in/out, centred on cursor X |
+| Pinch gesture | Same (touch devices) |
+| `+` / `-` keys (Gantt focused) | Zoom in/out by 20% step, centred on viewport centre |
+| `0` key | Reset zoom to fit entire execution |
 | Click-drag on time axis | Pan horizontally |
 
 **Zoom limits:**
-- Minimum: entire execution fits in viewport (1:1 with auto-scale)
-- Maximum: 1 second fills the viewport width (maximum detail)
 
-**Zoom implementation:**
-```
+- **Minimum:** entire execution fits in viewport (auto-scale baseline)
+- **Maximum:** 1 second fills the viewport width (maximum detail)
+
+```javascript
 function zoom(delta, centerX) {
     const oldPxPerSec = this._pxPerSec
     const newPxPerSec = clamp(
         oldPxPerSec * (1 + delta * 0.1),
-        this._minPxPerSec,   // entire execution fits
-        this._maxPxPerSec    // 1s = canvas width
+        this._minPxPerSec,
+        this._maxPxPerSec
     )
 
-    // Adjust scroll offset to keep centerX stable
-    const timeAtCenter = this._scrollX / oldPxPerSec + centerX / oldPxPerSec
+    // Keep the point under the cursor stable
+    const timeAtCenter = (this._scrollX + centerX) / oldPxPerSec
     this._scrollX = timeAtCenter * newPxPerSec - centerX
-
     this._pxPerSec = newPxPerSec
+
     this._renderTimeAxis()
     this._renderBars()
 }
@@ -478,51 +629,74 @@ function zoom(delta, centerX) {
 ### 10.3 Horizontal Pan
 
 - `Shift+Scroll` (mousewheel): pan left/right
-- Click-drag on empty canvas area: pan
-- Scrollbar: standard horizontal scrollbar below the canvas
+- Click-drag on empty canvas area: pan cursor `grab` → `grabbing`
+- Standard horizontal scrollbar below the canvas
 
-### 10.4 Zoom Synchronization
+### 10.4 Zoom Independence
 
-The Gantt time axis is **independent** of the DAG graph zoom. The graph shows spatial layout; the Gantt shows temporal layout. They don't share a zoom level. However, they share `selectedNodeId` for cross-highlighting (Section 6).
+The Gantt time axis zoom is **independent** of the DAG graph zoom. The graph
+shows spatial layout; the Gantt shows temporal layout. They share
+`selectedNodeId` for cross-highlighting (Section 6) but never zoom state.
 
 ---
 
 ## 11. Resize (Drag Handle)
 
-### 11.1 Drag Behavior
+### 11.1 Drag Behaviour
 
-The drag handle between the graph (top) and the tabbed panel (bottom) allows resizing:
+The drag handle between the graph (top) and the tabbed panel (bottom):
 
 | Property | Value |
 |----------|-------|
-| Handle height | 8px |
+| Handle height | 8px (`--space-2`) |
 | Cursor | `row-resize` |
-| Visual | 2px horizontal line centered, `--color-border`. On hover: `--color-text-secondary`. On drag: `--color-accent`. |
-| Min top panel | 120px (enough for a minimal graph view) |
-| Min bottom panel | 80px (enough for 2 rows + summary) |
+| Idle | 2px horizontal line centred, `--color-border` |
+| Hover | Line colour promoted to `--color-text-tertiary` |
+| Active drag | Line colour: `--accent` |
+| Min top panel | 120px |
+| Min bottom panel | 80px (2 rows + summary) |
 | Default ratio | 60% top / 40% bottom |
 
-### 11.2 Drag Implementation
+### 11.2 Implementation
 
-```
-handle.onmousedown → start drag
-  document.onmousemove → calculate new ratio, apply to flex-basis
-  document.onmouseup → end drag, persist ratio
+```javascript
+handle.addEventListener('mousedown', (e) => {
+    const startY = e.clientY
+    const startRatio = this._splitRatio
+
+    const onMove = (me) => {
+        const dy = me.clientY - startY
+        const containerH = this._container.offsetHeight
+        const newRatio = clamp(
+            startRatio + dy / containerH,
+            120 / containerH,           // min top
+            1 - 80 / containerH         // min bottom
+        )
+        this._applySplitRatio(newRatio)
+    }
+    const onUp = () => {
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        this._persistSplitRatio()
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+})
 ```
 
 ### 11.3 Persistence
 
-- Ratio persisted to `localStorage` key `edog.dagStudio.splitRatio`
+- Key: `localStorage` → `edog.dagStudio.splitRatio`
 - Restored on next DAG Studio activation
 - Default: `0.6` (60% graph, 40% bottom panel)
 
-### 11.4 Responsive Behavior
+### 11.4 Responsive Behaviour
 
-| Container Height | Behavior |
-|-----------------|----------|
-| ≥ 600px | Normal split with persisted ratio |
+| Container Height | Behaviour |
+|-----------------|-----------|
+| >= 600px | Normal split with persisted ratio |
 | 400–599px | Force 50/50 split, ignore persisted ratio |
-| < 400px | Stack vertically: graph collapses to 120px, Gantt takes remaining space |
+| < 400px | Stack: graph collapses to 120px, Gantt fills remainder |
 
 ---
 
@@ -530,32 +704,45 @@ handle.onmousedown → start drag
 
 ### 12.1 Trigger
 
-- Hover over a Gantt bar for 300ms (debounced)
-- Tooltip follows cursor horizontally, anchored 8px above the bar
-- Disappears on mouseout or bar change
+- Hover over a Gantt bar for 300ms (debounced via `setTimeout`)
+- Tooltip follows cursor X, anchored `--space-2` above the bar top edge
+- Disappears immediately on `mouseout` or when cursor moves to a different bar
 
 ### 12.2 Content
 
 ```
-┌─────────────────────────────┐
-│ RefreshSalesData         SQL│
-│ ● Completed                 │
-│ ─────────────────────────── │
-│ Start:    14:23:05.123      │
-│ End:      14:23:07.456      │
-│ Duration: 2.33s             │
-│ Rows:     +1,234 / −0       │
-│ ─────────────────────────── │
-│ ⚠ Bottleneck — 8.2s blocked │  ← only if bottleneck
-└─────────────────────────────┘
+┌─────────────────────────────────┐
+│ RefreshSalesData             SQL│
+│ ● Completed                     │
+│ ──────────────────────────────  │
+│ Start:    14:23:05.123          │
+│ End:      14:23:07.456          │
+│ Duration: 2.33s                 │
+│ Rows:     +1,234 / −0           │
+│ ──────────────────────────────  │
+│ ◆ Bottleneck — 8.2s blocked    │  ← only if flagged
+└─────────────────────────────────┘
 ```
 
-### 12.3 Tooltip Positioning
+**Styling:**
 
-- Preferred: above the bar, centered on cursor X
-- Flip below if insufficient space above
-- Clamp to viewport edges with 8px margin
-- Implementation: DOM `<div>` absolutely positioned over the canvas. Hidden by default, shown on hit-test match.
+| Property | Value |
+|----------|-------|
+| Background | `--color-bg` |
+| Border | 1px solid `--color-border` |
+| Border radius | 6px |
+| Box shadow | `0 2px 8px rgba(0,0,0,0.08)` |
+| Text colour | `--color-text` (primary), `--color-text-secondary` (labels) |
+| Status dot | Filled circle in corresponding `--status-*` token |
+| Max width | 280px |
+| Font | 12px system, `--font-mono` for timestamps and numbers |
+
+### 12.3 Positioning
+
+- Preferred: above the bar, centred on cursor X
+- Flip below if insufficient space above (< tooltip height + `--space-2`)
+- Clamp to viewport edges with `--space-2` margin
+- DOM `<div>` absolutely positioned over the canvas, hidden by default
 
 ---
 
@@ -563,138 +750,193 @@ handle.onmousedown → start drag
 
 | Key | Context | Action |
 |-----|---------|--------|
-| `↑` / `↓` | Gantt focused | Move selection to previous/next node row |
-| `←` / `→` | Gantt focused | Pan time axis left/right by 10% of viewport |
-| `Enter` | Node row focused | Select node → fires `onNodeSelected`, opens detail panel |
+| `Up` / `Down` | Gantt focused | Move selection to previous/next node row |
+| `Left` / `Right` | Gantt focused | Pan time axis left/right by 10% of viewport width |
+| `Enter` | Row focused | Select node → fire `onNodeSelected`, open detail panel |
 | `Escape` | Any | Clear selection. Exit comparison mode if active. |
-| `+` / `=` | Gantt focused | Zoom in time axis 20% |
-| `-` | Gantt focused | Zoom out time axis 20% |
+| `+` / `=` | Gantt focused | Zoom in time axis by 20% |
+| `-` | Gantt focused | Zoom out time axis by 20% |
 | `0` | Gantt focused | Fit entire execution in viewport |
 | `Home` | Gantt focused | Scroll to t=0 (execution start) |
 | `End` | Gantt focused | Scroll to execution end (or Now marker if live) |
-| `Tab` | Gantt focused | Move focus to next interactive region (label column → bar grid → controls) |
+| `Tab` | Gantt focused | Cycle focus: label column → bar grid → footer controls |
 
-Focus indicator: 2px outline `--color-accent` on the focused row (matches selection outline but dashed).
+**Focus indicator:** 2px dashed `--accent` outline on the focused row (dashed
+distinguishes focus from the solid selection outline).
 
 ---
 
 ## 14. Performance Budget
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Initial render (50 nodes) | < 16ms (1 frame) | `performance.mark` around `renderExecution()` |
-| Initial render (300 nodes) | < 50ms (3 frames) | Same |
-| Live frame time (50 nodes running) | < 8ms per frame (120fps headroom) | `requestAnimationFrame` delta |
-| Live frame time (300 nodes, 20 running) | < 16ms per frame (60fps) | Same |
-| Hit-test latency | < 1ms | O(1) row lookup |
-| Zoom response | < 16ms | Time scale recalculation + redraw |
-| Memory (50 nodes) | < 2MB | Canvas buffer + node data |
-| Memory (300 nodes) | < 8MB | Same |
+### 14.1 Targets
 
-### 14.1 Optimization Techniques
+| Metric | 50 Nodes | 300 Nodes | Measurement |
+|--------|----------|-----------|-------------|
+| Initial render | < 16ms (1 frame) | < 50ms (3 frames) | `performance.mark` around `renderExecution()` |
+| Live frame time | < 8ms (120fps headroom) | < 16ms (60fps) | `requestAnimationFrame` delta |
+| Hit-test latency | < 1ms | < 1ms | O(1) row lookup |
+| Zoom response | < 16ms | < 16ms | Scale recalc + redraw |
+| Memory | < 2MB | < 8MB | Canvas buffer + node data |
+
+### 14.2 Optimization Techniques
 
 | Technique | Application |
 |-----------|-------------|
-| **Dirty-rect repaint** | Only redraw bars that changed (running bars + newly completed) |
+| **Dirty-rect repaint** | Only redraw bars that changed (running + newly completed) |
 | **Offscreen pattern caching** | Hatch/stripe patterns rendered once to offscreen canvas |
-| **Row virtualization** | Only render rows visible in the scroll viewport + 2-row buffer |
-| **Frame skipping** | If `requestAnimationFrame` callback takes > 16ms, skip next frame |
-| **Time axis caching** | Time axis redraws only on zoom/pan, not every bar frame |
-| **Batch DOM updates** | Label column updates batched in single `requestAnimationFrame` |
+| **Row virtualisation** | Only render rows visible in scroll viewport + 2-row buffer |
+| **Frame skipping** | If rAF callback exceeds 16ms, skip next frame to avoid compounding |
+| **Time axis caching** | Axis redraws only on zoom/pan, decoupled from bar frame loop |
+| **Batch DOM updates** | Label column mutations batched in single `requestAnimationFrame` |
 
 ---
 
 ## 15. Error Handling
 
-| Error | User Sees | Recovery |
-|-------|-----------|----------|
-| Execution metrics fetch fails (network) | "Could not load execution data" with retry button | Retry button calls `getDagExecMetrics()` again |
-| Execution metrics fetch fails (404) | "Execution not found — it may have been garbage collected" | Disable Gantt, show empty state |
-| Execution metrics fetch fails (401) | "Session expired — re-authenticate" | Redirect to auth flow |
-| Canvas context creation fails | "Gantt chart unavailable — Canvas not supported" | Fallback to text summary of node timings |
-| No nodes in execution | "Empty execution — no nodes ran" | Show empty state with dashed border |
-| Corrupted timing data (start > end) | Render bar as 3px sliver + tooltip "Invalid timing data" | Log warning to console |
-| WebSocket disconnect during live | Gantt freezes. "Connection lost" banner (from global handler). | On reconnect: fetch latest metrics, reconcile bar states |
-| Comparison with incompatible DAGs | "DAG structure changed between runs — {N} nodes differ" banner at top of comparison | Still render comparison, mark mismatched nodes |
+| Error | User Message | Recovery |
+|-------|-------------|----------|
+| Metrics fetch fails (network) | "Could not load execution data" + retry button | Retry calls `getDagExecMetrics()` |
+| Metrics fetch 404 | "Execution not found — may have been garbage collected" | Disable Gantt, show empty state |
+| Metrics fetch 401 | "Session expired — re-authenticate" | Redirect to auth flow |
+| Canvas context fails | "Gantt chart unavailable — Canvas not supported" | Fallback to text summary of timings |
+| Empty execution (0 nodes) | "Empty execution — no nodes ran" | Empty state with dashed `--color-border` border |
+| Corrupted timing (start > end) | 3px sliver bar + tooltip "Invalid timing data" | Log warning to console |
+| WebSocket disconnect (live) | Gantt freezes. "Connection lost" banner (global handler). | On reconnect: refetch metrics, reconcile bars |
+| Incompatible DAGs (comparison) | "DAG structure changed — {N} nodes differ" banner | Still render, mark mismatched nodes |
+
+All error messages use `--color-text` on `--color-bg`. Warning/error icons use
+`--status-failed` for errors, `--status-cancelled` for warnings. No emoji —
+use `◆` for info, `✕` for errors.
 
 ---
 
 ## 16. DagGantt Class API
 
-```
+### 16.1 Public Methods
+
+```javascript
 class DagGantt {
+    /**
+     * @param {HTMLElement} containerEl — parent div for the Gantt panel
+     */
     constructor(containerEl)
-    // containerEl: the parent div for the Gantt panel
 
-    // === Public API ===
+    // ── Rendering ──────────────────────────────────────────────
 
+    /**
+     * Render a complete execution from DagExecutionInstance data.
+     * Clears previous content. Builds sorted node list, calculates
+     * time scale, renders canvas + DOM.
+     * @param {DagExecutionInstance} executionInstance
+     */
     renderExecution(executionInstance)
-    // Render a complete execution from DagExecutionInstance data.
-    // Clears previous content. Builds sorted node list, calculates time scale.
 
+    /**
+     * Real-time update for a single node during live execution.
+     * Creates bar if node not yet rendered; updates in place otherwise.
+     * @param {string} nodeId
+     * @param {{ status: string, startedAt: number?, endedAt: number? }} update
+     */
     updateBar(nodeId, { status, startedAt, endedAt })
-    // Real-time update for a single node during live execution.
-    // If node not yet rendered, creates it. If already rendered, updates in place.
 
+    // ── Cross-highlighting ─────────────────────────────────────
+
+    /**
+     * Highlight a bar with selection outline, scroll into view.
+     * Called by DagStudio when a graph node is selected.
+     * @param {string} nodeId
+     */
     highlightNode(nodeId)
-    // Cross-highlight: outline the bar, scroll into view.
-    // Called by DagStudio when graph node is selected.
 
+    /**
+     * Apply hover background to a row.
+     * Called by DagStudio when a graph node is hovered.
+     * @param {string} nodeId
+     */
     hoverNode(nodeId)
-    // Cross-hover: apply hover background to row.
-    // Called by DagStudio when graph node is hovered.
 
+    /**
+     * Remove all selection and hover highlights.
+     */
     clearHighlight()
-    // Remove selection + hover highlights.
 
+    // ── Comparison ─────────────────────────────────────────────
+
+    /**
+     * Enter comparison mode: overlay two runs.
+     * Doubles row height. Applies solid/striped differentiation.
+     * @param {DagExecutionInstance} runA — older run
+     * @param {DagExecutionInstance} runB — newer run
+     */
     renderComparison(runA, runB)
-    // Enter comparison mode: two DagExecutionInstances overlaid.
-    // Row height doubles. Bars get solid/striped differentiation.
 
+    /**
+     * Exit comparison mode. Animate row heights back to 28px.
+     */
     exitComparison()
-    // Return to single-run view. Animate row height back to 28px.
 
+    // ── Zoom / Layout ──────────────────────────────────────────
+
+    /**
+     * Programmatic zoom control.
+     * @param {'fit' | number} level — 'fit' or pxPerSec value
+     */
     setTimeZoom(level)
-    // Programmatic zoom. level: 'fit' | number (pxPerSec).
 
+    /**
+     * Re-measure container and re-render. Called on drag-handle
+     * resize and window resize events.
+     */
     resize()
-    // Called when container size changes (drag handle, window resize).
-    // Recalculates canvas dimensions and re-renders.
 
+    // ── Lifecycle ──────────────────────────────────────────────
+
+    /**
+     * Tear down: cancel rAF, remove listeners, remove DOM, release ctx.
+     */
     destroy()
-    // Tear down: cancel animation frame, remove event listeners,
-    // remove DOM elements, release canvas context.
-
-    // === Callbacks (set by DagStudio orchestrator) ===
-
-    onNodeSelected    = null  // (nodeId) => void
-    onNodeHovered     = null  // (nodeId) => void
-    onNodeUnhovered   = null  // () => void
-
-    // === Private ===
-
-    _calculateTimeScale(startTime, endTime)
-    _renderBars()
-    _renderTimeAxis()
-    _renderGridlines()
-    _renderNowMarker()
-    _renderBottlenecks()
-    _renderParallelLimitLine()
-    _hitTest(mouseX, mouseY)
-    _startAnimationLoop()
-    _stopAnimationLoop()
-    _handleMouseMove(e)
-    _handleMouseClick(e)
-    _handleWheel(e)
-    _handleKeyDown(e)
-    _sortNodes(nodes, dagLayout)
-    _createPatternCanvases()
 }
 ```
+
+### 16.2 Callbacks
+
+Set by the `DagStudio` orchestrator after construction:
+
+```javascript
+gantt.onNodeSelected   = (nodeId) => { /* … */ }
+gantt.onNodeHovered    = (nodeId) => { /* … */ }
+gantt.onNodeUnhovered  = ()       => { /* … */ }
+```
+
+### 16.3 Private Methods
+
+| Method | Responsibility |
+|--------|---------------|
+| `_calculateTimeScale(start, end)` | Returns `{ unit, tickInterval, pxPerSec, totalSec }` |
+| `_renderBars()` | Full bar-grid canvas repaint (all 7 passes) |
+| `_renderTimeAxis()` | DOM overlay — tick labels + total duration |
+| `_renderGridlines()` | Canvas pass 2 — major/minor ticks, layer separators |
+| `_renderNowMarker()` | Canvas pass 4 — live marker line |
+| `_renderBottlenecks()` | Canvas pass 6 — left borders + row tint |
+| `_renderParallelLimitLine()` | Canvas pass 7 — dashed limit line |
+| `_hitTest(x, y)` | Returns `nodeId` or `null`. O(1). |
+| `_startAnimationLoop()` | Begin `requestAnimationFrame` cycle |
+| `_stopAnimationLoop()` | Cancel rAF, set `_animating = false` |
+| `_handleMouseMove(e)` | Hover detection via hit-test, tooltip positioning |
+| `_handleMouseClick(e)` | Selection via hit-test, fire `onNodeSelected` |
+| `_handleWheel(e)` | Ctrl+wheel → zoom, Shift+wheel → pan |
+| `_handleKeyDown(e)` | Keyboard interactions (Section 13) |
+| `_sortNodes(nodes, layout)` | Layer → startTime → alpha sort |
+| `_createPatternCanvases()` | Build hatch/stripe offscreen patterns |
+| `_detectBottlenecks(nodes)` | Flag nodes running solo > 20% of total |
+| `_formatDuration(ms)` | `2.33s`, `1m 23s`, `2h 05m` |
+| `_applyDPR(canvas)` | Scale canvas for `devicePixelRatio` |
 
 ---
 
 ## 17. Data Flow
+
+### 17.1 Initial Load (Historical or Live)
 
 ```
 DagExecutionInstance (from API or AutoDetector)
@@ -702,40 +944,114 @@ DagExecutionInstance (from API or AutoDetector)
   ▼
 DagStudio._loadExecution(iterationId)
   │
-  ├─▶ DagCanvasRenderer.overlayMetrics(nodeMetrics)
-  │     └── Updates node colors/badges on graph
+  ├──▶ DagCanvasRenderer.overlayMetrics(nodeMetrics)
+  │      └── Updates node colours/badges on graph
   │
-  └─▶ DagGantt.renderExecution(executionInstance)
-        ├── Extract nodeExecutionMetrices map
-        ├── Sort by layer + startTime
-        ├── Calculate time scale
-        ├── Render canvas bars + DOM labels
-        └── If status === 'running': start animation loop
+  └──▶ DagGantt.renderExecution(executionInstance)
+         ├── Extract nodeExecutionMetrics map
+         │     NodeExecutionMetrics {
+         │       Status, StartedAt, EndedAt,
+         │       SessionId, ReplId,
+         │       AddedRowsCount, DroppedRowsCount,
+         │       TotalRowsProcessed,
+         │       ErrorCode, ErrorMessage, Warnings
+         │     }
+         ├── Sort by layer + startTime
+         ├── Calculate time scale
+         ├── Render canvas bars + DOM labels
+         └── If status === Running → start animation loop
+```
 
+### 17.2 Live Updates
+
+```
 AutoDetector.onExecutionUpdated(id, exec)
   │
   ▼
 DagStudio._onExecutionUpdated(id, exec)
   │
-  ├─▶ DagCanvasRenderer.updateNodeState(nodeId, status)
-  └─▶ DagGantt.updateBar(nodeId, { status, startedAt, endedAt })
-        ├── If new node: insert row, create bar
-        ├── If running: update barWidth (animation loop handles growth)
-        └── If terminal: freeze bar, apply final status color
+  ├──▶ DagCanvasRenderer.updateNodeState(nodeId, status)
+  │
+  └──▶ DagGantt.updateBar(nodeId, { status, startedAt, endedAt })
+         ├── New node    → insert row, create bar
+         ├── Running     → update barWidth (rAF loop handles growth)
+         └── Terminal    → freeze bar, apply final status colour
+```
+
+### 17.3 Comparison Flow
+
+```
+ExecutionHistory.onCompareRequested(runIdA, runIdB)
+  │
+  ▼
+DagStudio._loadComparison(runIdA, runIdB)
+  │
+  ├── Fetch both DagExecutionInstances
+  │
+  └──▶ DagGantt.renderComparison(instanceA, instanceB)
+         ├── Merge node lists (union by nodeId)
+         ├── Double row heights to 48px
+         ├── Render paired bars (solid A / striped B)
+         ├── Calculate timing deltas per node
+         └── Render comparison summary footer
 ```
 
 ---
 
 ## 18. Accessibility
 
-| Requirement | Implementation |
-|-------------|----------------|
-| Screen reader: node list | Hidden `<ul>` with `role="list"` mirroring visible rows. Each `<li>` contains node name, status, duration. |
-| Keyboard navigation | Full keyboard support (Section 13). Focus ring on active row. |
-| Color-blind safety | Status uses color + pattern (hatch/stripe/solid/dotted). Never color alone. |
-| Reduced motion | Respect `prefers-reduced-motion`: disable pulse animations, bar growth is instant (jump to final width on each update). |
-| Zoom | Time axis zoom respects browser zoom. Canvas DPI-aware (`devicePixelRatio`). |
-| High contrast | Status patterns remain visible. Bar outlines increase to 2px in high-contrast mode. |
+### 18.1 ARIA Roles
+
+The canvas is opaque to assistive technology. A hidden DOM structure provides
+equivalent information:
+
+```html
+<div role="region" aria-label="DAG execution timeline">
+  <!-- Hidden screen-reader list, mirrors visible rows -->
+  <ul role="list" class="sr-only" aria-live="polite">
+    <li>SourceA, Completed, 2.3 seconds, 1234 rows added</li>
+    <li>SourceB, Running, 5.1 seconds elapsed</li>
+    <!-- … -->
+  </ul>
+  <!-- Visible canvas + DOM overlay -->
+  <canvas aria-hidden="true"></canvas>
+</div>
+```
+
+### 18.2 Keyboard Navigation
+
+Full keyboard support documented in Section 13. Focus ring uses 2px dashed
+`--accent` outline.
+
+### 18.3 Colour-Blind Safety
+
+Status is **never** encoded by colour alone. Every status has a distinct
+pattern or shape:
+
+| Status | Colour | Pattern | Shape/Treatment |
+|--------|--------|---------|-----------------|
+| Completed | `--status-succeeded` | Solid | Full bar |
+| Failed | `--status-failed` | Diagonal hatch | Hatched bar |
+| Cancelled | `--status-cancelled` | Vertical stripe | Striped bar |
+| Skipped | `--status-pending` | Solid, low opacity | Dotted outline |
+| Pending | — | — | Dashed midline |
+| Running | `--accent` | Solid | Pulsing bar |
+
+### 18.4 Reduced Motion
+
+When `prefers-reduced-motion: reduce` is active:
+
+- Pulse animations are disabled (steady opacity)
+- Bar growth is instant (jump to current width each frame)
+- Row insertion is instant (no slide transition)
+- Scroll-into-view snaps instead of smooth-scrolling
+
+### 18.5 Display Scaling
+
+- Canvas is DPI-aware: dimensions multiplied by `devicePixelRatio`, CSS size
+  set to logical pixels
+- Browser zoom is respected — canvas re-renders on `resize` observer callback
+- High contrast mode: bar outlines thicken to 2px, pattern contrast increased
 
 ---
 
@@ -743,6 +1059,7 @@ DagStudio._onExecutionUpdated(id, exec)
 
 | # | Question | Impact | Proposed Resolution |
 |---|----------|--------|---------------------|
-| 1 | Should the Gantt time axis sync with a shared "playback" scrubber for replaying executions? | Nice-to-have — not MVP | Defer to post-MVP. Note in spec. |
-| 2 | Should we support exporting the Gantt as an image (PNG/SVG) for pasting into incident reports? | Medium — engineers share DAG timelines in Teams | Canvas `toDataURL()` makes this trivial. Add to V2 scope. |
-| 3 | Should comparison mode support > 2 runs? | Low — 2-run diff covers 95% of use cases | No. Keep it at exactly 2. |
+| 1 | Should the Gantt time axis sync with a shared "playback" scrubber for replaying executions? | Nice-to-have | Defer to post-MVP. |
+| 2 | Should we support exporting the Gantt as PNG/SVG for incident reports? | Medium — engineers share timelines in Teams | Canvas `toDataURL()` is trivial. Add to V2 scope. |
+| 3 | Should comparison mode support > 2 runs? | Low — 2-run diff covers 95% of cases | No. Keep at exactly 2. |
+| 4 | Should the bottleneck threshold (20%) be configurable? | Low | Hardcode for MVP. Consider settings in V2. |

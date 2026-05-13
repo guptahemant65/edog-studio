@@ -7,6 +7,7 @@
 
 namespace Microsoft.LiveTable.Service.DevMode
 {
+    using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Threading;
@@ -22,7 +23,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         private readonly int _maxSize;
         private readonly ConcurrentQueue<TopicEvent> _ring = new();
         private readonly Channel<TopicEvent> _liveChannel;
+        private readonly ConcurrentDictionary<long, Action<TopicEvent>> _observers = new();
         private long _sequenceCounter;
+        private long _observerIdCounter;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TopicBuffer"/> class.
@@ -53,6 +56,25 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             // Live channel for active stream subscribers (non-blocking)
             _liveChannel.Writer.TryWrite(evt);
+
+            // Notify observers (QA recording sessions)
+            foreach (var kvp in _observers)
+            {
+                try { kvp.Value(evt); }
+                catch { /* Observer failures never propagate */ }
+            }
+        }
+
+        /// <summary>
+        /// Registers an observer callback invoked on every Write(). Returns a disposable
+        /// that removes the observer when disposed. Used by QA recording sessions.
+        /// </summary>
+        /// <param name="callback">Callback invoked synchronously for each event.</param>
+        public IDisposable AddObserver(Action<TopicEvent> callback)
+        {
+            var id = Interlocked.Increment(ref _observerIdCounter);
+            _observers.TryAdd(id, callback);
+            return new ObserverHandle(this, id);
         }
 
         /// <summary>
@@ -70,6 +92,28 @@ namespace Microsoft.LiveTable.Service.DevMode
         public IAsyncEnumerable<TopicEvent> ReadLiveAsync(CancellationToken ct)
         {
             return _liveChannel.Reader.ReadAllAsync(ct);
+        }
+
+        /// <summary>
+        /// Disposable handle that removes an observer from the buffer on dispose.
+        /// </summary>
+        private sealed class ObserverHandle : IDisposable
+        {
+            private readonly TopicBuffer _buffer;
+            private readonly long _id;
+            private int _disposed;
+
+            public ObserverHandle(TopicBuffer buffer, long id)
+            {
+                _buffer = buffer;
+                _id = id;
+            }
+
+            public void Dispose()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                    _buffer._observers.TryRemove(_id, out _);
+            }
         }
     }
 }

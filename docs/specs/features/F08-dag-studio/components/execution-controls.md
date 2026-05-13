@@ -1,520 +1,773 @@
 # Execution Controls — Component Spec
 
 > **Feature:** F08 DAG Studio — Section 2.2 Execution Controls
-> **Status:** SPEC — READY FOR REVIEW
-> **Author:** Pixel (Frontend) + Vex (Backend) + Sana Reeves (Architecture)
-> **Date:** 2026-07-30
-> **Depends On:** `spec.md` §2.2, `p0-foundation.md` (API endpoints 4–15), `auto-detect.js` (real-time state)
-> **Feeds Into:** `states/execution-controls.md`, `dag-studio.js`
+> **Status:** DRAFT
+> **Author:** Sana Reeves (Architecture)
+> **Date:** 2025-07-18
+> **Depends On:** `p0-foundation.md` (APIs 4–9, 15), `auto-detect.js`, `api-client.js`
+> **State Matrix:** `states/execution-controls.md` (68 states, all transitions)
 
 ---
 
-## 0. Overview
+## 1. Overview
 
-The Execution Controls toolbar is the command strip above the DAG canvas. It governs the full execution lifecycle: trigger, monitor, cancel, retry, force-unlock, configure. Every button state is deterministic — derived from a single `executionState` enum plus auxiliary signals (lock detection, API in-flight flags).
+### Problem
 
-**Design principle:** An FLT engineer glances at the toolbar and knows *exactly* what they can do right now. No guessing, no disabled buttons without explanation, no silent failures.
+DAG execution in FabricLiveTable requires coordinating five distinct operations — run, cancel, refresh, force-unlock, and settings — across a lifecycle with eight possible states. Without a unified toolbar, users lose track of what they can do at any moment, double-fire runs, or miss that a stale lock is blocking execution.
+
+### Design Principle
+
+**One toolbar, zero ambiguity.** Every button is either enabled with a clear action or hidden entirely. No disabled-but-visible buttons that taunt the user. State transitions are optimistic where safe (run) and confirmation-gated where destructive (cancel, force-unlock). The status indicator is the single source of truth for "what is happening right now."
+
+### Scope
+
+This spec covers the 44px execution toolbar rendered above the DAG canvas. It does NOT cover:
+- The graph canvas itself (`components/graph-canvas.md`)
+- Node detail panel (`components/node-detail.md`)
+- Execution history list (`components/execution-history.md`)
+- Gantt chart (`components/gantt-chart.md`)
 
 ---
 
-## 1. Layout
+## 2. Layout
+
+### Toolbar Dimensions
+
+```
+Height:     44px (fixed)
+Padding:    0 16px
+Background: var(--color-bg-secondary)    /* #f5f5f7 */
+Border:     1px solid var(--color-border) /* #e0e0e2 */  (bottom only)
+Z-index:    10 (above canvas, below modals)
+```
+
+### Toolbar Anatomy
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│ [▸ Run DAG ▾] [⊘ Cancel] [↻ Refresh] [🔓 Force Unlock]  [⚙ Settings]  │ ● Status │
-│  └─ dropdown                                                            │  + timer │
+│  [▸ Run DAG ▾]   [✕ Cancel]   [↻ Refresh]   [⚿ Force Unlock]        ● Status │
+│  ◀─ left group ─────────────────────────────▶           ◀─ right group ──────▶ │
+│                                                                    [⚙ Settings]│
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Height:** 44px (11 × `--space-1`)
-- **Background:** `var(--color-bg-secondary)` with 1px bottom border `var(--color-border)`
-- **Padding:** `var(--space-2)` horizontal, centered vertically
-- **Left group:** Action buttons, gap `var(--space-2)`
-- **Right group:** Status indicator, pushed right with `margin-left: auto`
-- **Keyboard focus:** Tab order matches visual order left-to-right
+### Spacing Tokens
+
+| Gap | Value | Between |
+|-----|-------|---------|
+| Button gap (left group) | `8px` | Between Run, Cancel, Refresh, Force Unlock |
+| Group separator | `flex-grow: 1` | Between left group and right group |
+| Status-to-Settings gap | `12px` | Between status indicator and settings gear |
+| Button internal padding | `8px 14px` | Icon + label inside each button |
+| Dropdown caret padding | `0 6px` | Caret separator within Run DAG split button |
+
+### CSS Structure
+
+```css
+.dag-toolbar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  gap: 8px;
+}
+
+.dag-toolbar__left  { display: flex; align-items: center; gap: 8px; }
+.dag-toolbar__right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+```
 
 ---
 
-## 2. MLV Execution Definitions Dropdown
+## 3. MLV Execution Definitions Dropdown
 
-The Run button is a **split button**: primary click = run with current selection, caret click = open dropdown.
+The Run DAG button is a **split button**: clicking the main area triggers the default action; clicking the caret (▾) opens a dropdown to select an execution definition.
 
-### 2.1 Dropdown Content
+### Dropdown Items
 
-| Row | Content | Action |
-|-----|---------|--------|
-| ● Full DAG | Default. "Run all executable nodes" | Select → close dropdown |
-| Named definitions | From `GET .../liveTable/mlvExecutionDefinitions` | Select → close dropdown |
-| ─── divider | | |
-| + Create new... | Opens definition creator dialog | Opens modal |
+| # | Label | Source | Behavior |
+|---|-------|--------|----------|
+| 1 | **Full DAG** | Hardcoded | Default. `ExecutionMode.CurrentLakehouse`. No body payload — all MLVs in current lakehouse execute. |
+| 2 | *{Named Definition}* | `GET /liveTable/mlvExecutionDefinitions` | One entry per saved definition. `ExecutionMode.SelectedOnly` with `mlvExecutionDefinitionId` query param. Label = `definition.displayName`. |
+| 3 | **Run Selected Node** | Contextual | Visible only when a node is selected in the graph canvas. `ExecutionMode.SelectedOnly` with `selectedMLVs: [selectedNode.nodeId]`. Label includes node name: "Run Selected: {nodeName}". |
+| 4 | ── separator ── | — | Visual divider. |
+| 5 | **Create New Definition...** | Action | Opens a modal to create a new `MLVExecutionDefinition` via `POST /liveTable/mlvExecutionDefinitions`. |
 
-### 2.2 Data Source
+### Dropdown Behavior
+
+- **Max height:** `320px` with overflow scroll for long definition lists.
+- **Width:** `min(280px, toolbar-width - 32px)`.
+- **Selected item:** Checkmark (✓) prefix on the currently active definition.
+- **Keyboard:** Arrow keys navigate, Enter selects, Escape closes.
+- **Empty state:** If `listMlvDefinitions()` returns empty, only "Full DAG" and "Create New Definition..." appear.
+- **Loading state:** Spinner replaces definition list while `listMlvDefinitions()` is in flight. Definitions are fetched once on DAG Studio activation and cached until view deactivation.
+
+### Run Button Label Updates
+
+When a definition is selected, the Run button label changes:
+
+| Selection | Button Label |
+|-----------|-------------|
+| Full DAG | `▸ Run DAG` |
+| Named definition | `▸ Run: {defName}` |
+| Run Selected Node | `▸ Run: {nodeName}` |
+
+Label is truncated with ellipsis at `180px` max-width.
+
+### API: List Definitions
 
 ```
-GET /v1/workspaces/{wId}/lakehouses/{aId}/liveTable/mlvExecutionDefinitions
-→ List<MLVExecutionDefinitionResponse>
+GET /liveTable/mlvExecutionDefinitions
+→ 200: List<MLVExecDefResponse>
+
+Response shape:
+{
+  id: Guid,
+  displayName: string,
+  selectedMLVs: Guid[],
+  executionMode: "SelectedOnly",
+  createdAt: ISO8601,
+  modifiedAt: ISO8601
+}
 ```
 
-- **Cached:** Fetched once on DAG Studio activate, re-fetched on Refresh DAG
-- **Display:** `definition.name` — truncated to 28 chars in dropdown
-- **Selection persists:** Last-used definition stored in `localStorage` key `edog.dagStudio.lastDefinition`
-- **No definitions:** Dropdown shows only "Full DAG" + "Create new..."
+### API: Create Definition
 
-### 2.3 Selection Effect
-
-| Selection | Run Button Label | POST Body |
-|-----------|-----------------|-----------|
-| Full DAG | "Run DAG" | Empty body (default full run) |
-| Named definition | "Run: {name}" (truncated 18ch) | `ArtifactJobRequest` with `mlvExecutionDefinitionId` |
-
-### 2.4 Create New Definition Dialog
-
-**Trigger:** Click "Create new..." in dropdown
-
-| Field | Type | Validation |
-|-------|------|------------|
-| Name | Text input | Required, 1–64 chars, unique |
-| Description | Text area | Optional, 0–256 chars |
-| Selected MLVs | Checkbox list of all nodes where `executable: true` | At least 1 selected |
-| Execution Mode | Radio: Current Lakehouse / Selected Only / Full Lineage | Default: CurrentLakehouse |
-
-**Submit:** `POST .../liveTable/mlvExecutionDefinitions` → on success, refresh dropdown, auto-select new definition.
+```
+POST /liveTable/mlvExecutionDefinitions
+Body: { displayName: string, selectedMLVs: Guid[] }
+→ 201: MLVExecDefResponse
+```
 
 ---
 
-## 3. Run DAG Flow
+## 4. Run DAG Flow
 
-### 3.1 Preconditions
+### Preconditions
 
-Run is enabled when `executionState` ∈ `{idle, completed, failed, cancelled}`.
+All must be true before the Run button is enabled:
 
-### 3.2 Sequence
+| # | Condition | How Checked |
+|---|-----------|-------------|
+| 1 | DAG loaded successfully | `_dagLoaded === true` |
+| 2 | Not currently executing | `_executionState` ∉ `{running, cancelling}` |
+| 3 | No in-flight run request | `_runInFlight === false` |
+| 4 | No active lock detected | `_lockDetected === false` |
+
+### Sequence
 
 ```
-User clicks [▸ Run DAG]
+User clicks [▸ Run DAG]  (or Ctrl+Enter)
   │
-  ├─ 1. Generate UUID v4 (crypto.randomUUID())
-  ├─ 2. Optimistic UI: set executionState → "running"
-  │     • Run button: disabled, text → "Running..."
-  │     • Cancel button: enabled
-  │     • Status indicator: pulsing blue dot + "Running" + timer starts
-  │     • Store iterationId in this._currentIterationId
+  ├─ 1. Guard: check preconditions → abort if any fail
+  ├─ 2. Generate iterationId = crypto.randomUUID()
+  ├─ 3. Set _runInFlight = true
+  ├─ 4. OPTIMISTIC UI (immediate, before API responds):
+  │     ├─ Run button: disabled, label → "Running...", opacity 40%
+  │     ├─ Cancel button: slides in (160ms ease-out), enabled
+  │     ├─ Dropdown caret: disabled
+  │     ├─ Status indicator: pulsing accent dot + "Running" + timer starts
+  │     └─ Timer: starts at 0:00, increments every 1s via setInterval
   │
-  ├─ 3. POST /liveTableSchedule/runDAG/{iterationId}
-  │     Headers: { Authorization: Bearer {mwcToken}, Content-Type: application/json }
-  │     Body: {} (Full DAG) or { mlvExecutionDefinitionId: "..." } (named definition)
+  ├─ 5. Build request body (depends on selected definition):
+  │     ├─ Full DAG: no query param, no body
+  │     ├─ Named def: ?mlvExecutionDefinitionId={defId}
+  │     └─ Selected node: body = { executionMode: "SelectedOnly", selectedMLVs: [nodeId] }
   │
-  ├─ 4a. 202 Accepted → Execution started
-  │      • Log to console: "DAG execution started: {iterationId}"
-  │      • AutoDetector will pick up status updates from log stream
-  │      • History list: new row appears at top (status: Running)
+  ├─ 6. POST /liveTableSchedule/runDAG/{iterationId}
+  │     ├─ 202 Accepted → store iterationId, keep optimistic state
+  │     └─ Error → REVERT optimistic UI:
+  │           ├─ Run button: re-enabled, label restored
+  │           ├─ Cancel button: slides out
+  │           ├─ Status: previous state restored
+  │           ├─ Timer: cleared
+  │           └─ Toast: "Run failed: {error.message}"
   │
-  └─ 4b. Error → Revert optimistic UI
-         • 401/403: executionState → previous. Toast: "Authentication failed — token may be expired"
-         • 404: executionState → previous. Toast: "DAG not found — refresh the DAG definition"
-         • 409: executionState → previous. Toast: "Another execution is already running"
-         • 429: executionState → previous. Toast: "Rate limited — wait {retryAfter}s"
-         • 500: executionState → previous. Toast: "Server error — check FLT service logs"
-         • Network error: executionState → previous. Toast: "Cannot reach FLT service"
+  └─ 7. Set _runInFlight = false
 ```
 
-### 3.3 Optimistic UI Details
+### Timer Display
 
-The UI shows "Running" immediately on click — before the API responds. This eliminates the 200-800ms perceived latency of waiting for 202 Accepted.
+- Format: `M:SS` for < 60 minutes, `H:MM:SS` for ≥ 60 minutes.
+- Font: `var(--font-mono)`, `font-size: 12px`, `color: var(--color-text-secondary)`.
+- Positioned inline after the status text: `● Running  1:23`.
+- Timer is driven by `setInterval(1000)`. Reference time is `performance.now()` at run start to avoid drift.
+- Timer freezes on terminal state (completed/failed/cancelled) showing final duration from `DagTerminal.durationMs`.
 
-**Revert on error:** If the POST fails, the UI snaps back to the previous state. The revert uses a saved `_previousState` captured before the optimistic transition. The timer resets to 0.
+### Double-Click Prevention
 
-**Race condition:** If the user rapidly clicks Run, the UUID changes each time, but only the last POST proceeds (debounce via `_runInFlight` flag).
-
-### 3.4 Timer
-
-- **Format:** `0:00` → `0:01` → ... → `1:23` → ... → `12:07`
-- **Source:** `Date.now() - runStartTime`, updated every 1000ms via `setInterval`
-- **Precision:** Seconds (no milliseconds — execution durations are minutes-scale)
-- **Stops:** When `executionState` transitions out of `running` / `cancelling`
+The `_runInFlight` flag is set synchronously before the API call and cleared in the `finally` block. The Run button checks this flag in its click handler and returns early if set.
 
 ---
 
-## 4. Cancel DAG Flow
+## 5. Cancel DAG Flow
 
-### 4.1 Preconditions
+### Confirmation Popover
 
-Cancel is enabled when `executionState` ∈ `{running, notStarted}`.
-
-### 4.2 Confirmation Popover
-
-**No accidental cancels.** Clicking Cancel shows a confirmation popover anchored below the button:
+Cancellation is destructive — it cannot be undone. A confirmation popover appears anchored below the Cancel button.
 
 ```
-┌──────────────────────────────────┐
-│  Cancel this DAG execution?      │
-│                                  │
-│  Iteration: a1b2c3d4...         │
-│  Running for: 2m 14s            │
-│  Nodes completed: 12/30         │
-│                                  │
-│  [Cancel Execution]  [Keep Running]│
-└──────────────────────────────────┘
+┌──────────────────────────────────────┐
+│  Cancel running execution?           │
+│                                      │
+│  This will cancel all nodes that     │
+│  haven't completed yet. Completed    │
+│  nodes are not rolled back.          │
+│                                      │
+│  Iteration: {iterationId (short)}    │
+│                                      │
+│         [No, keep running]  [Cancel] │
+└──────────────────────────────────────┘
 ```
 
-- **Width:** 280px
-- **Background:** `var(--color-bg-elevated)` with `var(--shadow-lg)`
-- **"Cancel Execution" button:** Destructive style — red background
-- **"Keep Running" button:** Ghost style — default
-- **Auto-dismiss:** Clicking outside or pressing Escape closes without action
-- **Keyboard:** `Enter` confirms cancel (focus is on "Cancel Execution"), `Escape` dismisses
+- **Popover width:** `320px`.
+- **Iteration ID display:** First 8 chars of UUID, monospaced, `color: var(--color-text-tertiary)`.
+- **"Cancel" button:** `background: var(--status-failed)` (red), white text.
+- **"No, keep running":** Ghost button, `color: var(--color-text-secondary)`.
+- **Dismiss:** Clicking outside closes popover without action. Escape key closes.
+- **Keyboard:** Tab cycles between buttons. Enter activates focused button.
 
-### 4.3 Sequence
+### Sequence
 
 ```
-User confirms cancel
+User clicks [✕ Cancel]
   │
-  ├─ 1. Set executionState → "cancelling"
-  │     • Cancel button: disabled, text → "Cancelling..."
-  │     • Status indicator: pulsing amber dot + "Cancelling..."
-  │     • Run button: remains disabled
+  ├─ 1. Show confirmation popover
   │
-  ├─ 2. GET /liveTableSchedule/cancelDAG/{iterationId}
-  │     ⚠ Note: GET not POST — FLT convention
+  ├─ 2. User confirms → popover closes
+  │     ├─ Cancel button: disabled, label → "Cancelling..."
+  │     ├─ Run button: remains disabled
+  │     ├─ Status: amber dot + "Cancelling..." (pulsing)
+  │     └─ Timer: continues running (cancel takes time)
   │
-  ├─ 3a. 200 OK → DagExecutionStatus returned
-  │      • If "cancelled" → executionState → "cancelled"
-  │      • If "cancelling" → remain in cancelling, AutoDetector will report final status
+  ├─ 3. DELETE /liveTableSchedule/cancelDAG/{iterationId}
+  │     ├─ 200 → wait for DagTerminal SignalR event with status=cancelled
+  │     │        Timeout: 30 seconds. If no DagTerminal received:
+  │     │        └─ Toast: "Cancel confirmed but status unknown. Refreshing..."
+  │     │           → auto-trigger refresh
+  │     └─ Error → Toast: "Cancel failed: {error.message}"
+  │                Cancel button: re-enabled
+  │                Status: remains "Running" (cancel failed, execution continues)
   │
-  ├─ 3b. Error → Remain in cancelling state
-  │      • Toast: "Cancel request failed — execution may still be running"
-  │      • Do NOT revert to "running" — the cancel may have reached the server
-  │      • Allow retry: re-enable Cancel button after 5s timeout
-  │
-  └─ 4. Cancel timeout (60s)
-         • If still in "cancelling" after 60s with no status update:
-         • Toast: "Cancel taking longer than expected — execution may be stuck"
-         • Show "Force Unlock" option
+  └─ 4. On DagTerminal(status=cancelled):
+        ├─ Cancel button: slides out (160ms)
+        ├─ Run button: re-enabled
+        ├─ Status: solid amber dot + "Cancelled"
+        ├─ Timer: freezes at final duration from DagTerminal.durationMs
+        └─ _executionState = 'cancelled'
 ```
 
-### 4.4 Cancelling State Behavior
+### Hard Constraint
 
-The "Cancelling" state is special — it's not idle and not running. The DAG engine needs time to gracefully stop running nodes.
-
-- **Nodes in progress:** Continue until their current operation completes, then stop
-- **Graph visual:** Running nodes transition to pulsing amber (cancelling)
-- **Gantt visual:** Running bars stop growing, get amber overlay
-- **Duration timer:** Continues counting (shows total wall time including cancel wait)
+There is **no single-node cancel**. The `cancelDAG` endpoint cancels the entire DAG execution. Nodes that have already completed retain their results. Nodes in `running` state transition to `cancelled`. Nodes in `none` (not yet started) transition to `skipped`.
 
 ---
 
-## 5. Refresh DAG Flow
+## 6. Refresh DAG Flow
 
-### 5.1 Purpose
+### Triggers
 
-Re-fetch the DAG definition from the server and re-layout the graph. Used when:
-- The user changed notebook code (new/removed MLVs)
-- The user suspects the displayed DAG is stale
-- After deploying new code to the lakehouse
+| Trigger | Source |
+|---------|--------|
+| Click [↻ Refresh] button | User action |
+| Press `F5` | Keyboard shortcut |
+| Auto-refresh after cancel timeout | System (see §5) |
+| Post-run if topology changed | Auto-detector signal |
 
-### 5.2 Preconditions
-
-Always enabled. Can be triggered during execution (non-destructive read-only operation).
-
-### 5.3 Sequence
+### Sequence
 
 ```
-User clicks [↻ Refresh] or presses F5
+Refresh triggered
   │
-  ├─ 1. Button shows spinner (replace ↻ icon with 12px rotating spinner)
-  │     • Button text: "Refreshing..."
-  │     • Button remains clickable but debounced (no double-fetch)
+  ├─ 1. Refresh button: spinner icon replaces ↻, disabled
   │
   ├─ 2. GET /liveTable/getLatestDag?showExtendedLineage=true
+  │     ├─ 200 → compare node count + edge count with current DAG
+  │     │   ├─ No change: silent success, restore button
+  │     │   └─ Topology changed:
+  │     │       ├─ Graph canvas: re-layout with new topology
+  │     │       ├─ Toast: "DAG updated: {added} nodes added, {removed} removed"
+  │     │       └─ If execution is active: node states preserved for existing nodeIds,
+  │     │          new nodes show as "none" (grey dot)
+  │     └─ Error → Toast: "Refresh failed: {error.message}"
+  │              Restore button to enabled state
   │
-  ├─ 3a. 200 OK → New DAG data received
-  │      │
-  │      ├─ 3a.i. Compare with current DAG
-  │      │    • New nodes: highlighted briefly (green pulse, 2s)
-  │      │    • Removed nodes: removed from canvas (if no execution overlay)
-  │      │    • Changed edges: re-routed
-  │      │    • Unchanged: preserved in place
-  │      │
-  │      ├─ 3a.ii. Re-layout (Sugiyama) if topology changed
-  │      │    • Preserve current zoom level and pan offset
-  │      │    • Animate node positions to new locations (300ms ease-out)
-  │      │    • If topology unchanged (same nodes/edges): skip layout, just update data
-  │      │
-  │      ├─ 3a.iii. Re-fetch MLV execution definitions (cache refresh)
-  │      │
-  │      └─ 3a.iv. Toast: "DAG refreshed" (auto-dismiss 2s)
-  │               or "DAG refreshed — 3 new nodes, 1 removed" if topology changed
-  │
-  └─ 3b. Error
-         • 401/403: Toast: "Authentication failed"
-         • 404: Toast: "DAG not found — no MLVs defined in this lakehouse?"
-         • 500: Toast: "Failed to refresh DAG — FLT service error"
-         • Network: Toast: "Cannot reach FLT service"
-         • In all error cases: existing graph remains visible (do not clear)
+  └─ 3. Refresh button: ↻ icon restored, enabled
 ```
 
-### 5.4 Refresh During Execution
+### F5 Conflict Prevention
 
-When refreshing while a DAG is running:
-- The new DAG *definition* loads, but the *execution overlay* (node statuses, timing) is preserved
-- If the new definition has a node not in the current execution → show as "Pending" (grey)
-- If the current execution has a node not in the new definition → keep it visible with a "removed" badge (dashed border) until execution completes
+The `F5` shortcut is intercepted via `keydown` listener with `e.preventDefault()` to prevent browser page reload. This listener is **only active when DAG Studio view is visible**. When another view is active, `F5` behaves as normal browser refresh.
 
 ---
 
-## 6. Force Unlock Flow
+## 7. Force Unlock Flow
 
-### 6.1 Lock Detection
+### Lock Detection
 
-**Polling:** Every 30 seconds while DAG Studio is the active view:
-
-```
-GET /liveTableMaintanance/getLockedDAGExecutionIteration
-  ⚠ URL typo is intentional — matches FLT route
-```
-
-| Response | Action |
-|----------|--------|
-| Empty/null | No lock. Hide Force Unlock button. |
-| `List<Guid>` with entries | Lock detected. Calculate lock age from last known execution start time. |
-
-**Lock age threshold:** Show Force Unlock button only when lock age > 5 minutes. Younger locks may be legitimate in-progress executions.
-
-### 6.2 Force Unlock Button Visibility
-
-- **Hidden by default** — only appears when lock detected with age > 5 min
-- **Position:** Between Refresh and Settings buttons (inserted dynamically)
-- **Style:** Ghost button with warning color (`var(--color-warning)`)
-- **Icon:** Lock icon (🔓) — differentiates from other actions
-
-### 6.3 Confirmation Dialog
-
-Force Unlock is destructive. It requires a modal confirmation dialog (not just a popover):
+A background poller runs while DAG Studio is active:
 
 ```
-┌─────────────────────────────────────────────┐
-│  ⚠ Force Unlock DAG Execution               │
-│                                              │
-│  A DAG execution lock is preventing new runs.│
-│                                              │
-│  Locked Iteration: a1b2c3d4-5678-...        │
-│  Lock Age: 47 minutes                       │
-│                                              │
-│  Force unlocking will:                       │
-│  • Clear the execution lock                  │
-│  • Allow new DAG runs to start               │
-│  • NOT cancel any running Spark jobs         │
-│                                              │
-│  This is safe if the execution is stuck.     │
-│  If the execution is still running, unlocking│
-│  may cause concurrent execution conflicts.   │
-│                                              │
-│  [Force Unlock]  [Cancel]                    │
-└─────────────────────────────────────────────┘
+Interval: 30 seconds
+API:      GET /liveTableMaintanance/getLockedDAGExecutionIteration
+          (note: "Maintanance" typo is the real FLT route)
+
+Response:
+  - null / empty → no lock, hide Force Unlock button
+  - Guid         → lock detected, show Force Unlock button
+  - List<Guid>   → multiple locks (rare), use first entry
 ```
 
-- **Width:** 420px
-- **Modal overlay:** Semi-transparent background, click-outside does NOT dismiss (intentional — prevent accidental closure)
-- **"Force Unlock" button:** Warning style (amber background)
-- **Keyboard:** `Enter` confirms, `Escape` cancels
+The poller starts on DAG Studio activation and stops on deactivation. It does NOT run during active execution (redundant — we already know the lock state).
 
-### 6.4 Sequence
+### Lock Age Calculation
+
+Lock age is derived from the locked iteration's `startedAt` timestamp (from `getDagExecMetrics` if available) compared to `Date.now()`. Displayed as:
+- `< 1h` → "Locked for {M} minutes"
+- `≥ 1h` → "Locked for {H}h {M}m"
+- Unknown age → "Locked (age unknown)"
+
+### Confirmation Dialog
+
+Force unlock is dangerous — it can corrupt a legitimately running execution. A modal dialog (not popover) is used:
 
 ```
-User confirms Force Unlock
+┌──────────────────────────────────────────────┐
+│  ◆ Force Unlock DAG Execution                │
+│                                              │
+│  A lock is preventing new executions.        │
+│  This may indicate a stuck or orphaned run.  │
+│                                              │
+│  Locked iteration: {iterationId (short)}     │
+│  Lock age: {formatted duration}              │
+│                                              │
+│  ⚠ If an execution is genuinely running,     │
+│  force-unlocking may leave it in an          │
+│  inconsistent state.                         │
+│                                              │
+│       [Cancel]            [Force Unlock]     │
+└──────────────────────────────────────────────┘
+```
+
+- **Dialog width:** `420px`, centered.
+- **Backdrop:** `rgba(0, 0, 0, 0.3)`.
+- **"Force Unlock" button:** `background: var(--status-cancelled)` (amber), dark text.
+- **"Cancel" button:** Ghost style.
+- **Warning icon (⚠):** `color: var(--status-cancelled)`.
+
+### Sequence
+
+```
+User clicks [⚿ Force Unlock]
   │
-  ├─ 1. Button: disabled, text → "Unlocking..."
+  ├─ 1. Show confirmation dialog
   │
-  ├─ 2. POST /liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}
+  ├─ 2. User confirms
+  │     ├─ Dialog closes
+  │     ├─ Force Unlock button: disabled, label → "Unlocking..."
+  │     └─ Toast: "Unlocking execution..."
   │
-  ├─ 3a. 200 OK → "Force unlocked Dag"
-  │      • executionState → "idle"
-  │      • Hide Force Unlock button
-  │      • Toast: "DAG execution lock cleared"
-  │      • Re-enable Run button
+  ├─ 3. POST /liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}
+  │     (note: "Maintanance" typo is the real FLT route)
+  │     ├─ 200 → "Force unlocked Dag"
+  │     │   ├─ Force Unlock button: slides out (160ms)
+  │     │   ├─ Toast: "Execution unlocked successfully"
+  │     │   ├─ _lockDetected = false
+  │     │   └─ Auto-refresh DAG (trigger §6 flow)
+  │     └─ Error → Toast: "Unlock failed: {error.message}"
+  │              Force Unlock button: re-enabled
   │
-  └─ 3b. Error
-         • 400: Toast: "No lock to clear — may have already been unlocked"
-         • 401: Toast: "Insufficient permissions to force unlock"
-         • 500: Toast: "Force unlock failed — try again or restart FLT service"
+  └─ 4. Resume lock detection polling
 ```
 
 ---
 
-## 7. Settings Panel
+## 8. Settings Panel
 
-### 7.1 Trigger
+### Trigger
 
-Click [⚙ Settings] button. Always enabled.
+Click the [⚙] gear icon in the toolbar right group, or press `Ctrl+,`.
 
-### 7.2 Panel Type
+### Layout
 
-**Slide-out panel** from the right side of the toolbar area, 360px wide. Overlays the DAG graph (does not push it). Close with ✕ button or Escape.
-
-### 7.3 Data Source
+A slide-out panel from the right edge, overlaying the graph canvas:
 
 ```
-Load:  GET  /v1/workspaces/{wId}/lakehouses/{aId}/liveTable/settings
-Save:  PATCH /v1/workspaces/{wId}/lakehouses/{aId}/liveTable/settings
+Width:      360px
+Animation:  slide from right, 200ms ease-out
+Background: var(--color-bg)
+Border:     1px solid var(--color-border) (left edge)
+Shadow:     -4px 0 12px rgba(0,0,0,0.06)
+Z-index:    20 (above toolbar)
 ```
 
-### 7.4 Form Fields
+### Settings Fields
 
-| Field | Type | Current Value Source | Validation | API Field |
-|-------|------|---------------------|------------|-----------|
-| Parallel Node Limit | Number input + slider | `settings.parallelNodeLimit` | 2–25, integer | `parallelNodeLimit` |
-| Refresh Mode | Radio group | `settings.refreshMode` | "Optimal" or "Full" | `refreshMode` |
-| Environment | Dropdown | `settings.environment` | List of available environments (separate API) | `environment: { environmentId, workspaceId }` |
+| Field | Control | Range | Default | API Field |
+|-------|---------|-------|---------|-----------|
+| Parallel Node Limit | Numeric stepper | 2–25 | Server value | `parallelNodeLimit` |
+| Refresh Mode | Radio group | Optimal · Full | Server value | `refreshMode` |
 
-### 7.5 Inline Editing
+### Parallel Node Limit
 
-- **No separate edit mode.** Fields are always editable.
-- **Auto-save:** Changes PATCH immediately on blur or Enter (debounced 500ms).
-- **Optimistic update:** Field shows new value immediately. Revert on error.
-- **Save indicator:** Small "Saved ✓" text next to changed field (fades after 2s).
-- **Error indicator:** Field border turns red, "Failed to save — retry" link below.
+- **Stepper UI:** `[−]  {value}  [+]` with direct text input.
+- **Validation:** Integer, min 2, max 25. Values outside range snap to nearest bound on blur.
+- **Display:** Current value in monospaced font, centered between buttons.
 
-### 7.6 Parallel Node Limit Visualization
+### Refresh Mode
 
-The slider for parallel node limit (2–25) has tick marks at common values (2, 5, 10, 15, 25). The current value is reflected in the Gantt chart's parallel limit marker line.
+- **Optimal:** Refreshes only nodes whose dependencies have changed. Default for most scenarios.
+- **Full:** Refreshes all nodes regardless of dependency state. Use for debugging or after schema changes.
 
----
+### Auto-Save Behavior
 
-## 8. Status Indicator
+Settings are persisted automatically with debounce:
 
-### 8.1 Position
+```
+User changes a value
+  │
+  ├─ 1. Update local state immediately (optimistic)
+  ├─ 2. Start 800ms debounce timer
+  │     (subsequent changes reset the timer)
+  ├─ 3. After 800ms of no changes:
+  │     PATCH /liveTable/settings
+  │     Body: { parallelNodeLimit: N, refreshMode: "Optimal"|"Full" }
+  │     ├─ 200 → subtle "Saved" indicator (check mark, fades after 2s)
+  │     └─ Error → revert to server value, toast: "Settings save failed"
+  └─ 4. No explicit Save button
+```
 
-Right-aligned in the toolbar. Fixed width area (~200px) to prevent layout shift.
+### Loading State
 
-### 8.2 States
+On panel open, current settings are fetched:
 
-| executionState | Dot Color | Dot Animation | Label | Suffix |
-|----------------|-----------|---------------|-------|--------|
-| `idle` | Grey | None | "Idle" | — |
-| `notStarted` | Grey | None | "Not Started" | — |
-| `running` | Blue (`var(--color-accent)`) | Pulsing (1.5s opacity cycle) | "Running" | Elapsed timer `0:00` |
-| `completed` | Green (`var(--status-succeeded)`) | None | "Completed" | Duration `1m 23s` |
-| `failed` | Red (`var(--status-failed)`) | None | "Failed" | Error code summary |
-| `cancelled` | Amber (`var(--status-cancelled)`) | None | "Cancelled" | — |
-| `cancelling` | Amber | Pulsing (1.5s) | "Cancelling..." | Elapsed timer |
-| `locked` | Red | None | "Locked" | Lock age `47m ago` |
+```
+GET /liveTable/settings
+→ 200: { parallelNodeLimit: number, refreshMode: string, ... }
+```
 
-### 8.3 Dot Rendering
+Skeleton placeholders (two grey bars) shown during fetch. Fields are non-interactive until loaded.
 
-- **Size:** 8px circle
-- **Pulse animation:** `@keyframes status-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.4 } }` at 1.5s
-- **Spacing:** `var(--space-2)` between dot and label
+### Close Behavior
 
----
-
-## 9. Keyboard Shortcuts
-
-| Shortcut | Action | Precondition |
-|----------|--------|--------------|
-| `Ctrl+Enter` | Run DAG | Run button enabled |
-| `Ctrl+.` | Cancel DAG | Cancel button enabled. Opens confirmation popover, auto-focused on confirm. |
-| `F5` | Refresh DAG | Always (prevents browser refresh inside DAG Studio view) |
-| `Ctrl+Shift+U` | Force Unlock | Force Unlock button visible |
-| `Ctrl+,` | Open/Close Settings | Always |
-
-### 9.1 Shortcut Conflict Prevention
-
-- `F5` is intercepted via `event.preventDefault()` only when DAG Studio is the active view. In other views, F5 behaves normally (browser refresh).
-- `Ctrl+Enter` does not conflict with any browser default.
-- `Ctrl+.` is not a standard browser shortcut. In VS Code it's "Quick Fix" but DAG Studio runs in the browser, not VS Code.
-
-### 9.2 Shortcut Hints
-
-Button tooltips include the shortcut:
-- "Run DAG (Ctrl+Enter)"
-- "Cancel (Ctrl+.)"
-- "Refresh DAG (F5)"
-- "Force Unlock (Ctrl+Shift+U)"
-- "Settings (Ctrl+,)"
+- Click the ✕ button in panel header.
+- Press `Escape`.
+- Click outside the panel (on the canvas area).
+- No unsaved-changes warning — auto-save handles persistence.
 
 ---
 
-## 10. Button State Matrix
+## 9. Status Indicator
 
-### 10.1 Complete Matrix
+### Anatomy
 
-Every cell = button state for that (button × executionState) combination.
+```
+[●] {Status Text}  {Duration}
+```
 
-| Button | idle | notStarted | running | completed | failed | cancelled | cancelling | locked |
-|--------|------|------------|---------|-----------|--------|-----------|------------|--------|
-| **Run DAG** | ✅ Enabled (primary) | ⛔ Disabled | ⛔ Disabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ⛔ Disabled | ⛔ Disabled |
-| **Cancel** | ⛔ Hidden | ✅ Enabled | ✅ Enabled | ⛔ Hidden | ⛔ Hidden | ⛔ Hidden | ⛔ Disabled (text: "Cancelling...") | ⛔ Hidden |
-| **Refresh** | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled |
-| **Force Unlock** | ⛔ Hidden | ⛔ Hidden | ⛔ Hidden | ⛔ Hidden | ⛔ Hidden | ⛔ Hidden | ⛔ Hidden | ✅ Visible + Enabled |
-| **Settings** | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ✅ Enabled |
-| **Definition ▾** | ✅ Enabled | ⛔ Disabled | ⛔ Disabled | ✅ Enabled | ✅ Enabled | ✅ Enabled | ⛔ Disabled | ⛔ Disabled |
+- **Dot:** 8px circle, `border-radius: 50%`.
+- **Status text:** `font-size: 13px`, `font-weight: 500`, `color: var(--color-text)`.
+- **Duration:** `font-size: 12px`, `font-family: var(--font-mono)`, `color: var(--color-text-secondary)`.
+- **Gap:** 6px between dot and text, 8px between text and duration.
 
-### 10.2 Disabled Button Behavior
+### State Map
 
-- **Disabled buttons** have 40% opacity, `cursor: not-allowed`, `pointer-events: none`
-- **Hidden buttons** are `display: none` — do not take up space
-- **Cancel visibility:** Shown only during `notStarted`, `running`, `cancelling`. Hidden otherwise.
-- **Force Unlock visibility:** Shown only when lock detected with age > 5 min.
+| Execution State | Dot Color | Dot Animation | Status Text | Duration | Tooltip |
+|-----------------|-----------|---------------|-------------|----------|---------|
+| `idle` | `var(--status-pending)` | none | "Idle" | — | "No execution in progress" |
+| `running` | `var(--accent)` | pulse (opacity 0.4→1, 1.5s ease-in-out infinite) | "Running" | Live timer `M:SS` | "Execution in progress since {startTime}" |
+| `completed` | `var(--status-succeeded)` | none | "Completed" | Frozen `M:SS` | "Completed in {durationMs}ms — {completedNodes}/{totalNodes} nodes" |
+| `failed` | `var(--status-failed)` | none | "Failed" | Frozen `M:SS` | "{errorCode}: {errorMessage}" |
+| `cancelled` | `var(--status-cancelled)` | none | "Cancelled" | Frozen `M:SS` | "Cancelled — {completedNodes} completed, {skippedNodes} skipped" |
+| `cancelling` | `var(--status-cancelled)` | pulse | "Cancelling..." | Live timer | "Cancel request sent, waiting for nodes to stop" |
+| `loading` | `var(--status-pending)` | pulse | "Loading DAG..." | — | "Fetching DAG topology" |
+| `error` | `var(--status-failed)` | none | "DAG load failed" | — | "{error.message}" |
 
-### 10.3 Button Transitions (Animated)
+### Pulse Animation
+
+```css
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+.dag-status__dot--pulsing {
+  animation: status-pulse 1.5s ease-in-out infinite;
+}
+```
+
+---
+
+## 10. Keyboard Shortcuts
+
+### Shortcut Table
+
+| Key | Action | Guard | Conflict Prevention |
+|-----|--------|-------|---------------------|
+| `Ctrl+Enter` | Run DAG (default definition) | Same as Run button preconditions (§4) | None — not a browser default |
+| `Escape` | Close settings panel / dismiss popover / deselect node | Priority: popover → settings → selection | Standard dismiss key |
+| `F5` | Refresh DAG | DAG Studio view must be active | `e.preventDefault()` blocks browser refresh |
+| `Ctrl+,` | Toggle settings panel | Always available | Mirrors VS Code convention |
+| `Ctrl+Shift+C` | Cancel DAG (opens confirmation) | Execution must be running | Avoids `Ctrl+C` (copy) collision |
+
+### Implementation
+
+```javascript
+_onKeyDown(e) {
+  if (!this._isActive) return; // DAG Studio not visible
+
+  if (e.key === 'F5') {
+    e.preventDefault();
+    this._refreshDag();
+  }
+  if (e.ctrlKey && e.key === 'Enter') {
+    this._runDag();
+  }
+  if (e.ctrlKey && e.key === ',') {
+    e.preventDefault();
+    this._toggleSettings();
+  }
+  if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+    e.preventDefault();
+    this._showCancelConfirmation();
+  }
+  if (e.key === 'Escape') {
+    if (this._popoverOpen) this._dismissPopover();
+    else if (this._settingsOpen) this._closeSettings();
+    else this._deselectNode();
+  }
+}
+```
+
+The listener is added on `activate()` and removed on `deactivate()` to prevent shortcut leakage to other views.
+
+---
+
+## 11. Button State Matrix
+
+Complete grid showing every button's state for each execution phase.
+
+### Legend
+
+| Symbol | Meaning |
+|--------|---------|
+| ✓ | Visible and enabled |
+| ✗ | Hidden (not rendered) |
+| ○ | Visible but disabled (greyed, `opacity: 0.4`, no pointer events) |
+| ◆ | Visible with modified appearance (label/style change) |
+
+### Matrix
+
+| Execution State | ▸ Run DAG | ▾ Caret | ✕ Cancel | ↻ Refresh | ⚿ Force Unlock | ⚙ Settings |
+|-----------------|-----------|---------|----------|-----------|-----------------|------------|
+| `idle` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ |
+| `idle` + lock detected | ○ | ○ | ✗ | ✓ | ✓ | ✓ |
+| `loading` (DAG fetch) | ○ | ○ | ✗ | ◆ spinner | ✗ | ✓ |
+| `running` | ○ "Running..." | ○ | ✓ | ○ | ✗ | ✓ |
+| `cancelling` | ○ | ○ | ◆ "Cancelling..." ○ | ○ | ✗ | ✓ |
+| `completed` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ |
+| `failed` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ |
+| `cancelled` | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ |
+| `error` (DAG load fail) | ○ | ○ | ✗ | ✓ | ✗ | ✓ |
+
+### Transition Animations
 
 | Transition | Animation |
 |------------|-----------|
-| Run → Disabled | Fade to 40% opacity (160ms `var(--ease-standard)`) |
-| Cancel appears | Slide in from left (160ms), fade in |
-| Cancel disappears | Fade out (160ms), slide out |
-| Force Unlock appears | Fade in with amber pulse (300ms) — draws attention |
-| Force Unlock disappears | Fade out (160ms) |
+| Cancel button appears | `slide-in-left 160ms ease-out` |
+| Cancel button disappears | `slide-out-left 160ms ease-in` |
+| Force Unlock appears | `fade-in 200ms ease-out` |
+| Force Unlock disappears | `fade-out 160ms ease-in` |
+| Status dot color change | `background-color 300ms ease` |
+| Run button label change | Instant (no animation on text) |
 
 ---
 
-## 11. Error Handling Summary
+## 12. Error Handling Summary
 
-| Error | Source | User Impact | Recovery |
-|-------|--------|-------------|----------|
-| Run API 401/403 | Expired/invalid token | Toast + revert optimistic UI | Refresh token (auto or manual) |
-| Run API 409 | Concurrent execution | Toast + revert | Wait for current run to finish |
-| Run API 429 | Rate limiting | Toast with retry-after | Auto-retry after delay |
-| Run API 500 | FLT server error | Toast + revert | Check FLT logs |
-| Run network error | FLT service down | Toast + revert | Verify FLT is running |
-| Cancel API error | Various | Toast, stay in cancelling | Retry after 5s or Force Unlock |
-| Cancel timeout | 60s no response | Toast + suggest Force Unlock | Force Unlock button shown |
-| Refresh API error | Various | Toast, keep existing graph | Retry manually |
-| Force Unlock error | Various | Toast | Retry or restart FLT |
-| Settings PATCH error | Various | Revert field, show error | Retry on blur |
-| Lock detection error | Network/auth | Silent — do not spam toasts | Next poll in 30s |
-| Definition fetch error | Various | Dropdown shows only "Full DAG" | Retry on next Refresh |
-
----
-
-## 12. API Reference Summary
-
-| Action | Method | Endpoint | Auth |
-|--------|--------|----------|------|
-| Run DAG | POST | `.../liveTableSchedule/runDAG/{iterationId}` | ReadAll + Execute |
-| Cancel DAG | GET ⚠ | `.../liveTableSchedule/cancelDAG/{iterationId}` | Appropriate perms |
-| Refresh DAG | GET | `.../liveTable/getLatestDag?showExtendedLineage=true` | ReadAll |
-| Force Unlock | POST | `.../liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}` ⚠ typo | ReadAll + Execute |
-| Check Lock | GET | `.../liveTableMaintanance/getLockedDAGExecutionIteration` ⚠ typo | ReadAll + Execute |
-| Get Settings | GET | `.../liveTable/settings` | ReadAll |
-| Update Settings | PATCH | `.../liveTable/settings` | ReadAll + Execute |
-| List Definitions | GET | `.../liveTable/mlvExecutionDefinitions` | ReadAll |
-| Create Definition | POST | `.../liveTable/mlvExecutionDefinitions` | ReadAll + Execute |
-
-All endpoints share the base path: `/v1/workspaces/{workspaceId}/lakehouses/{artifactId}`
+| Error Scenario | Source | User Impact | Recovery |
+|----------------|--------|-------------|----------|
+| Run DAG — 409 Conflict | `POST runDAG` | Execution already in progress | Toast: "An execution is already running." Revert optimistic UI. Auto-refresh status. |
+| Run DAG — 423 Locked | `POST runDAG` | DAG locked by another execution | Toast: "DAG is locked. Use Force Unlock if the lock is stale." Show Force Unlock button. |
+| Run DAG — 500 Server Error | `POST runDAG` | Unknown server failure | Toast: "Run failed: {message}". Revert optimistic UI. Log error to console. |
+| Run DAG — Network Error | `POST runDAG` | Connectivity issue | Toast: "Network error. Check connection and retry." Revert optimistic UI. |
+| Cancel DAG — 404 Not Found | `DELETE cancelDAG` | Iteration already terminated | Toast: "Execution already finished." Auto-refresh to get final state. |
+| Cancel DAG — 500 | `DELETE cancelDAG` | Cancel failed | Toast: "Cancel failed: {message}". Cancel button re-enabled. Execution continues. |
+| Refresh — 500 | `GET getLatestDag` | Cannot fetch topology | Toast: "Refresh failed: {message}". Refresh button re-enabled. Stale DAG remains visible. |
+| Force Unlock — 404 | `POST forceUnlockDAG` | No lock to unlock | Toast: "No active lock found." Hide Force Unlock button. |
+| Force Unlock — 500 | `POST forceUnlockDAG` | Unlock failed | Toast: "Unlock failed: {message}". Force Unlock button re-enabled. |
+| Settings — PATCH 400 | `PATCH settings` | Invalid value rejected | Revert field to server value. Toast: "Invalid setting: {message}". |
+| Settings — PATCH 500 | `PATCH settings` | Save failed | Revert field to server value. Toast: "Settings save failed". |
+| Lock poll — any error | `GET getLockedIteration` | Non-critical | Silent failure. Log to console. Retry on next poll interval. |
+| Definitions — 500 | `GET mlvExecutionDefinitions` | Cannot load definitions | Dropdown shows only "Full DAG". Toast: "Could not load definitions." |
+| SignalR disconnect | Connection lost | No real-time updates | Status indicator shows ◆ warning icon. Fallback to 5s polling via `getDagExecMetrics`. Auto-reconnect with exponential backoff (1s, 2s, 4s, 8s, max 30s). |
 
 ---
 
-## 13. Accessibility
+## 13. Real-time Updates — SignalR Events
 
-- **All buttons:** `role="button"`, `aria-label` with action + current state
-- **Disabled buttons:** `aria-disabled="true"`, not `disabled` attribute (allows tooltip on hover)
-- **Status indicator:** `role="status"`, `aria-live="polite"` for screen reader announcements
-- **Confirmation popover:** `role="alertdialog"`, focus trapped inside, `aria-describedby` points to explanation text
-- **Force Unlock modal:** `role="dialog"`, `aria-modal="true"`, focus trapped
-- **Timer:** `aria-label="Elapsed time: {formatted}"`, updates every 10s for screen readers (not every 1s — too noisy)
-- **Dropdown:** `role="listbox"` with `aria-activedescendant`, arrow key navigation
+All four SignalR events flow through the `DagStudio` orchestrator, which updates the toolbar and graph canvas in a single render pass.
+
+### NodeStarted
+
+```
+Event:   NodeStarted
+Payload: { nodeId: Guid, dagId: Guid, iterationId: Guid, timestamp: ISO8601 }
+
+Toolbar effect:
+  - No toolbar change (status already "Running")
+  - Pass to graph canvas: node dot → pulsing accent
+```
+
+### NodeCompleted
+
+```
+Event:   NodeCompleted
+Payload: { nodeId: Guid, dagId: Guid, iterationId: Guid, durationMs: number }
+
+Toolbar effect:
+  - No toolbar change
+  - Pass to graph canvas: node dot → solid green (--status-succeeded)
+  - Pass to gantt chart: bar extends to completion
+```
+
+### NodeFailed
+
+```
+Event:   NodeFailed
+Payload: { nodeId: Guid, dagId: Guid, iterationId: Guid,
+           durationMs: number, errorType: string, errorMessage: string }
+
+Toolbar effect:
+  - No toolbar change (DAG still running — other nodes may continue)
+  - Pass to graph canvas: node dot → solid red (--status-failed)
+  - If node detail panel is open for this node: show error inline
+```
+
+### DagTerminal
+
+```
+Event:   DagTerminal
+Payload: { dagId: Guid, iterationId: Guid, status: DagExecutionStatus,
+           totalNodes: number, completedNodes: number,
+           failedNodes: number, skippedNodes: number,
+           parallelLimit: number, durationMs: number,
+           errorCode: string?, errorMessage: string? }
+
+Toolbar effect (depends on status field):
+
+  status = "completed":
+    - _executionState = 'completed'
+    - Status dot: solid green (--status-succeeded)
+    - Status text: "Completed"
+    - Timer: freeze at durationMs (formatted)
+    - Cancel button: slide out
+    - Run button: re-enabled
+
+  status = "failed":
+    - _executionState = 'failed'
+    - Status dot: solid red (--status-failed)
+    - Status text: "Failed"
+    - Timer: freeze at durationMs
+    - Tooltip: "{errorCode}: {errorMessage}"
+    - Cancel button: slide out
+    - Run button: re-enabled
+
+  status = "cancelled":
+    - _executionState = 'cancelled'
+    - Status dot: solid amber (--status-cancelled)
+    - Status text: "Cancelled"
+    - Timer: freeze at durationMs
+    - Cancel button: slide out
+    - Run button: re-enabled
+```
+
+### Iteration ID Matching
+
+Events are matched by `iterationId`. If an event arrives for an iteration ID that doesn't match the current `_activeIterationId`, it is **silently discarded**. This prevents stale events from a previous run from corrupting the current UI state.
 
 ---
 
-*"The toolbar is the cockpit instrument panel. Every light, every gauge, every switch must be immediately legible at a glance."*
+## 14. API Reference Summary
+
+| Method | Verb | Endpoint | Response | Notes |
+|--------|------|----------|----------|-------|
+| `runDag` | `POST` | `/liveTableSchedule/runDAG/{iterationId}` | `202 Accepted` | Optional query: `?mlvExecutionDefinitionId={id}`. Optional body for `SelectedOnly` mode. |
+| `cancelDag` | `DELETE` | `/liveTableSchedule/cancelDAG/{iterationId}` | `200: DagExecutionStatus` | **DELETE not GET.** Previous documentation was incorrect. |
+| `getLatestDag` | `GET` | `/liveTable/getLatestDag?showExtendedLineage=true` | `Dag` | Returns full topology with nodes, edges, warnings. |
+| `getDagExecMetrics` | `GET` | `/liveTableSchedule/getDagExecMetrics/{iterationId}` | `DagExecutionInstance` | Polling fallback when SignalR is disconnected. |
+| `getLockedExecution` | `GET` | `/liveTableMaintanance/getLockedDAGExecutionIteration` | `string\|List<Guid>` | Typo in URL ("Maintanance") is the real FLT route. |
+| `forceUnlockDag` | `POST` | `/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}` | `string` | Returns "Force unlocked Dag". Typo in URL is real. |
+| `getSettings` | `GET` | `/liveTable/settings` | `Settings` | `{ parallelNodeLimit, refreshMode, ... }` |
+| `updateSettings` | `PATCH` | `/liveTable/settings` | `Settings` | Partial update — send only changed fields. |
+| `listMlvDefinitions` | `GET` | `/liveTable/mlvExecutionDefinitions` | `List<MLVExecDefResponse>` | Named execution subsets. |
+| `createMlvDefinition` | `POST` | `/liveTable/mlvExecutionDefinitions` | `MLVExecDefResponse` | Body: `{ displayName, selectedMLVs }`. |
+
+---
+
+## 15. Accessibility
+
+### ARIA Attributes
+
+| Element | Role | ARIA | Notes |
+|---------|------|------|-------|
+| Toolbar container | `role="toolbar"` | `aria-label="DAG execution controls"` | Arrow keys navigate between buttons per WAI-ARIA toolbar pattern |
+| Run DAG button | `role="button"` | `aria-haspopup="menu"` on caret | Split button pattern: main action + menu trigger |
+| Dropdown menu | `role="menu"` | `aria-labelledby="{runButtonId}"` | Items have `role="menuitemradio"` with `aria-checked` |
+| Cancel button | `role="button"` | `aria-describedby="{confirmPopoverId}"` when popover open | Described-by links to confirmation content |
+| Status indicator | `role="status"` | `aria-live="polite"`, `aria-atomic="true"` | Screen readers announce state changes without interrupting |
+| Settings panel | `role="dialog"` | `aria-label="DAG execution settings"`, `aria-modal="true"` | Focus trapped while open |
+| Force Unlock dialog | `role="alertdialog"` | `aria-describedby="{warningTextId}"` | `alertdialog` for destructive confirmation |
+
+### Focus Management
+
+- **Settings open:** Focus moves to first interactive element (Parallel Node Limit stepper). On close, focus returns to ⚙ button.
+- **Popover open:** Focus moves to "No, keep running" button (safe default). On close, focus returns to Cancel button.
+- **Dialog open:** Focus moves to "Cancel" button (safe default). On close, focus returns to Force Unlock button.
+- **Dropdown open:** Focus moves to currently selected item. Arrow keys navigate. On close, focus returns to caret.
+
+### Keyboard Navigation
+
+- **Tab order within toolbar:** Run → Caret → Cancel → Refresh → Force Unlock → Status (informational, skipped) → Settings.
+- **Arrow keys within toolbar:** Left/Right move between visible buttons (per `role="toolbar"` pattern).
+- **Hidden buttons are removed from tab order** (`tabindex="-1"` or not rendered).
+
+### Screen Reader Announcements
+
+| Event | Announcement (via `aria-live` region) |
+|-------|--------------------------------------|
+| Run started | "DAG execution started" |
+| Run failed to start | "DAG execution failed to start: {reason}" |
+| Execution completed | "DAG execution completed in {duration}" |
+| Execution failed | "DAG execution failed: {errorCode}" |
+| Execution cancelled | "DAG execution cancelled" |
+| Lock detected | "DAG execution locked. Force unlock available." |
+| Settings saved | "Settings saved" |
+
+---
+
+## 16. Performance Budgets
+
+| Metric | Budget | How Enforced |
+|--------|--------|--------------|
+| Toolbar initial render | < 16ms | Single DOM pass. No layout thrashing. Buttons are plain `<button>` elements, no framework overhead. |
+| Optimistic state transition | < 8ms | Synchronous class toggles. No forced reflow between read/write. |
+| Status update from SignalR | < 4ms | Direct property mutation on status element. No re-render of entire toolbar. |
+| Settings panel open animation | 200ms | CSS `transform: translateX()` — compositor-only, no main-thread paint. |
+| Cancel button slide-in | 160ms | CSS `transform: translateX()` — compositor-only. |
+| Timer update (1s interval) | < 1ms | Single `textContent` write to timer element. |
+| Dropdown render (20 definitions) | < 8ms | Static list, no virtualization needed at this scale. |
+| Lock poll (30s interval) | < 2ms overhead | Non-blocking `fetch`. Response parsed, boolean flag set. |
+| Memory: toolbar DOM nodes | < 40 nodes | Flat structure. No nested component trees. |
+
+---
+
+## 17. Open Questions
+
+None. All execution control behaviors are fully specified by the FLT source code, the state matrix (68 states), and this component spec. If implementation reveals edge cases not covered here, file them against the state matrix document.
+
+---
+
+> *"The toolbar is the cockpit. Every switch, every light, every gauge — the pilot must know what it does without reading a manual. If they have to think, we failed."*
+> — Sana Reeves, Architecture Review, 2025-07-18

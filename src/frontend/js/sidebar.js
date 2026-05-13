@@ -8,7 +8,7 @@
  * Public API (backward-compatible with main.js):
  *   constructor()
  *   init()
- *   switchView(viewId)        — 'workspace' | 'runtime' | 'api' | 'environment' | 'dag'
+ *   switchView(viewId)        — 'workspace' | 'runtime' | 'api' | 'environment' | 'dag' | 'qa'
  *   setPhase(phase)           — 'disconnected' | 'connected'
  *   getActiveView()           — returns current viewId
  *   onViewChange              — callback: (viewId) => void
