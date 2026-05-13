@@ -56,18 +56,18 @@ _openai_config: dict = {}  # {"endpoint", "api_key", "api_version", "deployment"
 
 
 def _load_openai_config() -> dict:
-    """Load Azure OpenAI config from env vars or donna-app .env file."""
+    """Load Azure OpenAI config from env vars or local .env file."""
     endpoint = os.environ.get("AZURE_OPENAI_PRO_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT")
     api_key = os.environ.get("AZURE_OPENAI_PRO_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY")
     api_version = os.environ.get("AZURE_OPENAI_PRO_API_VERSION") or os.environ.get("AZURE_OPENAI_API_VERSION") or "2025-04-01-preview"
     deployment = os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4-pro"
 
     if not endpoint or not api_key:
-        # Try donna-app .env as fallback
-        donna_env = Path.home() / "newrepo" / "donna-app" / ".env"
-        if donna_env.exists():
+        # Load from .env in project root
+        env_file = PROJECT_DIR / ".env"
+        if env_file.exists():
             env_vars: dict[str, str] = {}
-            for line in donna_env.read_text(encoding="utf-8").splitlines():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
                 if not line or line.startswith("#") or "=" not in line:
                     continue

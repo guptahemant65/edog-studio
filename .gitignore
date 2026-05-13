@@ -36,6 +36,7 @@ edog-feature-overrides.json
 
 # Config with secrets
 edog-config.json
+.env
 
 # Build output
 src/frontend/edog-studio.html
