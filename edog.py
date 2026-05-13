@@ -1782,8 +1782,8 @@ def apply_log_viewer_registration_workloadapp_cs(content):
 
 def revert_log_viewer_registration_program_cs(content):
     """Revert log viewer registration from Program.cs."""
-    # Remove the EDOG DevMode block (match from start-of-line to preserve surrounding newlines)
-    pattern = r"^[ \t]*// EDOG DevMode - Start log viewer server.*?WireUp\.RegisterInstance\(edogServer\);[ \t]*\n\n?"
+    # Remove the EDOG DevMode block (match from start comment to auth diagnostic call)
+    pattern = r"^[ \t]*// EDOG DevMode - Start log viewer server.*?EdogAuthDiagnostic\.CaptureDevModeToken\(\);[ \t]*\n\n?"
     new_content = re.sub(pattern, "", content, flags=re.DOTALL | re.MULTILINE)
     return new_content
 
@@ -1849,7 +1849,7 @@ def apply_dag_execution_hook_patch(content):
 
     edog_hook_line = (
         "                    // EDOG DevMode - observability hook for DAG lifecycle events\n"
-        "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());\n"
+        "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());"
     )
 
     lines.insert(insert_idx, edog_hook_line)
