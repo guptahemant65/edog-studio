@@ -588,17 +588,14 @@ class FabricApiClient {
 
   async _fltFetch(path, options = {}) {
     try {
-      const url = this._fabricBaseUrl + path;
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `MwcToken ${this._mwcToken}`,
-      };
-      const resp = await fetch(url, { ...options, headers });
+      var url = '/api/flt-proxy' + path;
+      var headers = { 'Content-Type': 'application/json' };
+      var resp = await fetch(url, { ...options, headers: headers });
       if (!resp.ok) {
         console.warn('FLT API error:', resp.status, path);
         return null;
       }
-      const text = await resp.text();
+      var text = await resp.text();
       return text ? JSON.parse(text) : {};
     } catch (e) {
       console.warn('FLT API fetch failed:', path, e.message);
@@ -615,27 +612,26 @@ class FabricApiClient {
    * @throws {Error} With .status, .body, .path properties.
    */
   async _fltFetchStrict(path, options = {}) {
-    if (!this._fabricBaseUrl || !this._mwcToken) {
-      const err = new Error('FLT service not connected — ensure MWC token is available');
+    if (!this._mwcToken) {
+      var err = new Error('FLT service not connected — ensure MWC token is available');
       err.status = 0;
       err.path = path;
       throw err;
     }
-    const url = this._fabricBaseUrl + path;
-    const headers = {
+    var url = '/api/flt-proxy' + path;
+    var headers = {
       'Content-Type': 'application/json',
-      'Authorization': `MwcToken ${this._mwcToken}`,
       ...options.headers,
     };
-    const resp = await fetch(url, { ...options, headers });
+    var resp = await fetch(url, { ...options, headers: headers });
     if (!resp.ok) {
-      const err = new Error(`FLT API error: ${resp.status} ${path}`);
-      err.status = resp.status;
-      err.body = await resp.text().catch(() => '');
-      err.path = path;
-      throw err;
+      var err2 = new Error('FLT API error: ' + resp.status + ' ' + path);
+      err2.status = resp.status;
+      err2.body = await resp.text().catch(function() { return ''; });
+      err2.path = path;
+      throw err2;
     }
-    const text = await resp.text();
+    var text = await resp.text();
     return text ? JSON.parse(text) : {};
   }
 
@@ -648,23 +644,20 @@ class FabricApiClient {
    * @throws {Error} With .status, .path properties.
    */
   async _fltFetchRaw(path, options = {}) {
-    if (!this._fabricBaseUrl || !this._mwcToken) {
-      const err = new Error('FLT service not connected');
+    if (!this._mwcToken) {
+      var err = new Error('FLT service not connected');
       err.status = 0;
       err.path = path;
       throw err;
     }
-    const url = this._fabricBaseUrl + path;
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `MwcToken ${this._mwcToken}`,
-    };
-    const resp = await fetch(url, { ...options, headers });
+    var url = '/api/flt-proxy' + path;
+    var headers = { 'Content-Type': 'application/json' };
+    var resp = await fetch(url, { ...options, headers: headers });
     if (!resp.ok) {
-      const err = new Error(`FLT API error: ${resp.status} ${path}`);
-      err.status = resp.status;
-      err.path = path;
-      throw err;
+      var err2 = new Error('FLT API error: ' + resp.status + ' ' + path);
+      err2.status = resp.status;
+      err2.path = path;
+      throw err2;
     }
     return resp;
   }

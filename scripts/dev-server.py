@@ -1036,6 +1036,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             or self.path.startswith("/api/telemetry")
             or self.path.startswith("/api/stats")
             or self.path.startswith("/api/executions")
+            or self.path.startswith("/api/flt-proxy/")
         ):
             self._proxy_to_flt("GET")
         elif self.path == "/ws/logs":
@@ -1102,6 +1103,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_file_changes_dismiss()
         elif self.path == "/api/studio/feedback":
             self._serve_feedback()
+        elif self.path.startswith("/api/flt-proxy/"):
+            self._proxy_to_flt("POST")
         elif self.path == "/api/templates":
             self._serve_template_save()
         else:
@@ -1644,7 +1647,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             time.sleep(0.5)
 
     def _proxy_to_flt(self, method="GET"):
-        """Proxy REST request to EdogLogServer on internal port."""
+        """Proxy REST request to FLT service on internal port.
+
+        Supports two path styles:
+        - /api/flt-proxy/... → strips prefix, forwards /... to FLT
+        - /api/logs, /api/telemetry, etc. → forwards as-is
+        """
         with _studio_lock:
             port = _studio_state.get("fltPort")
         if not port:
@@ -1657,7 +1665,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        target_url = f"http://localhost:{port}{self.path}"
+        # Strip /api/flt-proxy prefix so FLT receives the original path
+        flt_path = self.path
+        if flt_path.startswith("/api/flt-proxy/"):
+            flt_path = flt_path[len("/api/flt-proxy"):]
+
+        target_url = f"http://localhost:{port}{flt_path}"
         try:
             body = None
             if method in ("POST", "PUT", "PATCH"):
@@ -1668,6 +1681,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             ct = self.headers.get("Content-Type")
             if ct:
                 req.add_header("Content-Type", ct)
+
+            # For flt-proxy routes, inject MWC token server-side
+            if self.path.startswith("/api/flt-proxy/"):
+                mwc, _ = _read_cache(MWC_CACHE)
+                if mwc:
+                    req.add_header("Authorization", f"MwcToken {mwc}")
+            # Forward client Authorization header for other proxy paths
+            auth = self.headers.get("Authorization")
+            if auth and "Authorization" not in dict(req.header_items()):
+                req.add_header("Authorization", auth)
 
             with urllib.request.urlopen(req, timeout=10) as resp:
                 resp_body = resp.read()
