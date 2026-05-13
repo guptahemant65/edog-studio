@@ -137,7 +137,7 @@ var THEME_SAMPLE_DATA = {
     [2006, "'Liam'",     "'Zhang'",     "'Finance'",        "'Financial Analyst'",     "'2023-02-14'", 82000.00,  2030, "'Chicago'",     "'Active'"],
     [2007, "'Aisha'",    "'Mohammed'",  "'Engineering'",    "'DevOps Engineer'",       "'2020-06-22'", 110000.00, 2000, "'Seattle'",     "'Active'"],
     [2008, "'Daniel'",   "'Fischer'",   "'HR'",             "'HR Business Partner'",   "'2018-04-01'", 98000.00,  2040, "'New York'",    "'Active'"],
-    [2009, "'Yuki'",     "'Sato'",      "'Engineering'",    "'Staff Engineer'",        "'2017-08-15'", 155000.00, NULL, "'San Francisco'","'Active'"],
+    [2009, "'Yuki'",     "'Sato'",      "'Engineering'",    "'Staff Engineer'",        "'2017-08-15'", 155000.00, null, "'San Francisco'","'Active'"],
     [2010, "'Rachel'",   "'Murphy'",    "'Product'",        "'Senior PM'",             "'2019-01-10'", 135000.00, 2010, "'San Francisco'","'On Leave'"]
   ],
   finance: [
