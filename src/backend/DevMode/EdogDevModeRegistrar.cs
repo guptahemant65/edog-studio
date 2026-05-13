@@ -9,6 +9,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
 
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Logging.Abstractions;
+
     /// <summary>
     /// Single entry point for registering all EDOG DevMode runtime interceptors.
     /// Called from WorkloadApp.cs RunAsync callback. Idempotent — safe to call multiple times.
@@ -346,7 +349,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     diRegistryProvider);
 
                 // Minimal service provider for engines that require IServiceProvider
-                var serviceProvider = new Microsoft.Extensions.DependencyInjection.ServiceCollection()
+                var serviceProvider = new ServiceCollection()
                     .BuildServiceProvider();
 
                 // Resolve IHttpClientFactory if already registered, otherwise null
@@ -370,7 +373,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     stimulusDispatcher,
                     null,  // ResultAggregator is per-run — created at execution time
                     codeAnalyzer,
-                    loggerFactory.CreateLogger<EdogQaExecutionEngine>(),
+                    NullLogger<EdogQaExecutionEngine>.Instance,
                     serviceProvider);
 
                 // Populate service locator for hub access

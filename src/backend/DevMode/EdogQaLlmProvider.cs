@@ -236,11 +236,15 @@ Return ONLY valid JSON, no markdown, no explanation text.";
 
             sb.AppendLine("**Primary Change:**");
             var primary = request.Zone.PrimaryChange;
-            sb.AppendLine($"- File: {primary.FilePath}");
-            if (!string.IsNullOrEmpty(primary.MethodName))
-                sb.AppendLine($"- Method: {primary.MethodName}");
-            sb.AppendLine($"- Lines: {primary.StartLine}-{primary.EndLine}");
-            sb.AppendLine($"- Change Type: {primary.ChangeType}");
+            var startLine = primary?.LinesChanged?.Count > 0 ? primary.LinesChanged.Min() : 0;
+            var endLine = primary?.LinesChanged?.Count > 0 ? primary.LinesChanged.Max() : 0;
+            sb.AppendLine($"- File: {primary?.File ?? "unknown"}");
+            if (!string.IsNullOrEmpty(primary?.Method))
+                sb.AppendLine($"- Method: {primary.Method}");
+            sb.AppendLine(startLine > 0
+                ? $"- Lines: {startLine}-{endLine}"
+                : "- Lines: unknown");
+            sb.AppendLine($"- Change Type: {primary?.ChangeType ?? "unknown"}");
             sb.AppendLine();
 
             // Affected callers
@@ -249,7 +253,7 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                 sb.AppendLine($"**Affected Callers ({request.Zone.AffectedCallers.Count}):**");
                 foreach (var caller in request.Zone.AffectedCallers.Take(10))
                 {
-                    sb.AppendLine($"- {caller.Method} (file: {caller.FilePath})");
+                    sb.AppendLine($"- {caller.Method} (file: {caller.File})");
                 }
                 if (request.Zone.AffectedCallers.Count > 10)
                     sb.AppendLine($"... and {request.Zone.AffectedCallers.Count - 10} more");
@@ -283,7 +287,7 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                 sb.AppendLine($"**Entry Points ({request.Zone.EntryPoints.Count}):**");
                 foreach (var ep in request.Zone.EntryPoints.Take(10))
                 {
-                    sb.AppendLine($"- {ep.Method} → stimulus: {ep.SuggestedStimulusType}");
+                    sb.AppendLine($"- {ep.Node} → stimulus: {ep.StimulusType}");
                 }
                 if (request.Zone.EntryPoints.Count > 10)
                     sb.AppendLine($"... and {request.Zone.EntryPoints.Count - 10} more");

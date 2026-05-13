@@ -195,7 +195,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                             Source = nodeId,
                             Target = targetId,
                             EdgeType = "direct_call",
-                            Weight = 1.0
+                            Source_ = "l1"
                         });
                     }
                 }
@@ -496,7 +496,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 Source = sourceId,
                                 Target = targetId,
                                 EdgeType = edgeType,
-                                Weight = 2.0 // Higher weight for structural relationships
+                                Source_ = "l2"
                             });
 
                             // Ensure nodes exist
@@ -545,7 +545,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 Source = sourceId,
                                 Target = targetId,
                                 EdgeType = "field_reference",
-                                Weight = 1.5
+                                Source_ = "l2"
                             });
 
                             if (!graph.Nodes.ContainsKey(targetId))

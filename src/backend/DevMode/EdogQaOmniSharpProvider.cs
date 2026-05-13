@@ -270,17 +270,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return;
                 }
 
-                var node = graph.Nodes.FirstOrDefault(n => n.Id == $"{symbol.File}::{symbol.Method}");
-                if (node == null)
+                var nodeId = $"{symbol.File}:{symbol.Method}";
+                if (!graph.Nodes.TryGetValue(nodeId, out var node))
                 {
                     node = new GraphNode
                     {
-                        Id = $"{symbol.File}::{symbol.Method}",
+                        Id = nodeId,
                         File = symbol.File,
                         Method = symbol.Method,
-                        Type = "method"
+                        NodeType = "method"
                     };
-                    graph.Nodes.Add(node);
+                    graph.AddNode(node);
                 }
 
                 var implementations = await this.GetImplementationsViaOmniSharpAsync(
@@ -291,24 +291,26 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 foreach (var impl in implementations)
                 {
+                    var implNodeId = $"impl:{impl}";
                     var implNode = new GraphNode
                     {
-                        Id = $"impl::{impl}",
+                        Id = implNodeId,
                         File = "unknown",
                         Method = impl,
-                        Type = "implementation"
+                        NodeType = "implementation"
                     };
 
-                    if (!graph.Nodes.Any(n => n.Id == implNode.Id))
+                    if (!graph.Nodes.ContainsKey(implNodeId))
                     {
-                        graph.Nodes.Add(implNode);
+                        graph.AddNode(implNode);
                     }
 
-                    graph.Edges.Add(new GraphEdge
+                    graph.AddEdge(new GraphEdge
                     {
                         Source = node.Id,
-                        Target = implNode.Id,
-                        Type = "interface_dispatch"
+                        Target = implNodeId,
+                        EdgeType = "interface_dispatch",
+                        Source_ = "l3"
                     });
                 }
 
@@ -320,24 +322,26 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 foreach (var usage in usages.Take(20))
                 {
+                    var callerNodeId = $"{usage.FileName}:{usage.ContainingMethod ?? "Unknown"}";
                     var callerNode = new GraphNode
                     {
-                        Id = $"{usage.FileName}::{usage.ContainingMethod ?? "Unknown"}",
+                        Id = callerNodeId,
                         File = usage.FileName,
                         Method = usage.ContainingMethod ?? "Unknown",
-                        Type = "method"
+                        NodeType = "method"
                     };
 
-                    if (!graph.Nodes.Any(n => n.Id == callerNode.Id))
+                    if (!graph.Nodes.ContainsKey(callerNodeId))
                     {
-                        graph.Nodes.Add(callerNode);
+                        graph.AddNode(callerNode);
                     }
 
-                    graph.Edges.Add(new GraphEdge
+                    graph.AddEdge(new GraphEdge
                     {
-                        Source = callerNode.Id,
+                        Source = callerNodeId,
                         Target = node.Id,
-                        Type = "semantic_call"
+                        EdgeType = "semantic_call",
+                        Source_ = "l3"
                     });
                 }
             }
@@ -533,39 +537,41 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             var callers = await this.GetIncomingCallsFallbackAsync(symbol.Method, cancellationToken);
 
-            var node = graph.Nodes.FirstOrDefault(n => n.Id == $"{symbol.File}::{symbol.Method}");
-            if (node == null)
+            var nodeId = $"{symbol.File}:{symbol.Method}";
+            if (!graph.Nodes.TryGetValue(nodeId, out var node))
             {
                 node = new GraphNode
                 {
-                    Id = $"{symbol.File}::{symbol.Method}",
+                    Id = nodeId,
                     File = symbol.File,
                     Method = symbol.Method,
-                    Type = "method"
+                    NodeType = "method"
                 };
-                graph.Nodes.Add(node);
+                graph.AddNode(node);
             }
 
             foreach (var caller in callers.Take(10))
             {
+                var callerNodeId = $"{caller.File}:{caller.Method}";
                 var callerNode = new GraphNode
                 {
-                    Id = $"{caller.File}::{caller.Method}",
+                    Id = callerNodeId,
                     File = caller.File,
                     Method = caller.Method,
-                    Type = "method"
+                    NodeType = "method"
                 };
 
-                if (!graph.Nodes.Any(n => n.Id == callerNode.Id))
+                if (!graph.Nodes.ContainsKey(callerNodeId))
                 {
-                    graph.Nodes.Add(callerNode);
+                    graph.AddNode(callerNode);
                 }
 
-                graph.Edges.Add(new GraphEdge
+                graph.AddEdge(new GraphEdge
                 {
-                    Source = callerNode.Id,
+                    Source = callerNodeId,
                     Target = node.Id,
-                    Type = "semantic_call"
+                    EdgeType = "semantic_call",
+                    Source_ = "l3"
                 });
             }
         }

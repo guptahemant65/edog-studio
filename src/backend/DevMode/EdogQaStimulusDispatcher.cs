@@ -716,7 +716,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static Type ResolveServiceType(string typeName)
         {
             // Try exact match first (fully qualified)
-            var type = Type.GetType(typeName);
+            var type = System.Type.GetType(typeName);
             if (type != null) return type;
 
             // Scan loaded assemblies for interface/class matching the name
