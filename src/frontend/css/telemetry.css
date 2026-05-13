@@ -149,8 +149,8 @@
   color: var(--text);
 }
 
-/* Cross-link styling */
-.cross-link {
+/* Cross-link styling (scoped to telemetry) */
+.telemetry-scroll .cross-link {
   font-size: 12px;
   color: var(--accent);
   cursor: pointer;
@@ -160,7 +160,7 @@
   margin-top: 8px;
   display: inline-block;
 }
-.cross-link:hover {
+.telemetry-scroll .cross-link:hover {
   background: var(--accent);
   color: white;
 }

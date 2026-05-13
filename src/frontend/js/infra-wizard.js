@@ -812,10 +812,13 @@ class InfraWizardDialog {
       confirmEl.parentNode.removeChild(confirmEl);
       if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
-    confirmEl.querySelector('#iw-confirm-discard').addEventListener('click', function() {
-      confirmEl.removeEventListener('keydown', trapHandler);
-      self._performClose();
-    });
+    const discardBtn = confirmEl.querySelector('#iw-confirm-discard');
+    if (discardBtn) {
+      discardBtn.addEventListener('click', function() {
+        confirmEl.removeEventListener('keydown', trapHandler);
+        self._performClose();
+      });
+    }
   }
 
   _showLockInConfirmation() {
@@ -870,11 +873,14 @@ class InfraWizardDialog {
       confirmEl.parentNode.removeChild(confirmEl);
       if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
-    confirmEl.querySelector('#iw-lockin-confirm').addEventListener('click', function() {
-      confirmEl.removeEventListener('keydown', trapHandler);
-      confirmEl.parentNode.removeChild(confirmEl);
-      self._goToPage(4, true);
-    });
+    const lockinBtn = confirmEl.querySelector('#iw-lockin-confirm');
+    if (lockinBtn) {
+      lockinBtn.addEventListener('click', function() {
+        confirmEl.removeEventListener('keydown', trapHandler);
+        confirmEl.parentNode.removeChild(confirmEl);
+        self._goToPage(4, true);
+      });
+    }
   }
 
   _minimizeToFloatingBadge() {

@@ -238,12 +238,12 @@
 }
 .json-details summary:hover { color: var(--accent); }
 
-/* JSON Syntax Highlighting */
-.json-key { color: var(--accent); }
-.json-string { color: var(--status-succeeded); }
-.json-number { color: var(--level-message); }
-.json-boolean { color: var(--level-warning); }
-.json-null { color: var(--text-dim); }
+/* JSON Syntax Highlighting (scoped to detail panel) */
+.detail-panel .json-key { color: var(--accent); }
+.detail-panel .json-string { color: var(--status-succeeded); }
+.detail-panel .json-number { color: var(--level-message); }
+.detail-panel .json-boolean { color: var(--level-warning); }
+.detail-panel .json-null { color: var(--text-dim); }
 
 /* Level badge inside detail panel */
 .detail-grid .level-badge {

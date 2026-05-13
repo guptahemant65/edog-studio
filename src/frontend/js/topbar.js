@@ -365,9 +365,12 @@ class TopBar {
     this._ttlTickTimer = null;
 
     var self = this;
-    el.querySelector('#ti-close-btn').addEventListener('click', function() {
-      self._closeInspector();
-    });
+    const closeBtn = el.querySelector('#ti-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        self._closeInspector();
+      });
+    }
     overlay.addEventListener('click', function() {
       self._closeInspector();
     });

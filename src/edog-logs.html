@@ -5312,8 +5312,8 @@ mark {
   color: var(--text);
 }
 
-/* Cross-link styling */
-.cross-link {
+/* Cross-link styling (scoped to telemetry) */
+.telemetry-scroll .cross-link {
   font-size: 12px;
   color: var(--accent);
   cursor: pointer;
@@ -5323,7 +5323,7 @@ mark {
   margin-top: 8px;
   display: inline-block;
 }
-.cross-link:hover {
+.telemetry-scroll .cross-link:hover {
   background: var(--accent);
   color: white;
 }
@@ -5581,12 +5581,12 @@ mark {
 }
 .json-details summary:hover { color: var(--accent); }
 
-/* JSON Syntax Highlighting */
-.json-key { color: var(--accent); }
-.json-string { color: var(--status-succeeded); }
-.json-number { color: var(--level-message); }
-.json-boolean { color: var(--level-warning); }
-.json-null { color: var(--text-dim); }
+/* JSON Syntax Highlighting (scoped to detail panel) */
+.detail-panel .json-key { color: var(--accent); }
+.detail-panel .json-string { color: var(--status-succeeded); }
+.detail-panel .json-number { color: var(--level-message); }
+.detail-panel .json-boolean { color: var(--level-warning); }
+.detail-panel .json-null { color: var(--text-dim); }
 
 /* Level badge inside detail panel */
 .detail-grid .level-badge {
@@ -9804,15 +9804,15 @@ mark {
 }
 .bp-add:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── File Change Notification ── */
-.file-change-bar {
+/* ── File Change Notification (scoped to token inspector) ── */
+.ti-panel .file-change-bar {
   display: flex; align-items: center; gap: var(--space-3);
   padding: var(--space-1) var(--space-4);
   background: var(--surface); border-bottom: 1px solid var(--border);
   font-size: var(--text-xs); color: var(--text-dim);
 }
-.file-change-bar:empty { display: none; }
-.file-change-bar .fc-files { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
+.ti-panel .file-change-bar:empty { display: none; }
+.ti-panel .file-change-bar .fc-files { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-muted); }
 .fc-btn {
   padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
   font-size: var(--text-xs); border: 1px solid var(--border-bright);
@@ -9848,26 +9848,26 @@ mark {
 .sh-icon { font-size: var(--text-sm); min-width: 16px; text-align: center; }
 .sh-action { color: var(--text-dim); }
 
-/* ── Deploy Progress ── */
+/* ── Deploy Progress (scoped to token inspector) ── */
 .deploy-progress {
   padding: var(--space-4);
   display: flex; flex-direction: column; gap: var(--space-3);
 }
-.deploy-step {
+.ti-panel .deploy-step {
   display: flex; align-items: center; gap: var(--space-3);
   font-size: var(--text-sm);
 }
-.deploy-step-num {
+.ti-panel .deploy-step-num {
   width: 24px; height: 24px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: var(--text-xs); font-weight: 600;
   border: 2px solid var(--border-bright); color: var(--text-muted);
 }
-.deploy-step.active .deploy-step-num { border-color: var(--accent); color: var(--accent); animation: dag-pulse 1.5s infinite; }
-.deploy-step.done .deploy-step-num { border-color: var(--status-succeeded); color: var(--status-succeeded); background: rgba(5,150,105,0.08); }
-.deploy-step-label { color: var(--text-dim); }
-.deploy-step.active .deploy-step-label { color: var(--text); font-weight: 500; }
-.deploy-step.done .deploy-step-label { color: var(--status-succeeded); }
+.ti-panel .deploy-step.active .deploy-step-num { border-color: var(--accent); color: var(--accent); animation: dag-pulse 1.5s infinite; }
+.ti-panel .deploy-step.done .deploy-step-num { border-color: var(--status-succeeded); color: var(--status-succeeded); background: rgba(5,150,105,0.08); }
+.ti-panel .deploy-step-label { color: var(--text-dim); }
+.ti-panel .deploy-step.active .deploy-step-label { color: var(--text); font-weight: 500; }
+.ti-panel .deploy-step.done .deploy-step-label { color: var(--status-succeeded); }
 
     /* === css/infra-wizard.css === */
 /* ═══════════════════════════════════════════════════════════════════
@@ -36554,8 +36554,8 @@ class ControlPanel {
     try {
       const executions = await this._fetchHistory();
       this._renderHistory(executions);
-    } catch (_) {
-      // Leave existing history content intact on transient failure
+    } catch (err) {
+      console.warn('[EDOG] Failed to fetch history, leaving existing content intact:', err);
     }
   }
 
@@ -37406,9 +37406,12 @@ class TopBar {
     this._ttlTickTimer = null;
 
     var self = this;
-    el.querySelector('#ti-close-btn').addEventListener('click', function() {
-      self._closeInspector();
-    });
+    const closeBtn = el.querySelector('#ti-close-btn');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        self._closeInspector();
+      });
+    }
     overlay.addEventListener('click', function() {
       self._closeInspector();
     });
@@ -41200,9 +41203,9 @@ class TelemetryTab {
     this._dom.cards.addEventListener('scroll', () => this._hideTooltip(), { passive: true });
 
     // Detail panel
-    this._dom.detail.querySelector('.tl-detail-close').addEventListener('click', () => this._closeDetail());
-    this._dom.detail.querySelector('.tl-detail-logs').addEventListener('click', () => this._viewInLogs());
-    this._dom.detail.querySelector('.tl-detail-copy').addEventListener('click', () => this._copyData());
+    this._dom.detail.querySelector('.tl-detail-close')?.addEventListener('click', () => this._closeDetail());
+    this._dom.detail.querySelector('.tl-detail-logs')?.addEventListener('click', () => this._viewInLogs());
+    this._dom.detail.querySelector('.tl-detail-copy')?.addEventListener('click', () => this._copyData());
     this._initDetailResize();
 
     // Keyboard — bound ref stored; registered in activate(), removed in deactivate()
@@ -44740,10 +44743,10 @@ class TokensTab {
       }
     };
 
-    this._detailEl.querySelector('.tok-detail-close').addEventListener('click', () => this._closeDetail());
+    this._detailEl.querySelector('.tok-detail-close')?.addEventListener('click', () => this._closeDetail());
     this._initDetailResize();
-    this._detailEl.querySelector('[data-action="copy-claims"]').addEventListener('click', () => this._copyClaims());
-    this._detailEl.querySelector('[data-action="copy-curl"]').addEventListener('click', () => this._copyCurl());
+    this._detailEl.querySelector('[data-action="copy-claims"]')?.addEventListener('click', () => this._copyClaims());
+    this._detailEl.querySelector('[data-action="copy-curl"]')?.addEventListener('click', () => this._copyCurl());
     this._container.addEventListener('keydown', (e) => this._onKeyDown(e));
   }
 
@@ -52834,9 +52837,12 @@ class NexusTab {
     this._els.alertStack.appendChild(el);
 
     var self = this;
-    el.querySelector('.nexus-alert-close').addEventListener('click', function() {
-      self._removeAlert(el);
-    });
+    const closeBtn = el.querySelector('.nexus-alert-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        self._removeAlert(el);
+      });
+    }
 
     // Auto-dismiss after 8 seconds
     setTimeout(function() { self._removeAlert(el); }, 8000);
@@ -61867,10 +61873,13 @@ class InfraWizardDialog {
       confirmEl.parentNode.removeChild(confirmEl);
       if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
-    confirmEl.querySelector('#iw-confirm-discard').addEventListener('click', function() {
-      confirmEl.removeEventListener('keydown', trapHandler);
-      self._performClose();
-    });
+    const discardBtn = confirmEl.querySelector('#iw-confirm-discard');
+    if (discardBtn) {
+      discardBtn.addEventListener('click', function() {
+        confirmEl.removeEventListener('keydown', trapHandler);
+        self._performClose();
+      });
+    }
   }
 
   _showLockInConfirmation() {
@@ -61925,11 +61934,14 @@ class InfraWizardDialog {
       confirmEl.parentNode.removeChild(confirmEl);
       if (triggerEl && triggerEl.focus) triggerEl.focus();
     });
-    confirmEl.querySelector('#iw-lockin-confirm').addEventListener('click', function() {
-      confirmEl.removeEventListener('keydown', trapHandler);
-      confirmEl.parentNode.removeChild(confirmEl);
-      self._goToPage(4, true);
-    });
+    const lockinBtn = confirmEl.querySelector('#iw-lockin-confirm');
+    if (lockinBtn) {
+      lockinBtn.addEventListener('click', function() {
+        confirmEl.removeEventListener('keydown', trapHandler);
+        confirmEl.parentNode.removeChild(confirmEl);
+        self._goToPage(4, true);
+      });
+    }
   }
 
   _minimizeToFloatingBadge() {
@@ -63024,6 +63036,30 @@ class WorkspaceExplorer {
       return;
     }
     const wizard = new InfraWizardDialog(this._api, {
+      existingWorkspaces: this._workspaces
+    });
+    wizard.onClose = () => { this._refreshAll(); };
+    wizard.onComplete = () => { this._refreshAll(); };
+    wizard.open();
+  }
+
+  /** Open the Infra Wizard pre-filled with the selected workspace/lakehouse config. */
+  _cloneEnvironment(ws) {
+    if (InfraWizardDialog.isActive()) {
+      InfraWizardDialog.getActive().restore();
+      return;
+    }
+    const lh = this._selectedItem;
+    const seedState = {
+      workspaceName: (ws.displayName || '') + ' (Clone)',
+      lakehouseName: lh ? (lh.displayName || '') : '',
+      capacityId: ws._capacityId || null,
+      capacityDisplayName: ws._capacityDisplayName || '',
+      capacitySku: ws._capacitySku || '',
+      capacityRegion: ws._region || '',
+    };
+    const wizard = new InfraWizardDialog(this._api, {
+      initialState: seedState,
       existingWorkspaces: this._workspaces
     });
     wizard.onClose = () => { this._refreshAll(); };
@@ -64168,7 +64204,7 @@ class WorkspaceExplorer {
         } else if (action === 'open-fabric-lh') {
           window.open(`https://app.fabric.microsoft.com/groups/${ws.id}`, '_blank');
         } else if (action === 'clone-env') {
-          this._toast('Clone Environment — coming soon');
+          this._cloneEnvironment(ws);
         } else if (action === 'open-notebook-ide') {
           this._openNotebookIDE(this._selectedItem, this._selectedWorkspace);
         } else if (action === 'rename-item') {
@@ -68269,7 +68305,8 @@ class MockRenderer {
         row.className = 'api-header-row';
         row.innerHTML = '<input class="api-header-key" placeholder="Header name"/><input class="api-header-val" placeholder="Value"/><button class="api-header-rm">\u2715</button>';
         headers.appendChild(row);
-        row.querySelector('.api-header-rm').addEventListener('click', () => row.remove());
+        const rmBtn = row.querySelector('.api-header-rm');
+        if (rmBtn) rmBtn.addEventListener('click', () => row.remove());
       });
     }
     panel.querySelectorAll('.api-header-rm').forEach(btn => {
@@ -68799,17 +68836,20 @@ class MockRenderer {
         <button class="bp-add-submit" style="font-size:var(--text-xs);padding:2px var(--space-2);border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-dim);color:var(--accent);cursor:pointer">Add</button>`;
       bar.querySelector('.bp-pills').after(form);
 
-      form.querySelector('.bp-add-submit').addEventListener('click', () => {
-        const regex = form.querySelector('.bp-add-input').value.trim();
-        const color = form.querySelector('.bp-add-color').value;
-        if (!regex) return;
-        try {
-          this._breakpoints.push({ regex: new RegExp(regex, 'i'), color, label: regex });
-          this._renderBreakpointPills();
-          this._applyBreakpointHighlights();
-          form.remove();
-        } catch { this._showToast('Invalid regex'); }
-      });
+      const submitBtn = form.querySelector('.bp-add-submit');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', () => {
+          const regex = form.querySelector('.bp-add-input')?.value.trim();
+          const color = form.querySelector('.bp-add-color')?.value;
+          if (!regex) return;
+          try {
+            this._breakpoints.push({ regex: new RegExp(regex, 'i'), color, label: regex });
+            this._renderBreakpointPills();
+            this._applyBreakpointHighlights();
+            form.remove();
+          } catch { this._showToast('Invalid regex'); }
+        });
+      }
     });
   }
 

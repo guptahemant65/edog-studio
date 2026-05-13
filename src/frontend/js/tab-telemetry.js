@@ -493,9 +493,9 @@ class TelemetryTab {
     this._dom.cards.addEventListener('scroll', () => this._hideTooltip(), { passive: true });
 
     // Detail panel
-    this._dom.detail.querySelector('.tl-detail-close').addEventListener('click', () => this._closeDetail());
-    this._dom.detail.querySelector('.tl-detail-logs').addEventListener('click', () => this._viewInLogs());
-    this._dom.detail.querySelector('.tl-detail-copy').addEventListener('click', () => this._copyData());
+    this._dom.detail.querySelector('.tl-detail-close')?.addEventListener('click', () => this._closeDetail());
+    this._dom.detail.querySelector('.tl-detail-logs')?.addEventListener('click', () => this._viewInLogs());
+    this._dom.detail.querySelector('.tl-detail-copy')?.addEventListener('click', () => this._copyData());
     this._initDetailResize();
 
     // Keyboard — bound ref stored; registered in activate(), removed in deactivate()

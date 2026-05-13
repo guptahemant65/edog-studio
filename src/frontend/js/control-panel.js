@@ -132,8 +132,8 @@ class ControlPanel {
     try {
       const executions = await this._fetchHistory();
       this._renderHistory(executions);
-    } catch (_) {
-      // Leave existing history content intact on transient failure
+    } catch (err) {
+      console.warn('[EDOG] Failed to fetch history, leaving existing content intact:', err);
     }
   }
 

@@ -1052,9 +1052,12 @@ class NexusTab {
     this._els.alertStack.appendChild(el);
 
     var self = this;
-    el.querySelector('.nexus-alert-close').addEventListener('click', function() {
-      self._removeAlert(el);
-    });
+    const closeBtn = el.querySelector('.nexus-alert-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', function() {
+        self._removeAlert(el);
+      });
+    }
 
     // Auto-dismiss after 8 seconds
     setTimeout(function() { self._removeAlert(el); }, 8000);

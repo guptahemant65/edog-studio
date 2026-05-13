@@ -342,10 +342,10 @@ class TokensTab {
       }
     };
 
-    this._detailEl.querySelector('.tok-detail-close').addEventListener('click', () => this._closeDetail());
+    this._detailEl.querySelector('.tok-detail-close')?.addEventListener('click', () => this._closeDetail());
     this._initDetailResize();
-    this._detailEl.querySelector('[data-action="copy-claims"]').addEventListener('click', () => this._copyClaims());
-    this._detailEl.querySelector('[data-action="copy-curl"]').addEventListener('click', () => this._copyCurl());
+    this._detailEl.querySelector('[data-action="copy-claims"]')?.addEventListener('click', () => this._copyClaims());
+    this._detailEl.querySelector('[data-action="copy-curl"]')?.addEventListener('click', () => this._copyCurl());
     this._container.addEventListener('keydown', (e) => this._onKeyDown(e));
   }
 

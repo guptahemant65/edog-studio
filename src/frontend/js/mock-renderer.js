@@ -820,7 +820,8 @@ class MockRenderer {
         row.className = 'api-header-row';
         row.innerHTML = '<input class="api-header-key" placeholder="Header name"/><input class="api-header-val" placeholder="Value"/><button class="api-header-rm">\u2715</button>';
         headers.appendChild(row);
-        row.querySelector('.api-header-rm').addEventListener('click', () => row.remove());
+        const rmBtn = row.querySelector('.api-header-rm');
+        if (rmBtn) rmBtn.addEventListener('click', () => row.remove());
       });
     }
     panel.querySelectorAll('.api-header-rm').forEach(btn => {
@@ -1350,17 +1351,20 @@ class MockRenderer {
         <button class="bp-add-submit" style="font-size:var(--text-xs);padding:2px var(--space-2);border:1px solid var(--accent);border-radius:var(--radius-sm);background:var(--accent-dim);color:var(--accent);cursor:pointer">Add</button>`;
       bar.querySelector('.bp-pills').after(form);
 
-      form.querySelector('.bp-add-submit').addEventListener('click', () => {
-        const regex = form.querySelector('.bp-add-input').value.trim();
-        const color = form.querySelector('.bp-add-color').value;
-        if (!regex) return;
-        try {
-          this._breakpoints.push({ regex: new RegExp(regex, 'i'), color, label: regex });
-          this._renderBreakpointPills();
-          this._applyBreakpointHighlights();
-          form.remove();
-        } catch { this._showToast('Invalid regex'); }
-      });
+      const submitBtn = form.querySelector('.bp-add-submit');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', () => {
+          const regex = form.querySelector('.bp-add-input')?.value.trim();
+          const color = form.querySelector('.bp-add-color')?.value;
+          if (!regex) return;
+          try {
+            this._breakpoints.push({ regex: new RegExp(regex, 'i'), color, label: regex });
+            this._renderBreakpointPills();
+            this._applyBreakpointHighlights();
+            form.remove();
+          } catch { this._showToast('Invalid regex'); }
+        });
+      }
     });
   }
 
