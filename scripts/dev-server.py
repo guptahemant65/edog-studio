@@ -44,6 +44,13 @@ _mwc_lock = threading.Lock()
 _jupyter_sessions: dict = {}  # value: {"kernelId": str, "sessionId": str, "capHost": str}
 _jupyter_lock = threading.Lock()
 
+# ADO token cache — single token, refreshed when expired
+_ado_token_cache: dict = {}  # {"token": str, "expiry": float}
+_ado_token_lock = threading.Lock()
+
+ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6975798"
+_ADO_PR_URL_RE = None  # lazily compiled
+
 
 def _atomic_write(path: Path, data: str):
     """Write data atomically: write to temp file, then rename."""
@@ -199,6 +206,232 @@ def _normalize_workspaces(resp_body: bytes) -> bytes:
             }
         )
     return json.dumps({"value": normalized}).encode()
+
+
+def _get_ado_token() -> str:
+    """Get an Azure DevOps access token via Azure CLI, with in-memory caching."""
+    global _ado_token_cache
+    with _ado_token_lock:
+        cached = _ado_token_cache
+        if cached and cached.get("expiry", 0) > time.time() + 60:
+            return cached["token"]
+
+        # Refresh inside the lock to prevent stampede
+        result = subprocess.run(
+            ["az", "account", "get-access-token", "--resource", ADO_RESOURCE_ID, "--query", "accessToken", "-o", "tsv"],
+            capture_output=True, text=True, timeout=30, shell=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"az CLI failed: {result.stderr.strip()}")
+        token = result.stdout.strip()
+        if not token:
+            raise RuntimeError("az CLI returned empty ADO token")
+
+        _ado_token_cache = {"token": token, "expiry": time.time() + 3000}
+        return token
+
+
+def _parse_ado_pr_url(pr_url: str) -> dict:
+    """Parse an ADO PR URL into org, project, repo, prId components.
+
+    Accepts:
+      https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{prId}
+      https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{prId}?_a=files
+    """
+    global _ADO_PR_URL_RE
+    import re
+    if _ADO_PR_URL_RE is None:
+        _ADO_PR_URL_RE = re.compile(
+            r"https?://dev\.azure\.com/(?P<org>[^/]+)/(?P<project>[^/]+)/"
+            r"_git/(?P<repo>[^/]+)/pullrequest/(?P<prId>\d+)"
+        )
+    m = _ADO_PR_URL_RE.match(pr_url.split("?")[0])
+    if not m:
+        raise ValueError(f"Cannot parse ADO PR URL: {pr_url}")
+    return {
+        "org": m.group("org"),
+        "project": m.group("project"),
+        "repo": m.group("repo"),
+        "prId": int(m.group("prId")),
+    }
+
+
+def _ado_api_get(token: str, url: str) -> dict | str:
+    """Call an ADO REST API endpoint. Returns parsed JSON or raw text."""
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    })
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+        content_type = resp.headers.get("Content-Type", "")
+        body = resp.read().decode("utf-8")
+        if "application/json" in content_type:
+            return json.loads(body)
+        return body
+
+
+def _ado_api_get_text(token: str, url: str) -> str:
+    """Call an ADO REST API endpoint expecting raw text (file content)."""
+    req = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "text/plain",
+    })
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+        raw = resp.read()
+        try:
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return None  # binary file
+
+
+def _fetch_pr_diff(pr_url: str) -> dict:
+    """Fetch the unified diff for a pull request from Azure DevOps.
+
+    Returns dict with: prId, title, author, filesChanged, linesAdded,
+    linesRemoved, diff (unified diff string), skippedFiles (list).
+    """
+    import difflib
+
+    parsed = _parse_ado_pr_url(pr_url)
+    org, project, repo, pr_id = parsed["org"], parsed["project"], parsed["repo"], parsed["prId"]
+    base_url = f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/{repo}"
+    token = _get_ado_token()
+
+    # 1. Get PR metadata
+    pr_data = _ado_api_get(token, f"{base_url}/pullRequests/{pr_id}?api-version=7.0")
+    title = pr_data.get("title", "")
+    author = pr_data.get("createdBy", {}).get("displayName", "")
+
+    # 2. Get iterations to find the latest source/common commits
+    iterations = _ado_api_get(token, f"{base_url}/pullRequests/{pr_id}/iterations?api-version=7.0")
+    iter_list = iterations.get("value", [])
+    if not iter_list:
+        raise RuntimeError(f"PR {pr_id} has no iterations")
+    latest = iter_list[-1]
+    source_commit = latest.get("sourceRefCommit", {}).get("commitId")
+    common_commit = latest.get("commonRefCommit", {}).get("commitId")
+    if not source_commit or not common_commit:
+        raise RuntimeError(f"PR {pr_id}: missing source/common commit in iteration {latest.get('id')}")
+
+    # 3. Get cumulative changed files (compareTo=1 gives full PR diff, not just latest push)
+    iter_id = latest["id"]
+    changes_data = _ado_api_get(
+        token, f"{base_url}/pullRequests/{pr_id}/iterations/{iter_id}/changes?compareTo=1&api-version=7.0"
+    )
+    change_entries = changes_data.get("changeEntries", [])
+    file_changes = [c for c in change_entries if not c.get("item", {}).get("isFolder")]
+
+    # 4. Build unified diff for each file
+    MAX_FILES = 50
+    MAX_FILE_BYTES = 200_000
+    SKIP_EXTENSIONS = {".dll", ".exe", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".zip", ".nupkg", ".snk"}
+
+    diff_parts = []
+    skipped = []
+    total_added = 0
+    total_removed = 0
+
+    for entry in file_changes[:MAX_FILES]:
+        item = entry.get("item", {})
+        raw_change_type = entry.get("changeType", "").lower()
+        file_path = item.get("path", "")
+
+        # Normalize composite ADO change types (e.g. "rename, edit" → {"rename", "edit"})
+        change_tokens = {t.strip() for t in raw_change_type.replace(",", " ").split()}
+        is_add = "add" in change_tokens
+        is_delete = "delete" in change_tokens
+        is_rename = "rename" in change_tokens or "sourcerename" in change_tokens
+
+        # Skip binary/large/irrelevant files
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in SKIP_EXTENSIONS:
+            skipped.append({"path": file_path, "reason": "binary"})
+            continue
+
+        original_path = entry.get("sourceServerItem") or file_path
+
+        # Fetch base version (from common commit) — skip for pure adds
+        base_content = ""
+        if not is_add:
+            fetch_path = original_path if is_rename else file_path
+            try:
+                encoded_path = urllib.parse.quote(fetch_path, safe="/")
+                base_content = _ado_api_get_text(
+                    token,
+                    f"{base_url}/items?path={encoded_path}&versionType=Commit&version={common_commit}&api-version=7.0",
+                )
+                if base_content is None:
+                    skipped.append({"path": file_path, "reason": "binary"})
+                    continue
+                if len(base_content) > MAX_FILE_BYTES:
+                    skipped.append({"path": file_path, "reason": "too_large"})
+                    continue
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    base_content = ""
+                else:
+                    skipped.append({"path": file_path, "reason": f"fetch_error_{e.code}"})
+                    continue
+
+        # Fetch target version (from source commit) — skip for pure deletes
+        target_content = ""
+        if not is_delete:
+            try:
+                encoded_path = urllib.parse.quote(file_path, safe="/")
+                target_content = _ado_api_get_text(
+                    token,
+                    f"{base_url}/items?path={encoded_path}&versionType=Commit&version={source_commit}&api-version=7.0",
+                )
+                if target_content is None:
+                    skipped.append({"path": file_path, "reason": "binary"})
+                    continue
+                if len(target_content) > MAX_FILE_BYTES:
+                    skipped.append({"path": file_path, "reason": "too_large"})
+                    continue
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    target_content = ""
+                else:
+                    skipped.append({"path": file_path, "reason": f"fetch_error_{e.code}"})
+                    continue
+
+        # Generate unified diff
+        from_file = f"a{original_path}" if not is_add else "/dev/null"
+        to_file = f"b{file_path}" if not is_delete else "/dev/null"
+
+        base_lines = base_content.splitlines(keepends=True)
+        target_lines = target_content.splitlines(keepends=True)
+
+        file_diff = list(difflib.unified_diff(base_lines, target_lines, fromfile=from_file, tofile=to_file, lineterm="\n"))
+        if file_diff:
+            diff_parts.append("".join(file_diff))
+            for line in file_diff:
+                if line.startswith("+") and not line.startswith("+++"):
+                    total_added += 1
+                elif line.startswith("-") and not line.startswith("---"):
+                    total_removed += 1
+
+    if len(file_changes) > MAX_FILES:
+        skipped.append({"path": f"({len(file_changes) - MAX_FILES} more files)", "reason": "file_limit"})
+
+    combined_diff = "\n".join(diff_parts)
+
+    return {
+        "prId": pr_id,
+        "title": title,
+        "author": author,
+        "filesChanged": len(file_changes),
+        "filesDiffed": len(diff_parts),
+        "linesAdded": total_added,
+        "linesRemoved": total_removed,
+        "skippedFiles": skipped,
+        "iterationId": iter_id,
+        "sourceCommit": source_commit[:12],
+        "commonCommit": common_commit[:12],
+        "diff": combined_diff,
+    }
 
 
 def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workload_type: str = "Lakehouse") -> tuple:
@@ -1120,6 +1353,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_templates_list()
         elif self.path.startswith("/api/templates/"):
             self._serve_template_get()
+        elif self.path.startswith("/api/ado-proxy/pr-diff"):
+            self._serve_ado_pr_diff()
         else:
             self.send_error(404)
 
@@ -1283,6 +1518,44 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
+
+    # ── ADO Proxy Endpoints ───────────────────────────────────────────────
+
+    def _serve_ado_pr_diff(self):
+        """GET /api/ado-proxy/pr-diff?prUrl=... — fetch unified diff for a PR."""
+        parsed_url = urllib.parse.urlparse(self.path)
+        qs = urllib.parse.parse_qs(parsed_url.query)
+        pr_url = qs.get("prUrl", [None])[0]
+
+        if not pr_url:
+            self._json_response(400, {"error": "missing_param", "message": "prUrl query parameter required"})
+            return
+
+        print(f"  [ADO] Fetching PR diff: {pr_url}")
+        try:
+            result = _fetch_pr_diff(pr_url)
+            print(f"  [ADO] PR #{result['prId']}: {result['filesDiffed']} files diffed, "
+                  f"+{result['linesAdded']}/-{result['linesRemoved']}, "
+                  f"{len(result['diff'])} chars")
+            if result["skippedFiles"]:
+                print(f"  [ADO] Skipped: {[s['path'] for s in result['skippedFiles']]}")
+            self._json_response(200, result)
+        except ValueError as e:
+            self._json_response(400, {"error": "invalid_pr_url", "message": str(e)})
+        except RuntimeError as e:
+            self._json_response(502, {"error": "ado_api_error", "message": str(e)})
+        except urllib.error.HTTPError as e:
+            status = 502 if e.code >= 500 else (401 if e.code in (401, 403) else 502)
+            self._json_response(status, {"error": f"ado_http_{e.code}", "message": f"ADO returned {e.code}: {e.reason}"})
+        except urllib.error.URLError as e:
+            self._json_response(502, {"error": "ado_unreachable", "message": f"Cannot reach ADO: {e.reason}"})
+        except subprocess.TimeoutExpired:
+            self._json_response(504, {"error": "az_cli_timeout", "message": "Azure CLI timed out acquiring ADO token"})
+        except TimeoutError:
+            self._json_response(504, {"error": "ado_timeout", "message": "ADO API request timed out"})
+        except Exception as e:
+            print(f"  [ADO] Error: {e}")
+            self._json_response(500, {"error": "internal_error", "message": str(e)})
 
     # ── Studio Supervisor Endpoints ───────────────────────────────────────
 

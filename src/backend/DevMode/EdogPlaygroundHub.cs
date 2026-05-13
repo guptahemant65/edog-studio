@@ -958,10 +958,89 @@ namespace Microsoft.LiveTable.Service.DevMode
             var sw = System.Diagnostics.Stopwatch.StartNew();
             List<Scenario> scenarios = null;
 
-            // Phase 1: Fetching diff
+            // Phase 1: Fetch real PR diff from ADO via dev-server proxy
             await BroadcastAnalysisProgressAsync(correlationId, analysisId, "fetching_diff", 0, 6, 5,
                 "Fetching PR diff from Azure DevOps...", sw.ElapsedMilliseconds).ConfigureAwait(false);
-            await Task.Delay(500, ct).ConfigureAwait(false);
+
+            string realDiff = null;
+            string diffError = null;
+            if (!string.IsNullOrEmpty(request.PrUrl))
+            {
+                try
+                {
+                    using var httpClient = new System.Net.Http.HttpClient { Timeout = System.TimeSpan.FromSeconds(60) };
+                    var encodedUrl = System.Net.WebUtility.UrlEncode(request.PrUrl);
+                    var proxyUrl = $"http://localhost:5555/api/ado-proxy/pr-diff?prUrl={encodedUrl}";
+                    var resp = await httpClient.GetAsync(proxyUrl, ct).ConfigureAwait(false);
+                    var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        var diffResult = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(body);
+                        realDiff = diffResult.GetProperty("diff").GetString();
+                        var filesChanged = diffResult.GetProperty("filesChanged").GetInt32();
+                        var filesDiffed = diffResult.GetProperty("filesDiffed").GetInt32();
+                        var linesAdded = diffResult.GetProperty("linesAdded").GetInt32();
+                        var linesRemoved = diffResult.GetProperty("linesRemoved").GetInt32();
+
+                        if (string.IsNullOrWhiteSpace(realDiff) || filesDiffed == 0)
+                        {
+                            // Successful fetch but no analyzable diff content
+                            var skippedCount = 0;
+                            if (diffResult.TryGetProperty("skippedFiles", out var skippedArr))
+                                skippedCount = skippedArr.GetArrayLength();
+                            diffError = $"PR diff fetched but empty — {filesChanged} files changed, {skippedCount} skipped (binary/large). No analyzable code diff.";
+                            realDiff = null;
+                        }
+                        else
+                        {
+                            await BroadcastAnalysisProgressAsync(correlationId, analysisId, "fetching_diff", 0, 6, 15,
+                                $"PR diff fetched: {filesDiffed}/{filesChanged} files, +{linesAdded}/-{linesRemoved} lines",
+                                sw.ElapsedMilliseconds).ConfigureAwait(false);
+                        }
+
+                        System.Diagnostics.Debug.WriteLine($"[QA] Real PR diff fetched: {realDiff?.Length ?? 0} chars, {filesDiffed} files");
+                    }
+                    else
+                    {
+                        diffError = $"ADO proxy returned {(int)resp.StatusCode}: {body}";
+                        System.Diagnostics.Debug.WriteLine($"[QA] PR diff fetch failed: {diffError}");
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    diffError = $"PR diff fetch error: {ex.Message}";
+                    System.Diagnostics.Debug.WriteLine($"[QA] {diffError}");
+                }
+            }
+            else
+            {
+                diffError = "No PR URL provided — cannot fetch diff from ADO";
+            }
+
+            // If diff fetch failed, broadcast warning (don't silently fall back)
+            if (string.IsNullOrEmpty(realDiff) && diffError != null)
+            {
+                await BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    analysisId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "pr_diff_fetch_failed",
+                    message = diffError,
+                    fallback = "synthetic_scenarios",
+                }).ConfigureAwait(false);
+            }
+
+            // Use real diff if available, otherwise synthetic placeholder
+            var diffToAnalyze = realDiff;
+            if (string.IsNullOrEmpty(diffToAnalyze))
+            {
+                diffToAnalyze = $"--- a/LiveTableController.cs\n+++ b/LiveTableController.cs\n@@ -100,5 +100,10 @@\n" +
+                    $" // PR #{request.PrId ?? 0} changes\n+// Modified code path\n";
+            }
 
             // Try real CodeAnalyzer pipeline
             var analyzer = EdogQaServiceLocator.CodeAnalyzer;
@@ -969,10 +1048,6 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 try
                 {
-                    // Build a minimal diff from PR info (real implementation would fetch from ADO)
-                    var syntheticDiff = $"--- a/LiveTableController.cs\n+++ b/LiveTableController.cs\n@@ -100,5 +100,10 @@\n" +
-                        $" // PR #{request.PrId ?? 0} changes\n+// Modified code path\n";
-
                     // Phase 2: Blast radius
                     await BroadcastAnalysisProgressAsync(correlationId, analysisId, "roslyn_blast_radius", 1, 6, 25,
                         "Analyzing blast radius via code-review-graph + Graphify...", sw.ElapsedMilliseconds).ConfigureAwait(false);
@@ -991,8 +1066,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     ct.ThrowIfCancellationRequested();
                     await Task.Delay(400, ct).ConfigureAwait(false);
 
-                    // Run the real analyzer (it handles its own layer failures gracefully)
-                    var result = await analyzer.AnalyzeAsync(syntheticDiff, ct).ConfigureAwait(false);
+                    // Run the real analyzer with the PR diff
+                    var result = await analyzer.AnalyzeAsync(diffToAnalyze, ct).ConfigureAwait(false);
                     scenarios = result?.Scenarios;
                 }
                 catch (OperationCanceledException) { throw; }
