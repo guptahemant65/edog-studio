@@ -294,6 +294,95 @@ def sync_capacity_from_workload(flt_repo_path=None, silent=False):
     return edog_val
 
 
+# ============================================================================
+# Zero-popup auth: DevMode token injection
+# ============================================================================
+# Tracks whether we injected a token (for safe cleanup — don't remove user-owned tokens)
+_devmode_token_injected = False
+
+
+def inject_devmode_token(username, flt_repo_path=None):
+    """Acquire a token with MwcFrontendBaseEndpoint audience and inject into workload-dev-mode.json.
+
+    WCL SDK checks UserAuthorizationToken on startup — if present, it skips
+    the browser popup entirely. Zero-popup auth, no pywinauto needed.
+
+    NOTE: This is a DIFFERENT token from the bearer/MWC token:
+      - Bearer token → audience: PowerBI API → used for MWC generation
+      - This token   → audience: MwcFrontendBaseEndpoint → used by WCL SDK
+
+    Returns:
+        datetime expiry of the injected token, or None on failure.
+    """
+    global _devmode_token_injected
+
+    devmode_path = get_workload_dev_mode_path(flt_repo_path)
+    if not devmode_path or not devmode_path.exists():
+        print("  ⚠️  workload-dev-mode.json not found — browser popup may appear")
+        return None
+
+    try:
+        data = json.loads(devmode_path.read_text(encoding="utf-8"))
+        mwc_endpoint = data.get("MwcFrontendBaseEndpoint", "")
+        if not mwc_endpoint:
+            print("  ⚠️  No MwcFrontendBaseEndpoint in config — skipping token injection")
+            return None
+
+        # Strip trailing port/slash for the resource URI
+        resource = mwc_endpoint.rstrip("/")
+        if resource.endswith(":443"):
+            resource = resource[:-4]
+
+        # Acquire token with MwcFrontendBaseEndpoint as audience
+        print(f"  Acquiring DevMode token (audience: {resource})...")
+        devmode_token = _try_silent_cba(username, resource=resource)
+        if not devmode_token:
+            print("  ⚠️  Could not acquire DevMode token — browser popup may appear")
+            return None
+
+        data["UserAuthorizationToken"] = devmode_token
+        # Atomic write
+        tmp = devmode_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=4), encoding="utf-8")
+        tmp.replace(devmode_path)
+        _devmode_token_injected = True
+
+        expiry = parse_jwt_expiry(devmode_token)
+        expiry_str = expiry.strftime("%I:%M:%S %p") if expiry else "unknown"
+        print(f"  ✅ Injected UserAuthorizationToken → zero-popup auth (expires: {expiry_str})")
+        return expiry
+    except Exception as e:
+        print(f"  ⚠️  Token injection failed: {e} — browser popup may appear")
+        return None
+
+
+def cleanup_devmode_token(flt_repo_path=None):
+    """Remove UserAuthorizationToken from workload-dev-mode.json on exit.
+
+    Only removes if EDOG injected it (tracked via _devmode_token_injected flag).
+    Prevents credential residue on disk after EDOG stops.
+    """
+    global _devmode_token_injected
+
+    if not _devmode_token_injected:
+        return  # We didn't inject — don't touch user-owned tokens
+
+    try:
+        devmode_path = get_workload_dev_mode_path(flt_repo_path)
+        if not devmode_path or not devmode_path.exists():
+            return
+        data = json.loads(devmode_path.read_text(encoding="utf-8"))
+        if "UserAuthorizationToken" in data:
+            del data["UserAuthorizationToken"]
+            tmp = devmode_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, indent=4), encoding="utf-8")
+            tmp.replace(devmode_path)
+            print("  Cleaned up UserAuthorizationToken from workload-dev-mode.json")
+        _devmode_token_injected = False
+    except Exception as e:
+        print(f"  ⚠️  Could not clean UserAuthorizationToken: {e}")
+
+
 def validate_guid(value):
     """Validate GUID format. Returns True if valid."""
     guid_pattern = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -1661,6 +1750,12 @@ def revert_log_viewer_files(repo_root):
             target.unlink()
             removed = True
 
+    # Also remove the generated component allowlist (deploy-time artifact)
+    components_file = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
+    if components_file.exists():
+        components_file.unlink()
+        removed = True
+
     # Remove DevMode directory if empty
     devmode_dir = repo_root / SERVICE_PATH / "DevMode"
     if devmode_dir.exists() and not any(devmode_dir.iterdir()):
@@ -1986,12 +2081,17 @@ async def get_bearer_token(username):
     return None
 
 
-def _try_silent_cba(username: str) -> str | None:
+def _try_silent_cba(username: str, resource: str | None = None) -> str | None:
     """Acquire token via C# Silent CBA helper (no browser needed).
 
     Uses ``Microsoft.Identity.Client.TestOnlySilentCBA`` to perform
     3-phase certificate-based auth purely over HTTP/TLS — the same
     mechanism used by FabricSparkCST CI/CD pipelines.
+
+    Args:
+        username: CBA username (e.g. Admin1CBA@FabricFMLV08PPE.ccsctp.net).
+        resource: Optional token audience/resource URI. If provided, passed
+                  as 5th arg to token-helper (overrides the default PowerBI API).
     """
     cert_subject = username.replace("@", ".")
     thumbprint = _find_cert_thumbprint(cert_subject)
@@ -2015,10 +2115,18 @@ def _try_silent_cba(username: str) -> str | None:
         else:
             return None
 
-    print(f"  Silent CBA: {cert_subject}")
+    print(f"  Silent CBA: {cert_subject}" + (f" (audience: {resource})" if resource else ""))
     try:
+        cmd = [str(helper_exe), thumbprint, username]
+        if resource:
+            # token-helper args: <thumbprint> <username> [clientId] [authority] [resource]
+            cmd += [
+                "ea0616ba-638b-4df5-95b9-636659ae5121",
+                "https://login.windows-ppe.net/organizations",
+                resource,
+            ]
         result = subprocess.run(
-            [str(helper_exe), thumbprint, username],
+            cmd,
             capture_output=True,
             text=True,
             timeout=30,
@@ -2125,6 +2233,99 @@ def _cache_bearer(token: str) -> None:
     except (ValueError, KeyError, IndexError, json.JSONDecodeError):
         expiry_ts = time.time() + 3600
     cache_bearer_token(token, expiry_ts)
+
+
+# ============================================================================
+# Dynamic FLT component allowlist generation
+# ============================================================================
+def scan_flt_components(repo_root):
+    """Scan FLT C# source code to discover component names for the log allowlist.
+
+    Generates edog-flt-components.json in the DevMode directory so the
+    EdogLogInterceptor can filter noise from non-FLT components while
+    dynamically adapting to new components added to the codebase.
+
+    Extraction sources:
+    1. Bracket tags in Tracer calls: [ComponentName] in string literals
+    2. CodeMarkerScope names: new CodeMarkerScope("Name") or MonitoredScope
+    3. Class names of key FLT service classes (Handlers, Executors, etc.)
+
+    Returns:
+        list of component prefix strings, or empty list on failure.
+    """
+    service_dir = repo_root / "Service" / "Microsoft.LiveTable.Service"
+    if not service_dir.exists():
+        print(f"  ⚠️  FLT service dir not found: {service_dir}")
+        return []
+
+    components = set()
+    bracket_pattern = re.compile(r'"\[([A-Za-z][A-Za-z0-9_]{2,})\]')
+    marker_pattern = re.compile(r'(?:CodeMarkerScope|MonitoredScope)\s*\(\s*"([^"]+)"')
+    class_pattern = re.compile(r'^(?:\s+(?:public|internal|private)\s+(?:sealed\s+)?(?:partial\s+)?class\s+)(\w+Handler\w*|\w+Executor\w*|\w+Manager\w*|\w+Provider\w*|\w+Service\w*)')
+
+    # Well-known FLT component prefixes (always included as baseline)
+    baseline = {
+        "LiveTable", "DagExecution", "DagNode", "Catalog",
+        "Lakehouse", "Notebook", "SparkSession", "SQL_QUERY",
+        "FLT", "MLV", "Maintenance", "Schedule", "OneLake",
+        "CatalogSyncHandler", "DeltaTable", "Retention",
+    }
+    components.update(baseline)
+
+    cs_files = list(service_dir.rglob("*.cs"))
+    # Skip DevMode files (those are EDOG's own)
+    cs_files = [f for f in cs_files if "DevMode" not in str(f)]
+
+    for cs_file in cs_files:
+        try:
+            content = cs_file.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        # Extract bracket tags: "[DagExecution]", "[CatalogSync]", etc.
+        for m in bracket_pattern.finditer(content):
+            tag = m.group(1)
+            if len(tag) >= 3 and not tag.startswith("Test"):
+                components.add(tag)
+
+        # Extract CodeMarkerScope/MonitoredScope names
+        for m in marker_pattern.finditer(content):
+            name = m.group(1)
+            # Clean up WCL- prefix if present
+            if name.startswith("WCL-"):
+                name = name[4:]
+            # Take only the part before underscore (e.g. "LiveTableSchedule_RunDAG" → "LiveTableSchedule")
+            parts = name.split("_")
+            if parts[0] and len(parts[0]) >= 3:
+                components.add(parts[0])
+
+        # Extract handler/executor/manager class names
+        for m in class_pattern.finditer(content):
+            components.add(m.group(1))
+
+    # Sort for deterministic output
+    sorted_components = sorted(components)
+
+    # Write to DevMode directory in FLT repo (deployed alongside interceptor)
+    devmode_dir = service_dir / "DevMode"
+    devmode_dir.mkdir(parents=True, exist_ok=True)
+    output_path = devmode_dir / "edog-flt-components.json"
+
+    output = {
+        "version": 1,
+        "generated_at": datetime.now().isoformat(),
+        "repo_path": str(repo_root),
+        "component_count": len(sorted_components),
+        "components": sorted_components,
+    }
+
+    try:
+        output_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
+        print(f"  ✅ Generated FLT component allowlist: {len(sorted_components)} components")
+        return sorted_components
+    except Exception as e:
+        print(f"  ⚠️  Could not write component allowlist: {e}")
+        return sorted_components
 
 
 # ============================================================================
@@ -2803,6 +3004,14 @@ def headless_deploy(repo_root):
     except Exception:
         pass  # Non-fatal — don't block deploy for hook install failure
 
+    # Generate dynamic FLT component allowlist for log noise filtering
+    try:
+        components = scan_flt_components(repo_root)
+        if components:
+            emit(2, f"Generated FLT component allowlist ({len(components)} components)", "info")
+    except Exception as e:
+        emit(2, f"Component scan failed (non-fatal): {e}", "warn")
+
     # Step 3: Build
     emit(3, "Building FLT service...")
     entrypoint = get_entrypoint_path(repo_root)
@@ -2921,6 +3130,11 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
             print("\n⚠️  Some changes could not be applied")
         else:
             print("\n✅ Code changes applied successfully")
+        # Generate dynamic component allowlist for log noise filtering
+        try:
+            scan_flt_components(repo_root)
+        except Exception:
+            pass  # Non-fatal
     else:
         print("   Code patching deferred until authentication completes.")
 
@@ -2934,6 +3148,10 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
         print("\n" + "=" * 70)
         print("🚀 Starting FLT Service...")
         print("=" * 70)
+
+        # Inject DevMode token for zero-popup auth (before service start)
+        devmode_expiry = inject_devmode_token(username, str(repo_root))
+
         service_process = start_flt_service(repo_root)
         if service_process:
             # Start background thread to stream service output
@@ -2943,9 +3161,10 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
             )
             output_thread.start()
 
-            # Start background thread to handle DevMode account picker popup
-            popup_thread = threading.Thread(target=handle_devmode_account_picker, args=(username, 30), daemon=True)
-            popup_thread.start()
+            # Start popup handler as safety net (if token injection failed or WCL ignores it)
+            if not devmode_expiry:
+                popup_thread = threading.Thread(target=handle_devmode_account_picker, args=(username, 30), daemon=True)
+                popup_thread.start()
         else:
             print("\n⚠️  Service failed to start, continuing with token management only")
 
@@ -3020,7 +3239,10 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
                     stop_event.set()  # Signal output thread to stop
                 stop_flt_service(service_process)
 
-            # Step 2: Revert code changes
+            # Step 2: Clean up DevMode token (before reverting code changes)
+            cleanup_devmode_token(str(repo_root))
+
+            # Step 3: Revert code changes
             print("🔄 Reverting EDOG changes...")
             revert_all_changes(repo_root)
 
