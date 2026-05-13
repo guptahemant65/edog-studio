@@ -1900,6 +1900,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 # Save last authenticated user for auto-reauth
                 _save_session({"lastUsername": upn, "lastAuth": time.time()})
 
+                # Sync username into edog-config.json so deploy uses the right tenant
+                try:
+                    cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+                    if cfg.get("username") != upn:
+                        cfg["username"] = upn
+                        _atomic_write(CONFIG_PATH, json.dumps(cfg, indent=2))
+                except Exception:
+                    pass
+
                 self._json_response(
                     200,
                     {
