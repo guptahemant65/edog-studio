@@ -55,7 +55,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     ///   - timer_tick:      &lt; 10s (wait for scheduled event)
     ///   - direct_invoke:   &lt; 5s (service method execution)
     /// </summary>
-    internal sealed class EdogQaStimulusDispatcher
+    public sealed class EdogQaStimulusDispatcher
     {
         private readonly Dictionary<StimulusType, IStimulusHandler> _handlers;
         private readonly ILogger _logger;
