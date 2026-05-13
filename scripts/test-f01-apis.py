@@ -1,8 +1,8 @@
 """Test ALL F01 API endpoints end-to-end via dev-server proxy."""
 import json
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 BASE = "http://127.0.0.1:5555"
 results = []
@@ -150,7 +150,7 @@ failed = sum(1 for _, ok, *_ in results if not ok)
 print(f"RESULTS: {passed} passed, {failed} failed, {len(results)} total")
 if failed:
     print("\nFAILED:")
-    for label, ok, status, elapsed, summary in results:
+    for label, ok, status, _elapsed, summary in results:
         if not ok:
             print(f"  ✗ {label}: {status} — {summary}")
 print("=" * 60)

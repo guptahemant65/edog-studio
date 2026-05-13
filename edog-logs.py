@@ -16,50 +16,40 @@ Usage:
   dotnet run 2>&1 | edog-logs          Pipe service output directly
 """
 
-import json
+import queue
 import re
 import sys
-import os
-import time
 import threading
-import queue
-from datetime import datetime
-from pathlib import Path
+import time
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict
+from datetime import datetime
 from enum import Enum
+from pathlib import Path
+from typing import ClassVar
 
 try:
-    from rich.console import Console
-    from rich.live import Live
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.layout import Layout
-    from rich.text import Text
-    from rich.style import Style
-    from rich.box import ROUNDED, DOUBLE, HEAVY
-    from rich.align import Align
-    from rich.spinner import Spinner
     from rich import box
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-    from rich.markdown import Markdown
+    from rich.align import Align
+    from rich.box import HEAVY, ROUNDED
+    from rich.console import Console
+    from rich.layout import Layout
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
 except ImportError:
     print("Installing required packages...")
     import subprocess
     subprocess.check_call([sys.executable, "-m", "pip", "install", "rich", "-q"])
-    from rich.console import Console
-    from rich.live import Live
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.layout import Layout
-    from rich.text import Text
-    from rich.style import Style
-    from rich.box import ROUNDED, DOUBLE, HEAVY
-    from rich.align import Align
-    from rich.spinner import Spinner
     from rich import box
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-    from rich.markdown import Markdown
+    from rich.align import Align
+    from rich.box import HEAVY, ROUNDED
+    from rich.console import Console
+    from rich.layout import Layout
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
 
 console = Console()
 
@@ -79,33 +69,33 @@ class LogEntry:
     level: LogLevel
     component: str
     message: str
-    activity_id: Optional[str] = None
-    extra: Dict = field(default_factory=dict)
+    activity_id: str | None = None
+    extra: dict = field(default_factory=dict)
 
-@dataclass 
+@dataclass
 class TelemetryEvent:
     timestamp: datetime
     activity_name: str
     status: str
     duration_ms: int
-    user_id: Optional[str] = None
-    correlation_id: Optional[str] = None
-    attributes: Dict = field(default_factory=dict)
-    result_code: Optional[str] = None
+    user_id: str | None = None
+    correlation_id: str | None = None
+    attributes: dict = field(default_factory=dict)
+    result_code: str | None = None
 
 # ============================================================================
 # Log Store
 # ============================================================================
 class LogStore:
     def __init__(self, max_entries: int = 1000):
-        self.logs: List[LogEntry] = []
-        self.telemetry: List[TelemetryEvent] = []
+        self.logs: list[LogEntry] = []
+        self.telemetry: list[TelemetryEvent] = []
         self.max_entries = max_entries
         self.lock = threading.Lock()
         self.log_queue = queue.Queue()
         self.telemetry_queue = queue.Queue()
         self.source_info = "Waiting for input..."
-        
+
         # Stats
         self.stats = {
             "total_logs": 0,
@@ -117,7 +107,7 @@ class LogStore:
             "succeeded": 0,
             "failed": 0,
         }
-    
+
     def add_log(self, entry: LogEntry):
         with self.lock:
             self.logs.append(entry)
@@ -125,7 +115,7 @@ class LogStore:
                 self.logs.pop(0)
             self.stats["total_logs"] += 1
             self.stats[entry.level.value.lower()] = self.stats.get(entry.level.value.lower(), 0) + 1
-    
+
     def add_telemetry(self, event: TelemetryEvent):
         with self.lock:
             self.telemetry.append(event)
@@ -136,16 +126,16 @@ class LogStore:
                 self.stats["succeeded"] += 1
             elif "fail" in event.status.lower():
                 self.stats["failed"] += 1
-    
-    def get_recent_logs(self, count: int = 50, level_filter: Optional[LogLevel] = None) -> List[LogEntry]:
+
+    def get_recent_logs(self, count: int = 50, level_filter: LogLevel | None = None) -> list[LogEntry]:
         with self.lock:
-            logs = self.logs[-count:] if not level_filter else [l for l in self.logs if l.level == level_filter][-count:]
+            logs = self.logs[-count:] if not level_filter else [log_entry for log_entry in self.logs if log_entry.level == level_filter][-count:]
             return logs
-    
-    def get_recent_telemetry(self, count: int = 20) -> List[TelemetryEvent]:
+
+    def get_recent_telemetry(self, count: int = 20) -> list[TelemetryEvent]:
         with self.lock:
             return self.telemetry[-count:]
-    
+
     def clear(self):
         with self.lock:
             self.logs.clear()
@@ -163,7 +153,7 @@ def create_header(store: LogStore) -> Panel:
     header_text.append("EDOG Log Viewer", style="bold cyan")
     header_text.append("  │  ", style="dim")
     header_text.append(store.source_info, style="italic dim green")
-    
+
     return Panel(
         Align.center(header_text),
         box=HEAVY,
@@ -174,20 +164,20 @@ def create_header(store: LogStore) -> Panel:
 def create_stats_panel(store: LogStore) -> Panel:
     """Create statistics panel."""
     stats = store.stats
-    
+
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column("Metric", style="dim")
     table.add_column("Value", justify="right")
-    
+
     table.add_row("📊 Total Logs", f"[bold white]{stats['total_logs']}[/]")
-    table.add_row("ℹ️  Info", f"[blue]{stats.get('info', 0)}[/]")
+    table.add_row("ℹ️  Info", f"[blue]{stats.get('info', 0)}[/]")  # noqa: RUF001
     table.add_row("⚠️  Warnings", f"[yellow]{stats.get('warn', 0)}[/]")
     table.add_row("❌ Errors", f"[red]{stats.get('error', 0)}[/]")
     table.add_row("", "")
     table.add_row("📡 Telemetry", f"[bold white]{stats['telemetry_events']}[/]")
     table.add_row("✅ Succeeded", f"[green]{stats['succeeded']}[/]")
     table.add_row("❌ Failed", f"[red]{stats['failed']}[/]")
-    
+
     return Panel(
         table,
         title="[bold]Statistics[/]",
@@ -204,14 +194,14 @@ def create_logs_panel(store: LogStore, height: int = 20) -> Panel:
         expand=True,
         row_styles=["", "dim"]
     )
-    
+
     table.add_column("Time", style="cyan", width=12)
     table.add_column("Level", width=8, justify="center")
     table.add_column("Component", style="blue", width=25)
     table.add_column("Message", style="white", overflow="fold")
-    
+
     logs = store.get_recent_logs(height - 5)
-    
+
     for log in logs:
         level_style = {
             LogLevel.DEBUG: "[dim]DEBUG[/]",
@@ -220,20 +210,20 @@ def create_logs_panel(store: LogStore, height: int = 20) -> Panel:
             LogLevel.ERROR: "[red bold]ERROR[/]",
             LogLevel.TELEMETRY: "[magenta]TELEM[/]",
         }.get(log.level, log.level.value)
-        
+
         # Truncate message if too long
         msg = log.message[:100] + "..." if len(log.message) > 100 else log.message
-        
+
         table.add_row(
             log.timestamp.strftime("%H:%M:%S.%f")[:12],
             level_style,
             log.component[:25],
             msg
         )
-    
+
     if not logs:
         table.add_row("--", "--", "--", "[dim italic]Waiting for logs...[/]")
-    
+
     return Panel(
         table,
         title="[bold]📋 Live Logs[/]",
@@ -249,22 +239,22 @@ def create_telemetry_panel(store: LogStore) -> Panel:
         box=box.SIMPLE,
         expand=True
     )
-    
+
     table.add_column("Time", style="dim", width=10)
     table.add_column("Activity", style="cyan", width=20)
     table.add_column("Status", width=12, justify="center")
     table.add_column("Duration", width=10, justify="right")
     table.add_column("Result", width=15)
-    
+
     events = store.get_recent_telemetry(10)
-    
+
     for event in events:
         status_style = "[green]✓ Success[/]" if "succeed" in event.status.lower() else "[red]✗ Failed[/]"
         if "cancel" in event.status.lower():
             status_style = "[yellow]◌ Cancelled[/]"
-        
+
         duration = f"{event.duration_ms:,}ms" if event.duration_ms < 10000 else f"{event.duration_ms/1000:.1f}s"
-        
+
         table.add_row(
             event.timestamp.strftime("%H:%M:%S"),
             event.activity_name[:20],
@@ -272,10 +262,10 @@ def create_telemetry_panel(store: LogStore) -> Panel:
             duration,
             event.result_code or "-"
         )
-    
+
     if not events:
         table.add_row("--", "--", "--", "--", "[dim italic]No telemetry yet[/]")
-    
+
     return Panel(
         table,
         title="[bold]📡 Telemetry Events[/]",
@@ -286,7 +276,7 @@ def create_telemetry_panel(store: LogStore) -> Panel:
 def create_activity_panel(store: LogStore) -> Panel:
     """Create activity breakdown panel."""
     events = store.get_recent_telemetry(100)
-    
+
     # Group by activity
     activities = {}
     for event in events:
@@ -299,14 +289,14 @@ def create_activity_panel(store: LogStore) -> Panel:
             activities[name]["success"] += 1
         else:
             activities[name]["failed"] += 1
-    
+
     table = Table(show_header=True, header_style="bold", box=box.SIMPLE)
     table.add_column("Activity", style="cyan")
     table.add_column("Count", justify="right")
     table.add_column("Success", justify="right", style="green")
     table.add_column("Failed", justify="right", style="red")
     table.add_column("Avg Time", justify="right")
-    
+
     for name, data in sorted(activities.items(), key=lambda x: x[1]["count"], reverse=True)[:8]:
         avg_ms = data["total_ms"] // data["count"] if data["count"] > 0 else 0
         table.add_row(
@@ -316,10 +306,10 @@ def create_activity_panel(store: LogStore) -> Panel:
             str(data["failed"]),
             f"{avg_ms}ms"
         )
-    
+
     if not activities:
         table.add_row("[dim]No data[/]", "-", "-", "-", "-")
-    
+
     return Panel(
         table,
         title="[bold]📊 Activity Breakdown[/]",
@@ -330,41 +320,41 @@ def create_activity_panel(store: LogStore) -> Panel:
 def create_layout(store: LogStore) -> Layout:
     """Create the main layout."""
     layout = Layout()
-    
+
     layout.split_column(
         Layout(name="header", size=3),
         Layout(name="body"),
         Layout(name="footer", size=3)
     )
-    
+
     layout["body"].split_row(
         Layout(name="main", ratio=3),
         Layout(name="sidebar", ratio=1)
     )
-    
+
     layout["main"].split_column(
         Layout(name="logs", ratio=2),
         Layout(name="telemetry", ratio=1)
     )
-    
+
     layout["sidebar"].split_column(
         Layout(name="stats"),
         Layout(name="activities")
     )
-    
+
     # Populate layout
     layout["header"].update(create_header(store))
     layout["logs"].update(create_logs_panel(store))
     layout["telemetry"].update(create_telemetry_panel(store))
     layout["stats"].update(create_stats_panel(store))
     layout["activities"].update(create_activity_panel(store))
-    
+
     footer_text = Text()
     footer_text.append(" Press ", style="dim")
     footer_text.append("Ctrl+C", style="bold yellow")
     footer_text.append(" to quit", style="dim")
     layout["footer"].update(Panel(Align.center(footer_text), box=box.SIMPLE))
-    
+
     return layout
 
 # ============================================================================
@@ -372,9 +362,9 @@ def create_layout(store: LogStore) -> Layout:
 # ============================================================================
 class LogParser:
     """Parse log lines from FLT service output."""
-    
+
     # Patterns for different log formats
-    
+
     # EDOG DevMode Tracer format: [HH:mm:ss.fff] [LEVEL] message
     EDOG_TRACER_PATTERN = re.compile(
         r'\[(?P<timestamp>\d{2}:\d{2}:\d{2}\.\d{3})\]\s*'
@@ -382,7 +372,7 @@ class LogParser:
         r'(?P<message>.*)',
         re.IGNORECASE
     )
-    
+
     TRACER_PATTERN = re.compile(
         r'\[(?P<timestamp>[\d\-T:\.]+)\]\s*'
         r'(?P<level>DEBUG|INFO|WARN|WARNING|ERROR)\s*'
@@ -390,7 +380,7 @@ class LogParser:
         r'(?P<message>.*)',
         re.IGNORECASE
     )
-    
+
     SIMPLE_PATTERN = re.compile(
         r'(?P<level>DEBUG|INFO|WARN|WARNING|ERROR)[,:]?\s*'
         r'(?P<timestamp>[\d/\-\s:\.]+)[,]?\s*'
@@ -401,7 +391,7 @@ class LogParser:
         r'(?P<message>.*)',
         re.IGNORECASE
     )
-    
+
     # Updated pattern to match: [TELEMETRY] Activity: X | Status: Y | Result: Z | Duration: Wms | CorrelationId: ...
     TELEMETRY_PATTERN = re.compile(
         r'\[TELEMETRY\]\s*Activity:\s*(?P<activity>[\w\-]+)\s*\|\s*'
@@ -411,9 +401,9 @@ class LogParser:
         r'CorrelationId:\s*(?P<correlation_id>[\w\-]+)',
         re.IGNORECASE
     )
-    
+
     # FLT-specific patterns
-    FLT_PATTERNS = [
+    FLT_PATTERNS: ClassVar[list] = [
         re.compile(r'LiveTable[:\s-](?P<message>.*)', re.IGNORECASE),
         re.compile(r'DAG\s*(execution|Exec)', re.IGNORECASE),
         re.compile(r'GTS[:\s-](?P<message>.*)', re.IGNORECASE),
@@ -424,23 +414,23 @@ class LogParser:
         re.compile(r'MWC[:\s-]', re.IGNORECASE),
         re.compile(r'Workload[:\s-]', re.IGNORECASE),
     ]
-    
+
     MONITORED_SCOPE_PATTERN = re.compile(
         r'LiveTable[- ](?P<scope>[A-Za-z\-]+)',
         re.IGNORECASE
     )
-    
+
     @classmethod
-    def parse_line(cls, line: str) -> Optional[LogEntry]:
+    def parse_line(cls, line: str) -> LogEntry | None:
         """Parse a log line into a LogEntry."""
         line = line.strip()
         if not line:
             return None
-        
+
         # Skip empty or very short lines
         if len(line) < 5:
             return None
-        
+
         # Try EDOG tracer pattern first (highest priority)
         match = cls.EDOG_TRACER_PATTERN.match(line)
         if match:
@@ -450,7 +440,7 @@ class LogParser:
                 component="FLT",
                 message=match.group("message")
             )
-        
+
         # Try tracer pattern
         match = cls.TRACER_PATTERN.match(line)
         if match:
@@ -460,7 +450,7 @@ class LogParser:
                 component=match.group("component") or "FLT",
                 message=match.group("message")
             )
-        
+
         # Try simple pattern (ConsoleLogger format)
         match = cls.SIMPLE_PATTERN.match(line)
         if match:
@@ -473,7 +463,7 @@ class LogParser:
                 component=component[:30],
                 message=match.group("message")
             )
-        
+
         # Check for FLT-specific patterns
         for pattern in cls.FLT_PATTERNS:
             if pattern.search(line):
@@ -482,18 +472,18 @@ class LogParser:
                     level = LogLevel.ERROR
                 elif "warn" in line.lower():
                     level = LogLevel.WARN
-                
+
                 # Extract component from MonitoredScope if present
                 scope_match = cls.MONITORED_SCOPE_PATTERN.search(line)
                 component = scope_match.group("scope") if scope_match else "FLT"
-                
+
                 return LogEntry(
                     timestamp=datetime.now(),
                     level=level,
                     component=component,
                     message=line[:200]
                 )
-        
+
         # Check for standard .NET/ASP.NET Core log patterns
         if any(keyword in line for keyword in ["Microsoft.", "System.", "Hosting", "Application", "Request", "dbug:", "info:", "warn:", "fail:", "crit:"]):
             level = LogLevel.INFO
@@ -503,21 +493,21 @@ class LogParser:
                 level = LogLevel.WARN
             elif "dbug:" in line.lower():
                 level = LogLevel.DEBUG
-            
+
             # Extract component
             component = "ASP.NET"
             if "Microsoft." in line:
                 comp_match = re.search(r'Microsoft\.(\w+)', line)
                 if comp_match:
                     component = comp_match.group(1)
-            
+
             return LogEntry(
                 timestamp=datetime.now(),
                 level=level,
                 component=component,
                 message=line[:200]
             )
-        
+
         # Generic fallback for any substantial line
         if len(line) > 10:
             level = LogLevel.INFO
@@ -527,18 +517,18 @@ class LogParser:
                 level = LogLevel.WARN
             elif "debug" in line.lower():
                 level = LogLevel.DEBUG
-            
+
             return LogEntry(
                 timestamp=datetime.now(),
                 level=level,
                 component="System",
                 message=line[:200]
             )
-        
+
         return None
-    
+
     @classmethod
-    def parse_telemetry(cls, line: str) -> Optional[TelemetryEvent]:
+    def parse_telemetry(cls, line: str) -> TelemetryEvent | None:
         """Parse a telemetry line into a TelemetryEvent."""
         match = cls.TELEMETRY_PATTERN.search(line)
         if match:
@@ -557,13 +547,13 @@ class LogParser:
 # ============================================================================
 class StdinWatcher(threading.Thread):
     """Watch stdin for log lines."""
-    
+
     def __init__(self, store: LogStore):
         super().__init__(daemon=True)
         self.store = store
         self.running = True
         self.store.source_info = "Reading from stdin (pipe your service output)"
-    
+
     def run(self):
         while self.running:
             try:
@@ -571,34 +561,34 @@ class StdinWatcher(threading.Thread):
                 if not line:
                     time.sleep(0.1)
                     continue
-                
+
                 # Try to parse as telemetry first
                 telemetry = LogParser.parse_telemetry(line)
                 if telemetry:
                     self.store.add_telemetry(telemetry)
                     continue
-                
+
                 # Parse as log
                 log = LogParser.parse_line(line)
                 if log:
                     self.store.add_log(log)
             except Exception:
                 pass
-    
+
     def stop(self):
         self.running = False
 
 
 class FileWatcher(threading.Thread):
     """Watch a file for new lines (tail -f style)."""
-    
+
     def __init__(self, store: LogStore, file_path: str):
         super().__init__(daemon=True)
         self.store = store
         self.file_path = Path(file_path)
         self.running = True
         self.store.source_info = f"Watching: {self.file_path.name}"
-    
+
     def run(self):
         if not self.file_path.exists():
             self.store.add_log(LogEntry(
@@ -608,33 +598,33 @@ class FileWatcher(threading.Thread):
                 message=f"File not found: {self.file_path}"
             ))
             return
-        
-        with open(self.file_path, 'r', encoding='utf-8', errors='ignore') as f:
+
+        with open(self.file_path, encoding='utf-8', errors='ignore') as f:
             # Go to end of file
             f.seek(0, 2)
-            
+
             while self.running:
                 line = f.readline()
                 if not line:
                     time.sleep(0.1)
                     continue
-                
+
                 telemetry = LogParser.parse_telemetry(line)
                 if telemetry:
                     self.store.add_telemetry(telemetry)
                     continue
-                
+
                 log = LogParser.parse_line(line)
                 if log:
                     self.store.add_log(log)
-    
+
     def stop(self):
         self.running = False
 
 
 class DirectoryWatcher(threading.Thread):
     """Watch a directory for log files and tail them."""
-    
+
     def __init__(self, store: LogStore, directory: str):
         super().__init__(daemon=True)
         self.store = store
@@ -642,7 +632,7 @@ class DirectoryWatcher(threading.Thread):
         self.running = True
         self.file_watchers = []
         self.store.source_info = f"Watching: {self.directory}"
-    
+
     def run(self):
         if not self.directory.exists():
             self.store.add_log(LogEntry(
@@ -652,13 +642,13 @@ class DirectoryWatcher(threading.Thread):
                 message=f"Directory not found: {self.directory}"
             ))
             return
-        
+
         # Find log files
         log_patterns = ["*.log", "*.txt", "*output*"]
         log_files = []
         for pattern in log_patterns:
             log_files.extend(self.directory.glob(pattern))
-        
+
         if not log_files:
             self.store.add_log(LogEntry(
                 timestamp=datetime.now(),
@@ -666,15 +656,15 @@ class DirectoryWatcher(threading.Thread):
                 component="DirWatcher",
                 message=f"No log files found in {self.directory}"
             ))
-        
+
         for log_file in log_files[:5]:  # Watch max 5 files
             watcher = FileWatcher(self.store, str(log_file))
             watcher.start()
             self.file_watchers.append(watcher)
-        
+
         while self.running:
             time.sleep(1)
-    
+
     def stop(self):
         self.running = False
         for watcher in self.file_watchers:
@@ -686,10 +676,10 @@ class DirectoryWatcher(threading.Thread):
 # ============================================================================
 class DemoDataGenerator(threading.Thread):
     """Generate demo data for testing the UI."""
-    
-    ACTIVITIES = ["GetLatestDag", "RunDag", "NodeExecution", "CatalogFetch", "OneLakeRead", "TokenRefresh"]
-    COMPONENTS = ["LiveTableController", "DagExecutionHandler", "GTSBasedSparkClient", "CatalogHandler", "NodeExecutor"]
-    MESSAGES = [
+
+    ACTIVITIES: ClassVar[list] = ["GetLatestDag", "RunDag", "NodeExecution", "CatalogFetch", "OneLakeRead", "TokenRefresh"]
+    COMPONENTS: ClassVar[list] = ["LiveTableController", "DagExecutionHandler", "GTSBasedSparkClient", "CatalogHandler", "NodeExecutor"]
+    MESSAGES: ClassVar[list] = [
         "Starting DAG execution for workspace {ws}",
         "Fetching catalog metadata from OneLake",
         "Submitting node {node} to GTS",
@@ -701,16 +691,16 @@ class DemoDataGenerator(threading.Thread):
         "Checking node dependencies",
         "Parallel node limit: 25",
     ]
-    
+
     def __init__(self, store: LogStore):
         super().__init__(daemon=True)
         self.store = store
         self.running = True
         self.store.source_info = "Demo Mode (simulated data)"
-    
+
     def run(self):
         import random
-        
+
         while self.running:
             # Generate a log entry
             if random.random() < 0.7:
@@ -718,28 +708,28 @@ class DemoDataGenerator(threading.Thread):
                     [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR],
                     weights=[10, 60, 20, 10]
                 )[0]
-                
+
                 msg = random.choice(self.MESSAGES)
                 msg = msg.format(
                     ws=f"ws-{random.randint(1000,9999)}",
                     node=f"node-{random.randint(1,20)}",
                     nodes=random.randint(5, 50)
                 )
-                
+
                 self.store.add_log(LogEntry(
                     timestamp=datetime.now(),
                     level=level,
                     component=random.choice(self.COMPONENTS),
                     message=msg
                 ))
-            
+
             # Generate a telemetry event
             if random.random() < 0.3:
                 status = random.choices(
                     ["Succeeded", "Failed", "SucceededWithErrors"],
                     weights=[80, 15, 5]
                 )[0]
-                
+
                 self.store.add_telemetry(TelemetryEvent(
                     timestamp=datetime.now(),
                     activity_name=random.choice(self.ACTIVITIES),
@@ -747,9 +737,9 @@ class DemoDataGenerator(threading.Thread):
                     duration_ms=random.randint(50, 5000),
                     result_code="0" if "Succeeded" in status else f"FLT_{random.randint(1000,9999)}"
                 ))
-            
+
             time.sleep(random.uniform(0.2, 1.5))
-    
+
     def stop(self):
         self.running = False
 
@@ -760,7 +750,7 @@ def run_viewer(data_source):
     """Run the log viewer with the given data source."""
     store = data_source.store
     data_source.start()
-    
+
     try:
         with Live(create_layout(store), refresh_per_second=4, screen=True) as live:
             while True:
@@ -775,7 +765,7 @@ def run_viewer(data_source):
 def show_splash():
     """Show splash screen."""
     console.clear()
-    
+
     splash = """
 [bold cyan]
     ███████╗██████╗  ██████╗  ██████╗     ██╗      ██████╗  ██████╗ ███████╗
@@ -792,7 +782,7 @@ def show_splash():
 
 def main():
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description="EDOG Log Viewer - Real-time log and telemetry viewer for FLT DevMode",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -801,7 +791,7 @@ Examples:
   edog-logs --demo                    Run with simulated data (test the UI)
   edog-logs --file service.log        Tail a specific log file
   edog-logs --watch ./logs            Watch a directory for log files
-  
+
   # Pipe service output from FLT repo:
   cd C:\\path\\to\\workload-fabriclivetable\\Service\\Microsoft.LiveTable.Service.EntryPoint
   dotnet run 2>&1 | edog-logs
@@ -811,15 +801,15 @@ Examples:
     parser.add_argument("--file", "-f", type=str, help="Tail a specific log file")
     parser.add_argument("--watch", "-w", type=str, help="Watch a directory for log files")
     parser.add_argument("--no-splash", action="store_true", help="Skip splash screen")
-    
+
     args = parser.parse_args()
-    
+
     if not args.no_splash:
         show_splash()
         time.sleep(0.5)
-    
+
     store = LogStore()
-    
+
     # Choose data source
     if args.demo:
         console.print("[yellow]Running in demo mode with simulated data[/]")
@@ -840,7 +830,7 @@ Examples:
             console.print("[dim]Use --help to see usage options[/]\n")
             time.sleep(1)
             data_source = DemoDataGenerator(store)
-    
+
     time.sleep(0.5)
     run_viewer(data_source)
 

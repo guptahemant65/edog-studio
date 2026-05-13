@@ -6,6 +6,7 @@ Proxy strategy (per docs/fabric-api-reference.md):
   - Bearer token is attached server-side (avoids CORS)
 """
 import base64
+import contextlib
 import json
 import os
 import ssl
@@ -51,14 +52,10 @@ def _atomic_write(path: Path, data: str):
         os.close(fd)
         os.replace(tmp, str(path))
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp)
-        except OSError:
-            pass
         raise
 
 
@@ -297,7 +294,7 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
     with _mwc_lock:
         cached = _mwc_cache.get(nb_key)
         if cached and time.time() < cached["expiry"] - 300:
-            print(f"  [JUPYTER] MWC Notebook cache hit")
+            print("  [JUPYTER] MWC Notebook cache hit")
             return cached["token"], cached.get("host", "")
         # Fall back to any token for this capacity
         for key, entry in _mwc_cache.items():
@@ -319,7 +316,7 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
                 # Try Lakehouse-scoped as fallback
                 if lh_id:
                     try:
-                        print(f"  [JUPYTER] Falling back to Lakehouse MWC token...")
+                        print("  [JUPYTER] Falling back to Lakehouse MWC token...")
                         token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id,
                                                      workload_type="Lakehouse")
                         return token, host
@@ -339,8 +336,9 @@ async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, 
 
     Returns dict with status, outputs, and error info.
     """
-    import websockets
     import uuid
+
+    import websockets
 
     ws_host = cap_host.replace("https://", "")
     ws_path = (
@@ -534,7 +532,6 @@ def _handle_account_picker(username, timeout=45):
     """
     try:
         from pywinauto import Desktop
-        from pywinauto.keyboard import send_keys
     except ImportError:
         _deploy_log("pywinauto not installed — please select account manually", "warn")
         return False
@@ -613,7 +610,7 @@ def _inject_devmode_token(config):
         # Find workload-dev-mode.json
         sys.path.insert(0, str(PROJECT_DIR))
         try:
-            from edog import get_workload_dev_mode_path, _find_cert_thumbprint
+            from edog import _find_cert_thumbprint, get_workload_dev_mode_path
             devmode_path = get_workload_dev_mode_path(flt_repo)
         except Exception as e:
             _deploy_log(f"Could not locate workload-dev-mode.json: {e}", "warn")
@@ -704,7 +701,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 })
             return
         try:
-            token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
+            _token, _host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
             _deploy_log("MWC token acquired", "success")
         except Exception as e:
             _deploy_log(f"Token fetch failed: {e}", "error")
@@ -1142,7 +1139,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # Auto-correct: deploying but no active pipeline → reset to idle
             if _studio_state["phase"] == "deploying":
                 # Check if deploy thread is actually running
-                deploy_id = _studio_state.get("deployId")
                 start_time = _studio_state.get("deployStartTime", 0)
                 # If deploy started >5min ago and still "deploying", it's stale
                 if start_time and (time.time() - start_time) > 900:
@@ -1421,10 +1417,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         last_idx = 0
         last_event_id = self.headers.get("Last-Event-ID")
         if last_event_id:
-            try:
+            with contextlib.suppress(ValueError):
                 last_idx = int(last_event_id)
-            except ValueError:
-                pass
 
         while True:
             with _studio_lock:
@@ -2460,7 +2454,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         # Step 1: Poll session until kernel is idle (max 10 min)
         session_url = f"{cap_host}{base}/sessions/{session_id}"
-        print(f"  [JUPYTER] Polling session until kernel idle...")
+        print("  [JUPYTER] Polling session until kernel idle...")
         ctx = ssl.create_default_context()
         kernel_ready = False
         for attempt in range(300):  # Max 10 min (300 x 2s)

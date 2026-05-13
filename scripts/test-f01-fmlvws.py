@@ -1,7 +1,7 @@
 """Test F01 APIs against FMLVWS workspace with real lakehouses."""
 import json
-import urllib.request
 import urllib.error
+import urllib.request
 
 BASE = "http://127.0.0.1:5555"
 

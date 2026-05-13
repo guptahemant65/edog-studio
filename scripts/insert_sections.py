@@ -313,7 +313,8 @@ NEW_CSS = """
 # ─────────────────────────────────────────────
 # 2. New HTML sections
 # ─────────────────────────────────────────────
-NEW_HTML = r"""
+NEW_HTML = (
+    r"""
 <section class="section" id="s17">
   <div class="sec-hdr">
     <div class="sec-ico">
@@ -366,21 +367,33 @@ NEW_HTML = r"""
     <div class="sub-title">Standard</div>
     <nav class="breadcrumb">
       <span class="bc-seg">Workspaces</span>
-      <span class="bc-sep">›</span>
+"""
+    '      <span class="bc-sep">›</span>\n'  # noqa: RUF001
+    r"""
       <span class="bc-seg">FabricDev-WS</span>
-      <span class="bc-sep">›</span>
+"""
+    '      <span class="bc-sep">›</span>\n'  # noqa: RUF001
+    r"""
       <span class="bc-seg">LiveTableLakehouse</span>
-      <span class="bc-sep">›</span>
+"""
+    '      <span class="bc-sep">›</span>\n'  # noqa: RUF001
+    r"""
       <span class="bc-seg bc-current">Orders_Delta</span>
     </nav>
     <div class="sub-title mt16">With overflow collapse</div>
     <nav class="breadcrumb bc-overflow">
       <span class="bc-seg">Workspaces</span>
-      <span class="bc-sep">›</span>
+"""
+    '      <span class="bc-sep">›</span>\n'  # noqa: RUF001
+    r"""
       <span class="bc-more" title="FabricDev-WS / LiveTableLakehouse / Schemas">&#8943;</span>
-      <span class="bc-sep">›</span>
+"""
+    '      <span class="bc-sep">›</span>\n'  # noqa: RUF001
+    r"""
       <span class="bc-seg">dbo</span>
-      <span class="bc-sep">›</span>
+"""
+    '      <span class="bc-sep">›</span>\n'  # noqa: RUF001
+    r"""
       <span class="bc-seg bc-current">Orders_Delta</span>
     </nav>
   </div>
@@ -668,7 +681,9 @@ NEW_HTML = r"""
         <div style="font-size:11px;color:var(--text-4);margin-top:6px">Sidebar + Main + Detail panel</div>
       </div>
       <div class="layout-state-card">
-        <div class="layout-state-name">Medium (800–1199px)</div>
+"""
+    '        <div class="layout-state-name">Medium (800–1199px)</div>\n'  # noqa: RUF001
+    r"""
         <div class="layout-diagram">
           <div class="ld-sidebar ld-icon"></div>
           <div class="ld-main"></div>
@@ -924,6 +939,7 @@ df.<span class="nb-fn">filter</span>(df.status == <span class="nb-str">"PENDING"
   </div>
 </section>
 """
+)
 
 # ─────────────────────────────────────────────
 # 3. New JS block

@@ -2,12 +2,6 @@
 import json
 import os
 import tempfile
-import threading
-import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
 
 
 class TestAtomicWrite:
@@ -41,7 +35,7 @@ class TestAtomicWrite:
         target.write_text('{"original": true}')
         # If write fails, original should be intact
         try:
-            fd, tmp = tempfile.mkstemp(dir=str(tmp_path), suffix='.tmp')
+            fd, _tmp = tempfile.mkstemp(dir=str(tmp_path), suffix='.tmp')
             os.close(fd)
             # Simulate failure before replace
             raise ValueError("simulated error")
@@ -128,10 +122,7 @@ class TestDeployStateTransitions:
         state["deployId"] = "current-123"
         # Stale worker tries to update with old ID
         stale_id = "old-456"
-        if state["deployId"] != stale_id:
-            updated = False  # Should not update
-        else:
-            updated = True
+        updated = state["deployId"] == stale_id
         assert not updated
 
     def test_log_accumulation(self):

@@ -11,6 +11,7 @@ broken file references, and placeholder substitution failures.
 import os
 import subprocess
 import sys
+
 import pytest
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
