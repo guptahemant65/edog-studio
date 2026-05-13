@@ -635,6 +635,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                 .Where(n => n.NodeType == "interface")
                 .ToList();
 
+            // Load snapshot FIRST, then check availability
+            try
+            {
+                _diRegistryProvider.LoadSnapshot();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG-QA] DI registry snapshot load failed: {ex.Message}");
+            }
+
             if (!_diRegistryProvider.IsAvailable)
             {
                 degradationFlags.Add("di_registry_unavailable");
@@ -655,7 +665,6 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
-                _diRegistryProvider.LoadSnapshot();
 
                 foreach (var node in interfaceNodes)
                 {
