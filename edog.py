@@ -1942,20 +1942,19 @@ def apply_dag_execution_hook_patch(content):
     if insert_idx is None:
         return content, "pattern_not_found"
 
-    edog_hook_line = (
-        "                    // EDOG DevMode - observability hook for DAG lifecycle events\n"
-        "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());"
-    )
-
-    lines.insert(insert_idx, edog_hook_line)
+    # Insert as two separate lines — comment first, then hook (insert at same
+    # index pushes earlier inserts down so order is preserved).
+    lines.insert(insert_idx, "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());")
+    lines.insert(insert_idx, "                    // EDOG DevMode - observability hook for DAG lifecycle events")
     return "\n".join(lines), "applied"
 
 
 def revert_dag_execution_hook_patch(content):
     """Remove EdogDagExecutionHook registration from DagExecutionHandlerV2.cs."""
+    # Match blank line + comment + hook-add (each on its own line)
     pattern = (
-        r"\n\s*// EDOG DevMode - observability hook for DAG lifecycle events\n"
-        r"\s*dagExecutionHooks\.Add\(new Microsoft\.LiveTable\.Service\.DevMode\.EdogDagExecutionHook\(\)\);\n"
+        r"\n[ ]*// EDOG DevMode - observability hook for DAG lifecycle events\n"
+        r"[ ]*dagExecutionHooks\.Add\(new Microsoft\.LiveTable\.Service\.DevMode\.EdogDagExecutionHook\(\)\);"
     )
     return re.sub(pattern, "", content)
 
