@@ -63,6 +63,7 @@ class QaPanel {
     this._phaseOverlay = document.getElementById('qaPhase1Overlay');
     this._killSwitch = document.getElementById('qaKillSwitch');
     this._killBtn = document.getElementById('qaKillBtn');
+    this._disconnectBtn = document.getElementById('qaDisconnectBtn');
     this._editorOverlay = document.getElementById('qaEditorOverlay');
 
     // Stage bar: click completed stages to navigate back
@@ -78,6 +79,15 @@ class QaPanel {
     // Kill switch
     if (this._killBtn) {
       this._killBtn.addEventListener('click', () => this._handleKillSwitch());
+    }
+
+    // Disconnect button
+    if (this._disconnectBtn) {
+      this._disconnectBtn.addEventListener('click', () => {
+        if (window.edogWs) window.edogWs.disconnect();
+        if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+        if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+      });
     }
 
     // Subscribe to QA server events via topic bus
