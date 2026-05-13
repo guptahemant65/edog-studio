@@ -1848,7 +1848,6 @@ def apply_dag_execution_hook_patch(content):
         return content, "pattern_not_found"
 
     edog_hook_line = (
-        "\n"
         "                    // EDOG DevMode - observability hook for DAG lifecycle events\n"
         "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());\n"
     )
