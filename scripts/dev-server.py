@@ -699,6 +699,14 @@ def _inject_devmode_token(config):
 
         # Inject into workload-dev-mode.json
         devmode["UserAuthorizationToken"] = token
+
+        # Sync CapacityGuid so FLT connects to the correct capacity
+        cap_id = config.get("capacity_id", "")
+        if cap_id and devmode.get("CapacityGuid", "").lower() != cap_id.lower():
+            old_cap = devmode.get("CapacityGuid", "(none)")
+            devmode["CapacityGuid"] = cap_id
+            _deploy_log(f"Synced CapacityGuid: {old_cap[:8]}… → {cap_id[:8]}…", "info")
+
         _atomic_write(Path(devmode_path), json.dumps(devmode, indent=4))
         _deploy_log("Injected UserAuthorizationToken — no browser popup needed", "success")
         global _devmode_token_was_injected
@@ -795,6 +803,27 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             config["capacity_id"] = cap_id
             _atomic_write(CONFIG_PATH, json.dumps(config, indent=2))
             _deploy_log("edog-config.json updated", "success")
+
+            # Also sync CapacityGuid into workload-dev-mode.json so FLT connects
+            # to the right capacity even when token injection is skipped later
+            if cap_id:
+                flt_repo = config.get("flt_repo_path", "")
+                if flt_repo:
+                    sys.path.insert(0, str(PROJECT_DIR))
+                    try:
+                        from edog import get_workload_dev_mode_path
+                        wdm_path = get_workload_dev_mode_path(flt_repo)
+                        if wdm_path and Path(wdm_path).exists():
+                            wdm = json.loads(Path(wdm_path).read_text())
+                            if wdm.get("CapacityGuid", "").lower() != cap_id.lower():
+                                wdm["CapacityGuid"] = cap_id
+                                _atomic_write(Path(wdm_path), json.dumps(wdm, indent=4))
+                                _deploy_log(f"Synced CapacityGuid in workload-dev-mode.json", "success")
+                    except Exception as e:
+                        _deploy_log(f"Could not sync CapacityGuid: {e}", "warn")
+                    finally:
+                        if str(PROJECT_DIR) in sys.path:
+                            sys.path.remove(str(PROJECT_DIR))
         except Exception as e:
             _deploy_log(f"Config update failed: {e}", "error")
             with _studio_lock:
