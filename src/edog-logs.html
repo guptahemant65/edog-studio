@@ -63830,15 +63830,13 @@ class WorkspaceExplorer {
     if (!header) return;
     if (header.querySelector('.ws-new-env-btn')) return;
 
+    var self = this;
     var newEnvBtn = document.createElement('button');
     newEnvBtn.className = 'ws-toolbar-btn ws-new-env-btn';
     newEnvBtn.title = 'Create new test environment';
     newEnvBtn.textContent = '+ New Environment';
     newEnvBtn.addEventListener('click', function() {
-      if (window.InfraWizardDialog) {
-        var wizard = new window.InfraWizardDialog();
-        wizard.open();
-      }
+      self._ctxNewInfra();
     });
     header.appendChild(newEnvBtn);
   }
