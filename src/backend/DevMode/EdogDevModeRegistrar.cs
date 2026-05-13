@@ -333,12 +333,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // Register the "qa" topic buffer for QA engine status/progress events
                 EdogTopicRouter.RegisterTopic("qa", 500);
 
-                // Stub providers — real implementations wire in during Connected phase
+                // Real provider implementations for the five-layer code understanding engine
+                var graphProvider = new EdogQaGraphProvider();
+                var omniSharpProvider = new EdogQaOmniSharpProvider();
+                var llmProvider = new EdogQaLlmProvider();
+                var diRegistryProvider = new EdogQaDiRegistryProvider();
+
                 var codeAnalyzer = new EdogQaCodeAnalyzer(
-                    new NullGraphProvider(),
-                    new NullOmniSharpProvider(),
-                    new NullLlmProvider(),
-                    new NullDiRegistryProvider());
+                    graphProvider,
+                    omniSharpProvider,
+                    llmProvider,
+                    diRegistryProvider);
 
                 // Minimal service provider for engines that require IServiceProvider
                 var serviceProvider = new Microsoft.Extensions.DependencyInjection.ServiceCollection()
