@@ -934,8 +934,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static bool IsQaEventForRun(TopicEvent evt, string runId)
         {
             if (evt.Topic != "qa") return false;
-            if (evt.Data is QaEventBase qaEvt) return qaEvt.RunId == runId;
-            return false;
+            // Typed event path (if we ever use QaEventBase directly)
+            if (evt.Data is QaEventBase qaEvt)
+                return string.Equals(qaEvt.RunId, runId, StringComparison.Ordinal);
+            // Anonymous object path — reflect for runId property (case-insensitive)
+            if (evt.Data == null) return false;
+            var prop = evt.Data.GetType().GetProperty("runId")
+                    ?? evt.Data.GetType().GetProperty("RunId");
+            if (prop == null) return false;
+            return string.Equals(prop.GetValue(evt.Data) as string, runId, StringComparison.Ordinal);
         }
 
         /// <summary>

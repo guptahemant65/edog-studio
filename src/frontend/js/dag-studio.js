@@ -436,6 +436,9 @@ class DagStudio {
     // Subscribe to SignalR telemetry topic
     this._signalR.on('telemetry', this._onTelemetryEvent);
     this._signalR.subscribeTopic('telemetry');
+    // Subscribe to log topic (backup channel for autoDetector)
+    this._signalR.on('log', this._onLogEntry);
+    this._signalR.subscribeTopic('log');
     // Keyboard shortcuts
     document.addEventListener('keydown', this._onKeyDown);
     // Load DAG
@@ -452,6 +455,9 @@ class DagStudio {
     // Unsubscribe telemetry
     this._signalR.off('telemetry', this._onTelemetryEvent);
     this._signalR.unsubscribeTopic('telemetry');
+    // Unsubscribe log backup channel
+    this._signalR.off('log', this._onLogEntry);
+    this._signalR.unsubscribeTopic('log');
     // Pause rendering
     if (this._renderer) this._renderer.pauseRendering();
     // Remove keyboard listener

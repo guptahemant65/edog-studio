@@ -1126,12 +1126,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def do_PATCH(self):
         if self.path.startswith("/api/fabric/"):
             self._proxy_fabric("PATCH")
+        elif self.path.startswith("/api/flt-proxy/"):
+            self._proxy_to_flt("PATCH")
         else:
             self.send_error(404)
 
     def do_DELETE(self):
         if self.path.startswith("/api/fabric/"):
             self._proxy_fabric("DELETE")
+        elif self.path.startswith("/api/flt-proxy/"):
+            self._proxy_to_flt("DELETE")
         elif self.path.startswith("/api/templates/"):
             self._serve_template_delete()
         else:
@@ -1819,6 +1823,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self.send_response(resp.status)
                 self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
                 self.send_header("Content-Length", str(len(resp_body)))
+                # Forward pagination token for paginated FLT endpoints
+                cont_token = resp.headers.get("x-ms-continuation-token")
+                if cont_token:
+                    self.send_header("x-ms-continuation-token", cont_token)
+                    self.send_header("Access-Control-Expose-Headers", "x-ms-continuation-token")
                 self.end_headers()
                 self.wfile.write(resp_body)
         except urllib.error.HTTPError as e:
