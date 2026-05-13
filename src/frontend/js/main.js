@@ -1342,37 +1342,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.dataset.theme = 'dark';
   }
 
-  // Auth gate: check if we have a valid bearer token
-  const onboarding = new OnboardingScreen();
-  const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
-  const needsAuth = forceOnboarding || await onboarding.isRequired();
+  // Fetch health ONCE — shared by all startup gates
+  let health = null;
+  try {
+    const resp = await fetch('/api/edog/health');
+    if (resp.ok) health = await resp.json();
+  } catch { /* health stays null — gates will handle */ }
 
-  if (needsAuth && !forceOnboarding) {
-    // Try silent re-auth with last known user before showing onboarding
-    const silentOk = await onboarding.trySilentReauth();
-    if (silentOk) {
-      startApp();
-    } else {
-      await onboarding.show(function onAuthComplete(result) {
-        startApp();
-      });
-    }
-  } else if (needsAuth) {
-    await onboarding.show(function onAuthComplete(result) {
-      startApp();
-    });
-  } else {
-    // Token looks valid locally — verify it actually works against Fabric
-    const tokenWorks = await onboarding.verifyToken();
-    if (tokenWorks) {
-      startApp();
-    } else {
-      // Token expired or tenant rotated — force re-auth
-      await onboarding.show(function onAuthComplete(result) {
-        startApp();
-      });
-    }
-  }
+  // Gate 1: Auth — resolve bearer token
+  await resolveAuthGate(health);
+
+  // Gate 2: Repo — resolve FLT repo path (needed for branch in topbar)
+  await resolveRepoGate(health);
+
+  // Both gates passed — start the app
+  startApp();
 
   // Initialize mock data rendering — only when ?mock=true is in the URL
   if (typeof MockRenderer !== 'undefined' && new URLSearchParams(window.location.search).get('mock') === 'true') {
@@ -1383,6 +1367,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 500);
   }
 });
+
+async function resolveAuthGate(health) {
+  const onboarding = new OnboardingScreen();
+  const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
+  const needsAuth = forceOnboarding || await onboarding.isRequired(health);
+
+  if (!needsAuth) {
+    // Token looks valid locally — verify it actually works against Fabric
+    const tokenWorks = await onboarding.verifyToken();
+    if (tokenWorks) return;
+  }
+
+  if (needsAuth && !forceOnboarding) {
+    // Try silent re-auth with last known user before showing onboarding
+    const silentOk = await onboarding.trySilentReauth();
+    if (silentOk) return;
+  }
+
+  // Must show onboarding UI
+  await new Promise(resolve => {
+    onboarding.show(function onAuthComplete() { resolve(); });
+  });
+}
+
+async function resolveRepoGate(health) {
+  const repoGate = new RepoGateOverlay();
+
+  // Re-fetch health if needed (auth may have changed the state)
+  let currentHealth = health;
+  try {
+    const resp = await fetch('/api/edog/health');
+    if (resp.ok) currentHealth = await resp.json();
+  } catch { /* use original health */ }
+
+  const resolved = await repoGate.tryResolve(currentHealth || {});
+  if (resolved) return;
+
+  // Need user interaction — show overlay
+  await new Promise(resolve => {
+    repoGate.show(function onRepoComplete() { resolve(); });
+  });
+}
 
 function startApp() {
   new EdogLogViewer().init();

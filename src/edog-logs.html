@@ -25216,6 +25216,215 @@ mark {
 }
 
 
+    /* === css/repo-gate.css === */
+/* ============================================================================
+   REPO GATE — Overlay for FLT repo selection/entry.
+   Minimal centered card — no showcase panel, just functional.
+   Scoped under .repo-gate-overlay.
+   ============================================================================ */
+
+.repo-gate-overlay *,
+.repo-gate-overlay *::before,
+.repo-gate-overlay *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.repo-gate-overlay {
+  --rg-bg: rgba(15, 17, 23, 0.45);
+  --rg-card-bg: #ffffff;
+  --rg-border: #e4e6ec;
+  --rg-text: #0f1117;
+  --rg-text-secondary: #5c6170;
+  --rg-text-muted: #999dab;
+  --rg-accent: #6d5cff;
+  --rg-accent-hover: #5c4be6;
+  --rg-error: #c53030;
+  --rg-font: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --rg-radius: 10px;
+  --rg-speed: 120ms;
+}
+
+[data-theme="dark"] .repo-gate-overlay {
+  --rg-bg: rgba(0, 0, 0, 0.6);
+  --rg-card-bg: #1a1c24;
+  --rg-border: #2d2f3a;
+  --rg-text: #e4e6f0;
+  --rg-text-secondary: #9da1b0;
+  --rg-text-muted: #6b7080;
+}
+
+/* --- Overlay --- */
+.repo-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rg-bg);
+  font-family: var(--rg-font);
+  color: var(--rg-text);
+  opacity: 1;
+  transition: opacity 0.4s ease;
+  backdrop-filter: blur(4px);
+}
+
+.repo-gate-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- Card --- */
+.rg-card {
+  background: var(--rg-card-bg);
+  border: 1px solid var(--rg-border);
+  border-radius: 14px;
+  padding: 36px 40px;
+  max-width: 560px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.rg-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.rg-subtitle {
+  font-size: 13px;
+  color: var(--rg-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* --- Content --- */
+.rg-label {
+  font-size: 13px;
+  color: var(--rg-text-secondary);
+  margin-bottom: 12px;
+}
+
+/* --- Picker list --- */
+.rg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.rg-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--rg-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--rg-font);
+  font-size: 13px;
+  color: var(--rg-text);
+  text-align: left;
+  transition: border-color var(--rg-speed), background var(--rg-speed);
+}
+
+.rg-item:hover {
+  border-color: var(--rg-accent);
+  background: rgba(109, 92, 255, 0.04);
+}
+
+.rg-item.selected {
+  border-color: var(--rg-accent);
+  background: rgba(109, 92, 255, 0.08);
+}
+
+.rg-path {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* --- Manual entry --- */
+.rg-input-row {
+  margin-bottom: 12px;
+}
+
+.rg-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  color: var(--rg-text);
+  background: var(--rg-card-bg);
+  border: 1px solid var(--rg-border);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color var(--rg-speed);
+}
+
+.rg-input:focus {
+  border-color: var(--rg-accent);
+}
+
+.rg-error {
+  font-size: 12px;
+  color: var(--rg-error);
+  min-height: 18px;
+  margin-bottom: 8px;
+}
+
+/* --- Buttons --- */
+.rg-confirm {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-family: var(--rg-font);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--rg-accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--rg-speed);
+  margin-bottom: 10px;
+}
+
+.rg-confirm:hover:not(:disabled) {
+  background: var(--rg-accent-hover);
+}
+
+.rg-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rg-rescan {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-family: var(--rg-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rg-text-secondary);
+  background: transparent;
+  border: 1px solid var(--rg-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color var(--rg-speed), color var(--rg-speed);
+}
+
+.rg-rescan:hover {
+  border-color: var(--rg-accent);
+  color: var(--rg-accent);
+}
+
     /* === css/qa-panel.css === */
 /* ── QA Testing Panel (F27) ──
  * Stage-based workflow: PR Input → Analysis → Curation → Execution → Results
@@ -69497,11 +69706,15 @@ class OnboardingScreen {
    * Check whether onboarding is required (no valid bearer or < 5 min left).
    * @returns {Promise<boolean>}
    */
-  async isRequired() {
+  async isRequired(healthData) {
     try {
-      const resp = await fetch('/api/edog/health');
-      if (!resp.ok) return true;
-      this._healthData = await resp.json();
+      if (healthData) {
+        this._healthData = healthData;
+      } else {
+        const resp = await fetch('/api/edog/health');
+        if (!resp.ok) return true;
+        this._healthData = await resp.json();
+      }
       if (!this._healthData.hasBearerToken || !this._healthData.tokenHelperBuilt) return true;
       const remainingSec = this._healthData.bearerExpiresIn ?? 0;
       return remainingSec < 300;
@@ -70294,6 +70507,273 @@ class OnboardingScreen {
   }
 }
 
+
+// === js/repo-gate.js ===
+/* ============================================================================
+   REPO GATE — Startup gate for FLT repo discovery/selection.
+   Resolves flt_repo_path before dashboard loads. Auto-resolves when possible,
+   shows picker only when multiple repos found or manual entry when zero.
+
+   Scoped under .repo-gate-overlay for CSS isolation.
+   ============================================================================ */
+
+// eslint-disable-next-line no-unused-vars
+class RepoGateOverlay {
+  constructor() {
+    this._overlay = null;
+    this._onComplete = null;
+  }
+
+  /**
+   * Check if repo gate needs user interaction.
+   * @param {object} health - Health response from /api/edog/health
+   * @returns {Promise<boolean>} true if repo resolved (no gate needed)
+   */
+  async tryResolve(health) {
+    const repo = health.fltRepo;
+    if (repo && repo.valid) return true;
+
+    // Repo not configured or invalid — try auto-scan
+    try {
+      const resp = await fetch('/api/edog/repo-scan', { method: 'POST' });
+      if (!resp.ok) return false;
+      const scan = await resp.json();
+
+      if (scan.found.length === 1) {
+        // Single repo found — auto-set without UI
+        return await this._setRepo(scan.found[0]);
+      }
+      if (scan.found.length > 1) {
+        // Multiple found — need picker (handled by show())
+        this._scanResults = scan.found;
+        return false;
+      }
+      // Zero found
+      this._scanResults = [];
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Show the repo picker/entry overlay.
+   * @param {function} onComplete - Called with repo info on success.
+   */
+  async show(onComplete) {
+    this._onComplete = onComplete || null;
+    this._createOverlay();
+    document.body.appendChild(this._overlay);
+
+    const results = this._scanResults || [];
+    if (results.length > 1) {
+      this._renderPicker(results);
+    } else {
+      this._renderManualEntry();
+    }
+  }
+
+  dismiss() {
+    if (!this._overlay) return;
+    this._overlay.classList.add('fade-out');
+    setTimeout(() => {
+      if (this._overlay && this._overlay.parentNode) {
+        this._overlay.parentNode.removeChild(this._overlay);
+      }
+      this._overlay = null;
+    }, 400);
+  }
+
+  // --- Private: DOM ---
+
+  _createOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'repo-gate-overlay';
+
+    const card = document.createElement('div');
+    card.className = 'rg-card';
+
+    const title = document.createElement('h2');
+    title.className = 'rg-title';
+    title.textContent = 'Locate FLT Repository';
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'rg-subtitle';
+    subtitle.textContent = 'EDOG needs your workload-fabriclivetable repo to show branch info and enable deploy.';
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    this._content = document.createElement('div');
+    this._content.className = 'rg-content';
+    card.appendChild(this._content);
+
+    overlay.appendChild(card);
+    this._overlay = overlay;
+  }
+
+  _renderPicker(paths) {
+    this._content.innerHTML = '';
+
+    const label = document.createElement('p');
+    label.className = 'rg-label';
+    label.textContent = 'Multiple repositories found. Select one:';
+    this._content.appendChild(label);
+
+    const list = document.createElement('div');
+    list.className = 'rg-list';
+
+    paths.forEach((p, i) => {
+      const item = document.createElement('button');
+      item.className = 'rg-item';
+      item.type = 'button';
+      item.dataset.path = p;
+
+      const pathText = document.createElement('span');
+      pathText.className = 'rg-path';
+      pathText.textContent = p;
+      item.appendChild(pathText);
+
+      item.addEventListener('click', () => {
+        list.querySelectorAll('.rg-item').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+        this._selectedPath = p;
+      });
+
+      // Auto-select first
+      if (i === 0) {
+        item.classList.add('selected');
+        this._selectedPath = p;
+      }
+
+      list.appendChild(item);
+    });
+
+    this._content.appendChild(list);
+    this._addConfirmButton();
+  }
+
+  _renderManualEntry() {
+    this._content.innerHTML = '';
+
+    const label = document.createElement('p');
+    label.className = 'rg-label';
+    label.textContent = 'No FLT repository found automatically. Enter the path:';
+    this._content.appendChild(label);
+
+    const inputRow = document.createElement('div');
+    inputRow.className = 'rg-input-row';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'rg-input';
+    input.placeholder = 'C:\\repos\\workload-fabriclivetable';
+    this._input = input;
+
+    inputRow.appendChild(input);
+    this._content.appendChild(inputRow);
+
+    this._errorEl = document.createElement('p');
+    this._errorEl.className = 'rg-error';
+    this._content.appendChild(this._errorEl);
+
+    this._addConfirmButton();
+
+    // Also add a rescan button
+    const rescan = document.createElement('button');
+    rescan.type = 'button';
+    rescan.className = 'rg-rescan';
+    rescan.textContent = 'Rescan';
+    rescan.addEventListener('click', () => this._doRescan());
+    this._content.appendChild(rescan);
+
+    input.focus();
+  }
+
+  _addConfirmButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rg-confirm';
+    btn.textContent = 'Continue';
+    btn.addEventListener('click', () => this._handleConfirm());
+    this._content.appendChild(btn);
+    this._confirmBtn = btn;
+  }
+
+  // --- Private: Actions ---
+
+  async _handleConfirm() {
+    const path = this._selectedPath || (this._input && this._input.value.trim());
+    if (!path) {
+      this._showError('Please enter a path');
+      return;
+    }
+
+    this._confirmBtn.disabled = true;
+    this._confirmBtn.textContent = 'Validating...';
+
+    const ok = await this._setRepo(path);
+    if (!ok) {
+      this._confirmBtn.disabled = false;
+      this._confirmBtn.textContent = 'Continue';
+    }
+  }
+
+  async _setRepo(path) {
+    try {
+      const resp = await fetch('/api/edog/repo-set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        const reason = err.reason || 'unknown';
+        const messages = {
+          path_not_found: 'Path does not exist',
+          not_a_directory: 'Path is not a directory',
+          missing_flt_marker: 'Not a valid FLT repo (missing Service/Microsoft.LiveTable.Service)',
+        };
+        this._showError(messages[reason] || `Invalid path: ${reason}`);
+        return false;
+      }
+      const info = await resp.json();
+      this.dismiss();
+      if (this._onComplete) this._onComplete(info);
+      return true;
+    } catch {
+      this._showError('Failed to validate path');
+      return false;
+    }
+  }
+
+  async _doRescan() {
+    this._showError('');
+    try {
+      const resp = await fetch('/api/edog/repo-scan', { method: 'POST' });
+      if (!resp.ok) return;
+      const scan = await resp.json();
+      if (scan.found.length > 0) {
+        this._scanResults = scan.found;
+        if (scan.found.length === 1) {
+          const ok = await this._setRepo(scan.found[0]);
+          if (ok) return;
+        }
+        this._renderPicker(scan.found);
+      } else {
+        this._showError('No FLT repositories found');
+      }
+    } catch {
+      this._showError('Scan failed');
+    }
+  }
+
+  _showError(msg) {
+    if (this._errorEl) {
+      this._errorEl.textContent = msg || '';
+    }
+  }
+}
 
 // === js/qa-panel.js ===
 /**
@@ -73638,37 +74118,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.dataset.theme = 'dark';
   }
 
-  // Auth gate: check if we have a valid bearer token
-  const onboarding = new OnboardingScreen();
-  const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
-  const needsAuth = forceOnboarding || await onboarding.isRequired();
+  // Fetch health ONCE — shared by all startup gates
+  let health = null;
+  try {
+    const resp = await fetch('/api/edog/health');
+    if (resp.ok) health = await resp.json();
+  } catch { /* health stays null — gates will handle */ }
 
-  if (needsAuth && !forceOnboarding) {
-    // Try silent re-auth with last known user before showing onboarding
-    const silentOk = await onboarding.trySilentReauth();
-    if (silentOk) {
-      startApp();
-    } else {
-      await onboarding.show(function onAuthComplete(result) {
-        startApp();
-      });
-    }
-  } else if (needsAuth) {
-    await onboarding.show(function onAuthComplete(result) {
-      startApp();
-    });
-  } else {
-    // Token looks valid locally — verify it actually works against Fabric
-    const tokenWorks = await onboarding.verifyToken();
-    if (tokenWorks) {
-      startApp();
-    } else {
-      // Token expired or tenant rotated — force re-auth
-      await onboarding.show(function onAuthComplete(result) {
-        startApp();
-      });
-    }
-  }
+  // Gate 1: Auth — resolve bearer token
+  await resolveAuthGate(health);
+
+  // Gate 2: Repo — resolve FLT repo path (needed for branch in topbar)
+  await resolveRepoGate(health);
+
+  // Both gates passed — start the app
+  startApp();
 
   // Initialize mock data rendering — only when ?mock=true is in the URL
   if (typeof MockRenderer !== 'undefined' && new URLSearchParams(window.location.search).get('mock') === 'true') {
@@ -73679,6 +74143,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 500);
   }
 });
+
+async function resolveAuthGate(health) {
+  const onboarding = new OnboardingScreen();
+  const forceOnboarding = new URLSearchParams(window.location.search).get('force-onboarding') === 'true';
+  const needsAuth = forceOnboarding || await onboarding.isRequired(health);
+
+  if (!needsAuth) {
+    // Token looks valid locally — verify it actually works against Fabric
+    const tokenWorks = await onboarding.verifyToken();
+    if (tokenWorks) return;
+  }
+
+  if (needsAuth && !forceOnboarding) {
+    // Try silent re-auth with last known user before showing onboarding
+    const silentOk = await onboarding.trySilentReauth();
+    if (silentOk) return;
+  }
+
+  // Must show onboarding UI
+  await new Promise(resolve => {
+    onboarding.show(function onAuthComplete() { resolve(); });
+  });
+}
+
+async function resolveRepoGate(health) {
+  const repoGate = new RepoGateOverlay();
+
+  // Re-fetch health if needed (auth may have changed the state)
+  let currentHealth = health;
+  try {
+    const resp = await fetch('/api/edog/health');
+    if (resp.ok) currentHealth = await resp.json();
+  } catch { /* use original health */ }
+
+  const resolved = await repoGate.tryResolve(currentHealth || {});
+  if (resolved) return;
+
+  // Need user interaction — show overlay
+  await new Promise(resolve => {
+    repoGate.show(function onRepoComplete() { resolve(); });
+  });
+}
 
 function startApp() {
   new EdogLogViewer().init();

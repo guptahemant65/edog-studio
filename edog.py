@@ -30,6 +30,13 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
+# Add scripts dir to path for shared modules
+_scripts_dir = str(Path(__file__).parent / "scripts")
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
+from repo_discovery import find_flt_repos, is_flt_repo, validate_repo  # noqa: E402
+
 # Fix Windows console encoding for emoji/unicode characters
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -606,68 +613,16 @@ def format_timedelta(td):
 # File modification utilities
 # ============================================================================
 def find_flt_repo():
-    """Search for FabricLiveTable repo by looking for its unique folder structure.
+    """Search for FabricLiveTable repo — wraps shared discovery with CLI output."""
+    result = find_flt_repos(max_depth=4, limit=1, timeout_sec=10.0)
+    if result["found"]:
+        return Path(result["found"][0])
 
-    Uses a fallback strategy: first searches up to depth 4 (fast ~0.3s),
-    then falls back to depth 8 if not found (slower but more thorough).
-    """
-    home = Path.home()
-
-    # Signature: repo must contain Service/Microsoft.LiveTable.Service
-    def is_flt_repo(path):
-        try:
-            return (path / "Service" / "Microsoft.LiveTable.Service").exists()
-        except (PermissionError, OSError):
-            return False
-
-    skip_dirs = {
-        ".git",
-        ".vs",
-        ".vscode",
-        "node_modules",
-        "__pycache__",
-        "bin",
-        "obj",
-        "packages",
-        "AppData",
-        ".nuget",
-        ".dotnet",
-        ".azure",
-        "OneDrive",
-    }
-
-    def search_dir(start_path, max_depth, current_depth=0):
-        if current_depth > max_depth:
-            return None
-        try:
-            for entry in start_path.iterdir():
-                try:
-                    if not entry.is_dir():
-                        continue
-                except (PermissionError, OSError):
-                    continue
-                # Skip hidden folders and known non-repo dirs
-                if entry.name.startswith(".") or entry.name in skip_dirs:
-                    continue
-                # Check if this is the FLT repo
-                if is_flt_repo(entry):
-                    return entry
-                # Recurse into subdirectory
-                found = search_dir(entry, max_depth, current_depth + 1)
-                if found:
-                    return found
-        except (PermissionError, OSError):
-            pass
-        return None
-
-    # Fallback strategy: try shallow search first (fast), then deeper search if needed
-    result = search_dir(home, max_depth=4)
-    if result:
-        return result
-
-    # Not found at depth 4, try deeper search
     print("   Searching deeper for FLT repo...")
-    return search_dir(home, max_depth=8)
+    result = find_flt_repos(max_depth=8, limit=1, timeout_sec=30.0)
+    if result["found"]:
+        return Path(result["found"][0])
+    return None
 
 
 def get_repo_root():
@@ -676,27 +631,23 @@ def get_repo_root():
 
     # First, check config for explicit repo path
     if config.get("flt_repo_path"):
-        repo_path = Path(config["flt_repo_path"])
-        if repo_path.exists() and (repo_path / "Service" / "Microsoft.LiveTable.Service").exists():
-            return repo_path
-        else:
-            print(f"⚠️ Configured FLT repo path no longer valid: {repo_path}")
-            print("   → Update with: edog --config -r <new_path>")
+        info = validate_repo(config["flt_repo_path"])
+        if info["valid"]:
+            return Path(info["path"])
+        print(f"⚠️ Configured FLT repo path no longer valid: {config['flt_repo_path']}")
+        print("   → Update with: edog --config -r <new_path>")
 
-    # Try current working directory
+    # Try current working directory and parents
     cwd = Path.cwd()
-    if (cwd / "Service" / "Microsoft.LiveTable.Service").exists():
+    if is_flt_repo(cwd):
         return cwd
-
-    # Try parent directories (in case running from subdirectory)
     for parent in cwd.parents:
-        if (parent / "Service" / "Microsoft.LiveTable.Service").exists():
+        if is_flt_repo(parent):
             return parent
 
     # Auto-search common locations
     found = find_flt_repo()
     if found:
-        # Save it to config for future use
         config["flt_repo_path"] = str(found)
         save_config(config)
         print(f"✅ Auto-detected FLT repo: {found}")
@@ -714,19 +665,20 @@ def get_repo_root():
             print("   ❌ Path is required")
             continue
 
-        repo_path = Path(repo_input).resolve()
-        if not repo_path.exists():
-            print(f"   ❌ Path does not exist: {repo_path}")
-            continue
-        if not (repo_path / "Service" / "Microsoft.LiveTable.Service").exists():
-            print("   ❌ Not a valid FLT repo (missing Service/Microsoft.LiveTable.Service)")
+        info = validate_repo(repo_input)
+        if not info["valid"]:
+            messages = {
+                "path_not_found": f"Path does not exist: {info['path']}",
+                "not_a_directory": f"Not a directory: {info['path']}",
+                "missing_flt_marker": "Not a valid FLT repo (missing Service/Microsoft.LiveTable.Service)",
+            }
+            print(f"   ❌ {messages.get(info['reason'], info['reason'])}")
             continue
 
-        # Valid path - save to config
-        config["flt_repo_path"] = str(repo_path)
+        config["flt_repo_path"] = info["path"]
         save_config(config)
-        print(f"   ✅ Saved FLT repo path: {repo_path}")
-        return repo_path
+        print(f"   ✅ Saved FLT repo path: {info['path']}")
+        return Path(info["path"])
 
 
 def read_file(filepath):

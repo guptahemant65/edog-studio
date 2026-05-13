@@ -63,6 +63,7 @@ CSS_MODULES = [
     "css/tab-nexus.css",
     "css/mock-components.css",
     "css/onboarding.css",
+    "css/repo-gate.css",
     "css/qa-panel.css",
 ]
 
@@ -137,6 +138,7 @@ JS_MODULES = [
     "js/api-playground.js",
     "js/mock-renderer.js",
     "js/onboarding.js",
+    "js/repo-gate.js",
     # QA Testing modules (F27) — panel first, then sub-modules
     "js/qa-panel.js",
     "js/qa-input.js",

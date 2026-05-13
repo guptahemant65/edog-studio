@@ -25,6 +25,7 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 from file_watcher import FileWatcher
+from repo_discovery import find_flt_repos, get_configured_repo, validate_repo
 
 PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
@@ -1071,6 +1072,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._proxy_fabric("POST")
         elif self.path == "/api/edog/auth":
             self._serve_auth()
+        elif self.path == "/api/edog/repo-scan":
+            self._serve_repo_scan()
+        elif self.path == "/api/edog/repo-set":
+            self._serve_repo_set()
         elif self.path == "/api/edog/mwc-token":
             self._serve_mwc_token()
         elif self.path == "/api/mwc/table-details":
@@ -1736,40 +1741,28 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if not helper.exists():
             helper = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug" / "net472" / "token-helper.exe"
 
-        # Git info from the FLT repo (workload-fabriclivetable), not edog-studio
-        git_branch = ""
-        git_dirty = 0
-        flt_repo = ""
-        try:
+        # FLT repo status via shared discovery module
+        cfg = {}
+        with contextlib.suppress(Exception):
             cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
-            flt_repo = cfg.get("flt_repo_path", "")
-        except Exception:
-            pass
-        git_cwd = flt_repo if flt_repo and Path(flt_repo).is_dir() else str(PROJECT_DIR)
-        try:
-            git_branch = (
-                subprocess.check_output(
-                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                    cwd=git_cwd,
-                    timeout=3,
-                    stderr=subprocess.DEVNULL,
-                )
-                .decode()
-                .strip()
-            )
-            porcelain = (
-                subprocess.check_output(
-                    ["git", "status", "--porcelain"],
-                    cwd=git_cwd,
-                    timeout=3,
-                    stderr=subprocess.DEVNULL,
-                )
-                .decode()
-                .strip()
-            )
-            git_dirty = len(porcelain.splitlines()) if porcelain else 0
-        except Exception:
-            pass
+        repo_info = get_configured_repo(cfg)
+        if repo_info and repo_info["valid"]:
+            flt_repo_resp = {
+                "configured": True,
+                "valid": True,
+                "path": repo_info["path"],
+            }
+            git_branch = repo_info.get("gitBranch", "")
+            git_dirty = repo_info.get("gitDirty", 0)
+        else:
+            flt_repo_resp = {
+                "configured": repo_info is not None,
+                "valid": False,
+                "path": repo_info["path"] if repo_info else "",
+                "reason": repo_info["reason"] if repo_info else "not_configured",
+            }
+            git_branch = ""
+            git_dirty = 0
 
         self._json_response(
             200,
@@ -1780,8 +1773,46 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "lastUsername": session.get("lastUsername", ""),
                 "gitBranch": git_branch,
                 "gitDirtyFiles": git_dirty,
+                "fltRepo": flt_repo_resp,
             },
         )
+
+    def _serve_repo_scan(self):
+        """POST /api/edog/repo-scan — auto-detect FLT repos on disk."""
+        result = find_flt_repos(max_depth=4, limit=10, timeout_sec=5.0)
+        self._json_response(200, result)
+
+    def _serve_repo_set(self):
+        """POST /api/edog/repo-set — validate and persist FLT repo path."""
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+        except (json.JSONDecodeError, ValueError):
+            self._json_response(400, {"error": "invalid_json"})
+            return
+
+        path = body.get("path", "")
+        if not path:
+            self._json_response(400, {"error": "missing_path"})
+            return
+
+        info = validate_repo(path)
+        if not info["valid"]:
+            self._json_response(
+                400,
+                {"error": "invalid_repo", "reason": info["reason"], "path": info["path"]},
+            )
+            return
+
+        # Persist to config
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        except Exception:
+            cfg = {}
+        cfg["flt_repo_path"] = info["path"]
+        _atomic_write(CONFIG_PATH, json.dumps(cfg, indent=2))
+
+        self._json_response(200, info)
 
     def _serve_mwc_tables(self):
         """GET /api/mwc/tables — list lakehouse tables via MWC token."""

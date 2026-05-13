@@ -73,11 +73,15 @@ class OnboardingScreen {
    * Check whether onboarding is required (no valid bearer or < 5 min left).
    * @returns {Promise<boolean>}
    */
-  async isRequired() {
+  async isRequired(healthData) {
     try {
-      const resp = await fetch('/api/edog/health');
-      if (!resp.ok) return true;
-      this._healthData = await resp.json();
+      if (healthData) {
+        this._healthData = healthData;
+      } else {
+        const resp = await fetch('/api/edog/health');
+        if (!resp.ok) return true;
+        this._healthData = await resp.json();
+      }
       if (!this._healthData.hasBearerToken || !this._healthData.tokenHelperBuilt) return true;
       const remainingSec = this._healthData.bearerExpiresIn ?? 0;
       return remainingSec < 300;

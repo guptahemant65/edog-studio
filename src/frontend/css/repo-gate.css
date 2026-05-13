@@ -1,0 +1,207 @@
+/* ============================================================================
+   REPO GATE — Overlay for FLT repo selection/entry.
+   Minimal centered card — no showcase panel, just functional.
+   Scoped under .repo-gate-overlay.
+   ============================================================================ */
+
+.repo-gate-overlay *,
+.repo-gate-overlay *::before,
+.repo-gate-overlay *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.repo-gate-overlay {
+  --rg-bg: rgba(15, 17, 23, 0.45);
+  --rg-card-bg: #ffffff;
+  --rg-border: #e4e6ec;
+  --rg-text: #0f1117;
+  --rg-text-secondary: #5c6170;
+  --rg-text-muted: #999dab;
+  --rg-accent: #6d5cff;
+  --rg-accent-hover: #5c4be6;
+  --rg-error: #c53030;
+  --rg-font: 'Plus Jakarta Sans', -apple-system, system-ui, sans-serif;
+  --rg-radius: 10px;
+  --rg-speed: 120ms;
+}
+
+[data-theme="dark"] .repo-gate-overlay {
+  --rg-bg: rgba(0, 0, 0, 0.6);
+  --rg-card-bg: #1a1c24;
+  --rg-border: #2d2f3a;
+  --rg-text: #e4e6f0;
+  --rg-text-secondary: #9da1b0;
+  --rg-text-muted: #6b7080;
+}
+
+/* --- Overlay --- */
+.repo-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rg-bg);
+  font-family: var(--rg-font);
+  color: var(--rg-text);
+  opacity: 1;
+  transition: opacity 0.4s ease;
+  backdrop-filter: blur(4px);
+}
+
+.repo-gate-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- Card --- */
+.rg-card {
+  background: var(--rg-card-bg);
+  border: 1px solid var(--rg-border);
+  border-radius: 14px;
+  padding: 36px 40px;
+  max-width: 560px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.rg-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.rg-subtitle {
+  font-size: 13px;
+  color: var(--rg-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* --- Content --- */
+.rg-label {
+  font-size: 13px;
+  color: var(--rg-text-secondary);
+  margin-bottom: 12px;
+}
+
+/* --- Picker list --- */
+.rg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.rg-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px solid var(--rg-border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--rg-font);
+  font-size: 13px;
+  color: var(--rg-text);
+  text-align: left;
+  transition: border-color var(--rg-speed), background var(--rg-speed);
+}
+
+.rg-item:hover {
+  border-color: var(--rg-accent);
+  background: rgba(109, 92, 255, 0.04);
+}
+
+.rg-item.selected {
+  border-color: var(--rg-accent);
+  background: rgba(109, 92, 255, 0.08);
+}
+
+.rg-path {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+/* --- Manual entry --- */
+.rg-input-row {
+  margin-bottom: 12px;
+}
+
+.rg-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  color: var(--rg-text);
+  background: var(--rg-card-bg);
+  border: 1px solid var(--rg-border);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color var(--rg-speed);
+}
+
+.rg-input:focus {
+  border-color: var(--rg-accent);
+}
+
+.rg-error {
+  font-size: 12px;
+  color: var(--rg-error);
+  min-height: 18px;
+  margin-bottom: 8px;
+}
+
+/* --- Buttons --- */
+.rg-confirm {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-family: var(--rg-font);
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--rg-accent);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--rg-speed);
+  margin-bottom: 10px;
+}
+
+.rg-confirm:hover:not(:disabled) {
+  background: var(--rg-accent-hover);
+}
+
+.rg-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rg-rescan {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  font-family: var(--rg-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rg-text-secondary);
+  background: transparent;
+  border: 1px solid var(--rg-border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color var(--rg-speed), color var(--rg-speed);
+}
+
+.rg-rescan:hover {
+  border-color: var(--rg-accent);
+  color: var(--rg-accent);
+}
