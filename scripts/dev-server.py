@@ -1100,6 +1100,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_undeploy()
         elif self.path == "/api/studio/file-changes/dismiss":
             self._serve_file_changes_dismiss()
+        elif self.path == "/api/studio/feedback":
+            self._serve_feedback()
         elif self.path == "/api/templates":
             self._serve_template_save()
         else:
@@ -1264,6 +1266,63 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if _file_watcher:
             _file_watcher.dismiss(version)
         self._json_response(200, {"ok": True})
+
+    def _serve_feedback(self):
+        """POST /api/studio/feedback — create GitHub issue via gh CLI."""
+        import shutil
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(content_length)) if content_length else {}
+        except (json.JSONDecodeError, ValueError):
+            self._json_response(400, {"error": "Invalid JSON"})
+            return
+
+        title = (body.get("title") or "").strip()
+        if not title:
+            self._json_response(400, {"error": "Title is required"})
+            return
+
+        description = (body.get("body") or "").strip()
+        repo = "guptahemant65/edog-studio"
+
+        gh = shutil.which("gh")
+        if not gh:
+            self._json_response(503, {"error": "gh CLI not found"})
+            return
+
+        cmd = [gh, "issue", "create", "--repo", repo, "--title", title]
+        if description:
+            cmd.extend(["--body", description])
+        else:
+            cmd.extend(["--body", "(No description provided)"])
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=15
+            )
+            if result.returncode == 0:
+                url = result.stdout.strip()
+                # Extract issue number from URL like https://github.com/.../issues/42
+                issue_number = None
+                if "/issues/" in url:
+                    try:
+                        issue_number = int(url.rsplit("/issues/", 1)[1])
+                    except (ValueError, IndexError):
+                        pass
+                self._json_response(200, {
+                    "ok": True,
+                    "issueUrl": url,
+                    "issueNumber": issue_number,
+                })
+            else:
+                logger.warning("gh issue create failed: %s", result.stderr)
+                self._json_response(502, {"error": "gh issue create failed", "detail": result.stderr.strip()})
+        except subprocess.TimeoutExpired:
+            self._json_response(504, {"error": "gh CLI timed out"})
+        except Exception as exc:
+            logger.warning("Feedback error: %s", exc)
+            self._json_response(500, {"error": str(exc)})
 
     # ── Template CRUD ──────────────────────────────────────────────
 
