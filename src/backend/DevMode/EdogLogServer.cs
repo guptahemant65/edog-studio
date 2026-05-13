@@ -75,7 +75,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             builder.WebHost.UseUrls($"http://localhost:{port}");
             builder.WebHost.UseKestrel(options => options.AllowSynchronousIO = true);
 
-            builder.Services.AddSignalR();
+            builder.Services.AddSignalR()
+                .AddJsonProtocol(options =>
+                {
+                    options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                    options.PayloadSerializerOptions.PropertyNameCaseInsensitive = true;
+                });
 
             // CORS: allow dev-server (5555) to connect to FLT SignalR hub (5557)
             builder.Services.AddCors(options =>

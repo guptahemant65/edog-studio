@@ -1039,7 +1039,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         id = scn.Id,
                         title = scn.Title,
                         description = scn.Description,
-                        category = scn.Category.ToString().ToLowerInvariant(),
+                        category = ConvertCategoryToSnakeCase(scn.Category),
                         priority = scn.Priority,
                         impactZone = scn.ImpactZone,
                         timeoutMs = scn.TimeoutMs,
@@ -1052,7 +1052,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         },
                         stimulus = scn.Stimulus != null ? new
                         {
-                            type = scn.Stimulus.Type.ToString(),
+                            type = scn.Stimulus.Type.ToString().ToLowerInvariant(),
                             httpRequest = scn.Stimulus.HttpRequest != null ? new
                             {
                                 method = scn.Stimulus.HttpRequest.Method,
@@ -1062,8 +1062,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         expectations = scn.Expectations?.Select(e => new
                         {
                             id = e.Id,
-                            type = e.Type.ToString(),
-                            topic = e.Topic
+                            type = ConvertExpectationTypeToSnakeCase(e.Type),
+                            topic = e.Topic,
+                            description = $"{e.Type} on '{e.Topic}'"
                         }).ToList()
                     }
                 }).ConfigureAwait(false);
@@ -1504,11 +1505,38 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
 
                 // Timeout
-                if (s.Timeout < 1000 || s.Timeout > 60000)
-                    errors.Add(new QaValidationError { ScenarioId = s.Id, Field = "timeout", Message = "Timeout must be 1000-60000 ms" });
+                if (s.TimeoutMs < 1000 || s.TimeoutMs > 60000)
+                    errors.Add(new QaValidationError { ScenarioId = s.Id, Field = "timeoutMs", Message = "Timeout must be 1000-60000 ms" });
             }
 
             return errors;
+        }
+
+        private static string ConvertCategoryToSnakeCase(ScenarioCategory cat)
+        {
+            return cat switch
+            {
+                ScenarioCategory.HappyPath => "happy_path",
+                ScenarioCategory.ErrorPath => "error_path",
+                ScenarioCategory.EdgeCase => "edge_case",
+                ScenarioCategory.Regression => "regression",
+                ScenarioCategory.Performance => "performance",
+                _ => cat.ToString().ToLowerInvariant()
+            };
+        }
+
+        private static string ConvertExpectationTypeToSnakeCase(ExpectationType t)
+        {
+            return t switch
+            {
+                ExpectationType.EventPresent => "event_present",
+                ExpectationType.EventAbsent => "event_absent",
+                ExpectationType.EventCount => "event_count",
+                ExpectationType.EventOrder => "event_order",
+                ExpectationType.Timing => "timing",
+                ExpectationType.FieldMatch => "field_match",
+                _ => t.ToString().ToLowerInvariant()
+            };
         }
 
         /// <summary>

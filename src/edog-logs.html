@@ -28365,6 +28365,7 @@ class SignalRManager {
     // Topic-based event bus (Phase 3)
     this._listeners = new Map();      // topic → Set<callback>
     this._activeStreams = new Map();   // topic → IStreamResult
+    this._pendingTopics = new Set();  // topics requested while disconnected
   }
 
   /** Set the SignalR target port (call when FLT starts on a different port). */
@@ -28485,6 +28486,12 @@ class SignalRManager {
     for (const topic of activeTopics) {
       this.subscribeTopic(topic);
     }
+    // Subscribe topics that were requested while disconnected
+    const pending = [...this._pendingTopics];
+    this._pendingTopics.clear();
+    for (const topic of pending) {
+      this.subscribeTopic(topic);
+    }
   }
 
   setStatus = (status) => {
@@ -28514,8 +28521,12 @@ class SignalRManager {
   /** Start streaming a topic via ChannelReader (snapshot + live). */
   subscribeTopic(topic) {
     if (this._activeStreams.has(topic)) return;
-    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
+      this._pendingTopics.add(topic);
+      return;
+    }
 
+    this._pendingTopics.delete(topic);
     try {
       const stream = this.connection.stream('SubscribeToTopic', topic);
       this._activeStreams.set(topic, stream);
@@ -28542,6 +28553,7 @@ class SignalRManager {
 
   /** Stop streaming a topic. */
   unsubscribeTopic(topic) {
+    this._pendingTopics.delete(topic);
     const stream = this._activeStreams.get(topic);
     if (stream) {
       try { stream.dispose(); } catch (e) { /* dispose can throw if already closed */ }

@@ -129,7 +129,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         public List<object> Teardown { get; set; } = new();
 
         /// <summary>Timeout in ms (1000-60000).</summary>
-        public int Timeout { get; set; } = 30000;
+        public int TimeoutMs { get; set; } = 30000;
 
         /// <summary>Scenario metadata.</summary>
         public object Metadata { get; set; }
