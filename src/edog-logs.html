@@ -6369,6 +6369,27 @@ mark {
   z-index: 1;
 }
 
+.deploy-strip .ds-disconnect {
+  margin-left: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--border-subtle, var(--border));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 1;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.deploy-strip .ds-disconnect:hover {
+  border-color: var(--status-warning, #e5940c);
+  color: var(--status-warning, #e5940c);
+}
+
 .ds-tooltip {
   position: fixed;
   padding: 10px 14px;
@@ -25680,40 +25701,6 @@ mark {
   margin-left: auto;
 }
 
-/* Disconnect switch */
-.qa-disconnect-switch {
-  margin-left: var(--space-2);
-}
-.qa-kill-switch[style*="none"] + .qa-disconnect-switch {
-  margin-left: auto;
-}
-
-.qa-disconnect-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-family: var(--font-body);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.qa-disconnect-btn:hover {
-  border-color: var(--level-warn);
-  color: var(--level-warn);
-}
-
-.qa-disconnect-btn:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
 .qa-kill-btn {
   display: inline-flex;
   align-items: center;
@@ -27272,9 +27259,6 @@ window.onerror = function(msg, src, line, col, err) {
             <!-- Kill switch (right-aligned, shown during execution) -->
             <div class="qa-kill-switch" id="qaKillSwitch" style="display:none">
               <button class="qa-kill-btn" id="qaKillBtn" title="Abort execution">&#10005; Kill</button>
-            </div>
-            <div class="qa-disconnect-switch" id="qaDisconnectSwitch">
-              <button class="qa-disconnect-btn" id="qaDisconnectBtn" title="Disconnect from FLT service">Disconnect</button>
             </div>
           </div>
 
@@ -38373,6 +38357,19 @@ class DeployContextStrip {
     if (!this._timeTimer) {
       this._timeTimer = setInterval(function() { self._updateTime(); }, 60000);
     }
+
+    // Disconnect button
+    var disconnectBtn = document.createElement('button');
+    disconnectBtn.className = 'ds-disconnect';
+    disconnectBtn.textContent = 'Disconnect';
+    disconnectBtn.title = 'Disconnect from FLT service';
+    disconnectBtn.addEventListener('click', function() {
+      if (window.edogWs) window.edogWs.disconnect();
+      if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+      if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+      if (window.edogDeployStrip) window.edogDeployStrip.hide();
+    });
+    this._el.appendChild(disconnectBtn);
 
     this._el.classList.add('active');
   }
@@ -71159,7 +71156,6 @@ class QaPanel {
     this._phaseOverlay = document.getElementById('qaPhase1Overlay');
     this._killSwitch = document.getElementById('qaKillSwitch');
     this._killBtn = document.getElementById('qaKillBtn');
-    this._disconnectBtn = document.getElementById('qaDisconnectBtn');
     this._editorOverlay = document.getElementById('qaEditorOverlay');
 
     // Stage bar: click completed stages to navigate back
@@ -71175,15 +71171,6 @@ class QaPanel {
     // Kill switch
     if (this._killBtn) {
       this._killBtn.addEventListener('click', () => this._handleKillSwitch());
-    }
-
-    // Disconnect button
-    if (this._disconnectBtn) {
-      this._disconnectBtn.addEventListener('click', () => {
-        if (window.edogWs) window.edogWs.disconnect();
-        if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
-        if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
-      });
     }
 
     // Subscribe to QA server events via topic bus

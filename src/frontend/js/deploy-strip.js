@@ -106,6 +106,19 @@ class DeployContextStrip {
       this._timeTimer = setInterval(function() { self._updateTime(); }, 60000);
     }
 
+    // Disconnect button
+    var disconnectBtn = document.createElement('button');
+    disconnectBtn.className = 'ds-disconnect';
+    disconnectBtn.textContent = 'Disconnect';
+    disconnectBtn.title = 'Disconnect from FLT service';
+    disconnectBtn.addEventListener('click', function() {
+      if (window.edogWs) window.edogWs.disconnect();
+      if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+      if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+      if (window.edogDeployStrip) window.edogDeployStrip.hide();
+    });
+    this._el.appendChild(disconnectBtn);
+
     this._el.classList.add('active');
   }
 
