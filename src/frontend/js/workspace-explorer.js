@@ -262,6 +262,30 @@ class WorkspaceExplorer {
     wizard.open();
   }
 
+  /** Open the Infra Wizard pre-filled with the selected workspace/lakehouse config. */
+  _cloneEnvironment(ws) {
+    if (InfraWizardDialog.isActive()) {
+      InfraWizardDialog.getActive().restore();
+      return;
+    }
+    const lh = this._selectedItem;
+    const seedState = {
+      workspaceName: (ws.displayName || '') + ' (Clone)',
+      lakehouseName: lh ? (lh.displayName || '') : '',
+      capacityId: ws._capacityId || null,
+      capacityDisplayName: ws._capacityDisplayName || '',
+      capacitySku: ws._capacitySku || '',
+      capacityRegion: ws._region || '',
+    };
+    const wizard = new InfraWizardDialog(this._api, {
+      initialState: seedState,
+      existingWorkspaces: this._workspaces
+    });
+    wizard.onClose = () => { this._refreshAll(); };
+    wizard.onComplete = () => { this._refreshAll(); };
+    wizard.open();
+  }
+
   _ctxDeploy() {
     const t = this._ctxTarget;
     if (!t || !t.isLakehouse) return;
@@ -1399,7 +1423,7 @@ class WorkspaceExplorer {
         } else if (action === 'open-fabric-lh') {
           window.open(`https://app.fabric.microsoft.com/groups/${ws.id}`, '_blank');
         } else if (action === 'clone-env') {
-          this._toast('Clone Environment — coming soon');
+          this._cloneEnvironment(ws);
         } else if (action === 'open-notebook-ide') {
           this._openNotebookIDE(this._selectedItem, this._selectedWorkspace);
         } else if (action === 'rename-item') {
