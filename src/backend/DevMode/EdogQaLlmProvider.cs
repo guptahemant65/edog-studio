@@ -26,6 +26,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         private const int MaxDiffChars = 8000;
         private const int HttpTimeoutSeconds = 120;
+        private const string DevServerProxyUrl = "http://localhost:5555/api/openai-proxy/chat";
 
         private readonly HttpClient _httpClient;
         private readonly string _endpoint;
@@ -33,11 +34,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         private readonly string _apiVersion;
         private readonly string _deployment;
         private readonly bool _isConfigured;
+        private readonly bool _useProxy;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EdogQaLlmProvider"/> class.
         /// Reads Azure OpenAI configuration from environment variables.
-        /// Prefers PRO_* variants if set, falls back to base AZURE_OPENAI_* variants.
+        /// Falls back to dev-server proxy when env vars are missing.
         /// </summary>
         public EdogQaLlmProvider()
         {
@@ -56,19 +58,28 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
                 ?? "gpt-5.4-pro";
 
-            _isConfigured = !string.IsNullOrEmpty(_endpoint) && !string.IsNullOrEmpty(_apiKey);
+            var hasDirectCreds = !string.IsNullOrEmpty(_endpoint) && !string.IsNullOrEmpty(_apiKey);
 
-            if (_isConfigured)
+            if (hasDirectCreds)
             {
+                _isConfigured = true;
+                _useProxy = false;
                 _httpClient = new HttpClient
                 {
                     Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds)
                 };
-                Console.WriteLine($"[EDOG] LLM provider configured: endpoint={_endpoint}, deployment={_deployment}");
+                Console.WriteLine($"[EDOG] LLM provider configured (direct): endpoint={_endpoint}, deployment={_deployment}");
             }
             else
             {
-                Console.WriteLine("[EDOG] LLM provider NOT configured (missing AZURE_OPENAI_ENDPOINT or AZURE_OPENAI_API_KEY)");
+                // No direct creds — use dev-server proxy which reads from donna-app/.env
+                _isConfigured = true;
+                _useProxy = true;
+                _httpClient = new HttpClient
+                {
+                    Timeout = TimeSpan.FromSeconds(HttpTimeoutSeconds)
+                };
+                Console.WriteLine($"[EDOG] LLM provider configured (proxy): {DevServerProxyUrl}");
             }
         }
 
@@ -389,7 +400,15 @@ Return ONLY valid JSON, no markdown, no explanation text.";
             string userMessage,
             CancellationToken cancellationToken)
         {
-            var url = $"{_endpoint.TrimEnd('/')}/openai/deployments/{_deployment}/chat/completions?api-version={_apiVersion}";
+            string url;
+            if (_useProxy)
+            {
+                url = DevServerProxyUrl;
+            }
+            else
+            {
+                url = $"{_endpoint.TrimEnd('/')}/openai/deployments/{_deployment}/chat/completions?api-version={_apiVersion}";
+            }
 
             var requestBody = new
             {
@@ -409,7 +428,10 @@ Return ONLY valid JSON, no markdown, no explanation text.";
             });
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("api-key", _apiKey);
+            if (!_useProxy)
+            {
+                request.Headers.Add("api-key", _apiKey);
+            }
             request.Content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
             var sw = System.Diagnostics.Stopwatch.StartNew();

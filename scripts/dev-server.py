@@ -51,6 +51,39 @@ _ado_token_lock = threading.Lock()
 ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6975798"
 _ADO_PR_URL_RE = None  # lazily compiled
 
+# ── Azure OpenAI Proxy Config ────────────────────────────────────────────
+_openai_config: dict = {}  # {"endpoint", "api_key", "api_version", "deployment"}
+
+
+def _load_openai_config() -> dict:
+    """Load Azure OpenAI config from env vars or donna-app .env file."""
+    endpoint = os.environ.get("AZURE_OPENAI_PRO_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT")
+    api_key = os.environ.get("AZURE_OPENAI_PRO_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY")
+    api_version = os.environ.get("AZURE_OPENAI_PRO_API_VERSION") or os.environ.get("AZURE_OPENAI_API_VERSION") or "2025-04-01-preview"
+    deployment = os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4-pro"
+
+    if not endpoint or not api_key:
+        # Try donna-app .env as fallback
+        donna_env = Path.home() / "newrepo" / "donna-app" / ".env"
+        if donna_env.exists():
+            env_vars: dict[str, str] = {}
+            for line in donna_env.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                env_vars[k.strip()] = v.strip()
+            if not endpoint:
+                endpoint = env_vars.get("AZURE_OPENAI_PRO_ENDPOINT") or env_vars.get("AZURE_OPENAI_ENDPOINT")
+            if not api_key:
+                api_key = env_vars.get("AZURE_OPENAI_PRO_API_KEY") or env_vars.get("AZURE_OPENAI_API_KEY")
+            api_version = env_vars.get("AZURE_OPENAI_PRO_API_VERSION") or env_vars.get("AZURE_OPENAI_API_VERSION") or api_version
+            deployment = env_vars.get("AZURE_OPENAI_PRO_DEPLOYMENT") or env_vars.get("AZURE_OPENAI_DEPLOYMENT") or deployment
+
+    if endpoint and api_key:
+        return {"endpoint": endpoint, "api_key": api_key, "api_version": api_version, "deployment": deployment}
+    return {}
+
 
 def _atomic_write(path: Path, data: str):
     """Write data atomically: write to temp file, then rename."""
@@ -1433,6 +1466,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._proxy_to_flt("POST")
         elif self.path == "/api/templates":
             self._serve_template_save()
+        elif self.path == "/api/openai-proxy/chat":
+            self._serve_openai_proxy()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for POST {self.path}"})
 
@@ -1577,7 +1612,48 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             print(f"  [ADO] Error: {e}")
             self._json_response(500, {"error": "internal_error", "message": str(e)})
 
-    # ── Studio Supervisor Endpoints ───────────────────────────────────────
+    def _serve_openai_proxy(self):
+        """POST /api/openai-proxy/chat — proxy Azure OpenAI Chat Completions API calls."""
+        global _openai_config
+        if not _openai_config:
+            _openai_config = _load_openai_config()
+        if not _openai_config:
+            self._json_response(503, {"error": "openai_not_configured",
+                                      "message": "Azure OpenAI credentials not found in env or donna-app/.env"})
+            return
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(content_length)
+
+        cfg = _openai_config
+        url = (f"{cfg['endpoint'].rstrip('/')}/openai/deployments/{cfg['deployment']}"
+               f"/chat/completions?api-version={cfg['api_version']}")
+
+        print(f"  [OpenAI] Proxying chat completion → {cfg['endpoint']} / {cfg['deployment']}")
+        req = urllib.request.Request(
+            url, data=body, method="POST",
+            headers={"Content-Type": "application/json", "api-key": cfg["api_key"]},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                resp_body = resp.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_body)))
+            self._cors_headers()
+            self.end_headers()
+            self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")[:2000]
+            print(f"  [OpenAI] API error {e.code}: {err_body[:200]}")
+            self._json_response(e.code, {"error": f"openai_api_{e.code}", "message": err_body})
+        except urllib.error.URLError as e:
+            self._json_response(502, {"error": "openai_unreachable", "message": str(e.reason)})
+        except TimeoutError:
+            self._json_response(504, {"error": "openai_timeout", "message": "Azure OpenAI request timed out (120s)"})
+        except Exception as e:
+            print(f"  [OpenAI] Error: {e}")
+            self._json_response(500, {"error": "openai_proxy_error", "message": str(e)})
 
     def _serve_studio_status(self):
         """GET /api/studio/status — authoritative studio phase.
@@ -3387,6 +3463,14 @@ if __name__ == "__main__":
         daemon_threads = True
 
     server = ThreadedHTTPServer(("127.0.0.1", 5555), EdogDevHandler)
+
+    # Load Azure OpenAI config for QA LLM proxy
+    _openai_config = _load_openai_config()
+    if _openai_config:
+        print(f"  OpenAI:  {_openai_config['endpoint']} / {_openai_config['deployment']}")
+    else:
+        print("  OpenAI:  NOT configured (LLM scenarios will be synthetic)")
+
     print("EDOG Dev Server running at http://127.0.0.1:5555/")
     print(f"  Config:  {CONFIG_PATH}")
     print(f"  Bearer:  {BEARER_CACHE} (exists={BEARER_CACHE.exists()})")
