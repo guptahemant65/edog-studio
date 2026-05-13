@@ -650,6 +650,9 @@ class EdogLogViewer {
   
   loadInitialData = async () => {
     try {
+      // Refresh API client config so tokens/phase are current after deploy
+      await this.apiClient.fetchConfig();
+
       // Load logs — batch add directly to state (skip pendingLogs buffer)
       const logsResponse = await fetch('/api/logs');
       if (logsResponse.ok) {

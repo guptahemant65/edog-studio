@@ -463,6 +463,8 @@ class DagStudio {
 
   async _loadDag() {
     try {
+      // Refresh config so MWC token and fabricBaseUrl are current
+      await this._api.fetchConfig();
       var dag = await this._api.getLatestDag();
       if (!dag || !dag.nodes) {
         this._renderEmpty('No DAG found. Ensure FLT is configured.');
