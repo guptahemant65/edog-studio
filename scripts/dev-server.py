@@ -701,6 +701,8 @@ def _inject_devmode_token(config):
         devmode["UserAuthorizationToken"] = token
         _atomic_write(Path(devmode_path), json.dumps(devmode, indent=4))
         _deploy_log("Injected UserAuthorizationToken — no browser popup needed", "success")
+        global _devmode_token_was_injected
+        _devmode_token_was_injected = True
         return True
 
     except subprocess.TimeoutExpired:
@@ -709,6 +711,43 @@ def _inject_devmode_token(config):
     except Exception as e:
         _deploy_log(f"Token injection failed: {e} — falling back to browser", "warn")
         return False
+
+
+# Track whether we injected the DevMode token (for safe cleanup)
+_devmode_token_was_injected = False
+
+
+def _cleanup_devmode_token():
+    """Remove UserAuthorizationToken from workload-dev-mode.json if we injected it."""
+    global _devmode_token_was_injected
+    if not _devmode_token_was_injected:
+        return
+
+    try:
+        config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        flt_repo = config.get("flt_repo_path", "")
+        if not flt_repo:
+            return
+
+        sys.path.insert(0, str(PROJECT_DIR))
+        try:
+            from edog import get_workload_dev_mode_path
+            devmode_path = get_workload_dev_mode_path(flt_repo)
+        finally:
+            if str(PROJECT_DIR) in sys.path:
+                sys.path.remove(str(PROJECT_DIR))
+
+        if not devmode_path or not Path(devmode_path).exists():
+            return
+
+        data = json.loads(Path(devmode_path).read_text())
+        if "UserAuthorizationToken" in data:
+            del data["UserAuthorizationToken"]
+            _atomic_write(Path(devmode_path), json.dumps(data, indent=4))
+            _deploy_log("Cleaned up UserAuthorizationToken", "info")
+        _devmode_token_was_injected = False
+    except Exception as e:
+        _deploy_log(f"Token cleanup failed: {e}", "warn")
 
 
 def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
@@ -1532,6 +1571,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 _flt_process.kill()
             stopped = True
             _flt_process = None
+
+        # Clean up injected DevMode token before reverting code
+        _cleanup_devmode_token()
 
         # Revert code changes (restore FLT source to clean state)
         try:
@@ -2967,6 +3009,8 @@ if __name__ == "__main__":
             except subprocess.TimeoutExpired:
                 _flt_process.kill()
             print("  FLT service stopped.")
+            # Clean up injected DevMode token
+            _cleanup_devmode_token()
             # Revert code changes
             print("  Reverting EDOG patches...")
             try:
