@@ -88,6 +88,10 @@ class QaPanel {
 
     // Apply phase gate
     this._updatePhaseGate();
+
+    // Initialize sub-modules
+    var inputMod = new QaInput(this);
+    inputMod.init();
   }
 
   // ── Lifecycle ──
