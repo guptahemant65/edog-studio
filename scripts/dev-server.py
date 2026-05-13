@@ -1356,7 +1356,25 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith("/api/ado-proxy/pr-diff"):
             self._serve_ado_pr_diff()
         else:
-            self.send_error(404)
+            self._json_response(404, {"error": "not_found", "message": f"No handler for GET {self.path}"})
+
+    def do_OPTIONS(self):
+        """CORS preflight handler for all mutable routes."""
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, x-ms-continuation-token")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_PUT(self):
+        if self.path.startswith("/api/fabric/"):
+            self._proxy_fabric("PUT")
+        elif self.path.startswith("/api/flt-proxy/"):
+            self._proxy_to_flt("PUT")
+        else:
+            self._json_response(404, {"error": "not_found", "message": f"No handler for PUT {self.path}"})
 
     def do_PATCH(self):
         if self.path.startswith("/api/fabric/"):
@@ -1364,7 +1382,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith("/api/flt-proxy/"):
             self._proxy_to_flt("PATCH")
         else:
-            self.send_error(404)
+            self._json_response(404, {"error": "not_found", "message": f"No handler for PATCH {self.path}"})
 
     def do_DELETE(self):
         if self.path.startswith("/api/fabric/"):
@@ -1374,7 +1392,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         elif self.path.startswith("/api/templates/"):
             self._serve_template_delete()
         else:
-            self.send_error(404)
+            self._json_response(404, {"error": "not_found", "message": f"No handler for DELETE {self.path}"})
 
     def do_POST(self):
         if self.path.startswith("/api/fabric/"):
@@ -1416,7 +1434,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         elif self.path == "/api/templates":
             self._serve_template_save()
         else:
-            self.send_error(404)
+            self._json_response(404, {"error": "not_found", "message": f"No handler for POST {self.path}"})
 
     def _serve_config(self):
         config = {}
@@ -1425,9 +1443,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         bearer, _ = _read_cache(BEARER_CACHE)
 
-        # MWC tokens are generated on-demand by the proxy — signal availability
-        # when deploy is active (fltPort set) and bearer token exists
-        has_flt = bool(_studio_state.get("fltPort"))
+        with _studio_lock:
+            flt_port = _studio_state.get("fltPort")
+            studio_phase = _studio_state.get("phase", "idle")
+
+        has_flt = bool(flt_port)
         mwc_available = bool(bearer and has_flt and config.get("workspace_id") and config.get("capacity_id"))
 
         resp = {
@@ -1440,8 +1460,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "fabricBaseUrl": None,  # routing handled by proxy, not direct localhost
             "bearerToken": bearer,
             "phase": "connected" if mwc_available else "disconnected",
-            "fltPort": _studio_state.get("fltPort"),
-            "studioPhase": _studio_state.get("phase", "idle"),
+            "fltPort": flt_port,
+            "studioPhase": studio_phase,
         }
 
         body = json.dumps(resp).encode()

@@ -235,6 +235,13 @@ class SignalRManager {
   disconnect = () => {
     this._closing = true;
     if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+    // Dispose active streams before killing connection
+    for (const [, stream] of this._activeStreams) {
+      try { stream.dispose(); } catch (_) { /* already closed */ }
+    }
+    this._activeStreams.clear();
+    this._pendingTopics.clear();
+    this._listeners.clear();
     if (this.connection) {
       this.connection.stop().catch(() => {});
       this.connection = null;
