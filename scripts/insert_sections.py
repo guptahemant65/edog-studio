@@ -1,5 +1,6 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """One-shot script to insert sections 17-20 into the design bible."""
+
 import pathlib
 import sys
 
@@ -1179,10 +1180,10 @@ NEW_JS = """
 # ─────────────────────────────────────────────
 # 4. Do the replacements
 # ─────────────────────────────────────────────
-content = FILE.read_text(encoding='utf-8')
+content = FILE.read_text(encoding="utf-8")
 
 # Anchor: unique string at end of section 16, before </main>
-ANCHOR_MAIN = "        <div class=\"kbd-row\"><span class=\"kbd-act\">Toggle dark mode</span><div class=\"kbd-keys\"><kbd>Ctrl</kbd><span class=\"kbd-plus\">+</span><kbd>Shift</kbd><span class=\"kbd-plus\">+</span><kbd>T</kbd></div></div>\n      </div>\n    </div>\n  </div>\n</section>\n\n</main>\n</div>"
+ANCHOR_MAIN = '        <div class="kbd-row"><span class="kbd-act">Toggle dark mode</span><div class="kbd-keys"><kbd>Ctrl</kbd><span class="kbd-plus">+</span><kbd>Shift</kbd><span class="kbd-plus">+</span><kbd>T</kbd></div></div>\n      </div>\n    </div>\n  </div>\n</section>\n\n</main>\n</div>'
 
 if ANCHOR_MAIN not in content:
     print("ERROR: main anchor not found in file!")
@@ -1190,13 +1191,10 @@ if ANCHOR_MAIN not in content:
 
 # Replace: keep section 16 closing, add style + new sections, then </main></div>
 new_main = (
-    "        <div class=\"kbd-row\"><span class=\"kbd-act\">Toggle dark mode</span>"
-    "<div class=\"kbd-keys\"><kbd>Ctrl</kbd><span class=\"kbd-plus\">+</span>"
-    "<kbd>Shift</kbd><span class=\"kbd-plus\">+</span><kbd>T</kbd></div></div>\n"
-    "      </div>\n    </div>\n  </div>\n</section>\n"
-    + NEW_CSS
-    + NEW_HTML
-    + "\n</main>\n</div>"
+    '        <div class="kbd-row"><span class="kbd-act">Toggle dark mode</span>'
+    '<div class="kbd-keys"><kbd>Ctrl</kbd><span class="kbd-plus">+</span>'
+    '<kbd>Shift</kbd><span class="kbd-plus">+</span><kbd>T</kbd></div></div>\n'
+    "      </div>\n    </div>\n  </div>\n</section>\n" + NEW_CSS + NEW_HTML + "\n</main>\n</div>"
 )
 
 content = content.replace(ANCHOR_MAIN, new_main, 1)
@@ -1209,5 +1207,5 @@ if ANCHOR_BODY not in content:
 
 content = content.replace(ANCHOR_BODY, NEW_JS + "\n</body>\n</html>", 1)
 
-FILE.write_text(content, encoding='utf-8')
+FILE.write_text(content, encoding="utf-8")
 print(f"Done. File is now {len(content)} chars / {content.count(chr(10))} lines")

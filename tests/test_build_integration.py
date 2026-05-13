@@ -79,23 +79,17 @@ class TestBuildIntegrity:
     def test_css_module_count(self, build_output):
         """All CSS modules are inlined."""
         css_markers = build_output.count("/* === css/")
-        assert css_markers == EXPECTED_CSS_MODULES, (
-            f"Expected {EXPECTED_CSS_MODULES} CSS modules, found {css_markers}"
-        )
+        assert css_markers == EXPECTED_CSS_MODULES, f"Expected {EXPECTED_CSS_MODULES} CSS modules, found {css_markers}"
 
     def test_js_module_count(self, build_output):
         """All JS modules are inlined."""
         js_markers = build_output.count("// === js/")
-        assert js_markers == EXPECTED_JS_MODULES, (
-            f"Expected {EXPECTED_JS_MODULES} JS modules, found {js_markers}"
-        )
+        assert js_markers == EXPECTED_JS_MODULES, f"Expected {EXPECTED_JS_MODULES} JS modules, found {js_markers}"
 
     def test_lib_module_count(self, build_output):
         """All vendor libraries are inlined."""
         lib_markers = build_output.count("// === lib/")
-        assert lib_markers == EXPECTED_LIB_MODULES, (
-            f"Expected {EXPECTED_LIB_MODULES} lib modules, found {lib_markers}"
-        )
+        assert lib_markers == EXPECTED_LIB_MODULES, f"Expected {EXPECTED_LIB_MODULES} lib modules, found {lib_markers}"
 
     def test_f16_wizard_modules_present(self, build_output):
         """Every F16 Phase 2 wizard JS module is inlined."""
@@ -116,9 +110,7 @@ class TestBuildIntegrity:
             if module == "infra-wizard.js":
                 continue
             mod_pos = build_output.find(f"// === js/{module} ===")
-            assert mod_pos < wizard_pos, (
-                f"{module} must appear before infra-wizard.js"
-            )
+            assert mod_pos < wizard_pos, f"{module} must appear before infra-wizard.js"
 
     def test_output_is_valid_html(self, build_output):
         """Output starts with HTML doctype/tag."""

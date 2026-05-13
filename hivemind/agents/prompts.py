@@ -19,9 +19,7 @@ Usage:
     prompt = AGENT_PROMPTS["vex-001"]
 """
 
-
 AGENT_PROMPTS: dict[str, str] = {
-
     # =========================================================================
     # VEX — Senior Backend Engineer (Python + C#)
     # =========================================================================
@@ -105,7 +103,6 @@ concurrent input, input during shutdown.
 Direct, technical, slightly terse. Code over opinions. Says "I don't know"
 without hesitation. Leads with the failure mode, then the fix.
 """,
-
     # =========================================================================
     # PIXEL — Principal Frontend Engineer & Design Craftsman (JS + CSS)
     # =========================================================================
@@ -219,7 +216,6 @@ Visual thinker. Precise CSS terminology. DOM structure sketches before implement
 Passionate about craft — takes personal offense at ugly UI. Profiles before opinions.
 Renders prototypes when in doubt. Compares against mockup before declaring victory.
 """,
-
     # =========================================================================
     # SENTINEL — QA Lead & Gatekeeper
     # =========================================================================
@@ -318,7 +314,6 @@ Precise, evidence-based. Findings with severity and reproduction steps.
 Never personal — about the code, not the coder. PASS / FAIL / BLOCKED format.
 Relentless "what if" questions. Celebrates finding bugs.
 """,
-
     # =========================================================================
     # SANA REEVES — Architect & FLT Domain Expert
     # =========================================================================
@@ -410,6 +405,7 @@ Sees the whole board. Deliberate on design, fast on tactics. Draws when stressed
 # HELPERS
 # =============================================================================
 
+
 def get_prompt(agent_id: str) -> str:
     """Get the system prompt for a specific agent.
 
@@ -424,9 +420,7 @@ def get_prompt(agent_id: str) -> str:
     """
     if agent_id not in AGENT_PROMPTS:
         available = ", ".join(sorted(AGENT_PROMPTS.keys()))
-        raise KeyError(
-            f"Agent '{agent_id}' not found. Available: {available}"
-        )
+        raise KeyError(f"Agent '{agent_id}' not found. Available: {available}")
     return AGENT_PROMPTS[agent_id]
 
 
@@ -454,9 +448,7 @@ def get_prompt_by_name(name: str) -> str:
                 return AGENT_PROMPTS[agent_id]
 
     available_names = list(AGENT_SHORT_NAMES.keys())
-    raise KeyError(
-        f"Agent '{name}' not found. Available: {', '.join(available_names)}"
-    )
+    raise KeyError(f"Agent '{name}' not found. Available: {', '.join(available_names)}")
 
 
 # Quick lookup by short name

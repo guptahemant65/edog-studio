@@ -1,11 +1,10 @@
 """Tests for F13 File Change Detection — FileWatcher module."""
 
-
 # Module under test — import will fail until Step 3
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from file_watcher import FileWatcher
 
 

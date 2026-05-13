@@ -5,6 +5,7 @@ Proxy strategy (per docs/fabric-api-reference.md):
   - Only /workspaces (top-level) uses /metadata/workspaces (for capacityId)
   - Bearer token is attached server-side (avoids CORS)
 """
+
 import base64
 import contextlib
 import json
@@ -46,9 +47,10 @@ _jupyter_lock = threading.Lock()
 def _atomic_write(path: Path, data: str):
     """Write data atomically: write to temp file, then rename."""
     import tempfile as _tf
-    fd, tmp = _tf.mkstemp(dir=str(path.parent), suffix='.tmp')
+
+    fd, tmp = _tf.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
-        os.write(fd, data.encode('utf-8'))
+        os.write(fd, data.encode("utf-8"))
         os.close(fd)
         os.replace(tmp, str(path))
     except Exception:
@@ -63,7 +65,7 @@ def _atomic_write(path: Path, data: str):
 FLT_INTERNAL_PORT = 5557
 
 _studio_state = {
-    "phase": "idle",       # idle | deploying | running | crashed | stopped
+    "phase": "idle",  # idle | deploying | running | crashed | stopped
     "deployId": None,
     "fltPort": None,
     "fltPid": None,
@@ -100,9 +102,7 @@ def _start_file_watcher(service_dir: str):
     _file_watcher_stop.clear()
     _file_watcher = FileWatcher(service_dir)
     _file_watcher.snapshot_deployed()
-    _file_watcher_thread = threading.Thread(
-        target=_file_watcher_loop, daemon=True, name="file-watcher"
-    )
+    _file_watcher_thread = threading.Thread(target=_file_watcher_loop, daemon=True, name="file-watcher")
     _file_watcher_thread.start()
 
 
@@ -187,19 +187,20 @@ def _normalize_workspaces(resp_body: bytes) -> bytes:
 
     normalized = []
     for f in data["folders"]:
-        normalized.append({
-            "id": f.get("objectId", str(f.get("id", ""))),
-            "displayName": f.get("displayName", ""),
-            "type": "Workspace",
-            "capacityId": f.get("capacityObjectId", ""),
-            "state": "Active",
-            "description": f.get("description", ""),
-        })
+        normalized.append(
+            {
+                "id": f.get("objectId", str(f.get("id", ""))),
+                "displayName": f.get("displayName", ""),
+                "type": "Workspace",
+                "capacityId": f.get("capacityObjectId", ""),
+                "state": "Active",
+                "description": f.get("description", ""),
+            }
+        )
     return json.dumps({"value": normalized}).encode()
 
 
-def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str,
-                   workload_type: str = "Lakehouse") -> tuple:
+def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workload_type: str = "Lakehouse") -> tuple:
     """Generate or retrieve cached MWC token for a workspace/artifact/capacity tuple.
 
     Args:
@@ -223,19 +224,26 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str,
             return cached["token"], cached["host"]
 
     print(f"  [MWC] Generating {workload_type} token for ws={ws_id[:8]}... artifact={artifact_id[:8]}...")
-    body = json.dumps({
-        "type": "[Start] GetMWCToken",
-        "workloadType": workload_type,
-        "workspaceObjectId": ws_id,
-        "artifactObjectIds": [artifact_id],
-        "capacityObjectId": cap_id,
-    }).encode()
+    body = json.dumps(
+        {
+            "type": "[Start] GetMWCToken",
+            "workloadType": workload_type,
+            "workspaceObjectId": ws_id,
+            "artifactObjectIds": [artifact_id],
+            "capacityObjectId": cap_id,
+        }
+    ).encode()
 
     url = f"{REDIRECT_HOST}/metadata/v201606/generatemwctoken"
-    req = urllib.request.Request(url, data=body, headers={
-        "Authorization": f"Bearer {bearer}",
-        "Content-Type": "application/json",
-    }, method="POST")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
 
     ctx = ssl.create_default_context()
     with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
@@ -266,10 +274,7 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str,
 
 def _capacity_base_path(cap_id: str, ws_id: str) -> str:
     """Build the MWC API base path for a capacity/workspace pair."""
-    return (
-        f"/webapi/capacities/{cap_id}/workloads/Lakehouse"
-        f"/LakehouseService/automatic/v1/workspaces/{ws_id}"
-    )
+    return f"/webapi/capacities/{cap_id}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{ws_id}"
 
 
 def _jupyter_api_path(cap_id: str, ws_id: str, nb_id: str) -> str:
@@ -281,8 +286,7 @@ def _jupyter_api_path(cap_id: str, ws_id: str, nb_id: str) -> str:
     )
 
 
-def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
-                             lh_id: str = ""):
+def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "", lh_id: str = ""):
     """Resolve MWC token for Jupyter operations.
 
     Jupyter requires a Notebook-workload MWC token, not a Lakehouse one.
@@ -308,8 +312,7 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
         if bearer:
             try:
                 print(f"  [JUPYTER] Generating Notebook MWC token for nb={nb_id[:8]}...")
-                token, host = _get_mwc_token(bearer, ws_id, nb_id, cap_id,
-                                             workload_type="Notebook")
+                token, host = _get_mwc_token(bearer, ws_id, nb_id, cap_id, workload_type="Notebook")
                 return token, host
             except Exception as e:
                 print(f"  [JUPYTER] Notebook MWC token failed: {e}")
@@ -317,8 +320,7 @@ def _resolve_mwc_for_jupyter(cap_id: str, ws_id: str = "", nb_id: str = "",
                 if lh_id:
                     try:
                         print("  [JUPYTER] Falling back to Lakehouse MWC token...")
-                        token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id,
-                                                     workload_type="Lakehouse")
+                        token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id, workload_type="Lakehouse")
                         return token, host
                     except Exception as e2:
                         print(f"  [JUPYTER] Lakehouse MWC fallback also failed: {e2}")
@@ -355,27 +357,29 @@ async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, 
     msg_id = str(uuid.uuid4())
 
     # Jupyter execute_request message
-    execute_msg = json.dumps({
-        "header": {
-            "msg_id": msg_id,
-            "msg_type": "execute_request",
-            "username": "edog",
-            "session": str(uuid.uuid4()),
-            "version": "5.3",
-        },
-        "parent_header": {},
-        "metadata": {},
-        "content": {
-            "code": code,
-            "silent": False,
-            "store_history": True,
-            "user_expressions": {},
-            "allow_stdin": False,
-            "stop_on_error": True,
-        },
-        "buffers": [],
-        "channel": "shell",
-    })
+    execute_msg = json.dumps(
+        {
+            "header": {
+                "msg_id": msg_id,
+                "msg_type": "execute_request",
+                "username": "edog",
+                "session": str(uuid.uuid4()),
+                "version": "5.3",
+            },
+            "parent_header": {},
+            "metadata": {},
+            "content": {
+                "code": code,
+                "silent": False,
+                "store_history": True,
+                "user_expressions": {},
+                "allow_stdin": False,
+                "stop_on_error": True,
+            },
+            "buffers": [],
+            "channel": "shell",
+        }
+    )
 
     outputs = []
     status = "ok"
@@ -397,6 +401,7 @@ async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, 
 
             # Collect responses until execute_reply
             import asyncio
+
             deadline = asyncio.get_event_loop().time() + 300  # 5 min timeout
 
             while asyncio.get_event_loop().time() < deadline:
@@ -419,36 +424,44 @@ async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, 
                     continue
 
                 if msg_type == "stream":
-                    outputs.append({
-                        "type": "stream",
-                        "name": content.get("name", "stdout"),
-                        "text": content.get("text", ""),
-                    })
+                    outputs.append(
+                        {
+                            "type": "stream",
+                            "name": content.get("name", "stdout"),
+                            "text": content.get("text", ""),
+                        }
+                    )
                 elif msg_type == "execute_result":
                     data = content.get("data", {})
-                    outputs.append({
-                        "type": "execute_result",
-                        "text": data.get("text/plain", ""),
-                        "html": data.get("text/html", ""),
-                    })
+                    outputs.append(
+                        {
+                            "type": "execute_result",
+                            "text": data.get("text/plain", ""),
+                            "html": data.get("text/html", ""),
+                        }
+                    )
                 elif msg_type == "display_data":
                     data = content.get("data", {})
-                    outputs.append({
-                        "type": "display_data",
-                        "text": data.get("text/plain", ""),
-                        "html": data.get("text/html", ""),
-                    })
+                    outputs.append(
+                        {
+                            "type": "display_data",
+                            "text": data.get("text/plain", ""),
+                            "html": data.get("text/html", ""),
+                        }
+                    )
                 elif msg_type == "error":
                     status = "error"
                     error_name = content.get("ename", "")
                     error_value = content.get("evalue", "")
                     traceback_lines = content.get("traceback", [])
-                    outputs.append({
-                        "type": "error",
-                        "ename": error_name,
-                        "evalue": error_value,
-                        "traceback": traceback_lines,
-                    })
+                    outputs.append(
+                        {
+                            "type": "error",
+                            "ename": error_name,
+                            "evalue": error_value,
+                            "traceback": traceback_lines,
+                        }
+                    )
                 elif msg_type == "execute_reply":
                     reply_status = content.get("status", "ok")
                     if reply_status == "error":
@@ -475,6 +488,7 @@ async def _jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, 
 
 
 # ── Deploy Helpers ────────────────────────────────────────────────────────
+
 
 def _ts():
     return datetime.now().strftime("%H:%M:%S")
@@ -546,10 +560,16 @@ def _handle_account_picker(username, timeout=45):
             for win in desktop.windows():
                 try:
                     title = win.window_text().lower()
-                    is_login = any(kw in title for kw in [
-                        "pick an account", "sign in to your account",
-                        "login.microsoftonline", "login.windows", "sign in -",
-                    ])
+                    is_login = any(
+                        kw in title
+                        for kw in [
+                            "pick an account",
+                            "sign in to your account",
+                            "login.microsoftonline",
+                            "login.windows",
+                            "sign in -",
+                        ]
+                    )
                     if is_login and ("edge" in title or "chrome" in title or "msedge" in title):
                         _deploy_log("Account picker detected — looking for account...", "info")
                         try:
@@ -564,7 +584,10 @@ def _handle_account_picker(username, timeout=45):
                                 for el in descendants:
                                     try:
                                         el_text = el.window_text()
-                                        if account_name.lower() in el_text.lower() or username.lower() in el_text.lower():
+                                        if (
+                                            account_name.lower() in el_text.lower()
+                                            or username.lower() in el_text.lower()
+                                        ):
                                             _deploy_log(f"Found account element: {el_text[:50]}", "info")
                                             el.click_input()
                                             found = True
@@ -577,7 +600,9 @@ def _handle_account_picker(username, timeout=45):
                             if found:
                                 _deploy_log(f"Account selected: {username}", "success")
                             else:
-                                _deploy_log(f"Account '{account_name}' not found in picker — please select manually", "warn")
+                                _deploy_log(
+                                    f"Account '{account_name}' not found in picker — please select manually", "warn"
+                                )
                             return found
                         except Exception as e:
                             _deploy_log(f"Account picker error: {e}", "warn")
@@ -611,6 +636,7 @@ def _inject_devmode_token(config):
         sys.path.insert(0, str(PROJECT_DIR))
         try:
             from edog import _find_cert_thumbprint, get_workload_dev_mode_path
+
             devmode_path = get_workload_dev_mode_path(flt_repo)
         except Exception as e:
             _deploy_log(f"Could not locate workload-dev-mode.json: {e}", "warn")
@@ -657,7 +683,9 @@ def _inject_devmode_token(config):
 
         result = subprocess.run(
             [str(helper), thumbprint, username, client_id, authority, resource],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
 
         if result.returncode != 0 or not result.stdout.strip().startswith("eyJ"):
@@ -694,11 +722,13 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         if not bearer:
             _deploy_log("No bearer token — authenticate first", "error")
             with _studio_lock:
-                _studio_state.update({
-                    "phase": "stopped",
-                    "deployError": "No bearer token. Run authentication first.",
-                    "deployMessage": "Deploy failed — no bearer token",
-                })
+                _studio_state.update(
+                    {
+                        "phase": "stopped",
+                        "deployError": "No bearer token. Run authentication first.",
+                        "deployMessage": "Deploy failed — no bearer token",
+                    }
+                )
             return
         try:
             _token, _host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
@@ -706,7 +736,13 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         except Exception as e:
             _deploy_log(f"Token fetch failed: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": f"Token fetch failed: {e}", "deployMessage": "Deploy failed — token fetch error"})
+                _studio_state.update(
+                    {
+                        "phase": "stopped",
+                        "deployError": f"Token fetch failed: {e}",
+                        "deployMessage": "Deploy failed — token fetch error",
+                    }
+                )
             return
 
         # Step 1: Update config (atomic write)
@@ -722,7 +758,9 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         except Exception as e:
             _deploy_log(f"Config update failed: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — config update error"})
+                _studio_state.update(
+                    {"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — config update error"}
+                )
             return
 
         # Step 2: Patch + Build (via edog.py --headless-deploy)
@@ -739,8 +777,13 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
             proc = subprocess.Popen(
                 [sys.executable, str(PROJECT_DIR / "edog.py"), "--headless-deploy"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, env=env, encoding="utf-8", errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+                encoding="utf-8",
+                errors="replace",
             )
             for line in proc.stdout:
                 line = line.rstrip()
@@ -769,18 +812,22 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             if proc.returncode != 0:
                 _deploy_log(f"Patch/build failed (exit {proc.returncode})", "error")
                 with _studio_lock:
-                    _studio_state.update({
-                        "phase": "stopped",
-                        "deployError": f"Patch/build failed (exit {proc.returncode})",
-                        "deployMessage": "Deploy failed — patch/build error",
-                    })
+                    _studio_state.update(
+                        {
+                            "phase": "stopped",
+                            "deployError": f"Patch/build failed (exit {proc.returncode})",
+                            "deployMessage": "Deploy failed — patch/build error",
+                        }
+                    )
                 return
             _deploy_log("Patch and build succeeded", "success")
 
         except Exception as e:
             _deploy_log(f"Patch/build error: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — patch/build error"})
+                _studio_state.update(
+                    {"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — patch/build error"}
+                )
             return
 
         # Step 3: Launch FLT (dev-server owns the process)
@@ -807,9 +854,14 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
             _flt_process = subprocess.Popen(
                 ["dotnet", "run", "--no-build"],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, cwd=str(entrypoint), env=env,
-                encoding="utf-8", errors="replace",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=str(entrypoint),
+                env=env,
+                encoding="utf-8",
+                errors="replace",
             )
             _deploy_log(f"FLT started (PID: {_flt_process.pid})", "success")
 
@@ -818,21 +870,19 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 _studio_state["fltPort"] = FLT_INTERNAL_PORT
 
             # Drain stdout in background (prevents pipe buffer blocking)
-            threading.Thread(
-                target=_drain_flt_stdout, args=(_flt_process, deploy_id), daemon=True
-            ).start()
+            threading.Thread(target=_drain_flt_stdout, args=(_flt_process, deploy_id), daemon=True).start()
 
             # Fallback: account picker automation if token injection failed
             if not token_injected:
                 username = config.get("username", "")
-                threading.Thread(
-                    target=_handle_account_picker, args=(username,), daemon=True
-                ).start()
+                threading.Thread(target=_handle_account_picker, args=(username,), daemon=True).start()
 
         except Exception as e:
             _deploy_log(f"Launch failed: {e}", "error")
             with _studio_lock:
-                _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — launch error"})
+                _studio_state.update(
+                    {"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — launch error"}
+                )
             return
 
         # Step 4: Wait for FLT to be fully deployed
@@ -853,32 +903,38 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
         if _flt_process.poll() is not None:
             _deploy_log(f"FLT process exited with code {_flt_process.returncode}", "error")
             with _studio_lock:
-                _studio_state.update({
-                    "phase": "stopped",
-                    "deployError": f"FLT process exited with code {_flt_process.returncode}",
-                    "deployMessage": "Deploy failed — service crashed during startup",
-                })
+                _studio_state.update(
+                    {
+                        "phase": "stopped",
+                        "deployError": f"FLT process exited with code {_flt_process.returncode}",
+                        "deployMessage": "Deploy failed — service crashed during startup",
+                    }
+                )
             return
 
         if not healthy:
             _deploy_log("DevConnection not established within 180s", "error")
             with _studio_lock:
-                _studio_state.update({
-                    "phase": "stopped",
-                    "deployError": "Service did not fully start within 180s",
-                    "deployMessage": "Deploy failed — DevMode connection timeout",
-                })
+                _studio_state.update(
+                    {
+                        "phase": "stopped",
+                        "deployError": "Service did not fully start within 180s",
+                        "deployMessage": "Deploy failed — DevMode connection timeout",
+                    }
+                )
             return
 
         _deploy_log("DevConnection started — service fully deployed!", "success")
 
         # Done
         with _studio_lock:
-            _studio_state.update({
-                "phase": "running",
-                "deployStep": 5,
-                "deployMessage": "Deploy complete",
-            })
+            _studio_state.update(
+                {
+                    "phase": "running",
+                    "deployStep": 5,
+                    "deployMessage": "Deploy complete",
+                }
+            )
         _deploy_log("Deploy complete!", "success")
 
         # Start file change detection after successful deploy
@@ -897,14 +953,18 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
         # Start token refresh thread
         refresher = threading.Thread(
-            target=_token_refresh_loop, args=(ws_id, lh_id, cap_id), daemon=True,
+            target=_token_refresh_loop,
+            args=(ws_id, lh_id, cap_id),
+            daemon=True,
         )
         refresher.start()
 
     except Exception as e:
         _deploy_log(f"Unexpected error: {e}", "error")
         with _studio_lock:
-            _studio_state.update({"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — unexpected error"})
+            _studio_state.update(
+                {"phase": "stopped", "deployError": str(e), "deployMessage": "Deploy failed — unexpected error"}
+            )
 
 
 def _monitor_flt(deploy_id):
@@ -916,11 +976,13 @@ def _monitor_flt(deploy_id):
         code = _flt_process.returncode
         with _studio_lock:
             if _studio_state.get("deployId") == deploy_id and _studio_state["phase"] == "running":
-                _studio_state.update({
-                    "phase": "crashed",
-                    "deployError": f"FLT exited with code {code}",
-                    "deployMessage": f"Service crashed (exit code {code})",
-                })
+                _studio_state.update(
+                    {
+                        "phase": "crashed",
+                        "deployError": f"FLT exited with code {code}",
+                        "deployMessage": f"Service crashed (exit code {code})",
+                    }
+                )
         _deploy_log(f"FLT process exited with code {code}", "error")
 
 
@@ -968,13 +1030,19 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_studio_status()
         elif self.path == "/api/command/deploy-stream":
             self._serve_deploy_stream()
-        elif self.path.startswith("/api/logs") or self.path.startswith("/api/telemetry") \
-                or self.path.startswith("/api/stats") or self.path.startswith("/api/executions"):
+        elif (
+            self.path.startswith("/api/logs")
+            or self.path.startswith("/api/telemetry")
+            or self.path.startswith("/api/stats")
+            or self.path.startswith("/api/executions")
+        ):
             self._proxy_to_flt("GET")
         elif self.path == "/ws/logs":
             # WebSocket upgrade request — can't handle in stdlib HTTP server.
             # Return 426 so the client knows to use the FLT port instead.
-            self._json_response(426, {"error": "ws_not_here", "message": "WebSocket available on FLT port after deploy"})
+            self._json_response(
+                426, {"error": "ws_not_here", "message": "WebSocket available on FLT port after deploy"}
+            )
         elif self.path == "/api/studio/file-changes":
             self._serve_file_changes()
         elif self.path == "/api/templates":
@@ -1047,7 +1115,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "tokenExpiryMinutes": int((mwc_exp - time.time()) / 60) if mwc_exp else 0,
             "tokenExpired": mwc is None,
             "mwcToken": mwc,
-            "fabricBaseUrl": f"http://localhost:{_studio_state.get('fltPort')}" if _studio_state.get("fltPort") else None,
+            "fabricBaseUrl": f"http://localhost:{_studio_state.get('fltPort')}"
+            if _studio_state.get("fltPort")
+            else None,
             "bearerToken": bearer,
             "phase": "connected" if mwc else "disconnected",
             "fltPort": _studio_state.get("fltPort"),
@@ -1078,9 +1148,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         # /api/fabric/workspaces/{id}/items → /workspaces/{id}/items
-        fabric_path = self.path[len("/api/fabric"):]
+        fabric_path = self.path[len("/api/fabric") :]
         target_path = _map_path(fabric_path)
-        is_workspace_list = "/metadata/workspaces" in target_path and "/" not in target_path.split("/metadata/workspaces")[1].lstrip("/")
+        is_workspace_list = "/metadata/workspaces" in target_path and "/" not in target_path.split(
+            "/metadata/workspaces"
+        )[1].lstrip("/")
 
         url = REDIRECT_HOST + target_path
         print(f"  [PROXY] {method} {fabric_path} → {target_path}")
@@ -1146,10 +1218,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             # Auto-correct: running but FLT process is dead → crashed
             if _studio_state["phase"] == "running" and _flt_process and _flt_process.poll() is not None:
-                _studio_state.update({
-                    "phase": "crashed",
-                    "deployError": f"FLT exited with code {_flt_process.returncode}",
-                })
+                _studio_state.update(
+                    {
+                        "phase": "crashed",
+                        "deployError": f"FLT exited with code {_flt_process.returncode}",
+                    }
+                )
 
             # Auto-correct: running but no FLT process reference → idle
             if _studio_state["phase"] == "running" and _flt_process is None:
@@ -1208,15 +1282,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         data = self._read_templates()
         summaries = []
         for t in data.get("templates", []):
-            summaries.append({
-                "id": t["id"],
-                "name": t["name"],
-                "description": t.get("description", ""),
-                "createdAt": t["createdAt"],
-                "updatedAt": t.get("updatedAt", t["createdAt"]),
-                "nodeCount": len(t.get("state", {}).get("nodes", [])),
-                "theme": t.get("state", {}).get("theme", ""),
-            })
+            summaries.append(
+                {
+                    "id": t["id"],
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "createdAt": t["createdAt"],
+                    "updatedAt": t.get("updatedAt", t["createdAt"]),
+                    "nodeCount": len(t.get("state", {}).get("nodes", [])),
+                    "theme": t.get("state", {}).get("theme", ""),
+                }
+            )
         self._json_response(200, {"templates": summaries})
 
     def _serve_template_get(self):
@@ -1285,10 +1361,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         force = body.get("force", False)
 
         if not all([ws_id, lh_id]):
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": "workspaceId and artifactId required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "workspaceId and artifactId required",
+                },
+            )
             return
 
         with _studio_lock:
@@ -1297,21 +1376,27 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
             # Block if deploy is actively running
             if phase == "deploying":
-                self._json_response(409, {
-                    "error": "deploy_in_progress",
-                    "message": "A deployment is already in progress",
-                })
+                self._json_response(
+                    409,
+                    {
+                        "error": "deploy_in_progress",
+                        "message": "A deployment is already in progress",
+                    },
+                )
                 return
 
             # If running/crashed on a DIFFERENT lakehouse, require confirmation
             if phase in ("running", "crashed") and current_target and not force:
                 current_lh = current_target.get("artifactId", "")
                 if current_lh and current_lh != lh_id:
-                    self._json_response(409, {
-                        "error": "already_deployed",
-                        "message": f"Currently deployed to {current_target.get('lakehouseName', current_lh)}",
-                        "currentTarget": current_target,
-                    })
+                    self._json_response(
+                        409,
+                        {
+                            "error": "already_deployed",
+                            "message": f"Currently deployed to {current_target.get('lakehouseName', current_lh)}",
+                            "currentTarget": current_target,
+                        },
+                    )
                     return
 
         _stop_file_watcher()
@@ -1331,22 +1416,31 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         _deploy_cancel.clear()
 
         with _studio_lock:
-            _studio_state.update({
-                "phase": "deploying", "deployId": deploy_id,
-                "deployStep": 0, "deployTotal": 5,
-                "deployMessage": "Starting deploy...", "deployError": None,
-                "deployLogs": [],
-                "deployTarget": {
-                    "workspaceId": ws_id, "artifactId": lh_id,
-                    "capacityId": cap_id, "lakehouseName": lh_name,
-                },
-                "deployStartTime": time.time(),
-                "fltPort": None, "fltPid": None,
-            })
+            _studio_state.update(
+                {
+                    "phase": "deploying",
+                    "deployId": deploy_id,
+                    "deployStep": 0,
+                    "deployTotal": 5,
+                    "deployMessage": "Starting deploy...",
+                    "deployError": None,
+                    "deployLogs": [],
+                    "deployTarget": {
+                        "workspaceId": ws_id,
+                        "artifactId": lh_id,
+                        "capacityId": cap_id,
+                        "lakehouseName": lh_name,
+                    },
+                    "deployStartTime": time.time(),
+                    "fltPort": None,
+                    "fltPid": None,
+                }
+            )
 
         t = threading.Thread(
             target=_run_deploy_pipeline,
-            args=(deploy_id, ws_id, lh_id, cap_id), daemon=True,
+            args=(deploy_id, ws_id, lh_id, cap_id),
+            daemon=True,
         )
         t.start()
         self._json_response(200, {"ok": True, "deployId": deploy_id})
@@ -1375,10 +1469,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         # Revert code changes (restore FLT source to clean state)
         try:
             import sys as _sys
+
             result = subprocess.run(
                 [_sys.executable, str(PROJECT_DIR / "edog.py"), "--revert"],
-                capture_output=True, text=True, timeout=30,
-                encoding="utf-8", errors="replace",
+                capture_output=True,
+                text=True,
+                timeout=30,
+                encoding="utf-8",
+                errors="replace",
             )
             reverted = result.returncode == 0
             if reverted:
@@ -1391,18 +1489,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             target_name = ""
             if _studio_state.get("deployTarget"):
                 target_name = _studio_state["deployTarget"].get("lakehouseName", "")
-            _studio_state.update({
-                "phase": "idle",
-                "deployId": None,
-                "fltPort": None,
-                "fltPid": None,
-                "deployStep": 0,
-                "deployMessage": "",
-                "deployError": None,
-                "deployLogs": [],
-                "deployTarget": None,
-                "deployStartTime": None,
-            })
+            _studio_state.update(
+                {
+                    "phase": "idle",
+                    "deployId": None,
+                    "fltPort": None,
+                    "fltPid": None,
+                    "deployStep": 0,
+                    "deployMessage": "",
+                    "deployError": None,
+                    "deployLogs": [],
+                    "deployTarget": None,
+                    "deployStartTime": None,
+                }
+            )
 
         self._json_response(200, {"ok": True, "stopped": stopped, "reverted": reverted, "lakehouse": target_name})
 
@@ -1435,11 +1535,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 # NOTE: step/message/error are snapshot values at read time,
                 # not the step that was active when this log was produced.
                 # Known limitation — acceptable for now.
-                data = json.dumps({
-                    "step": step, "total": total, "status": phase,
-                    "message": msg, "error": err, "log": log_entry,
-                    "fltPort": flt_port,
-                })
+                data = json.dumps(
+                    {
+                        "step": step,
+                        "total": total,
+                        "status": phase,
+                        "message": msg,
+                        "error": err,
+                        "log": log_entry,
+                        "fltPort": flt_port,
+                    }
+                )
                 try:
                     self.wfile.write(f"id: {event_id}\ndata: {data}\n\n".encode())
                     self.wfile.flush()
@@ -1448,10 +1554,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             last_idx += len(logs)
 
             if phase in ("running", "crashed", "stopped"):
-                final = json.dumps({
-                    "step": step, "total": total, "status": phase,
-                    "message": msg, "error": err, "fltPort": flt_port,
-                })
+                final = json.dumps(
+                    {
+                        "step": step,
+                        "total": total,
+                        "status": phase,
+                        "message": msg,
+                        "error": err,
+                        "fltPort": flt_port,
+                    }
+                )
                 try:
                     self.wfile.write(f"event: complete\ndata: {final}\n\n".encode())
                     self.wfile.flush()
@@ -1472,10 +1584,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         with _studio_lock:
             port = _studio_state.get("fltPort")
         if not port:
-            self._json_response(503, {
-                "error": "flt_not_running",
-                "message": "FLT service not running",
-            })
+            self._json_response(
+                503,
+                {
+                    "error": "flt_not_running",
+                    "message": "FLT service not running",
+                },
+            )
             return
 
         target_url = f"http://localhost:{port}{self.path}"
@@ -1493,8 +1608,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             with urllib.request.urlopen(req, timeout=10) as resp:
                 resp_body = resp.read()
                 self.send_response(resp.status)
-                self.send_header("Content-Type",
-                                 resp.headers.get("Content-Type", "application/json"))
+                self.send_header("Content-Type", resp.headers.get("Content-Type", "application/json"))
                 self.send_header("Content-Length", str(len(resp_body)))
                 self.end_headers()
                 self.wfile.write(resp_body)
@@ -1515,7 +1629,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             result = subprocess.run(
                 [str(helper), "--list-certs"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if result.returncode == 0:
                 certs = json.loads(result.stdout)
@@ -1549,7 +1665,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             list_result = subprocess.run(
                 [str(helper), "--list-certs"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             thumbprint = None
             if list_result.returncode == 0:
@@ -1561,17 +1679,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             thumbprint = None
 
         if not thumbprint:
-            self._json_response(404, {
-                "error": f"No certificate found for {cert_cn}",
-                "help": "https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)"
-            })
+            self._json_response(
+                404,
+                {
+                    "error": f"No certificate found for {cert_cn}",
+                    "help": "https://dev.azure.com/powerbi/Trident/_wiki/wikis/Trident.wiki/80942/PPE-Ephemeral-Tenants-(ES-Maintained-Rotated)",
+                },
+            )
             return
 
         # Run Silent CBA
         try:
             result = subprocess.run(
                 [str(helper), thumbprint, username],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if result.returncode == 0:
                 token = result.stdout.strip()
@@ -1592,16 +1715,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 # Save last authenticated user for auto-reauth
                 _save_session({"lastUsername": upn, "lastAuth": time.time()})
 
-                self._json_response(200, {
-                    "token": token,
-                    "username": upn,
-                    "expiresIn": int(expiry - time.time()),
-                })
+                self._json_response(
+                    200,
+                    {
+                        "token": token,
+                        "username": upn,
+                        "expiresIn": int(expiry - time.time()),
+                    },
+                )
             else:
-                self._json_response(401, {
-                    "error": "Authentication failed",
-                    "detail": result.stderr.strip()[:300]
-                })
+                self._json_response(401, {"error": "Authentication failed", "detail": result.stderr.strip()[:300]})
         except subprocess.TimeoutExpired:
             self._json_response(504, {"error": "Authentication timed out (30s)"})
 
@@ -1624,26 +1747,41 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             pass
         git_cwd = flt_repo if flt_repo and Path(flt_repo).is_dir() else str(PROJECT_DIR)
         try:
-            git_branch = subprocess.check_output(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=git_cwd, timeout=3, stderr=subprocess.DEVNULL,
-            ).decode().strip()
-            porcelain = subprocess.check_output(
-                ["git", "status", "--porcelain"],
-                cwd=git_cwd, timeout=3, stderr=subprocess.DEVNULL,
-            ).decode().strip()
+            git_branch = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    cwd=git_cwd,
+                    timeout=3,
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
+            porcelain = (
+                subprocess.check_output(
+                    ["git", "status", "--porcelain"],
+                    cwd=git_cwd,
+                    timeout=3,
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
             git_dirty = len(porcelain.splitlines()) if porcelain else 0
         except Exception:
             pass
 
-        self._json_response(200, {
-            "tokenHelperBuilt": helper.exists(),
-            "hasBearerToken": bearer is not None,
-            "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,
-            "lastUsername": session.get("lastUsername", ""),
-            "gitBranch": git_branch,
-            "gitDirtyFiles": git_dirty,
-        })
+        self._json_response(
+            200,
+            {
+                "tokenHelperBuilt": helper.exists(),
+                "hasBearerToken": bearer is not None,
+                "bearerExpiresIn": int(bearer_exp - time.time()) if bearer_exp else 0,
+                "lastUsername": session.get("lastUsername", ""),
+                "gitBranch": git_branch,
+                "gitDirtyFiles": git_dirty,
+            },
+        )
 
     def _serve_mwc_tables(self):
         """GET /api/mwc/tables — list lakehouse tables via MWC token."""
@@ -1679,11 +1817,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, headers={
-                "Authorization": f"MwcToken {token}",
-                "x-ms-workload-resource-moniker": lh_id,
-                "Content-Type": "application/json",
-            }, method="GET")
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"MwcToken {token}",
+                    "x-ms-workload-resource-moniker": lh_id,
+                    "Content-Type": "application/json",
+                },
+                method="GET",
+            )
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 resp_body = resp.read()
                 self.send_response(resp.status)
@@ -1716,10 +1858,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         tables = body.get("tables", [])
 
         if not all([ws_id, lh_id, cap_id, tables]):
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": "wsId, lhId, capId, and tables are required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "wsId, lhId, capId, and tables are required",
+                },
+            )
             return
 
         bearer, _ = _read_cache(BEARER_CACHE)
@@ -1777,10 +1922,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     self._json_response(500, {"error": "operation_failed", "detail": poll_data})
                     return
 
-            self._json_response(504, {
-                "error": "poll_timeout",
-                "message": f"Operation {operation_id} did not complete in 20s",
-            })
+            self._json_response(
+                504,
+                {
+                    "error": "poll_timeout",
+                    "message": f"Operation {operation_id} did not complete in 20s",
+                },
+            )
         except urllib.error.HTTPError as e:
             resp_body = e.read()
             self.send_response(e.code)
@@ -1804,8 +1952,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         table_name = params.get("tableName", [None])[0]
 
         if not all([ws_id, lh_id, table_name]):
-            self._json_response(400, {"error": "missing_params",
-                                      "message": "wsId, lhId, and tableName required"})
+            self._json_response(400, {"error": "missing_params", "message": "wsId, lhId, and tableName required"})
             return
 
         bearer, _ = _read_cache(BEARER_CACHE)
@@ -1820,27 +1967,36 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             # List delta log files
             list_url = f"{onelake_host}{log_path}?resource=filesystem&recursive=false"
-            req = urllib.request.Request(list_url, headers={
-                "Authorization": f"Bearer {bearer}",
-                "x-ms-version": "2021-06-08",
-            })
+            req = urllib.request.Request(
+                list_url,
+                headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "x-ms-version": "2021-06-08",
+                },
+            )
             with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
                 listing = json.loads(resp.read())
 
             # Find JSON commit files, sorted by name (version order)
             json_files = sorted(
-                [p["name"] for p in listing.get("paths", [])
-                 if p["name"].endswith(".json") and not p.get("isDirectory")],
+                [
+                    p["name"]
+                    for p in listing.get("paths", [])
+                    if p["name"].endswith(".json") and not p.get("isDirectory")
+                ],
             )
 
             # Read each commit and accumulate active files
             active_files = {}  # path → {size, numRecords}
             for jf in json_files:
                 file_url = f"{onelake_host}/{ws_id}/{jf}"
-                req = urllib.request.Request(file_url, headers={
-                    "Authorization": f"Bearer {bearer}",
-                    "x-ms-version": "2021-06-08",
-                })
+                req = urllib.request.Request(
+                    file_url,
+                    headers={
+                        "Authorization": f"Bearer {bearer}",
+                        "x-ms-version": "2021-06-08",
+                    },
+                )
                 with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
                     content = resp.read().decode()
 
@@ -1862,20 +2018,26 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             total_rows = sum(f["numRecords"] for f in active_files.values())
             total_size = sum(f["size"] for f in active_files.values())
 
-            self._json_response(200, {
-                "tableName": table_name,
-                "rowCount": total_rows,
-                "sizeBytes": total_size,
-                "fileCount": len(active_files),
-            })
+            self._json_response(
+                200,
+                {
+                    "tableName": table_name,
+                    "rowCount": total_rows,
+                    "sizeBytes": total_size,
+                    "fileCount": len(active_files),
+                },
+            )
         except urllib.error.HTTPError as e:
             if e.code == 404:
-                self._json_response(200, {
-                    "tableName": table_name,
-                    "rowCount": None,
-                    "sizeBytes": None,
-                    "error": "delta_log_not_found",
-                })
+                self._json_response(
+                    200,
+                    {
+                        "tableName": table_name,
+                        "rowCount": None,
+                        "sizeBytes": None,
+                        "error": "delta_log_not_found",
+                    },
+                )
             else:
                 body = e.read().decode("utf-8", "replace")[:200]
                 self._json_response(e.code, {"error": "onelake_error", "message": body})
@@ -1895,10 +2057,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         cap_id = body.get("capacityId")
 
         if not all([ws_id, lh_id, cap_id]):
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": "workspaceId, lakehouseId, and capacityId are required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "workspaceId, lakehouseId, and capacityId are required",
+                },
+            )
             return
 
         bearer, _ = _read_cache(BEARER_CACHE)
@@ -1918,11 +2083,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         cache_key = f"{ws_id}:{lh_id}:{cap_id}"
         cached = _mwc_cache.get(cache_key, {})
-        self._json_response(200, {
-            "token": token,
-            "host": host,
-            "expiry": cached.get("expiry", 0),
-        })
+        self._json_response(
+            200,
+            {
+                "token": token,
+                "host": host,
+                "expiry": cached.get("expiry", 0),
+            },
+        )
 
     # ── Notebook LRO Endpoints ────────────────────────────────────────
 
@@ -2001,10 +2169,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         return
 
                 if resp_data is None:
-                    self._json_response(504, {
-                        "error": "lro_timeout",
-                        "message": "getDefinition did not complete in 60s",
-                    })
+                    self._json_response(
+                        504,
+                        {
+                            "error": "lro_timeout",
+                            "message": "getDefinition did not complete in 60s",
+                        },
+                    )
                     return
 
                 # Step 3: GET the result URL
@@ -2031,11 +2202,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 elif path == ".platform":
                     platform_text = decoded
 
-            self._json_response(200, {
-                "content": content_text,
-                "platform": platform_text,
-                "allParts": all_parts,
-            })
+            self._json_response(
+                200,
+                {
+                    "content": content_text,
+                    "platform": platform_text,
+                    "allParts": all_parts,
+                },
+            )
         except urllib.error.HTTPError as e:
             body = e.read().decode("utf-8", "replace")[:500]
             self._json_response(e.code, {"error": "notebook_content_error", "message": body})
@@ -2074,11 +2248,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         ]
         platform = body.get("platform")
         if platform:
-            parts.append({
-                "path": ".platform",
-                "payload": base64.b64encode(platform.encode("utf-8")).decode(),
-                "payloadType": "InlineBase64",
-            })
+            parts.append(
+                {
+                    "path": ".platform",
+                    "payload": base64.b64encode(platform.encode("utf-8")).decode(),
+                    "payloadType": "InlineBase64",
+                }
+            )
 
         url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/notebooks/{nb_id}/updateDefinition"
         req_body = json.dumps({"definition": {"parts": parts}}).encode()
@@ -2086,10 +2262,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, data=req_body, headers={
-                "Authorization": f"Bearer {bearer}",
-                "Content-Type": "application/json",
-            }, method="POST")
+            req = urllib.request.Request(
+                url,
+                data=req_body,
+                headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 resp.read()  # drain
             self._json_response(200, {"status": "saved"})
@@ -2125,18 +2306,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
 
-        url = (
-            f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/items/{nb_id}"
-            f"/jobs/instances?jobType=RunNotebook"
-        )
+        url = f"{REDIRECT_HOST}/v1/workspaces/{ws_id}/items/{nb_id}/jobs/instances?jobType=RunNotebook"
         print(f"  [NOTEBOOK] POST run ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, data=b"{}", headers={
-                "Authorization": f"Bearer {bearer}",
-                "Content-Type": "application/json",
-            }, method="POST")
+            req = urllib.request.Request(
+                url,
+                data=b"{}",
+                headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
             try:
                 with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                     # Unexpected 200 — return whatever we got
@@ -2173,10 +2356,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(location, headers={
-                "Authorization": f"Bearer {bearer}",
-                "Content-Type": "application/json",
-            }, method="GET")
+            req = urllib.request.Request(
+                location,
+                headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "Content-Type": "application/json",
+                },
+                method="GET",
+            )
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 resp_data = json.loads(resp.read())
             self._json_response(200, resp_data)
@@ -2211,10 +2398,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(cancel_url, data=b"{}", headers={
-                "Authorization": f"Bearer {bearer}",
-                "Content-Type": "application/json",
-            }, method="POST")
+            req = urllib.request.Request(
+                cancel_url,
+                data=b"{}",
+                headers={
+                    "Authorization": f"Bearer {bearer}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 resp.read()  # drain
             self._json_response(200, {"status": "cancelled"})
@@ -2249,19 +2441,25 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         if not all([ws_id, nb_id, cap_id]):
             print(f"  [JUPYTER] Rejected: missing params ws={bool(ws_id)} nb={bool(nb_id)} cap={bool(cap_id)}")
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": f"wsId, nbId, and capId are required. Got ws={bool(ws_id)} nb={bool(nb_id)} cap={bool(cap_id)}",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": f"wsId, nbId, and capId are required. Got ws={bool(ws_id)} nb={bool(nb_id)} cap={bool(cap_id)}",
+                },
+            )
             return
 
         token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id, lh_id)
         if not token:
             print(f"  [JUPYTER] Rejected: no MWC token for capId={cap_id}")
-            self._json_response(400, {
-                "error": "no_mwc_token",
-                "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "no_mwc_token",
+                    "message": "MWC token not available. Deploy to a lakehouse first to enable cell execution.",
+                },
+            )
             return
         if not cap_host:
             cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
@@ -2269,21 +2467,28 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         base = _jupyter_api_path(cap_id, ws_id, nb_id)
         url = f"{cap_host}{base}/sessions"
 
-        session_body = json.dumps({
-            "kernel": {"id": None, "name": "synapse_pyspark"},
-            "name": "",
-            "path": f"notebooks/{nb_id}.ipynb",
-            "type": "notebook",
-        }).encode()
+        session_body = json.dumps(
+            {
+                "kernel": {"id": None, "name": "synapse_pyspark"},
+                "name": "",
+                "path": f"notebooks/{nb_id}.ipynb",
+                "type": "notebook",
+            }
+        ).encode()
 
         print(f"  [JUPYTER] POST create-session ws={ws_id[:8]}... nb={nb_id[:8]}...")
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, data=session_body, headers={
-                "Authorization": f"MwcToken {token}",
-                "Content-Type": "application/json",
-            }, method="POST")
+            req = urllib.request.Request(
+                url,
+                data=session_body,
+                headers={
+                    "Authorization": f"MwcToken {token}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
             with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
                 resp_data = json.loads(resp.read())
 
@@ -2300,12 +2505,15 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 }
 
             print(f"  [JUPYTER] Session created kernel={kernel_id[:8]}... state={exec_state}")
-            self._json_response(200, {
-                "kernelId": kernel_id,
-                "sessionId": session_id,
-                "executionState": exec_state,
-                "capHost": cap_host,
-            })
+            self._json_response(
+                200,
+                {
+                    "kernelId": kernel_id,
+                    "sessionId": session_id,
+                    "executionState": exec_state,
+                    "capHost": cap_host,
+                },
+            )
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8", "replace")[:500]
             print(f"  [JUPYTER] Session creation failed: {e.code}")
@@ -2323,18 +2531,24 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         cap_id = params.get("capId", [None])[0]
 
         if not all([ws_id, nb_id, cap_id]):
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": "wsId, nbId, and capId are required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "wsId, nbId, and capId are required",
+                },
+            )
             return
 
         token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id)
         if not token:
-            self._json_response(400, {
-                "error": "no_mwc_token",
-                "message": "MWC token not available.",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "no_mwc_token",
+                    "message": "MWC token not available.",
+                },
+            )
             return
         if not cap_host:
             cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
@@ -2346,10 +2560,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, headers={
-                "Authorization": f"MwcToken {token}",
-                "Content-Type": "application/json",
-            }, method="GET")
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"MwcToken {token}",
+                    "Content-Type": "application/json",
+                },
+                method="GET",
+            )
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 resp_body = resp.read()
                 self.send_response(resp.status)
@@ -2384,10 +2602,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         language = body.get("language", "python")
 
         if not all([ws_id, nb_id, cap_id]):
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": "wsId, nbId, capId, and code are required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "wsId, nbId, capId, and code are required",
+                },
+            )
             return
         if not code.strip():
             self._json_response(400, {"error": "empty_code", "message": "code must not be empty"})
@@ -2395,10 +2616,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id, body.get("lhId", ""))
         if not token:
-            self._json_response(400, {
-                "error": "no_mwc_token",
-                "message": "MWC token not available. Deploy to a lakehouse first.",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "no_mwc_token",
+                    "message": "MWC token not available. Deploy to a lakehouse first.",
+                },
+            )
             return
         if not cap_host:
             cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
@@ -2418,20 +2642,27 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             print(f"  [JUPYTER] Reusing session kernel={kernel_id[:8]}...")
         else:
             url = f"{cap_host}{base}/sessions"
-            session_body = json.dumps({
-                "kernel": {"id": None, "name": "synapse_pyspark"},
-                "name": "",
-                "path": f"notebooks/{nb_id}.ipynb",
-                "type": "notebook",
-            }).encode()
+            session_body = json.dumps(
+                {
+                    "kernel": {"id": None, "name": "synapse_pyspark"},
+                    "name": "",
+                    "path": f"notebooks/{nb_id}.ipynb",
+                    "type": "notebook",
+                }
+            ).encode()
 
             print("  [JUPYTER] Auto-creating session for execute-cell...")
             try:
                 ctx = ssl.create_default_context()
-                req = urllib.request.Request(url, data=session_body, headers={
-                    "Authorization": f"MwcToken {token}",
-                    "Content-Type": "application/json",
-                }, method="POST")
+                req = urllib.request.Request(
+                    url,
+                    data=session_body,
+                    headers={
+                        "Authorization": f"MwcToken {token}",
+                        "Content-Type": "application/json",
+                    },
+                    method="POST",
+                )
                 with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
                     resp_data = json.loads(resp.read())
                 kernel_id = resp_data.get("kernel", {}).get("id", "")
@@ -2459,9 +2690,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         kernel_ready = False
         for attempt in range(300):  # Max 10 min (300 x 2s)
             try:
-                req = urllib.request.Request(session_url, headers={
-                    "Authorization": f"MwcToken {token}",
-                }, method="GET")
+                req = urllib.request.Request(
+                    session_url,
+                    headers={
+                        "Authorization": f"MwcToken {token}",
+                    },
+                    method="GET",
+                )
                 with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
                     sdata = json.loads(resp.read())
                 kstate = sdata.get("kernel", {}).get("execution_state", "unknown")
@@ -2479,19 +2714,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             time.sleep(2)
 
         if not kernel_ready:
-            self._json_response(504, {
-                "error": "kernel_timeout",
-                "message": "Kernel did not become idle within 10 minutes. Try again.",
-            })
+            self._json_response(
+                504,
+                {
+                    "error": "kernel_timeout",
+                    "message": "Kernel did not become idle within 10 minutes. Try again.",
+                },
+            )
             return
 
         # Step 2: Execute via Jupyter WebSocket protocol
         print(f"  [JUPYTER] Executing cell via WebSocket ({len(code)} chars, lang={language})...")
         try:
             import asyncio
-            result = asyncio.run(_jupyter_ws_execute(
-                cap_host, cap_id, ws_id, nb_id, kernel_id, token, code
-            ))
+
+            result = asyncio.run(_jupyter_ws_execute(cap_host, cap_id, ws_id, nb_id, kernel_id, token, code))
             print(f"  [JUPYTER] Execution complete: {result.get('status', 'unknown')}")
             self._json_response(200, result)
         except Exception as e:
@@ -2512,18 +2749,24 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         session_id = body.get("sessionId")
 
         if not all([ws_id, nb_id, cap_id, session_id]):
-            self._json_response(400, {
-                "error": "missing_params",
-                "message": "wsId, nbId, capId, and sessionId are required",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "wsId, nbId, capId, and sessionId are required",
+                },
+            )
             return
 
         token, cap_host = _resolve_mwc_for_jupyter(cap_id, ws_id, nb_id, body.get("lhId", ""))
         if not token:
-            self._json_response(400, {
-                "error": "no_mwc_token",
-                "message": "MWC token not available.",
-            })
+            self._json_response(
+                400,
+                {
+                    "error": "no_mwc_token",
+                    "message": "MWC token not available.",
+                },
+            )
             return
         if not cap_host:
             cap_host = f"https://{cap_id.replace('-', '')}.pbidedicated.windows-int.net"
@@ -2534,10 +2777,14 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         try:
             ctx = ssl.create_default_context()
-            req = urllib.request.Request(url, headers={
-                "Authorization": f"MwcToken {token}",
-                "Content-Type": "application/json",
-            }, method="DELETE")
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"MwcToken {token}",
+                    "Content-Type": "application/json",
+                },
+                method="DELETE",
+            )
             with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                 resp.read()  # drain
         except urllib.error.HTTPError as e:
@@ -2570,8 +2817,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args):
         msg = str(args)
         quiet_paths = (
-            "/api/flt/config", "/ws/logs", "/api/logs",
-            "/api/telemetry", "/api/stats",
+            "/api/flt/config",
+            "/ws/logs",
+            "/api/logs",
+            "/api/telemetry",
+            "/api/stats",
         )
         if any(p in msg for p in quiet_paths):
             return
@@ -2582,6 +2832,7 @@ if __name__ == "__main__":
 
     class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         """Handle each request in a new thread to avoid blocking on slow MWC calls."""
+
         daemon_threads = True
 
     server = ThreadedHTTPServer(("127.0.0.1", 5555), EdogDevHandler)
@@ -2607,10 +2858,14 @@ if __name__ == "__main__":
             print("  Reverting EDOG patches...")
             try:
                 import sys as _sys
+
                 subprocess.run(
                     [_sys.executable, str(PROJECT_DIR / "edog.py"), "--revert"],
-                    capture_output=True, text=True, timeout=30,
-                    encoding="utf-8", errors="replace",
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    encoding="utf-8",
+                    errors="replace",
                 )
                 print("  Patches reverted.")
             except Exception:

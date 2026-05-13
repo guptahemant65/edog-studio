@@ -70,44 +70,56 @@ def main():
     gates = []
 
     # 1. Build
-    gates.append(run(
-        "Build HTML",
-        [sys.executable, "scripts/build-html.py"],
-    ))
+    gates.append(
+        run(
+            "Build HTML",
+            [sys.executable, "scripts/build-html.py"],
+        )
+    )
 
     # 2. JS syntax check
-    gates.append(run(
-        "JS syntax check",
-        ["node", "-e",
-         "const fs=require('fs'),html=fs.readFileSync('src/edog-logs.html','utf8'),"
-         "m=html.match(/<script[^>]*>([\\s\\S]*?)<\\/script>/g);"
-         "if(!m){console.error('No scripts');process.exit(1)}"
-         "let code=m.map(s=>s.replace(/<\\/?script[^>]*>/g,'')).join('\\n');"
-         "try{new Function(code);console.log('OK')}catch(e){console.error(e.message);process.exit(1)}"],
-    ))
+    gates.append(
+        run(
+            "JS syntax check",
+            [
+                "node",
+                "-e",
+                "const fs=require('fs'),html=fs.readFileSync('src/edog-logs.html','utf8'),"
+                "m=html.match(/<script[^>]*>([\\s\\S]*?)<\\/script>/g);"
+                "if(!m){console.error('No scripts');process.exit(1)}"
+                "let code=m.map(s=>s.replace(/<\\/?script[^>]*>/g,'')).join('\\n');"
+                "try{new Function(code);console.log('OK')}catch(e){console.error(e.message);process.exit(1)}",
+            ],
+        )
+    )
 
     # 3. Python lint (governed files only — edog.py and edog-logs.py are legacy)
-    gates.append(run(
-        "Python lint (ruff)",
-        ["ruff", "check", "--quiet", "scripts/", "hivemind/", "tests/"],
-        allow_fail=True,
-    ))
+    gates.append(
+        run(
+            "Python lint (ruff)",
+            ["ruff", "check", "--quiet", "scripts/", "hivemind/", "tests/"],
+            allow_fail=True,
+        )
+    )
 
     # 4. Python tests (skip in quick mode)
     if QUICK_MODE:
         print("  [~] SKIP  Python tests (--quick mode)")
     else:
-        gates.append(run(
-            "Python tests (pytest)",
-            [sys.executable, "-m", "pytest", "tests/", "-q",
-             "--ignore=tests/test_revert.py", "--tb=short"],
-        ))
+        gates.append(
+            run(
+                "Python tests (pytest)",
+                [sys.executable, "-m", "pytest", "tests/", "-q", "--ignore=tests/test_revert.py", "--tb=short"],
+            )
+        )
 
     # 5. Quality gates
-    gates.append(run(
-        "Quality gates",
-        [sys.executable, "hivemind/agents/quality_gates.py"],
-    ))
+    gates.append(
+        run(
+            "Quality gates",
+            [sys.executable, "hivemind/agents/quality_gates.py"],
+        )
+    )
 
     elapsed = time.time() - start
     passed = sum(gates)

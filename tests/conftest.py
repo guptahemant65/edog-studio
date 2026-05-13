@@ -41,18 +41,15 @@ def mock_flt_repo(tmp_path: pathlib.Path) -> Generator[pathlib.Path, None, None]
 
     # C# stubs
     (devmode_dir / "DevModeController.cs").write_text(
-        "namespace Microsoft.LiveTable.Service.DevMode;\n"
-        "public class DevModeController { }\n",
+        "namespace Microsoft.LiveTable.Service.DevMode;\npublic class DevModeController { }\n",
         encoding="utf-8",
     )
     (devmode_dir / "DevModeMiddleware.cs").write_text(
-        "namespace Microsoft.LiveTable.Service.DevMode;\n"
-        "public class DevModeMiddleware { }\n",
+        "namespace Microsoft.LiveTable.Service.DevMode;\npublic class DevModeMiddleware { }\n",
         encoding="utf-8",
     )
     (devmode_dir / "DevModeConfig.cs").write_text(
-        "namespace Microsoft.LiveTable.Service.DevMode;\n"
-        "public class DevModeConfig { }\n",
+        "namespace Microsoft.LiveTable.Service.DevMode;\npublic class DevModeConfig { }\n",
         encoding="utf-8",
     )
 

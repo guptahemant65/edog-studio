@@ -1,4 +1,5 @@
 """Test ALL F01 API endpoints end-to-end via dev-server proxy."""
+
 import json
 import time
 import urllib.error
@@ -32,7 +33,7 @@ def test(label, method, path, body=None, expect_status=200):
             elif "data" in parsed:
                 summary = f"{len(parsed['data'])} items"
             elif "token" in parsed:
-                summary = f"token {len(parsed.get('token',''))} chars"
+                summary = f"token {len(parsed.get('token', ''))} chars"
             else:
                 summary = f"keys: {list(parsed.keys())[:5]}"
         elif isinstance(parsed, list):
@@ -98,22 +99,24 @@ if ws_data and ws_data.get("value"):
 
         # --- 4. Table listing (public API — may 400 for schema-enabled) ---
         print("\n--- Table Listing (Public API) ---")
-        tables = test("list-tables-public", "GET",
-                       f"/api/fabric/workspaces/{ws_id}/lakehouses/{lh_id}/tables")
+        tables = test("list-tables-public", "GET", f"/api/fabric/workspaces/{ws_id}/lakehouses/{lh_id}/tables")
 
         # --- 5. Table listing (MWC capacity host) ---
         print("\n--- Table Listing (MWC Capacity Host) ---")
         if cap_id:
-            mwc_tables = test("list-tables-mwc", "GET",
-                              f"/api/mwc/tables?wsId={ws_id}&lhId={lh_id}&capId={cap_id}")
+            mwc_tables = test("list-tables-mwc", "GET", f"/api/mwc/tables?wsId={ws_id}&lhId={lh_id}&capId={cap_id}")
         else:
             print("  [SKIP] No capacityId — cannot test MWC tables")
 
         # --- 6. MWC Token generation ---
         print("\n--- MWC Token Generation ---")
         if cap_id:
-            mwc_token = test("generate-mwc", "POST", "/api/edog/mwc-token",
-                             body={"workspaceId": ws_id, "lakehouseId": lh_id, "capacityId": cap_id})
+            mwc_token = test(
+                "generate-mwc",
+                "POST",
+                "/api/edog/mwc-token",
+                body={"workspaceId": ws_id, "lakehouseId": lh_id, "capacityId": cap_id},
+            )
         else:
             print("  [SKIP] No capacityId")
 
@@ -122,8 +125,12 @@ if ws_data and ws_data.get("value"):
         if cap_id and mwc_tables and mwc_tables.get("data"):
             table_names = [t["name"] for t in mwc_tables["data"][:3]]
             print(f"  Testing with tables: {table_names}")
-            details = test("batch-table-details", "POST", "/api/mwc/table-details",
-                           body={"wsId": ws_id, "lhId": lh_id, "capId": cap_id, "tables": table_names})
+            details = test(
+                "batch-table-details",
+                "POST",
+                "/api/mwc/table-details",
+                body={"wsId": ws_id, "lhId": lh_id, "capId": cap_id, "tables": table_names},
+            )
         elif cap_id:
             print("  [SKIP] No tables from MWC listing")
         else:

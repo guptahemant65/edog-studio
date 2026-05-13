@@ -1,4 +1,5 @@
 """Tests for EDOG auth API endpoints."""
+
 import json
 import subprocess
 from pathlib import Path
@@ -21,6 +22,7 @@ def test_token_helper_list_certs():
     helper = _find_helper()
     if not helper:
         import pytest
+
         pytest.skip("token-helper not built")
     result = subprocess.run([str(helper), "--list-certs"], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, f"stderr: {result.stderr}"
@@ -39,11 +41,13 @@ def test_token_helper_silent_cba():
     helper = _find_helper()
     if not helper:
         import pytest
+
         pytest.skip("token-helper not built")
     result = subprocess.run(
-        [str(helper), "6921EC59777B2667C9B0BD4B82FA09F1077AB973",
-         "Admin1CBA@FabricFMLV08PPE.ccsctp.net"],
-        capture_output=True, text=True, timeout=30,
+        [str(helper), "6921EC59777B2667C9B0BD4B82FA09F1077AB973", "Admin1CBA@FabricFMLV08PPE.ccsctp.net"],
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     token = result.stdout.strip()

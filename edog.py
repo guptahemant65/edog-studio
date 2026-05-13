@@ -31,9 +31,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # Fix Windows console encoding for emoji/unicode characters
-if sys.platform == 'win32':
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ============================================================================
 # Configuration
@@ -58,7 +58,8 @@ FILES = {
     "TelemetryReporter": SERVICE_PATH / "Telemetry/CustomLiveTableTelemetryReporter.cs",
     "WorkloadApp": SERVICE_PATH / "WorkloadApp.cs",
     "Program": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "Program.cs",
-    "ParametersManifest": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "WorkloadParameters/ParametersManifest.json",
+    "ParametersManifest": Path("Service/Microsoft.LiveTable.Service.EntryPoint")
+    / "WorkloadParameters/ParametersManifest.json",
     "TestRollout": Path("Service/Microsoft.LiveTable.Service.EntryPoint") / "WorkloadParameters/Rollouts/Test.json",
     "DagExecutionHandlerV2": SERVICE_PATH / "Core/V2/DagExecutionHandlerV2.cs",
 }
@@ -122,7 +123,7 @@ def save_config(config):
     """Save config to file. Also clears token cache since config changes may invalidate it."""
     config_path = get_config_path()
     try:
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
         # Clear token cache since config changes may invalidate the cached token
         token_cache = Path(__file__).parent / ".edog-token-cache"
@@ -149,7 +150,13 @@ def get_workload_dev_mode_path(flt_repo_path=None):
     if not flt_repo_path:
         return None
 
-    launch_settings = Path(flt_repo_path) / "Service" / "Microsoft.LiveTable.Service.EntryPoint" / "Properties" / "launchSettings.json"
+    launch_settings = (
+        Path(flt_repo_path)
+        / "Service"
+        / "Microsoft.LiveTable.Service.EntryPoint"
+        / "Properties"
+        / "launchSettings.json"
+    )
 
     if not launch_settings.exists():
         return None
@@ -209,7 +216,7 @@ def write_workload_dev_mode_config(capacity_id, flt_repo_path=None):
 
         data["CapacityGuid"] = capacity_id
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=4)
 
         return True
@@ -270,7 +277,7 @@ def sync_capacity_from_workload(flt_repo_path=None, silent=False):
 
 def validate_guid(value):
     """Validate GUID format. Returns True if valid."""
-    guid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    guid_pattern = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     return bool(re.match(guid_pattern, value))
 
 
@@ -310,7 +317,7 @@ def prompt_for_config(flt_repo_path=None):
         print(f"      Path: {workload_path}")
         print(f"      Value: {detected_capacity}")
         use_detected = input("   Use this capacity ID? [Y/n]: ").strip().lower()
-        if use_detected != 'n':
+        if use_detected != "n":
             capacity_id = detected_capacity
             print("   ✅ Using capacity ID from workload-dev-mode.json")
         else:
@@ -318,12 +325,7 @@ def prompt_for_config(flt_repo_path=None):
     else:
         capacity_id = prompt_guid("   Capacity ID: ", "Capacity ID")
 
-    return {
-        "username": username,
-        "workspace_id": workspace_id,
-        "artifact_id": artifact_id,
-        "capacity_id": capacity_id
-    }
+    return {"username": username, "workspace_id": workspace_id, "artifact_id": artifact_id, "capacity_id": capacity_id}
 
 
 def update_config(username=None, workspace_id=None, artifact_id=None, capacity_id=None, flt_repo_path=None):
@@ -408,6 +410,7 @@ def show_config():
     else:
         print("   No config found. Run 'edog' to set up.")
 
+
 # ============================================================================
 # Smart Pattern Matching (Anchor-Based Fuzzy Matching)
 # ============================================================================
@@ -419,13 +422,14 @@ SMART_PATTERNS = {
     #   context_distance: Max lines between anchor and context
     #   action: "wrap_ifdef" or "replace_line"
     #   description: Human-readable description
-
     # Auth bypass patches removed — DisableFLTAuth config flag handles this globally now.
 }
 
+
 def normalize_whitespace(text):
     """Normalize whitespace for flexible matching."""
-    return ' '.join(text.split())
+    return " ".join(text.split())
+
 
 def find_anchor_line(lines, anchor):
     """Find line number containing the anchor (whitespace-flexible)."""
@@ -435,16 +439,15 @@ def find_anchor_line(lines, anchor):
             return i
     return -1
 
+
 def validate_context(lines, anchor_line, context, max_distance):
     """Check if context exists within max_distance lines of anchor."""
     normalized_context = normalize_whitespace(context).lower()
     start = max(0, anchor_line - max_distance)
     end = min(len(lines), anchor_line + max_distance + 1)
 
-    return any(
-        normalized_context in normalize_whitespace(lines[i]).lower()
-        for i in range(start, end)
-    )
+    return any(normalized_context in normalize_whitespace(lines[i]).lower() for i in range(start, end))
+
 
 def is_already_wrapped(lines, anchor_line):
     """Check if the anchor line is already wrapped with #if EDOG_DEVMODE."""
@@ -452,6 +455,7 @@ def is_already_wrapped(lines, anchor_line):
         return False
     prev_line = lines[anchor_line - 1].strip()
     return prev_line.startswith("#if EDOG_DEVMODE")
+
 
 def apply_smart_pattern(content, pattern_config):
     """
@@ -462,7 +466,7 @@ def apply_smart_pattern(content, pattern_config):
       - "anchor_not_found": Anchor text not found
       - "context_mismatch": Anchor found but context validation failed
     """
-    lines = content.split('\n')
+    lines = content.split("\n")
     anchor = pattern_config["anchor"]
     context = pattern_config["context"]
     max_distance = pattern_config["context_distance"]
@@ -488,14 +492,15 @@ def apply_smart_pattern(content, pattern_config):
     wrapped = f"#if EDOG_DEVMODE  // EDOG DevMode - disabled\n{original_line}\n{indent_str}#endif"
     lines[anchor_line] = wrapped
 
-    return '\n'.join(lines), "applied"
+    return "\n".join(lines), "applied"
+
 
 def revert_smart_pattern(content, pattern_config):
     """
     Revert a smart pattern by removing #if EDOG_DEVMODE wrapper.
     Returns (new_content, was_reverted)
     """
-    lines = content.split('\n')
+    lines = content.split("\n")
     anchor = pattern_config["anchor"]
 
     # Find anchor
@@ -521,14 +526,15 @@ def revert_smart_pattern(content, pattern_config):
     del lines[endif_line]  # Remove #endif first (so indices don't shift)
     del lines[anchor_line - 1]  # Remove #if EDOG_DEVMODE
 
-    return '\n'.join(lines), True
+    return "\n".join(lines), True
+
 
 def check_smart_pattern_status(content, pattern_config):
     """
     Check if a smart pattern is applied.
     Returns: "applied", "not_applied", "anchor_not_found", or "context_mismatch"
     """
-    lines = content.split('\n')
+    lines = content.split("\n")
     anchor = pattern_config["anchor"]
     context = pattern_config["context"]
     max_distance = pattern_config["context_distance"]
@@ -548,8 +554,7 @@ def check_smart_pattern_status(content, pattern_config):
 
 # ============================================================================
 # Legacy Patterns — auth bypass entries removed (DisableFLTAuth config flag handles this globally now)
-PATTERNS = {
-}
+PATTERNS = {}
 
 
 # ============================================================================
@@ -564,11 +569,11 @@ def parse_jwt_expiry(token):
     """Extract expiry datetime from JWT token."""
     try:
         # JWT format: header.payload.signature
-        payload = token.split('.')[1]
+        payload = token.split(".")[1]
         # Add padding if needed
-        payload += '=' * (4 - len(payload) % 4)
+        payload += "=" * (4 - len(payload) % 4)
         decoded = json.loads(base64.urlsafe_b64decode(payload))
-        exp_timestamp = decoded.get('exp')
+        exp_timestamp = decoded.get("exp")
         if exp_timestamp:
             return datetime.fromtimestamp(exp_timestamp)
     except Exception as e:
@@ -615,8 +620,21 @@ def find_flt_repo():
         except (PermissionError, OSError):
             return False
 
-    skip_dirs = {'.git', '.vs', '.vscode', 'node_modules', '__pycache__', 'bin', 'obj',
-                 'packages', 'AppData', '.nuget', '.dotnet', '.azure', 'OneDrive'}
+    skip_dirs = {
+        ".git",
+        ".vs",
+        ".vscode",
+        "node_modules",
+        "__pycache__",
+        "bin",
+        "obj",
+        "packages",
+        "AppData",
+        ".nuget",
+        ".dotnet",
+        ".azure",
+        "OneDrive",
+    }
 
     def search_dir(start_path, max_depth, current_depth=0):
         if current_depth > max_depth:
@@ -629,7 +647,7 @@ def find_flt_repo():
                 except (PermissionError, OSError):
                     continue
                 # Skip hidden folders and known non-repo dirs
-                if entry.name.startswith('.') or entry.name in skip_dirs:
+                if entry.name.startswith(".") or entry.name in skip_dirs:
                     continue
                 # Check if this is the FLT repo
                 if is_flt_repo(entry):
@@ -690,7 +708,7 @@ def get_repo_root():
 
     while True:
         repo_input = input("   FLT Repo Path (or 'q' to quit): ").strip()
-        if repo_input.lower() == 'q':
+        if repo_input.lower() == "q":
             return None
         if not repo_input:
             print("   ❌ Path is required")
@@ -714,7 +732,7 @@ def get_repo_root():
 def read_file(filepath):
     """Read file content. Fails immediately if file is locked."""
     try:
-        with open(filepath, encoding='utf-8') as f:
+        with open(filepath, encoding="utf-8") as f:
             return f.read()
     except PermissionError:
         print(f"❌ File is locked: {filepath.name}")
@@ -733,7 +751,7 @@ def read_file(filepath):
 def write_file(filepath, content):
     """Write file content. Fails immediately if file is locked."""
     try:
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
         return True
     except PermissionError:
@@ -755,11 +773,7 @@ def check_git_status(repo_root):
     try:
         # Get list of modified/staged files
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=repo_root,
-            capture_output=True,
-            text=True,
-            timeout=10
+            ["git", "status", "--porcelain"], cwd=repo_root, capture_output=True, text=True, timeout=10
         )
 
         if result.returncode != 0:
@@ -811,7 +825,7 @@ def install_git_hook(repo_root):
         return False
 
     # Hook script — blocks commits containing any EDOG-modified or EDOG-created file
-    hook_script = '''#!/bin/sh
+    hook_script = """#!/bin/sh
 # EDOG DevMode pre-commit hook
 # Prevents accidental commits of EDOG-modified files
 # Auto-installed by EDOG Studio deploy. Remove with: edog --uninstall-hook
@@ -846,11 +860,11 @@ for file in $EDOG_PATCHED; do
 done
 
 exit 0
-'''
+"""
 
     # Check if hook already exists
     if hook_file.exists():
-        existing = hook_file.read_text(encoding='utf-8', errors='ignore')
+        existing = hook_file.read_text(encoding="utf-8", errors="ignore")
         if "EDOG DevMode pre-commit hook" in existing:
             print("✅ EDOG pre-commit hook already installed")
             return True
@@ -861,9 +875,10 @@ exit 0
             print(f"   Backed up existing hook to: {backup.name}")
 
     try:
-        hook_file.write_text(hook_script, encoding='utf-8')
+        hook_file.write_text(hook_script, encoding="utf-8")
         # Make executable (on Unix)
         import stat
+
         hook_file.chmod(hook_file.stat().st_mode | stat.S_IEXEC)
         print("✅ Installed EDOG pre-commit hook")
         print(f"   Location: {hook_file}")
@@ -942,20 +957,16 @@ def generate_patch(original_contents, modified_contents, repo_root):
         modified_lines = modified.splitlines(keepends=True)
 
         # Ensure last line has newline for proper patch format
-        if original_lines and not original_lines[-1].endswith('\n'):
-            original_lines[-1] += '\n'
-        if modified_lines and not modified_lines[-1].endswith('\n'):
-            modified_lines[-1] += '\n'
+        if original_lines and not original_lines[-1].endswith("\n"):
+            original_lines[-1] += "\n"
+        if modified_lines and not modified_lines[-1].endswith("\n"):
+            modified_lines[-1] += "\n"
 
         # Use forward slashes for git compatibility
-        git_path = str(rel_path).replace('\\', '/')
+        git_path = str(rel_path).replace("\\", "/")
 
         diff = difflib.unified_diff(
-            original_lines,
-            modified_lines,
-            fromfile=f"a/{git_path}",
-            tofile=f"b/{git_path}",
-            lineterm='\n'
+            original_lines, modified_lines, fromfile=f"a/{git_path}", tofile=f"b/{git_path}", lineterm="\n"
         )
 
         patch_lines.extend(diff)
@@ -966,8 +977,8 @@ def generate_patch(original_contents, modified_contents, repo_root):
     # Write patch file
     patch_path = get_patch_file_path()
     try:
-        patch_content = ''.join(patch_lines)
-        patch_path.write_text(patch_content, encoding='utf-8')
+        patch_content = "".join(patch_lines)
+        patch_path.write_text(patch_content, encoding="utf-8")
         return True
     except Exception as e:
         print(f"❌ Failed to write patch file: {e}")
@@ -990,21 +1001,21 @@ def apply_patch_reverse(repo_root):
     try:
         # First, check if patch applies cleanly
         check_result = subprocess.run(
-            ['git', 'apply', '-R', '--check', '--whitespace=nowarn', str(patch_path)],
+            ["git", "apply", "-R", "--check", "--whitespace=nowarn", str(patch_path)],
             cwd=str(repo_root),
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
 
         if check_result.returncode == 0:
             # Patch applies cleanly - go ahead
             result = subprocess.run(
-                ['git', 'apply', '-R', '--whitespace=nowarn', str(patch_path)],
+                ["git", "apply", "-R", "--whitespace=nowarn", str(patch_path)],
                 cwd=str(repo_root),
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
             )
 
             if result.returncode == 0:
@@ -1020,11 +1031,11 @@ def apply_patch_reverse(repo_root):
 
             # Try with --3way to do a 3-way merge
             result = subprocess.run(
-                ['git', 'apply', '-R', '--3way', '--whitespace=nowarn', str(patch_path)],
+                ["git", "apply", "-R", "--3way", "--whitespace=nowarn", str(patch_path)],
                 cwd=str(repo_root),
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
             )
 
             if result.returncode == 0:
@@ -1206,6 +1217,7 @@ def show_notification(title, message):
     """Show a Windows toast notification."""
     try:
         from win10toast import ToastNotifier
+
         toaster = ToastNotifier()
         toaster.show_toast(title, message, duration=5, threaded=True)
         return True
@@ -1213,7 +1225,8 @@ def show_notification(title, message):
         # win10toast not installed, try PowerShell fallback
         try:
             import subprocess
-            ps_script = f'''
+
+            ps_script = f"""
             [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
             [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
             $template = "<toast><visual><binding template='ToastText02'><text id='1'>{title}</text><text id='2'>{message}</text></binding></visual></toast>"
@@ -1221,9 +1234,8 @@ def show_notification(title, message):
             $xml.LoadXml($template)
             $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
             [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("EDOG DevMode").Show($toast)
-            '''
-            subprocess.run(["powershell", "-Command", ps_script],
-                         capture_output=True, timeout=5)
+            """
+            subprocess.run(["powershell", "-Command", ps_script], capture_output=True, timeout=5)
             return True
         except Exception:
             pass
@@ -1251,7 +1263,6 @@ def revert_simple_pattern(content, original, modified, description):
     return content, False
 
 
-
 def get_gts_spark_client_bypass(token):
     """Get the bypass code for GTSBasedSparkClient."""
     bypass_code = f'''        protected async virtual Task<Token> GenerateMWCV1TokenForGTSWorkloadAsync(CancellationToken ct)
@@ -1268,12 +1279,11 @@ def get_gts_spark_client_bypass(token):
     return bypass_code
 
 
-
 def apply_gts_spark_client_change(content, token, repo_root=None):
     """Apply GTSBasedSparkClient bypass. Returns (new_content, status)."""
-    edog_marker = '// EDOG DevMode - bypassing OBO token exchange'
-    original_marker_start = '// EDOG_ORIGINAL_START:'
-    original_marker_end = '// EDOG_ORIGINAL_END'
+    edog_marker = "// EDOG DevMode - bypassing OBO token exchange"
+    original_marker_start = "// EDOG_ORIGINAL_START:"
+    original_marker_end = "// EDOG_ORIGINAL_END"
 
     # Check if bypass exists
     if edog_marker in content:
@@ -1296,10 +1306,7 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
             try:
                 file_rel_path = FILES["GTSBasedSparkClient"]
                 result = subprocess.run(
-                    ['git', 'show', f'HEAD:{file_rel_path}'],
-                    cwd=str(repo_root),
-                    capture_output=True,
-                    text=True
+                    ["git", "show", f"HEAD:{file_rel_path}"], cwd=str(repo_root), capture_output=True, text=True
                 )
                 if result.returncode == 0:
                     git_content = result.stdout
@@ -1318,7 +1325,7 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
             return new_content, "token_updated"
 
     # Apply fresh bypass - find the method signature and replace the entire method
-    method_sig = 'protected async virtual Task<Token> GenerateMWCV1TokenForGTSWorkloadAsync(CancellationToken ct)'
+    method_sig = "protected async virtual Task<Token> GenerateMWCV1TokenForGTSWorkloadAsync(CancellationToken ct)"
 
     if method_sig not in content:
         return content, "pattern_not_found"
@@ -1329,7 +1336,7 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
         return content, "pattern_not_found"
 
     # Find the opening brace after signature
-    brace_start = content.find('{', sig_start)
+    brace_start = content.find("{", sig_start)
     if brace_start == -1:
         return content, "pattern_not_found"
 
@@ -1337,9 +1344,9 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
     brace_count = 1
     pos = brace_start + 1
     while pos < len(content) and brace_count > 0:
-        if content[pos] == '{':
+        if content[pos] == "{":
             brace_count += 1
-        elif content[pos] == '}':
+        elif content[pos] == "}":
             brace_count -= 1
         pos += 1
 
@@ -1350,7 +1357,7 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
 
     # Find the start of the method block (including any comments/attributes before the signature)
     # Go back line by line until we hit a line that's not a comment, attribute, or whitespace
-    line_start = content.rfind('\n', 0, sig_start) + 1
+    line_start = content.rfind("\n", 0, sig_start) + 1
     method_start = line_start
 
     # Keep going back to include comments and attributes
@@ -1358,11 +1365,17 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
         prev_line_end = method_start - 1
         if prev_line_end < 0:
             break
-        prev_line_start = content.rfind('\n', 0, prev_line_end) + 1
+        prev_line_start = content.rfind("\n", 0, prev_line_end) + 1
         prev_line = content[prev_line_start:prev_line_end].strip()
 
         # Include lines that are comments, attributes, or empty
-        if prev_line.startswith('//') or prev_line.startswith('/*') or prev_line.startswith('*') or prev_line.startswith('[') or prev_line == '':
+        if (
+            prev_line.startswith("//")
+            or prev_line.startswith("/*")
+            or prev_line.startswith("*")
+            or prev_line.startswith("[")
+            or prev_line == ""
+        ):
             method_start = prev_line_start
         else:
             break
@@ -1371,7 +1384,7 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
     original_content = content[method_start:method_end]
 
     # Base64 encode the original content for safe storage
-    original_encoded = base64.b64encode(original_content.encode('utf-8')).decode('ascii')
+    original_encoded = base64.b64encode(original_content.encode("utf-8")).decode("ascii")
 
     # Build the bypass code with the original content stored as a comment
     bypass_code = f'''
@@ -1394,9 +1407,9 @@ def apply_gts_spark_client_change(content, token, repo_root=None):
 
 def revert_gts_spark_client_change(content, repo_root=None):
     """Revert GTSBasedSparkClient bypass - restore original method from stored backup or git."""
-    edog_marker = '// EDOG DevMode - bypassing OBO token exchange'
-    original_marker_start = '// EDOG_ORIGINAL_START:'
-    original_marker_end = '// EDOG_ORIGINAL_END'
+    edog_marker = "// EDOG DevMode - bypassing OBO token exchange"
+    original_marker_start = "// EDOG_ORIGINAL_START:"
+    original_marker_end = "// EDOG_ORIGINAL_END"
 
     if edog_marker not in content:
         return content, False
@@ -1410,31 +1423,33 @@ def revert_gts_spark_client_change(content, repo_root=None):
         if start_idx < end_idx:
             encoded_original = content[start_idx:end_idx].strip()  # strip newlines/whitespace
             try:
-                original_content = base64.b64decode(encoded_original.encode('ascii')).decode('utf-8')
+                original_content = base64.b64decode(encoded_original.encode("ascii")).decode("utf-8")
 
                 # Find the start of the EDOG marker line
                 marker_pos = content.find(original_marker_start)
-                marker_line_start = content.rfind('\n', 0, marker_pos) + 1
+                marker_line_start = content.rfind("\n", 0, marker_pos) + 1
 
                 # The bypass block starts at marker_line_start and includes:
                 # 1. The EDOG_ORIGINAL marker line
                 # 2. The method signature and body
                 # We need to find the method end (closing brace)
-                method_sig = 'protected async virtual Task<Token> GenerateMWCV1TokenForGTSWorkloadAsync(CancellationToken ct)'
+                method_sig = (
+                    "protected async virtual Task<Token> GenerateMWCV1TokenForGTSWorkloadAsync(CancellationToken ct)"
+                )
                 sig_start = content.find(method_sig, marker_line_start)
                 if sig_start == -1:
                     return content, False
 
-                brace_start = content.find('{', sig_start)
+                brace_start = content.find("{", sig_start)
                 if brace_start == -1:
                     return content, False
 
                 brace_count = 1
                 pos = brace_start + 1
                 while pos < len(content) and brace_count > 0:
-                    if content[pos] == '{':
+                    if content[pos] == "{":
                         brace_count += 1
-                    elif content[pos] == '}':
+                    elif content[pos] == "}":
                         brace_count -= 1
                     pos += 1
 
@@ -1456,12 +1471,9 @@ def revert_gts_spark_client_change(content, repo_root=None):
     # No stored original - try to restore from git
     if repo_root:
         try:
-            file_rel_path = str(FILES["GTSBasedSparkClient"]).replace('\\', '/')
+            file_rel_path = str(FILES["GTSBasedSparkClient"]).replace("\\", "/")
             result = subprocess.run(
-                ['git', 'show', f'HEAD:{file_rel_path}'],
-                cwd=str(repo_root),
-                capture_output=True,
-                text=True
+                ["git", "show", f"HEAD:{file_rel_path}"], cwd=str(repo_root), capture_output=True, text=True
             )
             if result.returncode == 0:
                 print("   ℹ️  Restored from git HEAD (no stored original found)")  # noqa: RUF001
@@ -1482,7 +1494,7 @@ def revert_gts_spark_client_change(content, repo_root=None):
 # ============================================================================
 
 # This file will be created in the FLT repo to intercept Tracer calls
-DEVMODE_TRACER_FILE_CONTENT = '''// <auto-generated>
+DEVMODE_TRACER_FILE_CONTENT = """// <auto-generated>
 // EDOG DevMode - Tracer Console Output Wrapper
 // This file redirects platform Tracer calls to console for local debugging.
 // DO NOT COMMIT THIS FILE - Run 'edog --revert' before committing.
@@ -1549,24 +1561,27 @@ namespace Microsoft.ServicePlatform.Telemetry
 
 #pragma warning restore SA1600
 #pragma warning restore CS1591
-'''
+"""
 
 # Global usings file to redirect Tracer to EdogTracer
-DEVMODE_GLOBAL_USINGS_CONTENT = '''// <auto-generated>
+DEVMODE_GLOBAL_USINGS_CONTENT = """// <auto-generated>
 // EDOG DevMode - Global using directives for Tracer interception
 // DO NOT COMMIT THIS FILE - Run 'edog --revert' before committing.
 // </auto-generated>
 
 global using Tracer = Microsoft.ServicePlatform.Telemetry.EdogTracer;
-'''
+"""
+
 
 def get_tracer_file_path(repo_root):
     """Get the path for the DevMode tracer wrapper file."""
     return repo_root / "Service/Microsoft.LiveTable.Service/Core/EdogDevModeTracer.cs"
 
+
 def get_global_usings_path(repo_root):
     """Get the path for the global usings file."""
     return repo_root / "Service/Microsoft.LiveTable.Service/EdogGlobalUsings.cs"
+
 
 def apply_tracer_console_output(repo_root):
     """
@@ -1642,7 +1657,7 @@ def apply_log_viewer_files(repo_root):
             created_files.append(target.name)
         else:
             # Update if content differs
-            if src_file.read_text(encoding='utf-8') != target.read_text(encoding='utf-8'):
+            if src_file.read_text(encoding="utf-8") != target.read_text(encoding="utf-8"):
                 shutil.copy2(src_file, target)
                 created_files.append(f"{target.name} (updated)")
 
@@ -1688,20 +1703,23 @@ def revert_log_viewer_files(repo_root):
         devmode_dir.rmdir()
 
     # Remove SignalR NuGet from csproj and Directory.Packages.props if present
-    pkg_line = 'Microsoft.AspNetCore.SignalR.Protocols.MessagePack'
+    pkg_line = "Microsoft.AspNetCore.SignalR.Protocols.MessagePack"
     import re
+
     csproj = repo_root / SERVICE_PATH / "Microsoft.LiveTable.Service.csproj"
     if csproj.exists():
         content = csproj.read_text(encoding="utf-8")
         if pkg_line in content:
-            content = re.sub(r'\s*<PackageReference\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', '\n', content)
+            content = re.sub(
+                r'\s*<PackageReference\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', "\n", content
+            )
             csproj.write_text(content, encoding="utf-8")
 
     packages_props = repo_root / "Directory.Packages.props"
     if packages_props.exists():
         content = packages_props.read_text(encoding="utf-8")
         if pkg_line in content:
-            content = re.sub(r'\s*<PackageVersion\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', '\n', content)
+            content = re.sub(r'\s*<PackageVersion\s+Include="' + re.escape(pkg_line) + r'"[^/]*/>\s*\n?', "\n", content)
             packages_props.write_text(content, encoding="utf-8")
 
     return removed
@@ -1716,7 +1734,7 @@ def apply_log_viewer_registration_program_cs(content):
     # Find the WorkloadApp instantiation line (capture leading whitespace on same line only)
     patterns = [
         r"(^[ \t]*)(await new WorkloadApp\(\)\.RunAsync\(.*?\);)",
-        r"(^[ \t]*)(new WorkloadApp\(\)\.RunAsync\(.*?\)\.GetAwaiter\(\)\.GetResult\(\);)"
+        r"(^[ \t]*)(new WorkloadApp\(\)\.RunAsync\(.*?\)\.GetAwaiter\(\)\.GetResult\(\);)",
     ]
 
     registration_code = (
@@ -1756,7 +1774,7 @@ def apply_log_viewer_registration_program_cs(content):
         if match:
             indent = match.group(1)
             workload_line = match.group(2)
-            new_content = content[:match.start()] + registration_code + indent + workload_line + content[match.end():]
+            new_content = content[: match.start()] + registration_code + indent + workload_line + content[match.end() :]
             return new_content, "applied"
 
     return content, "pattern_not_found"
@@ -1846,18 +1864,18 @@ def apply_dag_execution_hook_patch(content):
 
     # Find the hook registration log line — our hook goes right before it
     # Simpler match — just the unique log marker
-    marker = '[DagHook] Registered {dagExecutionHooks.Count} hooks'
+    marker = "[DagHook] Registered {dagExecutionHooks.Count} hooks"
     if marker not in content:
         return content, "pattern_not_found"
 
     # Find the Tracer.LogSanitizedMessage line and insert our hook before it
-    lines = content.split('\n')
+    lines = content.split("\n")
     insert_idx = None
     for i, line in enumerate(lines):
         if marker in line:
             # Walk back to the Tracer.LogSanitizedMessage( start
             idx = i
-            while idx > 0 and 'Tracer.LogSanitizedMessage' not in lines[idx]:
+            while idx > 0 and "Tracer.LogSanitizedMessage" not in lines[idx]:
                 idx -= 1
             insert_idx = idx
             break
@@ -1872,7 +1890,7 @@ def apply_dag_execution_hook_patch(content):
     )
 
     lines.insert(insert_idx, edog_hook_line)
-    return '\n'.join(lines), "applied"
+    return "\n".join(lines), "applied"
 
 
 def revert_dag_execution_hook_patch(content):
@@ -1908,7 +1926,7 @@ def apply_disable_flt_auth_test_json(content):
     match = re.search(pattern, content)
     if match:
         # Preserve whatever comes after the match (including any trailing newline)
-        new_content = content[:match.end(1)] + ',\n    "DisableFLTAuth": true\n' + content[match.start(2):]
+        new_content = content[: match.end(1)] + ',\n    "DisableFLTAuth": true\n' + content[match.start(2) :]
         return new_content, "applied"
     return content, "pattern_not_found"
 
@@ -1916,22 +1934,24 @@ def apply_disable_flt_auth_test_json(content):
 def revert_disable_flt_auth_test_json(content):
     """Remove DisableFLTAuth from Test.json rollout config."""
     # Remove the DisableFLTAuth line and trailing comma from previous line
-    content = re.sub(r',\s*\n\s*"DisableFLTAuth":\s*true', '', content)
+    content = re.sub(r',\s*\n\s*"DisableFLTAuth":\s*true', "", content)
     return content
 
 
 def fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id):
     """Fetch MWC token using Bearer token."""
 
-    body = json.dumps({
-        "type": "[Start] GetMWCToken",
-        "workloadType": "Lakehouse",
-        "workspaceObjectId": workspace_id,
-        "artifactObjectIds": [artifact_id],
-        "capacityObjectId": capacity_id,
-        "asyncId": str(uuid.uuid4()),
-        "iframeId": str(uuid.uuid4())
-    }).encode('utf-8')
+    body = json.dumps(
+        {
+            "type": "[Start] GetMWCToken",
+            "workloadType": "Lakehouse",
+            "workspaceObjectId": workspace_id,
+            "artifactObjectIds": [artifact_id],
+            "capacityObjectId": capacity_id,
+            "asyncId": str(uuid.uuid4()),
+            "iframeId": str(uuid.uuid4()),
+        }
+    ).encode("utf-8")
 
     headers = {
         "Authorization": f"Bearer {bearer_token}",
@@ -1941,17 +1961,18 @@ def fetch_mwc_token(bearer_token, workspace_id, artifact_id, capacity_id):
         "requestid": str(uuid.uuid4()),
         "x-powerbi-hostenv": "Power BI Web App",
         "origin": "https://powerbi-df.analysis-df.windows.net",
-        "referer": "https://powerbi-df.analysis-df.windows.net/"
+        "referer": "https://powerbi-df.analysis-df.windows.net/",
     }
 
-    req = urllib.request.Request(MWC_TOKEN_ENDPOINT, data=body, headers=headers, method='POST')
+    req = urllib.request.Request(MWC_TOKEN_ENDPOINT, data=body, headers=headers, method="POST")
 
     try:
         import ssl
+
         ctx = ssl.create_default_context()
         with urllib.request.urlopen(req, timeout=30, context=ctx) as response:
-            result = json.loads(response.read().decode('utf-8'))
-            return result.get('Token') or result.get('token')
+            result = json.loads(response.read().decode("utf-8"))
+            return result.get("Token") or result.get("token")
     except urllib.error.HTTPError as e:
         print(f"❌ HTTP Error {e.code}: {e.reason}")
         with contextlib.suppress(Exception):
@@ -2023,7 +2044,8 @@ def _try_silent_cba(username: str) -> str | None:
             print("  Building token-helper...")
             build = subprocess.run(
                 ["dotnet", "build", str(csproj), "-v", "q"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
             if build.returncode != 0:
                 return None
@@ -2034,7 +2056,9 @@ def _try_silent_cba(username: str) -> str | None:
     try:
         result = subprocess.run(
             [str(helper_exe), thumbprint, username],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
     except subprocess.TimeoutExpired:
         print("  Silent CBA timed out")
@@ -2091,32 +2115,36 @@ def _query_cert_store(cert_cn: str) -> str | None:
     """Query Windows cert store via PowerShell. Slow (~2-8s), called once."""
     try:
         ps_cmd = (
-            'Import-Module PKI -ErrorAction SilentlyContinue; '
-            f'Get-ChildItem Cert:\\CurrentUser\\My | '
+            "Import-Module PKI -ErrorAction SilentlyContinue; "
+            f"Get-ChildItem Cert:\\CurrentUser\\My | "
             f'Where-Object {{ $_.Subject -like "*CN={cert_cn}*" }} | '
-            'Select-Object -First 1 -ExpandProperty Thumbprint'
+            "Select-Object -First 1 -ExpandProperty Thumbprint"
         )
         result = subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps_cmd],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         tp = result.stdout.strip()
         if tp and len(tp) == 40:
             return tp
 
         dotnet_cmd = (
-            'Add-Type -AssemblyName System.Security; '
-            '$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('
+            "Add-Type -AssemblyName System.Security; "
+            "$store = New-Object System.Security.Cryptography.X509Certificates.X509Store("
             '"My", [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser); '
             '$store.Open("ReadOnly"); '
             f'$c = $store.Certificates | Where-Object {{ $_.Subject -like "*CN={cert_cn}*" }} | '
-            'Select-Object -First 1; '
-            '$store.Close(); '
-            'if ($c) { $c.Thumbprint }'
+            "Select-Object -First 1; "
+            "$store.Close(); "
+            "if ($c) { $c.Thumbprint }"
         )
         result2 = subprocess.run(
             ["powershell", "-NoProfile", "-Command", dotnet_cmd],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         tp2 = result2.stdout.strip()
         return tp2 if tp2 and len(tp2) == 40 else None
@@ -2262,8 +2290,18 @@ def apply_all_changes(token, repo_root):
 
     # 5. Disable FLT auth for EDOG DevMode (ParametersManifest.json and Test.json)
     for file_key, apply_fn, revert_fn, desc in [
-        ("ParametersManifest", apply_disable_flt_auth_manifest, revert_disable_flt_auth_manifest, "DisableFLTAuth (ParametersManifest.json)"),
-        ("TestRollout", apply_disable_flt_auth_test_json, revert_disable_flt_auth_test_json, "DisableFLTAuth (Test.json)"),
+        (
+            "ParametersManifest",
+            apply_disable_flt_auth_manifest,
+            revert_disable_flt_auth_manifest,
+            "DisableFLTAuth (ParametersManifest.json)",
+        ),
+        (
+            "TestRollout",
+            apply_disable_flt_auth_test_json,
+            revert_disable_flt_auth_test_json,
+            "DisableFLTAuth (Test.json)",
+        ),
     ]:
         rel_path = FILES[file_key]
         filepath = repo_root / rel_path
@@ -2534,6 +2572,7 @@ def fetch_token_with_retry(username, workspace_id, artifact_id, capacity_id, max
 # ============================================================================
 FLT_SERVICE_PROCESS = None  # Global reference to the service process
 
+
 def get_entrypoint_path(repo_root):
     """Get path to the FLT service EntryPoint project."""
     return repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
@@ -2558,15 +2597,12 @@ def start_flt_service(repo_root):
         # Step 1: Build first to ensure changes are compiled
         print("   ⏳ Building project (to compile code changes)...")
         build_result = subprocess.run(
-            ["dotnet", "build", str(entrypoint), "--no-incremental"],
-            capture_output=True,
-            text=True,
-            cwd=str(repo_root)
+            ["dotnet", "build", str(entrypoint), "--no-incremental"], capture_output=True, text=True, cwd=str(repo_root)
         )
 
         if build_result.returncode != 0:
             print("   ❌ Build failed:")
-            for line in build_result.stdout.split('\n')[-20:]:  # Last 20 lines
+            for line in build_result.stdout.split("\n")[-20:]:  # Last 20 lines
                 if line.strip():
                     print(f"      {line}")
             return None
@@ -2581,7 +2617,7 @@ def start_flt_service(repo_root):
             stderr=subprocess.STDOUT,
             text=True,
             bufsize=1,
-            cwd=str(entrypoint)  # Run from EntryPoint dir so it finds WorkloadParameters
+            cwd=str(entrypoint),  # Run from EntryPoint dir so it finds WorkloadParameters
         )
 
         FLT_SERVICE_PROCESS = process
@@ -2678,10 +2714,15 @@ def handle_devmode_account_picker(username, timeout=30):
                     title = win.window_text().lower()
 
                     # Check if this is a Microsoft login/account picker window
-                    is_login_window = any(keyword in title for keyword in [
-                        "pick an account", "sign in to your account",
-                        "login.microsoftonline", "sign in -"
-                    ])
+                    is_login_window = any(
+                        keyword in title
+                        for keyword in [
+                            "pick an account",
+                            "sign in to your account",
+                            "login.microsoftonline",
+                            "sign in -",
+                        ]
+                    )
 
                     if is_login_window and "edge" in title:
                         print("   📍 Found account picker window")
@@ -2743,10 +2784,10 @@ def headless_deploy(repo_root):
     dev-server.py owns that process. Stdout is protocol-only JSON.
     Human-readable output goes to stderr.
     """
+
     def emit(step, message, level="info"):
         """Write a JSON progress line to stdout."""
-        obj = {"step": step, "message": message, "level": level,
-               "ts": datetime.now().strftime("%H:%M:%S")}
+        obj = {"step": step, "message": message, "level": level, "ts": datetime.now().strftime("%H:%M:%S")}
         sys.stdout.write(json.dumps(obj) + "\n")
         sys.stdout.flush()
 
@@ -2932,18 +2973,12 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
             # Start background thread to stream service output
             stop_event = threading.Event()
             output_thread = threading.Thread(
-                target=stream_service_output,
-                args=(service_process, stop_event),
-                daemon=True
+                target=stream_service_output, args=(service_process, stop_event), daemon=True
             )
             output_thread.start()
 
             # Start background thread to handle DevMode account picker popup
-            popup_thread = threading.Thread(
-                target=handle_devmode_account_picker,
-                args=(username, 30),
-                daemon=True
-            )
+            popup_thread = threading.Thread(target=handle_devmode_account_picker, args=(username, 30), daemon=True)
             popup_thread.start()
         else:
             print("\n⚠️  Service failed to start, continuing with token management only")
@@ -2985,7 +3020,9 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
                 if new_token:
                     mwc_token = new_token
                     token_expiry = parse_jwt_expiry(mwc_token)
-                    print(f"✅ Token refreshed (expires: {token_expiry.strftime('%H:%M:%S') if token_expiry else 'unknown'})")
+                    print(
+                        f"✅ Token refreshed (expires: {token_expiry.strftime('%H:%M:%S') if token_expiry else 'unknown'})"
+                    )
 
                     # Cache the new token
                     if token_expiry:
@@ -3007,6 +3044,7 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
 
         # Block further Ctrl+C during cleanup
         import signal
+
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         try:
@@ -3050,7 +3088,7 @@ Examples:
   edog --config -r C:\\path\\to\\FLT  Set FLT repo path (enables running from anywhere)
   edog --install-hook               Install git pre-commit hook (blocks commits with EDOG changes)
   edog --uninstall-hook             Remove git pre-commit hook
-        """
+        """,
     )
 
     parser.add_argument("--revert", action="store_true", help="Revert all EDOG changes")
@@ -3059,9 +3097,12 @@ Examples:
     parser.add_argument("--clear-token", action="store_true", help="Clear cached authentication token")
     parser.add_argument("--install-hook", action="store_true", help="Install git pre-commit hook")
     parser.add_argument("--uninstall-hook", action="store_true", help="Remove git pre-commit hook")
-    parser.add_argument("--no-launch", action="store_true", help="Don't auto-launch FLT service (token management only)")
-    parser.add_argument("--headless-deploy", action="store_true",
-                        help="Studio mode: patch + build, JSON progress on stdout")
+    parser.add_argument(
+        "--no-launch", action="store_true", help="Don't auto-launch FLT service (token management only)"
+    )
+    parser.add_argument(
+        "--headless-deploy", action="store_true", help="Studio mode: patch + build, JSON progress on stdout"
+    )
     parser.add_argument("--logs", action="store_true", help="Open log viewer in browser")
     parser.add_argument("-u", "--username", help="Username/Email for login")
     parser.add_argument("-w", "--workspace", help="Workspace ID")
@@ -3088,6 +3129,7 @@ Examples:
     # Logs command doesn't need repo_root
     if args.logs:
         import webbrowser
+
         webbrowser.open("http://localhost:5555")
         print("🐕 Opening EDOG Log Viewer at http://localhost:5555")
         print("   Make sure FLT service is running with EDOG changes applied.")
@@ -3137,4 +3179,6 @@ Examples:
             artifact_id = config["artifact_id"]
             capacity_id = config["capacity_id"]
 
-        sys.exit(run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, launch_service=not args.no_launch))
+        sys.exit(
+            run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, launch_service=not args.no_launch)
+        )

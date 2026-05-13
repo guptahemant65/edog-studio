@@ -7,6 +7,7 @@ Thread-safe: all public methods acquire _lock before mutating state.
 
 @author Vex — EDOG Studio hivemind
 """
+
 from __future__ import annotations
 
 import hashlib

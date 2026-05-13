@@ -1,4 +1,5 @@
 """Tests for F02 Deploy to Lakehouse flow."""
+
 import json
 import os
 import tempfile
@@ -11,8 +12,8 @@ class TestAtomicWrite:
         target = tmp_path / "config.json"
         data = json.dumps({"workspace_id": "ws-123"})
         # Simulate atomic write: write to temp, rename
-        fd, tmp = tempfile.mkstemp(dir=str(tmp_path), suffix='.tmp')
-        os.write(fd, data.encode('utf-8'))
+        fd, tmp = tempfile.mkstemp(dir=str(tmp_path), suffix=".tmp")
+        os.write(fd, data.encode("utf-8"))
         os.close(fd)
         os.replace(tmp, str(target))
         assert target.exists()
@@ -22,8 +23,8 @@ class TestAtomicWrite:
         target = tmp_path / "config.json"
         target.write_text('{"old": true}')
         new_data = json.dumps({"workspace_id": "ws-456"})
-        fd, tmp = tempfile.mkstemp(dir=str(tmp_path), suffix='.tmp')
-        os.write(fd, new_data.encode('utf-8'))
+        fd, tmp = tempfile.mkstemp(dir=str(tmp_path), suffix=".tmp")
+        os.write(fd, new_data.encode("utf-8"))
         os.close(fd)
         os.replace(tmp, str(target))
         result = json.loads(target.read_text())
@@ -35,7 +36,7 @@ class TestAtomicWrite:
         target.write_text('{"original": true}')
         # If write fails, original should be intact
         try:
-            fd, _tmp = tempfile.mkstemp(dir=str(tmp_path), suffix='.tmp')
+            fd, _tmp = tempfile.mkstemp(dir=str(tmp_path), suffix=".tmp")
             os.close(fd)
             # Simulate failure before replace
             raise ValueError("simulated error")
@@ -65,11 +66,15 @@ class TestDeployStateTransitions:
     def test_idle_to_deploying(self):
         state = self._make_state()
         deploy_id = "12345"
-        state.update({
-            "phase": "deploying", "deployId": deploy_id,
-            "deployStep": 0, "deployMessage": "Starting...",
-            "deployTarget": {"workspaceId": "ws", "artifactId": "lh", "capacityId": "cap"},
-        })
+        state.update(
+            {
+                "phase": "deploying",
+                "deployId": deploy_id,
+                "deployStep": 0,
+                "deployMessage": "Starting...",
+                "deployTarget": {"workspaceId": "ws", "artifactId": "lh", "capacityId": "cap"},
+            }
+        )
         assert state["phase"] == "deploying"
         assert state["deployId"] == deploy_id
 
@@ -83,20 +88,26 @@ class TestDeployStateTransitions:
     def test_deploying_to_running(self):
         state = self._make_state()
         state["phase"] = "deploying"
-        state.update({
-            "phase": "running", "deployStep": 5,
-            "fltPort": 5557, "fltPid": 12345,
-        })
+        state.update(
+            {
+                "phase": "running",
+                "deployStep": 5,
+                "fltPort": 5557,
+                "fltPid": 12345,
+            }
+        )
         assert state["phase"] == "running"
         assert state["fltPort"] == 5557
 
     def test_running_to_crashed(self):
         state = self._make_state()
         state["phase"] = "running"
-        state.update({
-            "phase": "crashed",
-            "deployError": "FLT exited with code 1",
-        })
+        state.update(
+            {
+                "phase": "crashed",
+                "deployError": "FLT exited with code 1",
+            }
+        )
         assert state["phase"] == "crashed"
         assert "exited" in state["deployError"]
 
@@ -104,10 +115,12 @@ class TestDeployStateTransitions:
         state = self._make_state()
         state["phase"] = "deploying"
         state["deployStep"] = 2
-        state.update({
-            "phase": "stopped",
-            "deployError": "Build failed",
-        })
+        state.update(
+            {
+                "phase": "stopped",
+                "deployError": "Build failed",
+            }
+        )
         assert state["phase"] == "stopped"
         assert state["deployStep"] == 2
 
@@ -166,10 +179,15 @@ class TestSSEEventFormat:
 
     def test_sse_data_format(self):
         """SSE data line should be valid JSON with expected fields."""
-        data = {"step": 1, "total": 5, "status": "deploying",
-                "message": "Updating config...", "error": None,
-                "log": {"ts": "18:30", "msg": "Config updated", "level": "success"},
-                "fltPort": None}
+        data = {
+            "step": 1,
+            "total": 5,
+            "status": "deploying",
+            "message": "Updating config...",
+            "error": None,
+            "log": {"ts": "18:30", "msg": "Config updated", "level": "success"},
+            "fltPort": None,
+        }
         line = f"data: {json.dumps(data)}\n\n"
         assert line.startswith("data: ")
         assert line.endswith("\n\n")
@@ -179,8 +197,14 @@ class TestSSEEventFormat:
 
     def test_sse_complete_event(self):
         """Terminal SSE event should have event: complete."""
-        data = {"step": 5, "total": 5, "status": "running",
-                "message": "Deploy complete", "error": None, "fltPort": 5557}
+        data = {
+            "step": 5,
+            "total": 5,
+            "status": "running",
+            "message": "Deploy complete",
+            "error": None,
+            "fltPort": 5557,
+        }
         line = f"event: complete\ndata: {json.dumps(data)}\n\n"
         assert "event: complete" in line
         parsed = json.loads(line.split("data: ")[1].strip())

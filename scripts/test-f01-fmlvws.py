@@ -1,4 +1,5 @@
 """Test F01 APIs against FMLVWS workspace with real lakehouses."""
+
 import json
 import urllib.error
 import urllib.request
@@ -41,8 +42,7 @@ print(f"\nLakehouse: {lh_name} ({lh_id})")
 # Test 1: Public API tables
 print("\n--- Public API tables ---")
 try:
-    resp = urllib.request.urlopen(
-        BASE + f"/api/fabric/workspaces/{ws_id}/lakehouses/{lh_id}/tables", timeout=10)
+    resp = urllib.request.urlopen(BASE + f"/api/fabric/workspaces/{ws_id}/lakehouses/{lh_id}/tables", timeout=10)
     tables = json.loads(resp.read())
     count = len(tables.get("value", tables.get("data", [])))
     print(f"OK 200: {count} tables")
@@ -54,8 +54,7 @@ print("\n--- MWC tables ---")
 tables = []
 if cap_id:
     try:
-        resp = urllib.request.urlopen(
-            BASE + f"/api/mwc/tables?wsId={ws_id}&lhId={lh_id}&capId={cap_id}", timeout=20)
+        resp = urllib.request.urlopen(BASE + f"/api/mwc/tables?wsId={ws_id}&lhId={lh_id}&capId={cap_id}", timeout=20)
         mwc = json.loads(resp.read())
         tables = mwc.get("data", [])
         print(f"OK 200: {len(tables)} tables")
@@ -79,9 +78,7 @@ if tables and cap_id:
     try:
         req = urllib.request.Request(
             BASE + "/api/mwc/table-details",
-            data=json.dumps({
-                "wsId": ws_id, "lhId": lh_id, "capId": cap_id, "tables": names
-            }).encode(),
+            data=json.dumps({"wsId": ws_id, "lhId": lh_id, "capId": cap_id, "tables": names}).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
@@ -112,9 +109,7 @@ if cap_id:
     try:
         req = urllib.request.Request(
             BASE + "/api/edog/mwc-token",
-            data=json.dumps({
-                "workspaceId": ws_id, "lakehouseId": lh_id, "capacityId": cap_id
-            }).encode(),
+            data=json.dumps({"workspaceId": ws_id, "lakehouseId": lh_id, "capacityId": cap_id}).encode(),
             headers={"Content-Type": "application/json"},
             method="POST",
         )

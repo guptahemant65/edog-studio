@@ -38,10 +38,7 @@ def check_python_style() -> tuple[bool, str]:
     Returns:
         (passed, message) — True if no lint violations found.
     """
-    python_files = (
-        list((REPO_ROOT / "scripts").rglob("*.py"))
-        + list((REPO_ROOT / "tests").rglob("*.py"))
-    )
+    python_files = list((REPO_ROOT / "scripts").rglob("*.py")) + list((REPO_ROOT / "tests").rglob("*.py"))
 
     if not python_files:
         return True, "No Python files found to check."
@@ -107,17 +104,12 @@ def check_no_emoji_in_frontend() -> tuple[bool, str]:
                 if matches:
                     rel_path = filepath.relative_to(REPO_ROOT)
                     for match in matches:
-                        violations.append(
-                            f"  {rel_path}:{line_num} — found emoji: {match}"
-                        )
+                        violations.append(f"  {rel_path}:{line_num} — found emoji: {match}")
 
     if not violations:
         return True, "No emoji found in frontend source files."
 
-    return False, (
-        f"Found {len(violations)} emoji occurrence(s) in frontend:\n"
-        + "\n".join(violations)
-    )
+    return False, (f"Found {len(violations)} emoji occurrence(s) in frontend:\n" + "\n".join(violations))
 
 
 def check_css_uses_oklch() -> tuple[bool, str]:
@@ -167,10 +159,7 @@ def check_css_uses_oklch() -> tuple[bool, str]:
     if not violations:
         return True, "All CSS colors use OKLCH."
 
-    return False, (
-        f"Found {len(violations)} non-OKLCH color(s) in CSS:\n"
-        + "\n".join(violations)
-    )
+    return False, (f"Found {len(violations)} non-OKLCH color(s) in CSS:\n" + "\n".join(violations))
 
 
 def check_conventional_commit(msg: str) -> tuple[bool, str]:
@@ -215,25 +204,18 @@ def check_conventional_commit(msg: str) -> tuple[bool, str]:
     subject = match.group("subject")
 
     if commit_type not in valid_types:
-        return False, (
-            f"Invalid type: '{commit_type}'\n"
-            f"  Valid types: {', '.join(sorted(valid_types))}"
-        )
+        return False, (f"Invalid type: '{commit_type}'\n  Valid types: {', '.join(sorted(valid_types))}")
 
     if subject[0].isupper():
         return False, (
-            f"Subject should start with lowercase: '{subject}'\n"
-            f"  Write: '{subject[0].lower() + subject[1:]}'"
+            f"Subject should start with lowercase: '{subject}'\n  Write: '{subject[0].lower() + subject[1:]}'"
         )
 
     if subject.endswith("."):
         return False, f"Subject should not end with a period: '{subject}'"
 
     if len(first_line) > 72:
-        return False, (
-            f"Subject line too long ({len(first_line)} chars, max 72):\n"
-            f"  '{first_line}'"
-        )
+        return False, (f"Subject line too long ({len(first_line)} chars, max 72):\n  '{first_line}'")
 
     return True, f"Valid conventional commit: {first_line}"
 
@@ -276,9 +258,7 @@ def check_no_frameworks_in_js() -> tuple[bool, str]:
         for line_num, line in enumerate(content.splitlines(), 1):
             for pattern, framework_name in framework_patterns:
                 if pattern.search(line):
-                    violations.append(
-                        f"  {rel_path}:{line_num} — {framework_name}: {line.strip()[:80]}"
-                    )
+                    violations.append(f"  {rel_path}:{line_num} — {framework_name}: {line.strip()[:80]}")
 
     # Also check the HTML template
     html_template = FRONTEND_SRC / "index.html"
@@ -289,9 +269,7 @@ def check_no_frameworks_in_js() -> tuple[bool, str]:
             for line_num, line in enumerate(content.splitlines(), 1):
                 for pattern, framework_name in framework_patterns:
                     if pattern.search(line):
-                        violations.append(
-                            f"  {rel_path}:{line_num} — {framework_name}: {line.strip()[:80]}"
-                        )
+                        violations.append(f"  {rel_path}:{line_num} — {framework_name}: {line.strip()[:80]}")
         except (UnicodeDecodeError, OSError):
             pass
 
@@ -351,8 +329,11 @@ def check_js_syntax() -> tuple[bool, str]:
 
         result = subprocess.run(
             ["node", str(check_file), str(temp_js)],
-            capture_output=True, text=True, timeout=10,
-            encoding="utf-8", errors="replace",
+            capture_output=True,
+            text=True,
+            timeout=10,
+            encoding="utf-8",
+            errors="replace",
         )
     except FileNotFoundError:
         return False, "Node.js not found. Install Node.js to enable JS syntax checking."
@@ -385,10 +366,7 @@ def check_single_file_build() -> tuple[bool, str]:
         (passed, message) — True if the build output is valid.
     """
     if not BUILD_OUTPUT.exists():
-        return False, (
-            f"Build output not found: {BUILD_OUTPUT}\n"
-            f"  Run: python build-html.py"
-        )
+        return False, (f"Build output not found: {BUILD_OUTPUT}\n  Run: python build-html.py")
 
     try:
         content = BUILD_OUTPUT.read_text(encoding="utf-8")
@@ -413,10 +391,7 @@ def check_single_file_build() -> tuple[bool, str]:
     script_src_pattern = re.compile(r'<script\s[^>]*src=["\'](?!data:)([^"\']+)["\']', re.IGNORECASE)
     external_scripts = script_src_pattern.findall(content)
     if external_scripts:
-        issues.append(
-            f"Found {len(external_scripts)} external script(s): "
-            + ", ".join(external_scripts[:3])
-        )
+        issues.append(f"Found {len(external_scripts)} external script(s): " + ", ".join(external_scripts[:3]))
 
     # Check file size
     size_bytes = len(content.encode("utf-8"))
@@ -426,10 +401,7 @@ def check_single_file_build() -> tuple[bool, str]:
         issues.append(f"File too large ({size_bytes / 1024 / 1024:.1f} MB)")
 
     if issues:
-        return False, (
-            "Build output validation failed:\n"
-            + "\n".join(f"  - {issue}" for issue in issues)
-        )
+        return False, ("Build output validation failed:\n" + "\n".join(f"  - {issue}" for issue in issues))
 
     size_kb = size_bytes / 1024
     return True, f"Valid single-file HTML ({size_kb:.0f} KB). Zero external dependencies."
@@ -439,6 +411,7 @@ def check_single_file_build() -> tuple[bool, str]:
 # RUNNER
 # =============================================================================
 
+
 def run_all_gates() -> list[tuple[str, bool, str]]:
     """Run all quality gates and return results.
 
@@ -446,7 +419,7 @@ def run_all_gates() -> list[tuple[str, bool, str]]:
         List of (gate_name, passed, message) tuples.
     """
     gates = [
-        ("python_style", check_python_style, True),       # warn-only: pre-existing violations
+        ("python_style", check_python_style, True),  # warn-only: pre-existing violations
         ("no_emoji_in_frontend", check_no_emoji_in_frontend, False),
         ("css_uses_oklch", check_css_uses_oklch, False),
         ("no_frameworks_in_js", check_no_frameworks_in_js, False),
@@ -468,6 +441,7 @@ def run_all_gates() -> list[tuple[str, bool, str]]:
 if __name__ == "__main__":
     import io
     import sys
+
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
     print("=" * 60)

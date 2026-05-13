@@ -72,6 +72,7 @@ MAX_BODY_SIZE = 4096  # warn if single entry body exceeds this
 # Helper functions
 # ---------------------------------------------------------------------------
 
+
 def log_info(msg: str) -> None:
     """Print informational message to stderr."""
     print(f"  {msg}", file=sys.stderr)
@@ -100,7 +101,7 @@ def code_to_title(code: str) -> str:
     """MLV_SPARK_SESSION_ACQUISITION_FAILED -> Spark Session Acquisition Failed."""
     for prefix in ("MLV_", "FLT_", "SPARK_"):
         if code.startswith(prefix):
-            code = code[len(prefix):]
+            code = code[len(prefix) :]
             break
     return code.replace("_", " ").title()
 
@@ -145,6 +146,7 @@ def split_positional_args(body: str) -> list[str]:
 # Parsers
 # ---------------------------------------------------------------------------
 
+
 def parse_field_init(cs_content: str) -> list[dict]:
     """Parse ``public static readonly ErrorDefinition X = new(...);`` entries."""
     entries: list[dict] = []
@@ -161,20 +163,27 @@ def parse_field_init(cs_content: str) -> list[dict]:
         seen.add(code)
         category_raw = args.get("category", "SYSTEM")
         if category_raw.upper().replace("ERRORCATEGORY.", "") not in (
-            "USER", "USERERROR", "USER_ERROR", "CONFIGURATION", "SYSTEM",
-            "INTERNAL", "INFRASTRUCTURE",
+            "USER",
+            "USERERROR",
+            "USER_ERROR",
+            "CONFIGURATION",
+            "SYSTEM",
+            "INTERNAL",
+            "INFRASTRUCTURE",
         ):
             log_warn(f"'{code}': unknown category '{category_raw}', defaulting to SYSTEM")
-        entries.append({
-            "code": code,
-            "title": code_to_title(code),
-            "description": args.get("description", ""),
-            "category": normalize_category(category_raw),
-            "severity": "error",
-            "suggestedFix": args.get("suggestedFix", ""),
-            "retryable": args.get("retryable", "false") == "true",
-            "runbookUrl": args.get("runbookUrl") if args.get("runbookUrl") != "null" else None,
-        })
+        entries.append(
+            {
+                "code": code,
+                "title": code_to_title(code),
+                "description": args.get("description", ""),
+                "category": normalize_category(category_raw),
+                "severity": "error",
+                "suggestedFix": args.get("suggestedFix", ""),
+                "retryable": args.get("retryable", "false") == "true",
+                "runbookUrl": args.get("runbookUrl") if args.get("runbookUrl") != "null" else None,
+            }
+        )
     return entries
 
 
@@ -245,6 +254,7 @@ def parse_cs_file(cs_content: str) -> dict[str, dict]:
 # Curated loader
 # ---------------------------------------------------------------------------
 
+
 def load_curated(curated_path: Path) -> dict[str, dict]:
     """Load curated error codes. Returns empty dict if file missing."""
     if not curated_path.exists():
@@ -268,6 +278,7 @@ def load_curated(curated_path: Path) -> dict[str, dict]:
 # Merge
 # ---------------------------------------------------------------------------
 
+
 def merge_codes(parsed: dict[str, dict], curated: dict[str, dict]) -> dict[str, dict]:
     """Merge parsed codes over curated. Parsed wins on conflict."""
     merged = dict(curated)
@@ -281,6 +292,7 @@ def merge_codes(parsed: dict[str, dict], curated: dict[str, dict]) -> dict[str, 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 def validate_entry(code: str, entry: dict) -> list[str]:
     """Returns list of validation errors (empty = valid)."""
@@ -335,15 +347,14 @@ def validate_all(codes: dict[str, dict]) -> list[str]:
     for code, entry in codes.items():
         for rel in entry.get("relatedCodes", []):
             if rel not in known:
-                all_errors.append(
-                    f"WARN: '{code}.relatedCodes': references unknown code '{rel}'"
-                )
+                all_errors.append(f"WARN: '{code}.relatedCodes': references unknown code '{rel}'")
     return all_errors
 
 
 # ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
+
 
 def write_output(codes: dict[str, dict], source: str, output_path: Path) -> None:
     """Write error-codes-data.js with window.ERROR_CODES_DB assignment."""
@@ -366,24 +377,28 @@ def write_output(codes: dict[str, dict], source: str, output_path: Path) -> None
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate error-codes-data.js from FLT ErrorRegistry.cs",
     )
     parser.add_argument(
-        "--registry", "-r",
+        "--registry",
+        "-r",
         type=Path,
         default=None,
         help="Path to ErrorRegistry.cs (optional; curated-only if omitted)",
     )
     parser.add_argument(
-        "--curated", "-c",
+        "--curated",
+        "-c",
         type=Path,
         default=PROJECT_DIR / "src" / "data" / "error-codes-curated.json",
         help="Path to curated error codes JSON (default: src/data/error-codes-curated.json)",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=PROJECT_DIR / "src" / "frontend" / "js" / "error-codes-data.js",
         help="Output JS file path (default: src/frontend/js/error-codes-data.js)",
@@ -429,8 +444,7 @@ def main() -> None:
             cs_size = args.registry.stat().st_size
             if cs_size > 100:
                 log_error(
-                    f"Parsed 0 codes from {args.registry} ({cs_size} bytes). "
-                    "File may use an unrecognized pattern."
+                    f"Parsed 0 codes from {args.registry} ({cs_size} bytes). File may use an unrecognized pattern."
                 )
                 sys.exit(EXIT_PARSE)
 

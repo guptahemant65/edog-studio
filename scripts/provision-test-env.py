@@ -3,6 +3,7 @@
 Creates isolated test infra for API endpoint testing. Does NOT touch existing resources.
 Uses the redirect host with PBI bearer token.
 """
+
 import base64
 import json
 import ssl
@@ -90,13 +91,18 @@ def main():
         print(f"  Found existing: {ws_name} ({ws_id[:12]}...)")
     else:
         print(f"  Creating workspace: {ws_name}")
-        result = _request("POST", "/metadata/folders", body={
-            "capacityObjectId": CAPACITY_ID,
-            "displayName": ws_name,
-            "description": "Auto-provisioned by EDOG Studio for API testing. Safe to delete.",
-            "isServiceApp": False,
-            "datasetStorageMode": 1,
-        }, bearer=bearer)
+        result = _request(
+            "POST",
+            "/metadata/folders",
+            body={
+                "capacityObjectId": CAPACITY_ID,
+                "displayName": ws_name,
+                "description": "Auto-provisioned by EDOG Studio for API testing. Safe to delete.",
+                "isServiceApp": False,
+                "datasetStorageMode": 1,
+            },
+            bearer=bearer,
+        )
         ws_id = result.get("objectId", result.get("id", ""))
         if not ws_id:
             print(f"  ERROR: No workspace ID in response: {json.dumps(result)[:300]}")
@@ -118,10 +124,15 @@ def main():
     else:
         print(f"  Creating lakehouse: {lh_name} (WITHOUT schemas for table listing)")
         # Create via v1 public API — creates lakehouse without schemas by default
-        result = _request("POST", f"/v1/workspaces/{ws_id}/lakehouses", body={
-            "displayName": lh_name,
-            "description": "EDOG Studio test lakehouse. Safe to delete.",
-        }, bearer=bearer)
+        result = _request(
+            "POST",
+            f"/v1/workspaces/{ws_id}/lakehouses",
+            body={
+                "displayName": lh_name,
+                "description": "EDOG Studio test lakehouse. Safe to delete.",
+            },
+            bearer=bearer,
+        )
         lh_id = result.get("id", "")
         if not lh_id:
             print(f"  ERROR: No lakehouse ID in response: {json.dumps(result)[:300]}")
@@ -140,7 +151,7 @@ def main():
             print(f"    - {t.get('name', t.get('displayName', '?'))}")
     except urllib.error.HTTPError as e:
         if e.code == 400:
-            err = json.loads(e.read().decode() if hasattr(e, 'read') else '{}')
+            err = json.loads(e.read().decode() if hasattr(e, "read") else "{}")
             ec = err.get("errorCode", "?")
             if "Schemas" in ec:
                 print("  Tables endpoint returned 400 (schemas enabled) — this lakehouse has schemas.")
