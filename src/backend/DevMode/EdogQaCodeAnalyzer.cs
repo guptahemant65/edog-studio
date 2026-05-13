@@ -583,6 +583,24 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
+            // Auto-warm OmniSharp on first use if not yet ready
+            if (!_omniSharpProvider.IsReady)
+            {
+                var solutionPath = FindSolutionFile();
+                if (solutionPath != null)
+                {
+                    try
+                    {
+                        Console.WriteLine($"[EDOG] Auto-warming OmniSharp with {solutionPath}...");
+                        await _omniSharpProvider.WarmUpAsync(solutionPath, cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[EDOG] OmniSharp warmup failed: {ex.Message}");
+                    }
+                }
+            }
+
             if (!_omniSharpProvider.IsReady)
             {
                 degradationFlags.Add("omnisharp_not_ready");
@@ -1158,6 +1176,30 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 // Non-fatal — never let diagnostics crash the pipeline
             }
+        }
+
+        /// <summary>
+        /// Walk up from CWD or EDOG_FLT_SOURCE_ROOT looking for a .sln file.
+        /// </summary>
+        private static string FindSolutionFile()
+        {
+            var envRoot = Environment.GetEnvironmentVariable("EDOG_FLT_SOURCE_ROOT");
+            var startDir = !string.IsNullOrEmpty(envRoot) && Directory.Exists(envRoot)
+                ? new DirectoryInfo(envRoot)
+                : new DirectoryInfo(Directory.GetCurrentDirectory());
+
+            var dir = startDir;
+            while (dir != null)
+            {
+                var slnFiles = dir.GetFiles("*.sln");
+                if (slnFiles.Length > 0)
+                {
+                    return slnFiles[0].FullName;
+                }
+                dir = dir.Parent;
+            }
+
+            return null;
         }
     }
 
