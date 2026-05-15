@@ -3364,6 +3364,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             }
             git_branch = repo_info.get("gitBranch", "")
             git_dirty = repo_info.get("gitDirty", 0)
+            git_dirty_edog = repo_info.get("gitDirtyEdog", 0)
+            git_dirty_total = repo_info.get("gitDirtyTotal", 0)
         else:
             flt_repo_resp = {
                 "configured": repo_info is not None,
@@ -3373,6 +3375,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             }
             git_branch = ""
             git_dirty = 0
+            git_dirty_edog = 0
+            git_dirty_total = 0
 
         self._json_response(
             200,
@@ -3383,6 +3387,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "lastUsername": session.get("lastUsername", ""),
                 "gitBranch": git_branch,
                 "gitDirtyFiles": git_dirty,
+                "gitDirtyEdogFiles": git_dirty_edog,
+                "gitDirtyTotal": git_dirty_total,
                 "fltRepo": flt_repo_resp,
             },
         )
