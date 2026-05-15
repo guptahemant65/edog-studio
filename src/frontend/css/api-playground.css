@@ -134,6 +134,26 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* F09 SF-004: kind icons inline with the endpoint name (spec / ui / signalr).
+   No icon rendered for kind=rest — the method pill carries the meaning. */
+.api-cat-item .ci-kind {
+  display: inline-block;
+  font-size: 10px;
+  line-height: 1;
+  width: 12px;
+  text-align: center;
+  vertical-align: 1px;
+  color: var(--text-muted);
+}
+.api-cat-item .ci-kind-spec { color: var(--purple); }
+.api-cat-item .ci-kind-ui { color: var(--blue); }
+.api-cat-item .ci-kind-signalr { color: var(--amber); }
+/* Spec endpoints get a faint left-edge highlight so the "diff" affordance
+   reads at a glance. */
+.api-cat-item.api-cat-item-spec { border-left: 2px solid var(--purple-dim); }
+.api-cat-item.api-cat-item-ui { border-left: 2px solid var(--blue-dim); }
+.api-cat-item.api-cat-item-signalr { border-left: 2px solid var(--amber-dim); }
+
 /* Catalog method pill dim colors */
 .m-get { background: var(--green-dim); color: var(--green); }
 .m-post { background: var(--blue-dim); color: var(--blue); }

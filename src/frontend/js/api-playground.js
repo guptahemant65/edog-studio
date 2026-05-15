@@ -363,6 +363,11 @@ class EndpointCatalog {
     var item = document.createElement('div');
     item.className = 'api-cat-item';
     if (ep.dangerLevel === 'destructive') item.classList.add('api-danger-destructive');
+    // SF-004: visual differentiation for non-controller kinds (spec / ui / signalr).
+    // Adds a 2px color-coded left border; kind=rest falls through to default styling.
+    if (ep.kind && ep.kind !== 'rest') {
+      item.classList.add('api-cat-item-' + ep.kind);
+    }
 
     var pill = document.createElement('span');
     pill.className = 'ci-method m-' + ep.method.toLowerCase();
@@ -370,6 +375,20 @@ class EndpointCatalog {
 
     var info = document.createElement('div');
     info.className = 'ci-info';
+
+    // SF-004: kind icon prepended to the name row. aria-hidden because the
+    // kind is also conveyed via the title attribute below; the visual is
+    // redundant signal, not the primary content.
+    if (ep.kind && ep.kind !== 'rest') {
+      var kindIcon = document.createElement('span');
+      kindIcon.className = 'ci-kind ci-kind-' + ep.kind;
+      kindIcon.textContent = EndpointCatalog._KIND_ICONS[ep.kind] || '';
+      kindIcon.setAttribute('aria-hidden', 'true');
+      var label = EndpointCatalog._KIND_LABELS[ep.kind];
+      if (label) kindIcon.title = label;
+      info.appendChild(kindIcon);
+    }
+
     var name = document.createElement('span');
     name.className = 'ci-name';
     name.textContent = ep.name;
@@ -398,6 +417,23 @@ class EndpointCatalog {
     this.onSelect = null;
   }
 }
+
+// SF-004: kind taxonomy must mirror scripts/flt_catalog.py VALID_ENDPOINT_KINDS.
+// Glyphs picked from BMP for universal monospace coverage:
+//   spec    ◆  U+25C6  BLACK DIAMOND          — "definition / contract"
+//   ui      ◰  U+25F0  SQUARE W/ UL QUADRANT  — "rendered surface"
+//   signalr ⇆  U+21C6  LEFTWARDS PAIRED ARROW — "bidirectional stream"
+// REST has no icon — the method pill already carries the meaning.
+EndpointCatalog._KIND_ICONS = {
+  spec: '\u25C6',
+  ui: '\u25F0',
+  signalr: '\u21C6',
+};
+EndpointCatalog._KIND_LABELS = {
+  spec: 'OpenAPI spec',
+  ui: 'Web UI (open in browser)',
+  signalr: 'SignalR hub',
+};
 
 /* ══════════════════════════════════════════════════════════════
  * §3  REQUEST BUILDER

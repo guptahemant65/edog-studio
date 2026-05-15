@@ -26,7 +26,7 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 from file_watcher import FileWatcher
-from flt_catalog import controllers_dir_mtime, extract_catalog
+from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
 from repo_discovery import find_flt_repos, get_configured_repo, validate_repo
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -2846,6 +2846,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 },
             )
             return
+
+        # SF-002: framework-endpoints.json contributes to the catalog, so its
+        # mtime must factor into the cache key. Touching data/framework-endpoints.json
+        # in edog-studio invalidates a previously-cached extraction.
+        fw_mtime = framework_endpoints_mtime()
+        if fw_mtime is not None and fw_mtime > current_mtime:
+            current_mtime = fw_mtime
 
         # Cache lookup (read-only fast path).
         with _playground_catalog_lock:

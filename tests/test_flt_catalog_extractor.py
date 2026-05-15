@@ -464,8 +464,10 @@ class TestExtractCatalog:
         )
         result = extract_catalog(str(repo))
         assert result["stats"]["controllers_scanned"] == 3
-        # 4 LiveTable + 1 Maintenance + 1 Insights = 6 endpoints
-        assert result["stats"]["endpoints_found"] == 6
+        # 4 LiveTable + 1 Maintenance + 1 Insights = 6 controller endpoints,
+        # plus 2 framework endpoints (swagger spec + swagger UI) = 8 total.
+        assert result["stats"]["endpoints_found"] == 8
+        assert result["stats"]["framework_endpoints"] == 2
 
     def test_groups_have_friendly_labels(self, tmp_path):
         repo = _make_fake_repo(

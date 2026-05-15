@@ -122,8 +122,12 @@ class TestHappyPath:
         with patch.object(srv, "_get_flt_repo_dir", return_value=str(repo)):
             handler = _call_catalog(srv)
         assert handler.response_status == 200
-        assert len(handler.response_payload["endpoints"]) == 1
-        ep = handler.response_payload["endpoints"][0]
+        # Catalog includes the controller endpoint plus 2 framework endpoints
+        # (swagger spec + UI), filter by source to keep the test resilient.
+        endpoints = handler.response_payload["endpoints"]
+        controller_eps = [e for e in endpoints if e.get("source") == "controller"]
+        assert len(controller_eps) == 1
+        ep = controller_eps[0]
         assert ep["urlTemplate"] == "/liveTable/getLatestDag"
         assert ep["method"] == "GET"
         assert ep["tokenType"] == "mwc"
@@ -141,7 +145,9 @@ class TestHappyPath:
             handler = _call_catalog(srv)
         stats = handler.response_payload["stats"]
         assert stats["controllers_scanned"] == 1
-        assert stats["endpoints_found"] == 1
+        # 1 controller endpoint + 2 framework endpoints (swagger spec + UI)
+        assert stats["endpoints_found"] == 3
+        assert stats["framework_endpoints"] == 2
 
 
 # ════════════════════════════════════════════════════════════════

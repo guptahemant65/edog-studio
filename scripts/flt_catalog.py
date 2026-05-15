@@ -23,6 +23,8 @@ Output shape:
                 "queryParams": ["showExtendedLineage"],
                 "dangerLevel": "safe",
                 "bodyTemplate": null,
+                "kind": "rest",          # F09 SF-001
+                "source": "controller",  # F09 SF-001
             },
             ...
         ],
@@ -54,6 +56,30 @@ from pathlib import Path
 CONTROLLERS_SUBPATH = Path("Service") / "Microsoft.LiveTable.Service" / "Controllers"
 
 INCLUDED_CLASS_ROUTE_PREFIX = "v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable"
+
+# F09 swagger-discovery taxonomy. Every endpoint in the catalog carries a
+# `kind` and a `source` so the Playground UI and dispatch layer can branch
+# on them. `kind` describes WHAT the endpoint is; `source` describes WHERE
+# we learned about it.
+#
+# kind:
+#   - "rest"     : normal JSON REST endpoint (the default for all controllers)
+#   - "spec"     : OpenAPI/swagger spec JSON document (special: triggers diff
+#                  view inside the Playground response viewer)
+#   - "ui"       : human-facing HTML page (e.g. swagger-ui); not invokable as
+#                  an API request - Playground offers "Open in browser"
+#   - "signalr"  : SignalR hub (websocket); Playground uses a hub-events tab
+#
+# source:
+#   - "controller" : extracted from a [HttpVerb] method in a *Controller.cs
+#   - "framework"  : hand-curated entry from data/framework-endpoints.json
+#                    (covers app.UseSwagger / MapHub / MapGet middleware that
+#                    is invisible to the controller scanner)
+#   - "runtime"    : observed in the live swagger.json at runtime but not
+#                    matched against any static source (catch-all for routes
+#                    we missed statically)
+VALID_ENDPOINT_KINDS = frozenset({"rest", "spec", "ui", "signalr"})
+VALID_ENDPOINT_SOURCES = frozenset({"controller", "framework", "runtime"})
 
 EXCLUDED_FILES = frozenset(
     {
@@ -201,8 +227,123 @@ def extract_catalog(flt_repo_path: str) -> dict:
         result["warnings"].extend(controller_warnings)
 
     result["stats"]["endpoints_found"] = len(result["endpoints"])
+
+    # SF-002: merge framework endpoints (swagger spec, UI, SignalR hubs) from
+    # the hand-curated catalog. Done after controller scan so controller IDs
+    # take precedence in any (unlikely) collision.
+    framework_endpoints, framework_warnings = _load_framework_endpoints()
+    result["warnings"].extend(framework_warnings)
+    existing_ids = {ep["id"] for ep in result["endpoints"]}
+    for ep in framework_endpoints:
+        if ep["id"] in existing_ids:
+            result["warnings"].append(
+                f"Framework endpoint id '{ep['id']}' collides with controller endpoint — keeping controller"
+            )
+            continue
+        result["endpoints"].append(ep)
+        existing_ids.add(ep["id"])
+    result["stats"]["framework_endpoints"] = len(framework_endpoints)
+    result["stats"]["endpoints_found"] = len(result["endpoints"])
+
     result["groups"] = _derive_groups(result["endpoints"])
     return result
+
+
+# ── SF-002: framework endpoints loader ────────────────────────────────────────
+# Hand-curated entries for non-controller routes (UseSwagger, UseSwaggerUI,
+# MapHub). Lives at data/framework-endpoints.json relative to the edog-studio
+# repo root, NOT the FLT repo. Loader is fault-tolerant: missing file →
+# warning + empty list, malformed file → warning + empty list.
+
+_FRAMEWORK_ENDPOINTS_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "framework-endpoints.json"
+)
+
+_REQUIRED_FRAMEWORK_KEYS = (
+    "id",
+    "name",
+    "method",
+    "urlTemplate",
+    "fullPath",
+    "group",
+    "tokenType",
+    "controller",
+    "description",
+    "queryParams",
+    "dangerLevel",
+    "bodyTemplate",
+    "kind",
+    "source",
+)
+
+
+def _load_framework_endpoints() -> tuple[list[dict], list[str]]:
+    """Read and validate data/framework-endpoints.json.
+
+    Returns (endpoints, warnings). Never raises; non-fatal issues become
+    warnings so the controller-derived catalog still serves.
+    """
+    import json
+
+    warnings: list[str] = []
+    path = _FRAMEWORK_ENDPOINTS_PATH
+    if not path.is_file():
+        warnings.append(f"Framework endpoints file not found: {path}")
+        return [], warnings
+
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        warnings.append(f"Could not read framework endpoints file: {exc}")
+        return [], warnings
+
+    try:
+        doc = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        warnings.append(f"Framework endpoints file is not valid JSON: {exc}")
+        return [], warnings
+
+    raw_endpoints = doc.get("endpoints")
+    if not isinstance(raw_endpoints, list):
+        warnings.append("Framework endpoints file missing 'endpoints' list")
+        return [], warnings
+
+    validated: list[dict] = []
+    for idx, ep in enumerate(raw_endpoints):
+        if not isinstance(ep, dict):
+            warnings.append(f"Framework endpoint #{idx} is not an object — skipped")
+            continue
+        missing = [k for k in _REQUIRED_FRAMEWORK_KEYS if k not in ep]
+        if missing:
+            warnings.append(
+                f"Framework endpoint '{ep.get('id', f'#{idx}')}' missing keys: {missing} — skipped"
+            )
+            continue
+        if ep["kind"] not in VALID_ENDPOINT_KINDS:
+            warnings.append(
+                f"Framework endpoint '{ep['id']}' has invalid kind '{ep['kind']}' — skipped"
+            )
+            continue
+        if ep["source"] != "framework":
+            warnings.append(
+                f"Framework endpoint '{ep['id']}' must have source='framework', got '{ep['source']}' — skipped"
+            )
+            continue
+        validated.append(ep)
+    return validated, warnings
+
+
+def framework_endpoints_mtime() -> float | None:
+    """Return the mtime of data/framework-endpoints.json, or None if missing.
+
+    SF-002: separate cache invalidation key for framework-endpoint edits, so
+    the dev-server playground cache invalidates when this file changes
+    without needing a controller file touch.
+    """
+    try:
+        return _FRAMEWORK_ENDPOINTS_PATH.stat().st_mtime
+    except OSError:
+        return None
 
 
 def _parse_controller(
@@ -344,6 +485,8 @@ def _parse_controller(
                 "queryParams": query_params,
                 "dangerLevel": _danger_level(verb, method_name),
                 "bodyTemplate": body_template,
+                "kind": "rest",
+                "source": "controller",
             }
         )
 
@@ -470,6 +613,7 @@ _GROUP_LABEL_OVERRIDES = {
     "liveTable/refreshTriggers": "Refresh Triggers",
     "liveTableMaintanance": "Maintenance",
     "liveTableSchedule": "Scheduler",
+    "framework/swagger": "Framework · Swagger",
 }
 
 

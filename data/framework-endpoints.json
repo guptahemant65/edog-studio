@@ -1,0 +1,38 @@
+{
+  "$schema": "Hand-curated framework endpoints for the FLT workload, sourced from middleware/wire-up code (UseSwagger / UseSwaggerUI / MapHub). Auto-merged with controller-derived endpoints by scripts/flt_catalog.py. Editing notes: keep entries grouped by `group`; lint test (tests/test_framework_endpoints_lint.py) verifies that every UseSwagger/MapHub call in the FLT repo has a corresponding entry.",
+  "version": 1,
+  "endpoints": [
+    {
+      "id": "framework-swagger-spec",
+      "name": "Swagger Spec (swagger.json)",
+      "method": "GET",
+      "urlTemplate": "/swagger/v1/swagger.json",
+      "fullPath": "/swagger/v1/swagger.json",
+      "group": "framework/swagger",
+      "tokenType": "mwc",
+      "controller": "WorkloadEndpointSetup (UseSwagger)",
+      "description": "The OpenAPI spec document generated at runtime by Swashbuckle. Opening this endpoint in the Playground triggers the swagger-diff view: response is compared against the committed baseline at data/swagger-baseline.json so contract changes are visible at a glance.",
+      "queryParams": [],
+      "dangerLevel": "safe",
+      "bodyTemplate": null,
+      "kind": "spec",
+      "source": "framework"
+    },
+    {
+      "id": "framework-swagger-ui",
+      "name": "Swagger UI",
+      "method": "GET",
+      "urlTemplate": "/",
+      "fullPath": "/",
+      "group": "framework/swagger",
+      "tokenType": "mwc",
+      "controller": "WorkloadEndpointSetup (UseSwaggerUI)",
+      "description": "Interactive Swagger UI served by Swashbuckle at the root path (RoutePrefix = empty). Dev-environment only. Not invokable as an API — Playground will offer 'Open in browser' instead of Send.",
+      "queryParams": [],
+      "dangerLevel": "safe",
+      "bodyTemplate": null,
+      "kind": "ui",
+      "source": "framework"
+    }
+  ]
+}
