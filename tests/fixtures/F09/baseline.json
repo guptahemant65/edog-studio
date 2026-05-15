@@ -1,0 +1,38 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "EDOG Demo API", "version": "1.0.0"},
+  "paths": {
+    "/api/users": {
+      "get": {
+        "summary": "List users",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "OK"}
+        }
+      }
+    },
+    "/api/legacy": {
+      "delete": {
+        "summary": "Legacy delete",
+        "responses": {"204": {"description": "Deleted"}}
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"}
+        }
+      },
+      "LegacyType": {
+        "type": "string"
+      }
+    }
+  }
+}

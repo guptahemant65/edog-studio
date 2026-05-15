@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "EDOG Demo API", "version": "1.0.0"},
+  "paths": {
+    "/api/users": {
+      "get": {
+        "summary": "List users with pagination",
+        "parameters": [
+          {"name": "limit", "in": "query", "schema": {"type": "integer"}},
+          {"name": "offset", "in": "query", "schema": {"type": "integer"}}
+        ],
+        "responses": {
+          "200": {"description": "OK"},
+          "400": {"description": "Bad request"}
+        }
+      }
+    },
+    "/api/items": {
+      "post": {
+        "summary": "Create item",
+        "responses": {"201": {"description": "Created"}}
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "required": ["id", "email"],
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "email": {"type": "string"}
+        }
+      },
+      "ItemCreated": {
+        "type": "object",
+        "properties": {"id": {"type": "string"}}
+      }
+    }
+  }
+}

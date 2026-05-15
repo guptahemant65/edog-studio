@@ -1,0 +1,204 @@
+{
+  "summary": {
+    "endpoints": {
+      "added": 1,
+      "removed": 1,
+      "modified": 1
+    },
+    "schemas": {
+      "added": 1,
+      "removed": 1,
+      "modified": 1
+    },
+    "totalChanges": 6
+  },
+  "changes": [
+    {
+      "category": "endpoints",
+      "type": "removed",
+      "key": "DELETE /api/legacy",
+      "oldValue": {
+        "summary": "Legacy delete",
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        },
+        "parameters": []
+      },
+      "id": "ch-001"
+    },
+    {
+      "category": "endpoints",
+      "type": "modified",
+      "key": "GET /api/users",
+      "oldValue": {
+        "summary": "List users",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "newValue": {
+        "summary": "List users with pagination",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      },
+      "subChanges": [
+        {
+          "subType": "metadata-changed",
+          "detail": "summary",
+          "oldValue": "List users",
+          "newValue": "List users with pagination"
+        },
+        {
+          "subType": "parameter-added",
+          "detail": "query.offset",
+          "newValue": {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        },
+        {
+          "subType": "response-added",
+          "detail": "400",
+          "newValue": {
+            "description": "Bad request"
+          }
+        }
+      ],
+      "id": "ch-002"
+    },
+    {
+      "category": "endpoints",
+      "type": "added",
+      "key": "POST /api/items",
+      "newValue": {
+        "summary": "Create item",
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        },
+        "parameters": []
+      },
+      "id": "ch-003"
+    },
+    {
+      "category": "schemas",
+      "type": "added",
+      "key": "ItemCreated",
+      "newValue": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "id": "ch-004"
+    },
+    {
+      "category": "schemas",
+      "type": "removed",
+      "key": "LegacyType",
+      "oldValue": {
+        "type": "string"
+      },
+      "id": "ch-005"
+    },
+    {
+      "category": "schemas",
+      "type": "modified",
+      "key": "User",
+      "oldValue": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "newValue": {
+        "type": "object",
+        "required": [
+          "id",
+          "email"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "subChanges": [
+        {
+          "subType": "property-added",
+          "detail": "email",
+          "newValue": {
+            "type": "string"
+          }
+        },
+        {
+          "subType": "required-changed",
+          "detail": "required",
+          "oldValue": [
+            "id"
+          ],
+          "newValue": [
+            "id",
+            "email"
+          ]
+        }
+      ],
+      "id": "ch-006"
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 > **Status:** 🟢 ACTIVE
 > **Applies To:** All edog-studio agents
-> **Last Updated:** 2026-04-08
+> **Last Updated:** 2026-05-15
 
 ---
 
@@ -26,6 +26,7 @@ edog-studio spans three languages, two build pipelines, browser auth via Playwri
 | "Pattern not found" during patch | FLT code structure changed | [Patch Failures](#5-patch-failures) |
 | WebSocket disconnects randomly | Server restart, browser tab sleep | [WebSocket Disconnects](#6-websocket-disconnects) |
 | StyleCop analyzer warnings | Missing `#nullable disable`, using order | [StyleCop Failures](#7-stylecop-failures) |
+| Swagger diff fails / "No baseline" / stale changes | Missing/corrupt baseline file, runtime spec unreachable | [Swagger Diff & Baseline](#8-swagger-diff--baseline) |
 
 ---
 
@@ -276,6 +277,64 @@ Max: wait 30s, then keep retrying every 30s
 #pragma warning disable SA1101 // Prefix local calls with this
 #pragma warning disable SA1633 // File should have header
 ```
+
+---
+
+## 8. Swagger Diff & Baseline
+
+**Feature:** F09 API Playground — selecting the `framework-swagger-spec` endpoint renders a semantic diff between the runtime swagger.json (served by Swashbuckle in FLT) and a committed baseline at `data/swagger-baseline.json`. Diff is assembled by `scripts/swagger_diff_assemble.py` from four pure modules (normalize, paths, operation, schemas).
+
+### Symptom: "No baseline" CTA shows even though baseline.json exists
+
+**Cause:** The file is `{}` (placeholder) or contains an empty object. `swagger_baseline.load_baseline` treats `{}` as absent so the frontend shows the save-CTA.
+
+**Fix:** Click **Save as baseline** in the playground, or hit `POST /api/playground/swagger/baseline`. The dev-server fetches the live runtime spec and atomically writes it.
+
+### Symptom: "Baseline file is unreadable" warning
+
+**Cause:** `data/swagger-baseline.json` is corrupt (malformed JSON) or unparseable. The diff endpoint returns `baselineError: "baseline-corrupt: ..."` and `diff: null` so the frontend renders a warning + Replace CTA.
+
+**Fix (any one):**
+- Click **Replace baseline** in the playground (POST overwrites atomically).
+- `git checkout data/swagger-baseline.json` to restore the committed copy.
+- Delete the file (`DELETE /api/playground/swagger/baseline`) and re-save.
+
+### Symptom: Diff returns 502 / "Failed to load swagger diff"
+
+**Cause:** The dev-server couldn't reach the runtime spec. Usually because FLT isn't running (Disconnected phase), the MWC token is stale, or `workspace_id` / `artifact_id` are missing from `edog-config.json`.
+
+**Fix:** Confirm FLT is up (Connected phase, `studio_state.phase == "running"`), refresh tokens via the connection flow, and verify the config has all three IDs (workspace, artifact, capacity). The dev-server fetches via the same path as the proxy — if `/swagger/v1/swagger.json` doesn't work as a normal MWC call, the diff won't either.
+
+### Symptom: Snapshot test `test_swagger_diff_snapshot.py` fails
+
+**Cause:** Either a real regression in one of the five diff modules, **or** an intentional shape change to the diff payload.
+
+**Fix:**
+1. Read the assertion diff. If the shape change is unintended, find the regression in `swagger_{normalize,diff_paths,diff_operation,diff_schemas,diff_assemble}.py`.
+2. If the shape change is intentional, regenerate the fixture: `python scripts/regen_swagger_diff_fixture.py` and review the resulting `tests/fixtures/F09/expected_diff.json` diff in the PR before committing.
+
+### Interpreting diff categories
+
+| Category | Type | What it means |
+|---|---|---|
+| `endpoints` | `added` | New `METHOD /path` in runtime, not in baseline. `newValue` carries the operation. |
+| `endpoints` | `removed` | Operation present in baseline, gone from runtime. `oldValue` is the lost shape. |
+| `endpoints` | `modified` | Same `METHOD /path`, different parameters / request body / responses / metadata. `subChanges[]` lists per-leaf diffs (`parameter-added`, `response-modified`, `metadata-changed`, etc.). |
+| `schemas` | `added`/`removed` | A `components/schemas/<Name>` entry appeared/disappeared. v2 `definitions` are lifted by `normalize` first. |
+| `schemas` | `modified` | Same name, different shape. `subChanges[]` covers `property-added/removed/modified`, `required-changed`, `type-changed`, `field-changed`. |
+
+### Where things live
+
+| File | Role |
+|---|---|
+| `data/swagger-baseline.json` | The committed baseline. Reviewed in PRs. `{}` = placeholder = "treat as absent". |
+| `scripts/swagger_baseline.py` | Atomic read/write/delete (`.tmp` → rename). |
+| `scripts/swagger_normalize.py` | Lifts v2/v3 → canonical `{version, info, operations, schemas}`. External `$ref` becomes `{$unsupported}` sentinel — no network. |
+| `scripts/swagger_diff_{paths,operation,schemas,assemble}.py` | Pure diff walkers. |
+| `tests/fixtures/F09/{baseline,runtime,expected_diff}.json` | Snapshot test fixtures. |
+| `scripts/regen_swagger_diff_fixture.py` | Regenerate `expected_diff.json` after intentional shape changes. |
+| Endpoints in `scripts/dev-server.py` | `GET/POST/DELETE /api/playground/swagger/baseline` + `GET /api/playground/swagger/diff` |
+| `src/frontend/js/api-playground.js` (`SwaggerSpecView`) | Renders the diff payload inline in the response panel. |
 
 ---
 
