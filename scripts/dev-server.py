@@ -27,7 +27,12 @@ from socketserver import ThreadingMixIn
 
 from file_watcher import FileWatcher
 from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
-from repo_discovery import find_flt_repos, get_configured_repo, validate_repo
+from repo_discovery import (
+    find_flt_repos,
+    get_configured_repo,
+    get_configured_swagger_path,
+    validate_repo,
+)
 from swagger_baseline import load_baseline as _load_swagger_baseline
 from swagger_baseline import remove_baseline as _remove_swagger_baseline
 from swagger_baseline import save_baseline as _save_swagger_baseline
@@ -41,7 +46,6 @@ BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
-SWAGGER_BASELINE_PATH = PROJECT_DIR / "data" / "swagger-baseline.json"
 
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 
@@ -2901,17 +2905,44 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         self._json_response(200, payload)
 
+    def _resolve_swagger_baseline_path(self):
+        """Resolve the baseline Swagger.json path from FLT repo config.
+
+        Returns ``(Path, None)`` on success, or ``(None, err_dict)`` when the
+        FLT repo isn't configured or the configured path is invalid. The
+        error dict is shaped for direct JSON serialization.
+        """
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        except (OSError, json.JSONDecodeError) as exc:
+            return None, {
+                "error": "config-read-failed",
+                "message": str(exc),
+            }
+        baseline_path = get_configured_swagger_path(cfg)
+        if baseline_path is None:
+            return None, {
+                "error": "flt-repo-not-configured",
+                "message": (
+                    "Configure the FLT repo path in EDOG Studio settings — "
+                    "the baseline is read from <flt-repo>/Service/"
+                    "Microsoft.LiveTable.Service/Swagger/Swagger.json."
+                ),
+            }
+        return baseline_path, None
+
     def _serve_swagger_diff(self):
         """F09 SF-010: GET /api/playground/swagger/diff.
 
         Fetches the live swagger.json from the running FLT instance,
-        loads the committed baseline (``data/swagger-baseline.json``),
+        loads the FLT repo's committed ``Swagger/Swagger.json`` baseline,
         and returns the typed diff alongside the raw runtime spec.
 
         Response shapes:
-          200 {runtime, baselineExists, baselineSavedAt, baselineError, diff}
+          200 {runtime, baselineExists, baselineSavedAt, baselineError,
+               baselinePath, baselineSource, diff}
               ``diff`` is null when no baseline is present (frontend
-              should render a "Save as baseline" CTA).
+              should render a "Sync repo Swagger.json" CTA).
           4xx/5xx envelope when the runtime fetch fails — the same error
               taxonomy as swagger_runtime.fetch_runtime_swagger.
         """
@@ -2931,7 +2962,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(status, err)
             return
 
-        baseline_spec, baseline_meta = _load_swagger_baseline(SWAGGER_BASELINE_PATH)
+        baseline_path, path_err = self._resolve_swagger_baseline_path()
+        if baseline_path is None:
+            # Repo not configured: surface a soft "no baseline" state so
+            # the frontend renders the configure-CTA, not a hard error.
+            self._json_response(200, {
+                "runtime": runtime_spec,
+                "baselineExists": False,
+                "baselineSavedAt": None,
+                "baselineError": path_err.get("error"),
+                "baselinePath": None,
+                "baselineSource": "flt-repo",
+                "diff": None,
+            })
+            return
+
+        baseline_spec, baseline_meta = _load_swagger_baseline(baseline_path)
 
         diff_payload = None
         if baseline_spec is not None:
@@ -2946,6 +2992,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "runtime": runtime_spec,
                     "baselineExists": True,
                     "baselineSavedAt": baseline_meta.get("savedAt"),
+                    "baselinePath": str(baseline_path),
+                    "baselineSource": "flt-repo",
                 })
                 return
 
@@ -2954,27 +3002,47 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "baselineExists": baseline_meta.get("exists", False),
             "baselineSavedAt": baseline_meta.get("savedAt"),
             "baselineError": baseline_meta.get("error"),
+            "baselinePath": str(baseline_path),
+            "baselineSource": "flt-repo",
             "diff": diff_payload,
         })
 
     def _serve_swagger_baseline_get(self):
         """F09 SF-011: GET /api/playground/swagger/baseline.
 
-        Returns metadata about the committed baseline file. The spec
-        itself is not returned — callers that need it should use the
-        diff endpoint, which includes the full runtime spec and the
-        diff that summarizes the baseline content.
+        Returns metadata about the FLT repo's committed Swagger.json.
+        The spec body is not returned — callers that need it should use
+        the diff endpoint.
         """
-        _, meta = _load_swagger_baseline(SWAGGER_BASELINE_PATH)
+        baseline_path, path_err = self._resolve_swagger_baseline_path()
+        if baseline_path is None:
+            self._json_response(200, {
+                "exists": False,
+                "savedAt": None,
+                "size": None,
+                "error": path_err.get("error"),
+                "path": None,
+                "source": "flt-repo",
+            })
+            return
+        _, meta = _load_swagger_baseline(baseline_path)
+        meta["path"] = str(baseline_path)
+        meta["source"] = "flt-repo"
         self._json_response(200, meta)
 
     def _serve_swagger_baseline_post(self):
         """F09 SF-011: POST /api/playground/swagger/baseline.
 
-        Fetches the live runtime spec and persists it as the new
-        baseline at ``data/swagger-baseline.json``. Body is ignored —
-        the source of truth is always whatever FLT is currently serving.
+        Fetches the live runtime spec and writes it to the FLT repo's
+        committed Swagger.json — the developer then reviews the diff
+        and commits the change via git. Body is ignored; the source of
+        truth is whatever FLT is currently serving.
         """
+        baseline_path, path_err = self._resolve_swagger_baseline_path()
+        if baseline_path is None:
+            self._json_response(400, path_err)
+            return
+
         cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
         ws_id = cfg.get("workspace_id", "")
         art_id = cfg.get("artifact_id", "")
@@ -2990,7 +3058,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            meta = _save_swagger_baseline(SWAGGER_BASELINE_PATH, spec)
+            meta = _save_swagger_baseline(baseline_path, spec)
         except (OSError, TypeError) as exc:
             self._json_response(500, {
                 "error": "baseline-save-failed",
@@ -2998,19 +3066,34 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             })
             return
 
+        meta["path"] = str(baseline_path)
+        meta["source"] = "flt-repo"
         self._json_response(200, meta)
 
     def _serve_swagger_baseline_delete(self):
-        """F09 SF-011: DELETE /api/playground/swagger/baseline."""
+        """F09 SF-011: DELETE /api/playground/swagger/baseline.
+
+        Removes the FLT repo's committed Swagger.json. This is a
+        destructive write to the user's working tree but recoverable
+        via ``git checkout`` — the frontend confirms before calling.
+        """
+        baseline_path, path_err = self._resolve_swagger_baseline_path()
+        if baseline_path is None:
+            self._json_response(400, path_err)
+            return
         try:
-            removed = _remove_swagger_baseline(SWAGGER_BASELINE_PATH)
+            removed = _remove_swagger_baseline(baseline_path)
         except OSError as exc:
             self._json_response(500, {
                 "error": "baseline-delete-failed",
                 "message": str(exc),
             })
             return
-        self._json_response(200, {"removed": removed})
+        self._json_response(200, {
+            "removed": removed,
+            "path": str(baseline_path),
+            "source": "flt-repo",
+        })
 
     def _serve_playground_dispatch(self):
         """Dispatcher for the F09 API Playground with custom header forwarding.

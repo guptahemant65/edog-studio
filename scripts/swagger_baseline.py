@@ -5,14 +5,16 @@ dev-server so the file IO is unit-testable and the read-side (SF-010
 diff endpoint) and write-side (SF-011 baseline endpoints) share the
 same canonical path.
 
-The baseline is a plain JSON document — exactly what FLT returned from
-its ``/swagger/v1/swagger.json`` at some past moment. Comparing the
-runtime spec to it produces the diff the playground renders.
+The baseline is a plain JSON document — the canonical Swagger.json the
+FLT team commits to source control at
+``<flt-repo>/Service/Microsoft.LiveTable.Service/Swagger/Swagger.json``.
+Comparing the runtime spec to it surfaces drift between the running
+service and what's checked in, which is what reviewers care about.
 
-Path convention: ``edog-studio/data/swagger-baseline.json`` (committed to
-the repo, per ADR-008 / plan §6).
-
-All functions accept an explicit ``Path``: no module-level globals.
+The path itself is resolved by callers (see
+``repo_discovery.get_configured_swagger_path``) — this module just
+takes an explicit ``Path`` and reads/writes it. No module-level globals,
+no assumption about where the file lives.
 """
 
 from __future__ import annotations

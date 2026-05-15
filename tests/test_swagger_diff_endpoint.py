@@ -1,7 +1,12 @@
 """Integration tests for SF-010: /api/playground/swagger/diff endpoint.
 
 Exercises _serve_swagger_diff by binding the unbound method to a FakeHandler
-and patching the dev-server's runtime fetcher and baseline file path.
+and patching the dev-server's runtime fetcher and baseline-path resolver.
+
+After the F09 baseline-source change, the baseline lives at the FLT
+repo's committed Swagger.json. Tests stub
+``_resolve_swagger_baseline_path`` so they don't need to materialize a
+fake FLT repo on disk.
 """
 
 from __future__ import annotations
@@ -43,8 +48,27 @@ class FakeHandler:
         self.response_payload = payload
 
 
-def _call_diff(srv):
+def _resolver_ok(path: Path):
+    def _impl(self):
+        return path, None
+    return _impl
+
+
+def _resolver_unconfigured():
+    def _impl(self):
+        return None, {"error": "flt-repo-not-configured", "message": "no repo"}
+    return _impl
+
+
+def _attach(handler, resolver):
+    handler._resolve_swagger_baseline_path = lambda: resolver(handler)
+    return handler
+
+
+def _call_diff(srv, resolver=None):
     handler = FakeHandler()
+    if resolver is not None:
+        _attach(handler, resolver)
     srv.EdogDevHandler._serve_swagger_diff(handler)
     return handler
 
@@ -108,15 +132,35 @@ class TestNoBaseline:
         }
         baseline_path = tmp_path / "baseline-missing.json"  # not created
         with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "SWAGGER_BASELINE_PATH", baseline_path), \
              patch.object(srv, "_read_cache", return_value=("tok", None)), \
              patch.object(srv, "_fetch_runtime_swagger",
                           return_value=(runtime, None)):
-            handler = _call_diff(srv)
+            handler = _call_diff(srv, _resolver_ok(baseline_path))
         assert handler.response_status == 200
         payload = handler.response_payload
         assert payload["runtime"] == runtime
         assert payload["baselineExists"] is False
+        assert payload["diff"] is None
+        assert payload["baselineSource"] == "flt-repo"
+
+    def test_returns_200_when_flt_repo_not_configured(self, srv, tmp_path):
+        cfg = _write_config(tmp_path, {
+            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
+        })
+        runtime = {
+            "openapi": "3.0.0", "info": {"title": "FLT", "version": "1"},
+            "paths": {}, "components": {"schemas": {}},
+        }
+        with patch.object(srv, "CONFIG_PATH", cfg), \
+             patch.object(srv, "_read_cache", return_value=("tok", None)), \
+             patch.object(srv, "_fetch_runtime_swagger",
+                          return_value=(runtime, None)):
+            handler = _call_diff(srv, _resolver_unconfigured())
+        assert handler.response_status == 200
+        payload = handler.response_payload
+        assert payload["runtime"] == runtime
+        assert payload["baselineExists"] is False
+        assert payload["baselineError"] == "flt-repo-not-configured"
         assert payload["diff"] is None
 
 
@@ -137,11 +181,10 @@ class TestWithBaseline:
         baseline_path = tmp_path / "baseline.json"
         baseline_path.write_text(json.dumps(spec), encoding="utf-8")
         with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "SWAGGER_BASELINE_PATH", baseline_path), \
              patch.object(srv, "_read_cache", return_value=("tok", None)), \
              patch.object(srv, "_fetch_runtime_swagger",
                           return_value=(spec, None)):
-            handler = _call_diff(srv)
+            handler = _call_diff(srv, _resolver_ok(baseline_path))
         assert handler.response_status == 200
         payload = handler.response_payload
         assert payload["baselineExists"] is True
@@ -168,11 +211,10 @@ class TestWithBaseline:
         baseline_path = tmp_path / "baseline.json"
         baseline_path.write_text(json.dumps(baseline_spec), encoding="utf-8")
         with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "SWAGGER_BASELINE_PATH", baseline_path), \
              patch.object(srv, "_read_cache", return_value=("tok", None)), \
              patch.object(srv, "_fetch_runtime_swagger",
                           return_value=(runtime_spec, None)):
-            handler = _call_diff(srv)
+            handler = _call_diff(srv, _resolver_ok(baseline_path))
         assert handler.response_status == 200
         diff = handler.response_payload["diff"]
         assert diff["summary"]["endpoints"]["added"] == 1
@@ -196,11 +238,10 @@ class TestCorruptBaseline:
             "paths": {}, "components": {"schemas": {}},
         }
         with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "SWAGGER_BASELINE_PATH", baseline_path), \
              patch.object(srv, "_read_cache", return_value=("tok", None)), \
              patch.object(srv, "_fetch_runtime_swagger",
                           return_value=(runtime, None)):
-            handler = _call_diff(srv)
+            handler = _call_diff(srv, _resolver_ok(baseline_path))
         # Frontend gets a clean signal to ask "re-save baseline" — not a 5xx.
         assert handler.response_status == 200
         payload = handler.response_payload

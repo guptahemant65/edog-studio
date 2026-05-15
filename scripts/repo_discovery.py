@@ -172,6 +172,41 @@ def get_configured_repo(config: dict) -> dict | None:
     return validate_repo(flt_path)
 
 
+# Relative path inside an FLT repo to the swagger spec the team commits.
+# This is the canonical baseline for the API playground diff feature — the
+# source-of-truth Swagger.json that lives under source control, not a
+# separately-captured snapshot in the edog-studio working tree.
+FLT_SWAGGER_RELPATH = (
+    Path("Service") / "Microsoft.LiveTable.Service" / "Swagger" / "Swagger.json"
+)
+
+
+def get_flt_swagger_path(repo_root: Path | str) -> Path:
+    """Return the absolute path to the FLT repo's committed Swagger.json.
+
+    Does not check existence — that's the caller's job. Use this so the
+    location stays consistent across diff/baseline endpoints and tests.
+    """
+    return Path(repo_root) / FLT_SWAGGER_RELPATH
+
+
+def get_configured_swagger_path(config: dict) -> Path | None:
+    """Resolve the committed swagger path from config, or None.
+
+    Returns None when:
+      - no ``flt_repo_path`` configured, or
+      - the configured path fails ``validate_repo`` (missing/wrong layout).
+
+    Existence of the Swagger.json file itself is NOT checked here — the
+    caller decides whether absence is a hard error or a soft "no baseline"
+    state.
+    """
+    repo_info = get_configured_repo(config)
+    if not repo_info or not repo_info.get("valid"):
+        return None
+    return get_flt_swagger_path(repo_info["path"])
+
+
 def find_flt_repos(
     *,
     max_depth: int = 4,

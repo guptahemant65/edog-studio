@@ -70393,6 +70393,10 @@ class SwaggerSpecView {
 
     c.appendChild(this._renderHeader(p, baselineExists, baselineError, diff, totalChanges));
 
+    if (baselineError === 'flt-repo-not-configured') {
+      c.appendChild(this._renderRepoNotConfiguredBody());
+      return;
+    }
     if (baselineError) {
       c.appendChild(this._renderBaselineErrorBody(baselineError));
       return;
@@ -70419,7 +70423,10 @@ class SwaggerSpecView {
 
     var pill = document.createElement('span');
     pill.className = 'api-status-pill';
-    if (baselineError) {
+    if (baselineError === 'flt-repo-not-configured') {
+      pill.className += ' s4xx';
+      pill.textContent = 'Repo not configured';
+    } else if (baselineError) {
       pill.className += ' s4xx';
       pill.textContent = 'Baseline corrupt';
     } else if (!baselineExists) {
@@ -70475,10 +70482,15 @@ class SwaggerSpecView {
       actions.appendChild(copyAllBtn);
     }
 
-    if (!baselineExists || baselineError) {
+    if (baselineError === 'flt-repo-not-configured') {
+      // No CTA — user has to configure the repo first; nothing the
+      // baseline endpoints can do for them in this state.
+    } else if (!baselineExists || baselineError) {
       var saveBtn = document.createElement('button');
       saveBtn.className = 'api-json-action api-swag-primary';
-      saveBtn.textContent = 'Save as baseline';
+      saveBtn.textContent = 'Sync repo Swagger.json';
+      saveBtn.title = 'Write the current runtime spec to '
+        + 'Service/Microsoft.LiveTable.Service/Swagger/Swagger.json in the FLT repo.';
       saveBtn.addEventListener('click', function() {
         self._invokeBaseline('save', saveBtn);
       });
@@ -70486,11 +70498,13 @@ class SwaggerSpecView {
     } else if (totalChanges > 0) {
       var replaceBtn = document.createElement('button');
       replaceBtn.className = 'api-json-action api-swag-primary';
-      replaceBtn.textContent = 'Replace baseline';
-      replaceBtn.title = 'Overwrite the committed baseline with current runtime spec.';
+      replaceBtn.textContent = 'Sync repo Swagger.json';
+      replaceBtn.title = 'Overwrite the FLT repo\'s Swagger.json with the current '
+        + 'runtime spec. You\'ll commit the change via git.';
       replaceBtn.addEventListener('click', function() {
-        if (!window.confirm('Replace the committed baseline with the current runtime spec? '
-          + 'This is a destructive write — review the diff before confirming.')) return;
+        if (!window.confirm('Overwrite the FLT repo\'s Swagger.json with the current '
+          + 'runtime spec? Review the diff before confirming — you\'ll need to commit '
+          + 'the change via git.')) return;
         self._invokeBaseline('replace', replaceBtn);
       });
       actions.appendChild(replaceBtn);
@@ -70528,8 +70542,10 @@ class SwaggerSpecView {
     title.textContent = 'No baseline to diff against';
     var hint = document.createElement('div');
     hint.className = 'api-swag-firstrun-hint';
-    hint.textContent = 'Save the current runtime spec as your baseline to start tracking contract changes. '
-      + 'The baseline is committed to data/swagger-baseline.json and reviewed in PRs.';
+    hint.textContent = 'The baseline is the FLT repo\'s committed Swagger.json '
+      + '(Service/Microsoft.LiveTable.Service/Swagger/Swagger.json). '
+      + 'Sync it with the current runtime spec to start tracking contract changes — '
+      + 'review the diff before committing.';
     card.appendChild(icon);
     card.appendChild(title);
     card.appendChild(hint);
@@ -70538,7 +70554,7 @@ class SwaggerSpecView {
     ctaRow.className = 'api-swag-firstrun-cta';
     var primary = document.createElement('button');
     primary.className = 'api-json-action api-swag-primary';
-    primary.textContent = 'Save as baseline';
+    primary.textContent = 'Sync repo Swagger.json';
     var self = this;
     primary.addEventListener('click', function() {
       self._invokeBaseline('save', primary);
@@ -70576,6 +70592,29 @@ class SwaggerSpecView {
     var hint = document.createElement('div');
     hint.className = 'api-swag-firstrun-hint';
     hint.textContent = errMsg + '. Replace the baseline with the current runtime spec or fix the file on disk.';
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(hint);
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  _renderRepoNotConfiguredBody() {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-firstrun';
+    var card = document.createElement('div');
+    card.className = 'api-swag-firstrun-card';
+    var icon = document.createElement('div');
+    icon.className = 'api-swag-firstrun-icon';
+    icon.textContent = '\u25C6';
+    var title = document.createElement('div');
+    title.className = 'api-swag-firstrun-title';
+    title.textContent = 'FLT repo not configured';
+    var hint = document.createElement('div');
+    hint.className = 'api-swag-firstrun-hint';
+    hint.textContent = 'The Swagger baseline is read from the FLT repo\'s committed '
+      + 'Service/Microsoft.LiveTable.Service/Swagger/Swagger.json. '
+      + 'Set the FLT repo path in EDOG Studio settings to enable the diff.';
     card.appendChild(icon);
     card.appendChild(title);
     card.appendChild(hint);
