@@ -29,6 +29,8 @@ from file_watcher import FileWatcher
 from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
 from repo_discovery import find_flt_repos, get_configured_repo, validate_repo
 from swagger_baseline import load_baseline as _load_swagger_baseline
+from swagger_baseline import remove_baseline as _remove_swagger_baseline
+from swagger_baseline import save_baseline as _save_swagger_baseline
 from swagger_diff_assemble import build_diff_payload as _build_swagger_diff_payload
 from swagger_normalize import normalize as _normalize_swagger
 from swagger_runtime import fetch_runtime_swagger as _fetch_runtime_swagger
@@ -1910,6 +1912,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_playground_catalog()
         elif self.path == "/api/playground/swagger/diff":
             self._serve_swagger_diff()
+        elif self.path == "/api/playground/swagger/baseline":
+            self._serve_swagger_baseline_get()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for GET {self.path}"})
 
@@ -1946,6 +1950,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._proxy_to_flt("DELETE")
         elif self.path.startswith("/api/templates/"):
             self._serve_template_delete()
+        elif self.path == "/api/playground/swagger/baseline":
+            self._serve_swagger_baseline_delete()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for DELETE {self.path}"})
 
@@ -1992,6 +1998,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_openai_proxy()
         elif self.path == "/api/playground/dispatch":
             self._serve_playground_dispatch()
+        elif self.path == "/api/playground/swagger/baseline":
+            self._serve_swagger_baseline_post()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for POST {self.path}"})
 
@@ -2948,6 +2956,61 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "baselineError": baseline_meta.get("error"),
             "diff": diff_payload,
         })
+
+    def _serve_swagger_baseline_get(self):
+        """F09 SF-011: GET /api/playground/swagger/baseline.
+
+        Returns metadata about the committed baseline file. The spec
+        itself is not returned — callers that need it should use the
+        diff endpoint, which includes the full runtime spec and the
+        diff that summarizes the baseline content.
+        """
+        _, meta = _load_swagger_baseline(SWAGGER_BASELINE_PATH)
+        self._json_response(200, meta)
+
+    def _serve_swagger_baseline_post(self):
+        """F09 SF-011: POST /api/playground/swagger/baseline.
+
+        Fetches the live runtime spec and persists it as the new
+        baseline at ``data/swagger-baseline.json``. Body is ignored —
+        the source of truth is always whatever FLT is currently serving.
+        """
+        cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        ws_id = cfg.get("workspace_id", "")
+        art_id = cfg.get("artifact_id", "")
+        cap_id = cfg.get("capacity_id", "")
+        bearer, _ = _read_cache(BEARER_CACHE)
+
+        spec, err = _fetch_runtime_swagger(
+            bearer, ws_id, art_id, cap_id, token_provider=_get_mwc_token,
+        )
+        if err is not None:
+            status = err.pop("status", 502)
+            self._json_response(status, err)
+            return
+
+        try:
+            meta = _save_swagger_baseline(SWAGGER_BASELINE_PATH, spec)
+        except (OSError, TypeError) as exc:
+            self._json_response(500, {
+                "error": "baseline-save-failed",
+                "message": str(exc),
+            })
+            return
+
+        self._json_response(200, meta)
+
+    def _serve_swagger_baseline_delete(self):
+        """F09 SF-011: DELETE /api/playground/swagger/baseline."""
+        try:
+            removed = _remove_swagger_baseline(SWAGGER_BASELINE_PATH)
+        except OSError as exc:
+            self._json_response(500, {
+                "error": "baseline-delete-failed",
+                "message": str(exc),
+            })
+            return
+        self._json_response(200, {"removed": removed})
 
     def _serve_playground_dispatch(self):
         """Dispatcher for the F09 API Playground with custom header forwarding.
