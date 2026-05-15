@@ -82,6 +82,7 @@ DEVMODE_FILES = {
     "TopicEvent": SERVICE_PATH / "DevMode/TopicEvent.cs",
     "TopicBuffer": SERVICE_PATH / "DevMode/TopicBuffer.cs",
     "EdogTopicRouter": SERVICE_PATH / "DevMode/EdogTopicRouter.cs",
+    "EdogInterceptorRegistry": SERVICE_PATH / "DevMode/EdogInterceptorRegistry.cs",
     "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
     "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
     "EdogTokenInterceptor": SERVICE_PATH / "DevMode/EdogTokenInterceptor.cs",
