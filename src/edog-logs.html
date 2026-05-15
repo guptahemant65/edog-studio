@@ -3520,6 +3520,123 @@ mark {
   text-align: center;
 }
 
+/* Terminal action buttons (right side of titlebar) */
+.deploy-terminal-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  position: relative;
+  z-index: 3;
+}
+
+.deploy-terminal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: oklch(0.55 0 0);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  position: relative;
+}
+
+.deploy-terminal-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: oklch(0.85 0 0);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.deploy-terminal-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent, oklch(0.70 0.18 290));
+  color: oklch(0.90 0 0);
+}
+
+.deploy-terminal-btn.active {
+  color: var(--accent, oklch(0.78 0.16 290));
+  background: rgba(109, 92, 255, 0.10);
+}
+
+.deploy-term-toast {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 6px;
+  background: oklch(0.18 0.01 270);
+  color: oklch(0.85 0 0);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm, 4px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 160ms, transform 160ms;
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.deploy-term-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Expanded terminal — taller for actual reading */
+.deploy-terminal.expanded.open {
+  max-height: 70vh;
+}
+
+/* No-wrap mode: lines scroll horizontally instead of wrapping */
+.deploy-terminal.nowrap .deploy-terminal-line .term-content {
+  white-space: pre;
+  word-break: normal;
+  overflow-x: auto;
+}
+
+/* Jump-to-latest badge — appears only when user has scrolled up.
+   Sticky inside the scroll container so it pins to the bottom of the viewport
+   regardless of scroll position. Block-level + auto margins for horizontal centering. */
+.deploy-term-jump {
+  position: sticky;
+  bottom: 8px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  margin: 4px auto 6px auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 5px 10px 5px 8px;
+  background: var(--accent, oklch(0.62 0.18 290));
+  color: white;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 160ms, transform 160ms;
+  white-space: nowrap;
+}
+
+.deploy-term-jump.visible {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.deploy-term-jump:hover {
+  filter: brightness(1.08);
+}
+
 /* Terminal body */
 .deploy-terminal-body {
   padding: 6px 0;
@@ -6439,6 +6556,291 @@ mark {
   50%      { box-shadow: 0 0 0 5px rgba(24,160,88,0.06), 0 0 12px rgba(24,160,88,0.25); }
 }
 
+/* ─── Patch Warnings Banner ───────────────────────────────────────────────
+   Surfaces edog.py "pattern not found" warnings — the deploy succeeded but
+   at least one regex anchor failed to match, so some interceptors are
+   silently inactive. Sits below the deploy-strip in .notification-zone.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.patch-warnings-banner {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(229,148,12,0.18);
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text);
+  overflow: hidden;
+  position: relative;
+}
+
+.patch-warnings-banner::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--status-warning, #e5940c);
+  box-shadow: 0 0 12px rgba(229,148,12,0.32), 4px 0 20px rgba(229,148,12,0.08);
+}
+
+.patch-warnings-banner::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(229,148,12,0.05) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.patch-warnings-banner.active { display: flex; }
+
+.patch-warnings-banner .pwb-icon {
+  color: var(--status-warning, #e5940c);
+  font-size: 13px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.patch-warnings-banner .pwb-label {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.patch-warnings-banner .pwb-detail {
+  color: var(--text-dim);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1;
+}
+
+.patch-warnings-banner .pwb-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(229,148,12,0.45);
+  color: var(--status-warning, #e5940c);
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 1;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.patch-warnings-banner .pwb-btn:hover {
+  background: rgba(229,148,12,0.08);
+  border-color: var(--status-warning, #e5940c);
+}
+
+    /* === css/edog-health-chip.css === */
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDOG Health Chip — topbar status indicator for EDOG interceptors
+   Shows wrapped count + traffic-light color; click for per-interceptor panel.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.edog-health-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+  user-select: none;
+}
+
+.edog-health-chip:hover {
+  border-color: var(--border-bright);
+  background: var(--surface);
+}
+
+.edog-health-chip .ehc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.edog-health-chip .ehc-dot.green {
+  background: var(--status-success, #18a058);
+  box-shadow: 0 0 0 2px rgba(24,160,88,0.18);
+}
+
+.edog-health-chip .ehc-dot.amber {
+  background: var(--status-warning, #e5940c);
+  box-shadow: 0 0 0 2px rgba(229,148,12,0.18);
+}
+
+.edog-health-chip .ehc-dot.red {
+  background: var(--status-error, #d03050);
+  box-shadow: 0 0 0 2px rgba(208,48,80,0.20);
+}
+
+.edog-health-chip .ehc-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.edog-health-chip .ehc-count {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Dropdown panel ──────────────────────────────────────────────────── */
+
+.ehc-panel {
+  position: fixed;
+  width: 380px;
+  max-height: 560px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-alt, rgba(0,0,0,0.12));
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  z-index: 600;
+  display: none;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ehc-panel.open { display: block; }
+
+.ehc-panel-header {
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
+}
+
+.ehc-panel-section {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.06));
+}
+
+.ehc-panel-section.warn {
+  background: rgba(229,148,12,0.06);
+  border-left: 3px solid var(--status-warning, #e5940c);
+}
+
+.ehc-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.ehc-warning-row {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  padding: 4px 0;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ehc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border, rgba(0,0,0,0.04));
+}
+
+.ehc-row:last-child { border-bottom: none; }
+
+.ehc-row-glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.ehc-row.ok .ehc-row-glyph { color: var(--status-success, #18a058); }
+.ehc-row.fail .ehc-row-glyph { color: var(--status-error, #d03050); }
+.ehc-row.static .ehc-row-glyph { color: var(--text-muted); }
+
+.ehc-row-name {
+  flex: 1 1 auto;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ehc-row-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 100px;
+}
+
+.ehc-row-error {
+  flex: 1 0 100%;
+  margin-left: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--status-error, #d03050);
+  background: rgba(208,48,80,0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.ehc-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.ehc-panel-footer {
+  padding: 10px 16px;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--surface-2);
+}
+
+.ehc-refresh {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.ehc-refresh:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+}
+
     /* === css/status-bar.css === */
 /* ═══════════════════════════════════════════════════════════════════════════
    Footer Status Bar
@@ -7816,6 +8218,19 @@ mark {
 .api-catalog-search {
   padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
+
+/* Source badge — sits between header and search, indicates fresh vs bundled. */
+.api-catalog-source {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px var(--space-3) 6px;
+  font-size: 10px; font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.api-catalog-source-dot { font-size: 8px; line-height: 1; }
+.api-catalog-source-auto-discovered { color: var(--green, #4ade80); }
+.api-catalog-source-bundled { color: var(--text-muted); }
 .api-catalog-search-box {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px;
   border-radius: var(--radius-md); border: 1px solid var(--border-bright);
@@ -8053,7 +8468,8 @@ mark {
 .api-kv-table tr:hover td { background: var(--hover-bg); }
 .api-kv-table .kv-chk { width: 30px; text-align: center; }
 .api-kv-table .kv-key {
-  font-family: var(--font-mono); color: var(--blue); font-weight: 500; white-space: nowrap;
+  font-family: var(--font-mono); color: var(--blue); font-weight: 500;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
 }
 .api-kv-table .kv-val {
   font-family: var(--font-mono); color: var(--text); word-break: break-all;
@@ -8072,6 +8488,73 @@ mark {
   padding: var(--space-2) 0; transition: color var(--transition-fast);
 }
 .api-kv-add:hover { color: var(--accent); }
+
+/* ── F09 query-param enrichment (documented params from catalog) ── */
+.api-param-type {
+  flex: 0 0 auto;
+  display: inline-block;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text);
+  background: var(--bg-elev-2, var(--bg-elev));
+  border: 1px solid var(--border-bright, var(--border));
+  border-radius: 3px;
+  cursor: help;
+  vertical-align: middle;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.75;
+}
+.api-param-type:hover {
+  opacity: 1;
+}
+.api-param-required .api-param-type {
+  color: var(--accent);
+  border-color: var(--accent);
+  opacity: 1;
+}
+.api-param-required .api-param-key {
+  color: var(--accent) !important;
+}
+.api-kv-table select.api-param-val {
+  border: none; outline: none; padding: 2px 4px;
+  font-family: var(--font-mono); font-size: var(--text-sm);
+  color: var(--text); background: transparent;
+}
+
+/* Chip picker for enum-list params */
+.api-param-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 2px 0;
+}
+.api-param-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-bright, var(--border));
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  line-height: 1.4;
+}
+.api-param-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.api-param-chip.selected {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.api-param-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 
 /* ── Body editor ── */
 .api-body-editor { position: relative; }
@@ -26224,6 +26707,14 @@ mark {
   background: rgba(24, 160, 88, 0.06);
 }
 
+.qa-analysis-phase.degraded {
+  border-left: 2px solid var(--warning, #e2a727);
+}
+
+.qa-analysis-phase.degraded .qa-phase-detail {
+  color: var(--warning, #e2a727);
+}
+
 .qa-phase-icon {
   width: 20px;
   height: 20px;
@@ -26467,6 +26958,131 @@ mark {
   gap: var(--space-1);
   flex-shrink: 0;
   align-self: flex-start;
+}
+
+/* ── F27 "pinnacle" item 3 + 5 + 6: technique, lint, grounding ── */
+
+.qa-technique-badge {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  text-transform: capitalize;
+}
+.qa-technique-badge.qa-tech-boundarytriplet { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); }
+.qa-technique-badge.qa-tech-counterfactual  { background: rgba(244, 114, 182, 0.15); color: #f472b6; border-color: rgba(244, 114, 182, 0.35); }
+.qa-technique-badge.qa-tech-truthtable      { background: rgba(250, 204, 21, 0.15); color: #facc15; border-color: rgba(250, 204, 21, 0.35); }
+.qa-technique-badge.qa-tech-equivalencepartition { background: rgba(34, 197, 94, 0.15); color: #22c55e; border-color: rgba(34, 197, 94, 0.35); }
+.qa-technique-badge.qa-tech-errorpath       { background: rgba(248, 113, 113, 0.15); color: #f87171; border-color: rgba(248, 113, 113, 0.35); }
+.qa-technique-badge.qa-tech-regressionguard { background: rgba(168, 85, 247, 0.15); color: #a855f7; border-color: rgba(168, 85, 247, 0.35); }
+.qa-technique-badge.qa-tech-happypath       { background: rgba(20, 184, 166, 0.15); color: #14b8a6; border-color: rgba(20, 184, 166, 0.35); }
+
+.qa-lint-badge {
+  display: inline-flex;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+.qa-lint-badge.qa-lint-error { background: rgba(239, 68, 68, 0.18); color: #f87171; }
+.qa-lint-badge.qa-lint-warn  { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+
+.qa-grounding {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+}
+.qa-grounding-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: var(--text-xs);
+}
+.qa-grounding-toggle:hover { color: var(--text); }
+.qa-grounding-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 8px;
+  margin-top: 4px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.qa-grounding-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+.qa-grounding-loc {
+  color: #94a3b8;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.qa-grounding-reason { color: var(--text-dim); flex: 1; }
+.qa-grounding-inv {
+  font-family: var(--font-mono);
+  color: #a78bfa;
+  font-size: 0.9em;
+  flex-shrink: 0;
+}
+
+.qa-lint-findings {
+  margin-top: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qa-lint-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border-left: 3px solid;
+  font-size: var(--text-xs);
+  background: var(--surface-2);
+}
+.qa-lint-row.qa-lint-error   { border-left-color: #ef4444; color: #fca5a5; }
+.qa-lint-row.qa-lint-warning { border-left-color: #f59e0b; color: #fcd34d; }
+.qa-lint-row.qa-lint-info    { border-left-color: #64748b; color: var(--text-dim); }
+.qa-lint-code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+.qa-lint-msg { flex: 1; }
+.qa-lint-inv {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: #a78bfa;
+  flex-shrink: 0;
+}
+
+.qa-lint-batch {
+  margin: var(--space-2) 0;
+  padding: var(--space-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.qa-lint-batch-header {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-1);
+  color: var(--text);
+}
+.qa-lint-batch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 /* ── Execution Stage Components ── */
@@ -26938,6 +27554,11 @@ window.onerror = function(msg, src, line, col, err) {
       </span>
       <span id="git-meta" class="topbar-meta" style="display:none"><span id="git-branch-name">--</span></span>
       <span id="patch-meta" class="topbar-meta" style="display:none"><span id="patch-count">0 patches</span></span>
+      <span id="edog-health-chip" class="edog-health-chip" style="display:none">
+        <span class="ehc-dot"></span>
+        <span class="ehc-label">Interceptors</span>
+        <span class="ehc-count">--</span>
+      </span>
       <button id="restart-btn" class="topbar-btn ghost" title="Restart service">Restart</button>
       <button id="theme-btn" class="topbar-btn ghost" title="Toggle theme">&#9790;</button>
     </div>
@@ -26946,6 +27567,7 @@ window.onerror = function(msg, src, line, col, err) {
   <!-- Notification Zone (collapses when empty) -->
   <div class="notification-zone">
     <div id="deploy-context-strip" class="deploy-strip"></div>
+    <div id="patch-warnings-banner" class="patch-warnings-banner"></div>
     <div id="file-change-bar" class="file-change-bar"></div>
     <div id="smart-context-bar" class="smart-context-bar"></div>
     <div id="api-toast" class="api-toast"></div>
@@ -26980,8 +27602,8 @@ window.onerror = function(msg, src, line, col, err) {
         <div class="nav-divider"></div>
         <div class="nav-item" data-view="api" tabindex="0" role="button" aria-label="API Playground"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div><span class="nav-label">API Playground</span><span class="nav-shortcut">3</span></div>
         <div class="nav-item" data-view="environment" tabindex="0" role="button" aria-label="Environment"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span class="nav-label">Environment</span><span class="nav-shortcut">4</span></div>
-        <div class="nav-item connected-only" data-view="dag" tabindex="0" role="button" aria-label="DAG Studio"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h4M14 5l3 5M14 19l3-5"/></svg></div><span class="nav-label">DAG Studio</span><span class="nav-shortcut">5</span></div>
-        <div class="nav-item connected-only" data-view="qa" tabindex="0" role="button" aria-label="QA Testing"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div><span class="nav-label">QA Testing</span><span class="nav-shortcut">6</span></div>
+        <div class="nav-item connected-only" data-view="dag" data-phase="connected" tabindex="0" role="button" aria-label="DAG Studio"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h4M14 5l3 5M14 19l3-5"/></svg></div><span class="nav-label">DAG Studio</span><span class="nav-shortcut">5</span></div>
+        <div class="nav-item connected-only" data-view="qa" data-phase="connected" tabindex="0" role="button" aria-label="QA Testing"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div><span class="nav-label">QA Testing</span><span class="nav-shortcut">6</span></div>
       </div>
 
     </nav>
@@ -27187,43 +27809,67 @@ window.onerror = function(msg, src, line, col, err) {
           <div class="dag-toolbar" id="dagToolbar">
             <button class="dag-btn primary" id="dagRunBtn" title="Run DAG">&#9654; Run DAG</button>
             <button class="dag-btn danger" id="dagCancelBtn" title="Cancel" style="display:none">&#10005; Cancel</button>
+            <div class="dag-toolbar-sep"></div>
+            <div class="exec-mode-wrap">
+              <button class="exec-mode-btn" id="dagExecModeBtn">
+                <span id="dagExecModeLabel">Full DAG</span> <span>&#9662;</span>
+              </button>
+              <div class="exec-mode-dropdown" id="dagExecModeDropdown">
+                <div class="exec-mode-option active" data-mode="full"><span class="check">&#10003;</span> Full DAG</div>
+                <div class="exec-mode-option" data-mode="selected"><span class="check"></span> Selected Nodes</div>
+                <div class="exec-mode-option" data-mode="lineage"><span class="check"></span> Full Lineage</div>
+              </div>
+            </div>
+            <div class="dag-toolbar-sep"></div>
             <button class="dag-btn" id="dagRefreshBtn" title="Refresh DAG">&#8635; Refresh</button>
-            <button class="dag-btn" id="dagUnlockBtn" title="Force Unlock" style="display:none">&#128274; Unlock</button>
+            <button class="dag-btn" id="dagUnlockBtn" title="Force Unlock" style="display:none">Unlock</button>
             <div class="dag-toolbar-spacer"></div>
+            <div class="dag-toolbar-info" id="dagToolbarInfo" style="display:none"></div>
             <div class="dag-toolbar-status" id="dagStatus">
-              <span class="dag-status-dot" id="dagStatusDot"></span>
+              <span class="status-dot" id="dagStatusDot" style="background:var(--status-pending)"></span>
               <span id="dagStatusText">Idle</span>
+              <span id="dagStatusTimer" style="display:none">0:00</span>
             </div>
           </div>
           <!-- Body: graph + side panel -->
           <div class="dag-body">
             <div class="dag-graph-panel" id="dagGraphPanel">
-              <canvas id="dagCanvas"></canvas>
+              <canvas id="dagCanvas" tabindex="0"></canvas>
               <div class="dag-nodes-layer" id="dagNodesLayer"></div>
               <canvas class="dag-minimap" id="dagMinimap" width="180" height="100"></canvas>
               <div class="dag-zoom-controls">
                 <button class="dag-zoom-btn" id="dagZoomIn" title="Zoom in">+</button>
                 <button class="dag-zoom-btn" id="dagZoomOut" title="Zoom out">&#8722;</button>
-                <button class="dag-zoom-btn" id="dagFitBtn" title="Fit to screen">&#9635;</button>
+                <button class="dag-zoom-btn" id="dagFitBtn" title="Fit to screen">F</button>
               </div>
             </div>
             <div class="dag-side-panel" id="dagSidePanel">
               <div class="dag-gantt-section">
-                <div class="dag-section-title">GANTT CHART</div>
+                <div class="dag-section-title">Gantt Chart <span class="section-count" id="dagGanttCount"></span></div>
                 <div class="gantt-chart" id="dagGanttContainer">
                   <div class="dag-empty-hint">Run a DAG to see the timeline</div>
                 </div>
               </div>
               <div class="dag-history-section">
-                <div class="dag-section-title">EXECUTION HISTORY</div>
+                <div class="dag-section-title">Execution History</div>
                 <div id="dagHistoryContainer">
                   <div class="dag-empty-hint">No execution history</div>
                 </div>
               </div>
+              <div class="dag-detail-section" id="dagDetailSection" style="display:none">
+                <div class="dag-section-title">Node Detail</div>
+                <div class="dag-node-detail" id="dagNodeDetail"></div>
+              </div>
             </div>
           </div>
-          <!-- Node Detail Panel (slides from right) -->
-          <div class="dag-node-detail" id="dagNodeDetail"></div>
+          <!-- Execution Summary -->
+          <div class="exec-summary" id="dagExecSummary">
+            <span>Nodes: <span class="stat-val" id="dagSumTotal">0</span></span>
+            <span>Succeeded: <span class="stat-val ok" id="dagSumOk">0</span></span>
+            <span>Failed: <span class="stat-val fail" id="dagSumFail">0</span></span>
+            <span>Running: <span class="stat-val run" id="dagSumRun">0</span></span>
+            <span>Duration: <span class="stat-val" id="dagSumDur">--</span></span>
+          </div>
         </div>
       </div>
 
@@ -28564,6 +29210,13 @@ class SignalRManager {
   disconnect = () => {
     this._closing = true;
     if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+    // Dispose active streams before killing connection
+    for (const [, stream] of this._activeStreams) {
+      try { stream.dispose(); } catch (_) { /* already closed */ }
+    }
+    this._activeStreams.clear();
+    this._pendingTopics.clear();
+    this._listeners.clear();
     if (this.connection) {
       this.connection.stop().catch(() => {});
       this.connection = null;
@@ -37484,6 +38137,7 @@ class TopBar {
         this._updateServiceStatus('stopped');
         this._updateTokenDisplay(null);
         if (window.edogDeployStrip) window.edogDeployStrip.hide();
+        if (window.edogPatchWarnings) window.edogPatchWarnings.hide();
         if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
         return null;
       }
@@ -37539,13 +38193,23 @@ class TopBar {
         window.edogWs.setPort(config.fltPort);
       }
 
-      // F1: Update deploy context strip
-      if (window.edogDeployStrip) {
-        fetch('/api/studio/status').then(function(r) {
+      // F1: Update deploy context strip + patch warnings banner + health chip
+      if (window.edogDeployStrip || window.edogPatchWarnings || window.edogHealthChip) {
+        var fetchStudio = fetch('/api/studio/status').then(function(r) {
           return r.ok ? r.json() : null;
-        }).then(function(s) {
-          if (s) window.edogDeployStrip.update(s);
-        }).catch(function() {});
+        }).catch(function() { return null; });
+        var fetchIx = window.edogHealthChip
+          ? fetch('/api/edog/interceptors-status').then(function(r) {
+              return r.ok ? r.json() : null;
+            }).catch(function() { return null; })
+          : Promise.resolve(null);
+        Promise.all([fetchStudio, fetchIx]).then(function(results) {
+          var s = results[0];
+          var ix = results[1];
+          if (s && window.edogDeployStrip) window.edogDeployStrip.update(s);
+          if (s && window.edogPatchWarnings) window.edogPatchWarnings.update(s);
+          if (window.edogHealthChip) window.edogHealthChip.update(s || {}, ix || {});
+        });
       }
 
       // F3: Sync footer status bar phase
@@ -37569,6 +38233,7 @@ class TopBar {
       this._updateServiceStatus('stopped');
       this._updateTokenDisplay(null);
       if (window.edogDeployStrip) window.edogDeployStrip.hide();
+      if (window.edogPatchWarnings) window.edogPatchWarnings.hide();
       if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
       return null;
     }
@@ -38283,11 +38948,15 @@ class DeployContextStrip {
   /**
    * Update strip with deploy config data.
    * @param {object|null} status — from /api/studio/status
+   *
+   * Visibility rule: only show after deploy is fully complete (phase === 'running').
+   * Previously the strip appeared during 'deploying' too, which made it pop up
+   * mid-build with empty fields — confusing and premature.
    */
   update(status) {
     if (!this._el) return;
 
-    if (!status || !status.deployTarget || status.phase === 'idle' || status.phase === 'stopped') {
+    if (!status || !status.deployTarget || status.phase !== 'running') {
       this._el.classList.remove('active');
       if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
       return;
@@ -38304,14 +38973,12 @@ class DeployContextStrip {
     badge.innerHTML = '<span class="ds-dot"></span><span class="ds-badge-label">Connected</span>';
     this._el.appendChild(badge);
 
-    // Breadcrumb path: tenant > capacity > workspace > lakehouse
+    // Breadcrumb path: workspace > lakehouse (names, IDs on tooltip)
     var path = document.createElement('div');
     path.className = 'ds-path';
     var segments = [
-      { text: t.tenantName || 'tenant', bold: false },
-      { text: t.capacityId || 'capacity', bold: false },
-      { text: t.workspaceName || t.workspaceId || 'workspace', bold: true },
-      { text: t.lakehouseName || t.artifactId || 'lakehouse', bold: true },
+      { text: t.workspaceName || 'workspace', title: t.workspaceId || '', bold: true },
+      { text: t.lakehouseName || 'lakehouse', title: t.artifactId || '', bold: true },
     ];
     segments.forEach(function(seg, i) {
       if (i > 0) {
@@ -38323,6 +38990,7 @@ class DeployContextStrip {
       var span = document.createElement('span');
       span.className = 'ds-path-seg' + (seg.bold ? ' bold' : '');
       span.textContent = seg.text;
+      if (seg.title) span.title = seg.title;
       path.appendChild(span);
     });
     this._el.appendChild(path);
@@ -38429,6 +39097,294 @@ class DeployContextStrip {
 }
 
 window.edogDeployStrip = new DeployContextStrip();
+
+// === js/patch-warnings-banner.js ===
+/**
+ * PatchWarningsBanner — surfaces edog.py "pattern not found" warnings.
+ *
+ * Renders into #patch-warnings-banner. Visible whenever the most recent deploy
+ * emitted regex-anchor failures from edog.py. When FLT renames or removes an
+ * anchor line, our patch silently no-ops and the deploy still goes green —
+ * this banner is the only thing that tells the developer the EDOG fleet is
+ * incomplete.
+ *
+ * Driven by `status.patchWarnings` from /api/studio/status (already polled by
+ * topbar.js every 30s). Click → opens Inspector EDOG Health tile.
+ *
+ * @author Pixel — EDOG Studio hivemind
+ */
+class PatchWarningsBanner {
+  constructor() {
+    this._el = document.getElementById('patch-warnings-banner');
+    this._lastKey = '';
+  }
+
+  /**
+   * Update from studio status payload.
+   * @param {object|null} status — must include .patchWarnings (array<string>)
+   */
+  update(status) {
+    if (!this._el) return;
+
+    var warnings = (status && Array.isArray(status.patchWarnings)) ? status.patchWarnings : [];
+    if (!warnings.length) {
+      this.hide();
+      return;
+    }
+
+    // Skip re-render if the warning set is unchanged — avoids DOM thrash
+    // on every 30s poll.
+    var key = warnings.join('||');
+    if (key === this._lastKey && this._el.classList.contains('active')) return;
+    this._lastKey = key;
+
+    this._el.innerHTML = '';
+
+    var icon = document.createElement('span');
+    icon.className = 'pwb-icon';
+    icon.textContent = '\u26A0';
+    this._el.appendChild(icon);
+
+    var label = document.createElement('span');
+    label.className = 'pwb-label';
+    label.textContent = warnings.length === 1
+      ? '1 EDOG patch warning'
+      : warnings.length + ' EDOG patch warnings';
+    this._el.appendChild(label);
+
+    var detail = document.createElement('span');
+    detail.className = 'pwb-detail';
+    detail.textContent = 'Some interceptors may be inactive. The deploy succeeded but at least one regex anchor in edog.py did not match.';
+    this._el.appendChild(detail);
+
+    var btn = document.createElement('button');
+    btn.className = 'pwb-btn';
+    btn.type = 'button';
+    btn.textContent = 'Details';
+    btn.title = warnings.map(function(w) { return '\u2022 ' + w; }).join('\n');
+    btn.addEventListener('click', function() {
+      // Open Inspector and scroll to EDOG Health tile if present.
+      if (window.edogTopbar && typeof window.edogTopbar.openInspector === 'function') {
+        window.edogTopbar.openInspector('edog-health');
+      } else {
+        // Fallback: surface in console so the warning isn't lost.
+        console.warn('[EDOG patch warnings]\n' + warnings.join('\n'));
+      }
+    });
+    this._el.appendChild(btn);
+
+    this._el.classList.add('active');
+  }
+
+  hide() {
+    if (!this._el) return;
+    this._el.classList.remove('active');
+    this._el.innerHTML = '';
+    this._lastKey = '';
+  }
+}
+
+window.edogPatchWarnings = new PatchWarningsBanner();
+
+// === js/edog-health-chip.js ===
+/**
+ * EdogHealthChip — topbar status chip for EDOG interceptors.
+ *
+ * Shows "Interceptors: N/M" with traffic-light color:
+ *   green  — N == M, all DI-bound interceptors wrapped
+ *   amber  — N <  M, some failed but the status endpoint responded
+ *   red    — endpoint unreachable / probe exception / patchWarnings present
+ *   hidden — phase is idle/stopped (nothing useful to report)
+ *
+ * Click opens a dropdown listing every interceptor with its wrap status and
+ * last error (if any) — the deep-dive surface for verifying that Phase 2
+ * fixes actually re-attached the wrappers.
+ *
+ * Data flows through the dev-server proxy /api/edog/interceptors-status,
+ * which forwards to the FLT-side EdogLogServer. Same origin → no CORS dance.
+ *
+ * @author Pixel — EDOG Studio hivemind
+ */
+class EdogHealthChip {
+  constructor() {
+    this._el = document.getElementById('edog-health-chip');
+    this._dot = this._el ? this._el.querySelector('.ehc-dot') : null;
+    this._count = this._el ? this._el.querySelector('.ehc-count') : null;
+    this._panel = null;
+    this._lastData = null;
+    if (this._el) {
+      this._el.addEventListener('click', () => this._togglePanel());
+    }
+    document.addEventListener('click', (e) => {
+      if (!this._panel || !this._panel.classList.contains('open')) return;
+      if (this._el.contains(e.target) || this._panel.contains(e.target)) return;
+      this._closePanel();
+    });
+  }
+
+  /**
+   * Update chip from the studio status payload (for patchWarnings) and
+   * the proxied interceptor status payload (for wrapped counts).
+   * @param {object} studioStatus — /api/studio/status
+   * @param {object} interceptors — /api/edog/interceptors-status
+   */
+  update(studioStatus, interceptors) {
+    if (!this._el) return;
+
+    var phase = studioStatus && studioStatus.phase;
+    // Only show the chip when FLT is actually running. Pre-deploy, the count
+    // is meaningless and would be noise in the topbar.
+    if (phase !== 'running') {
+      this._el.style.display = 'none';
+      this._lastData = null;
+      return;
+    }
+
+    var available = interceptors && interceptors.available;
+    var summary = (interceptors && interceptors.summary) || { Total: 0, Wrapped: 0, Failed: 0 };
+    var warnings = (studioStatus && studioStatus.patchWarnings) || [];
+
+    var color;
+    var text;
+    if (!available) {
+      color = 'red';
+      text = '? / ?';
+      this._el.title = 'EDOG status endpoint unreachable\n' + (interceptors && interceptors.error ? interceptors.error : 'FLT may not have the interceptor registry loaded.');
+    } else {
+      var wrapped = summary.Wrapped || 0;
+      var total = summary.Total || 0;
+      text = wrapped + ' / ' + total;
+      if (warnings.length > 0 || (summary.Failed || 0) > 0) {
+        color = 'red';
+      } else if (wrapped < total) {
+        color = 'amber';
+      } else {
+        color = 'green';
+      }
+      this._el.title = wrapped + ' of ' + total + ' EDOG interceptors wrapped'
+        + (warnings.length ? '\n' + warnings.length + ' patch warning(s) — click for details' : '')
+        + (summary.Failed ? '\n' + summary.Failed + ' DI resolution failure(s)' : '');
+    }
+
+    this._el.style.display = '';
+    if (this._count) this._count.textContent = text;
+    if (this._dot) {
+      this._dot.classList.remove('green', 'amber', 'red');
+      this._dot.classList.add(color);
+    }
+    this._lastData = { studio: studioStatus, interceptors: interceptors };
+
+    // If panel is open, refresh its content live.
+    if (this._panel && this._panel.classList.contains('open')) {
+      this._renderPanel();
+    }
+  }
+
+  _togglePanel() {
+    if (!this._panel) this._createPanel();
+    if (this._panel.classList.contains('open')) {
+      this._closePanel();
+    } else {
+      this._renderPanel();
+      this._positionPanel();
+      this._panel.classList.add('open');
+    }
+  }
+
+  _closePanel() {
+    if (this._panel) this._panel.classList.remove('open');
+  }
+
+  _createPanel() {
+    this._panel = document.createElement('div');
+    this._panel.className = 'ehc-panel';
+    document.body.appendChild(this._panel);
+  }
+
+  _positionPanel() {
+    if (!this._panel || !this._el) return;
+    var rect = this._el.getBoundingClientRect();
+    this._panel.style.top = (rect.bottom + 6) + 'px';
+    this._panel.style.right = (window.innerWidth - rect.right) + 'px';
+  }
+
+  _renderPanel() {
+    if (!this._panel) return;
+    var data = this._lastData || {};
+    var ix = data.interceptors || {};
+    var warnings = (data.studio && data.studio.patchWarnings) || [];
+    var list = ix.interceptors || [];
+
+    var parts = [];
+    parts.push('<div class="ehc-panel-header">EDOG interceptor health</div>');
+
+    if (warnings.length > 0) {
+      parts.push('<div class="ehc-panel-section warn">');
+      parts.push('<div class="ehc-section-title">Patch warnings (' + warnings.length + ')</div>');
+      warnings.forEach(function(w) {
+        parts.push('<div class="ehc-warning-row">' + escapeHtml(w) + '</div>');
+      });
+      parts.push('</div>');
+    }
+
+    if (!ix.available) {
+      parts.push('<div class="ehc-panel-section">');
+      parts.push('<div class="ehc-empty">Status endpoint unreachable.</div>');
+      if (ix.error) parts.push('<div class="ehc-empty">' + escapeHtml(String(ix.error)) + '</div>');
+      parts.push('</div>');
+    } else if (!list.length) {
+      parts.push('<div class="ehc-panel-section">');
+      parts.push('<div class="ehc-empty">No interceptors reported by FLT.</div>');
+      parts.push('</div>');
+    } else {
+      parts.push('<div class="ehc-panel-section">');
+      parts.push('<div class="ehc-section-title">Interceptors</div>');
+      list.forEach(function(i) {
+        var ok = i.Wrapped === true;
+        var statusCls = ok ? 'ok' : (i.Kind === 'Static' ? 'static' : 'fail');
+        var statusGlyph = ok ? '\u2713' : (i.Kind === 'Static' ? '\u25CB' : '\u2717');
+        parts.push('<div class="ehc-row ' + statusCls + '">');
+        parts.push('<span class="ehc-row-glyph">' + statusGlyph + '</span>');
+        parts.push('<span class="ehc-row-name">' + escapeHtml(i.Name || '?') + '</span>');
+        var kindLbl = i.Kind === 'Static' ? 'static' : (i.TargetType ? shortType(i.TargetType) : '');
+        if (kindLbl) parts.push('<span class="ehc-row-kind">' + escapeHtml(kindLbl) + '</span>');
+        if (i.Error) {
+          parts.push('<div class="ehc-row-error">' + escapeHtml(i.Error) + '</div>');
+        }
+        parts.push('</div>');
+      });
+      parts.push('</div>');
+    }
+
+    parts.push('<div class="ehc-panel-footer">');
+    parts.push('<button class="ehc-refresh" type="button">Refresh</button>');
+    parts.push('</div>');
+
+    this._panel.innerHTML = parts.join('');
+
+    var refresh = this._panel.querySelector('.ehc-refresh');
+    if (refresh) {
+      refresh.addEventListener('click', () => {
+        if (window.edogTopbar && typeof window.edogTopbar.fetchConfig === 'function') {
+          window.edogTopbar.fetchConfig();
+        }
+      });
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+    function shortType(t) {
+      if (typeof t !== 'string') return '';
+      var idx = t.lastIndexOf('.');
+      return idx >= 0 ? t.substring(idx + 1) : t;
+    }
+  }
+}
+
+window.edogHealthChip = new EdogHealthChip();
 
 // === js/status-bar.js ===
 /**
@@ -38664,6 +39620,10 @@ class DeployFlow {
     this._es = null;        // EventSource
     this._active = false;
     this._terminalOpen = false;
+    this._terminalExpanded = false;
+    this._followTail = true;
+    this._wrap = true;
+    this._copyToast = 0;
     this._logs = [];
     this._startTime = null;
     this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
@@ -38682,8 +39642,8 @@ class DeployFlow {
   ];
 
   /** Start a new deploy. */
-  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName, force) {
-    this._pendingTarget = { workspaceId, artifactId, capacityId, lakehouseName };
+  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName, force, workspaceName) {
+    this._pendingTarget = { workspaceId, artifactId, capacityId, lakehouseName, workspaceName: workspaceName || '' };
     this._active = true;
     this._startTime = Date.now();
     this._logs = [];
@@ -38695,7 +39655,7 @@ class DeployFlow {
       const resp = await fetch('/api/command/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName, force: !!force }),
+        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName, workspaceName: workspaceName || '', force: !!force }),
       });
 
       if (resp.status === 409) {
@@ -38932,10 +39892,33 @@ class DeployFlow {
     }
 
     // V2 Terminal with titlebar, gutter line numbers, color-coded output
-    html += '<div class="deploy-terminal' + (this._terminalOpen ? ' open' : '') + '" id="deploy-terminal">';
+    const termCls = 'deploy-terminal'
+      + (this._terminalOpen ? ' open' : '')
+      + (this._terminalExpanded ? ' expanded' : '')
+      + (this._wrap ? '' : ' nowrap');
+    html += '<div class="' + termCls + '" id="deploy-terminal">';
     html += '<div class="deploy-terminal-titlebar">';
     html += '<span class="deploy-terminal-dot r"></span><span class="deploy-terminal-dot y"></span><span class="deploy-terminal-dot g"></span>';
     html += '<span class="deploy-terminal-bar-title">edog deploy</span>';
+    html += '<div class="deploy-terminal-actions">';
+    html += '<button class="deploy-terminal-btn' + (this._wrap ? ' active' : '') + '" id="deploy-term-wrap" type="button" title="Toggle word-wrap" aria-label="Toggle word-wrap" aria-pressed="' + (this._wrap ? 'true' : 'false') + '">';
+    html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 7 21 7"/><path d="M3 12h15a3 3 0 0 1 0 6h-4"/><polyline points="17 15 14 18 17 21"/><polyline points="3 17 10 17"/></svg>';
+    html += '</button>';
+    html += '<button class="deploy-terminal-btn" id="deploy-term-copy" type="button" title="Copy logs" aria-label="Copy logs">';
+    html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    html += '<span class="deploy-term-toast" id="deploy-term-toast">Copied</span>';
+    html += '</button>';
+    html += '<button class="deploy-terminal-btn" id="deploy-term-clear" type="button" title="Clear logs" aria-label="Clear logs">';
+    html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+    html += '</button>';
+    html += '<button class="deploy-terminal-btn" id="deploy-term-expand" type="button" title="' + (this._terminalExpanded ? 'Collapse' : 'Expand') + '" aria-label="' + (this._terminalExpanded ? 'Collapse' : 'Expand') + '" aria-pressed="' + (this._terminalExpanded ? 'true' : 'false') + '">';
+    if (this._terminalExpanded) {
+      html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    } else {
+      html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    }
+    html += '</button>';
+    html += '</div>';
     html += '</div>';
     html += '<div class="deploy-terminal-body">';
     for (let i = 0; i < this._logs.length; i++) {
@@ -38946,7 +39929,12 @@ class DeployFlow {
       html += '<span class="term-content"><span class="ts">' + this._esc(l.ts || '') + '</span> ' + this._esc(l.msg || '') + '</span>';
       html += '</div>';
     }
-    html += '</div></div>';
+    html += '</div>';
+    html += '<button class="deploy-term-jump" id="deploy-term-jump" type="button" title="Jump to latest" aria-label="Jump to latest">';
+    html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+    html += '<span>Jump to latest</span>';
+    html += '</button>';
+    html += '</div>';
 
     // Error banner (V2 dramatic style)
     if (status === 'stopped' && error) {
@@ -38970,12 +39958,14 @@ class DeployFlow {
     html += '</div>';
     this._el.innerHTML = html;
     this._bindEvents();
+    this._bindTerminalScroll();
 
-    // Auto-scroll terminal
-    if (this._terminalOpen) {
+    // Auto-scroll terminal only when following tail
+    if (this._terminalOpen && this._followTail) {
       const term = document.getElementById('deploy-terminal');
       if (term) term.scrollTop = term.scrollHeight;
     }
+    this._updateJumpBadge();
   }
 
   _bindEvents() {
@@ -39013,10 +40003,96 @@ class DeployFlow {
       const term = document.getElementById('deploy-terminal');
       if (term) {
         term.classList.toggle('open', this._terminalOpen);
-        if (this._terminalOpen) term.scrollTop = term.scrollHeight;
+        if (this._terminalOpen && this._followTail) term.scrollTop = term.scrollHeight;
       }
       toggle.classList.toggle('open', this._terminalOpen);
+      this._updateJumpBadge();
     });
+
+    const expand = document.getElementById('deploy-term-expand');
+    if (expand) expand.addEventListener('click', () => {
+      this._terminalExpanded = !this._terminalExpanded;
+      this._render();
+    });
+
+    const clear = document.getElementById('deploy-term-clear');
+    if (clear) clear.addEventListener('click', () => {
+      this._logs = [];
+      this._followTail = true;
+      this._render();
+    });
+
+    const copy = document.getElementById('deploy-term-copy');
+    if (copy) copy.addEventListener('click', () => this._copyLogs());
+
+    const wrap = document.getElementById('deploy-term-wrap');
+    if (wrap) wrap.addEventListener('click', () => {
+      this._wrap = !this._wrap;
+      const term = document.getElementById('deploy-terminal');
+      if (term) {
+        term.classList.toggle('nowrap', !this._wrap);
+        if (this._followTail) term.scrollTop = term.scrollHeight;
+      }
+      wrap.classList.toggle('active', this._wrap);
+      wrap.setAttribute('aria-pressed', this._wrap ? 'true' : 'false');
+    });
+
+    const jump = document.getElementById('deploy-term-jump');
+    if (jump) jump.addEventListener('click', () => {
+      const term = document.getElementById('deploy-terminal');
+      if (!term) return;
+      this._followTail = true;
+      term.scrollTop = term.scrollHeight;
+      this._updateJumpBadge();
+    });
+  }
+
+  _bindTerminalScroll() {
+    const term = document.getElementById('deploy-terminal');
+    if (!term || term._scrollBound) return;
+    term._scrollBound = true;
+    term.addEventListener('scroll', () => {
+      const atBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 4;
+      this._followTail = atBottom;
+      this._updateJumpBadge();
+    }, { passive: true });
+  }
+
+  _updateJumpBadge() {
+    const jump = document.getElementById('deploy-term-jump');
+    if (!jump) return;
+    const show = this._terminalOpen && !this._followTail && this._logs.length > 0;
+    jump.classList.toggle('visible', show);
+  }
+
+  _copyLogs() {
+    const text = this._logs.map(l => ((l.ts || '') + ' ' + (l.msg || '')).trim()).join('\n');
+    const toast = document.getElementById('deploy-term-toast');
+    const showToast = () => {
+      if (!toast) return;
+      toast.classList.add('visible');
+      clearTimeout(this._copyToast);
+      this._copyToast = setTimeout(() => toast.classList.remove('visible'), 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showToast).catch(() => this._copyLogsFallback(text, showToast));
+    } else {
+      this._copyLogsFallback(text, showToast);
+    }
+  }
+
+  _copyLogsFallback(text, onDone) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onDone();
+    } catch (e) { /* clipboard unavailable */ }
   }
 
   _onFailed(message) {
@@ -39121,10 +40197,11 @@ class DeployFlow {
     line.className = 'deploy-terminal-line' + cls;
     line.innerHTML = '<span class="term-gutter">' + lineNum + '</span><span class="term-content"><span class="ts">' + this._esc(log.ts || '') + '</span> ' + this._esc(log.msg || '') + '</span>';
     body.appendChild(line);
-    if (this._terminalOpen) {
+    if (this._terminalOpen && this._followTail) {
       const term = document.getElementById('deploy-terminal');
       if (term) term.scrollTop = term.scrollHeight;
     }
+    this._updateJumpBadge();
   }
 
   _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -66378,79 +67455,38 @@ class CommandPalette {
  */
 
 /* ══════════════════════════════════════════════════════════════
- * §0  ENDPOINT CATALOG DATA
+ * §0  ENDPOINT CATALOG — BUNDLED FLT-ONLY FALLBACK
+ *
+ * The live catalog is auto-discovered from the FLT C# source at runtime via
+ * GET /api/playground/catalog. This bundled list is the fallback used when
+ * flt_repo_path is not configured (or the dev-server is unreachable).
+ *
+ * Keep this list FLT-only and minimal — it is a safety net, not a master.
+ * To add new endpoints permanently, add them to the FLT C# controllers;
+ * they will appear here automatically on next panel open.
  * ══════════════════════════════════════════════════════════════ */
 
 var ENDPOINT_GROUPS = [
-  { id: 'workspace',   label: 'Workspace',   order: 0 },
-  { id: 'items',       label: 'Items',       order: 1 },
-  { id: 'lakehouse',   label: 'Lakehouse',   order: 2 },
-  { id: 'tables',      label: 'Tables',      order: 3 },
-  { id: 'notebooks',   label: 'Notebooks',   order: 4 },
-  { id: 'environment', label: 'Environment', order: 5 },
-  { id: 'dag',         label: 'DAG',         order: 6 },
-  { id: 'execution',   label: 'Execution',   order: 7 },
-  { id: 'spark',       label: 'Spark',       order: 8 },
-  { id: 'maintenance', label: 'Maintenance', order: 9 },
+  { id: 'liveTable',            label: 'LiveTable',   order: 0 },
+  { id: 'liveTableSchedule',    label: 'Scheduler',   order: 1 },
+  { id: 'liveTableMaintanance', label: 'Maintenance', order: 2 },
 ];
 
 var ENDPOINT_CATALOG = [
-  // ── Workspace (bearer) ──
-  { id: 'list-workspaces',   name: 'List Workspaces',   method: 'GET',    urlTemplate: '/v1/workspaces',                                    group: 'workspace', tokenType: 'bearer', bodyTemplate: null, description: 'List all accessible workspaces', dangerLevel: 'safe' },
-  { id: 'get-workspace',     name: 'Get Workspace',     method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}',                      group: 'workspace', tokenType: 'bearer', bodyTemplate: null, description: 'Get workspace details by ID', dangerLevel: 'safe' },
-  { id: 'create-workspace',  name: 'Create Workspace',  method: 'POST',   urlTemplate: '/v1/workspaces',                                    group: 'workspace', tokenType: 'bearer', bodyTemplate: { displayName: 'New Workspace' }, description: 'Create a new workspace', dangerLevel: 'caution' },
-  { id: 'update-workspace',  name: 'Update Workspace',  method: 'PATCH',  urlTemplate: '/v1/workspaces/{workspaceId}',                      group: 'workspace', tokenType: 'bearer', bodyTemplate: { displayName: 'Updated Name' }, description: 'Update workspace properties', dangerLevel: 'caution' },
-  { id: 'delete-workspace',  name: 'Delete Workspace',  method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}',                      group: 'workspace', tokenType: 'bearer', bodyTemplate: null, description: 'Permanently delete a workspace', dangerLevel: 'destructive' },
-
-  // ── Items (bearer) ──
-  { id: 'list-items',  name: 'List Items',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/items',               group: 'items', tokenType: 'bearer', bodyTemplate: null, description: 'List all items in a workspace', dangerLevel: 'safe' },
-  { id: 'get-item',    name: 'Get Item',    method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/items/{itemId}',       group: 'items', tokenType: 'bearer', bodyTemplate: null, description: 'Get item details', dangerLevel: 'safe' },
-  { id: 'delete-item', name: 'Delete Item', method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}/items/{itemId}',       group: 'items', tokenType: 'bearer', bodyTemplate: null, description: 'Delete an item from workspace', dangerLevel: 'destructive' },
-
-  // ── Lakehouse (bearer) ──
-  { id: 'list-lakehouses',  name: 'List Lakehouses',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses',                          group: 'lakehouse', tokenType: 'bearer', bodyTemplate: null, description: 'List all lakehouses', dangerLevel: 'safe' },
-  { id: 'get-lakehouse',    name: 'Get Lakehouse',    method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}',             group: 'lakehouse', tokenType: 'bearer', bodyTemplate: null, description: 'Get lakehouse details', dangerLevel: 'safe' },
-  { id: 'create-lakehouse', name: 'Create Lakehouse', method: 'POST',   urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses',                          group: 'lakehouse', tokenType: 'bearer', bodyTemplate: { displayName: 'New Lakehouse' }, description: 'Create a new lakehouse', dangerLevel: 'caution' },
-  { id: 'update-lakehouse', name: 'Update Lakehouse', method: 'PATCH',  urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}',             group: 'lakehouse', tokenType: 'bearer', bodyTemplate: { displayName: 'Updated Lakehouse' }, description: 'Update lakehouse properties', dangerLevel: 'caution' },
-  { id: 'delete-lakehouse', name: 'Delete Lakehouse', method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}',             group: 'lakehouse', tokenType: 'bearer', bodyTemplate: null, description: 'Delete a lakehouse', dangerLevel: 'destructive' },
-
-  // ── Tables (mixed) ──
-  { id: 'list-tables',      name: 'List Tables',       method: 'GET', urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables', group: 'tables', tokenType: 'bearer', bodyTemplate: null, description: 'List tables in a lakehouse', dangerLevel: 'safe' },
-  { id: 'get-table-props',  name: 'Table Properties',  method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/tables/{tableName}/properties',      group: 'tables', tokenType: 'mwc',    bodyTemplate: null, description: 'Get table properties (FLT)', dangerLevel: 'safe' },
-  { id: 'get-table-schema', name: 'Table Schema',      method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/tables/{tableName}/schema',          group: 'tables', tokenType: 'mwc',    bodyTemplate: null, description: 'Get table schema (FLT)', dangerLevel: 'safe' },
-  { id: 'get-table-stats',  name: 'Table Stats',       method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/tables/{tableName}/stats',           group: 'tables', tokenType: 'mwc',    bodyTemplate: null, description: 'Get table statistics (FLT)', dangerLevel: 'safe' },
-
-  // ── Notebooks (bearer) ──
-  { id: 'list-notebooks',  name: 'List Notebooks',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/notebooks',                    group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'List notebooks in workspace', dangerLevel: 'safe' },
-  { id: 'get-notebook',    name: 'Get Notebook',    method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/notebooks/{notebookId}',       group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'Get notebook details', dangerLevel: 'safe' },
-  { id: 'create-notebook', name: 'Create Notebook', method: 'POST',   urlTemplate: '/v1/workspaces/{workspaceId}/notebooks',                    group: 'notebooks', tokenType: 'bearer', bodyTemplate: { displayName: 'New Notebook' }, description: 'Create a new notebook', dangerLevel: 'caution' },
-  { id: 'delete-notebook', name: 'Delete Notebook', method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}/notebooks/{notebookId}',       group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'Delete a notebook', dangerLevel: 'destructive' },
-
-  // ── Environment (bearer) ──
-  { id: 'get-environment', name: 'Get Environment', method: 'GET', urlTemplate: '/v1/workspaces/{workspaceId}/environments', group: 'environment', tokenType: 'bearer', bodyTemplate: null, description: 'Get workspace environment settings', dangerLevel: 'safe' },
-
   // ── DAG (mwc) ──
-  { id: 'get-latest-dag', name: 'Get Latest DAG',  method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/latest',  group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get the latest DAG definition', dangerLevel: 'safe' },
-  { id: 'run-dag',        name: 'Run DAG',         method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/dag/run',     group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Trigger a DAG execution', dangerLevel: 'caution' },
-  { id: 'cancel-dag',     name: 'Cancel DAG',      method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/dag/cancel',  group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Cancel running DAG execution', dangerLevel: 'caution' },
-  { id: 'get-dag-status', name: 'DAG Status',      method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/status',  group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get current DAG execution status', dangerLevel: 'safe' },
-  { id: 'get-dag-history',name: 'DAG History',     method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/history', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'List past DAG executions', dangerLevel: 'safe' },
-  { id: 'get-dag-metrics',name: 'DAG Metrics',     method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/metrics', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get DAG execution metrics', dangerLevel: 'safe' },
+  { id: 'get-latest-dag',  name: 'Get Latest DAG',  method: 'GET',    urlTemplate: '/liveTable/getLatestDag?showExtendedLineage=true', group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'Get the latest DAG definition', dangerLevel: 'safe' },
+  { id: 'get-dag-history', name: 'DAG Iterations',  method: 'GET',    urlTemplate: '/liveTable/listDAGExecutionIterationIds?pageSize=50', group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'List past DAG executions', dangerLevel: 'safe' },
+  { id: 'get-dag-metrics', name: 'DAG Metrics',     method: 'GET',    urlTemplate: '/liveTable/getDAGExecMetrics/{iterationId}',        group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'Get DAG execution metrics', dangerLevel: 'safe' },
+  { id: 'get-settings',    name: 'Get Settings',    method: 'GET',    urlTemplate: '/liveTable/settings',                                group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'Get FLT settings', dangerLevel: 'safe' },
 
-  // ── Execution (mwc) ──
-  { id: 'get-exec-status',  name: 'Execution Status',  method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/execution/status',  group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get current execution status', dangerLevel: 'safe' },
-  { id: 'get-exec-logs',    name: 'Execution Logs',    method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/execution/logs',    group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get execution log entries', dangerLevel: 'safe' },
-  { id: 'get-exec-metrics', name: 'Execution Metrics', method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/execution/metrics', group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get execution performance metrics', dangerLevel: 'safe' },
-
-  // ── Spark (mwc) ──
-  { id: 'list-spark-sessions', name: 'Spark Sessions', method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/spark/sessions',       group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'List active Spark sessions', dangerLevel: 'safe' },
-  { id: 'get-spark-job',       name: 'Spark Job',      method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/spark/jobs/{jobId}',   group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark job details', dangerLevel: 'safe' },
-  { id: 'get-spark-metrics',   name: 'Spark Metrics',  method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/spark/metrics',        group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark resource metrics', dangerLevel: 'safe' },
+  // ── Scheduler (mwc) ──
+  { id: 'run-dag',        name: 'Run DAG',         method: 'POST',   urlTemplate: '/liveTableSchedule/runDAG/{iterationId}',           group: 'liveTableSchedule', tokenType: 'mwc', bodyTemplate: null, description: 'Trigger a DAG execution', dangerLevel: 'caution' },
+  { id: 'get-dag-status', name: 'DAG Exec Status', method: 'GET',    urlTemplate: '/liveTableSchedule/getDAGExecStatus/{iterationId}', group: 'liveTableSchedule', tokenType: 'mwc', bodyTemplate: null, description: 'Get current DAG execution status', dangerLevel: 'safe' },
+  { id: 'cancel-dag',     name: 'Cancel DAG',      method: 'DELETE', urlTemplate: '/liveTableSchedule/cancelDAG/{iterationId}',        group: 'liveTableSchedule', tokenType: 'mwc', bodyTemplate: null, description: 'Cancel running DAG execution', dangerLevel: 'caution' },
 
   // ── Maintenance (mwc) ──
-  { id: 'force-unlock',     name: 'Force Unlock DAG',   method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/maintenance/unlock',   group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Force unlock a stuck DAG', dangerLevel: 'destructive' },
-  { id: 'list-orphaned',    name: 'List Orphaned',      method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/maintenance/orphaned', group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Find orphaned index folders', dangerLevel: 'safe' },
-  { id: 'cleanup-orphaned', name: 'Cleanup Orphaned',   method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/maintenance/cleanup',  group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Remove orphaned folders', dangerLevel: 'destructive' },
+  { id: 'list-locked',      name: 'Locked Iterations',  method: 'GET',  urlTemplate: '/liveTableMaintanance/getLockedDAGExecutionIteration',                group: 'liveTableMaintanance', tokenType: 'mwc', bodyTemplate: null, description: 'Find locked DAG iterations', dangerLevel: 'safe' },
+  { id: 'force-unlock',     name: 'Force Unlock DAG',   method: 'POST', urlTemplate: '/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}',   group: 'liveTableMaintanance', tokenType: 'mwc', bodyTemplate: null, description: 'Force unlock a stuck DAG iteration', dangerLevel: 'destructive' },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -66585,7 +67621,51 @@ class EndpointCatalog {
     this._boundClose = null;
     this._activeItem = null;
     this._groupStates = {};
+
+    // Live catalog state — initialized from bundled fallback, replaced by
+    // a successful fetch to /api/playground/catalog. See _loadDynamic().
+    this._endpoints = ENDPOINT_CATALOG;
+    this._groups = ENDPOINT_GROUPS;
+    this._source = 'bundled';
+    this._sourceCount = ENDPOINT_CATALOG.length;
+    this._badgeEl = null;
+
     this._render();
+    this._loadDynamic();
+  }
+
+  _loadDynamic() {
+    // Pull the live catalog from dev-server. On any failure, silently keep
+    // the bundled fallback already in place. This must work in Disconnected
+    // phase (no FLT process running) — it only requires the dev-server.
+    var self = this;
+    try {
+      fetch('/api/playground/catalog', { method: 'GET' })
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('catalog-http-' + resp.status);
+          return resp.json();
+        })
+        .then(function(payload) {
+          if (!payload || !Array.isArray(payload.endpoints) || !Array.isArray(payload.groups)) {
+            throw new Error('catalog-malformed-payload');
+          }
+          if (payload.endpoints.length === 0) {
+            // Empty extraction (probably FLT repo present but Controllers/ empty).
+            // Keep bundled — better than showing nothing.
+            return;
+          }
+          self._endpoints = payload.endpoints;
+          self._groups = payload.groups;
+          self._source = 'auto-discovered';
+          self._sourceCount = payload.endpoints.length;
+          self._render();
+        })
+        .catch(function() {
+          // Bundled fallback already set. No-op.
+        });
+    } catch (e) {
+      // fetch unavailable — keep bundled.
+    }
   }
 
   _render() {
@@ -66599,10 +67679,26 @@ class EndpointCatalog {
     title.textContent = 'Endpoints';
     var count = document.createElement('span');
     count.className = 'api-catalog-count';
-    count.textContent = ENDPOINT_CATALOG.length;
+    count.textContent = this._endpoints.length;
     header.appendChild(title);
     header.appendChild(count);
     this._container.appendChild(header);
+
+    // Source badge — shows whether catalog came from dev-server discovery
+    // or the bundled fallback. Helps users understand staleness vs freshness.
+    var badge = document.createElement('div');
+    badge.className = 'api-catalog-source api-catalog-source-' + this._source;
+    var badgeDot = document.createElement('span');
+    badgeDot.className = 'api-catalog-source-dot';
+    badgeDot.textContent = this._source === 'auto-discovered' ? '\u25CF' : '\u25CB';
+    var badgeText = document.createElement('span');
+    badgeText.textContent = this._source === 'auto-discovered'
+      ? 'Auto-discovered (' + this._sourceCount + ' routes)'
+      : 'Bundled fallback (' + this._sourceCount + ' routes)';
+    badge.appendChild(badgeDot);
+    badge.appendChild(badgeText);
+    this._badgeEl = badge;
+    this._container.appendChild(badge);
 
     // Search
     var searchWrap = document.createElement('div');
@@ -66640,11 +67736,11 @@ class EndpointCatalog {
     var matched = 0;
     var groupColors = ['var(--green)', 'var(--blue)', 'var(--amber)', 'var(--purple)', 'var(--red)',
       'var(--green)', 'var(--blue)', 'var(--amber)', 'var(--purple)', 'var(--red)'];
-    for (var g = 0; g < ENDPOINT_GROUPS.length; g++) {
-      var group = ENDPOINT_GROUPS[g];
+    for (var g = 0; g < this._groups.length; g++) {
+      var group = this._groups[g];
       var endpoints = [];
-      for (var i = 0; i < ENDPOINT_CATALOG.length; i++) {
-        var ep = ENDPOINT_CATALOG[i];
+      for (var i = 0; i < this._endpoints.length; i++) {
+        var ep = this._endpoints[i];
         if (ep.group !== group.id) continue;
         if (filter && ep.name.toLowerCase().indexOf(filter) === -1
             && ep.urlTemplate.toLowerCase().indexOf(filter) === -1
@@ -66761,12 +67857,16 @@ class RequestBuilder {
     this._bodyEl = null;
     this._bodySection = null;
     this._headersEl = null;
+    this._paramsEl = null;
     this._sendBtn = null;
     this._cancelBtn = null;
     this._catalogWrap = null;
     this._catalog = null;
     this._activeTab = 'headers';
+    this._pinnedTokenType = null;
+    this._docClickHandler = null;
     this.onSend = null;
+    this.onSave = null;
     this._render();
   }
 
@@ -66868,11 +67968,13 @@ class RequestBuilder {
     var content = document.createElement('div');
     content.className = 'api-req-content';
 
-    // Params pane (stub)
+    // Params pane
     var paramsPane = document.createElement('div');
     paramsPane.className = 'api-req-pane';
     paramsPane.setAttribute('data-pane', 'params');
-    paramsPane.innerHTML = '<div style="padding:var(--space-3) var(--space-4);color:var(--text-muted);font-size:var(--text-sm)">Query parameters are parsed from the URL</div>';
+    this._paramsEl = document.createElement('div');
+    paramsPane.appendChild(this._paramsEl);
+    this._renderParams();
     content.appendChild(paramsPane);
 
     // Headers pane
@@ -66931,7 +68033,8 @@ class RequestBuilder {
       self._setMethod(m);
       dd.classList.remove('open');
     });
-    document.addEventListener('click', function() { dd.classList.remove('open'); });
+    this._docClickHandler = function() { dd.classList.remove('open'); };
+    document.addEventListener('click', this._docClickHandler);
 
     // Tab switching
     tabBar.addEventListener('click', function(e) {
@@ -66960,11 +68063,242 @@ class RequestBuilder {
       }
     });
 
+    // URL edits invalidate the pinned token type (from a catalog selection)
+    this._urlEl.addEventListener('input', function() {
+      self._pinnedTokenType = null;
+      self._renderParams();
+    });
+
     // cURL copy
     curlBtn.addEventListener('click', function() {
       var curl = self.generateCurl();
       if (navigator.clipboard) { navigator.clipboard.writeText(curl); }
     });
+
+    // Save
+    saveBtn.addEventListener('click', function() {
+      if (self.onSave) self.onSave(self.getRequest());
+    });
+  }
+
+  _renderParams() {
+    if (!this._paramsEl) return;
+    var self = this;
+    this._paramsEl.innerHTML = '';
+    var table = document.createElement('table');
+    table.className = 'api-kv-table';
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th class="kv-chk"></th><th>Key</th><th>Value</th><th></th></tr>';
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    this._paramsEl.appendChild(table);
+
+    // Documented params come from the catalog and provide rich metadata
+    // (type, default, required, description, enum dropdown). They render
+    // first with the param name read-only.
+    var docs = this._documentedParams || [];
+    var pairs = this._parseQuery(this._urlEl ? this._urlEl.value : '');
+    var pairByName = {};
+    for (var i = 0; i < pairs.length; i++) pairByName[pairs[i].key] = pairs[i].value;
+
+    var documentedNames = {};
+    for (var d = 0; d < docs.length; d++) {
+      var meta = docs[d];
+      documentedNames[meta.name] = true;
+      var preFilled = Object.prototype.hasOwnProperty.call(pairByName, meta.name);
+      var checked = meta.required || preFilled;
+      var initialValue = preFilled ? pairByName[meta.name] : '';
+      tbody.appendChild(this._paramRow(meta.name, initialValue, { meta: meta, checked: checked }));
+    }
+
+    // Then any ad-hoc params from the URL that weren't in the catalog.
+    for (var p = 0; p < pairs.length; p++) {
+      if (documentedNames[pairs[p].key]) continue;
+      tbody.appendChild(this._paramRow(pairs[p].key, pairs[p].value));
+    }
+
+    var addRow = document.createElement('div');
+    addRow.className = 'api-kv-add';
+    addRow.textContent = '+ Add Param';
+    addRow.addEventListener('click', function() {
+      tbody.appendChild(self._paramRow('', ''));
+    });
+    this._paramsEl.appendChild(addRow);
+  }
+
+  _paramRow(key, value, opts) {
+    var self = this;
+    var meta = opts && opts.meta ? opts.meta : null;
+    var row = document.createElement('tr');
+    if (meta && meta.required) row.classList.add('api-param-required');
+
+    var chkCell = document.createElement('td');
+    chkCell.className = 'kv-chk';
+    var chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = opts && opts.checked !== undefined ? opts.checked : true;
+    chk.className = 'api-kv-check';
+    chkCell.appendChild(chk);
+    row.appendChild(chkCell);
+
+    var keyCell = document.createElement('td');
+    keyCell.className = 'kv-key';
+    var keyInput = document.createElement('input');
+    keyInput.className = 'api-param-key';
+    keyInput.value = key;
+    keyInput.placeholder = 'Param name';
+    keyInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;flex:1;min-width:0;outline:none';
+    if (meta) {
+      keyInput.readOnly = true;
+      keyInput.title = meta.description || meta.name;
+      if (meta.required) keyInput.style.fontWeight = '600';
+    }
+    keyCell.appendChild(keyInput);
+    if (meta) {
+      var typeBadge = document.createElement('span');
+      typeBadge.className = 'api-param-type';
+      typeBadge.textContent = meta.type + (meta.required ? ' *' : '');
+      typeBadge.title = (meta.description ? meta.description + '\n' : '') +
+        'Type: ' + meta.type +
+        (meta.defaultLiteral != null ? '\nDefault: ' + meta.defaultLiteral : '') +
+        (meta.required ? '\n(required)' : ' (optional)');
+      keyCell.appendChild(typeBadge);
+    }
+    row.appendChild(keyCell);
+
+    var valCell = document.createElement('td');
+    valCell.className = 'kv-val';
+    var valInput;
+    var isEnumList = meta && meta.kind === 'enum-list' && Array.isArray(meta.enumValues) && meta.enumValues.length > 0;
+    var isEnumSingle = meta && meta.kind === 'enum' && Array.isArray(meta.enumValues) && meta.enumValues.length > 0;
+    if (isEnumList) {
+      // Chip picker — single-line of toggleable pills. Toggling auto-checks the row.
+      valInput = document.createElement('div');
+      valInput.className = 'api-param-val api-param-chips';
+      var preselected = value ? String(value).split(',').map(function(s) { return s.trim(); }) : [];
+      for (var ev = 0; ev < meta.enumValues.length; ev++) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'api-param-chip';
+        chip.textContent = meta.enumValues[ev];
+        chip.dataset.value = meta.enumValues[ev];
+        if (preselected.indexOf(meta.enumValues[ev]) !== -1) chip.classList.add('selected');
+        chip.addEventListener('click', (function(btn) {
+          return function() {
+            btn.classList.toggle('selected');
+            if (chk && !chk.checked) chk.checked = true;
+            self._syncUrlFromParams();
+          };
+        })(chip));
+        valInput.appendChild(chip);
+      }
+    } else if (isEnumSingle) {
+      valInput = document.createElement('select');
+      var blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = meta.defaultLiteral != null ? '(default: ' + meta.defaultLiteral + ')' : '(none)';
+      valInput.appendChild(blank);
+      for (var es = 0; es < meta.enumValues.length; es++) {
+        var optS = document.createElement('option');
+        optS.value = meta.enumValues[es];
+        optS.textContent = meta.enumValues[es];
+        valInput.appendChild(optS);
+      }
+      if (value) valInput.value = value;
+      valInput.className = 'api-param-val';
+      valInput.style.cssText = 'background:none;font:inherit;color:inherit;width:100%';
+    } else {
+      valInput = document.createElement('input');
+      valInput.className = 'api-param-val';
+      valInput.value = value;
+      valInput.placeholder = meta && meta.defaultLiteral != null
+        ? 'default: ' + meta.defaultLiteral
+        : 'Value';
+      valInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    }
+    valCell.appendChild(valInput);
+    row.appendChild(valCell);
+
+    var actCell = document.createElement('td');
+    if (!meta) {
+      var del = document.createElement('button');
+      del.className = 'api-kv-del';
+      del.textContent = '\u2715';
+      del.addEventListener('click', function() {
+        row.remove();
+        self._syncUrlFromParams();
+      });
+      actCell.appendChild(del);
+    }
+    row.appendChild(actCell);
+
+    var sync = function() { self._syncUrlFromParams(); };
+    keyInput.addEventListener('input', sync);
+    valInput.addEventListener('input', sync);
+    valInput.addEventListener('change', sync);
+    chk.addEventListener('change', sync);
+
+    return row;
+  }
+
+  _parseQuery(url) {
+    var pairs = [];
+    if (!url) return pairs;
+    var qIdx = url.indexOf('?');
+    if (qIdx === -1) return pairs;
+    var qs = url.substring(qIdx + 1);
+    var parts = qs.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var eq = parts[i].indexOf('=');
+      var k, v;
+      if (eq === -1) { k = parts[i]; v = ''; }
+      else { k = parts[i].substring(0, eq); v = parts[i].substring(eq + 1); }
+      try { k = decodeURIComponent(k); } catch (e) { /* keep raw */ }
+      try { v = decodeURIComponent(v); } catch (e) { /* keep raw */ }
+      pairs.push({ key: k, value: v });
+    }
+    return pairs;
+  }
+
+  _syncUrlFromParams() {
+    if (!this._paramsEl || !this._urlEl) return;
+    var rows = this._paramsEl.querySelectorAll('tbody tr');
+    var parts = [];
+    for (var i = 0; i < rows.length; i++) {
+      var chk = rows[i].querySelector('.api-kv-check');
+      if (chk && !chk.checked) continue;
+      var k = rows[i].querySelector('.api-param-key');
+      var v = rows[i].querySelector('.api-param-val');
+      if (!k || !k.value.trim()) continue;
+      var keyEnc = encodeURIComponent(k.value.trim());
+      if (v && v.classList && v.classList.contains('api-param-chips')) {
+        // Chip picker (enum-list): emit ?key=A&key=B style for ASP.NET model binding.
+        var selChips = v.querySelectorAll('.api-param-chip.selected');
+        if (selChips.length === 0) {
+          parts.push(keyEnc + '=');
+        } else {
+          for (var ci = 0; ci < selChips.length; ci++) {
+            parts.push(keyEnc + '=' + encodeURIComponent(selChips[ci].dataset.value || ''));
+          }
+        }
+      } else if (v && v.tagName === 'SELECT' && v.multiple) {
+        // Legacy multi-select fallback (no longer rendered by _paramRow but kept for safety).
+        var anySelected = false;
+        for (var oi = 0; oi < v.options.length; oi++) {
+          if (v.options[oi].selected && v.options[oi].value) {
+            parts.push(keyEnc + '=' + encodeURIComponent(v.options[oi].value));
+            anySelected = true;
+          }
+        }
+        if (!anySelected) parts.push(keyEnc + '=');
+      } else {
+        parts.push(keyEnc + '=' + encodeURIComponent(v ? v.value : ''));
+      }
+    }
+    var base = this._urlEl.value.split('?')[0];
+    this._urlEl.value = parts.length ? base + '?' + parts.join('&') : base;
   }
 
   _setMethod(m) {
@@ -67059,13 +68393,14 @@ class RequestBuilder {
 
     var method = this._methodEl.getAttribute('data-value') || 'GET';
     var needsBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
+    var url = this._urlEl.value.trim();
 
     return {
       method: method,
-      url: this._urlEl.value.trim(),
+      url: url,
       headers: headers,
       body: needsBody ? this._bodyEl.value : null,
-      tokenType: this._detectTokenType(this._urlEl.value)
+      tokenType: this._pinnedTokenType || this._detectTokenType(url)
     };
   }
 
@@ -67075,6 +68410,13 @@ class RequestBuilder {
     }
     if (req.url !== undefined) this._urlEl.value = req.url;
     if (req.body !== undefined) this._bodyEl.value = req.body || '';
+    if (req.tokenType) this._pinnedTokenType = req.tokenType;
+
+    // F09 query-param enrichment: documented params from catalog drive a
+    // pre-seeded Params tab with type badges, defaults as placeholders, and
+    // dropdowns for known enums. `queryParams` is an array of objects with
+    // { name, type, kind, default, defaultLiteral, required, description, enumValues }.
+    this._documentedParams = Array.isArray(req.queryParams) ? req.queryParams : [];
 
     if (req.headers) {
       // Rebuild header rows
@@ -67093,6 +68435,10 @@ class RequestBuilder {
         this._addHeaderRow('Authorization', 'Bearer \u25CF\u25CF\u25CF\u25CF', true);
       }
     }
+
+    // Re-render Params tab so documented metadata renders alongside any
+    // ad-hoc params already in the URL.
+    this._renderParams();
   }
 
   setSending(sending) {
@@ -67118,7 +68464,8 @@ class RequestBuilder {
   }
 
   _detectTokenType(url) {
-    if (url.indexOf('pbidedicated') !== -1 || url.indexOf('{fabricBaseUrl}') !== -1) return 'mwc';
+    if (!url) return 'none';
+    if (url.indexOf('/liveTable') !== -1 || url.indexOf('pbidedicated') !== -1) return 'mwc';
     if (url.indexOf('/v1/') !== -1 || url.indexOf('api.fabric') !== -1) return 'bearer';
     return 'none';
   }
@@ -67126,9 +68473,14 @@ class RequestBuilder {
   getCatalog() { return this._catalog; }
 
   destroy() {
+    if (this._docClickHandler) {
+      document.removeEventListener('click', this._docClickHandler);
+      this._docClickHandler = null;
+    }
     if (this._catalog) this._catalog.destroy();
     this._container.innerHTML = '';
     this.onSend = null;
+    this.onSave = null;
   }
 }
 
@@ -67237,6 +68589,34 @@ class ResponseViewer {
       header.appendChild(sizePill);
     }
 
+    // Header actions — Copy + Download (always visible when we have a body)
+    var actions = document.createElement('div');
+    actions.style.marginLeft = 'auto';
+    actions.style.display = 'flex';
+    actions.style.gap = 'var(--space-2)';
+
+    if (result.body) {
+      var copyHdrBtn = document.createElement('button');
+      copyHdrBtn.className = 'api-json-action';
+      copyHdrBtn.textContent = 'Copy';
+      copyHdrBtn.addEventListener('click', function() {
+        if (navigator.clipboard) navigator.clipboard.writeText(result.body);
+      });
+      actions.appendChild(copyHdrBtn);
+
+      var dlBtn = document.createElement('button');
+      dlBtn.className = 'api-json-action';
+      dlBtn.textContent = 'Download';
+      var ct = (result.headers && (result.headers['content-type'] || result.headers['Content-Type'])) || 'application/json';
+      var ext = ct.indexOf('json') !== -1 ? 'json' : (ct.indexOf('xml') !== -1 ? 'xml' : 'txt');
+      var self2 = this;
+      dlBtn.addEventListener('click', function() {
+        self2._downloadBlob('response-' + Date.now() + '.' + ext, result.body, ct);
+      });
+      actions.appendChild(dlBtn);
+    }
+    header.appendChild(actions);
+
     this._container.appendChild(header);
 
     // Tabs
@@ -67311,8 +68691,35 @@ class ResponseViewer {
 
   _renderBody(container, result, treeBtn, rawBtn) {
     var bodyStr = result.body || '';
+    var TRUNCATE_LIMIT = 500 * 1024; // 500KB
+    var tooLarge = bodyStr.length > TRUNCATE_LIMIT;
     var parsed = null;
-    try { parsed = JSON.parse(bodyStr); } catch (e) { parsed = null; }
+    if (!tooLarge) {
+      try { parsed = JSON.parse(bodyStr); } catch (e) { parsed = null; }
+    }
+
+    if (tooLarge) {
+      var warn = document.createElement('div');
+      warn.className = 'api-resp-empty';
+      warn.style.padding = 'var(--space-4)';
+      var wt = document.createElement('div');
+      wt.className = 'api-resp-empty-title';
+      wt.textContent = 'Response too large to render (' + this._formatSize(bodyStr.length) + ')';
+      var wh = document.createElement('div');
+      wh.className = 'api-resp-empty-hint';
+      wh.textContent = 'Showing first 50KB. Use Download in the header to save the full response.';
+      warn.appendChild(wt);
+      warn.appendChild(wh);
+      container.appendChild(warn);
+
+      var preview = document.createElement('div');
+      preview.className = 'api-raw-view';
+      preview.textContent = bodyStr.substring(0, 50 * 1024) + '\n\n... (truncated) ...';
+      container.appendChild(preview);
+      treeBtn.style.display = 'none';
+      rawBtn.style.display = 'none';
+      return;
+    }
 
     if (parsed !== null) {
       // JSON toolbar
@@ -67437,6 +68844,20 @@ class ResponseViewer {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  _downloadBlob(filename, content, contentType) {
+    try {
+      var blob = new Blob([content], { type: contentType || 'application/octet-stream' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 0);
+    } catch (e) { /* clipboard/blob unavailable */ }
   }
 
   destroy() {
@@ -67775,16 +69196,19 @@ class ApiPlayground {
     // Center: Workspace
     var workspace = document.createElement('div');
     workspace.className = 'api-workspace';
+    this._workspaceEl = workspace;
 
     // Request panel
     var reqPanel = document.createElement('div');
     reqPanel.className = 'api-req-panel';
+    this._reqPanel = reqPanel;
     this._requestBuilder = new RequestBuilder(reqPanel);
     workspace.appendChild(reqPanel);
 
     // Resize handle
     var resizeH = document.createElement('div');
     resizeH.className = 'api-resize-h';
+    this._resizeH = resizeH;
     workspace.appendChild(resizeH);
 
     // Response panel
@@ -67827,7 +69251,9 @@ class ApiPlayground {
         method: endpoint.method,
         url: resolvedUrl,
         headers: headers,
-        body: endpoint.bodyTemplate ? JSON.stringify(endpoint.bodyTemplate, null, 2) : ''
+        body: endpoint.bodyTemplate ? JSON.stringify(endpoint.bodyTemplate, null, 2) : '',
+        tokenType: endpoint.tokenType,
+        queryParams: endpoint.queryParams || []
       });
     };
 
@@ -67837,7 +69263,8 @@ class ApiPlayground {
         method: entry.method,
         url: entry.url,
         headers: entry.headers || [],
-        body: entry.body || ''
+        body: entry.body || '',
+        tokenType: entry.tokenType
       });
     };
 
@@ -67850,17 +69277,73 @@ class ApiPlayground {
       self._requestBuilder.setSending(false);
       self._responseViewer.showError({ message: 'Request cancelled' });
     });
+
+    // Save button
+    this._requestBuilder.onSave = function(request) {
+      var defaultName = request.url ? request.url.split('?')[0] : 'Untitled request';
+      var name = window.prompt('Name this request:', defaultName);
+      if (!name) return;
+      self._historySaved.saveRequest({
+        method: request.method,
+        url: request.url,
+        headers: self._sanitizeHeaders(request.headers),
+        body: request.body,
+        tokenType: request.tokenType,
+        name: name
+      });
+    };
+
+    // Resize handle — drag to adjust request/response split
+    this._wireResize();
+  }
+
+  _wireResize() {
+    if (!this._resizeH || !this._reqPanel || !this._workspaceEl) return;
+    var self = this;
+    var dragging = false;
+    var startY = 0;
+    var startH = 0;
+
+    this._resizeH.addEventListener('mousedown', function(e) {
+      dragging = true;
+      startY = e.clientY;
+      startH = self._reqPanel.offsetHeight;
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    var onMove = function(e) {
+      if (!dragging) return;
+      var wsH = self._workspaceEl.offsetHeight;
+      var newH = startH + (e.clientY - startY);
+      var minH = 120;
+      var maxH = Math.max(minH + 1, wsH - 160);
+      if (newH < minH) newH = minH;
+      if (newH > maxH) newH = maxH;
+      self._reqPanel.style.height = newH + 'px';
+      self._reqPanel.style.flexShrink = '0';
+    };
+    var onUp = function() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    this._resizeMoveHandler = onMove;
+    this._resizeUpHandler = onUp;
   }
 
   _handleSend(request) {
     var self = this;
 
-    // Abort previous
     if (this._abortController) this._abortController.abort();
     this._abortController = new AbortController();
 
-    // Resolve URL
     var resolvedUrl = this._resolveUrl(request.url);
+    var tokenType = request.tokenType || this._detectTokenType(resolvedUrl);
 
     this._requestBuilder.setSending(true);
     this._responseViewer.showLoading();
@@ -67870,25 +69353,69 @@ class ApiPlayground {
       return;
     }
 
-    // Build proxy request
-    var proxyBody = JSON.stringify({
+    var path = this._extractPath(resolvedUrl);
+    if (!path) {
+      this._requestBuilder.setSending(false);
+      this._abortController = null;
+      this._responseViewer.showError({
+        message: 'Cannot route request \u2014 URL must be a relative API path (e.g. /v1/... for Fabric or /liveTable/... for FLT). Use the catalog or strip the host.'
+      });
+      return;
+    }
+
+    if (tokenType !== 'bearer' && tokenType !== 'mwc') {
+      this._requestBuilder.setSending(false);
+      this._abortController = null;
+      this._responseViewer.showError({
+        message: 'Cannot determine token type for this URL. Pick an endpoint from the catalog or use a /v1/... or /liveTable/... path.'
+      });
+      return;
+    }
+
+    var envelopeHeaders = this._buildEnvelopeHeaders(request.headers);
+    var needsBody = request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH';
+    var envelope = {
+      tokenType: tokenType,
       method: request.method,
-      url: resolvedUrl,
-      headers: this._buildProxyHeaders(request.headers),
-      body: request.body,
-      tokenType: request.tokenType || this._detectTokenType(resolvedUrl)
-    });
+      path: path,
+      headers: envelopeHeaders,
+      body: needsBody && request.body ? request.body : null,
+      timeout: 30
+    };
 
     var startTime = Date.now();
-    fetch('/api/playground/proxy', {
+    fetch('/api/playground/dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: proxyBody,
+      body: JSON.stringify(envelope),
       signal: this._abortController.signal
     }).then(function(resp) {
-      return resp.json();
-    }).then(function(result) {
-      if (!result.duration) result.duration = Date.now() - startTime;
+      var roundTrip = Date.now() - startTime;
+      return resp.json().then(function(payload) {
+        return { httpStatus: resp.status, payload: payload, roundTrip: roundTrip };
+      }).catch(function() {
+        return { httpStatus: resp.status, payload: null, roundTrip: roundTrip };
+      });
+    }).then(function(parsed) {
+      var payload = parsed.payload || {};
+      // Dispatcher-level failure: HTTP 4xx/5xx with {error, message}
+      if (parsed.httpStatus >= 400 && payload && payload.error) {
+        var msg = '[' + payload.error + '] ' + (payload.message || 'Dispatcher rejected the request');
+        self._responseViewer.showError({ message: msg, error: payload.error });
+        self._requestBuilder.setSending(false);
+        self._abortController = null;
+        return;
+      }
+      // Successful proxy — payload is the response envelope
+      var result = {
+        status: payload.status || 0,
+        statusText: payload.statusText || '',
+        headers: payload.headers || {},
+        body: payload.body || '',
+        duration: typeof payload.duration === 'number' ? payload.duration : parsed.roundTrip,
+        bodySize: typeof payload.bodySize === 'number' ? payload.bodySize : (payload.body ? payload.body.length : 0),
+        truncated: !!payload.truncated
+      };
       self._responseViewer.showResponse(result);
       self._historySaved.addHistoryEntry(
         self._sanitizeForHistory(request, resolvedUrl, result)
@@ -67907,6 +69434,12 @@ class ApiPlayground {
     var self = this;
     var delay = 100 + Math.floor(Math.random() * 400);
     setTimeout(function() {
+      var mockBody = JSON.stringify({
+        status: 'ok',
+        message: 'Mock response for ' + request.method + ' ' + request.url,
+        timestamp: new Date().toISOString(),
+        data: { items: [], count: 0 }
+      }, null, 2);
       var mockResult = {
         status: 200,
         statusText: 'OK',
@@ -67914,14 +69447,9 @@ class ApiPlayground {
           'content-type': 'application/json',
           'x-ms-request-id': self._uuid()
         },
-        body: JSON.stringify({
-          status: 'ok',
-          message: 'Mock response for ' + request.method + ' ' + request.url,
-          timestamp: new Date().toISOString(),
-          data: { items: [], count: 0 }
-        }),
+        body: mockBody,
         duration: delay,
-        bodySize: 128
+        bodySize: mockBody.length
       };
       self._responseViewer.showResponse(mockResult);
       self._historySaved.addHistoryEntry(
@@ -67939,54 +69467,70 @@ class ApiPlayground {
       workspaceId: config.workspaceId || '{workspaceId}',
       lakehouseId: config.lakehouseId || '{lakehouseId}',
       artifactId: config.artifactId || '{artifactId}',
-      capacityId: config.capacityId || '{capacityId}',
-      fabricBaseUrl: config.fabricBaseUrl || '{fabricBaseUrl}'
+      capacityId: config.capacityId || '{capacityId}'
     };
-    var resolved = template.replace(/\{(\w+)\}/g, function(match, key) {
+    return template.replace(/\{(\w+)\}/g, function(match, key) {
       return vars[key] || match;
     });
-
-    // Prefix relative URLs
-    if (resolved.charAt(0) === '/') {
-      resolved = 'https://api.fabric.microsoft.com' + resolved;
-    }
-    return resolved;
   }
 
-  _buildProxyHeaders(headers) {
-    var obj = {};
-    for (var i = 0; i < headers.length; i++) {
-      var h = headers[i];
-      // Skip the masked auth header — proxy handles token injection
-      if (h.key.toLowerCase() === 'authorization') continue;
-      if (h.key.trim()) obj[h.key] = h.value;
+  _extractPath(url) {
+    if (!url) return null;
+    // Absolute URL — strip known hosts to get path
+    if (/^https?:\/\//i.test(url)) {
+      var m = url.match(/^https?:\/\/[^\/]+(\/.*)?$/i);
+      return m ? (m[1] || '/') : null;
     }
-    return obj;
+    // Protocol-relative or absolute path
+    if (url.charAt(0) !== '/') url = '/' + url;
+    return url;
+  }
+
+  _buildEnvelopeHeaders(headerRows) {
+    // Convert request builder's array-of-rows into a flat object suitable for
+    // the dispatcher envelope. Drop masked Authorization (defense in depth;
+    // server's denylist also strips it).
+    var out = {};
+    if (!Array.isArray(headerRows)) return out;
+    for (var i = 0; i < headerRows.length; i++) {
+      var h = headerRows[i];
+      if (!h || !h.key) continue;
+      var keyLower = h.key.toLowerCase();
+      if (keyLower === 'authorization') continue;
+      // Only forward non-empty values
+      if (typeof h.value !== 'string' || h.value === '') continue;
+      out[h.key] = h.value;
+    }
+    return out;
   }
 
   _detectTokenType(url) {
-    if (url.indexOf('pbidedicated') !== -1) return 'mwc';
-    if (url.indexOf('api.fabric') !== -1) return 'bearer';
+    if (!url) return 'none';
+    if (url.indexOf('/liveTable') !== -1 || url.indexOf('pbidedicated') !== -1) return 'mwc';
+    if (url.indexOf('/v1/') !== -1 || url.indexOf('api.fabric') !== -1) return 'bearer';
     return 'none';
   }
 
-  _sanitizeForHistory(request, resolvedUrl, result) {
-    var sanitizedHeaders = [];
-    for (var i = 0; i < request.headers.length; i++) {
-      var h = request.headers[i];
+  _sanitizeHeaders(headers) {
+    var out = [];
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
       if (h.key.toLowerCase() === 'authorization') {
-        sanitizedHeaders.push({ key: h.key, value: h.value.replace(/\s.+$/, ' \u25CF\u25CF\u25CF\u25CF') });
+        out.push({ key: h.key, value: h.value.replace(/\s.+$/, ' \u25CF\u25CF\u25CF\u25CF') });
       } else {
-        sanitizedHeaders.push({ key: h.key, value: h.value });
+        out.push({ key: h.key, value: h.value });
       }
     }
+    return out;
+  }
 
+  _sanitizeForHistory(request, resolvedUrl, result) {
     return {
       id: this._uuid(),
       method: request.method,
       url: request.url,
       resolvedUrl: resolvedUrl,
-      headers: sanitizedHeaders,
+      headers: this._sanitizeHeaders(request.headers),
       body: request.body,
       tokenType: request.tokenType || 'none',
       response: {
@@ -68010,6 +69554,14 @@ class ApiPlayground {
 
   destroy() {
     if (this._abortController) this._abortController.abort();
+    if (this._resizeMoveHandler) {
+      document.removeEventListener('mousemove', this._resizeMoveHandler);
+      this._resizeMoveHandler = null;
+    }
+    if (this._resizeUpHandler) {
+      document.removeEventListener('mouseup', this._resizeUpHandler);
+      this._resizeUpHandler = null;
+    }
     if (this._endpointCatalog) this._endpointCatalog.destroy();
     if (this._requestBuilder) this._requestBuilder.destroy();
     if (this._responseViewer) this._responseViewer.destroy();
@@ -71361,11 +72913,17 @@ class QaPanel {
       case 'QaAnalysisProgress':
         if (this._analysis) this._analysis.onProgress(d);
         break;
+      case 'QaAnalysisWarning':
+        if (this._analysis) this._analysis.onWarning(d);
+        break;
       case 'QaAnalysisCancelled':
         if (this._analysis) this._analysis.onCancelled(d);
         break;
       case 'QaScenarioGenerated':
         if (this._analysis) this._analysis.onScenarioGenerated(d);
+        break;
+      case 'QaLintFindings':
+        if (this._analysis) this._analysis.onLintFindings(d);
         break;
 
       // Execution events -> qa-execution.js
@@ -71717,6 +73275,7 @@ class QaAnalysis {
     this._container = null;
     this._phases = [];        // phase DOM elements
     this._scenarios = [];     // received scenarios
+    this._lintFindings = [];  // F27 item 5 — deterministic lint findings batch
     this._scenarioListEl = null;
     this._cancelBtn = null;
     this._metricsEl = null;
@@ -71874,8 +73433,28 @@ class QaAnalysis {
     }
   }
 
+  onWarning(data) {
+    // data: { warning, message }
+    var msg = data.message || data.warning || 'Unknown warning';
+    console.warn('[QA] Pipeline warning:', msg);
+
+    // Show degradation indicator on the active phase
+    for (var i = 0; i < this._phases.length; i++) {
+      var p = this._phases[i];
+      if (p.el.classList.contains('active')) {
+        p.el.classList.add('degraded');
+        var existing = p.detailEl.textContent;
+        p.detailEl.textContent = (existing ? existing + ' ' : '') + '\u26A0 ' + msg;
+        break;
+      }
+    }
+
+    // Also toast the warning
+    if (window.edogToast) window.edogToast.show(msg, 'warning');
+  }
+
   onScenarioGenerated(data) {
-    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, ... } }
+    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, technique, invariantsAddressed, groundingEvidence, ... } }
     var scn = data.scenario;
     if (!scn) return;
     this._scenarios.push(scn);
@@ -71929,6 +73508,25 @@ class QaAnalysis {
     });
   }
 
+  /**
+   * Receive the deterministic linter batch produced after scenario generation.
+   * Findings flow into the curation stage so reviewers see badges and the
+   * findings panel alongside the scenario list. Severity counts also surface
+   * on the analysis-phase footer as a heads-up.
+   */
+  onLintFindings(data) {
+    if (!data) return;
+    this._lintFindings = Array.isArray(data.findings) ? data.findings.slice() : [];
+    // Surface a non-toast badge in the metrics line — purely informational.
+    var errCount = data.errorCount || 0;
+    var warnCount = data.warningCount || 0;
+    if (this._metricsEl && (errCount + warnCount) > 0) {
+      var existing = this._metricsEl.textContent || '';
+      var badge = '\u2696 ' + errCount + 'E / ' + warnCount + 'W lint';
+      this._metricsEl.textContent = existing ? (existing + ' \u00B7 ' + badge) : badge;
+    }
+  }
+
   _showProceedButton() {
     if (!this._container) return;
     var row = document.createElement('div');
@@ -71939,7 +73537,7 @@ class QaAnalysis {
     btn.addEventListener('click', () => {
       // Pass scenarios to curation stage
       if (this._panel._curation) {
-        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId());
+        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId(), this._lintFindings);
       }
       this._panel.goToStage('curation');
     });
@@ -71953,6 +73551,7 @@ class QaAnalysis {
   /** Reset for a new analysis */
   reset() {
     this._scenarios = [];
+    this._lintFindings = [];
     this._isComplete = false;
     this._isCancelled = false;
     this._render();
@@ -71975,6 +73574,9 @@ class QaCuration {
     this._scenarios = [];       // full scenario objects
     this._approved = new Set(); // set of approved scenario IDs
     this._analysisId = null;
+    this._lintFindings = [];    // F27 item 5 — deterministic linter findings
+    this._lintByScenario = new Map(); // scenarioId -> array of findings
+    this._batchFindings = [];   // findings without a scenarioId (coverage gaps)
   }
 
   init() {
@@ -71982,11 +73584,36 @@ class QaCuration {
     this._panel.registerCuration(this);
   }
 
-  /** Load scenarios from analysis stage. */
-  loadScenarios(scenarios, analysisId) {
+  /**
+   * Load scenarios from analysis stage.
+   *
+   * @param {Array} scenarios — full scenario objects from QaScenarioGenerated.
+   * @param {string} analysisId — correlation between analysis and curation.
+   * @param {Array} [lintFindings] — F27 item 5 deterministic findings, optional.
+   *   Each entry: { code, severity, message, scenarioId, invariantId }.
+   *   Findings without a scenarioId are treated as batch-level (coverage gaps).
+   */
+  loadScenarios(scenarios, analysisId, lintFindings) {
     this._scenarios = scenarios.slice();
     this._analysisId = analysisId;
     this._approved = new Set(this._scenarios.map(function (s) { return s.id; }));
+
+    // Index findings for O(1) lookup during card render.
+    this._lintFindings = Array.isArray(lintFindings) ? lintFindings.slice() : [];
+    this._lintByScenario = new Map();
+    this._batchFindings = [];
+    for (var i = 0; i < this._lintFindings.length; i++) {
+      var f = this._lintFindings[i];
+      if (!f) continue;
+      if (f.scenarioId) {
+        if (!this._lintByScenario.has(f.scenarioId)) {
+          this._lintByScenario.set(f.scenarioId, []);
+        }
+        this._lintByScenario.get(f.scenarioId).push(f);
+      } else {
+        this._batchFindings.push(f);
+      }
+    }
     this._render();
   }
 
@@ -72038,6 +73665,12 @@ class QaCuration {
     bulkBar.appendChild(deselectAll);
 
     this._container.appendChild(bulkBar);
+
+    // Batch-level lint findings (coverage gaps, truth-table cells) appear
+    // above the scenario list as a collapsible panel.
+    if (this._batchFindings && this._batchFindings.length > 0) {
+      this._container.appendChild(this._renderBatchFindings());
+    }
 
     // Scenario list
     this._listEl = document.createElement('div');
@@ -72139,11 +73772,42 @@ class QaCuration {
       metaEl.appendChild(stimEl);
     }
 
+    // F27 item 3: technique pill (BoundaryTriplet, Counterfactual, ...).
+    // Falls back gracefully for older synthetic scenarios that don't set it.
+    var technique = scn.technique || scn.Technique;
+    if (technique && technique !== 'NotSpecified') {
+      var techEl = document.createElement('span');
+      techEl.className = 'qa-technique-badge qa-tech-' + technique.toLowerCase();
+      techEl.textContent = this._humanizeTechnique(technique);
+      techEl.title = 'Test technique applied to this scenario';
+      metaEl.appendChild(techEl);
+    }
+
     var expCount = document.createElement('span');
     expCount.className = 'qa-exp-count';
     var n = scn.expectations ? scn.expectations.length : 0;
     expCount.textContent = n + ' expectation' + (n !== 1 ? 's' : '');
     metaEl.appendChild(expCount);
+
+    // F27 item 5: lint summary pill (Error / Warning counts) per card.
+    var perScn = this._lintByScenario.get(scn.id);
+    if (perScn && perScn.length > 0) {
+      var errCount = 0, warnCount = 0;
+      for (var li = 0; li < perScn.length; li++) {
+        var sev = (perScn[li].severity || '').toLowerCase();
+        if (sev === 'error') errCount++;
+        else if (sev === 'warning') warnCount++;
+      }
+      if (errCount + warnCount > 0) {
+        var lintBadge = document.createElement('span');
+        lintBadge.className = 'qa-lint-badge ' + (errCount > 0 ? 'qa-lint-error' : 'qa-lint-warn');
+        lintBadge.textContent = '\u2696 ' + (errCount > 0 ? (errCount + ' error') : '') +
+                                (errCount > 0 && warnCount > 0 ? ', ' : '') +
+                                (warnCount > 0 ? (warnCount + ' warn') : '');
+        lintBadge.title = 'Lint findings on this scenario — see details below.';
+        metaEl.appendChild(lintBadge);
+      }
+    }
 
     body.appendChild(metaEl);
 
@@ -72152,6 +73816,18 @@ class QaCuration {
       descEl.className = 'qa-curation-desc';
       descEl.textContent = scn.description;
       body.appendChild(descEl);
+    }
+
+    // F27 item 6: grounding evidence expandable. Hidden by default; click
+    // chevron to reveal the file:line ranges and rationales the LLM cited.
+    var grounding = scn.groundingEvidence || scn.GroundingEvidence;
+    if (Array.isArray(grounding) && grounding.length > 0) {
+      body.appendChild(this._renderGrounding(grounding));
+    }
+
+    // F27 item 5: per-scenario lint findings list.
+    if (perScn && perScn.length > 0) {
+      body.appendChild(this._renderScenarioFindings(perScn));
     }
 
     card.appendChild(body);
@@ -72275,6 +73951,150 @@ class QaCuration {
       }
     }
     this._renderList();
+  }
+
+  // ── F27 helpers ──
+
+  /** Convert PascalCase technique to a human-readable label. */
+  _humanizeTechnique(t) {
+    if (!t) return '';
+    return t.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  /**
+   * Render the grounding-evidence expander: chevron + list of file:line + reason.
+   * Each evidence item is read-only; clicking the chevron toggles the body.
+   */
+  _renderGrounding(grounding) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-grounding';
+
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'qa-grounding-toggle';
+    toggle.textContent = '\u25B8 Grounding (' + grounding.length + ')';
+    toggle.setAttribute('aria-expanded', 'false');
+
+    var body = document.createElement('div');
+    body.className = 'qa-grounding-body';
+    body.style.display = 'none';
+
+    for (var i = 0; i < grounding.length; i++) {
+      var ev = grounding[i];
+      if (!ev) continue;
+      var row = document.createElement('div');
+      row.className = 'qa-grounding-row';
+
+      var loc = document.createElement('code');
+      loc.className = 'qa-grounding-loc';
+      var locText = (ev.file || ev.File || '(unknown)');
+      var start = ev.startLine || ev.StartLine;
+      var end = ev.endLine || ev.EndLine;
+      if (start) locText += ':' + start + (end && end !== start ? '-' + end : '');
+      loc.textContent = locText;
+      row.appendChild(loc);
+
+      var reason = document.createElement('span');
+      reason.className = 'qa-grounding-reason';
+      reason.textContent = ev.reason || ev.Reason || '';
+      row.appendChild(reason);
+
+      var invId = ev.invariantId || ev.InvariantId;
+      if (invId) {
+        var inv = document.createElement('span');
+        inv.className = 'qa-grounding-inv';
+        inv.textContent = invId;
+        inv.title = 'Linked invariant';
+        row.appendChild(inv);
+      }
+
+      body.appendChild(row);
+    }
+
+    toggle.addEventListener('click', function () {
+      var open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      toggle.textContent = (open ? '\u25B8' : '\u25BE') + ' Grounding (' + grounding.length + ')';
+    });
+
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  /** Render the per-scenario lint findings as a stacked list of severity rows. */
+  _renderScenarioFindings(findings) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-lint-findings';
+
+    for (var i = 0; i < findings.length; i++) {
+      var f = findings[i];
+      if (!f) continue;
+      var row = document.createElement('div');
+      var sev = (f.severity || 'info').toLowerCase();
+      row.className = 'qa-lint-row qa-lint-' + sev;
+
+      var code = document.createElement('code');
+      code.className = 'qa-lint-code';
+      code.textContent = f.code || 'LNT???';
+      row.appendChild(code);
+
+      var msg = document.createElement('span');
+      msg.className = 'qa-lint-msg';
+      msg.textContent = f.message || '';
+      row.appendChild(msg);
+
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  /** Render the batch-level lint findings panel (coverage gaps, etc.). */
+  _renderBatchFindings() {
+    var panel = document.createElement('div');
+    panel.className = 'qa-lint-batch';
+
+    var header = document.createElement('div');
+    header.className = 'qa-lint-batch-header';
+    var errCount = 0, warnCount = 0;
+    for (var i = 0; i < this._batchFindings.length; i++) {
+      var sev = (this._batchFindings[i].severity || '').toLowerCase();
+      if (sev === 'error') errCount++;
+      else if (sev === 'warning') warnCount++;
+    }
+    header.textContent = '\u2696 Batch lint findings — ' + errCount + ' error, ' + warnCount + ' warning';
+    panel.appendChild(header);
+
+    var list = document.createElement('div');
+    list.className = 'qa-lint-batch-list';
+    for (var j = 0; j < this._batchFindings.length; j++) {
+      var f = this._batchFindings[j];
+      if (!f) continue;
+      var row = document.createElement('div');
+      var sv = (f.severity || 'info').toLowerCase();
+      row.className = 'qa-lint-row qa-lint-' + sv;
+
+      var code = document.createElement('code');
+      code.className = 'qa-lint-code';
+      code.textContent = f.code || 'LNT???';
+      row.appendChild(code);
+
+      var msg = document.createElement('span');
+      msg.className = 'qa-lint-msg';
+      msg.textContent = f.message || '';
+      row.appendChild(msg);
+
+      if (f.invariantId) {
+        var inv = document.createElement('span');
+        inv.className = 'qa-lint-inv';
+        inv.textContent = f.invariantId;
+        row.appendChild(inv);
+      }
+      list.appendChild(row);
+    }
+    panel.appendChild(list);
+    return panel;
   }
 }
 
