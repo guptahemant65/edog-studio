@@ -398,6 +398,26 @@ namespace Microsoft.LiveTable.Service.DevMode
             app.MapGet("/api/flt/config", apiProxy.HandleConfig);
             app.MapGet("/api/edog/health", apiProxy.HandleHealth);
         }
+
+        // Interceptor status — source of truth for which EDOG interceptors are active
+        app.MapGet("/api/edog/interceptors/status", async context =>
+        {
+            try
+            {
+                var statuses = EdogInterceptorRegistry.GetStatus();
+                var summary = EdogInterceptorRegistry.GetSummary();
+                var payload = new { interceptors = statuses, summary };
+                var json = JsonSerializer.Serialize(payload, JsonOptions);
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error serving interceptor status API: {ex}");
+                context.Response.StatusCode = 500;
+                await context.Response.WriteAsync("{\"error\":\"interceptor status probe failed\"}");
+            }
+        });
     }
 
     private static string FindEdogConfigDir()

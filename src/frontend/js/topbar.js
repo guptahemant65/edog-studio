@@ -49,6 +49,7 @@ class TopBar {
         this._updateServiceStatus('stopped');
         this._updateTokenDisplay(null);
         if (window.edogDeployStrip) window.edogDeployStrip.hide();
+        if (window.edogPatchWarnings) window.edogPatchWarnings.hide();
         if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
         return null;
       }
@@ -104,13 +105,23 @@ class TopBar {
         window.edogWs.setPort(config.fltPort);
       }
 
-      // F1: Update deploy context strip
-      if (window.edogDeployStrip) {
-        fetch('/api/studio/status').then(function(r) {
+      // F1: Update deploy context strip + patch warnings banner + health chip
+      if (window.edogDeployStrip || window.edogPatchWarnings || window.edogHealthChip) {
+        var fetchStudio = fetch('/api/studio/status').then(function(r) {
           return r.ok ? r.json() : null;
-        }).then(function(s) {
-          if (s) window.edogDeployStrip.update(s);
-        }).catch(function() {});
+        }).catch(function() { return null; });
+        var fetchIx = window.edogHealthChip
+          ? fetch('/api/edog/interceptors-status').then(function(r) {
+              return r.ok ? r.json() : null;
+            }).catch(function() { return null; })
+          : Promise.resolve(null);
+        Promise.all([fetchStudio, fetchIx]).then(function(results) {
+          var s = results[0];
+          var ix = results[1];
+          if (s && window.edogDeployStrip) window.edogDeployStrip.update(s);
+          if (s && window.edogPatchWarnings) window.edogPatchWarnings.update(s);
+          if (window.edogHealthChip) window.edogHealthChip.update(s || {}, ix || {});
+        });
       }
 
       // F3: Sync footer status bar phase
@@ -134,6 +145,7 @@ class TopBar {
       this._updateServiceStatus('stopped');
       this._updateTokenDisplay(null);
       if (window.edogDeployStrip) window.edogDeployStrip.hide();
+      if (window.edogPatchWarnings) window.edogPatchWarnings.hide();
       if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
       return null;
     }

@@ -19,8 +19,8 @@ BUILD_SCRIPT = os.path.join(PROJECT_DIR, "scripts", "build-html.py")
 OUTPUT_FILE = os.path.join(PROJECT_DIR, "src", "edog-logs.html")
 
 # Expected module counts (update when adding new modules)
-EXPECTED_CSS_MODULES = 43
-EXPECTED_JS_MODULES = 73
+EXPECTED_CSS_MODULES = 44
+EXPECTED_JS_MODULES = 75
 EXPECTED_LIB_MODULES = 1
 
 # F16 Phase 2 wizard modules that MUST be present
@@ -133,3 +133,32 @@ class TestBuildIntegrity:
         assert "ReviewSummaryPage" in build_output
         assert ".iw-dag-canvas" in build_output
         assert ".iw-badge" in build_output
+
+    def test_dag_view_contains_restored_toolbar_and_summary(self, build_output):
+        """DAG Studio view keeps the restored toolbar, timer, and summary UI."""
+        assert 'id="dagExecModeBtn"' in build_output
+        assert 'id="dagStatusTimer"' in build_output
+        assert 'id="dagDetailSection"' in build_output
+        assert 'id="dagExecSummary"' in build_output
+        assert 'id="dagSumDur"' in build_output
+
+    def test_dag_css_uses_restored_dom_card_styles(self, build_output):
+        """DAG CSS uses DOM-card styling and removes old SVG node rules."""
+        assert ".dag-node::before" in build_output
+        assert "@keyframes dagNodeRunPulse" in build_output
+        assert "@keyframes dagDropdownIn" in build_output
+        assert ".gantt-time" in build_output
+        assert ".dag-node-detail {" in build_output
+        assert ".dag-node rect" not in build_output
+        assert ".dag-edge" not in build_output
+        assert ".dag-node-label" not in build_output
+
+    def test_dag_scripts_include_restored_layer_and_summary_logic(self, build_output):
+        """DAG Studio scripts include restored layer, gantt, and summary logic."""
+        assert "return this._buildResult(nodes, positions, routedEdges, totalLayers, layerOf);" in build_output
+        assert "_buildResult(originalNodes, positions, routedEdges, totalLayers, layerOf)" in build_output
+        assert "layer: layerOf ? (layerOf.get(n.id) ?? 0) : 0," in build_output
+        assert "_layerName(layerIndex, totalLayers)" in build_output
+        assert "timeEl: time," in build_output
+        assert "this._statusTimer = document.getElementById('dagStatusTimer');" in build_output
+        assert "this._updateSummary();" in build_output

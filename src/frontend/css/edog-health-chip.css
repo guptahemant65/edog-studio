@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   EDOG Health Chip — topbar status indicator for EDOG interceptors
+   Shows wrapped count + traffic-light color; click for per-interceptor panel.
+   @author Pixel — EDOG Studio hivemind
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.edog-health-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+  user-select: none;
+}
+
+.edog-health-chip:hover {
+  border-color: var(--border-bright);
+  background: var(--surface);
+}
+
+.edog-health-chip .ehc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.edog-health-chip .ehc-dot.green {
+  background: var(--status-success, #18a058);
+  box-shadow: 0 0 0 2px rgba(24,160,88,0.18);
+}
+
+.edog-health-chip .ehc-dot.amber {
+  background: var(--status-warning, #e5940c);
+  box-shadow: 0 0 0 2px rgba(229,148,12,0.18);
+}
+
+.edog-health-chip .ehc-dot.red {
+  background: var(--status-error, #d03050);
+  box-shadow: 0 0 0 2px rgba(208,48,80,0.20);
+}
+
+.edog-health-chip .ehc-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.edog-health-chip .ehc-count {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Dropdown panel ──────────────────────────────────────────────────── */
+
+.ehc-panel {
+  position: fixed;
+  width: 380px;
+  max-height: 560px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border-alt, rgba(0,0,0,0.12));
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  z-index: 600;
+  display: none;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ehc-panel.open { display: block; }
+
+.ehc-panel-header {
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.08));
+}
+
+.ehc-panel-section {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.06));
+}
+
+.ehc-panel-section.warn {
+  background: rgba(229,148,12,0.06);
+  border-left: 3px solid var(--status-warning, #e5940c);
+}
+
+.ehc-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.ehc-warning-row {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  padding: 4px 0;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.ehc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--border, rgba(0,0,0,0.04));
+}
+
+.ehc-row:last-child { border-bottom: none; }
+
+.ehc-row-glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  width: 14px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.ehc-row.ok .ehc-row-glyph { color: var(--status-success, #18a058); }
+.ehc-row.fail .ehc-row-glyph { color: var(--status-error, #d03050); }
+.ehc-row.static .ehc-row-glyph { color: var(--text-muted); }
+
+.ehc-row-name {
+  flex: 1 1 auto;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.ehc-row-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 100px;
+}
+
+.ehc-row-error {
+  flex: 1 0 100%;
+  margin-left: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--status-error, #d03050);
+  background: rgba(208,48,80,0.05);
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-word;
+}
+
+.ehc-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.ehc-panel-footer {
+  padding: 10px 16px;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--surface-2);
+}
+
+.ehc-refresh {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.ehc-refresh:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+}

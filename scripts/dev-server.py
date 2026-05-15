@@ -159,6 +159,18 @@ def _atomic_write(path: Path, data: str):
 # ── Studio State ──────────────────────────────────────────────────────────
 FLT_INTERNAL_PORT = 5557
 
+
+def _is_edog_patch_warning(line: str) -> bool:
+    """True if a deploy stdout line represents an edog.py regex-anchor failure.
+
+    Centralised so the deploy pipeline parser and tests stay in sync.
+    """
+    if not line:
+        return False
+    lowered = line.lower()
+    return "pattern not found" in lowered or "\u26a0" in line
+
+
 _studio_state = {
     "phase": "idle",  # idle | deploying | running | crashed | stopped
     "deployId": None,
@@ -171,6 +183,7 @@ _studio_state = {
     "deployLogs": [],
     "deployTarget": None,
     "deployStartTime": None,
+    "patchWarnings": [],
 }
 _studio_lock = threading.Lock()
 _flt_process = None
@@ -1375,6 +1388,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                 encoding="utf-8",
                 errors="replace",
             )
+            patch_warnings: list[str] = []
             for line in proc.stdout:
                 line = line.rstrip()
                 if not line:
@@ -1389,8 +1403,12 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                                 _studio_state["deployStep"] = evt["step"]
                                 _studio_state["deployMessage"] = msg
                     _deploy_log(msg, lvl)
+                    if _is_edog_patch_warning(msg):
+                        patch_warnings.append(msg.strip())
                 except json.JSONDecodeError:
                     _deploy_log(line, "info")
+                    if _is_edog_patch_warning(line):
+                        patch_warnings.append(line.strip())
 
                 if _deploy_cancel.is_set():
                     proc.terminate()
@@ -1399,6 +1417,14 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                     return
 
             proc.wait()
+            with _studio_lock:
+                _studio_state["patchWarnings"] = patch_warnings
+            if patch_warnings:
+                _deploy_log(
+                    f"⚠️ {len(patch_warnings)} patch warning(s) — some EDOG interceptors may be inactive. "
+                    "Check the Inspector → EDOG Health tile.",
+                    "warn",
+                )
             if proc.returncode != 0:
                 _deploy_log(f"Patch/build failed (exit {proc.returncode})", "error")
                 with _studio_lock:
@@ -1622,6 +1648,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_certs()
         elif self.path == "/api/edog/health":
             self._serve_health()
+        elif self.path == "/api/edog/patch-warnings":
+            self._serve_patch_warnings()
+        elif self.path == "/api/edog/interceptors-status":
+            self._serve_interceptors_status()
         elif self.path.startswith("/api/mwc/tables"):
             self._serve_mwc_tables()
         elif self.path.startswith("/api/mwc/table-stats"):
@@ -2292,6 +2322,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "deployStartTime": time.time(),
                     "fltPort": None,
                     "fltPid": None,
+                    "patchWarnings": [],
                 }
             )
 
@@ -2362,6 +2393,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "deployLogs": [],
                     "deployTarget": None,
                     "deployStartTime": None,
+                    "patchWarnings": [],
                 }
             )
 
@@ -2809,6 +2841,70 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(500, {"error": "cert scan timed out"})
         except Exception as e:
             self._json_response(500, {"error": str(e)[:200]})
+
+    def _serve_patch_warnings(self):
+        """Return the list of pattern_not_found warnings from the last edog.py deploy.
+
+        EDOG patches FLT source via regex anchors. If FLT renames/removes an anchor line,
+        the patch returns 'pattern not found' and the deploy proceeds without that patch.
+        This endpoint surfaces those warnings so the frontend can show a red banner —
+        otherwise the deploy looks green even though interceptors are silently inactive.
+        """
+        with _studio_lock:
+            warnings_list = list(_studio_state.get("patchWarnings") or [])
+            phase = _studio_state.get("phase", "idle")
+        self._json_response(
+            200,
+            {
+                "warnings": warnings_list,
+                "count": len(warnings_list),
+                "deployPhase": phase,
+            },
+        )
+
+    def _serve_interceptors_status(self):
+        """Proxy to FLT's EdogLogServer interceptor status endpoint.
+
+        Returns a uniform shape whether FLT is running or not, so the frontend
+        chip can render a sensible "unknown" state pre-deploy without special-casing.
+        """
+        with _studio_lock:
+            flt_port = _studio_state.get("fltPort")
+            phase = _studio_state.get("phase", "idle")
+
+        if not flt_port or phase not in ("running", "deploying"):
+            self._json_response(
+                200,
+                {
+                    "available": False,
+                    "deployPhase": phase,
+                    "summary": {"Total": 0, "Wrapped": 0, "Failed": 0},
+                    "interceptors": [],
+                },
+            )
+            return
+
+        try:
+            req = urllib.request.Request(
+                f"http://localhost:{flt_port}/api/edog/interceptors/status",
+                headers={"Accept": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=3) as r:
+                payload = json.loads(r.read().decode("utf-8") or "{}")
+            payload["available"] = True
+            payload["deployPhase"] = phase
+            self._json_response(200, payload)
+        except Exception as e:
+            self._json_response(
+                200,
+                {
+                    "available": False,
+                    "deployPhase": phase,
+                    "error": str(e)[:200],
+                    "summary": {"Total": 0, "Wrapped": 0, "Failed": 0},
+                    "interceptors": [],
+                },
+            )
 
     def _serve_auth(self):
         """Authenticate via Silent CBA."""

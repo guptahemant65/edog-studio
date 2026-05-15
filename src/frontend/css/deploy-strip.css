@@ -216,3 +216,88 @@
   0%, 100% { box-shadow: 0 0 0 3px rgba(24,160,88,0.12), 0 0 8px rgba(24,160,88,0.4); }
   50%      { box-shadow: 0 0 0 5px rgba(24,160,88,0.06), 0 0 12px rgba(24,160,88,0.25); }
 }
+
+/* ─── Patch Warnings Banner ───────────────────────────────────────────────
+   Surfaces edog.py "pattern not found" warnings — the deploy succeeded but
+   at least one regex anchor failed to match, so some interceptors are
+   silently inactive. Sits below the deploy-strip in .notification-zone.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.patch-warnings-banner {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid rgba(229,148,12,0.18);
+  font-size: 12px;
+  font-family: var(--font-body);
+  color: var(--text);
+  overflow: hidden;
+  position: relative;
+}
+
+.patch-warnings-banner::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--status-warning, #e5940c);
+  box-shadow: 0 0 12px rgba(229,148,12,0.32), 4px 0 20px rgba(229,148,12,0.08);
+}
+
+.patch-warnings-banner::after {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, rgba(229,148,12,0.05) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.patch-warnings-banner.active { display: flex; }
+
+.patch-warnings-banner .pwb-icon {
+  color: var(--status-warning, #e5940c);
+  font-size: 13px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.patch-warnings-banner .pwb-label {
+  font-weight: 600;
+  color: var(--text);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.patch-warnings-banner .pwb-detail {
+  color: var(--text-dim);
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 1;
+}
+
+.patch-warnings-banner .pwb-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid rgba(229,148,12,0.45);
+  color: var(--status-warning, #e5940c);
+  padding: 4px 12px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 1;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.patch-warnings-banner .pwb-btn:hover {
+  background: rgba(229,148,12,0.08);
+  border-color: var(--status-warning, #e5940c);
+}
