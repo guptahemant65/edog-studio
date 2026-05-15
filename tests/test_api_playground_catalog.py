@@ -139,6 +139,29 @@ def test_no_orphan_proxy_endpoint_in_source() -> None:
     """The phantom /api/playground/proxy was never implemented — guard against regression."""
     src = PLAYGROUND_JS.read_text(encoding="utf-8")
     assert "/api/playground/proxy" not in src, (
-        "Frontend still references /api/playground/proxy — that endpoint never existed; "
-        "route via /api/fabric or /api/flt-proxy instead."
+        "Frontend still references /api/playground/proxy \u2014 that endpoint never existed; "
+        "route via /api/playground/dispatch instead."
+    )
+
+
+def test_playground_uses_dispatcher_not_prefix_proxies() -> None:
+    """Playground must POST to the dispatcher; never hit /api/fabric or /api/flt-proxy directly.
+
+    Those are DAG Studio's prefix proxies and don't forward custom headers. The
+    playground needs the dispatcher's allowlisted header forwarding.
+    """
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    assert "/api/playground/dispatch" in src, (
+        "Playground frontend must call /api/playground/dispatch"
+    )
+    # The deprecated _buildProxyUrl helper has been removed; assert it
+    # didn't sneak back in.
+    assert "_buildProxyUrl" not in src, (
+        "_buildProxyUrl was removed \u2014 routing happens server-side now"
+    )
+    assert "'/api/fabric'" not in src and '"/api/fabric"' not in src, (
+        "Playground must not hard-code /api/fabric \u2014 dispatcher handles routing"
+    )
+    assert "'/api/flt-proxy'" not in src and '"/api/flt-proxy"' not in src, (
+        "Playground must not hard-code /api/flt-proxy \u2014 dispatcher handles routing"
     )

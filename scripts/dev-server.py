@@ -10,6 +10,7 @@ import base64
 import contextlib
 import json
 import os
+import re
 import ssl
 import subprocess
 import sys
@@ -50,6 +51,43 @@ _ado_token_lock = threading.Lock()
 
 ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6975798"
 _ADO_PR_URL_RE = None  # lazily compiled
+
+# ── F09 API Playground header-forwarding policy ──────────────────────────
+# Denylist for headers the playground UI is NOT allowed to forward to upstream
+# Fabric/FLT services. Names compared lowercased. Rationale per category:
+#   - auth: dispatcher injects bearer/MWC; client-supplied auth would override
+#   - hop-by-hop (RFC 7230 §6.1): not end-to-end, breaks urllib framing
+#   - framing: re-emitted by urllib from the actual body it sends
+#   - browser pollution: irrelevant or rejected by upstream
+#   - cookies: cross-context session leak risk
+_PLAYGROUND_HEADER_DENYLIST = frozenset({
+    "authorization", "proxy-authorization", "proxy-authenticate",
+    "connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade",
+    "host", "content-length",
+    "origin", "referer", "user-agent", "accept-encoding",
+    "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user",
+    "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
+    "cookie", "set-cookie",
+})
+
+# RFC 7230 token grammar (header field names). Tightened slightly: no leading/trailing dot.
+_PLAYGROUND_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
+
+# Header values: ASCII printable + tab; CR/LF forbidden (CRLF-injection guard).
+_PLAYGROUND_HEADER_VALUE_FORBIDDEN_RE = re.compile(r"[\r\n\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+_PLAYGROUND_MAX_HEADERS = 50
+_PLAYGROUND_MAX_HEADER_VALUE_BYTES = 8 * 1024
+_PLAYGROUND_MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024
+_PLAYGROUND_MAX_RESPONSE_BODY_BYTES = 5 * 1024 * 1024
+_PLAYGROUND_DEFAULT_TIMEOUT = 30
+_PLAYGROUND_MAX_TIMEOUT = 60
+
+_PLAYGROUND_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
+_PLAYGROUND_BEARER_PATH_PREFIXES = ("/v1/", "/v1.0/", "/metadata/", "/workspaces")
+_PLAYGROUND_MWC_PATH_PREFIXES = (
+    "/liveTable", "/liveTableSchedule", "/liveTableMaintanance",
+)
 
 # ── Azure OpenAI Proxy Config ────────────────────────────────────────────
 _openai_config: dict = {}  # {"endpoint", "api_key", "api_version", "deployment"}
@@ -214,6 +252,173 @@ def _map_path(fabric_path: str) -> str:
     # /workspaces/{id}/lakehouses/{id}/tables → /v1/workspaces/{id}/lakehouses/{id}/tables
     # PATCH /workspaces/{id} → PATCH /v1/workspaces/{id}
     return "/v1" + fabric_path
+
+
+# ── F09 API Playground validators (pure functions) ───────────────────────
+
+
+def _sanitize_playground_headers(raw_headers):
+    """Filter and validate playground-supplied headers.
+
+    Returns (ok, sanitized_dict_or_error). On success, sanitized_dict has
+    header names preserved in original casing but deduplicated case-insensitively.
+    On failure, error is a dict suitable for the dispatcher error envelope.
+    """
+    if raw_headers is None:
+        return True, {}
+    if not isinstance(raw_headers, dict):
+        return False, {"error": "bad_header", "message": "headers must be an object"}
+
+    if len(raw_headers) > _PLAYGROUND_MAX_HEADERS:
+        return False, {
+            "error": "bad_header",
+            "message": f"too many headers (max {_PLAYGROUND_MAX_HEADERS})",
+        }
+
+    sanitized = {}
+    seen_lower = set()
+    for name, value in raw_headers.items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            return False, {
+                "error": "bad_header",
+                "message": "header name and value must be strings",
+            }
+        name_lower = name.lower()
+        if name_lower in _PLAYGROUND_HEADER_DENYLIST:
+            # Silently drop — UI hint already greys these out; don't fail the request.
+            continue
+        if not _PLAYGROUND_HEADER_NAME_RE.match(name):
+            return False, {
+                "error": "bad_header",
+                "message": f"invalid header name: {name!r}",
+            }
+        if _PLAYGROUND_HEADER_VALUE_FORBIDDEN_RE.search(value):
+            return False, {
+                "error": "bad_header",
+                "message": f"header {name!r} value contains forbidden characters",
+            }
+        if len(value.encode("utf-8", errors="replace")) > _PLAYGROUND_MAX_HEADER_VALUE_BYTES:
+            return False, {
+                "error": "bad_header",
+                "message": f"header {name!r} value exceeds {_PLAYGROUND_MAX_HEADER_VALUE_BYTES} bytes",
+            }
+        if name_lower in seen_lower:
+            # Duplicate (case-insensitive). Last write wins to match HTTP intuition.
+            # Remove prior entry preserving order roughly.
+            for existing in list(sanitized):
+                if existing.lower() == name_lower:
+                    del sanitized[existing]
+                    break
+        seen_lower.add(name_lower)
+        sanitized[name] = value
+    return True, sanitized
+
+
+def _validate_playground_envelope(envelope):
+    """Validate the inbound dispatch request envelope.
+
+    Returns (ok, parsed_or_error). On success, parsed is a dict with
+    normalized values: tokenType, method, path, headers (sanitized),
+    body (bytes or None), timeout (int).
+    """
+    if not isinstance(envelope, dict):
+        return False, {"error": "bad_request", "message": "envelope must be a JSON object"}
+
+    token_type = envelope.get("tokenType")
+    if token_type not in ("bearer", "mwc"):
+        return False, {
+            "error": "bad_request",
+            "message": "tokenType must be 'bearer' or 'mwc'",
+        }
+
+    method = envelope.get("method")
+    if not isinstance(method, str) or method.upper() not in _PLAYGROUND_METHODS:
+        return False, {
+            "error": "bad_request",
+            "message": f"method must be one of {sorted(_PLAYGROUND_METHODS)}",
+        }
+    method = method.upper()
+
+    path = envelope.get("path")
+    if not isinstance(path, str) or not path.startswith("/"):
+        return False, {"error": "invalid_path", "message": "path must start with '/'"}
+    if "://" in path:
+        return False, {
+            "error": "invalid_path",
+            "message": "absolute URLs not allowed; supply path only",
+        }
+    # Open-proxy guard: refuse protocol-relative paths like '//evil.com/x'
+    if path.startswith("//"):
+        return False, {
+            "error": "invalid_path",
+            "message": "protocol-relative paths not allowed",
+        }
+
+    # Per-tokenType prefix policy
+    if token_type == "bearer":
+        if not path.startswith(_PLAYGROUND_BEARER_PATH_PREFIXES):
+            return False, {
+                "error": "invalid_path",
+                "message": f"bearer paths must start with one of {list(_PLAYGROUND_BEARER_PATH_PREFIXES)}",
+            }
+    else:  # mwc
+        if not path.startswith(_PLAYGROUND_MWC_PATH_PREFIXES):
+            return False, {
+                "error": "invalid_path",
+                "message": f"mwc paths must start with one of {list(_PLAYGROUND_MWC_PATH_PREFIXES)}",
+            }
+
+    ok, headers_or_err = _sanitize_playground_headers(envelope.get("headers"))
+    if not ok:
+        return False, headers_or_err
+    headers = headers_or_err
+
+    body_raw = envelope.get("body")
+    body_bytes = None
+    if body_raw is not None:
+        if not isinstance(body_raw, str):
+            return False, {
+                "error": "bad_request",
+                "message": "body must be a string or null",
+            }
+        body_bytes = body_raw.encode("utf-8", errors="replace")
+        if len(body_bytes) > _PLAYGROUND_MAX_REQUEST_BODY_BYTES:
+            return False, {
+                "error": "body_too_large",
+                "message": f"body exceeds {_PLAYGROUND_MAX_REQUEST_BODY_BYTES} bytes",
+            }
+
+    timeout_raw = envelope.get("timeout", _PLAYGROUND_DEFAULT_TIMEOUT)
+    try:
+        timeout = int(timeout_raw)
+    except (TypeError, ValueError):
+        return False, {"error": "bad_request", "message": "timeout must be an integer"}
+    if timeout < 1:
+        timeout = 1
+    if timeout > _PLAYGROUND_MAX_TIMEOUT:
+        timeout = _PLAYGROUND_MAX_TIMEOUT
+
+    return True, {
+        "tokenType": token_type,
+        "method": method,
+        "path": path,
+        "headers": headers,
+        "body": body_bytes,
+        "timeout": timeout,
+    }
+
+
+def _compose_playground_bearer_url(path: str) -> str:
+    """Compose upstream URL for a bearer-token playground request.
+
+    Convention: /v1/* and /v1.0/* pass straight through (matches Fabric API docs
+    style used in the playground catalog). /workspaces and /metadata/* go
+    through _map_path for compatibility with the DAG Studio convention.
+    """
+    if path.startswith(("/v1/", "/v1.0/", "/metadata/")):
+        return REDIRECT_HOST + path
+    # /workspaces or /workspaces?... — let _map_path translate to /metadata/workspaces
+    return REDIRECT_HOST + _map_path(path)
 
 
 def _normalize_workspaces(resp_body: bytes) -> bytes:
@@ -1468,6 +1673,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_template_save()
         elif self.path == "/api/openai-proxy/chat":
             self._serve_openai_proxy()
+        elif self.path == "/api/playground/dispatch":
+            self._serve_playground_dispatch()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for POST {self.path}"})
 
@@ -2276,6 +2483,153 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
         except Exception as e:
             self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
+
+    def _serve_playground_dispatch(self):
+        """Dispatcher for the F09 API Playground with custom header forwarding.
+
+        Decoupled from _proxy_fabric and _proxy_to_flt so playground-only
+        sanitization concerns don't pollute DAG Studio's request path.
+
+        Envelope:
+          IN:  {tokenType, method, path, headers, body, timeout}
+          OUT: {status, statusText, headers, body, duration, bodySize, truncated}
+
+        Discriminator rule:
+          - Upstream returned anything (incl. 5xx) -> HTTP 200, envelope carries details
+          - We couldn't proxy (validation, token, transport) -> HTTP 4xx/5xx + {error,message}
+        """
+        # Read request body
+        try:
+            cl = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(cl) if cl else b""
+            envelope = json.loads(raw.decode("utf-8", errors="replace")) if raw else {}
+        except (ValueError, json.JSONDecodeError) as e:
+            self._json_response(400, {"error": "bad_request", "message": f"invalid JSON: {e}"})
+            return
+
+        ok, parsed = _validate_playground_envelope(envelope)
+        if not ok:
+            status = {
+                "body_too_large": 413,
+                "invalid_path": 400,
+                "bad_header": 400,
+                "bad_request": 400,
+            }.get(parsed.get("error"), 400)
+            self._json_response(status, parsed)
+            return
+
+        token_type = parsed["tokenType"]
+        method = parsed["method"]
+        path = parsed["path"]
+        sanitized_headers = parsed["headers"]
+        body = parsed["body"]
+        timeout = parsed["timeout"]
+
+        # Resolve token + compose upstream URL per tokenType
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            self._json_response(401, {"error": "no_token", "message": "Bearer cache empty — re-auth required"})
+            return
+
+        if token_type == "bearer":
+            target_url = _compose_playground_bearer_url(path)
+            auth_header_value = f"Bearer {bearer}"
+        else:  # mwc
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            ws_id = cfg.get("workspace_id", "")
+            art_id = cfg.get("artifact_id", "")
+            cap_id = cfg.get("capacity_id", "")
+            if not ws_id or not art_id or not cap_id:
+                self._json_response(
+                    503,
+                    {"error": "flt_not_configured", "message": "Missing workspace/artifact/capacity IDs"},
+                )
+                return
+            try:
+                mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id)
+            except Exception as e:
+                self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
+                return
+            target_url = (
+                f"{host}/webapi/capacities/{cap_id}/workloads/LiveTable"
+                f"/LiveTableService/automatic/v1/workspaces/{ws_id}/lakehouses/{art_id}{path}"
+            )
+            auth_header_value = f"MwcToken {mwc_token}"
+
+        # Build upstream request
+        try:
+            req = urllib.request.Request(target_url, data=body, method=method)
+            for name, value in sanitized_headers.items():
+                req.add_header(name, value)
+            # Ensure Content-Type defaults for body-bearing methods if client didn't set one
+            if body is not None and not any(k.lower() == "content-type" for k in sanitized_headers):
+                req.add_header("Content-Type", "application/json")
+            req.add_header("Authorization", auth_header_value)
+        except Exception as e:
+            self._json_response(400, {"error": "bad_request", "message": f"failed to build request: {e}"})
+            return
+
+        # Dispatch
+        ctx = ssl.create_default_context()
+        t0 = time.time()
+        upstream_status = 0
+        upstream_reason = ""
+        upstream_headers_list = []
+        upstream_body = b""
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                upstream_status = resp.status
+                upstream_reason = resp.reason or ""
+                upstream_headers_list = list(resp.headers.items())
+                upstream_body = resp.read(_PLAYGROUND_MAX_RESPONSE_BODY_BYTES + 1)
+        except urllib.error.HTTPError as e:
+            # Upstream returned non-2xx — that's data, not dispatcher failure
+            upstream_status = e.code
+            upstream_reason = e.reason or ""
+            try:
+                upstream_headers_list = list(e.headers.items()) if e.headers else []
+            except Exception:
+                upstream_headers_list = []
+            try:
+                upstream_body = e.read(_PLAYGROUND_MAX_RESPONSE_BODY_BYTES + 1) or b""
+            except Exception:
+                upstream_body = b""
+        except (TimeoutError, urllib.error.URLError) as e:
+            elapsed = int((time.time() - t0) * 1000)
+            reason = getattr(e, "reason", e)
+            print(f"[PLAYGROUND-ERR] upstream_timeout: {reason} ({elapsed}ms)")
+            self._json_response(
+                504,
+                {"error": "upstream_timeout", "message": f"upstream did not respond within {timeout}s: {reason}"},
+            )
+            return
+        except Exception as e:
+            print(f"[PLAYGROUND-ERR] transport: {e}")
+            self._json_response(502, {"error": "upstream_error", "message": str(e)})
+            return
+
+        duration_ms = int((time.time() - t0) * 1000)
+        truncated = len(upstream_body) > _PLAYGROUND_MAX_RESPONSE_BODY_BYTES
+        if truncated:
+            upstream_body = upstream_body[:_PLAYGROUND_MAX_RESPONSE_BODY_BYTES]
+
+        # Build response envelope
+        headers_dict = {}
+        for hname, hvalue in upstream_headers_list:
+            # Last-write-wins for duplicates (matches HTTP intuition for view purposes)
+            headers_dict[hname] = hvalue
+
+        envelope_out = {
+            "status": upstream_status,
+            "statusText": upstream_reason,
+            "headers": headers_dict,
+            "body": upstream_body.decode("utf-8", errors="replace"),
+            "duration": duration_ms,
+            "bodySize": len(upstream_body),
+            "truncated": truncated,
+        }
+        print(f"[PLAYGROUND] {token_type} {method} {path} -> {upstream_status} ({duration_ms}ms, {len(upstream_body)}B)")
+        self._json_response(200, envelope_out)
 
     def _serve_certs(self):
         """List CBA certs from Windows cert store."""

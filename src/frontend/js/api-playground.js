@@ -1771,40 +1771,69 @@ class ApiPlayground {
       return;
     }
 
-    var proxyUrl = this._buildProxyUrl(resolvedUrl, tokenType);
-    if (!proxyUrl) {
+    var path = this._extractPath(resolvedUrl);
+    if (!path) {
       this._requestBuilder.setSending(false);
       this._abortController = null;
       this._responseViewer.showError({
-        message: 'Cannot route request — URL must be a relative API path (e.g. /v1/... for Fabric or /liveTable/... for FLT). Use the catalog or strip the host.'
+        message: 'Cannot route request \u2014 URL must be a relative API path (e.g. /v1/... for Fabric or /liveTable/... for FLT). Use the catalog or strip the host.'
       });
       return;
     }
 
-    var fetchOpts = {
-      method: request.method,
-      headers: { 'Content-Type': 'application/json' },
-      signal: this._abortController.signal
-    };
+    if (tokenType !== 'bearer' && tokenType !== 'mwc') {
+      this._requestBuilder.setSending(false);
+      this._abortController = null;
+      this._responseViewer.showError({
+        message: 'Cannot determine token type for this URL. Pick an endpoint from the catalog or use a /v1/... or /liveTable/... path.'
+      });
+      return;
+    }
+
+    var envelopeHeaders = this._buildEnvelopeHeaders(request.headers);
     var needsBody = request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH';
-    if (needsBody && request.body) fetchOpts.body = request.body;
+    var envelope = {
+      tokenType: tokenType,
+      method: request.method,
+      path: path,
+      headers: envelopeHeaders,
+      body: needsBody && request.body ? request.body : null,
+      timeout: 30
+    };
 
     var startTime = Date.now();
-    fetch(proxyUrl, fetchOpts).then(function(resp) {
-      var duration = Date.now() - startTime;
-      var headersObj = {};
-      resp.headers.forEach(function(value, key) { headersObj[key] = value; });
-      return resp.text().then(function(text) {
-        return {
-          status: resp.status,
-          statusText: resp.statusText,
-          headers: headersObj,
-          body: text,
-          duration: duration,
-          bodySize: text ? text.length : 0
-        };
+    fetch('/api/playground/dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(envelope),
+      signal: this._abortController.signal
+    }).then(function(resp) {
+      var roundTrip = Date.now() - startTime;
+      return resp.json().then(function(payload) {
+        return { httpStatus: resp.status, payload: payload, roundTrip: roundTrip };
+      }).catch(function() {
+        return { httpStatus: resp.status, payload: null, roundTrip: roundTrip };
       });
-    }).then(function(result) {
+    }).then(function(parsed) {
+      var payload = parsed.payload || {};
+      // Dispatcher-level failure: HTTP 4xx/5xx with {error, message}
+      if (parsed.httpStatus >= 400 && payload && payload.error) {
+        var msg = '[' + payload.error + '] ' + (payload.message || 'Dispatcher rejected the request');
+        self._responseViewer.showError({ message: msg, error: payload.error });
+        self._requestBuilder.setSending(false);
+        self._abortController = null;
+        return;
+      }
+      // Successful proxy — payload is the response envelope
+      var result = {
+        status: payload.status || 0,
+        statusText: payload.statusText || '',
+        headers: payload.headers || {},
+        body: payload.body || '',
+        duration: typeof payload.duration === 'number' ? payload.duration : parsed.roundTrip,
+        bodySize: typeof payload.bodySize === 'number' ? payload.bodySize : (payload.body ? payload.body.length : 0),
+        truncated: !!payload.truncated
+      };
       self._responseViewer.showResponse(result);
       self._historySaved.addHistoryEntry(
         self._sanitizeForHistory(request, resolvedUrl, result)
@@ -1863,26 +1892,34 @@ class ApiPlayground {
     });
   }
 
-  _buildProxyUrl(url, tokenType) {
-    // External absolute URLs — strip known hosts so they route through proxy
+  _extractPath(url) {
+    if (!url) return null;
+    // Absolute URL — strip known hosts to get path
     if (/^https?:\/\//i.test(url)) {
-      var fabricHostMatch = url.match(/^https?:\/\/[^\/]*api\.fabric\.microsoft\.com(\/.*)?$/i);
-      if (fabricHostMatch) return '/api/fabric' + (fabricHostMatch[1] || '/');
-      var pbiMatch = url.match(/^https?:\/\/[^\/]*pbidedicated[^\/]*(\/.*)?$/i);
-      if (pbiMatch) return '/api/flt-proxy' + (pbiMatch[1] || '/');
-      // Unknown absolute host — refuse (CORS would fail anyway)
-      return null;
+      var m = url.match(/^https?:\/\/[^\/]+(\/.*)?$/i);
+      return m ? (m[1] || '/') : null;
     }
-
-    // Relative path — route by token type
+    // Protocol-relative or absolute path
     if (url.charAt(0) !== '/') url = '/' + url;
-    if (tokenType === 'mwc') return '/api/flt-proxy' + url;
-    if (tokenType === 'bearer') return '/api/fabric' + url;
+    return url;
+  }
 
-    // No token type known — infer from path shape
-    if (url.indexOf('/liveTable') === 0) return '/api/flt-proxy' + url;
-    if (url.indexOf('/v1/') === 0) return '/api/fabric' + url;
-    return null;
+  _buildEnvelopeHeaders(headerRows) {
+    // Convert request builder's array-of-rows into a flat object suitable for
+    // the dispatcher envelope. Drop masked Authorization (defense in depth;
+    // server's denylist also strips it).
+    var out = {};
+    if (!Array.isArray(headerRows)) return out;
+    for (var i = 0; i < headerRows.length; i++) {
+      var h = headerRows[i];
+      if (!h || !h.key) continue;
+      var keyLower = h.key.toLowerCase();
+      if (keyLower === 'authorization') continue;
+      // Only forward non-empty values
+      if (typeof h.value !== 'string' || h.value === '') continue;
+      out[h.key] = h.value;
+    }
+    return out;
   }
 
   _detectTokenType(url) {
