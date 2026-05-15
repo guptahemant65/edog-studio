@@ -47,9 +47,9 @@ var ENDPOINT_CATALOG = [
 
   // ── Tables (mixed) ──
   { id: 'list-tables',      name: 'List Tables',       method: 'GET', urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables', group: 'tables', tokenType: 'bearer', bodyTemplate: null, description: 'List tables in a lakehouse', dangerLevel: 'safe' },
-  { id: 'get-table-props',  name: 'Table Properties',  method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/tables/{tableName}/properties',      group: 'tables', tokenType: 'mwc',    bodyTemplate: null, description: 'Get table properties (FLT)', dangerLevel: 'safe' },
-  { id: 'get-table-schema', name: 'Table Schema',      method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/tables/{tableName}/schema',          group: 'tables', tokenType: 'mwc',    bodyTemplate: null, description: 'Get table schema (FLT)', dangerLevel: 'safe' },
-  { id: 'get-table-stats',  name: 'Table Stats',       method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/tables/{tableName}/stats',           group: 'tables', tokenType: 'mwc',    bodyTemplate: null, description: 'Get table statistics (FLT)', dangerLevel: 'safe' },
+  { id: 'get-table-props',  name: 'Table Properties',  method: 'GET', urlTemplate: '/liveTable/tables/{tableName}/properties',      group: 'tables', tokenType: 'mwc', bodyTemplate: null, description: 'Get table properties (FLT)', dangerLevel: 'safe' },
+  { id: 'get-table-schema', name: 'Table Schema',      method: 'GET', urlTemplate: '/liveTable/tables/{tableName}/schema',          group: 'tables', tokenType: 'mwc', bodyTemplate: null, description: 'Get table schema (FLT)', dangerLevel: 'safe' },
+  { id: 'get-table-stats',  name: 'Table Stats',       method: 'GET', urlTemplate: '/liveTable/tables/{tableName}/stats',           group: 'tables', tokenType: 'mwc', bodyTemplate: null, description: 'Get table statistics (FLT)', dangerLevel: 'safe' },
 
   // ── Notebooks (bearer) ──
   { id: 'list-notebooks',  name: 'List Notebooks',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/notebooks',                    group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'List notebooks in workspace', dangerLevel: 'safe' },
@@ -60,28 +60,27 @@ var ENDPOINT_CATALOG = [
   // ── Environment (bearer) ──
   { id: 'get-environment', name: 'Get Environment', method: 'GET', urlTemplate: '/v1/workspaces/{workspaceId}/environments', group: 'environment', tokenType: 'bearer', bodyTemplate: null, description: 'Get workspace environment settings', dangerLevel: 'safe' },
 
-  // ── DAG (mwc) ──
-  { id: 'get-latest-dag', name: 'Get Latest DAG',  method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/latest',  group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get the latest DAG definition', dangerLevel: 'safe' },
-  { id: 'run-dag',        name: 'Run DAG',         method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/dag/run',     group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Trigger a DAG execution', dangerLevel: 'caution' },
-  { id: 'cancel-dag',     name: 'Cancel DAG',      method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/dag/cancel',  group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Cancel running DAG execution', dangerLevel: 'caution' },
-  { id: 'get-dag-status', name: 'DAG Status',      method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/status',  group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get current DAG execution status', dangerLevel: 'safe' },
-  { id: 'get-dag-history',name: 'DAG History',     method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/history', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'List past DAG executions', dangerLevel: 'safe' },
-  { id: 'get-dag-metrics',name: 'DAG Metrics',     method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/dag/metrics', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get DAG execution metrics', dangerLevel: 'safe' },
+  // ── DAG (mwc) — paths mirror DAG Studio (/api/flt-proxy + path) ──
+  { id: 'get-latest-dag', name: 'Get Latest DAG',  method: 'GET',    urlTemplate: '/liveTable/getLatestDag?showExtendedLineage=true', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get the latest DAG definition', dangerLevel: 'safe' },
+  { id: 'run-dag',        name: 'Run DAG',         method: 'POST',   urlTemplate: '/liveTableSchedule/runDAG/{iterationId}',           group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Trigger a DAG execution', dangerLevel: 'caution' },
+  { id: 'cancel-dag',     name: 'Cancel DAG',      method: 'DELETE', urlTemplate: '/liveTableSchedule/cancelDAG/{iterationId}',        group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Cancel running DAG execution', dangerLevel: 'caution' },
+  { id: 'get-dag-status', name: 'DAG Exec Status', method: 'GET',    urlTemplate: '/liveTableSchedule/getDAGExecStatus/{iterationId}', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get current DAG execution status', dangerLevel: 'safe' },
+  { id: 'get-dag-history',name: 'DAG Iterations',  method: 'GET',    urlTemplate: '/liveTable/listDAGExecutionIterationIds?pageSize=50', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'List past DAG executions', dangerLevel: 'safe' },
+  { id: 'get-dag-metrics',name: 'DAG Metrics',     method: 'GET',    urlTemplate: '/liveTable/getDAGExecMetrics/{iterationId}',        group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get DAG execution metrics', dangerLevel: 'safe' },
 
   // ── Execution (mwc) ──
-  { id: 'get-exec-status',  name: 'Execution Status',  method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/execution/status',  group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get current execution status', dangerLevel: 'safe' },
-  { id: 'get-exec-logs',    name: 'Execution Logs',    method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/execution/logs',    group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get execution log entries', dangerLevel: 'safe' },
-  { id: 'get-exec-metrics', name: 'Execution Metrics', method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/execution/metrics', group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get execution performance metrics', dangerLevel: 'safe' },
+  { id: 'get-mlv-defs',     name: 'MLV Exec Definitions', method: 'GET', urlTemplate: '/liveTable/mlvExecutionDefinitions',       group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get MLV execution definitions', dangerLevel: 'safe' },
+  { id: 'get-settings',     name: 'Get Settings',         method: 'GET', urlTemplate: '/liveTable/settings',                       group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get FLT settings', dangerLevel: 'safe' },
+  { id: 'put-settings',     name: 'Update Settings',      method: 'PUT', urlTemplate: '/liveTable/settings',                       group: 'execution', tokenType: 'mwc', bodyTemplate: {}, description: 'Update FLT settings', dangerLevel: 'caution' },
 
-  // ── Spark (mwc) ──
-  { id: 'list-spark-sessions', name: 'Spark Sessions', method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/spark/sessions',       group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'List active Spark sessions', dangerLevel: 'safe' },
-  { id: 'get-spark-job',       name: 'Spark Job',      method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/spark/jobs/{jobId}',   group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark job details', dangerLevel: 'safe' },
-  { id: 'get-spark-metrics',   name: 'Spark Metrics',  method: 'GET', urlTemplate: '{fabricBaseUrl}/liveTable/spark/metrics',        group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark resource metrics', dangerLevel: 'safe' },
+  // ── Spark (mwc) — placeholders for routes that exist server-side ──
+  { id: 'list-spark-sessions', name: 'Spark Sessions', method: 'GET', urlTemplate: '/liveTable/spark/sessions',       group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'List active Spark sessions', dangerLevel: 'safe' },
+  { id: 'get-spark-job',       name: 'Spark Job',      method: 'GET', urlTemplate: '/liveTable/spark/jobs/{jobId}',   group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark job details', dangerLevel: 'safe' },
+  { id: 'get-spark-metrics',   name: 'Spark Metrics',  method: 'GET', urlTemplate: '/liveTable/spark/metrics',        group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark resource metrics', dangerLevel: 'safe' },
 
   // ── Maintenance (mwc) ──
-  { id: 'force-unlock',     name: 'Force Unlock DAG',   method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/maintenance/unlock',   group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Force unlock a stuck DAG', dangerLevel: 'destructive' },
-  { id: 'list-orphaned',    name: 'List Orphaned',      method: 'GET',  urlTemplate: '{fabricBaseUrl}/liveTable/maintenance/orphaned', group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Find orphaned index folders', dangerLevel: 'safe' },
-  { id: 'cleanup-orphaned', name: 'Cleanup Orphaned',   method: 'POST', urlTemplate: '{fabricBaseUrl}/liveTable/maintenance/cleanup',  group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Remove orphaned folders', dangerLevel: 'destructive' },
+  { id: 'list-locked',      name: 'Locked Iterations',  method: 'GET',  urlTemplate: '/liveTableMaintanance/getLockedDAGExecutionIteration',                group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Find locked DAG iterations', dangerLevel: 'safe' },
+  { id: 'force-unlock',     name: 'Force Unlock DAG',   method: 'POST', urlTemplate: '/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}',   group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Force unlock a stuck DAG iteration', dangerLevel: 'destructive' },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -392,12 +391,16 @@ class RequestBuilder {
     this._bodyEl = null;
     this._bodySection = null;
     this._headersEl = null;
+    this._paramsEl = null;
     this._sendBtn = null;
     this._cancelBtn = null;
     this._catalogWrap = null;
     this._catalog = null;
     this._activeTab = 'headers';
+    this._pinnedTokenType = null;
+    this._docClickHandler = null;
     this.onSend = null;
+    this.onSave = null;
     this._render();
   }
 
@@ -499,11 +502,13 @@ class RequestBuilder {
     var content = document.createElement('div');
     content.className = 'api-req-content';
 
-    // Params pane (stub)
+    // Params pane
     var paramsPane = document.createElement('div');
     paramsPane.className = 'api-req-pane';
     paramsPane.setAttribute('data-pane', 'params');
-    paramsPane.innerHTML = '<div style="padding:var(--space-3) var(--space-4);color:var(--text-muted);font-size:var(--text-sm)">Query parameters are parsed from the URL</div>';
+    this._paramsEl = document.createElement('div');
+    paramsPane.appendChild(this._paramsEl);
+    this._renderParams();
     content.appendChild(paramsPane);
 
     // Headers pane
@@ -562,7 +567,8 @@ class RequestBuilder {
       self._setMethod(m);
       dd.classList.remove('open');
     });
-    document.addEventListener('click', function() { dd.classList.remove('open'); });
+    this._docClickHandler = function() { dd.classList.remove('open'); };
+    document.addEventListener('click', this._docClickHandler);
 
     // Tab switching
     tabBar.addEventListener('click', function(e) {
@@ -591,11 +597,137 @@ class RequestBuilder {
       }
     });
 
+    // URL edits invalidate the pinned token type (from a catalog selection)
+    this._urlEl.addEventListener('input', function() {
+      self._pinnedTokenType = null;
+      self._renderParams();
+    });
+
     // cURL copy
     curlBtn.addEventListener('click', function() {
       var curl = self.generateCurl();
       if (navigator.clipboard) { navigator.clipboard.writeText(curl); }
     });
+
+    // Save
+    saveBtn.addEventListener('click', function() {
+      if (self.onSave) self.onSave(self.getRequest());
+    });
+  }
+
+  _renderParams() {
+    if (!this._paramsEl) return;
+    var self = this;
+    this._paramsEl.innerHTML = '';
+    var table = document.createElement('table');
+    table.className = 'api-kv-table';
+    var thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th class="kv-chk"></th><th>Key</th><th>Value</th><th></th></tr>';
+    table.appendChild(thead);
+    var tbody = document.createElement('tbody');
+    table.appendChild(tbody);
+    this._paramsEl.appendChild(table);
+
+    var pairs = this._parseQuery(this._urlEl ? this._urlEl.value : '');
+    for (var i = 0; i < pairs.length; i++) {
+      tbody.appendChild(this._paramRow(pairs[i].key, pairs[i].value));
+    }
+
+    var addRow = document.createElement('div');
+    addRow.className = 'api-kv-add';
+    addRow.textContent = '+ Add Param';
+    addRow.addEventListener('click', function() {
+      tbody.appendChild(self._paramRow('', ''));
+    });
+    this._paramsEl.appendChild(addRow);
+  }
+
+  _paramRow(key, value) {
+    var self = this;
+    var row = document.createElement('tr');
+
+    var chkCell = document.createElement('td');
+    chkCell.className = 'kv-chk';
+    var chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = true;
+    chk.className = 'api-kv-check';
+    chkCell.appendChild(chk);
+    row.appendChild(chkCell);
+
+    var keyCell = document.createElement('td');
+    keyCell.className = 'kv-key';
+    var keyInput = document.createElement('input');
+    keyInput.className = 'api-param-key';
+    keyInput.value = key;
+    keyInput.placeholder = 'Param name';
+    keyInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    keyCell.appendChild(keyInput);
+    row.appendChild(keyCell);
+
+    var valCell = document.createElement('td');
+    valCell.className = 'kv-val';
+    var valInput = document.createElement('input');
+    valInput.className = 'api-param-val';
+    valInput.value = value;
+    valInput.placeholder = 'Value';
+    valInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    valCell.appendChild(valInput);
+    row.appendChild(valCell);
+
+    var actCell = document.createElement('td');
+    var del = document.createElement('button');
+    del.className = 'api-kv-del';
+    del.textContent = '\u2715';
+    del.addEventListener('click', function() {
+      row.remove();
+      self._syncUrlFromParams();
+    });
+    actCell.appendChild(del);
+    row.appendChild(actCell);
+
+    var sync = function() { self._syncUrlFromParams(); };
+    keyInput.addEventListener('input', sync);
+    valInput.addEventListener('input', sync);
+    chk.addEventListener('change', sync);
+
+    return row;
+  }
+
+  _parseQuery(url) {
+    var pairs = [];
+    if (!url) return pairs;
+    var qIdx = url.indexOf('?');
+    if (qIdx === -1) return pairs;
+    var qs = url.substring(qIdx + 1);
+    var parts = qs.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var eq = parts[i].indexOf('=');
+      var k, v;
+      if (eq === -1) { k = parts[i]; v = ''; }
+      else { k = parts[i].substring(0, eq); v = parts[i].substring(eq + 1); }
+      try { k = decodeURIComponent(k); } catch (e) { /* keep raw */ }
+      try { v = decodeURIComponent(v); } catch (e) { /* keep raw */ }
+      pairs.push({ key: k, value: v });
+    }
+    return pairs;
+  }
+
+  _syncUrlFromParams() {
+    if (!this._paramsEl || !this._urlEl) return;
+    var rows = this._paramsEl.querySelectorAll('tbody tr');
+    var parts = [];
+    for (var i = 0; i < rows.length; i++) {
+      var chk = rows[i].querySelector('.api-kv-check');
+      if (chk && !chk.checked) continue;
+      var k = rows[i].querySelector('.api-param-key');
+      var v = rows[i].querySelector('.api-param-val');
+      if (!k || !k.value.trim()) continue;
+      parts.push(encodeURIComponent(k.value.trim()) + '=' + encodeURIComponent(v ? v.value : ''));
+    }
+    var base = this._urlEl.value.split('?')[0];
+    this._urlEl.value = parts.length ? base + '?' + parts.join('&') : base;
   }
 
   _setMethod(m) {
@@ -690,13 +822,14 @@ class RequestBuilder {
 
     var method = this._methodEl.getAttribute('data-value') || 'GET';
     var needsBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
+    var url = this._urlEl.value.trim();
 
     return {
       method: method,
-      url: this._urlEl.value.trim(),
+      url: url,
       headers: headers,
       body: needsBody ? this._bodyEl.value : null,
-      tokenType: this._detectTokenType(this._urlEl.value)
+      tokenType: this._pinnedTokenType || this._detectTokenType(url)
     };
   }
 
@@ -706,6 +839,7 @@ class RequestBuilder {
     }
     if (req.url !== undefined) this._urlEl.value = req.url;
     if (req.body !== undefined) this._bodyEl.value = req.body || '';
+    if (req.tokenType) this._pinnedTokenType = req.tokenType;
 
     if (req.headers) {
       // Rebuild header rows
@@ -749,7 +883,8 @@ class RequestBuilder {
   }
 
   _detectTokenType(url) {
-    if (url.indexOf('pbidedicated') !== -1 || url.indexOf('{fabricBaseUrl}') !== -1) return 'mwc';
+    if (!url) return 'none';
+    if (url.indexOf('/liveTable') !== -1 || url.indexOf('pbidedicated') !== -1) return 'mwc';
     if (url.indexOf('/v1/') !== -1 || url.indexOf('api.fabric') !== -1) return 'bearer';
     return 'none';
   }
@@ -757,9 +892,14 @@ class RequestBuilder {
   getCatalog() { return this._catalog; }
 
   destroy() {
+    if (this._docClickHandler) {
+      document.removeEventListener('click', this._docClickHandler);
+      this._docClickHandler = null;
+    }
     if (this._catalog) this._catalog.destroy();
     this._container.innerHTML = '';
     this.onSend = null;
+    this.onSave = null;
   }
 }
 
@@ -868,6 +1008,34 @@ class ResponseViewer {
       header.appendChild(sizePill);
     }
 
+    // Header actions — Copy + Download (always visible when we have a body)
+    var actions = document.createElement('div');
+    actions.style.marginLeft = 'auto';
+    actions.style.display = 'flex';
+    actions.style.gap = 'var(--space-2)';
+
+    if (result.body) {
+      var copyHdrBtn = document.createElement('button');
+      copyHdrBtn.className = 'api-json-action';
+      copyHdrBtn.textContent = 'Copy';
+      copyHdrBtn.addEventListener('click', function() {
+        if (navigator.clipboard) navigator.clipboard.writeText(result.body);
+      });
+      actions.appendChild(copyHdrBtn);
+
+      var dlBtn = document.createElement('button');
+      dlBtn.className = 'api-json-action';
+      dlBtn.textContent = 'Download';
+      var ct = (result.headers && (result.headers['content-type'] || result.headers['Content-Type'])) || 'application/json';
+      var ext = ct.indexOf('json') !== -1 ? 'json' : (ct.indexOf('xml') !== -1 ? 'xml' : 'txt');
+      var self2 = this;
+      dlBtn.addEventListener('click', function() {
+        self2._downloadBlob('response-' + Date.now() + '.' + ext, result.body, ct);
+      });
+      actions.appendChild(dlBtn);
+    }
+    header.appendChild(actions);
+
     this._container.appendChild(header);
 
     // Tabs
@@ -942,8 +1110,35 @@ class ResponseViewer {
 
   _renderBody(container, result, treeBtn, rawBtn) {
     var bodyStr = result.body || '';
+    var TRUNCATE_LIMIT = 500 * 1024; // 500KB
+    var tooLarge = bodyStr.length > TRUNCATE_LIMIT;
     var parsed = null;
-    try { parsed = JSON.parse(bodyStr); } catch (e) { parsed = null; }
+    if (!tooLarge) {
+      try { parsed = JSON.parse(bodyStr); } catch (e) { parsed = null; }
+    }
+
+    if (tooLarge) {
+      var warn = document.createElement('div');
+      warn.className = 'api-resp-empty';
+      warn.style.padding = 'var(--space-4)';
+      var wt = document.createElement('div');
+      wt.className = 'api-resp-empty-title';
+      wt.textContent = 'Response too large to render (' + this._formatSize(bodyStr.length) + ')';
+      var wh = document.createElement('div');
+      wh.className = 'api-resp-empty-hint';
+      wh.textContent = 'Showing first 50KB. Use Download in the header to save the full response.';
+      warn.appendChild(wt);
+      warn.appendChild(wh);
+      container.appendChild(warn);
+
+      var preview = document.createElement('div');
+      preview.className = 'api-raw-view';
+      preview.textContent = bodyStr.substring(0, 50 * 1024) + '\n\n... (truncated) ...';
+      container.appendChild(preview);
+      treeBtn.style.display = 'none';
+      rawBtn.style.display = 'none';
+      return;
+    }
 
     if (parsed !== null) {
       // JSON toolbar
@@ -1068,6 +1263,20 @@ class ResponseViewer {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / 1048576).toFixed(1) + ' MB';
+  }
+
+  _downloadBlob(filename, content, contentType) {
+    try {
+      var blob = new Blob([content], { type: contentType || 'application/octet-stream' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 0);
+    } catch (e) { /* clipboard/blob unavailable */ }
   }
 
   destroy() {
@@ -1406,16 +1615,19 @@ class ApiPlayground {
     // Center: Workspace
     var workspace = document.createElement('div');
     workspace.className = 'api-workspace';
+    this._workspaceEl = workspace;
 
     // Request panel
     var reqPanel = document.createElement('div');
     reqPanel.className = 'api-req-panel';
+    this._reqPanel = reqPanel;
     this._requestBuilder = new RequestBuilder(reqPanel);
     workspace.appendChild(reqPanel);
 
     // Resize handle
     var resizeH = document.createElement('div');
     resizeH.className = 'api-resize-h';
+    this._resizeH = resizeH;
     workspace.appendChild(resizeH);
 
     // Response panel
@@ -1458,7 +1670,8 @@ class ApiPlayground {
         method: endpoint.method,
         url: resolvedUrl,
         headers: headers,
-        body: endpoint.bodyTemplate ? JSON.stringify(endpoint.bodyTemplate, null, 2) : ''
+        body: endpoint.bodyTemplate ? JSON.stringify(endpoint.bodyTemplate, null, 2) : '',
+        tokenType: endpoint.tokenType
       });
     };
 
@@ -1468,7 +1681,8 @@ class ApiPlayground {
         method: entry.method,
         url: entry.url,
         headers: entry.headers || [],
-        body: entry.body || ''
+        body: entry.body || '',
+        tokenType: entry.tokenType
       });
     };
 
@@ -1481,17 +1695,73 @@ class ApiPlayground {
       self._requestBuilder.setSending(false);
       self._responseViewer.showError({ message: 'Request cancelled' });
     });
+
+    // Save button
+    this._requestBuilder.onSave = function(request) {
+      var defaultName = request.url ? request.url.split('?')[0] : 'Untitled request';
+      var name = window.prompt('Name this request:', defaultName);
+      if (!name) return;
+      self._historySaved.saveRequest({
+        method: request.method,
+        url: request.url,
+        headers: self._sanitizeHeaders(request.headers),
+        body: request.body,
+        tokenType: request.tokenType,
+        name: name
+      });
+    };
+
+    // Resize handle — drag to adjust request/response split
+    this._wireResize();
+  }
+
+  _wireResize() {
+    if (!this._resizeH || !this._reqPanel || !this._workspaceEl) return;
+    var self = this;
+    var dragging = false;
+    var startY = 0;
+    var startH = 0;
+
+    this._resizeH.addEventListener('mousedown', function(e) {
+      dragging = true;
+      startY = e.clientY;
+      startH = self._reqPanel.offsetHeight;
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    var onMove = function(e) {
+      if (!dragging) return;
+      var wsH = self._workspaceEl.offsetHeight;
+      var newH = startH + (e.clientY - startY);
+      var minH = 120;
+      var maxH = Math.max(minH + 1, wsH - 160);
+      if (newH < minH) newH = minH;
+      if (newH > maxH) newH = maxH;
+      self._reqPanel.style.height = newH + 'px';
+      self._reqPanel.style.flexShrink = '0';
+    };
+    var onUp = function() {
+      if (!dragging) return;
+      dragging = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    this._resizeMoveHandler = onMove;
+    this._resizeUpHandler = onUp;
   }
 
   _handleSend(request) {
     var self = this;
 
-    // Abort previous
     if (this._abortController) this._abortController.abort();
     this._abortController = new AbortController();
 
-    // Resolve URL
     var resolvedUrl = this._resolveUrl(request.url);
+    var tokenType = request.tokenType || this._detectTokenType(resolvedUrl);
 
     this._requestBuilder.setSending(true);
     this._responseViewer.showLoading();
@@ -1501,25 +1771,40 @@ class ApiPlayground {
       return;
     }
 
-    // Build proxy request
-    var proxyBody = JSON.stringify({
+    var proxyUrl = this._buildProxyUrl(resolvedUrl, tokenType);
+    if (!proxyUrl) {
+      this._requestBuilder.setSending(false);
+      this._abortController = null;
+      this._responseViewer.showError({
+        message: 'Cannot route request — URL must be a relative API path (e.g. /v1/... for Fabric or /liveTable/... for FLT). Use the catalog or strip the host.'
+      });
+      return;
+    }
+
+    var fetchOpts = {
       method: request.method,
-      url: resolvedUrl,
-      headers: this._buildProxyHeaders(request.headers),
-      body: request.body,
-      tokenType: request.tokenType || this._detectTokenType(resolvedUrl)
-    });
+      headers: { 'Content-Type': 'application/json' },
+      signal: this._abortController.signal
+    };
+    var needsBody = request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH';
+    if (needsBody && request.body) fetchOpts.body = request.body;
 
     var startTime = Date.now();
-    fetch('/api/playground/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: proxyBody,
-      signal: this._abortController.signal
-    }).then(function(resp) {
-      return resp.json();
+    fetch(proxyUrl, fetchOpts).then(function(resp) {
+      var duration = Date.now() - startTime;
+      var headersObj = {};
+      resp.headers.forEach(function(value, key) { headersObj[key] = value; });
+      return resp.text().then(function(text) {
+        return {
+          status: resp.status,
+          statusText: resp.statusText,
+          headers: headersObj,
+          body: text,
+          duration: duration,
+          bodySize: text ? text.length : 0
+        };
+      });
     }).then(function(result) {
-      if (!result.duration) result.duration = Date.now() - startTime;
       self._responseViewer.showResponse(result);
       self._historySaved.addHistoryEntry(
         self._sanitizeForHistory(request, resolvedUrl, result)
@@ -1538,6 +1823,12 @@ class ApiPlayground {
     var self = this;
     var delay = 100 + Math.floor(Math.random() * 400);
     setTimeout(function() {
+      var mockBody = JSON.stringify({
+        status: 'ok',
+        message: 'Mock response for ' + request.method + ' ' + request.url,
+        timestamp: new Date().toISOString(),
+        data: { items: [], count: 0 }
+      }, null, 2);
       var mockResult = {
         status: 200,
         statusText: 'OK',
@@ -1545,14 +1836,9 @@ class ApiPlayground {
           'content-type': 'application/json',
           'x-ms-request-id': self._uuid()
         },
-        body: JSON.stringify({
-          status: 'ok',
-          message: 'Mock response for ' + request.method + ' ' + request.url,
-          timestamp: new Date().toISOString(),
-          data: { items: [], count: 0 }
-        }),
+        body: mockBody,
         duration: delay,
-        bodySize: 128
+        bodySize: mockBody.length
       };
       self._responseViewer.showResponse(mockResult);
       self._historySaved.addHistoryEntry(
@@ -1570,54 +1856,62 @@ class ApiPlayground {
       workspaceId: config.workspaceId || '{workspaceId}',
       lakehouseId: config.lakehouseId || '{lakehouseId}',
       artifactId: config.artifactId || '{artifactId}',
-      capacityId: config.capacityId || '{capacityId}',
-      fabricBaseUrl: config.fabricBaseUrl || '{fabricBaseUrl}'
+      capacityId: config.capacityId || '{capacityId}'
     };
-    var resolved = template.replace(/\{(\w+)\}/g, function(match, key) {
+    return template.replace(/\{(\w+)\}/g, function(match, key) {
       return vars[key] || match;
     });
-
-    // Prefix relative URLs
-    if (resolved.charAt(0) === '/') {
-      resolved = 'https://api.fabric.microsoft.com' + resolved;
-    }
-    return resolved;
   }
 
-  _buildProxyHeaders(headers) {
-    var obj = {};
-    for (var i = 0; i < headers.length; i++) {
-      var h = headers[i];
-      // Skip the masked auth header — proxy handles token injection
-      if (h.key.toLowerCase() === 'authorization') continue;
-      if (h.key.trim()) obj[h.key] = h.value;
+  _buildProxyUrl(url, tokenType) {
+    // External absolute URLs — strip known hosts so they route through proxy
+    if (/^https?:\/\//i.test(url)) {
+      var fabricHostMatch = url.match(/^https?:\/\/[^\/]*api\.fabric\.microsoft\.com(\/.*)?$/i);
+      if (fabricHostMatch) return '/api/fabric' + (fabricHostMatch[1] || '/');
+      var pbiMatch = url.match(/^https?:\/\/[^\/]*pbidedicated[^\/]*(\/.*)?$/i);
+      if (pbiMatch) return '/api/flt-proxy' + (pbiMatch[1] || '/');
+      // Unknown absolute host — refuse (CORS would fail anyway)
+      return null;
     }
-    return obj;
+
+    // Relative path — route by token type
+    if (url.charAt(0) !== '/') url = '/' + url;
+    if (tokenType === 'mwc') return '/api/flt-proxy' + url;
+    if (tokenType === 'bearer') return '/api/fabric' + url;
+
+    // No token type known — infer from path shape
+    if (url.indexOf('/liveTable') === 0) return '/api/flt-proxy' + url;
+    if (url.indexOf('/v1/') === 0) return '/api/fabric' + url;
+    return null;
   }
 
   _detectTokenType(url) {
-    if (url.indexOf('pbidedicated') !== -1) return 'mwc';
-    if (url.indexOf('api.fabric') !== -1) return 'bearer';
+    if (!url) return 'none';
+    if (url.indexOf('/liveTable') !== -1 || url.indexOf('pbidedicated') !== -1) return 'mwc';
+    if (url.indexOf('/v1/') !== -1 || url.indexOf('api.fabric') !== -1) return 'bearer';
     return 'none';
   }
 
-  _sanitizeForHistory(request, resolvedUrl, result) {
-    var sanitizedHeaders = [];
-    for (var i = 0; i < request.headers.length; i++) {
-      var h = request.headers[i];
+  _sanitizeHeaders(headers) {
+    var out = [];
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
       if (h.key.toLowerCase() === 'authorization') {
-        sanitizedHeaders.push({ key: h.key, value: h.value.replace(/\s.+$/, ' \u25CF\u25CF\u25CF\u25CF') });
+        out.push({ key: h.key, value: h.value.replace(/\s.+$/, ' \u25CF\u25CF\u25CF\u25CF') });
       } else {
-        sanitizedHeaders.push({ key: h.key, value: h.value });
+        out.push({ key: h.key, value: h.value });
       }
     }
+    return out;
+  }
 
+  _sanitizeForHistory(request, resolvedUrl, result) {
     return {
       id: this._uuid(),
       method: request.method,
       url: request.url,
       resolvedUrl: resolvedUrl,
-      headers: sanitizedHeaders,
+      headers: this._sanitizeHeaders(request.headers),
       body: request.body,
       tokenType: request.tokenType || 'none',
       response: {
@@ -1641,6 +1935,14 @@ class ApiPlayground {
 
   destroy() {
     if (this._abortController) this._abortController.abort();
+    if (this._resizeMoveHandler) {
+      document.removeEventListener('mousemove', this._resizeMoveHandler);
+      this._resizeMoveHandler = null;
+    }
+    if (this._resizeUpHandler) {
+      document.removeEventListener('mouseup', this._resizeUpHandler);
+      this._resizeUpHandler = null;
+    }
     if (this._endpointCatalog) this._endpointCatalog.destroy();
     if (this._requestBuilder) this._requestBuilder.destroy();
     if (this._responseViewer) this._responseViewer.destroy();
