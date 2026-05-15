@@ -69,10 +69,10 @@ def apply_edog_changes(repo_root):
     new_c, _status = edog.apply_log_viewer_registration_program_cs(c)
     fp.write_text(new_c, encoding="utf-8")
 
-    # WorkloadApp.cs
+    # WorkloadApp.cs (Phase 2a split-anchor patch returns 3-tuple)
     fp = repo_root / files["WorkloadApp"]
     c = fp.read_text(encoding="utf-8")
-    new_c, _status = edog.apply_log_viewer_registration_workloadapp_cs(c)
+    new_c, _status, _warnings = edog.apply_log_viewer_registration_workloadapp_cs(c)
     fp.write_text(new_c, encoding="utf-8")
 
 

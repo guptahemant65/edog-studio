@@ -1840,39 +1840,104 @@ def apply_log_viewer_registration_program_cs(content):
 
 
 def apply_log_viewer_registration_workloadapp_cs(content):
-    """Apply log viewer telemetry interceptor registration to WorkloadApp.cs."""
-    # Check if already applied
-    if "EdogTelemetryInterceptor" in content:
-        return content, "already_applied"
+    """Apply EDOG log viewer interceptor patches to WorkloadApp.cs.
 
-    # Find the TelemetryReporter registration line and replace with interceptor wrapper
-    # Also re-set the Tracer test logger HERE (inside RunAsync callback) because
-    # the platform logger initialized during RunAsync takes priority over our
-    # pre-RunAsync SetStructuredTestLogger call. Re-setting it here ensures
-    # the test logger fires for ALL Tracer calls during service runtime.
-    original = "WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, CustomLiveTableTelemetryReporter>();"
-    replacement = (
-        "// EDOG DevMode - Wrap telemetry reporter with web log viewer interceptor\n"
-        "            WireUp.RegisterInstance<ICustomLiveTableTelemetryReporter>(\n"
-        "                new Microsoft.LiveTable.Service.DevMode.EdogTelemetryInterceptor(\n"
-        "                    new CustomLiveTableTelemetryReporter(),\n"
-        "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
-        "\n"
-        "            // EDOG DevMode - Re-set Tracer test logger after platform init\n"
-        "            // (must be set here, inside RunAsync, so it persists after PlatformLogger is configured)\n"
-        "            Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
-        "                new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
-        "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
-        "\n"
-        "            // EDOG DevMode - Register all runtime interceptors (Phase 2)\n"
-        "            Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();"
-    )
+    Splits into two patches at DISTINCT anchors so each runs at the right
+    point in the FLT bootstrap sequence:
 
-    if original in content:
-        new_content = content.replace(original, replacement)
-        return new_content, "applied"
+      Patch A — Telemetry wrap (constructor anchor)
+          Anchor: WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, ...>
+          Effect: Replaces the registration with one that wraps the reporter
+                  in EdogTelemetryInterceptor.
+          Why here: This patch only needs CustomLiveTableTelemetryReporter
+                    and EdogLogServer (which we register ourselves in
+                    Program.cs). No MWC platform services required.
 
-    return content, "pattern_not_found"
+      Patch B — Tracer reset + RegisterAll() (post-InitializeAsync anchor)
+          Anchor: DependencyHandler.Resolve<IReliableOperationsManager>();
+          Effect: Inserts the Tracer test-logger reset AND the call to
+                  EdogDevModeRegistrar.RegisterAll() BEFORE the anchor.
+          Why here: RegisterAll() resolves IWorkloadContext,
+                    IParametersProvider, IWorkloadApplicationAuthorityProvider,
+                    and IWorkloadCertifiedEventsTracer — all of which are
+                    only registered by MWC platform inside
+                    WorkloadContextInitializer.InitializeAsync(). Calling
+                    RegisterAll() in the constructor (the old behaviour)
+                    explains the 8 "type not registered" failures observed
+                    in production deploys.
+                    The Tracer reset also moves here because PlatformLogger
+                    is configured during InitializeAsync and would otherwise
+                    overwrite our test logger.
+
+    Returns:
+        (new_content, status, warnings) where:
+          status   ∈ {"applied", "already_applied", "pattern_not_found"}
+          warnings ⊂ list[str] — per-patch "pattern not found" warnings.
+                     May be non-empty even when status == "applied" if one
+                     of the two anchors matched but the other did not.
+    """
+    warnings: list[str] = []
+
+    # ── Patch A: Telemetry wrap (constructor anchor) ──────────────────────
+    telemetry_done = "EdogTelemetryInterceptor" in content
+    if telemetry_done:
+        status_a = "already_applied"
+    else:
+        original_a = (
+            "WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, "
+            "CustomLiveTableTelemetryReporter>();"
+        )
+        replacement_a = (
+            "// EDOG DevMode - Wrap telemetry reporter with web log viewer interceptor\n"
+            "            WireUp.RegisterInstance<ICustomLiveTableTelemetryReporter>(\n"
+            "                new Microsoft.LiveTable.Service.DevMode.EdogTelemetryInterceptor(\n"
+            "                    new CustomLiveTableTelemetryReporter(),\n"
+            "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));"
+        )
+        if original_a in content:
+            content = content.replace(original_a, replacement_a, 1)
+            status_a = "applied"
+        else:
+            status_a = "pattern_not_found"
+            warnings.append(
+                "⚠️  Log viewer telemetry wrap (constructor anchor): pattern not found"
+            )
+
+    # ── Patch B: Tracer reset + RegisterAll (post-InitializeAsync anchor) ─
+    registrar_done = "EdogDevModeRegistrar.RegisterAll" in content
+    if registrar_done:
+        status_b = "already_applied"
+    else:
+        original_b = "DependencyHandler.Resolve<IReliableOperationsManager>();"
+        replacement_b = (
+            "// EDOG DevMode - Re-set Tracer test logger after platform init\n"
+            "            // (must run here, after InitializeAsync, so it survives PlatformLogger configuration)\n"
+            "            Microsoft.ServicePlatform.Telemetry.Tracer.SetStructuredTestLogger(\n"
+            "                new Microsoft.LiveTable.Service.DevMode.EdogLogInterceptor(\n"
+            "                    WireUp.Resolve<Microsoft.LiveTable.Service.DevMode.EdogLogServer>()));\n"
+            "\n"
+            "            // EDOG DevMode - Register all runtime interceptors (Phase 2)\n"
+            "            // MWC platform services are now resolvable (InitializeAsync just completed).\n"
+            "            Microsoft.LiveTable.Service.DevMode.EdogDevModeRegistrar.RegisterAll();\n"
+            "\n"
+            "            DependencyHandler.Resolve<IReliableOperationsManager>();"
+        )
+        if original_b in content:
+            content = content.replace(original_b, replacement_b, 1)
+            status_b = "applied"
+        else:
+            status_b = "pattern_not_found"
+            warnings.append(
+                "⚠️  Log viewer interceptor registrar (post-InitializeAsync anchor): pattern not found"
+            )
+
+    # ── Combined status ────────────────────────────────────────────────────
+    if status_a == "already_applied" and status_b == "already_applied":
+        return content, "already_applied", []
+    if status_a == "pattern_not_found" and status_b == "pattern_not_found":
+        return content, "pattern_not_found", warnings
+    # At least one patch applied; surface partial-failure warnings (if any).
+    return content, "applied", warnings
 
 
 def revert_log_viewer_registration_program_cs(content):
@@ -1884,15 +1949,25 @@ def revert_log_viewer_registration_program_cs(content):
 
 
 def revert_log_viewer_registration_workloadapp_cs(content):
-    """Revert log viewer telemetry interceptor registration from WorkloadApp.cs."""
-    # First remove the RegisterAll() block (Phase 2 interceptor registration)
+    """Revert log viewer interceptor patches from WorkloadApp.cs.
+
+    Handles both the legacy single-anchor format (everything at the
+    constructor anchor) and the current split-anchor format (telemetry at
+    constructor anchor, Tracer reset + RegisterAll at the
+    post-InitializeAsync anchor) so reverts work on any deployed checkout.
+    """
+    # First remove the RegisterAll() block (Phase 2 interceptor registration).
+    # The optional second comment line was added when the patch split moved
+    # this block past WorkloadContextInitializer.InitializeAsync — match it
+    # only when present so legacy single-anchor checkouts still revert.
     registrar_pattern = (
         r"\n\s*// EDOG DevMode - Register all runtime interceptors \(Phase 2\)\n"
+        r"(?:\s*//.*\n)?"
         r"\s*Microsoft\.LiveTable\.Service\.DevMode\.EdogDevModeRegistrar\.RegisterAll\(\);"
     )
     content = re.sub(registrar_pattern, "", content)
 
-    # Remove the Tracer re-set block (added alongside telemetry interceptor)
+    # Remove the Tracer re-set block (added alongside telemetry interceptor).
     tracer_pattern = (
         r"\n\s*// EDOG DevMode - Re-set Tracer test logger after platform init\n"
         r"\s*//.*\n"
@@ -2409,13 +2484,18 @@ def apply_all_changes(token, repo_root):
     filepath = repo_root / rel_path
     content = read_file(filepath)
     if content:
-        new_content, status = apply_log_viewer_registration_workloadapp_cs(content)
+        new_content, status, partial_warnings = apply_log_viewer_registration_workloadapp_cs(content)
         if status == "applied":
             if rel_path not in original_contents:
                 original_contents[rel_path] = content
             write_file(filepath, new_content)
             modified_contents[rel_path] = new_content
             changes_made.append("✅ Log viewer telemetry interceptor (WorkloadApp.cs)")
+            # Patches may apply partially when only one of the two anchors
+            # matched. Surface the partial-failure warnings so they reach
+            # the deploy log and the patch-warnings banner.
+            for w in partial_warnings:
+                warnings.append(w)
         elif status == "already_applied":
             # Compute the pre-EDOG original by reverting the current content
             reverted = revert_log_viewer_registration_workloadapp_cs(content)
@@ -2427,7 +2507,12 @@ def apply_all_changes(token, repo_root):
             if rel_path not in original_contents:
                 original_contents[rel_path] = content
             modified_contents[rel_path] = content
-            warnings.append("⚠️  Log viewer telemetry interceptor: pattern not found")
+            # Use the detailed per-anchor warnings if available, else a generic one.
+            if partial_warnings:
+                for w in partial_warnings:
+                    warnings.append(w)
+            else:
+                warnings.append("⚠️  Log viewer telemetry interceptor: pattern not found")
 
     # 4b. Patch DagExecutionHandlerV2.cs to register EDOG DAG hook
     rel_path = FILES["DagExecutionHandlerV2"]
