@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 
 
 class TestAtomicWrite:
@@ -217,3 +218,102 @@ class TestSSEEventFormat:
         data = json.dumps({"step": 2, "total": 5, "status": "deploying"})
         line = f"id: {event_id}\ndata: {data}\n\n"
         assert f"id: {event_id}" in line
+
+
+# ============================================================================
+# Build-output terminal controls (F02 — UX enhancement)
+# ============================================================================
+
+_DEPLOY_JS = Path(__file__).resolve().parents[1] / "src" / "frontend" / "js" / "deploy-flow.js"
+_DEPLOY_CSS = Path(__file__).resolve().parents[1] / "src" / "frontend" / "css" / "deploy.css"
+
+
+class TestTerminalControls:
+    """The deploy build-output terminal must expose user controls."""
+
+    def test_follow_tail_state_exists(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "_followTail" in src, (
+            "DeployFlow must track _followTail to pause autoscroll when user scrolls up"
+        )
+
+    def test_scroll_listener_updates_follow_tail(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "_bindTerminalScroll" in src
+        # Detects bottom: scrollHeight - scrollTop - clientHeight near zero
+        assert "scrollHeight - term.scrollTop - term.clientHeight" in src, (
+            "Terminal scroll handler must measure distance from bottom to set _followTail"
+        )
+
+    def test_append_log_respects_follow_tail(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        # _appendLog should auto-scroll only when both terminal open AND following tail
+        assert "this._terminalOpen && this._followTail" in src, (
+            "_appendLog must auto-scroll only when terminal is open AND user is following tail"
+        )
+
+    def test_clear_button_wired(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "deploy-term-clear" in src, "Clear button must be present"
+        assert "this._logs = []" in src, "Clear handler must empty the log buffer"
+
+    def test_copy_button_wired(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "deploy-term-copy" in src, "Copy button must be present"
+        assert "_copyLogs" in src, "Copy handler must exist"
+        assert "navigator.clipboard" in src, "Copy must use clipboard API"
+        assert "_copyLogsFallback" in src, "Copy must fall back when clipboard unavailable"
+
+    def test_expand_button_wired(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "deploy-term-expand" in src, "Expand button must be present"
+        assert "_terminalExpanded" in src, "Expand state must be tracked"
+
+    def test_wrap_button_wired(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "deploy-term-wrap" in src, "Wrap toggle must be present"
+        assert "this._wrap" in src, "Wrap state must be tracked"
+
+    def test_jump_to_latest_badge_wired(self) -> None:
+        src = _DEPLOY_JS.read_text(encoding="utf-8")
+        assert "deploy-term-jump" in src, "Jump-to-latest badge must be present"
+        assert "_updateJumpBadge" in src, "Jump badge visibility helper must exist"
+
+
+class TestTerminalControlsCss:
+    """CSS classes for the new terminal controls must exist."""
+
+    def test_actions_container_styled(self) -> None:
+        css = _DEPLOY_CSS.read_text(encoding="utf-8")
+        assert ".deploy-terminal-actions" in css
+
+    def test_action_button_styled(self) -> None:
+        css = _DEPLOY_CSS.read_text(encoding="utf-8")
+        assert ".deploy-terminal-btn" in css
+        assert ".deploy-terminal-btn.active" in css, (
+            "Active state for toggle buttons (wrap) must be styled"
+        )
+
+    def test_expanded_mode_styled(self) -> None:
+        css = _DEPLOY_CSS.read_text(encoding="utf-8")
+        assert ".deploy-terminal.expanded.open" in css, (
+            "Expanded terminal must have its own max-height"
+        )
+
+    def test_nowrap_mode_styled(self) -> None:
+        css = _DEPLOY_CSS.read_text(encoding="utf-8")
+        assert ".deploy-terminal.nowrap" in css, (
+            "Nowrap mode must override white-space on term-content"
+        )
+
+    def test_jump_badge_styled(self) -> None:
+        css = _DEPLOY_CSS.read_text(encoding="utf-8")
+        assert ".deploy-term-jump" in css
+        assert ".deploy-term-jump.visible" in css, "Jump badge needs visible state"
+        # Sticky inside scroll container is the only way it pins to viewport bottom
+        assert "position: sticky" in css
+
+    def test_copy_toast_styled(self) -> None:
+        css = _DEPLOY_CSS.read_text(encoding="utf-8")
+        assert ".deploy-term-toast" in css
+        assert ".deploy-term-toast.visible" in css

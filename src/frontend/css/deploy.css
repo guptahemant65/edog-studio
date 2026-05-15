@@ -371,6 +371,123 @@
   text-align: center;
 }
 
+/* Terminal action buttons (right side of titlebar) */
+.deploy-terminal-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  position: relative;
+  z-index: 3;
+}
+
+.deploy-terminal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: oklch(0.55 0 0);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  position: relative;
+}
+
+.deploy-terminal-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: oklch(0.85 0 0);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.deploy-terminal-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent, oklch(0.70 0.18 290));
+  color: oklch(0.90 0 0);
+}
+
+.deploy-terminal-btn.active {
+  color: var(--accent, oklch(0.78 0.16 290));
+  background: rgba(109, 92, 255, 0.10);
+}
+
+.deploy-term-toast {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 6px;
+  background: oklch(0.18 0.01 270);
+  color: oklch(0.85 0 0);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm, 4px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 160ms, transform 160ms;
+  white-space: nowrap;
+  z-index: 4;
+}
+
+.deploy-term-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Expanded terminal — taller for actual reading */
+.deploy-terminal.expanded.open {
+  max-height: 70vh;
+}
+
+/* No-wrap mode: lines scroll horizontally instead of wrapping */
+.deploy-terminal.nowrap .deploy-terminal-line .term-content {
+  white-space: pre;
+  word-break: normal;
+  overflow-x: auto;
+}
+
+/* Jump-to-latest badge — appears only when user has scrolled up.
+   Sticky inside the scroll container so it pins to the bottom of the viewport
+   regardless of scroll position. Block-level + auto margins for horizontal centering. */
+.deploy-term-jump {
+  position: sticky;
+  bottom: 8px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  margin: 4px auto 6px auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 5px 10px 5px 8px;
+  background: var(--accent, oklch(0.62 0.18 290));
+  color: white;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 160ms, transform 160ms;
+  white-space: nowrap;
+}
+
+.deploy-term-jump.visible {
+  display: flex;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.deploy-term-jump:hover {
+  filter: brightness(1.08);
+}
+
 /* Terminal body */
 .deploy-terminal-body {
   padding: 6px 0;

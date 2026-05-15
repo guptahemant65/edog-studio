@@ -12,6 +12,10 @@ class DeployFlow {
     this._es = null;        // EventSource
     this._active = false;
     this._terminalOpen = false;
+    this._terminalExpanded = false;
+    this._followTail = true;
+    this._wrap = true;
+    this._copyToast = 0;
     this._logs = [];
     this._startTime = null;
     this._state = { step: 0, total: 5, status: 'idle', message: '', error: null, fltPort: null };
@@ -30,8 +34,8 @@ class DeployFlow {
   ];
 
   /** Start a new deploy. */
-  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName, force) {
-    this._pendingTarget = { workspaceId, artifactId, capacityId, lakehouseName };
+  async startDeploy(workspaceId, artifactId, capacityId, lakehouseName, force, workspaceName) {
+    this._pendingTarget = { workspaceId, artifactId, capacityId, lakehouseName, workspaceName: workspaceName || '' };
     this._active = true;
     this._startTime = Date.now();
     this._logs = [];
@@ -43,7 +47,7 @@ class DeployFlow {
       const resp = await fetch('/api/command/deploy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName, force: !!force }),
+        body: JSON.stringify({ workspaceId, artifactId, capacityId, lakehouseName, workspaceName: workspaceName || '', force: !!force }),
       });
 
       if (resp.status === 409) {
@@ -280,10 +284,33 @@ class DeployFlow {
     }
 
     // V2 Terminal with titlebar, gutter line numbers, color-coded output
-    html += '<div class="deploy-terminal' + (this._terminalOpen ? ' open' : '') + '" id="deploy-terminal">';
+    const termCls = 'deploy-terminal'
+      + (this._terminalOpen ? ' open' : '')
+      + (this._terminalExpanded ? ' expanded' : '')
+      + (this._wrap ? '' : ' nowrap');
+    html += '<div class="' + termCls + '" id="deploy-terminal">';
     html += '<div class="deploy-terminal-titlebar">';
     html += '<span class="deploy-terminal-dot r"></span><span class="deploy-terminal-dot y"></span><span class="deploy-terminal-dot g"></span>';
     html += '<span class="deploy-terminal-bar-title">edog deploy</span>';
+    html += '<div class="deploy-terminal-actions">';
+    html += '<button class="deploy-terminal-btn' + (this._wrap ? ' active' : '') + '" id="deploy-term-wrap" type="button" title="Toggle word-wrap" aria-label="Toggle word-wrap" aria-pressed="' + (this._wrap ? 'true' : 'false') + '">';
+    html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 7 21 7"/><path d="M3 12h15a3 3 0 0 1 0 6h-4"/><polyline points="17 15 14 18 17 21"/><polyline points="3 17 10 17"/></svg>';
+    html += '</button>';
+    html += '<button class="deploy-terminal-btn" id="deploy-term-copy" type="button" title="Copy logs" aria-label="Copy logs">';
+    html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    html += '<span class="deploy-term-toast" id="deploy-term-toast">Copied</span>';
+    html += '</button>';
+    html += '<button class="deploy-terminal-btn" id="deploy-term-clear" type="button" title="Clear logs" aria-label="Clear logs">';
+    html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+    html += '</button>';
+    html += '<button class="deploy-terminal-btn" id="deploy-term-expand" type="button" title="' + (this._terminalExpanded ? 'Collapse' : 'Expand') + '" aria-label="' + (this._terminalExpanded ? 'Collapse' : 'Expand') + '" aria-pressed="' + (this._terminalExpanded ? 'true' : 'false') + '">';
+    if (this._terminalExpanded) {
+      html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    } else {
+      html += '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>';
+    }
+    html += '</button>';
+    html += '</div>';
     html += '</div>';
     html += '<div class="deploy-terminal-body">';
     for (let i = 0; i < this._logs.length; i++) {
@@ -294,7 +321,12 @@ class DeployFlow {
       html += '<span class="term-content"><span class="ts">' + this._esc(l.ts || '') + '</span> ' + this._esc(l.msg || '') + '</span>';
       html += '</div>';
     }
-    html += '</div></div>';
+    html += '</div>';
+    html += '<button class="deploy-term-jump" id="deploy-term-jump" type="button" title="Jump to latest" aria-label="Jump to latest">';
+    html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+    html += '<span>Jump to latest</span>';
+    html += '</button>';
+    html += '</div>';
 
     // Error banner (V2 dramatic style)
     if (status === 'stopped' && error) {
@@ -318,12 +350,14 @@ class DeployFlow {
     html += '</div>';
     this._el.innerHTML = html;
     this._bindEvents();
+    this._bindTerminalScroll();
 
-    // Auto-scroll terminal
-    if (this._terminalOpen) {
+    // Auto-scroll terminal only when following tail
+    if (this._terminalOpen && this._followTail) {
       const term = document.getElementById('deploy-terminal');
       if (term) term.scrollTop = term.scrollHeight;
     }
+    this._updateJumpBadge();
   }
 
   _bindEvents() {
@@ -361,10 +395,96 @@ class DeployFlow {
       const term = document.getElementById('deploy-terminal');
       if (term) {
         term.classList.toggle('open', this._terminalOpen);
-        if (this._terminalOpen) term.scrollTop = term.scrollHeight;
+        if (this._terminalOpen && this._followTail) term.scrollTop = term.scrollHeight;
       }
       toggle.classList.toggle('open', this._terminalOpen);
+      this._updateJumpBadge();
     });
+
+    const expand = document.getElementById('deploy-term-expand');
+    if (expand) expand.addEventListener('click', () => {
+      this._terminalExpanded = !this._terminalExpanded;
+      this._render();
+    });
+
+    const clear = document.getElementById('deploy-term-clear');
+    if (clear) clear.addEventListener('click', () => {
+      this._logs = [];
+      this._followTail = true;
+      this._render();
+    });
+
+    const copy = document.getElementById('deploy-term-copy');
+    if (copy) copy.addEventListener('click', () => this._copyLogs());
+
+    const wrap = document.getElementById('deploy-term-wrap');
+    if (wrap) wrap.addEventListener('click', () => {
+      this._wrap = !this._wrap;
+      const term = document.getElementById('deploy-terminal');
+      if (term) {
+        term.classList.toggle('nowrap', !this._wrap);
+        if (this._followTail) term.scrollTop = term.scrollHeight;
+      }
+      wrap.classList.toggle('active', this._wrap);
+      wrap.setAttribute('aria-pressed', this._wrap ? 'true' : 'false');
+    });
+
+    const jump = document.getElementById('deploy-term-jump');
+    if (jump) jump.addEventListener('click', () => {
+      const term = document.getElementById('deploy-terminal');
+      if (!term) return;
+      this._followTail = true;
+      term.scrollTop = term.scrollHeight;
+      this._updateJumpBadge();
+    });
+  }
+
+  _bindTerminalScroll() {
+    const term = document.getElementById('deploy-terminal');
+    if (!term || term._scrollBound) return;
+    term._scrollBound = true;
+    term.addEventListener('scroll', () => {
+      const atBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 4;
+      this._followTail = atBottom;
+      this._updateJumpBadge();
+    }, { passive: true });
+  }
+
+  _updateJumpBadge() {
+    const jump = document.getElementById('deploy-term-jump');
+    if (!jump) return;
+    const show = this._terminalOpen && !this._followTail && this._logs.length > 0;
+    jump.classList.toggle('visible', show);
+  }
+
+  _copyLogs() {
+    const text = this._logs.map(l => ((l.ts || '') + ' ' + (l.msg || '')).trim()).join('\n');
+    const toast = document.getElementById('deploy-term-toast');
+    const showToast = () => {
+      if (!toast) return;
+      toast.classList.add('visible');
+      clearTimeout(this._copyToast);
+      this._copyToast = setTimeout(() => toast.classList.remove('visible'), 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(showToast).catch(() => this._copyLogsFallback(text, showToast));
+    } else {
+      this._copyLogsFallback(text, showToast);
+    }
+  }
+
+  _copyLogsFallback(text, onDone) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onDone();
+    } catch (e) { /* clipboard unavailable */ }
   }
 
   _onFailed(message) {
@@ -469,10 +589,11 @@ class DeployFlow {
     line.className = 'deploy-terminal-line' + cls;
     line.innerHTML = '<span class="term-gutter">' + lineNum + '</span><span class="term-content"><span class="ts">' + this._esc(log.ts || '') + '</span> ' + this._esc(log.msg || '') + '</span>';
     body.appendChild(line);
-    if (this._terminalOpen) {
+    if (this._terminalOpen && this._followTail) {
       const term = document.getElementById('deploy-terminal');
       if (term) term.scrollTop = term.scrollHeight;
     }
+    this._updateJumpBadge();
   }
 
   _esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
