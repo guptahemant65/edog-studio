@@ -46,6 +46,37 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
+    /// Test-design technique used to derive a scenario. Surfaced explicitly
+    /// (F27 "pinnacle" item 3) so the linter can verify each invariant kind
+    /// gets the appropriate technique, and the UI can show a coverage badge.
+    ///
+    /// <para>Maps to the TECHNIQUES table in <c>EdogQaLlmProvider</c>:</para>
+    /// <list type="bullet">
+    ///   <item><c>BoundaryTriplet</c> — three scenarios at-below/at/at-above a numeric or temporal threshold.</item>
+    ///   <item><c>Counterfactual</c> — exercise removed parameters or
+    ///     reverted code paths to confirm behavior change.</item>
+    ///   <item><c>TruthTable</c> — exhaustive 2^N grid over N optional parameters.</item>
+    ///   <item><c>EquivalencePartition</c> — one representative per input partition.</item>
+    ///   <item><c>ErrorPath</c> — explicit throw-site or 4xx/5xx coverage.</item>
+    ///   <item><c>RegressionGuard</c> — anchor for previously-broken behavior.</item>
+    ///   <item><c>HappyPath</c> — canonical success case.</item>
+    ///   <item><c>NotSpecified</c> — schema default; linter flags as <c>LNT003_TechniqueRequired</c>.</item>
+    /// </list>
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum ScenarioTechnique
+    {
+        NotSpecified,
+        BoundaryTriplet,
+        Counterfactual,
+        TruthTable,
+        EquivalencePartition,
+        ErrorPath,
+        RegressionGuard,
+        HappyPath
+    }
+
+    /// <summary>
     /// Type of stimulus that triggers the system under test.
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -187,6 +218,30 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Scenario metadata (generation info, tags, schema version).</summary>
         public ScenarioMetadata Metadata { get; set; } = new();
+
+        /// <summary>
+        /// Test-design technique used to derive this scenario (F27 item 3).
+        /// MUST be set to a non-<see cref="ScenarioTechnique.NotSpecified"/>
+        /// value or the linter raises <c>LNT003_TechniqueRequired</c>.
+        /// </summary>
+        public ScenarioTechnique Technique { get; set; } = ScenarioTechnique.NotSpecified;
+
+        /// <summary>
+        /// IDs of <c>CodeInvariant</c>s (from <see cref="EdogQaInvariantExtractor"/>)
+        /// this scenario addresses (F27 item 3). At least one entry is required
+        /// when the analyzer detected invariants; the linter raises
+        /// <c>LNT002_InvariantCoverage</c> otherwise. Empty is allowed only when
+        /// the diff produced no invariants (e.g. comment-only changes).
+        /// </summary>
+        public List<string> InvariantsAddressed { get; set; } = new();
+
+        /// <summary>
+        /// Evidence anchoring this scenario to the diff (F27 item 6). The LLM
+        /// must populate at least one entry so reviewers can verify each
+        /// scenario corresponds to a real code change. Empty raises
+        /// <c>LNT004_GroundingEvidenceMissing</c>.
+        /// </summary>
+        public List<GroundingEvidence> GroundingEvidence { get; set; } = new();
     }
 
     /// <summary>
@@ -206,8 +261,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>User-defined tags for filtering.</summary>
         public List<string> Tags { get; set; } = new();
 
-        /// <summary>Schema version for forward compatibility.</summary>
-        public int SchemaVersion { get; set; } = 1;
+        /// <summary>Schema version for forward compatibility. v2 added
+        /// the F27 pinnacle fields: Technique, InvariantsAddressed, and
+        /// GroundingEvidence on <see cref="Scenario"/>.</summary>
+        public int SchemaVersion { get; set; } = 2;
 
         /// <summary>UTC timestamp when the scenario was generated.</summary>
         public DateTimeOffset GeneratedAt { get; set; }
@@ -217,6 +274,43 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>UTC timestamp when the scenario was curated.</summary>
         public DateTimeOffset? CuratedAt { get; set; }
+    }
+
+    /// <summary>
+    /// A single anchoring point connecting a scenario to a specific span of
+    /// the diff under test (F27 "pinnacle" item 6). Reviewers use this to
+    /// confirm each generated scenario corresponds to a real code change,
+    /// rather than being a plausible-sounding hallucination.
+    ///
+    /// <para>The LLM is required to emit at least one <see cref="GroundingEvidence"/>
+    /// per scenario, citing the file and line range that motivates the test
+    /// case. The linter rule <c>LNT004_GroundingEvidenceMissing</c> rejects
+    /// scenarios with an empty list.</para>
+    /// </summary>
+    public sealed class GroundingEvidence
+    {
+        /// <summary>Repository-relative file path from the diff (e.g. <c>Service/.../LiveTableInsightsController.cs</c>).</summary>
+        public string File { get; set; }
+
+        /// <summary>First changed line in the file. Inclusive.</summary>
+        public int StartLine { get; set; }
+
+        /// <summary>Last changed line in the file. Inclusive. Same as <see cref="StartLine"/> for single-line citations.</summary>
+        public int EndLine { get; set; }
+
+        /// <summary>
+        /// Short human-readable reason this slice motivates the scenario,
+        /// e.g. "MaxStrictDateRangeDays constant introduces a 60-day cap".
+        /// Max 240 chars.
+        /// </summary>
+        public string Reason { get; set; }
+
+        /// <summary>
+        /// Optional invariant ID this evidence anchors to. When set, it must
+        /// match an entry in <see cref="Scenario.InvariantsAddressed"/> —
+        /// the linter cross-checks consistency under <c>LNT008_EvidenceConsistency</c>.
+        /// </summary>
+        public string InvariantId { get; set; }
     }
 
     // ──────────────────────────────────────────────

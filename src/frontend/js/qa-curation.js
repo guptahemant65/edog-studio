@@ -13,6 +13,9 @@ class QaCuration {
     this._scenarios = [];       // full scenario objects
     this._approved = new Set(); // set of approved scenario IDs
     this._analysisId = null;
+    this._lintFindings = [];    // F27 item 5 — deterministic linter findings
+    this._lintByScenario = new Map(); // scenarioId -> array of findings
+    this._batchFindings = [];   // findings without a scenarioId (coverage gaps)
   }
 
   init() {
@@ -20,11 +23,36 @@ class QaCuration {
     this._panel.registerCuration(this);
   }
 
-  /** Load scenarios from analysis stage. */
-  loadScenarios(scenarios, analysisId) {
+  /**
+   * Load scenarios from analysis stage.
+   *
+   * @param {Array} scenarios — full scenario objects from QaScenarioGenerated.
+   * @param {string} analysisId — correlation between analysis and curation.
+   * @param {Array} [lintFindings] — F27 item 5 deterministic findings, optional.
+   *   Each entry: { code, severity, message, scenarioId, invariantId }.
+   *   Findings without a scenarioId are treated as batch-level (coverage gaps).
+   */
+  loadScenarios(scenarios, analysisId, lintFindings) {
     this._scenarios = scenarios.slice();
     this._analysisId = analysisId;
     this._approved = new Set(this._scenarios.map(function (s) { return s.id; }));
+
+    // Index findings for O(1) lookup during card render.
+    this._lintFindings = Array.isArray(lintFindings) ? lintFindings.slice() : [];
+    this._lintByScenario = new Map();
+    this._batchFindings = [];
+    for (var i = 0; i < this._lintFindings.length; i++) {
+      var f = this._lintFindings[i];
+      if (!f) continue;
+      if (f.scenarioId) {
+        if (!this._lintByScenario.has(f.scenarioId)) {
+          this._lintByScenario.set(f.scenarioId, []);
+        }
+        this._lintByScenario.get(f.scenarioId).push(f);
+      } else {
+        this._batchFindings.push(f);
+      }
+    }
     this._render();
   }
 
@@ -76,6 +104,12 @@ class QaCuration {
     bulkBar.appendChild(deselectAll);
 
     this._container.appendChild(bulkBar);
+
+    // Batch-level lint findings (coverage gaps, truth-table cells) appear
+    // above the scenario list as a collapsible panel.
+    if (this._batchFindings && this._batchFindings.length > 0) {
+      this._container.appendChild(this._renderBatchFindings());
+    }
 
     // Scenario list
     this._listEl = document.createElement('div');
@@ -177,11 +211,42 @@ class QaCuration {
       metaEl.appendChild(stimEl);
     }
 
+    // F27 item 3: technique pill (BoundaryTriplet, Counterfactual, ...).
+    // Falls back gracefully for older synthetic scenarios that don't set it.
+    var technique = scn.technique || scn.Technique;
+    if (technique && technique !== 'NotSpecified') {
+      var techEl = document.createElement('span');
+      techEl.className = 'qa-technique-badge qa-tech-' + technique.toLowerCase();
+      techEl.textContent = this._humanizeTechnique(technique);
+      techEl.title = 'Test technique applied to this scenario';
+      metaEl.appendChild(techEl);
+    }
+
     var expCount = document.createElement('span');
     expCount.className = 'qa-exp-count';
     var n = scn.expectations ? scn.expectations.length : 0;
     expCount.textContent = n + ' expectation' + (n !== 1 ? 's' : '');
     metaEl.appendChild(expCount);
+
+    // F27 item 5: lint summary pill (Error / Warning counts) per card.
+    var perScn = this._lintByScenario.get(scn.id);
+    if (perScn && perScn.length > 0) {
+      var errCount = 0, warnCount = 0;
+      for (var li = 0; li < perScn.length; li++) {
+        var sev = (perScn[li].severity || '').toLowerCase();
+        if (sev === 'error') errCount++;
+        else if (sev === 'warning') warnCount++;
+      }
+      if (errCount + warnCount > 0) {
+        var lintBadge = document.createElement('span');
+        lintBadge.className = 'qa-lint-badge ' + (errCount > 0 ? 'qa-lint-error' : 'qa-lint-warn');
+        lintBadge.textContent = '\u2696 ' + (errCount > 0 ? (errCount + ' error') : '') +
+                                (errCount > 0 && warnCount > 0 ? ', ' : '') +
+                                (warnCount > 0 ? (warnCount + ' warn') : '');
+        lintBadge.title = 'Lint findings on this scenario — see details below.';
+        metaEl.appendChild(lintBadge);
+      }
+    }
 
     body.appendChild(metaEl);
 
@@ -190,6 +255,18 @@ class QaCuration {
       descEl.className = 'qa-curation-desc';
       descEl.textContent = scn.description;
       body.appendChild(descEl);
+    }
+
+    // F27 item 6: grounding evidence expandable. Hidden by default; click
+    // chevron to reveal the file:line ranges and rationales the LLM cited.
+    var grounding = scn.groundingEvidence || scn.GroundingEvidence;
+    if (Array.isArray(grounding) && grounding.length > 0) {
+      body.appendChild(this._renderGrounding(grounding));
+    }
+
+    // F27 item 5: per-scenario lint findings list.
+    if (perScn && perScn.length > 0) {
+      body.appendChild(this._renderScenarioFindings(perScn));
     }
 
     card.appendChild(body);
@@ -313,5 +390,149 @@ class QaCuration {
       }
     }
     this._renderList();
+  }
+
+  // ── F27 helpers ──
+
+  /** Convert PascalCase technique to a human-readable label. */
+  _humanizeTechnique(t) {
+    if (!t) return '';
+    return t.replace(/([a-z])([A-Z])/g, '$1 $2');
+  }
+
+  /**
+   * Render the grounding-evidence expander: chevron + list of file:line + reason.
+   * Each evidence item is read-only; clicking the chevron toggles the body.
+   */
+  _renderGrounding(grounding) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-grounding';
+
+    var toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'qa-grounding-toggle';
+    toggle.textContent = '\u25B8 Grounding (' + grounding.length + ')';
+    toggle.setAttribute('aria-expanded', 'false');
+
+    var body = document.createElement('div');
+    body.className = 'qa-grounding-body';
+    body.style.display = 'none';
+
+    for (var i = 0; i < grounding.length; i++) {
+      var ev = grounding[i];
+      if (!ev) continue;
+      var row = document.createElement('div');
+      row.className = 'qa-grounding-row';
+
+      var loc = document.createElement('code');
+      loc.className = 'qa-grounding-loc';
+      var locText = (ev.file || ev.File || '(unknown)');
+      var start = ev.startLine || ev.StartLine;
+      var end = ev.endLine || ev.EndLine;
+      if (start) locText += ':' + start + (end && end !== start ? '-' + end : '');
+      loc.textContent = locText;
+      row.appendChild(loc);
+
+      var reason = document.createElement('span');
+      reason.className = 'qa-grounding-reason';
+      reason.textContent = ev.reason || ev.Reason || '';
+      row.appendChild(reason);
+
+      var invId = ev.invariantId || ev.InvariantId;
+      if (invId) {
+        var inv = document.createElement('span');
+        inv.className = 'qa-grounding-inv';
+        inv.textContent = invId;
+        inv.title = 'Linked invariant';
+        row.appendChild(inv);
+      }
+
+      body.appendChild(row);
+    }
+
+    toggle.addEventListener('click', function () {
+      var open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      toggle.textContent = (open ? '\u25B8' : '\u25BE') + ' Grounding (' + grounding.length + ')';
+    });
+
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  /** Render the per-scenario lint findings as a stacked list of severity rows. */
+  _renderScenarioFindings(findings) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-lint-findings';
+
+    for (var i = 0; i < findings.length; i++) {
+      var f = findings[i];
+      if (!f) continue;
+      var row = document.createElement('div');
+      var sev = (f.severity || 'info').toLowerCase();
+      row.className = 'qa-lint-row qa-lint-' + sev;
+
+      var code = document.createElement('code');
+      code.className = 'qa-lint-code';
+      code.textContent = f.code || 'LNT???';
+      row.appendChild(code);
+
+      var msg = document.createElement('span');
+      msg.className = 'qa-lint-msg';
+      msg.textContent = f.message || '';
+      row.appendChild(msg);
+
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  /** Render the batch-level lint findings panel (coverage gaps, etc.). */
+  _renderBatchFindings() {
+    var panel = document.createElement('div');
+    panel.className = 'qa-lint-batch';
+
+    var header = document.createElement('div');
+    header.className = 'qa-lint-batch-header';
+    var errCount = 0, warnCount = 0;
+    for (var i = 0; i < this._batchFindings.length; i++) {
+      var sev = (this._batchFindings[i].severity || '').toLowerCase();
+      if (sev === 'error') errCount++;
+      else if (sev === 'warning') warnCount++;
+    }
+    header.textContent = '\u2696 Batch lint findings — ' + errCount + ' error, ' + warnCount + ' warning';
+    panel.appendChild(header);
+
+    var list = document.createElement('div');
+    list.className = 'qa-lint-batch-list';
+    for (var j = 0; j < this._batchFindings.length; j++) {
+      var f = this._batchFindings[j];
+      if (!f) continue;
+      var row = document.createElement('div');
+      var sv = (f.severity || 'info').toLowerCase();
+      row.className = 'qa-lint-row qa-lint-' + sv;
+
+      var code = document.createElement('code');
+      code.className = 'qa-lint-code';
+      code.textContent = f.code || 'LNT???';
+      row.appendChild(code);
+
+      var msg = document.createElement('span');
+      msg.className = 'qa-lint-msg';
+      msg.textContent = f.message || '';
+      row.appendChild(msg);
+
+      if (f.invariantId) {
+        var inv = document.createElement('span');
+        inv.className = 'qa-lint-inv';
+        inv.textContent = f.invariantId;
+        row.appendChild(inv);
+      }
+      list.appendChild(row);
+    }
+    panel.appendChild(list);
+    return panel;
   }
 }

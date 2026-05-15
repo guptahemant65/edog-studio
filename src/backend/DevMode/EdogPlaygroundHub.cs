@@ -957,6 +957,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
             List<Scenario> scenarios = null;
+            List<LintFinding> lintFindings = null;
 
             // Phase 1: Fetch real PR diff from ADO via dev-server proxy
             await BroadcastAnalysisProgressAsync(correlationId, analysisId, "fetching_diff", 0, 6, 5,
@@ -964,6 +965,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             string realDiff = null;
             string diffError = null;
+            PrContext prContext = null;
             if (!string.IsNullOrEmpty(request.PrUrl))
             {
                 try
@@ -999,7 +1001,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                                 sw.ElapsedMilliseconds).ConfigureAwait(false);
                         }
 
-                        System.Diagnostics.Debug.WriteLine($"[QA] Real PR diff fetched: {realDiff?.Length ?? 0} chars, {filesDiffed} files");
+                        // F27 item 1: parse PR contract context (best-effort).
+                        prContext = TryParsePrContext(diffResult);
+
+                        System.Diagnostics.Debug.WriteLine($"[QA] Real PR diff fetched: {realDiff?.Length ?? 0} chars, {filesDiffed} files; contract={(prContext != null ? "present" : "absent")}");
                     }
                     else
                     {
@@ -1096,8 +1101,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     };
 
                     // Run the real analyzer with live progress callback
-                    var result = await analyzer.AnalyzeAsync(diffToAnalyze, ct, progressCallback).ConfigureAwait(false);
+                    var result = await analyzer.AnalyzeAsync(diffToAnalyze, prContext, ct, progressCallback).ConfigureAwait(false);
                     scenarios = result?.Scenarios;
+                    lintFindings = result?.LintFindings;
 
                     // Surface degradation flags as warnings
                     if (result?.DegradationFlags?.Count > 0)
@@ -1202,6 +1208,21 @@ namespace Microsoft.LiveTable.Service.DevMode
                             type = ConvertExpectationTypeToSnakeCase(e.Type),
                             topic = e.Topic,
                             description = $"{e.Type} on '{e.Topic}'"
+                        }).ToList(),
+                        // F27 items 3 + 6: test-technique taxonomy and grounding evidence.
+                        // Surfaced to the curation UI so reviewers can see what
+                        // testing pattern the LLM intended and which diff lines
+                        // each scenario is grounded in. Defaults are safe for
+                        // older synthetic scenarios that don't populate them.
+                        technique = scn.Technique.ToString(),
+                        invariantsAddressed = scn.InvariantsAddressed ?? new List<string>(),
+                        groundingEvidence = (scn.GroundingEvidence ?? new List<GroundingEvidence>()).Select(g => new
+                        {
+                            file = g.File,
+                            startLine = g.StartLine,
+                            endLine = g.EndLine,
+                            reason = g.Reason,
+                            invariantId = g.InvariantId,
                         }).ToList()
                     }
                 }).ConfigureAwait(false);
@@ -1211,10 +1232,252 @@ namespace Microsoft.LiveTable.Service.DevMode
                     await Task.Delay(300, ct).ConfigureAwait(false);
             }
 
+            // F27 item 5: surface deterministic lint findings produced by
+            // EdogQaScenarioLinter. One batched event before the "complete"
+            // phase so the curation UI can render badges and a findings panel
+            // in the same render pass as the scenarios.
+            if (lintFindings != null && lintFindings.Count > 0)
+            {
+                await BroadcastQaEventAsync("QaLintFindings", new
+                {
+                    eventType = "QaLintFindings",
+                    correlationId,
+                    analysisId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    totalCount = lintFindings.Count,
+                    errorCount = lintFindings.Count(f => f.Severity == LintSeverity.Error),
+                    warningCount = lintFindings.Count(f => f.Severity == LintSeverity.Warning),
+                    infoCount = lintFindings.Count(f => f.Severity == LintSeverity.Info),
+                    findings = lintFindings.Select(f => new
+                    {
+                        code = f.Code,
+                        severity = f.Severity.ToString().ToLowerInvariant(),
+                        message = f.Message,
+                        scenarioId = f.ScenarioId,
+                        invariantId = f.InvariantId,
+                    }).ToList(),
+                }).ConfigureAwait(false);
+            }
+
             // Phase 6: Complete
             sw.Stop();
             await BroadcastAnalysisProgressAsync(correlationId, analysisId, "complete", 5, 6, 100,
                 $"Analysis complete. {totalScenarios} scenarios ready for curation.", sw.ElapsedMilliseconds).ConfigureAwait(false);
+        }
+
+        // ──────────────────────────────────────────────────────────
+        // F27 "Pinnacle" Quality Gates — item 1: PR context parsing.
+        // ──────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Parse the enriched PR context fields returned by the dev-server's
+        /// <c>/api/ado-proxy/pr-diff</c> endpoint into a typed
+        /// <see cref="PrContext"/>. Returns null only when every field is
+        /// missing — otherwise returns a partially-populated context with
+        /// best-effort sections.
+        /// </summary>
+        /// <remarks>
+        /// The dev-server already applies per-field caps; this method does
+        /// not re-validate sizes. JSON parse failures on individual fields
+        /// are swallowed and recorded in <see cref="PrContext.Warnings"/>
+        /// so they surface as degradation flags on the analysis result.
+        /// </remarks>
+        private static PrContext TryParsePrContext(System.Text.Json.JsonElement diffResult)
+        {
+            try
+            {
+                var ctx = new PrContext();
+                var hasAny = false;
+
+                if (diffResult.TryGetProperty("title", out var titleEl)
+                    && titleEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    ctx.Title = titleEl.GetString();
+                    hasAny |= !string.IsNullOrEmpty(ctx.Title);
+                }
+                if (diffResult.TryGetProperty("author", out var authorEl)
+                    && authorEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    ctx.Author = authorEl.GetString();
+                }
+                if (diffResult.TryGetProperty("description", out var descEl)
+                    && descEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    ctx.Description = descEl.GetString();
+                    hasAny |= !string.IsNullOrEmpty(ctx.Description);
+                }
+
+                if (diffResult.TryGetProperty("workItems", out var wiArr)
+                    && wiArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var wi in wiArr.EnumerateArray())
+                    {
+                        try
+                        {
+                            ctx.WorkItems.Add(new WorkItemSummary
+                            {
+                                Id = wi.TryGetProperty("id", out var idEl)
+                                     && idEl.ValueKind == System.Text.Json.JsonValueKind.Number
+                                     && idEl.TryGetInt64(out var idVal) ? idVal : 0,
+                                Title = wi.TryGetProperty("title", out var t)
+                                        && t.ValueKind == System.Text.Json.JsonValueKind.String
+                                        ? t.GetString() : null,
+                                State = wi.TryGetProperty("state", out var s)
+                                        && s.ValueKind == System.Text.Json.JsonValueKind.String
+                                        ? s.GetString() : null,
+                                AcceptanceCriteria = wi.TryGetProperty("acceptanceCriteria", out var ac)
+                                                     && ac.ValueKind == System.Text.Json.JsonValueKind.String
+                                                     ? ac.GetString() : null,
+                                DescriptionSnippet = wi.TryGetProperty("descriptionSnippet", out var ds)
+                                                     && ds.ValueKind == System.Text.Json.JsonValueKind.String
+                                                     ? ds.GetString() : null,
+                            });
+                            hasAny = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            ctx.Warnings.Add($"work_item_parse_failed: {ex.Message}");
+                        }
+                    }
+                }
+
+                if (diffResult.TryGetProperty("linkedSpecExcerpts", out var specsArr)
+                    && specsArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var sp in specsArr.EnumerateArray())
+                    {
+                        try
+                        {
+                            var url = sp.TryGetProperty("url", out var u)
+                                      && u.ValueKind == System.Text.Json.JsonValueKind.String
+                                      ? u.GetString() : null;
+                            var content = sp.TryGetProperty("content", out var c)
+                                          && c.ValueKind == System.Text.Json.JsonValueKind.String
+                                          ? c.GetString() : null;
+                            if (!string.IsNullOrEmpty(url) || !string.IsNullOrEmpty(content))
+                            {
+                                ctx.LinkedSpecExcerpts.Add(new SpecExcerpt { Url = url, Content = content });
+                                hasAny = true;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ctx.Warnings.Add($"spec_excerpt_parse_failed: {ex.Message}");
+                        }
+                    }
+                }
+
+                if (diffResult.TryGetProperty("apiCatalog", out var catalogEl)
+                    && catalogEl.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    try
+                    {
+                        var cat = new ApiCatalogContext();
+                        if (catalogEl.TryGetProperty("controllers", out var ctrls)
+                            && ctrls.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var c in ctrls.EnumerateArray())
+                            {
+                                if (c.ValueKind == System.Text.Json.JsonValueKind.String)
+                                {
+                                    cat.Controllers.Add(c.GetString());
+                                }
+                            }
+                        }
+                        if (catalogEl.TryGetProperty("endpoints", out var eps)
+                            && eps.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var ep in eps.EnumerateArray())
+                            {
+                                if (ep.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                                var dict = new Dictionary<string, object>();
+                                foreach (var prop in ep.EnumerateObject())
+                                {
+                                    dict[prop.Name] = prop.Value.Clone();
+                                }
+                                cat.Endpoints.Add(dict);
+                            }
+                        }
+                        if (catalogEl.TryGetProperty("truncated", out var trEl)
+                            && (trEl.ValueKind == System.Text.Json.JsonValueKind.True
+                                || trEl.ValueKind == System.Text.Json.JsonValueKind.False))
+                        {
+                            cat.Truncated = trEl.GetBoolean();
+                        }
+                        if (cat.Endpoints.Count > 0 || cat.Controllers.Count > 0)
+                        {
+                            ctx.ApiCatalog = cat;
+                            hasAny = true;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ctx.Warnings.Add($"api_catalog_parse_failed: {ex.Message}");
+                    }
+                }
+
+                if (diffResult.TryGetProperty("priorTests", out var ptArr)
+                    && ptArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var pt in ptArr.EnumerateArray())
+                    {
+                        try
+                        {
+                            var entry = new PriorTestFile
+                            {
+                                File = pt.TryGetProperty("file", out var f)
+                                       && f.ValueKind == System.Text.Json.JsonValueKind.String
+                                       ? f.GetString() : null,
+                                Controller = pt.TryGetProperty("controller", out var cc)
+                                             && cc.ValueKind == System.Text.Json.JsonValueKind.String
+                                             ? cc.GetString() : null,
+                                TotalMethods = pt.TryGetProperty("totalMethods", out var tm)
+                                               && tm.ValueKind == System.Text.Json.JsonValueKind.Number
+                                               && tm.TryGetInt32(out var tmVal) ? tmVal : 0,
+                            };
+                            if (pt.TryGetProperty("methods", out var m)
+                                && m.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                foreach (var mm in m.EnumerateArray())
+                                {
+                                    if (mm.ValueKind == System.Text.Json.JsonValueKind.String)
+                                    {
+                                        entry.Methods.Add(mm.GetString());
+                                    }
+                                }
+                            }
+                            if (!string.IsNullOrEmpty(entry.File) || entry.Methods.Count > 0)
+                            {
+                                ctx.PriorTests.Add(entry);
+                                hasAny = true;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ctx.Warnings.Add($"prior_test_parse_failed: {ex.Message}");
+                        }
+                    }
+                }
+
+                if (diffResult.TryGetProperty("extrasWarnings", out var warnArr)
+                    && warnArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var w in warnArr.EnumerateArray())
+                    {
+                        if (w.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            ctx.Warnings.Add(w.GetString());
+                        }
+                    }
+                }
+
+                return hasAny ? ctx : null;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[QA] TryParsePrContext failed: {ex.Message}");
+                return null;
+            }
         }
 
         /// <summary>

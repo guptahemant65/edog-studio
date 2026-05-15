@@ -28,6 +28,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         private const int HttpTimeoutSeconds = 300;
         private const string DevServerProxyUrl = "http://localhost:5555/api/openai-proxy/chat";
 
+        // F27 "pinnacle" contract-section caps (item 1). Each section is
+        // independently capped so a single huge field cannot starve the
+        // others of token budget. Total contract overhead capped at ~12K
+        // chars, leaving ample room for diff + graph + DI sections.
+        private const int MaxPrDescriptionChars = 2000;
+        private const int MaxAcceptanceCriteriaCharsPerWorkItem = 800;
+        private const int MaxWorkItemsRendered = 3;
+        private const int MaxSpecExcerptChars = 2500;
+        private const int MaxSpecExcerptsRendered = 2;
+        private const int MaxCatalogEndpointsRendered = 40;
+        private const int MaxPriorTestMethodsRendered = 60;
+
         private readonly HttpClient _httpClient;
         private readonly string _endpoint;
         private readonly string _apiKey;
@@ -200,8 +212,24 @@ Return JSON with a 'scenarios' array. Each scenario:
       ""description"": ""HTTP 200 response within 5s""
     }
   ],
-  ""timeoutMs"": 30000
+  ""timeoutMs"": 30000,
+  ""technique"": ""BoundaryTriplet|Counterfactual|TruthTable|EquivalencePartition|ErrorPath|RegressionGuard|HappyPath"",
+  ""invariantsAddressed"": [""inv-numeric_constant-abc123""],
+  ""groundingEvidence"": [
+    {
+      ""file"": ""Service/.../LiveTableInsightsController.cs"",
+      ""startLine"": 47,
+      ""endLine"": 63,
+      ""reason"": ""Window-validation guard added in PR; this scenario covers the just-above-cap path."",
+      ""invariantId"": ""inv-numeric_constant-abc123""
+    }
+  ]
 }
+
+**Required new fields (F27 pinnacle):**
+- `technique`: which test-design technique generated this scenario. Required, non-NotSpecified. See TECHNIQUES section below for mapping from invariant kind.
+- `invariantsAddressed`: list of invariant IDs (from the ""Code Invariants Detected in Diff"" section in the user message) this scenario covers. At least one entry required when any invariants were detected. Multi-invariant scenarios (e.g. a boundary triplet that also exercises the matching explicit_error throw) cite all relevant IDs.
+- `groundingEvidence`: list of {file, startLine, endLine, reason, invariantId?} entries anchoring the scenario to the diff. At least one entry required. `reason` is a short justification (max 240 chars); `invariantId` is optional and must match an entry in `invariantsAddressed` when present.
 
 **Priority Guidance:**
 - Focus on ERROR PATHS and EDGE CASES (80% weight)
@@ -223,6 +251,129 @@ Return JSON with a 'scenarios' array. Each scenario:
 - Generate expectations for topics not in ValidTopics
 - Use ambiguous matchers (always specify exact fields to match)
 - Generate duplicate scenarios (each should test a distinct path)
+
+**TECHNIQUES (apply these to invariants surfaced in the user message):**
+
+The user message will include a ""Code Invariants Detected in Diff"" section. For each invariant kind, use the matching technique below. Each invariant ID (e.g. ""inv-numeric_constant-abc123"") MUST be cited in at least one scenario's description.
+
+1. *numeric_constant* / *temporal_threshold* → **Boundary triplet**: emit three scenarios — at the boundary, just below (valid), and just above (invalid). Example: const ""MaxStrictDateRangeDays = 60"" with a guard ""endTime - startTime > TimeSpan.FromDays(60)"" yields scenarios with 59-day, 60-day, and 61-day windows.
+
+2. *removed_parameter* → **Counterfactual**: emit a scenario sending the removed parameter and assert the new behavior (silently ignored OR rejected — pick based on the PR description / AC; if ambiguous, lean ""silently ignored"" because OpenAPI removal is non-breaking by convention).
+
+3. *added_parameter* (multiple on same method) → **Truth-table grid**: for two added parameters with null-defaultable types, emit the full 2x2 — (null,null), (null,set), (set,null), (set,set). For three params emit a curated 2^3 subset of the four most-distinct cells.
+
+4. *comparison_predicate* → **Equivalence partition** plus boundary: at least one scenario in each side of the comparison (e.g. ""x > MaxLimit"" produces ""x = MaxLimit"" boundary plus ""x = MaxLimit + 1"" failure plus ""x = 0"" baseline).
+
+5. *explicit_error* → **Error-path coverage**: one scenario that triggers the throw site exactly, with EventPresent assertion on the http event having statusCode matching the exception's HTTP mapping and body.message containing the literal error text.
+
+**FEW-SHOT EXEMPLARS:**
+
+Below are abbreviated example outputs for the most common invariant patterns. They show shape and rigor — your real output will differ in path, fields, and topic specifics.
+
+Example A — Boundary triplet around ""inv-numeric_constant-MaxStrictDateRangeDays=60"":
+{
+  ""scenarios"": [
+    {
+      ""title"": ""59-day window: just below 60-day cap returns 200"",
+      ""description"": ""Boundary-below test for inv-numeric_constant-MaxStrictDateRangeDays. Covers the largest accepted window per the new strict-range guard."",
+      ""category"": ""EdgeCase"",
+      ""priority"": 2,
+      ""technique"": ""BoundaryTriplet"",
+      ""invariantsAddressed"": [""inv-numeric_constant-MaxStrictDateRangeDays""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 47, ""endLine"": 63, ""reason"": ""Strict-range guard added; this is the just-below-cap path."", ""invariantId"": ""inv-numeric_constant-MaxStrictDateRangeDays"" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?startTime=2025-03-13T00:00:00Z&endTime=2025-05-11T00:00:00Z"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}, ""timeWindow"": { ""withinMs"": 5000 }}]
+    },
+    {
+      ""title"": ""60-day window: exactly at cap returns 200"",
+      ""description"": ""Boundary-exact test for inv-numeric_constant-MaxStrictDateRangeDays. The guard uses '>' not '>=' so 60d must succeed."",
+      ""category"": ""EdgeCase"",
+      ""priority"": 1,
+      ""technique"": ""BoundaryTriplet"",
+      ""invariantsAddressed"": [""inv-numeric_constant-MaxStrictDateRangeDays""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 47, ""endLine"": 63, ""reason"": ""Boundary equality; '>' guard means 60d is still valid."", ""invariantId"": ""inv-numeric_constant-MaxStrictDateRangeDays"" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?startTime=2025-03-12T00:00:00Z&endTime=2025-05-11T00:00:00Z"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}, ""timeWindow"": { ""withinMs"": 5000 }}]
+    },
+    {
+      ""title"": ""61-day window: one day over cap returns 400"",
+      ""description"": ""Boundary-above test for inv-numeric_constant-MaxStrictDateRangeDays. Covers inv-explicit_error BadRequestException 'Date range cannot exceed' from the same change."",
+      ""category"": ""ErrorPath"",
+      ""priority"": 1,
+      ""technique"": ""BoundaryTriplet"",
+      ""invariantsAddressed"": [""inv-numeric_constant-MaxStrictDateRangeDays"", ""inv-explicit_error-BadRequestException""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 47, ""endLine"": 63, ""reason"": ""Throw site under the strict-range guard; exercises both invariants."", ""invariantId"": ""inv-explicit_error-BadRequestException"" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?startTime=2025-03-11T00:00:00Z&endTime=2025-05-11T00:00:00Z"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 400 }, ""contains"": { ""body.message"": ""cannot exceed"" }}, ""timeWindow"": { ""withinMs"": 5000 }}]
+    }
+  ]
+}
+
+Example B — Counterfactual for ""inv-removed_parameter-dateRange"":
+{
+  ""scenarios"": [
+    {
+      ""title"": ""Legacy dateRange query param is silently ignored"",
+      ""description"": ""Counterfactual for inv-removed_parameter-dateRange. Confirms backward-compatible behavior: clients still sending '?dateRange=last7d' get the default 7-day window response (no 400, no error echo)."",
+      ""category"": ""Regression"",
+      ""priority"": 2,
+      ""technique"": ""Counterfactual"",
+      ""invariantsAddressed"": [""inv-removed_parameter-dateRange""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 33, ""endLine"": 41, ""reason"": ""dateRange [FromQuery] parameter removed in this PR; verify legacy callers don't 400."", ""invariantId"": ""inv-removed_parameter-dateRange"" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?dateRange=last7d"" }},
+      ""expectations"": [
+        { ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}, ""timeWindow"": { ""withinMs"": 5000 }},
+        { ""id"": ""exp-2"", ""type"": ""EventAbsent"", ""topic"": ""log"", ""matcher"": { ""contains"": { ""message"": ""dateRange"" }, ""exact"": { ""level"": ""Error"" }}}
+      ]
+    }
+  ]
+}
+
+Example C — 2x2 truth table for ""inv-added_parameter-startTime"" and ""inv-added_parameter-endTime"":
+{
+  ""scenarios"": [
+    {
+      ""title"": ""Both startTime and endTime omitted: defaults to last 7 days"",
+      ""description"": ""Truth-table cell (null,null). Covers default-window resolution."",
+      ""category"": ""HappyPath"", ""priority"": 2,
+      ""technique"": ""TruthTable"",
+      ""invariantsAddressed"": [""inv-added_parameter-startTime"", ""inv-added_parameter-endTime""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 33, ""endLine"": 41, ""reason"": ""Method signature gained startTime and endTime; this cell exercises both-null."" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}}]
+    },
+    {
+      ""title"": ""Only endTime set: startTime backfilled as endTime - 7d"",
+      ""description"": ""Truth-table cell (null,set). Verifies asymmetric default behavior."",
+      ""category"": ""EdgeCase"", ""priority"": 2,
+      ""technique"": ""TruthTable"",
+      ""invariantsAddressed"": [""inv-added_parameter-startTime"", ""inv-added_parameter-endTime""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 33, ""endLine"": 41, ""reason"": ""(null,set) cell; covers endTime-only resolution path."" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?endTime=2025-05-11T00:00:00Z"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}}]
+    },
+    {
+      ""title"": ""Only startTime set: endTime forward-filled as startTime + 7d"",
+      ""description"": ""Truth-table cell (set,null). Mirror of the (null,set) case."",
+      ""category"": ""EdgeCase"", ""priority"": 2,
+      ""technique"": ""TruthTable"",
+      ""invariantsAddressed"": [""inv-added_parameter-startTime"", ""inv-added_parameter-endTime""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 33, ""endLine"": 41, ""reason"": ""(set,null) cell; covers startTime-only resolution path."" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?startTime=2025-05-04T00:00:00Z"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}}]
+    },
+    {
+      ""title"": ""Both set: explicit window honored without modification"",
+      ""description"": ""Truth-table cell (set,set). Verifies pass-through when caller fully specifies the window."",
+      ""category"": ""HappyPath"", ""priority"": 2,
+      ""technique"": ""TruthTable"",
+      ""invariantsAddressed"": [""inv-added_parameter-startTime"", ""inv-added_parameter-endTime""],
+      ""groundingEvidence"": [{ ""file"": ""Service/.../LiveTableInsightsController.cs"", ""startLine"": 33, ""endLine"": 41, ""reason"": ""(set,set) cell; verifies pass-through without modification."" }],
+      ""stimulus"": { ""type"": ""HttpRequest"", ""httpRequest"": { ""method"": ""GET"", ""path"": ""/api/v1/insights/summary?startTime=2025-05-01T00:00:00Z&endTime=2025-05-08T00:00:00Z"" }},
+      ""expectations"": [{ ""id"": ""exp-1"", ""type"": ""EventPresent"", ""topic"": ""http"", ""matcher"": { ""exact"": { ""statusCode"": 200 }}}]
+    }
+  ]
+}
 
 Return ONLY valid JSON, no markdown, no explanation text.";
         }
@@ -305,6 +456,14 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                 sb.AppendLine();
             }
 
+            // ──────────────────────────────────────────────────────────
+            // F27 "pinnacle" Sections 1.5a–1.5d — contract context (item 1).
+            // Skipped silently when request.PrContext is null; sections
+            // within emit a "[unavailable: reason]" marker when the
+            // dev-server reported a fetch failure for that specific field.
+            // ──────────────────────────────────────────────────────────
+            AppendContractSections(sb, request.PrContext);
+
             // Section 2: Diff Content (truncated)
             sb.AppendLine("# Code Diff");
             sb.AppendLine();
@@ -386,6 +545,208 @@ Return ONLY valid JSON, no markdown, no explanation text.";
             }
 
             return sb.ToString();
+        }
+
+        // ──────────────────────────────────────────────────────────
+        // F27 "Pinnacle" Contract Sections (item 1)
+        // ──────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Append PR contract context sections (PR Description, Work Item
+        /// Acceptance Criteria, Linked Spec Excerpts, API Catalog, Prior
+        /// Tests) to the user message.
+        /// </summary>
+        /// <remarks>
+        /// All sections are independently degraded — an empty/missing field
+        /// is silently skipped. The header for each section is only emitted
+        /// when the field has content, so the prompt stays clean when the
+        /// dev-server couldn't fetch anything (e.g. no PR URL, no ADO auth).
+        ///
+        /// Per-field caps enforced here are a defence-in-depth complement
+        /// to the dev-server's own caps in <c>_collect_pr_context_extras</c>.
+        /// </remarks>
+        private static void AppendContractSections(StringBuilder sb, PrContext ctx)
+        {
+            if (ctx == null) return;
+
+            // Section 1.5a — PR Description
+            if (!string.IsNullOrWhiteSpace(ctx.Description))
+            {
+                sb.AppendLine("# Pull Request Contract");
+                sb.AppendLine();
+                if (!string.IsNullOrWhiteSpace(ctx.Title))
+                {
+                    sb.AppendLine($"**Title:** {ctx.Title}");
+                }
+                if (!string.IsNullOrWhiteSpace(ctx.Author))
+                {
+                    sb.AppendLine($"**Author:** {ctx.Author}");
+                }
+                sb.AppendLine();
+                sb.AppendLine("**Description:**");
+                sb.AppendLine(Truncate(ctx.Description, MaxPrDescriptionChars));
+                sb.AppendLine();
+            }
+
+            // Section 1.5b — Work Item Acceptance Criteria
+            if (ctx.WorkItems != null && ctx.WorkItems.Count > 0)
+            {
+                sb.AppendLine("# Linked Work Items (acceptance criteria are authoritative)");
+                sb.AppendLine();
+                var workItemsToRender = ctx.WorkItems
+                    .Where(w => w != null)
+                    .Take(MaxWorkItemsRendered)
+                    .ToList();
+                foreach (var wi in workItemsToRender)
+                {
+                    sb.AppendLine($"## WI #{wi.Id} — {wi.Title ?? "(no title)"} [{wi.State ?? "unknown"}]");
+                    if (!string.IsNullOrWhiteSpace(wi.AcceptanceCriteria))
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("**Acceptance Criteria:**");
+                        sb.AppendLine(Truncate(wi.AcceptanceCriteria, MaxAcceptanceCriteriaCharsPerWorkItem));
+                    }
+                    else
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("_[no acceptance criteria recorded on this work item]_");
+                    }
+                    sb.AppendLine();
+                }
+                if (ctx.WorkItems.Count > MaxWorkItemsRendered)
+                {
+                    sb.AppendLine($"_... and {ctx.WorkItems.Count - MaxWorkItemsRendered} more work item(s) omitted_");
+                    sb.AppendLine();
+                }
+            }
+
+            // Section 1.5c — Linked Spec Excerpts (ADO-hosted markdown)
+            if (ctx.LinkedSpecExcerpts != null && ctx.LinkedSpecExcerpts.Count > 0)
+            {
+                sb.AppendLine("# Linked Specification Excerpts");
+                sb.AppendLine();
+                var specsToRender = ctx.LinkedSpecExcerpts
+                    .Where(s => s != null && !string.IsNullOrWhiteSpace(s.Content))
+                    .Take(MaxSpecExcerptsRendered)
+                    .ToList();
+                foreach (var spec in specsToRender)
+                {
+                    sb.AppendLine($"## {spec.Url}");
+                    sb.AppendLine();
+                    sb.AppendLine("```markdown");
+                    sb.AppendLine(Truncate(spec.Content, MaxSpecExcerptChars));
+                    sb.AppendLine("```");
+                    sb.AppendLine();
+                }
+                if (ctx.LinkedSpecExcerpts.Count > MaxSpecExcerptsRendered)
+                {
+                    sb.AppendLine($"_... and {ctx.LinkedSpecExcerpts.Count - MaxSpecExcerptsRendered} more spec link(s) omitted_");
+                    sb.AppendLine();
+                }
+            }
+
+            // Section 1.5d — API Surface (FLT controller endpoints from catalog)
+            if (ctx.ApiCatalog != null
+                && ctx.ApiCatalog.Endpoints != null
+                && ctx.ApiCatalog.Endpoints.Count > 0)
+            {
+                sb.AppendLine("# API Surface (changed controllers)");
+                sb.AppendLine();
+                if (ctx.ApiCatalog.Controllers != null && ctx.ApiCatalog.Controllers.Count > 0)
+                {
+                    sb.AppendLine($"**Controllers in diff:** {string.Join(", ", ctx.ApiCatalog.Controllers)}");
+                    sb.AppendLine();
+                }
+                sb.AppendLine("**Endpoints (verb, path, summary):**");
+                var rendered = 0;
+                foreach (var ep in ctx.ApiCatalog.Endpoints)
+                {
+                    if (ep == null) continue;
+                    if (rendered >= MaxCatalogEndpointsRendered) break;
+                    var verb = TryGetString(ep, "verb") ?? "?";
+                    var path = TryGetString(ep, "url_template") ?? TryGetString(ep, "path") ?? "?";
+                    var summary = TryGetString(ep, "summary") ?? TryGetString(ep, "name") ?? "";
+                    if (!string.IsNullOrEmpty(summary))
+                    {
+                        sb.AppendLine($"- `{verb} {path}` — {summary}");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"- `{verb} {path}`");
+                    }
+                    rendered++;
+                }
+                if (ctx.ApiCatalog.Truncated || ctx.ApiCatalog.Endpoints.Count > MaxCatalogEndpointsRendered)
+                {
+                    sb.AppendLine($"_... endpoint list truncated_");
+                }
+                sb.AppendLine();
+                sb.AppendLine("**RULE: stimulus.path MUST match one of these endpoints exactly.**");
+                sb.AppendLine();
+            }
+
+            // Section 1.5e — Prior Tests
+            if (ctx.PriorTests != null && ctx.PriorTests.Count > 0)
+            {
+                sb.AppendLine("# Prior Test Coverage (avoid duplicates; complement, do not replace)");
+                sb.AppendLine();
+                foreach (var pt in ctx.PriorTests)
+                {
+                    if (pt == null || pt.Methods == null || pt.Methods.Count == 0) continue;
+                    sb.AppendLine($"## {pt.File} ({pt.Controller})");
+                    sb.AppendLine();
+                    var methodsRendered = 0;
+                    foreach (var m in pt.Methods)
+                    {
+                        if (methodsRendered >= MaxPriorTestMethodsRendered) break;
+                        if (string.IsNullOrWhiteSpace(m)) continue;
+                        sb.AppendLine($"- {m}");
+                        methodsRendered++;
+                    }
+                    if (pt.TotalMethods > methodsRendered)
+                    {
+                        sb.AppendLine($"_... {pt.TotalMethods - methodsRendered} more test methods omitted_");
+                    }
+                    sb.AppendLine();
+                }
+            }
+
+            // Section 1.5f — Code Invariants extracted from the diff
+            // (F27 item 2). Rendered via the extractor's helper so the
+            // markdown layout stays in one place.
+            if (ctx.Invariants != null && ctx.Invariants.Count > 0)
+            {
+                var invariantsBlock = EdogQaInvariantExtractor.RenderForPrompt(ctx.Invariants);
+                if (!string.IsNullOrEmpty(invariantsBlock))
+                {
+                    sb.Append(invariantsBlock);
+                }
+            }
+        }
+
+        /// <summary>Cap a string at <paramref name="max"/> chars, appending an explicit truncation marker.</summary>
+        private static string Truncate(string s, int max)
+        {
+            if (string.IsNullOrEmpty(s) || s.Length <= max) return s ?? string.Empty;
+            return s.Substring(0, max) + "\n... [truncated]";
+        }
+
+        /// <summary>Read a string-valued entry from a loosely-typed catalog dictionary.</summary>
+        private static string TryGetString(Dictionary<string, object> dict, string key)
+        {
+            if (dict == null) return null;
+            if (!dict.TryGetValue(key, out var v) || v == null) return null;
+            if (v is string s) return s;
+            // JsonElement support (when the catalog is deserialized as JsonElement).
+            if (v is System.Text.Json.JsonElement je)
+            {
+                if (je.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    return je.GetString();
+                }
+                return je.ToString();
+            }
+            return v.ToString();
         }
 
         // ──────────────────────────────────────────────
@@ -560,8 +921,16 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                     GeneratedBy = "ai",
                     Confidence = Math.Clamp(response.Confidence, 0.0, 1.0),
                     GeneratedAt = DateTimeOffset.UtcNow,
-                    SchemaVersion = 1
-                }
+                    SchemaVersion = 2
+                },
+
+                // F27 item 3 + 6: taxonomy and grounding flow straight from
+                // the LLM DTO. Defaults (NotSpecified / empty lists) are
+                // intentional — the linter (item 5) raises explicit findings
+                // for missing values rather than silently filling them in.
+                Technique = response.Technique,
+                InvariantsAddressed = response.InvariantsAddressed ?? new List<string>(),
+                GroundingEvidence = response.GroundingEvidence ?? new List<GroundingEvidence>(),
             };
 
             return scenario;
@@ -609,6 +978,13 @@ Return ONLY valid JSON, no markdown, no explanation text.";
             public Stimulus Stimulus { get; set; }
             public List<Expectation> Expectations { get; set; }
             public int TimeoutMs { get; set; }
+
+            // F27 item 3 — taxonomy
+            public ScenarioTechnique Technique { get; set; }
+            public List<string> InvariantsAddressed { get; set; }
+
+            // F27 item 6 — grounding evidence
+            public List<GroundingEvidence> GroundingEvidence { get; set; }
         }
     }
 }

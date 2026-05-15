@@ -216,6 +216,137 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
+    /// Per-PR context fed to the LLM scenario generator (F27 QA Testing
+    /// "pinnacle" quality gates — item 1: feed the contract).
+    ///
+    /// <para>All fields are best-effort and optional. The analyzer pipeline
+    /// gracefully degrades when they are null/empty. Populated upstream of
+    /// <see cref="EdogQaCodeAnalyzer.AnalyzeAsync(string, PrContext, CancellationToken, Action{AnalysisProgress})"/>
+    /// — typically by <see cref="EdogPlaygroundHub"/> after fetching the
+    /// enriched <c>/api/ado-proxy/pr-diff</c> response from the dev-server.</para>
+    ///
+    /// <para><b>Token-budget contract:</b> the dev-server applies a first
+    /// round of caps (per-field byte limits) before returning. The
+    /// <see cref="EdogQaLlmProvider"/> applies a second round of caps when
+    /// rendering into the prompt. This double-cap is intentional — the
+    /// network round-trip should not enable arbitrarily large payloads.</para>
+    /// </summary>
+    public sealed class PrContext
+    {
+        /// <summary>PR title, e.g. "Insights v2.0.6 strict date contract".</summary>
+        public string Title { get; set; }
+
+        /// <summary>PR author display name. Informational only.</summary>
+        public string Author { get; set; }
+
+        /// <summary>Plain-text PR description, HTML stripped by dev-server.</summary>
+        public string Description { get; set; }
+
+        /// <summary>Linked work items with acceptance criteria.</summary>
+        public List<WorkItemSummary> WorkItems { get; set; } = new();
+
+        /// <summary>Linked spec markdown excerpts (ADO-hosted only).</summary>
+        public List<SpecExcerpt> LinkedSpecExcerpts { get; set; } = new();
+
+        /// <summary>FLT API catalog filtered to controllers in the diff.</summary>
+        public ApiCatalogContext ApiCatalog { get; set; }
+
+        /// <summary>Existing test files for the changed controllers.</summary>
+        public List<PriorTestFile> PriorTests { get; set; } = new();
+
+        /// <summary>
+        /// Code invariants extracted from the diff by
+        /// <see cref="EdogQaInvariantExtractor"/> (F27 item 2). Populated
+        /// by the analyzer rather than the dev-server, so this list is
+        /// empty when received from the Hub and filled in during
+        /// <see cref="EdogQaCodeAnalyzer.AnalyzeAsync(string, PrContext, CancellationToken, Action{AnalysisProgress})"/>.
+        /// </summary>
+        public List<CodeInvariant> Invariants { get; set; } = new();
+
+        /// <summary>
+        /// Best-effort warnings from the dev-server side. Surfaced as a
+        /// degradation flag rather than blocking generation.
+        /// </summary>
+        public List<string> Warnings { get; set; } = new();
+    }
+
+    /// <summary>Work item summary for the LLM contract section.</summary>
+    public sealed class WorkItemSummary
+    {
+        public long Id { get; set; }
+        public string Title { get; set; }
+        public string State { get; set; }
+        public string AcceptanceCriteria { get; set; }
+        public string DescriptionSnippet { get; set; }
+    }
+
+    /// <summary>Linked spec excerpt for the LLM contract section.</summary>
+    public sealed class SpecExcerpt
+    {
+        public string Url { get; set; }
+        public string Content { get; set; }
+    }
+
+    /// <summary>FLT API catalog filtered to changed controllers.</summary>
+    public sealed class ApiCatalogContext
+    {
+        public List<string> Controllers { get; set; } = new();
+        public List<Dictionary<string, object>> Endpoints { get; set; } = new();
+        public bool Truncated { get; set; }
+    }
+
+    /// <summary>Prior test file for a changed controller.</summary>
+    public sealed class PriorTestFile
+    {
+        public string File { get; set; }
+        public string Controller { get; set; }
+        public List<string> Methods { get; set; } = new();
+        public int TotalMethods { get; set; }
+    }
+
+    /// <summary>
+    /// A code invariant extracted from a PR diff (F27 item 2). Surfaced to
+    /// the LLM so it can reason about what changed structurally rather than
+    /// only what changed textually.
+    ///
+    /// <para>Each invariant is grounded in a specific file:line location so
+    /// the linter (item 5) and the scenario generator can cross-reference
+    /// them — e.g. "boundary triplet around <c>MaxStrictDateRangeDays=60</c>
+    /// at LiveTableInsightsController.cs:24".</para>
+    /// </summary>
+    public sealed class CodeInvariant
+    {
+        /// <summary>
+        /// Kind of invariant. One of:
+        /// <c>numeric_constant</c>, <c>comparison_predicate</c>,
+        /// <c>temporal_threshold</c>, <c>explicit_error</c>,
+        /// <c>removed_parameter</c>, <c>added_parameter</c>.
+        /// </summary>
+        public string Kind { get; set; }
+
+        /// <summary>Symbol name when applicable (e.g. constant identifier).</summary>
+        public string Symbol { get; set; }
+
+        /// <summary>Literal value when applicable (e.g. "60", "7").</summary>
+        public string Value { get; set; }
+
+        /// <summary>
+        /// Predicate or signature text, e.g. "endTime - startTime &gt; TimeSpan.FromDays(60)"
+        /// or a thrown error message.
+        /// </summary>
+        public string Predicate { get; set; }
+
+        /// <summary>File path (relative) where the invariant was detected.</summary>
+        public string File { get; set; }
+
+        /// <summary>Approximate line number in the post-diff file.</summary>
+        public int Line { get; set; }
+
+        /// <summary>Stable identifier of the form "inv-{kind}-{hash6}". Set by the extractor.</summary>
+        public string Id { get; set; }
+    }
+
+    /// <summary>
     /// Structured input for the LLM scenario generation prompt.
     /// </summary>
     public sealed class LlmPromptRequest
@@ -226,6 +357,13 @@ namespace Microsoft.LiveTable.Service.DevMode
         public List<DiRegistration> DiRegistrations { get; set; } = new();
         public List<InterfaceResolution> InterfaceResolutions { get; set; } = new();
         public List<string> ValidTopics { get; set; } = new();
+
+        /// <summary>
+        /// Per-PR contract context (description, WI AC, OpenAPI catalog,
+        /// prior tests). Optional — null when the dev-server did not return
+        /// extras or the Hub did not pass any.
+        /// </summary>
+        public PrContext PrContext { get; set; }
     }
 
     /// <summary>
@@ -278,6 +416,14 @@ namespace Microsoft.LiveTable.Service.DevMode
         public List<InterfaceResolution> InterfaceResolutions { get; set; } = new();
         public List<string> DegradationFlags { get; set; } = new();
         public long TotalDurationMs { get; set; }
+
+        /// <summary>
+        /// Findings from the post-LLM <see cref="EdogQaScenarioLinter"/> (F27
+        /// item 5). Always populated alongside <see cref="Scenarios"/>; an
+        /// empty list means every scenario passed every rule. Severity-Error
+        /// findings indicate scenarios the curator must fix or discard.
+        /// </summary>
+        public List<LintFinding> LintFindings { get; set; } = new();
     }
 
     // ──────────────────────────────────────────────
@@ -345,15 +491,40 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <param name="progressOverride">Optional per-call progress callback (overrides constructor callback).</param>
         /// <returns>Analysis result with scenarios, impact zones, and degradation flags.</returns>
+        /// <remarks>
+        /// Compatibility overload. New callers should prefer the
+        /// <see cref="AnalyzeAsync(string, PrContext, CancellationToken, Action{AnalysisProgress})"/>
+        /// overload that accepts contract context (PR description, work-item
+        /// acceptance criteria, API catalog, prior tests) for F27 QA Testing
+        /// "pinnacle" quality.
+        /// </remarks>
+        public Task<AnalysisResult> AnalyzeAsync(
+            string unifiedDiff,
+            CancellationToken cancellationToken = default,
+            Action<AnalysisProgress> progressOverride = null)
+        {
+            return AnalyzeAsync(unifiedDiff, prContext: null, cancellationToken: cancellationToken, progressOverride: progressOverride);
+        }
+
+        /// <summary>
+        /// Run the full five-layer code understanding pipeline against a PR diff
+        /// with contract context (F27 "pinnacle" quality, item 1).
+        /// </summary>
+        /// <param name="unifiedDiff">Raw unified diff text from ADO REST API.</param>
+        /// <param name="prContext">Best-effort PR contract context. Null is acceptable; pipeline degrades gracefully.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="progressOverride">Optional per-call progress callback (overrides constructor callback).</param>
+        /// <returns>Analysis result with scenarios, impact zones, and degradation flags.</returns>
         public async Task<AnalysisResult> AnalyzeAsync(
             string unifiedDiff,
+            PrContext prContext,
             CancellationToken cancellationToken = default,
             Action<AnalysisProgress> progressOverride = null)
         {
             _activeCallback = progressOverride;
             try
             {
-                return await AnalyzeInternalAsync(unifiedDiff, cancellationToken);
+                return await AnalyzeInternalAsync(unifiedDiff, prContext, cancellationToken);
             }
             finally
             {
@@ -363,6 +534,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private async Task<AnalysisResult> AnalyzeInternalAsync(
             string unifiedDiff,
+            PrContext prContext,
             CancellationToken cancellationToken)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -376,6 +548,23 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ReportProgress("complete", 100, "No code changes detected in diff.");
                 result.TotalDurationMs = sw.ElapsedMilliseconds;
                 return result;
+            }
+
+            // Phase 1b: Extract code invariants from the diff (F27 item 2).
+            // The invariants ride on prContext so the LLM provider can render
+            // them via the same channel as the PR contract; we lazily create
+            // prContext when the caller passed null so the downstream code
+            // need not null-check it again.
+            ReportProgress("invariant_extraction", 10, "Extracting code invariants from diff...");
+            prContext ??= new PrContext();
+            var invariants = EdogQaInvariantExtractor.Extract(unifiedDiff, out var invariantWarnings);
+            prContext.Invariants = invariants;
+            if (invariantWarnings.Count > 0)
+            {
+                foreach (var w in invariantWarnings)
+                {
+                    prContext.Warnings.Add(w);
+                }
             }
 
             // Phase 2: L1+L2 — structural graph (parallel)
@@ -407,7 +596,37 @@ namespace Microsoft.LiveTable.Service.DevMode
             ReportProgress("llm_generation", 75, $"Generating scenarios for {result.ImpactZones.Count} impact zones...");
             result.Scenarios = await GenerateScenariosSafe(
                 result.ImpactZones, result.Graph, result.InterfaceResolutions,
-                unifiedDiff, result.DegradationFlags, cancellationToken);
+                unifiedDiff, prContext, result.DegradationFlags, cancellationToken);
+
+            // Phase 8: Deterministic post-LLM lint (F27 item 5). Runs even if
+            // upstream phases degraded — useful findings exist whenever at
+            // least one scenario was produced. Failures here are reported as
+            // LNT999_RuleFailed by the linter itself; we surface a single
+            // degradation flag if the entire lint pass blew up.
+            try
+            {
+                ReportProgress("lint", 92, $"Linting {result.Scenarios.Count} scenarios...");
+                result.LintFindings = EdogQaScenarioLinter.Lint(result.Scenarios, prContext);
+                var errorCount = result.LintFindings.Count(f => f.Severity == LintSeverity.Error);
+                if (errorCount > 0)
+                {
+                    result.DegradationFlags.Add($"lint: {errorCount} scenario(s) flagged with Error-severity findings");
+                }
+            }
+            catch (Exception ex)
+            {
+                result.DegradationFlags.Add($"lint_failed: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            // Surface PR-context warnings (best-effort enrichment failures)
+            // as degradation flags so the UI shows them next to LLM warnings.
+            if (prContext?.Warnings != null && prContext.Warnings.Count > 0)
+            {
+                foreach (var w in prContext.Warnings)
+                {
+                    result.DegradationFlags.Add($"pr_context: {w}");
+                }
+            }
 
             // Done
             sw.Stop();
@@ -1022,6 +1241,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             CodeGraph graph,
             List<InterfaceResolution> resolutions,
             string diff,
+            PrContext prContext,
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
@@ -1030,7 +1250,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Generate scenarios in parallel across zones (limit to 10 zones max)
             var zonesToProcess = zones.Take(10).ToList();
             var tasks = zonesToProcess.Select(zone => GenerateScenariosForZoneSafe(
-                zone, graph, resolutions, diff, degradationFlags, cancellationToken)).ToList();
+                zone, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)).ToList();
 
             try
             {
@@ -1058,6 +1278,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             CodeGraph graph,
             List<InterfaceResolution> resolutions,
             string diff,
+            PrContext prContext,
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
@@ -1071,6 +1292,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     ? _diRegistryProvider.GetAll()
                     : new List<DiRegistration>(),
                 ValidTopics = ValidTopics,
+                PrContext = prContext,
             };
 
             try

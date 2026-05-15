@@ -223,6 +223,38 @@ PR Diff (ADO API)
 - GPT-5.4-pro timeout: Retry once with reduced context. If still fails, present partial results + offer manual scenario creation.
 - All three fail: Show error with "Create Manual Scenarios" CTA.
 
+### 3.5 Pinnacle Quality Pipeline (F27 items 1–6)
+
+The plain pipeline above produces plausible scenarios but, without
+extra discipline, drifts into hallucinated endpoints, missed boundary
+triplets, and scenarios untethered from contract requirements. The
+pinnacle layer hardens it in three stages:
+
+```
+PR Diff
+   │
+   ├──→ [PR Contract Context]   item 1 — description + ACs + OpenAPI + prior tests
+   │
+   ├──→ [Invariant Extractor]   item 2 — regex scan of diff hunks for numeric
+   │                                     constants, comparisons, temporal thresholds,
+   │                                     explicit errors, added/removed parameters.
+   │
+   ├──→ [Few-shot Exemplars]    item 4 — three exemplars (boundary triplet,
+   │                                     counterfactual, 2×2 truth table) inject
+   │                                     concrete patterns into the system prompt.
+   │
+   ├──→ [LLM (GPT-5.4-pro)]     emits scenarios with:
+   │                              - technique (item 3) — taxonomy of techniques
+   │                              - invariantsAddressed — links to extracted invariants
+   │                              - groundingEvidence (item 6) — file:line + reason
+   │
+   └──→ [Scenario Linter]       item 5 — 10 deterministic rules that catch drift
+                                 before scenarios reach the curation UI.
+```
+
+The linter rules are catalogued in §11. The schema additions (technique,
+invariantsAddressed, groundingEvidence) appear in §4.1.
+
 ---
 
 ## 4. Scenario Model
@@ -289,13 +321,33 @@ PR Diff (ADO API)
       "default": 30000,
       "description": "Max execution time in milliseconds"
     },
+    "technique": {
+      "type": "string",
+      "enum": [
+        "NotSpecified", "BoundaryTriplet", "Counterfactual", "TruthTable",
+        "EquivalencePartition", "ErrorPath", "RegressionGuard", "HappyPath"
+      ],
+      "default": "NotSpecified",
+      "description": "Test technique applied (F27 pinnacle item 3). Surfaced as a colored pill on the curation UI and required by linter rule LNT003."
+    },
+    "invariantsAddressed": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^inv-[a-z_]+-[a-f0-9]{6}$" },
+      "description": "Invariant IDs (from EdogQaInvariantExtractor) that this scenario verifies. Linter rule LNT002 fails if any extracted invariant has zero coverage; LNT008 fails if GroundingEvidence cites an invariant not listed here."
+    },
+    "groundingEvidence": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/GroundingEvidence" },
+      "description": "File:line ranges from the diff that ground this scenario in real code (F27 pinnacle item 6). LNT004 enforces >=1 entry with non-empty file+reason; LNT005 cross-checks each file against the diff."
+    },
     "metadata": {
       "type": "object",
       "properties": {
         "generatedBy": { "type": "string", "enum": ["ai", "manual", "template"] },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "relatedPRFiles": { "type": "array", "items": { "type": "string" } },
-        "tags": { "type": "array", "items": { "type": "string" } }
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "schemaVersion": { "type": "integer", "default": 2, "description": "Bumped to 2 when technique + grounding fields were added." }
       }
     }
   },
@@ -466,6 +518,18 @@ PR Diff (ADO API)
           "type": "string",
           "enum": ["remove_chaos_rule", "restore_flag", "cleanup_state"]
         }
+      }
+    },
+    "GroundingEvidence": {
+      "type": "object",
+      "required": ["file", "reason"],
+      "description": "A file:line range from the diff that the LLM cited as justification for a scenario. Validated by linter rules LNT004 (non-empty) and LNT005 (file appears in diff).",
+      "properties": {
+        "file": { "type": "string", "description": "Repo-relative file path from PrContext.Invariants[].file or PriorTests[].file." },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine":   { "type": "integer", "minimum": 1 },
+        "reason":    { "type": "string", "maxLength": 240, "description": "Why this range motivates the scenario." },
+        "invariantId": { "type": "string", "pattern": "^inv-[a-z_]+-[a-f0-9]{6}$", "description": "Optional invariant linkage. If set, must appear in Scenario.invariantsAddressed (LNT008)." }
       }
     }
   }
@@ -1019,12 +1083,60 @@ Task PostToPr(string runId);                              // Post results to ADO
 // Server → Client (streaming)
 event AnalysisProgress(string phase, int percentComplete);
 event ScenarioGenerated(Scenario scenario);               // Streams as generated
+event LintFindings(List<LintFinding> findings);           // F27 item 5 — emitted once
 event ExecutionStarted(string scenarioId);
 event EventCaptured(string scenarioId, InterceptorEvent evt);
 event ExpectationMatched(string scenarioId, string expectationId, bool passed);
 event ScenarioCompleted(string scenarioId, ScenarioResult result);
 event RunCompleted(string runId, RunResult result);
 ```
+
+---
+
+## 11. Scenario Linter (F27 pinnacle item 5)
+
+`EdogQaScenarioLinter` is a deterministic post-LLM validator. It runs
+after scenario generation and emits findings before the curation UI
+loads. The linter is a pure function of `(scenarios, prContext)` — no
+I/O, no model call-back — which makes its output reproducible and
+trivially unit-testable.
+
+### 11.1 Severity model
+
+| Severity | Meaning | Curator action |
+|---|---|---|
+| `Error`   | Scenario is unusable as-is.           | Must fix or discard before running. |
+| `Warning` | Scenario will execute but quality is below the contract bar. | Recommended fix. |
+| `Info`    | Informational; style or hint.         | Optional. |
+
+### 11.2 Rule catalog
+
+| Code | Severity | What it checks |
+|---|---|---|
+| `LNT001_PathInCatalog`        | Error   | HTTP `stimulus.path` matches an endpoint template in `PrContext.ApiCatalog` (with `{name}` wildcards). Catches hallucinated routes. |
+| `LNT002_InvariantCoverage`    | Warning | Every invariant extracted by `EdogQaInvariantExtractor` is cited by at least one scenario via `invariantsAddressed`. Catches coverage gaps. |
+| `LNT003_TechniqueRequired`    | Error   | `Scenario.technique` is set to a value other than `NotSpecified`. Forces every scenario to declare its testing pattern. |
+| `LNT004_GroundingEvidenceMissing` | Error | `Scenario.groundingEvidence` has at least one entry with non-empty `file` and `reason`. Forces grounding. |
+| `LNT005_GroundingFileInDiff`  | Warning | Each evidence `file` appears in `PrContext.Invariants[].file`, `PrContext.PriorTests[].file`, or matches a controller in `PrContext.ApiCatalog.Controllers` (fuzzy). Catches fabricated file paths. |
+| `LNT006_BoundaryTripletComplete` | Warning | Any `BoundaryTriplet` technique bucket per invariant has ≥3 scenarios (just-below / at / just-above). |
+| `LNT007_CounterfactualHasAbsent` | Warning | `Counterfactual` technique requires at least one `EventAbsent` expectation. |
+| `LNT008_EvidenceConsistency`  | Warning | `GroundingEvidence.invariantId`, when set, is in the scenario's `invariantsAddressed` list. |
+| `LNT009_NoDuplicateStimulus`  | Warning | No two scenarios share the same (method, path, body-hash) — or shape-equivalent key for non-HTTP stimuli. |
+| `LNT010_TruthTableCells`      | Warning | If the diff added N≥2 parameters (`added_parameter` invariants), the batch contains ≥2^min(N,3) `TruthTable` scenarios. |
+| `LNT999_RuleFailed`           | Warning | Safety net — each rule runs under `SafeRun`; a buggy rule cannot poison the entire lint pass. |
+
+### 11.3 Output shape
+
+`Lint(scenarios, prContext)` returns `List<LintFinding>` capped at 200
+entries, stably ordered by `(code, scenarioId, message)` for diff-able
+runs. Each finding carries `{ code, severity, message, scenarioId?,
+invariantId? }`. Findings with no `scenarioId` are batch-level — the
+curation UI renders them in a panel above the scenario list.
+
+The findings list is also surfaced on the C# `AnalysisResult` and
+broadcast over SignalR as a `QaLintFindings` event after the per-
+scenario `QaScenarioGenerated` stream and before the `complete`
+progress event.
 
 ### 8.5 Storage
 

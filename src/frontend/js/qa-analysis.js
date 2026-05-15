@@ -11,6 +11,7 @@ class QaAnalysis {
     this._container = null;
     this._phases = [];        // phase DOM elements
     this._scenarios = [];     // received scenarios
+    this._lintFindings = [];  // F27 item 5 — deterministic lint findings batch
     this._scenarioListEl = null;
     this._cancelBtn = null;
     this._metricsEl = null;
@@ -189,7 +190,7 @@ class QaAnalysis {
   }
 
   onScenarioGenerated(data) {
-    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, ... } }
+    // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, technique, invariantsAddressed, groundingEvidence, ... } }
     var scn = data.scenario;
     if (!scn) return;
     this._scenarios.push(scn);
@@ -243,6 +244,25 @@ class QaAnalysis {
     });
   }
 
+  /**
+   * Receive the deterministic linter batch produced after scenario generation.
+   * Findings flow into the curation stage so reviewers see badges and the
+   * findings panel alongside the scenario list. Severity counts also surface
+   * on the analysis-phase footer as a heads-up.
+   */
+  onLintFindings(data) {
+    if (!data) return;
+    this._lintFindings = Array.isArray(data.findings) ? data.findings.slice() : [];
+    // Surface a non-toast badge in the metrics line — purely informational.
+    var errCount = data.errorCount || 0;
+    var warnCount = data.warningCount || 0;
+    if (this._metricsEl && (errCount + warnCount) > 0) {
+      var existing = this._metricsEl.textContent || '';
+      var badge = '\u2696 ' + errCount + 'E / ' + warnCount + 'W lint';
+      this._metricsEl.textContent = existing ? (existing + ' \u00B7 ' + badge) : badge;
+    }
+  }
+
   _showProceedButton() {
     if (!this._container) return;
     var row = document.createElement('div');
@@ -253,7 +273,7 @@ class QaAnalysis {
     btn.addEventListener('click', () => {
       // Pass scenarios to curation stage
       if (this._panel._curation) {
-        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId());
+        this._panel._curation.loadScenarios(this._scenarios, this._panel.getAnalysisId(), this._lintFindings);
       }
       this._panel.goToStage('curation');
     });
@@ -267,6 +287,7 @@ class QaAnalysis {
   /** Reset for a new analysis */
   reset() {
     this._scenarios = [];
+    this._lintFindings = [];
     this._isComplete = false;
     this._isCancelled = false;
     this._render();

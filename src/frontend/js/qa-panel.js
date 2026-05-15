@@ -264,6 +264,9 @@ class QaPanel {
       case 'QaScenarioGenerated':
         if (this._analysis) this._analysis.onScenarioGenerated(d);
         break;
+      case 'QaLintFindings':
+        if (this._analysis) this._analysis.onLintFindings(d);
+        break;
 
       // Execution events -> qa-execution.js
       case 'QaRunStarted':

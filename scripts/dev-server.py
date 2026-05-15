@@ -719,7 +719,7 @@ def _fetch_pr_diff(pr_url: str) -> dict:
 
     combined_diff = "\n".join(diff_parts)
 
-    return {
+    response = {
         "prId": pr_id,
         "title": title,
         "author": author,
@@ -733,6 +733,216 @@ def _fetch_pr_diff(pr_url: str) -> dict:
         "commonCommit": common_commit[:12],
         "diff": combined_diff,
     }
+
+    # F27 QA "pinnacle" extras — best-effort PR context for LLM scenario
+    # generation. Failures are captured per-field; the diff response above is
+    # always returned even if every enrichment field fails.
+    try:
+        extras = _collect_pr_context_extras(token, base_url, pr_data, change_entries)
+        response.update(extras)
+    except Exception as exc:
+        response["extrasWarnings"] = [f"context_extras_top_level_failed: {exc}"]
+        response["description"] = pr_data.get("description") or ""
+        response["workItems"] = []
+        response["linkedSpecExcerpts"] = []
+        response["apiCatalog"] = None
+        response["priorTests"] = []
+
+    return response
+
+
+# ─────────────────────────────────────────────────────────────
+# F27 QA Testing — PR context enrichment for LLM scenario gen
+# ─────────────────────────────────────────────────────────────
+
+# Per-field caps so enriched response stays bounded.
+_PR_DESCRIPTION_MAX = 4000
+_WI_AC_MAX_CHARS = 1500
+_WI_DESC_MAX_CHARS = 1000
+_WI_MAX_COUNT = 5
+_SPEC_EXCERPT_MAX_CHARS = 4000
+_SPEC_EXCERPT_MAX_COUNT = 3
+_CATALOG_ENDPOINT_LIMIT = 50
+_PRIOR_TEST_METHOD_LIMIT = 60
+
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_HTML_ENTITY_MAP = {
+    "&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">",
+    "&quot;": '"', "&#39;": "'", "&apos;": "'",
+}
+_MD_URL_RE = re.compile(
+    r"https?://[^\s)\"'<>]+\.md(?:[?#][^\s)\"'<>]*)?", re.IGNORECASE
+)
+_TEST_METHOD_SIG_RE = re.compile(
+    r"\[TestMethod[\s\S]{0,200}?\]\s*(?:\[[^\]]+\]\s*)*"
+    r"public\s+(?:async\s+)?(?:Task|void|ValueTask)\s+(\w+)\s*\(",
+)
+
+
+def _strip_html(text: str) -> str:
+    """Strip HTML tags and decode common entities from ADO rich-text fields."""
+    if not text:
+        return ""
+    plain = _HTML_TAG_RE.sub("\n", text)
+    for entity, replacement in _HTML_ENTITY_MAP.items():
+        plain = plain.replace(entity, replacement)
+    # Collapse runs of whitespace but preserve paragraph breaks.
+    plain = re.sub(r"[ \t]+", " ", plain)
+    plain = re.sub(r"\n[ \t]+", "\n", plain)
+    plain = re.sub(r"\n{3,}", "\n\n", plain)
+    return plain.strip()
+
+
+def _collect_pr_context_extras(
+    token: str, base_url: str, pr_data: dict, change_entries: list
+) -> dict:
+    """Best-effort PR context for F27 LLM scenario generation.
+
+    Returns a dict with: description, workItems, linkedSpecExcerpts,
+    apiCatalog, priorTests, extrasWarnings. Each field is independently
+    degraded: failure in one section does NOT prevent the others from
+    being returned.
+
+    Token-budget controlled by the module-level caps. The Hub passes
+    these straight through to the analyzer; the analyzer's
+    BuildUserMessage re-applies its own caps before sending to the LLM.
+    """
+    extras = {
+        "description": "",
+        "workItems": [],
+        "linkedSpecExcerpts": [],
+        "apiCatalog": None,
+        "priorTests": [],
+        "extrasWarnings": [],
+    }
+
+    # 1) Plain-text PR description.
+    raw_desc = (pr_data.get("description") or "").strip()
+    extras["description"] = raw_desc[:_PR_DESCRIPTION_MAX]
+    if len(raw_desc) > _PR_DESCRIPTION_MAX:
+        extras["extrasWarnings"].append(
+            f"description_truncated_from_{len(raw_desc)}_chars"
+        )
+
+    # 2) Work-item acceptance criteria.
+    wi_refs = pr_data.get("workItemRefs") or []
+    org_match = re.search(r"https?://dev\.azure\.com/([^/]+)/", base_url)
+    org = org_match.group(1) if org_match else None
+    for wi_ref in wi_refs[:_WI_MAX_COUNT]:
+        wi_id = wi_ref.get("id")
+        if not wi_id or not org:
+            continue
+        try:
+            wi_url = (
+                f"https://dev.azure.com/{org}/_apis/wit/workitems/{wi_id}"
+                "?fields=System.Title,System.State,"
+                "Microsoft.VSTS.Common.AcceptanceCriteria,System.Description"
+                "&api-version=7.0"
+            )
+            wi_data = _ado_api_get(token, wi_url)
+            fields = wi_data.get("fields", {}) if isinstance(wi_data, dict) else {}
+            ac = _strip_html(
+                fields.get("Microsoft.VSTS.Common.AcceptanceCriteria", "")
+            )
+            desc = _strip_html(fields.get("System.Description", ""))
+            extras["workItems"].append({
+                "id": wi_id,
+                "title": fields.get("System.Title", ""),
+                "state": fields.get("System.State", ""),
+                "acceptanceCriteria": ac[:_WI_AC_MAX_CHARS],
+                "descriptionSnippet": desc[:_WI_DESC_MAX_CHARS],
+            })
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            extras["extrasWarnings"].append(f"wi_{wi_id}_fetch_failed: {exc}")
+
+    # 3) Linked spec excerpts — only ADO-hosted .md URLs are auth-reachable.
+    try:
+        md_urls = _MD_URL_RE.findall(raw_desc or "")
+        seen = set()
+        for url in md_urls:
+            if "dev.azure.com" not in url.lower():
+                continue
+            if url in seen:
+                continue
+            seen.add(url)
+            if len(extras["linkedSpecExcerpts"]) >= _SPEC_EXCERPT_MAX_COUNT:
+                break
+            try:
+                content = _ado_api_get_text(token, url)
+                if content:
+                    extras["linkedSpecExcerpts"].append({
+                        "url": url,
+                        "content": content[:_SPEC_EXCERPT_MAX_CHARS],
+                    })
+            except Exception as exc:  # noqa: BLE001
+                extras["extrasWarnings"].append(
+                    f"spec_fetch_failed_{url[:80]}: {exc}"
+                )
+    except Exception as exc:  # noqa: BLE001
+        extras["extrasWarnings"].append(f"linkedSpecs_failed: {exc}")
+
+    # 4) FLT API catalog filtered to changed controllers; 5) prior tests.
+    flt_repo_path = ""
+    try:
+        flt_repo_path = _get_flt_repo_dir()
+    except Exception:  # noqa: BLE001
+        flt_repo_path = ""
+
+    changed_controllers: set = set()
+    for entry in change_entries or []:
+        item = entry.get("item") or {}
+        path = item.get("path") or ""
+        base = os.path.basename(path)
+        if base.endswith("Controller.cs"):
+            changed_controllers.add(base[: -len(".cs")])
+
+    if changed_controllers and flt_repo_path:
+        try:
+            catalog = extract_catalog(flt_repo_path)
+            endpoints = catalog.get("endpoints", []) if isinstance(catalog, dict) else []
+            filtered = [
+                ep for ep in endpoints
+                if ep.get("controller") in changed_controllers
+            ]
+            if filtered:
+                extras["apiCatalog"] = {
+                    "controllers": sorted(changed_controllers),
+                    "endpoints": filtered[:_CATALOG_ENDPOINT_LIMIT],
+                    "truncated": len(filtered) > _CATALOG_ENDPOINT_LIMIT,
+                }
+        except Exception as exc:  # noqa: BLE001
+            extras["extrasWarnings"].append(f"catalog_failed: {exc}")
+
+        try:
+            test_root = Path(flt_repo_path) / "test"
+            if test_root.is_dir():
+                for ctrl in sorted(changed_controllers):
+                    target = f"{ctrl}Tests.cs"
+                    for hit in test_root.rglob(target):
+                        try:
+                            text = hit.read_text(encoding="utf-8", errors="ignore")
+                            methods = _TEST_METHOD_SIG_RE.findall(text)
+                            if methods:
+                                rel = hit.relative_to(flt_repo_path).as_posix()
+                                extras["priorTests"].append({
+                                    "file": rel,
+                                    "controller": ctrl,
+                                    "methods": methods[:_PRIOR_TEST_METHOD_LIMIT],
+                                    "totalMethods": len(methods),
+                                })
+                        except Exception as exc:  # noqa: BLE001
+                            extras["extrasWarnings"].append(
+                                f"prior_test_read_failed_{hit.name}: {exc}"
+                            )
+                        break  # one canonical test file per controller
+        except Exception as exc:  # noqa: BLE001
+            extras["extrasWarnings"].append(f"prior_tests_failed: {exc}")
+    elif changed_controllers and not flt_repo_path:
+        extras["extrasWarnings"].append(
+            "catalog_and_prior_tests_skipped: flt_repo_path_not_configured"
+        )
+
+    return extras
 
 
 def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workload_type: str = "Lakehouse") -> tuple:
