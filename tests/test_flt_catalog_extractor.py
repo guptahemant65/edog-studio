@@ -374,7 +374,8 @@ class TestParseController:
     def test_query_params_extracted(self):
         endpoints, _ = _parse_controller(SAMPLE_LIVETABLE_CTRL, "LiveTableController.cs")
         dag = next(e for e in endpoints if e["urlTemplate"] == "/liveTable/getLatestDag")
-        assert "showExtendedLineage" in dag["queryParams"]
+        names = [p["name"] for p in dag["queryParams"]]
+        assert "showExtendedLineage" in names
 
     def test_body_template_for_post_with_frombody(self):
         endpoints, _ = _parse_controller(SAMPLE_LIVETABLE_CTRL, "LiveTableController.cs")
@@ -566,3 +567,483 @@ class TestDeriveGroups:
         groups = _derive_groups([{"group": "x"}, {"group": "y"}])
         assert groups[0]["order"] == 0
         assert groups[1]["order"] == 1
+
+
+# ════════════════════════════════════════════════════════════════
+# §12 Query Param Enrichment
+# ════════════════════════════════════════════════════════════════
+
+
+from flt_catalog import (  # noqa: E402
+    _classify_type,
+    _collect_enum_values,
+    _extract_consts,
+    _extract_param_descriptions,
+    _parse_query_params,
+    _resolve_default,
+)
+
+# ── _extract_consts ──────────────────────────────────────────────
+
+
+class TestExtractConsts:
+    def test_int_const(self):
+        text = "private const int DefaultDateRangeDays = 30;"
+        assert _extract_consts(text) == {"DefaultDateRangeDays": 30}
+
+    def test_string_const(self):
+        text = 'private const string DefaultGroupBy = "day";'
+        assert _extract_consts(text) == {"DefaultGroupBy": "day"}
+
+    def test_static_readonly_int(self):
+        text = "public static readonly int DefaultPageSize = 50;"
+        assert _extract_consts(text) == {"DefaultPageSize": 50}
+
+    def test_multiple_consts(self):
+        text = textwrap.dedent("""
+            public class Foo {
+                private const int A = 1;
+                private const string B = "x";
+                public const bool C = true;
+            }
+        """)
+        out = _extract_consts(text)
+        assert out["A"] == 1
+        assert out["B"] == "x"
+        assert out["C"] is True
+
+    def test_no_consts(self):
+        assert _extract_consts("public class Foo { public int X { get; set; } }") == {}
+
+    def test_negative_int(self):
+        text = "private const int X = -5;"
+        assert _extract_consts(text) == {"X": -5}
+
+
+# ── _resolve_default ─────────────────────────────────────────────
+
+
+class TestResolveDefault:
+    def test_literal_int(self):
+        assert _resolve_default("100", {}) == (100, "100", True)
+
+    def test_literal_negative_int(self):
+        assert _resolve_default("-5", {}) == (-5, "-5", True)
+
+    def test_literal_string(self):
+        assert _resolve_default('"sys_dq_metrics"', {}) == ("sys_dq_metrics", '"sys_dq_metrics"', True)
+
+    def test_literal_bool_true(self):
+        assert _resolve_default("true", {}) == (True, "true", True)
+
+    def test_literal_bool_false(self):
+        assert _resolve_default("false", {}) == (False, "false", True)
+
+    def test_literal_null(self):
+        assert _resolve_default("null", {}) == (None, "null", True)
+
+    def test_const_resolved(self):
+        consts = {"DefaultDateRangeDays": 30}
+        assert _resolve_default("DefaultDateRangeDays", consts) == (30, "DefaultDateRangeDays", True)
+
+    def test_const_unresolved(self):
+        # Returns None as value, the literal symbol, resolved=False
+        assert _resolve_default("UnknownConst", {}) == (None, "UnknownConst", False)
+
+    def test_qualified_const_unresolved(self):
+        # Constants.Foo style — keep literal, mark unresolved
+        v, lit, ok = _resolve_default("Constants.Foo", {})
+        assert v is None
+        assert lit == "Constants.Foo"
+        assert ok is False
+
+
+# ── _classify_type ───────────────────────────────────────────────
+
+
+class TestClassifyType:
+    def test_int_scalar(self):
+        kind, nullable = _classify_type("int", set())
+        assert kind == "scalar"
+        assert nullable is False
+
+    def test_nullable_int(self):
+        kind, nullable = _classify_type("int?", set())
+        assert kind == "scalar"
+        assert nullable is True
+
+    def test_string_scalar(self):
+        # In C#, string is implicitly nullable but we don't treat it as nullable
+        # for "required" purposes since absence of a default still means required.
+        kind, nullable = _classify_type("string", set())
+        assert kind == "scalar"
+        assert nullable is False
+
+    def test_guid_nullable(self):
+        kind, nullable = _classify_type("Guid?", set())
+        assert kind == "scalar"
+        assert nullable is True
+
+    def test_datetime_nullable(self):
+        kind, nullable = _classify_type("DateTime?", set())
+        assert kind == "scalar"
+        assert nullable is True
+
+    def test_list_of_guid(self):
+        kind, nullable = _classify_type("List<Guid>", set())
+        assert kind == "list"
+        assert nullable is False
+
+    def test_list_of_enum(self):
+        kind, nullable = _classify_type("List<DagExecutionStatus>", {"DagExecutionStatus"})
+        assert kind == "enum-list"
+        assert nullable is False
+
+    def test_enum_scalar(self):
+        kind, nullable = _classify_type("DagExecutionStatus", {"DagExecutionStatus"})
+        assert kind == "enum"
+        assert nullable is False
+
+    def test_nullable_enum(self):
+        kind, nullable = _classify_type("DagExecutionStatus?", {"DagExecutionStatus"})
+        assert kind == "enum"
+        assert nullable is True
+
+    def test_unknown_type_falls_back_to_scalar(self):
+        kind, nullable = _classify_type("CustomType", set())
+        assert kind == "scalar"
+        assert nullable is False
+
+
+# ── _extract_param_descriptions ──────────────────────────────────
+
+
+class TestExtractParamDescriptions:
+    def test_single_param(self):
+        block = '/// <param name="historyCount">Number of past runs.</param>'
+        assert _extract_param_descriptions(block) == {"historyCount": "Number of past runs."}
+
+    def test_multiple_params(self):
+        block = textwrap.dedent('''
+            /// <param name="startTime">Start of window.</param>
+            /// <param name="endTime">End of window.</param>
+        ''')
+        out = _extract_param_descriptions(block)
+        assert out == {"startTime": "Start of window.", "endTime": "End of window."}
+
+    def test_multi_line_description(self):
+        block = textwrap.dedent('''
+            /// <param name="x">First line.
+            /// Second line.</param>
+        ''')
+        out = _extract_param_descriptions(block)
+        assert "First line." in out["x"]
+        assert "Second line." in out["x"]
+
+    def test_no_params(self):
+        assert _extract_param_descriptions("/// <summary>foo</summary>") == {}
+
+    def test_param_without_description(self):
+        # Self-closing param tag — no description body
+        block = '/// <param name="x"></param>'
+        out = _extract_param_descriptions(block)
+        assert out.get("x", "") == ""
+
+
+# ── _parse_query_params ──────────────────────────────────────────
+
+
+class TestParseQueryParams:
+    def test_simple_bool_with_default(self):
+        params_text = "([FromQuery] bool showExtendedLineage = false)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        assert len(out) == 1
+        p = out[0]
+        assert p["name"] == "showExtendedLineage"
+        assert p["type"] == "bool"
+        assert p["kind"] == "scalar"
+        assert p["default"] is False
+        assert p["defaultLiteral"] == "false"
+        assert p["required"] is False
+
+    def test_nullable_int_with_null_default(self):
+        params_text = "([FromQuery] int? historyCount = null)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["type"] == "int?"
+        assert p["default"] is None
+        assert p["defaultLiteral"] == "null"
+        assert p["required"] is False  # nullable AND has default
+
+    def test_string_with_literal_default(self):
+        params_text = '([FromQuery] string tableName = "sys_dq_metrics")'
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["default"] == "sys_dq_metrics"
+        assert p["required"] is False
+
+    def test_int_with_const_default_resolved(self):
+        params_text = "([FromQuery] int dateRange = DefaultDateRangeDays)"
+        consts = {"DefaultDateRangeDays": 30}
+        out = _parse_query_params(params_text, consts, set(), {})
+        p = out[0]
+        assert p["default"] == 30
+        assert p["defaultLiteral"] == "DefaultDateRangeDays"
+        assert p["required"] is False
+
+    def test_int_with_const_default_unresolved(self):
+        params_text = "([FromQuery] int dateRange = SomeUnknownConst)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["default"] is None
+        assert p["defaultLiteral"] == "SomeUnknownConst"
+
+    def test_required_when_no_default_non_nullable(self):
+        params_text = "([FromQuery] string status)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["required"] is True
+        assert p["default"] is None
+
+    def test_optional_when_nullable_no_default(self):
+        params_text = "([FromQuery] Guid? iterationId)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["required"] is False
+        assert p["type"] == "Guid?"
+
+    def test_list_of_guid(self):
+        params_text = "([FromQuery] List<Guid> mlvExecutionDefinitionIds = null)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["kind"] == "list"
+        assert p["type"] == "List<Guid>"
+        assert p["required"] is False
+
+    def test_list_of_enum_with_lookup(self):
+        params_text = "([FromQuery] List<DagExecutionStatus> statuses = null)"
+        enums = {"DagExecutionStatus"}
+        out = _parse_query_params(params_text, {}, enums, {})
+        p = out[0]
+        assert p["kind"] == "enum-list"
+
+    def test_alias_from_named_attribute(self):
+        params_text = '([FromQuery(Name = "_top")] int top = 100)'
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["name"] == "top"
+        assert p["alias"] == "_top"
+
+    def test_no_alias(self):
+        params_text = "([FromQuery] int top = 100)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["alias"] is None
+
+    def test_description_from_param_docs(self):
+        params_text = "([FromQuery] int historyCount = 10)"
+        param_docs = {"historyCount": "Number of past runs to return."}
+        out = _parse_query_params(params_text, {}, set(), param_docs)
+        p = out[0]
+        assert p["description"] == "Number of past runs to return."
+
+    def test_no_description_when_not_documented(self):
+        params_text = "([FromQuery] int x = 1)"
+        out = _parse_query_params(params_text, {}, set(), {})
+        p = out[0]
+        assert p["description"] == ""
+
+    def test_multiple_query_params(self):
+        params_text = textwrap.dedent("""
+            (
+                [FromRoute] Guid workspaceId,
+                [FromQuery] int? historyCount = null,
+                [FromQuery] DateTime? startTime = null,
+                [FromQuery] string continuationToken = null
+            )
+        """)
+        out = _parse_query_params(params_text, {}, set(), {})
+        names = [p["name"] for p in out]
+        assert names == ["historyCount", "startTime", "continuationToken"]
+
+    def test_ignores_from_route_and_from_body(self):
+        params_text = textwrap.dedent("""
+            (
+                [FromRoute] Guid workspaceId,
+                [FromBody] Settings settings,
+                [FromQuery] bool flag = false
+            )
+        """)
+        out = _parse_query_params(params_text, {}, set(), {})
+        assert len(out) == 1
+        assert out[0]["name"] == "flag"
+
+
+# ── _collect_enum_values ─────────────────────────────────────────
+
+
+class TestCollectEnumValues:
+    def test_finds_enum(self, tmp_path):
+        repo = tmp_path
+        svc = repo / "Service" / "Microsoft.LiveTable.Service" / "DataModel"
+        svc.mkdir(parents=True)
+        (svc / "DagExecutionStatus.cs").write_text(
+            textwrap.dedent("""
+                namespace Foo
+                {
+                    public enum DagExecutionStatus
+                    {
+                        Pending,
+                        Running,
+                        Completed,
+                        Failed,
+                    }
+                }
+            """),
+            encoding="utf-8",
+        )
+        out = _collect_enum_values(repo)
+        assert out["DagExecutionStatus"] == ["Pending", "Running", "Completed", "Failed"]
+
+    def test_ignores_enum_with_explicit_values(self, tmp_path):
+        # Should still collect just the names, not the values
+        repo = tmp_path
+        svc = repo / "Service" / "Microsoft.LiveTable.Service" / "DataModel"
+        svc.mkdir(parents=True)
+        (svc / "Status.cs").write_text(
+            textwrap.dedent("""
+                public enum Status
+                {
+                    Active = 1,
+                    Inactive = 2,
+                }
+            """),
+            encoding="utf-8",
+        )
+        out = _collect_enum_values(repo)
+        assert out["Status"] == ["Active", "Inactive"]
+
+    def test_missing_dir_returns_empty(self, tmp_path):
+        assert _collect_enum_values(tmp_path) == {}
+
+    def test_multiple_enums_in_file(self, tmp_path):
+        repo = tmp_path
+        svc = repo / "Service" / "Microsoft.LiveTable.Service" / "DataModel"
+        svc.mkdir(parents=True)
+        (svc / "Multi.cs").write_text(
+            textwrap.dedent("""
+                public enum A { X, Y }
+                public enum B { P, Q, R }
+            """),
+            encoding="utf-8",
+        )
+        out = _collect_enum_values(repo)
+        assert out["A"] == ["X", "Y"]
+        assert out["B"] == ["P", "Q", "R"]
+
+
+# ── End-to-end: extract_catalog with enriched queryParams ───────
+
+
+class TestEnrichedQueryParamsEndToEnd:
+    def test_query_params_are_objects_not_strings(self, tmp_path):
+        repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": SAMPLE_LIVETABLE_CTRL})
+        result = extract_catalog(str(repo))
+        eps = [e for e in result["endpoints"] if "getlatestdag" in e["id"]]
+        assert eps
+        qp = eps[0]["queryParams"]
+        assert qp and isinstance(qp[0], dict)
+        assert qp[0]["name"] == "showExtendedLineage"
+        assert qp[0]["type"] == "bool"
+        assert qp[0]["default"] is False
+
+    def test_required_param_marked(self, tmp_path):
+        ctrl = textwrap.dedent('''
+            namespace X {
+                [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
+                public class LiveTableController : BaseApiController {
+                    /// <summary>foo</summary>
+                    [HttpGet("required")]
+                    public async Task<IActionResult> Foo(
+                        [FromRoute] Guid workspaceId,
+                        [FromQuery] string mustHave) => Ok();
+                }
+            }
+        ''')
+        repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": ctrl})
+        result = extract_catalog(str(repo))
+        ep = result["endpoints"][0]
+        qp = ep["queryParams"][0]
+        assert qp["required"] is True
+
+    def test_const_resolution_in_endpoint(self, tmp_path):
+        ctrl = textwrap.dedent('''
+            namespace X {
+                [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
+                public class LiveTableController : BaseApiController {
+                    private const int DefaultDateRangeDays = 30;
+
+                    /// <summary>foo</summary>
+                    [HttpGet("insights")]
+                    public async Task<IActionResult> Foo(
+                        [FromRoute] Guid workspaceId,
+                        [FromQuery] int dateRange = DefaultDateRangeDays) => Ok();
+                }
+            }
+        ''')
+        repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": ctrl})
+        result = extract_catalog(str(repo))
+        ep = result["endpoints"][0]
+        qp = ep["queryParams"][0]
+        assert qp["default"] == 30
+        assert qp["defaultLiteral"] == "DefaultDateRangeDays"
+
+    def test_param_description_attached(self, tmp_path):
+        ctrl = textwrap.dedent('''
+            namespace X {
+                [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
+                public class LiveTableController : BaseApiController {
+                    /// <summary>foo</summary>
+                    /// <param name="historyCount">Number of past runs to return.</param>
+                    [HttpGet("history")]
+                    public async Task<IActionResult> Foo(
+                        [FromRoute] Guid workspaceId,
+                        [FromQuery] int historyCount = 10) => Ok();
+                }
+            }
+        ''')
+        repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": ctrl})
+        result = extract_catalog(str(repo))
+        ep = result["endpoints"][0]
+        qp = ep["queryParams"][0]
+        assert qp["description"] == "Number of past runs to return."
+
+    def test_enum_values_attached_when_known(self, tmp_path):
+        ctrl = textwrap.dedent('''
+            namespace X {
+                [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
+                public class LiveTableController : BaseApiController {
+                    /// <summary>foo</summary>
+                    [HttpGet("history")]
+                    public async Task<IActionResult> Foo(
+                        [FromRoute] Guid workspaceId,
+                        [FromQuery] List<DagExecutionStatus> statuses = null) => Ok();
+                }
+            }
+        ''')
+        # Create the enum file too
+        repo = tmp_path
+        ctrl_dir = repo / "Service" / "Microsoft.LiveTable.Service" / "Controllers"
+        ctrl_dir.mkdir(parents=True)
+        (ctrl_dir / "LiveTableController.cs").write_text(ctrl, encoding="utf-8")
+        dm = repo / "Service" / "Microsoft.LiveTable.Service" / "DataModel"
+        dm.mkdir(parents=True)
+        (dm / "DagExecutionStatus.cs").write_text(
+            "public enum DagExecutionStatus { Pending, Running, Completed, Failed }",
+            encoding="utf-8",
+        )
+        result = extract_catalog(str(repo))
+        ep = result["endpoints"][0]
+        qp = ep["queryParams"][0]
+        assert qp["kind"] == "enum-list"
+        assert qp["enumValues"] == ["Pending", "Running", "Completed", "Failed"]

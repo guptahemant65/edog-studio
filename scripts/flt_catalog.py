@@ -88,6 +88,47 @@ _FROM_QUERY_RE = re.compile(
 _FROM_BODY_RE = re.compile(r'\[FromBody(?:\([^)]*\))?\]')
 _DYNAMIC_ROUTE_RE = re.compile(r'\[Route\(\s*[A-Za-z_]')  # [Route(Constants.Foo)]
 
+# ── F09 query-param enrichment ────────────────────────────────────────────
+# Capture: optional [FromQuery(Name="alias")], type (preserving generics/?),
+# parameter name, optional default expression up to next ',' or ')'.
+# Type group keeps `<>`, `?`, `,`, `.` so we can preserve `List<Guid>`,
+# `int?`, `Microsoft.Foo.Bar`, etc.
+_FROM_QUERY_FULL_RE = re.compile(
+    r'\[FromQuery(?:\(\s*(?:Name\s*=\s*"(?P<alias>[^"]*)")?\s*\))?\]\s+'
+    r'(?P<type>[A-Za-z_][\w<>\[\],?\s\.]*?)\s+'
+    r'(?P<name>[A-Za-z_]\w*)'
+    r'(?:\s*=\s*(?P<default>[^,)]+?))?'
+    r'\s*(?=,|\))',
+    re.DOTALL,
+)
+
+# Const declarations: optional access modifier(s), const|static readonly, type, name, value.
+# Examples matched:
+#   private const int X = 30;
+#   public const string Y = "foo";
+#   public static readonly int Z = 50;
+_CONST_RE = re.compile(
+    r'(?:public|private|internal|protected)?\s*'
+    r'(?:(?:const)|(?:static\s+readonly))\s+'
+    r'(?P<type>[A-Za-z_][\w?]*)\s+'
+    r'(?P<name>[A-Za-z_]\w*)\s*=\s*'
+    r'(?P<value>[^;]+?)\s*;'
+)
+
+# Enum declaration. Captures the enum name and the body between `{` and `}`.
+_ENUM_RE = re.compile(
+    r'public\s+enum\s+(?P<name>[A-Za-z_]\w*)\s*(?::\s*[A-Za-z_]\w*\s*)?\{'
+    r'(?P<body>[^}]*)\}',
+    re.DOTALL,
+)
+
+# XML <param name="...">description</param>. Description can span lines and
+# include `///` line continuations.
+_XML_PARAM_RE = re.compile(
+    r'<param\s+name\s*=\s*"(?P<name>[^"]+)"\s*>(?P<desc>.*?)</param>',
+    re.DOTALL,
+)
+
 # Methods named with these suffixes/keywords get bumped to a higher danger level.
 _FORCE_KEYWORDS = ("force", "delete", "remove", "purge", "unlock")
 
@@ -121,6 +162,12 @@ def extract_catalog(flt_repo_path: str) -> dict:
         return result
 
     cs_files = sorted(controllers_dir.rglob("*Controller.cs"))
+
+    # F09 enrichment: collect enum names→values once for the whole repo so we
+    # can classify List<DagExecutionStatus> etc. as enum-list and ship the
+    # value list to the playground for typed dropdowns.
+    enum_values = _collect_enum_values(repo)
+
     for cs_file in cs_files:
         if cs_file.name in EXCLUDED_FILES:
             continue
@@ -142,7 +189,7 @@ def extract_catalog(flt_repo_path: str) -> dict:
             continue
 
         controller_endpoints, controller_warnings = _parse_controller(
-            text, cs_file.name
+            text, cs_file.name, enum_values
         )
         if controller_endpoints is None:
             # Filtered (wrong class-route prefix) — silent.
@@ -159,13 +206,18 @@ def extract_catalog(flt_repo_path: str) -> dict:
 
 
 def _parse_controller(
-    text: str, file_name: str
+    text: str, file_name: str, enum_values: dict[str, list[str]] | None = None
 ) -> tuple[list[dict] | None, list[str]]:
     """Parse a single controller file.
 
     Returns (endpoints, warnings). `endpoints` is None when the controller's
     class-level [Route] doesn't match the FLT inclusion prefix (silent filter).
+
+    `enum_values` is the repo-wide enum name→values map used to enrich
+    queryParams. Pass an empty dict for tests that don't care about enums.
     """
+    enum_values = enum_values or {}
+    enum_names = set(enum_values.keys())
     warnings: list[str] = []
 
     class_route = _extract_class_route(text)
@@ -176,6 +228,10 @@ def _parse_controller(
 
     class_name_match = _CLASS_DECL_RE.search(text)
     controller_name = class_name_match.group(1) if class_name_match else file_name.replace(".cs", "")
+
+    # Collect const values defined in this file once — used to resolve symbol
+    # default expressions like `dateRange = DefaultDateRangeDays`.
+    file_consts = _extract_consts(text)
 
     # Path suffix after the {artifactId}/ piece — e.g. "liveTable", "liveTableMaintanance",
     # "liveTableSchedule", "liveTable/insights", "liveTable/refreshTriggers".
@@ -234,11 +290,29 @@ def _parse_controller(
         preceding = text[backtrack_start : match.start()]
         description = _extract_last_summary(preceding)
 
+        # XML <param> descriptions live in the same preceding doc-comment block.
+        # Strip the `///` prefixes so the regex sees clean XML.
+        cleaned_xml = "\n".join(
+            line.strip().lstrip("/").strip() for line in preceding.splitlines()
+        )
+        param_docs = _extract_param_descriptions(cleaned_xml)
+
         # Query params are extracted from the method body parameter list.
         params_window = window[method_match.start() : method_match.start() + 2000]
         # Limit to the parameter list — first balanced parens.
         params_text = _slice_param_list(params_window)
-        query_params = [m.group(1) for m in _FROM_QUERY_RE.finditer(params_text)]
+        query_params = _parse_query_params(
+            params_text, file_consts, enum_names, param_docs
+        )
+        # Attach enum values when the type is a known enum (or list of one).
+        for qp in query_params:
+            if qp["kind"] in ("enum", "enum-list"):
+                base = qp["type"].rstrip("?")
+                if base.startswith("List<"):
+                    base = base[len("List<") : -1].strip()
+                qp["enumValues"] = enum_values.get(base)
+            else:
+                qp["enumValues"] = None
         has_from_body = bool(_FROM_BODY_RE.search(params_text))
 
         # Compose paths.
@@ -427,3 +501,236 @@ def controllers_dir_mtime(flt_repo_path: str) -> float | None:
         except OSError:
             continue
     return max_mtime
+
+
+# ════════════════════════════════════════════════════════════════
+# F09 query-param enrichment helpers
+# ════════════════════════════════════════════════════════════════
+
+# Subset of C# numeric primitives we treat as integer for default parsing.
+_INT_TYPES = {"int", "short", "long", "byte", "uint", "ushort", "ulong", "sbyte"}
+# C# float-ish primitives (kept for completeness even if rare in FLT controllers).
+_FLOAT_TYPES = {"float", "double", "decimal"}
+
+
+def _extract_consts(text: str) -> dict:
+    """Return {NAME: value} for every parseable `const` / `static readonly` in `text`.
+
+    Values are parsed as Python literals when possible (int, str, bool). When
+    the right-hand side isn't a simple literal (e.g. expression, method call),
+    the entry is omitted. Best-effort: callers must handle absence gracefully.
+    """
+    out: dict = {}
+    for m in _CONST_RE.finditer(text):
+        name = m.group("name")
+        ctype = m.group("type")
+        raw = m.group("value").strip()
+        value, _, ok = _resolve_default(raw, {})
+        if ok:
+            out[name] = value
+        else:
+            # Try harder for typed primitives where the literal may include
+            # suffixes like `30L` or `1.5f` — strip and retry.
+            if ctype in _INT_TYPES and raw and raw[-1].lower() in ("l", "u"):
+                stripped = raw.rstrip("uUlL")
+                v2, _, ok2 = _resolve_default(stripped, {})
+                if ok2:
+                    out[name] = v2
+    return out
+
+
+def _resolve_default(literal: str, consts: dict) -> tuple:
+    """Resolve a default expression to (value, raw_literal, resolved_bool).
+
+    Handles simple C# literals (numbers, strings, true/false, null) plus
+    symbol references that may resolve via `consts`. Anything else returns
+    (None, literal, False) so the caller can preserve the symbol for the UI.
+    """
+    raw = (literal or "").strip()
+    if not raw:
+        return None, raw, False
+
+    # null literal
+    if raw == "null":
+        return None, raw, True
+    # bool literals
+    if raw == "true":
+        return True, raw, True
+    if raw == "false":
+        return False, raw, True
+    # string literal — verbatim (`@"..."`) or regular
+    if raw.startswith('"') and raw.endswith('"') and len(raw) >= 2:
+        return raw[1:-1], raw, True
+    if raw.startswith('@"') and raw.endswith('"') and len(raw) >= 3:
+        return raw[2:-1], raw, True
+    # int literal (incl. negative)
+    try:
+        return int(raw), raw, True
+    except ValueError:
+        pass
+    # float literal
+    try:
+        return float(raw), raw, True
+    except ValueError:
+        pass
+    # Symbol reference — try const lookup, otherwise leave unresolved
+    if raw in consts:
+        return consts[raw], raw, True
+    return None, raw, False
+
+
+def _classify_type(type_str: str, enum_names: set) -> tuple:
+    """Return (kind, nullable) for a C# parameter type.
+
+    kind ∈ {"scalar", "list", "enum", "enum-list"}.
+    `nullable` is True only for explicit `T?` syntax — we don't treat
+    reference types (string, etc.) as nullable for required-flag purposes,
+    because absence of a default still means the caller must supply a value.
+    """
+    raw = (type_str or "").strip()
+    nullable = raw.endswith("?")
+    base = raw.rstrip("?").strip()
+
+    # List<T> / IEnumerable<T> / IReadOnlyList<T> — treat as list.
+    list_prefixes = ("List<", "IList<", "IEnumerable<", "IReadOnlyList<", "ICollection<")
+    for prefix in list_prefixes:
+        if base.startswith(prefix) and base.endswith(">"):
+            inner = base[len(prefix) : -1].strip().rstrip("?")
+            if inner in enum_names:
+                return "enum-list", nullable
+            return "list", nullable
+
+    if base in enum_names:
+        return "enum", nullable
+    return "scalar", nullable
+
+
+def _extract_param_descriptions(xml_block: str) -> dict:
+    """Return {param_name: description} from `<param name="...">desc</param>` tags.
+
+    Description text is whitespace-collapsed but multi-line content is preserved
+    as a single space-joined string. Empty descriptions return an empty string.
+    """
+    out: dict = {}
+    for m in _XML_PARAM_RE.finditer(xml_block):
+        name = m.group("name").strip()
+        raw = (m.group("desc") or "").strip()
+        # Collapse whitespace runs (including newlines) to single spaces.
+        cleaned = re.sub(r"\s+", " ", raw).strip()
+        out[name] = cleaned
+    return out
+
+
+def _parse_query_params(
+    params_text: str,
+    consts: dict,
+    enum_names: set,
+    param_docs: dict,
+) -> list:
+    """Parse `[FromQuery]` parameters from a balanced parameter list `params_text`.
+
+    Returns a list of enriched parameter dicts:
+        {name, type, kind, default, defaultLiteral, required, alias, description}
+
+    `enumValues` is set to None here — the caller attaches enum value lists
+    after parsing (it has the full enum_values dict, not just the names).
+    """
+    out: list = []
+    for m in _FROM_QUERY_FULL_RE.finditer(params_text):
+        name = m.group("name")
+        raw_type = re.sub(r"\s+", "", m.group("type") or "").strip()
+        alias = m.group("alias")
+        default_expr = m.group("default")
+        kind, nullable = _classify_type(raw_type, enum_names)
+
+        if default_expr is None:
+            default_value: object | None = None
+            default_literal: str | None = None
+            has_default = False
+        else:
+            v, lit, ok = _resolve_default(default_expr.strip(), consts)
+            default_value = v if ok else None
+            default_literal = lit
+            has_default = True
+
+        # Required iff non-nullable AND no default supplied.
+        required = (not nullable) and (not has_default)
+
+        out.append({
+            "name": name,
+            "type": raw_type,
+            "kind": kind,
+            "default": default_value,
+            "defaultLiteral": default_literal,
+            "required": required,
+            "alias": alias,
+            "description": param_docs.get(name, ""),
+            "enumValues": None,
+        })
+    return out
+
+
+def _collect_enum_values(repo_path) -> dict:
+    """Scan `Service/Microsoft.LiveTable.Service/**/*.cs` and return enum name→values.
+
+    Best-effort: parses simple `public enum Foo { A, B = 1, C, }` shapes. Strips
+    XML doc comments and attribute blocks (e.g. `[EnumMember(Value="x")]`) before
+    splitting on commas — FLT enums frequently carry both. Values with explicit
+    `= <value>` assignments still contribute the symbolic name.
+    Missing service directory returns `{}`.
+    """
+    repo = Path(repo_path)
+    svc_dir = repo / "Service" / "Microsoft.LiveTable.Service"
+    if not svc_dir.is_dir():
+        return {}
+
+    out: dict = {}
+    for cs_file in svc_dir.rglob("*.cs"):
+        try:
+            text = cs_file.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError:
+            continue
+        for m in _ENUM_RE.finditer(text):
+            ename = m.group("name")
+            body = m.group("body")
+            # Strip XML doc-comment lines (`/// ...`) — they contain `=` inside
+            # attribute references which would break our comma splitting.
+            body_no_xml = "\n".join(
+                line for line in body.splitlines() if not line.lstrip().startswith("///")
+            )
+            # Strip attribute blocks `[Foo(...)]` (may span lines, contain `=`).
+            body_no_attrs = _strip_balanced(body_no_xml, "[", "]")
+            values = []
+            for raw_val in body_no_attrs.split(","):
+                token = raw_val.strip()
+                if not token:
+                    continue
+                # Strip trailing assignment: `Active = 1` → `Active`.
+                token = token.split("=", 1)[0].strip()
+                # Identifier sanity check.
+                if re.match(r"^[A-Za-z_]\w*$", token):
+                    values.append(token)
+            if values and ename not in out:
+                out[ename] = values
+    return out
+
+
+def _strip_balanced(text: str, open_ch: str, close_ch: str) -> str:
+    """Remove substrings bounded by balanced `open_ch`/`close_ch` (depth-aware).
+
+    Used to strip `[Attribute(args)]` blocks from C# enum bodies before
+    comma-splitting. Unbalanced text is returned with whatever was opened
+    silently dropped — acceptable for best-effort parsing.
+    """
+    out = []
+    depth = 0
+    for ch in text:
+        if ch == open_ch:
+            depth += 1
+            continue
+        if ch == close_ch and depth > 0:
+            depth -= 1
+            continue
+        if depth == 0:
+            out.append(ch)
+    return "".join(out)

@@ -208,3 +208,43 @@ def test_no_generic_fabric_groups() -> None:
             f"ENDPOINT_GROUPS still references {term} \u2014 generic Fabric APIs were removed; "
             f"auto-discovery covers FLT-only groups now."
         )
+
+
+def test_request_builder_consumes_documented_query_params() -> None:
+    """setRequest must store endpoint.queryParams for the Params tab pre-fill."""
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    assert "_documentedParams" in src, (
+        "RequestBuilder must store documented queryParams as _documentedParams"
+    )
+    assert "queryParams: endpoint.queryParams" in src, (
+        "Catalog onSelect handler must forward endpoint.queryParams to setRequest"
+    )
+
+
+def test_param_row_renders_type_badge_for_documented_params() -> None:
+    """_paramRow must render a type badge when given documented param metadata."""
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    assert "api-param-type" in src, (
+        "_paramRow must add an api-param-type badge for documented params"
+    )
+    assert "meta.required" in src, (
+        "_paramRow must check meta.required to mark the row visually"
+    )
+
+
+def test_param_row_renders_select_for_known_enums() -> None:
+    """_paramRow must render <select> when meta has enumValues (known enum)."""
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    # Loosely check for the enum branch — multiline so accept either pattern.
+    assert "enumValues" in src, "_paramRow must consume meta.enumValues"
+    assert "createElement('select')" in src, (
+        "_paramRow must render a <select> element for enum / enum-list types"
+    )
+
+
+def test_sync_url_handles_multi_select_lists() -> None:
+    """_syncUrlFromParams must emit ?key=A&key=B for multi-select enum-list."""
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    assert "v.multiple" in src, (
+        "_syncUrlFromParams must detect SELECT.multiple to emit list-style query strings"
+    )

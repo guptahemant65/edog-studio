@@ -648,9 +648,28 @@ class RequestBuilder {
     table.appendChild(tbody);
     this._paramsEl.appendChild(table);
 
+    // Documented params come from the catalog and provide rich metadata
+    // (type, default, required, description, enum dropdown). They render
+    // first with the param name read-only.
+    var docs = this._documentedParams || [];
     var pairs = this._parseQuery(this._urlEl ? this._urlEl.value : '');
-    for (var i = 0; i < pairs.length; i++) {
-      tbody.appendChild(this._paramRow(pairs[i].key, pairs[i].value));
+    var pairByName = {};
+    for (var i = 0; i < pairs.length; i++) pairByName[pairs[i].key] = pairs[i].value;
+
+    var documentedNames = {};
+    for (var d = 0; d < docs.length; d++) {
+      var meta = docs[d];
+      documentedNames[meta.name] = true;
+      var preFilled = Object.prototype.hasOwnProperty.call(pairByName, meta.name);
+      var checked = meta.required || preFilled;
+      var initialValue = preFilled ? pairByName[meta.name] : '';
+      tbody.appendChild(this._paramRow(meta.name, initialValue, { meta: meta, checked: checked }));
+    }
+
+    // Then any ad-hoc params from the URL that weren't in the catalog.
+    for (var p = 0; p < pairs.length; p++) {
+      if (documentedNames[pairs[p].key]) continue;
+      tbody.appendChild(this._paramRow(pairs[p].key, pairs[p].value));
     }
 
     var addRow = document.createElement('div');
@@ -662,15 +681,17 @@ class RequestBuilder {
     this._paramsEl.appendChild(addRow);
   }
 
-  _paramRow(key, value) {
+  _paramRow(key, value, opts) {
     var self = this;
+    var meta = opts && opts.meta ? opts.meta : null;
     var row = document.createElement('tr');
+    if (meta && meta.required) row.classList.add('api-param-required');
 
     var chkCell = document.createElement('td');
     chkCell.className = 'kv-chk';
     var chk = document.createElement('input');
     chk.type = 'checkbox';
-    chk.checked = true;
+    chk.checked = opts && opts.checked !== undefined ? opts.checked : true;
     chk.className = 'api-kv-check';
     chkCell.appendChild(chk);
     row.appendChild(chkCell);
@@ -682,33 +703,84 @@ class RequestBuilder {
     keyInput.value = key;
     keyInput.placeholder = 'Param name';
     keyInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    if (meta) {
+      keyInput.readOnly = true;
+      keyInput.title = meta.description || meta.name;
+      if (meta.required) keyInput.style.fontWeight = '600';
+    }
     keyCell.appendChild(keyInput);
+    if (meta) {
+      var typeBadge = document.createElement('span');
+      typeBadge.className = 'api-param-type';
+      typeBadge.textContent = meta.type + (meta.required ? ' *' : '');
+      typeBadge.title = (meta.description ? meta.description + '\n' : '') +
+        'Type: ' + meta.type +
+        (meta.defaultLiteral != null ? '\nDefault: ' + meta.defaultLiteral : '') +
+        (meta.required ? '\n(required)' : ' (optional)');
+      keyCell.appendChild(typeBadge);
+    }
     row.appendChild(keyCell);
 
     var valCell = document.createElement('td');
     valCell.className = 'kv-val';
-    var valInput = document.createElement('input');
-    valInput.className = 'api-param-val';
-    valInput.value = value;
-    valInput.placeholder = 'Value';
-    valInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    var valInput;
+    if (meta && (meta.kind === 'enum' || meta.kind === 'enum-list') && Array.isArray(meta.enumValues) && meta.enumValues.length > 0) {
+      // Render a select for known enums. enum-list uses multi-select.
+      valInput = document.createElement('select');
+      if (meta.kind === 'enum-list') valInput.multiple = true;
+      else {
+        var blank = document.createElement('option');
+        blank.value = '';
+        blank.textContent = meta.defaultLiteral != null ? '(default: ' + meta.defaultLiteral + ')' : '';
+        valInput.appendChild(blank);
+      }
+      for (var ev = 0; ev < meta.enumValues.length; ev++) {
+        var opt = document.createElement('option');
+        opt.value = meta.enumValues[ev];
+        opt.textContent = meta.enumValues[ev];
+        valInput.appendChild(opt);
+      }
+      if (value) {
+        if (meta.kind === 'enum-list') {
+          var picks = String(value).split(',');
+          for (var pi = 0; pi < valInput.options.length; pi++) {
+            valInput.options[pi].selected = picks.indexOf(valInput.options[pi].value) !== -1;
+          }
+        } else {
+          valInput.value = value;
+        }
+      }
+      valInput.className = 'api-param-val';
+      valInput.style.cssText = 'background:none;font:inherit;color:inherit;width:100%';
+    } else {
+      valInput = document.createElement('input');
+      valInput.className = 'api-param-val';
+      valInput.value = value;
+      valInput.placeholder = meta && meta.defaultLiteral != null
+        ? 'default: ' + meta.defaultLiteral
+        : 'Value';
+      valInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    }
     valCell.appendChild(valInput);
     row.appendChild(valCell);
 
     var actCell = document.createElement('td');
-    var del = document.createElement('button');
-    del.className = 'api-kv-del';
-    del.textContent = '\u2715';
-    del.addEventListener('click', function() {
-      row.remove();
-      self._syncUrlFromParams();
-    });
-    actCell.appendChild(del);
+    if (!meta) {
+      var del = document.createElement('button');
+      del.className = 'api-kv-del';
+      del.textContent = '\u2715';
+      del.addEventListener('click', function() {
+        row.remove();
+        self._syncUrlFromParams();
+      });
+      actCell.appendChild(del);
+    }
     row.appendChild(actCell);
 
     var sync = function() { self._syncUrlFromParams(); };
     keyInput.addEventListener('input', sync);
     valInput.addEventListener('input', sync);
+    valInput.addEventListener('change', sync);
     chk.addEventListener('change', sync);
 
     return row;
@@ -744,7 +816,20 @@ class RequestBuilder {
       var k = rows[i].querySelector('.api-param-key');
       var v = rows[i].querySelector('.api-param-val');
       if (!k || !k.value.trim()) continue;
-      parts.push(encodeURIComponent(k.value.trim()) + '=' + encodeURIComponent(v ? v.value : ''));
+      var keyEnc = encodeURIComponent(k.value.trim());
+      if (v && v.tagName === 'SELECT' && v.multiple) {
+        // enum-list: emit `?key=A&key=B` style for ASP.NET model binding.
+        var anySelected = false;
+        for (var oi = 0; oi < v.options.length; oi++) {
+          if (v.options[oi].selected && v.options[oi].value) {
+            parts.push(keyEnc + '=' + encodeURIComponent(v.options[oi].value));
+            anySelected = true;
+          }
+        }
+        if (!anySelected) parts.push(keyEnc + '=');
+      } else {
+        parts.push(keyEnc + '=' + encodeURIComponent(v ? v.value : ''));
+      }
     }
     var base = this._urlEl.value.split('?')[0];
     this._urlEl.value = parts.length ? base + '?' + parts.join('&') : base;
@@ -861,6 +946,12 @@ class RequestBuilder {
     if (req.body !== undefined) this._bodyEl.value = req.body || '';
     if (req.tokenType) this._pinnedTokenType = req.tokenType;
 
+    // F09 query-param enrichment: documented params from catalog drive a
+    // pre-seeded Params tab with type badges, defaults as placeholders, and
+    // dropdowns for known enums. `queryParams` is an array of objects with
+    // { name, type, kind, default, defaultLiteral, required, description, enumValues }.
+    this._documentedParams = Array.isArray(req.queryParams) ? req.queryParams : [];
+
     if (req.headers) {
       // Rebuild header rows
       if (this._headersTbody) this._headersTbody.innerHTML = '';
@@ -878,6 +969,10 @@ class RequestBuilder {
         this._addHeaderRow('Authorization', 'Bearer \u25CF\u25CF\u25CF\u25CF', true);
       }
     }
+
+    // Re-render Params tab so documented metadata renders alongside any
+    // ad-hoc params already in the URL.
+    this._renderParams();
   }
 
   setSending(sending) {
@@ -1691,7 +1786,8 @@ class ApiPlayground {
         url: resolvedUrl,
         headers: headers,
         body: endpoint.bodyTemplate ? JSON.stringify(endpoint.bodyTemplate, null, 2) : '',
-        tokenType: endpoint.tokenType
+        tokenType: endpoint.tokenType,
+        queryParams: endpoint.queryParams || []
       });
     };
 
