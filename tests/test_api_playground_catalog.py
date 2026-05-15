@@ -62,7 +62,10 @@ def group_ids() -> set[str]:
 
 
 def test_catalog_not_empty(catalog: list[dict]) -> None:
-    assert len(catalog) >= 20, f"Catalog suspiciously small: {len(catalog)} entries"
+    # Bundled fallback is intentionally minimal — the LIVE catalog comes from
+    # /api/playground/catalog (auto-discovered from FLT C# source). The bundled
+    # list is the safety net for when flt_repo_path is not configured.
+    assert len(catalog) >= 8, f"Bundled fallback suspiciously small: {len(catalog)} entries"
 
 
 def test_every_entry_has_required_fields(catalog: list[dict]) -> None:
@@ -165,3 +168,43 @@ def test_playground_uses_dispatcher_not_prefix_proxies() -> None:
     assert "'/api/flt-proxy'" not in src and '"/api/flt-proxy"' not in src, (
         "Playground must not hard-code /api/flt-proxy \u2014 dispatcher handles routing"
     )
+
+
+def test_bundled_catalog_is_flt_only(catalog: list[dict]) -> None:
+    """The bundled fallback must contain ONLY FLT routes (mwc tokenType, /liveTable* paths).
+
+    Generic Fabric APIs (workspaces, items, lakehouses, notebooks, environments)
+    were intentionally removed in favor of the auto-discovered catalog. Re-adding
+    them here would clutter the FLT engineer's workflow.
+    """
+    flt_prefixes = ("/liveTable", "/liveTableSchedule", "/liveTableMaintanance")
+    for entry in catalog:
+        assert entry["tokenType"] == "mwc", (
+            f"{entry['id']}: bundled fallback must be mwc-only "
+            f"(generic Fabric APIs should be auto-discovered, not bundled)"
+        )
+        assert entry["urlTemplate"].startswith(flt_prefixes), (
+            f"{entry['id']}: bundled URL {entry['urlTemplate']!r} is not an FLT route"
+        )
+
+
+def test_playground_fetches_dynamic_catalog() -> None:
+    """The frontend must call /api/playground/catalog to auto-discover FLT routes."""
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    assert "/api/playground/catalog" in src, (
+        "Frontend must fetch /api/playground/catalog for dynamic FLT route discovery"
+    )
+    assert "_loadDynamic" in src, (
+        "EndpointCatalog must implement _loadDynamic for runtime auto-discovery"
+    )
+
+
+def test_no_generic_fabric_groups() -> None:
+    """ENDPOINT_GROUPS must not include workspace/items/lakehouse/notebooks/environment groups."""
+    src = _read_groups_block()
+    forbidden = ("'workspace'", "'items'", "'lakehouse'", "'notebooks'", "'environment'")
+    for term in forbidden:
+        assert term not in src, (
+            f"ENDPOINT_GROUPS still references {term} \u2014 generic Fabric APIs were removed; "
+            f"auto-discovery covers FLT-only groups now."
+        )

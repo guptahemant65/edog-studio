@@ -26,6 +26,7 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 from file_watcher import FileWatcher
+from flt_catalog import controllers_dir_mtime, extract_catalog
 from repo_discovery import find_flt_repos, get_configured_repo, validate_repo
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -51,6 +52,21 @@ _ado_token_lock = threading.Lock()
 
 ADO_RESOURCE_ID = "499b84ac-1321-427f-aa17-267ca6975798"
 _ADO_PR_URL_RE = None  # lazily compiled
+
+# F09 Playground catalog cache — keyed by flt_repo_path.
+# Value: {"mtime": float, "payload": dict}.
+# Invalidated when any controller file mtime is newer than the cached mtime.
+_playground_catalog_cache: dict = {}
+_playground_catalog_lock = threading.Lock()
+
+
+def _get_flt_repo_dir() -> str:
+    """Return configured flt_repo_path or empty string. Module-level so tests can patch."""
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return (json.load(f).get("flt_repo_path") or "").strip()
+    except Exception:
+        return ""
 
 # ── F09 API Playground header-forwarding policy ──────────────────────────
 # Denylist for headers the playground UI is NOT allowed to forward to upstream
@@ -1593,6 +1609,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_template_get()
         elif self.path.startswith("/api/ado-proxy/pr-diff"):
             self._serve_ado_pr_diff()
+        elif self.path == "/api/playground/catalog":
+            self._serve_playground_catalog()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for GET {self.path}"})
 
@@ -2483,6 +2501,87 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
         except Exception as e:
             self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
+
+    def _serve_playground_catalog(self):
+        """F09 API Playground — return the dynamically-extracted FLT API catalog.
+
+        Reads flt_repo_path from config, scans the C# controllers, returns
+        a JSON-serialized catalog. Results are cached by the max mtime of
+        the Controllers directory tree, so repeat panel-opens are O(stat),
+        and adding/editing a controller file invalidates the cache naturally.
+
+        Response shapes:
+          200  {endpoints, groups, source, extractedAt, warnings, stats}
+          404  {error: "flt-not-configured", message: ...}   when no flt_repo_path
+          500  {error: "extraction-failed", message: ...}    on unexpected error
+        """
+        flt_repo = _get_flt_repo_dir()
+        if not flt_repo:
+            self._json_response(
+                404,
+                {
+                    "error": "flt-not-configured",
+                    "message": (
+                        "flt_repo_path is not set in edog-config.json. "
+                        "Frontend should fall back to the bundled catalog."
+                    ),
+                },
+            )
+            return
+
+        try:
+            current_mtime = controllers_dir_mtime(flt_repo)
+        except Exception as exc:
+            self._json_response(
+                500,
+                {"error": "extraction-failed", "message": f"mtime probe failed: {exc}"},
+            )
+            return
+
+        if current_mtime is None:
+            self._json_response(
+                404,
+                {
+                    "error": "flt-controllers-not-found",
+                    "message": (
+                        f"Controllers directory not found under {flt_repo}. "
+                        f"Expected: Service/Microsoft.LiveTable.Service/Controllers/"
+                    ),
+                },
+            )
+            return
+
+        # Cache lookup (read-only fast path).
+        with _playground_catalog_lock:
+            cached = _playground_catalog_cache.get(flt_repo)
+            if cached and cached["mtime"] >= current_mtime:
+                self._json_response(200, cached["payload"])
+                return
+
+        # Cache miss — extract under lock to avoid two concurrent scans of the
+        # same repo. The lock is held during a typically-fast extraction (~tens
+        # of ms for 5-10 controllers); acceptable for the playground use case.
+        try:
+            with _playground_catalog_lock:
+                # Re-check after acquiring the lock — another thread may have
+                # populated the cache while we were waiting.
+                cached = _playground_catalog_cache.get(flt_repo)
+                if cached and cached["mtime"] >= current_mtime:
+                    self._json_response(200, cached["payload"])
+                    return
+                payload = extract_catalog(flt_repo)
+                _playground_catalog_cache[flt_repo] = {
+                    "mtime": current_mtime,
+                    "payload": payload,
+                }
+        except Exception as exc:
+            self._json_response(
+                500,
+                {"error": "extraction-failed", "message": str(exc)},
+            )
+            return
+
+        self._json_response(200, payload)
 
     def _serve_playground_dispatch(self):
         """Dispatcher for the F09 API Playground with custom header forwarding.

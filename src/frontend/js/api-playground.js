@@ -9,78 +9,38 @@
  */
 
 /* ══════════════════════════════════════════════════════════════
- * §0  ENDPOINT CATALOG DATA
+ * §0  ENDPOINT CATALOG — BUNDLED FLT-ONLY FALLBACK
+ *
+ * The live catalog is auto-discovered from the FLT C# source at runtime via
+ * GET /api/playground/catalog. This bundled list is the fallback used when
+ * flt_repo_path is not configured (or the dev-server is unreachable).
+ *
+ * Keep this list FLT-only and minimal — it is a safety net, not a master.
+ * To add new endpoints permanently, add them to the FLT C# controllers;
+ * they will appear here automatically on next panel open.
  * ══════════════════════════════════════════════════════════════ */
 
 var ENDPOINT_GROUPS = [
-  { id: 'workspace',   label: 'Workspace',   order: 0 },
-  { id: 'items',       label: 'Items',       order: 1 },
-  { id: 'lakehouse',   label: 'Lakehouse',   order: 2 },
-  { id: 'tables',      label: 'Tables',      order: 3 },
-  { id: 'notebooks',   label: 'Notebooks',   order: 4 },
-  { id: 'environment', label: 'Environment', order: 5 },
-  { id: 'dag',         label: 'DAG',         order: 6 },
-  { id: 'execution',   label: 'Execution',   order: 7 },
-  { id: 'spark',       label: 'Spark',       order: 8 },
-  { id: 'maintenance', label: 'Maintenance', order: 9 },
+  { id: 'liveTable',            label: 'LiveTable',   order: 0 },
+  { id: 'liveTableSchedule',    label: 'Scheduler',   order: 1 },
+  { id: 'liveTableMaintanance', label: 'Maintenance', order: 2 },
 ];
 
 var ENDPOINT_CATALOG = [
-  // ── Workspace (bearer) ──
-  { id: 'list-workspaces',   name: 'List Workspaces',   method: 'GET',    urlTemplate: '/v1/workspaces',                                    group: 'workspace', tokenType: 'bearer', bodyTemplate: null, description: 'List all accessible workspaces', dangerLevel: 'safe' },
-  { id: 'get-workspace',     name: 'Get Workspace',     method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}',                      group: 'workspace', tokenType: 'bearer', bodyTemplate: null, description: 'Get workspace details by ID', dangerLevel: 'safe' },
-  { id: 'create-workspace',  name: 'Create Workspace',  method: 'POST',   urlTemplate: '/v1/workspaces',                                    group: 'workspace', tokenType: 'bearer', bodyTemplate: { displayName: 'New Workspace' }, description: 'Create a new workspace', dangerLevel: 'caution' },
-  { id: 'update-workspace',  name: 'Update Workspace',  method: 'PATCH',  urlTemplate: '/v1/workspaces/{workspaceId}',                      group: 'workspace', tokenType: 'bearer', bodyTemplate: { displayName: 'Updated Name' }, description: 'Update workspace properties', dangerLevel: 'caution' },
-  { id: 'delete-workspace',  name: 'Delete Workspace',  method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}',                      group: 'workspace', tokenType: 'bearer', bodyTemplate: null, description: 'Permanently delete a workspace', dangerLevel: 'destructive' },
+  // ── DAG (mwc) ──
+  { id: 'get-latest-dag',  name: 'Get Latest DAG',  method: 'GET',    urlTemplate: '/liveTable/getLatestDag?showExtendedLineage=true', group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'Get the latest DAG definition', dangerLevel: 'safe' },
+  { id: 'get-dag-history', name: 'DAG Iterations',  method: 'GET',    urlTemplate: '/liveTable/listDAGExecutionIterationIds?pageSize=50', group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'List past DAG executions', dangerLevel: 'safe' },
+  { id: 'get-dag-metrics', name: 'DAG Metrics',     method: 'GET',    urlTemplate: '/liveTable/getDAGExecMetrics/{iterationId}',        group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'Get DAG execution metrics', dangerLevel: 'safe' },
+  { id: 'get-settings',    name: 'Get Settings',    method: 'GET',    urlTemplate: '/liveTable/settings',                                group: 'liveTable', tokenType: 'mwc', bodyTemplate: null, description: 'Get FLT settings', dangerLevel: 'safe' },
 
-  // ── Items (bearer) ──
-  { id: 'list-items',  name: 'List Items',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/items',               group: 'items', tokenType: 'bearer', bodyTemplate: null, description: 'List all items in a workspace', dangerLevel: 'safe' },
-  { id: 'get-item',    name: 'Get Item',    method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/items/{itemId}',       group: 'items', tokenType: 'bearer', bodyTemplate: null, description: 'Get item details', dangerLevel: 'safe' },
-  { id: 'delete-item', name: 'Delete Item', method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}/items/{itemId}',       group: 'items', tokenType: 'bearer', bodyTemplate: null, description: 'Delete an item from workspace', dangerLevel: 'destructive' },
-
-  // ── Lakehouse (bearer) ──
-  { id: 'list-lakehouses',  name: 'List Lakehouses',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses',                          group: 'lakehouse', tokenType: 'bearer', bodyTemplate: null, description: 'List all lakehouses', dangerLevel: 'safe' },
-  { id: 'get-lakehouse',    name: 'Get Lakehouse',    method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}',             group: 'lakehouse', tokenType: 'bearer', bodyTemplate: null, description: 'Get lakehouse details', dangerLevel: 'safe' },
-  { id: 'create-lakehouse', name: 'Create Lakehouse', method: 'POST',   urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses',                          group: 'lakehouse', tokenType: 'bearer', bodyTemplate: { displayName: 'New Lakehouse' }, description: 'Create a new lakehouse', dangerLevel: 'caution' },
-  { id: 'update-lakehouse', name: 'Update Lakehouse', method: 'PATCH',  urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}',             group: 'lakehouse', tokenType: 'bearer', bodyTemplate: { displayName: 'Updated Lakehouse' }, description: 'Update lakehouse properties', dangerLevel: 'caution' },
-  { id: 'delete-lakehouse', name: 'Delete Lakehouse', method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}',             group: 'lakehouse', tokenType: 'bearer', bodyTemplate: null, description: 'Delete a lakehouse', dangerLevel: 'destructive' },
-
-  // ── Tables (mixed) ──
-  { id: 'list-tables',      name: 'List Tables',       method: 'GET', urlTemplate: '/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/tables', group: 'tables', tokenType: 'bearer', bodyTemplate: null, description: 'List tables in a lakehouse', dangerLevel: 'safe' },
-  { id: 'get-table-props',  name: 'Table Properties',  method: 'GET', urlTemplate: '/liveTable/tables/{tableName}/properties',      group: 'tables', tokenType: 'mwc', bodyTemplate: null, description: 'Get table properties (FLT)', dangerLevel: 'safe' },
-  { id: 'get-table-schema', name: 'Table Schema',      method: 'GET', urlTemplate: '/liveTable/tables/{tableName}/schema',          group: 'tables', tokenType: 'mwc', bodyTemplate: null, description: 'Get table schema (FLT)', dangerLevel: 'safe' },
-  { id: 'get-table-stats',  name: 'Table Stats',       method: 'GET', urlTemplate: '/liveTable/tables/{tableName}/stats',           group: 'tables', tokenType: 'mwc', bodyTemplate: null, description: 'Get table statistics (FLT)', dangerLevel: 'safe' },
-
-  // ── Notebooks (bearer) ──
-  { id: 'list-notebooks',  name: 'List Notebooks',  method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/notebooks',                    group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'List notebooks in workspace', dangerLevel: 'safe' },
-  { id: 'get-notebook',    name: 'Get Notebook',    method: 'GET',    urlTemplate: '/v1/workspaces/{workspaceId}/notebooks/{notebookId}',       group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'Get notebook details', dangerLevel: 'safe' },
-  { id: 'create-notebook', name: 'Create Notebook', method: 'POST',   urlTemplate: '/v1/workspaces/{workspaceId}/notebooks',                    group: 'notebooks', tokenType: 'bearer', bodyTemplate: { displayName: 'New Notebook' }, description: 'Create a new notebook', dangerLevel: 'caution' },
-  { id: 'delete-notebook', name: 'Delete Notebook', method: 'DELETE', urlTemplate: '/v1/workspaces/{workspaceId}/notebooks/{notebookId}',       group: 'notebooks', tokenType: 'bearer', bodyTemplate: null, description: 'Delete a notebook', dangerLevel: 'destructive' },
-
-  // ── Environment (bearer) ──
-  { id: 'get-environment', name: 'Get Environment', method: 'GET', urlTemplate: '/v1/workspaces/{workspaceId}/environments', group: 'environment', tokenType: 'bearer', bodyTemplate: null, description: 'Get workspace environment settings', dangerLevel: 'safe' },
-
-  // ── DAG (mwc) — paths mirror DAG Studio (/api/flt-proxy + path) ──
-  { id: 'get-latest-dag', name: 'Get Latest DAG',  method: 'GET',    urlTemplate: '/liveTable/getLatestDag?showExtendedLineage=true', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get the latest DAG definition', dangerLevel: 'safe' },
-  { id: 'run-dag',        name: 'Run DAG',         method: 'POST',   urlTemplate: '/liveTableSchedule/runDAG/{iterationId}',           group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Trigger a DAG execution', dangerLevel: 'caution' },
-  { id: 'cancel-dag',     name: 'Cancel DAG',      method: 'DELETE', urlTemplate: '/liveTableSchedule/cancelDAG/{iterationId}',        group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Cancel running DAG execution', dangerLevel: 'caution' },
-  { id: 'get-dag-status', name: 'DAG Exec Status', method: 'GET',    urlTemplate: '/liveTableSchedule/getDAGExecStatus/{iterationId}', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get current DAG execution status', dangerLevel: 'safe' },
-  { id: 'get-dag-history',name: 'DAG Iterations',  method: 'GET',    urlTemplate: '/liveTable/listDAGExecutionIterationIds?pageSize=50', group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'List past DAG executions', dangerLevel: 'safe' },
-  { id: 'get-dag-metrics',name: 'DAG Metrics',     method: 'GET',    urlTemplate: '/liveTable/getDAGExecMetrics/{iterationId}',        group: 'dag', tokenType: 'mwc', bodyTemplate: null, description: 'Get DAG execution metrics', dangerLevel: 'safe' },
-
-  // ── Execution (mwc) ──
-  { id: 'get-mlv-defs',     name: 'MLV Exec Definitions', method: 'GET', urlTemplate: '/liveTable/mlvExecutionDefinitions',       group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get MLV execution definitions', dangerLevel: 'safe' },
-  { id: 'get-settings',     name: 'Get Settings',         method: 'GET', urlTemplate: '/liveTable/settings',                       group: 'execution', tokenType: 'mwc', bodyTemplate: null, description: 'Get FLT settings', dangerLevel: 'safe' },
-  { id: 'put-settings',     name: 'Update Settings',      method: 'PUT', urlTemplate: '/liveTable/settings',                       group: 'execution', tokenType: 'mwc', bodyTemplate: {}, description: 'Update FLT settings', dangerLevel: 'caution' },
-
-  // ── Spark (mwc) — placeholders for routes that exist server-side ──
-  { id: 'list-spark-sessions', name: 'Spark Sessions', method: 'GET', urlTemplate: '/liveTable/spark/sessions',       group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'List active Spark sessions', dangerLevel: 'safe' },
-  { id: 'get-spark-job',       name: 'Spark Job',      method: 'GET', urlTemplate: '/liveTable/spark/jobs/{jobId}',   group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark job details', dangerLevel: 'safe' },
-  { id: 'get-spark-metrics',   name: 'Spark Metrics',  method: 'GET', urlTemplate: '/liveTable/spark/metrics',        group: 'spark', tokenType: 'mwc', bodyTemplate: null, description: 'Get Spark resource metrics', dangerLevel: 'safe' },
+  // ── Scheduler (mwc) ──
+  { id: 'run-dag',        name: 'Run DAG',         method: 'POST',   urlTemplate: '/liveTableSchedule/runDAG/{iterationId}',           group: 'liveTableSchedule', tokenType: 'mwc', bodyTemplate: null, description: 'Trigger a DAG execution', dangerLevel: 'caution' },
+  { id: 'get-dag-status', name: 'DAG Exec Status', method: 'GET',    urlTemplate: '/liveTableSchedule/getDAGExecStatus/{iterationId}', group: 'liveTableSchedule', tokenType: 'mwc', bodyTemplate: null, description: 'Get current DAG execution status', dangerLevel: 'safe' },
+  { id: 'cancel-dag',     name: 'Cancel DAG',      method: 'DELETE', urlTemplate: '/liveTableSchedule/cancelDAG/{iterationId}',        group: 'liveTableSchedule', tokenType: 'mwc', bodyTemplate: null, description: 'Cancel running DAG execution', dangerLevel: 'caution' },
 
   // ── Maintenance (mwc) ──
-  { id: 'list-locked',      name: 'Locked Iterations',  method: 'GET',  urlTemplate: '/liveTableMaintanance/getLockedDAGExecutionIteration',                group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Find locked DAG iterations', dangerLevel: 'safe' },
-  { id: 'force-unlock',     name: 'Force Unlock DAG',   method: 'POST', urlTemplate: '/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}',   group: 'maintenance', tokenType: 'mwc', bodyTemplate: null, description: 'Force unlock a stuck DAG iteration', dangerLevel: 'destructive' },
+  { id: 'list-locked',      name: 'Locked Iterations',  method: 'GET',  urlTemplate: '/liveTableMaintanance/getLockedDAGExecutionIteration',                group: 'liveTableMaintanance', tokenType: 'mwc', bodyTemplate: null, description: 'Find locked DAG iterations', dangerLevel: 'safe' },
+  { id: 'force-unlock',     name: 'Force Unlock DAG',   method: 'POST', urlTemplate: '/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}',   group: 'liveTableMaintanance', tokenType: 'mwc', bodyTemplate: null, description: 'Force unlock a stuck DAG iteration', dangerLevel: 'destructive' },
 ];
 
 /* ══════════════════════════════════════════════════════════════
@@ -215,7 +175,51 @@ class EndpointCatalog {
     this._boundClose = null;
     this._activeItem = null;
     this._groupStates = {};
+
+    // Live catalog state — initialized from bundled fallback, replaced by
+    // a successful fetch to /api/playground/catalog. See _loadDynamic().
+    this._endpoints = ENDPOINT_CATALOG;
+    this._groups = ENDPOINT_GROUPS;
+    this._source = 'bundled';
+    this._sourceCount = ENDPOINT_CATALOG.length;
+    this._badgeEl = null;
+
     this._render();
+    this._loadDynamic();
+  }
+
+  _loadDynamic() {
+    // Pull the live catalog from dev-server. On any failure, silently keep
+    // the bundled fallback already in place. This must work in Disconnected
+    // phase (no FLT process running) — it only requires the dev-server.
+    var self = this;
+    try {
+      fetch('/api/playground/catalog', { method: 'GET' })
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('catalog-http-' + resp.status);
+          return resp.json();
+        })
+        .then(function(payload) {
+          if (!payload || !Array.isArray(payload.endpoints) || !Array.isArray(payload.groups)) {
+            throw new Error('catalog-malformed-payload');
+          }
+          if (payload.endpoints.length === 0) {
+            // Empty extraction (probably FLT repo present but Controllers/ empty).
+            // Keep bundled — better than showing nothing.
+            return;
+          }
+          self._endpoints = payload.endpoints;
+          self._groups = payload.groups;
+          self._source = 'auto-discovered';
+          self._sourceCount = payload.endpoints.length;
+          self._render();
+        })
+        .catch(function() {
+          // Bundled fallback already set. No-op.
+        });
+    } catch (e) {
+      // fetch unavailable — keep bundled.
+    }
   }
 
   _render() {
@@ -229,10 +233,26 @@ class EndpointCatalog {
     title.textContent = 'Endpoints';
     var count = document.createElement('span');
     count.className = 'api-catalog-count';
-    count.textContent = ENDPOINT_CATALOG.length;
+    count.textContent = this._endpoints.length;
     header.appendChild(title);
     header.appendChild(count);
     this._container.appendChild(header);
+
+    // Source badge — shows whether catalog came from dev-server discovery
+    // or the bundled fallback. Helps users understand staleness vs freshness.
+    var badge = document.createElement('div');
+    badge.className = 'api-catalog-source api-catalog-source-' + this._source;
+    var badgeDot = document.createElement('span');
+    badgeDot.className = 'api-catalog-source-dot';
+    badgeDot.textContent = this._source === 'auto-discovered' ? '\u25CF' : '\u25CB';
+    var badgeText = document.createElement('span');
+    badgeText.textContent = this._source === 'auto-discovered'
+      ? 'Auto-discovered (' + this._sourceCount + ' routes)'
+      : 'Bundled fallback (' + this._sourceCount + ' routes)';
+    badge.appendChild(badgeDot);
+    badge.appendChild(badgeText);
+    this._badgeEl = badge;
+    this._container.appendChild(badge);
 
     // Search
     var searchWrap = document.createElement('div');
@@ -270,11 +290,11 @@ class EndpointCatalog {
     var matched = 0;
     var groupColors = ['var(--green)', 'var(--blue)', 'var(--amber)', 'var(--purple)', 'var(--red)',
       'var(--green)', 'var(--blue)', 'var(--amber)', 'var(--purple)', 'var(--red)'];
-    for (var g = 0; g < ENDPOINT_GROUPS.length; g++) {
-      var group = ENDPOINT_GROUPS[g];
+    for (var g = 0; g < this._groups.length; g++) {
+      var group = this._groups[g];
       var endpoints = [];
-      for (var i = 0; i < ENDPOINT_CATALOG.length; i++) {
-        var ep = ENDPOINT_CATALOG[i];
+      for (var i = 0; i < this._endpoints.length; i++) {
+        var ep = this._endpoints[i];
         if (ep.group !== group.id) continue;
         if (filter && ep.name.toLowerCase().indexOf(filter) === -1
             && ep.urlTemplate.toLowerCase().indexOf(filter) === -1

@@ -50,6 +50,19 @@
 .api-catalog-search {
   padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
+
+/* Source badge — sits between header and search, indicates fresh vs bundled. */
+.api-catalog-source {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px var(--space-3) 6px;
+  font-size: 10px; font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.api-catalog-source-dot { font-size: 8px; line-height: 1; }
+.api-catalog-source-auto-discovered { color: var(--green, #4ade80); }
+.api-catalog-source-bundled { color: var(--text-muted); }
 .api-catalog-search-box {
   display: flex; align-items: center; gap: 6px; padding: 5px 10px;
   border-radius: var(--radius-md); border: 1px solid var(--border-bright);
