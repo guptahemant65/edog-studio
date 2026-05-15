@@ -212,6 +212,40 @@ def _stop_file_watcher():
         _file_watcher.reset()
 
 
+def _capture_git_head(repo_path: str) -> dict | None:
+    """Capture HEAD commit info from the FLT repo.
+
+    Returns dict with commitSha, commitMessage, commitAuthor, commitDate, or None
+    if the repo isn't a git checkout or git is unavailable. Used to populate the
+    Connected strip so the user can see exactly what code is running.
+    """
+    if not repo_path or not Path(repo_path).is_dir():
+        return None
+    try:
+        # Single git call: SHA \n author \n subject \n ISO date
+        result = subprocess.run(
+            ["git", "log", "-1", "--pretty=format:%H%n%an%n%s%n%cI"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        lines = result.stdout.split("\n", 3)
+        if len(lines) < 4:
+            return None
+        return {
+            "commitSha": lines[0].strip(),
+            "commitAuthor": lines[1].strip(),
+            "commitMessage": lines[2].strip(),
+            "commitDate": lines[3].strip(),
+        }
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+
+
 def _write_cache(path: Path, token: str, expiry: float):
     """Write base64-encoded timestamp|token cache file."""
     data = f"{expiry}|{token}"
@@ -1482,13 +1516,31 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
 
         _deploy_log("DevConnection started — service fully deployed!", "success")
 
+        # Capture FLT repo git HEAD for the Connected strip (issue: commit info
+        # was never populated, so commit SHA/message never showed up in UI).
+        git_info = None
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+            git_info = _capture_git_head(cfg.get("flt_repo_path", ""))
+            if git_info and git_info.get("commitSha"):
+                _deploy_log(
+                    f"FLT @ {git_info['commitSha'][:7]} — {git_info['commitMessage']}",
+                    "dim",
+                )
+        except Exception:
+            pass  # Non-fatal — strip just won't show commit chip
+
         # Done
         with _studio_lock:
+            target = _studio_state.get("deployTarget") or {}
+            if git_info:
+                target.update(git_info)
             _studio_state.update(
                 {
                     "phase": "running",
                     "deployStep": 5,
                     "deployMessage": "Deploy complete",
+                    "deployTarget": target,
                 }
             )
         _deploy_log("Deploy complete!", "success")
@@ -2162,6 +2214,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         lh_id = body.get("artifactId", "")
         cap_id = body.get("capacityId", "")
         lh_name = body.get("lakehouseName", "")
+        ws_name = body.get("workspaceName", "")
         force = body.get("force", False)
 
         if not all([ws_id, lh_id]):
@@ -2234,6 +2287,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         "artifactId": lh_id,
                         "capacityId": cap_id,
                         "lakehouseName": lh_name,
+                        "workspaceName": ws_name,
                     },
                     "deployStartTime": time.time(),
                     "fltPort": None,

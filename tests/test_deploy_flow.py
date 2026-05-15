@@ -317,3 +317,96 @@ class TestTerminalControlsCss:
         css = _DEPLOY_CSS.read_text(encoding="utf-8")
         assert ".deploy-term-toast" in css
         assert ".deploy-term-toast.visible" in css
+
+
+# ============================================================================
+# Deploy strip context — F02 fix: commit info + visibility timing
+# ============================================================================
+
+_DEPLOY_STRIP_JS = Path(__file__).resolve().parents[1] / "src" / "frontend" / "js" / "deploy-strip.js"
+
+
+class TestDeployStripVisibility:
+    """Strip must only appear after E2E deploy completes (phase === 'running')."""
+
+    def test_strip_hides_when_phase_not_running(self) -> None:
+        src = _DEPLOY_STRIP_JS.read_text(encoding="utf-8")
+        # Old logic hid only on idle/stopped — meaning the strip flashed during
+        # 'deploying' with empty fields. New logic hides for ANY non-running phase.
+        assert "status.phase !== 'running'" in src, (
+            "Strip visibility must check phase === 'running' (was leaking on 'deploying')"
+        )
+        # Defensive: the old buggy check should be gone
+        assert "status.phase === 'idle' || status.phase === 'stopped'" not in src, (
+            "Old hide condition must be removed — it caused strip to show mid-deploy"
+        )
+
+
+class TestGitHeadCapture:
+    """Backend must capture FLT repo HEAD commit info for the Connected strip."""
+
+    def test_capture_git_head_helper_exists(self) -> None:
+        ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
+        src = ds.read_text(encoding="utf-8")
+        assert "def _capture_git_head" in src, (
+            "dev-server.py must expose _capture_git_head() to populate commit chip"
+        )
+        # Single subprocess call to git log with the four fields the strip needs
+        assert "commitSha" in src and "commitAuthor" in src and "commitMessage" in src
+
+    def test_capture_git_head_returns_none_for_non_repo(self, tmp_path) -> None:
+        import importlib.util
+        import sys
+        ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
+        sys.path.insert(0, str(ds.parent))
+        try:
+            spec = importlib.util.spec_from_file_location("ds_mod_a", ds)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        finally:
+            sys.path.remove(str(ds.parent))
+        assert mod._capture_git_head("") is None
+        assert mod._capture_git_head(str(tmp_path)) is None
+        assert mod._capture_git_head("/nonexistent/path/xyz") is None
+
+    def test_capture_git_head_returns_sha_in_real_repo(self) -> None:
+        """Sanity: when run against the edog-studio repo itself, returns a sha."""
+        import importlib.util
+        import sys
+        ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
+        sys.path.insert(0, str(ds.parent))
+        try:
+            spec = importlib.util.spec_from_file_location("ds_mod_b", ds)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+        finally:
+            sys.path.remove(str(ds.parent))
+        info = mod._capture_git_head(str(ds.parent.parent))
+        # In CI we may or may not have git history — accept None as well as a real hit
+        if info is not None:
+            assert len(info["commitSha"]) == 40
+            assert info["commitMessage"]
+            assert info["commitAuthor"]
+
+
+class TestDeployTargetCarriesWorkspaceName:
+    """workspaceName from request body must be stored in deployTarget."""
+
+    def test_deploy_handler_reads_workspace_name(self) -> None:
+        ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
+        src = ds.read_text(encoding="utf-8")
+        assert 'body.get("workspaceName"' in src, (
+            "POST /api/command/deploy must read workspaceName from request body"
+        )
+        assert '"workspaceName": ws_name' in src, (
+            "workspaceName must be stored in deployTarget for the Connected strip"
+        )
+
+    def test_git_info_merged_into_deploy_target_on_running(self) -> None:
+        ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
+        src = ds.read_text(encoding="utf-8")
+        # When deploy transitions to 'running', git_info should be merged into target
+        assert "_capture_git_head" in src
+        assert "target.update(git_info)" in src, (
+            "Captured git_info must be merged into deployTarget on successful deploy"
+        )

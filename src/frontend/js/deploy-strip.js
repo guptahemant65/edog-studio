@@ -18,11 +18,15 @@ class DeployContextStrip {
   /**
    * Update strip with deploy config data.
    * @param {object|null} status — from /api/studio/status
+   *
+   * Visibility rule: only show after deploy is fully complete (phase === 'running').
+   * Previously the strip appeared during 'deploying' too, which made it pop up
+   * mid-build with empty fields — confusing and premature.
    */
   update(status) {
     if (!this._el) return;
 
-    if (!status || !status.deployTarget || status.phase === 'idle' || status.phase === 'stopped') {
+    if (!status || !status.deployTarget || status.phase !== 'running') {
       this._el.classList.remove('active');
       if (this._timeTimer) { clearInterval(this._timeTimer); this._timeTimer = null; }
       return;
@@ -39,14 +43,12 @@ class DeployContextStrip {
     badge.innerHTML = '<span class="ds-dot"></span><span class="ds-badge-label">Connected</span>';
     this._el.appendChild(badge);
 
-    // Breadcrumb path: tenant > capacity > workspace > lakehouse
+    // Breadcrumb path: workspace > lakehouse (names, IDs on tooltip)
     var path = document.createElement('div');
     path.className = 'ds-path';
     var segments = [
-      { text: t.tenantName || 'tenant', bold: false },
-      { text: t.capacityId || 'capacity', bold: false },
-      { text: t.workspaceName || t.workspaceId || 'workspace', bold: true },
-      { text: t.lakehouseName || t.artifactId || 'lakehouse', bold: true },
+      { text: t.workspaceName || 'workspace', title: t.workspaceId || '', bold: true },
+      { text: t.lakehouseName || 'lakehouse', title: t.artifactId || '', bold: true },
     ];
     segments.forEach(function(seg, i) {
       if (i > 0) {
@@ -58,6 +60,7 @@ class DeployContextStrip {
       var span = document.createElement('span');
       span.className = 'ds-path-seg' + (seg.bold ? ' bold' : '');
       span.textContent = seg.text;
+      if (seg.title) span.title = seg.title;
       path.appendChild(span);
     });
     this._el.appendChild(path);
