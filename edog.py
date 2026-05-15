@@ -2053,17 +2053,35 @@ def revert_disable_flt_auth_manifest(content):
 
 
 def apply_disable_flt_auth_test_json(content):
-    """Add DisableFLTAuth: true to Test.json rollout config."""
+    """Add ``"DisableFLTAuth": true`` to Test.json rollout config.
+
+    Anchors on the **structural tail** of the parameters block — the last
+    value before ``}\\n}`` at end-of-file — rather than on a specific
+    property name. The previous implementation hard-coded
+    ``"FabricPublicApiHost"`` as the assumed-last property, which broke
+    silently the moment the FLT team added a new property after it
+    (``"FabricPublicApiAudience"`` in May 2026).
+
+    The pattern intentionally allows any last-value shape (string, number,
+    bool, null, array close, object close) so we don't need a new regex
+    every time the upstream file is reordered or extended.
+    """
     if '"DisableFLTAuth": true' in content:
         return content, "already_applied"
-    # Add DisableFLTAuth after the last existing property (before closing braces)
-    pattern = r'("FabricPublicApiHost":\s*"[^"]*")\s*\n(\s*}\s*\n\s*})'
-    match = re.search(pattern, content)
-    if match:
-        # Preserve whatever comes after the match (including any trailing newline)
-        new_content = content[: match.end(1)] + ',\n    "DisableFLTAuth": true\n' + content[match.start(2) :]
-        return new_content, "applied"
-    return content, "pattern_not_found"
+    # End of last value (closing quote / number / bool / null / ']' / '}') ...
+    # followed by the inner '}' (closes "parameters") and outer '}' (closes root).
+    # Anchored to end-of-file so we only match the file's true tail.
+    pattern = re.compile(
+        r'((?:"[^"\\]*(?:\\.[^"\\]*)*"|true|false|null|-?\d+(?:\.\d+)?|\]|\}))'
+        r'(\s*\n\s*\}\s*\n\s*\}\s*\n?\s*)\Z',
+        re.DOTALL,
+    )
+    match = pattern.search(content)
+    if not match:
+        return content, "pattern_not_found"
+    insertion = ',\n    "DisableFLTAuth": true'
+    new_content = content[: match.end(1)] + insertion + content[match.end(1) :]
+    return new_content, "applied"
 
 
 def revert_disable_flt_auth_test_json(content):
