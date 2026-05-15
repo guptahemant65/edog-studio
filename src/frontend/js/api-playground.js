@@ -1038,6 +1038,11 @@ class RequestBuilder {
     this._urlEl.disabled = sending;
   }
 
+  setSendLabel(text) {
+    var lbl = this._sendBtn.querySelector('.lbl');
+    if (lbl) lbl.textContent = text || 'Send';
+  }
+
   getCancelBtn() { return this._cancelBtn; }
 
   generateCurl() {
@@ -1135,6 +1140,48 @@ class ResponseViewer {
       shimmer.appendChild(line);
     }
     this._container.appendChild(shimmer);
+  }
+
+  showInfo(opts) {
+    opts = opts || {};
+    this._container.innerHTML = '';
+    var header = document.createElement('div');
+    header.className = 'api-resp-header';
+    var label = document.createElement('span');
+    label.className = 'api-resp-label';
+    label.textContent = 'Response';
+    header.appendChild(label);
+    this._container.appendChild(header);
+
+    var empty = document.createElement('div');
+    empty.className = 'api-resp-empty';
+    var icon = document.createElement('div');
+    icon.className = 'api-resp-empty-icon';
+    icon.textContent = opts.icon || '\u2197'; // upper-right arrow ↗
+    var title = document.createElement('div');
+    title.className = 'api-resp-empty-title';
+    title.textContent = opts.title || 'Info';
+    var hint = document.createElement('div');
+    hint.className = 'api-resp-empty-hint';
+    hint.textContent = opts.hint || '';
+    empty.appendChild(icon);
+    empty.appendChild(title);
+    empty.appendChild(hint);
+
+    if (opts.url) {
+      var link = document.createElement('a');
+      link.className = 'api-resp-empty-hint';
+      link.href = opts.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = opts.url;
+      link.style.marginTop = '8px';
+      link.style.color = 'var(--accent, #4ea1ff)';
+      link.style.wordBreak = 'break-all';
+      empty.appendChild(link);
+    }
+
+    this._container.appendChild(empty);
   }
 
   showResponse(result) {
@@ -2633,6 +2680,10 @@ class ApiPlayground {
         queryParams: endpoint.queryParams || []
       });
 
+      // Swap the primary action label so the UI matches the behavior:
+      // `ui` kinds open in a new tab, everything else sends a request.
+      self._requestBuilder.setSendLabel(endpoint.kind === 'ui' ? 'Open in browser' : 'Send');
+
       // F09: spec endpoints auto-load the diff into the response panel.
       if (endpoint.kind === 'spec') {
         self._loadSwaggerDiff();
@@ -2642,6 +2693,7 @@ class ApiPlayground {
     // History/saved replay -> populate builder (clears spec-endpoint context)
     this._historySaved.onReplay = function(entry) {
       self._selectedEndpoint = null;
+      self._requestBuilder.setSendLabel('Send');
       self._requestBuilder.setRequest({
         method: entry.method,
         url: entry.url,
@@ -2728,6 +2780,14 @@ class ApiPlayground {
     // F09: spec endpoint short-circuits — load diff, don't proxy.
     if (this._selectedEndpoint && this._selectedEndpoint.kind === 'spec') {
       this._loadSwaggerDiff();
+      return;
+    }
+
+    // `ui` endpoints (e.g. Swagger UI) are HTML pages served by FLT — they
+    // can't be rendered inside the response panel. Open them directly in a
+    // new browser tab pointed at the running FLT port.
+    if (this._selectedEndpoint && this._selectedEndpoint.kind === 'ui') {
+      this._openInBrowser(request);
       return;
     }
 
@@ -2925,6 +2985,44 @@ class ApiPlayground {
     // Protocol-relative or absolute path
     if (url.charAt(0) !== '/') url = '/' + url;
     return url;
+  }
+
+  _openInBrowser(request) {
+    var config = (this._apiClient && this._apiClient.getConfig) ? this._apiClient.getConfig() : null;
+    var fltPort = config && config.fltPort ? config.fltPort : null;
+
+    if (!fltPort) {
+      this._responseViewer.showError({
+        message: 'FLT is not running \u2014 deploy first, then retry. Swagger UI lives on the FLT host (http://localhost:<fltPort>/).'
+      });
+      return;
+    }
+
+    var path = this._extractPath(this._resolveUrl(request.url)) || '/';
+    var browserUrl = 'http://localhost:' + fltPort + path;
+
+    var opened = null;
+    try {
+      opened = window.open(browserUrl, '_blank', 'noopener,noreferrer');
+    } catch (e) {
+      opened = null;
+    }
+
+    if (!opened) {
+      this._responseViewer.showInfo({
+        title: 'Popup blocked',
+        hint: 'Your browser blocked the new tab. Click the link below to open Swagger UI manually.',
+        url: browserUrl,
+        icon: '\u26A0'
+      });
+      return;
+    }
+
+    this._responseViewer.showInfo({
+      title: 'Opened Swagger UI in a new tab',
+      hint: 'This endpoint serves an interactive HTML page \u2014 not a JSON response \u2014 so it loads in your browser instead of the response panel.',
+      url: browserUrl
+    });
   }
 
   _buildEnvelopeHeaders(headerRows) {
