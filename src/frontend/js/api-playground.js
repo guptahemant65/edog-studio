@@ -1458,6 +1458,743 @@ class ResponseViewer {
 }
 
 /* ══════════════════════════════════════════════════════════════
+ * §4b  SWAGGER SPEC VIEW (F09 — kind=spec endpoint)
+ * ──────────────────────────────────────────────────────────────
+ *  Renders the diff between runtime swagger.json and the
+ *  committed baseline (data/swagger-baseline.json).
+ *  Backend: GET/POST/DELETE /api/playground/swagger/{diff,baseline}.
+ *  States:
+ *    – loading: shimmer
+ *    – no-baseline: CTA "Save as baseline" + raw runtime
+ *    – baseline-error: warning + "Replace baseline" CTA
+ *    – clean: "Runtime matches baseline" with savedAt
+ *    – changes: tree (categories → groups → entries) + detail pane
+ * ══════════════════════════════════════════════════════════════ */
+
+class SwaggerSpecView {
+  constructor(container) {
+    this._container = container;
+    this._handlers = { onSaveBaseline: null, onReplaceBaseline: null, onReload: null };
+    this._payload = null;
+    this._selectedChangeId = null;
+    this._showRawRuntime = false;
+    this._busy = false;
+  }
+
+  setHandlers(h) {
+    if (!h) return;
+    if (h.onSaveBaseline) this._handlers.onSaveBaseline = h.onSaveBaseline;
+    if (h.onReplaceBaseline) this._handlers.onReplaceBaseline = h.onReplaceBaseline;
+    if (h.onReload) this._handlers.onReload = h.onReload;
+  }
+
+  showLoading() {
+    var c = this._container;
+    c.innerHTML = '';
+    c.classList.remove('tint-ok', 'tint-warn', 'tint-err');
+    var header = document.createElement('div');
+    header.className = 'api-resp-header';
+    var label = document.createElement('span');
+    label.className = 'api-resp-label';
+    label.textContent = 'Swagger Diff';
+    header.appendChild(label);
+    c.appendChild(header);
+    var shimmer = document.createElement('div');
+    shimmer.className = 'api-shimmer active';
+    for (var i = 0; i < 6; i++) {
+      var line = document.createElement('div');
+      line.className = 'api-shimmer-line';
+      shimmer.appendChild(line);
+    }
+    c.appendChild(shimmer);
+  }
+
+  showError(msg) {
+    var c = this._container;
+    c.innerHTML = '';
+    c.classList.remove('tint-ok', 'tint-warn'); c.classList.add('tint-err');
+    var header = document.createElement('div');
+    header.className = 'api-resp-header';
+    var label = document.createElement('span');
+    label.className = 'api-resp-label'; label.textContent = 'Swagger Diff';
+    header.appendChild(label);
+    var pill = document.createElement('span');
+    pill.className = 'api-status-pill s5xx';
+    pill.textContent = 'Error';
+    header.appendChild(pill);
+    var actions = document.createElement('div');
+    actions.style.marginLeft = 'auto';
+    var retry = document.createElement('button');
+    retry.className = 'api-json-action'; retry.textContent = 'Retry';
+    var self = this;
+    retry.addEventListener('click', function() {
+      if (self._handlers.onReload) self._handlers.onReload();
+    });
+    actions.appendChild(retry);
+    header.appendChild(actions);
+    c.appendChild(header);
+    var body = document.createElement('div');
+    body.className = 'api-raw-view';
+    body.textContent = msg || 'Unknown error loading swagger diff.';
+    c.appendChild(body);
+  }
+
+  showDiff(payload) {
+    this._payload = payload || {};
+    this._selectedChangeId = null;
+    this._render();
+  }
+
+  _render() {
+    var p = this._payload;
+    var c = this._container;
+    c.innerHTML = '';
+    c.classList.remove('tint-ok', 'tint-warn', 'tint-err');
+
+    var baselineExists = !!p.baselineExists;
+    var baselineError = p.baselineError || null;
+    var diff = p.diff || null;
+    var totalChanges = diff && diff.summary ? (diff.summary.totalChanges | 0) : 0;
+
+    if (baselineError) c.classList.add('tint-warn');
+    else if (!baselineExists) c.classList.add('tint-warn');
+    else if (totalChanges === 0) c.classList.add('tint-ok');
+    else c.classList.add('tint-warn');
+
+    c.appendChild(this._renderHeader(p, baselineExists, baselineError, diff, totalChanges));
+
+    if (baselineError) {
+      c.appendChild(this._renderBaselineErrorBody(baselineError));
+      return;
+    }
+    if (!baselineExists) {
+      c.appendChild(this._renderFirstRunBody(p));
+      return;
+    }
+    if (totalChanges === 0) {
+      c.appendChild(this._renderCleanBody(p));
+      return;
+    }
+    c.appendChild(this._renderDiffBody(diff));
+  }
+
+  _renderHeader(p, baselineExists, baselineError, diff, totalChanges) {
+    var header = document.createElement('div');
+    header.className = 'api-resp-header';
+
+    var label = document.createElement('span');
+    label.className = 'api-resp-label';
+    label.textContent = 'Swagger Diff';
+    header.appendChild(label);
+
+    var pill = document.createElement('span');
+    pill.className = 'api-status-pill';
+    if (baselineError) {
+      pill.className += ' s4xx';
+      pill.textContent = 'Baseline corrupt';
+    } else if (!baselineExists) {
+      pill.className += ' s4xx';
+      pill.textContent = 'No baseline';
+    } else if (totalChanges === 0) {
+      pill.className += ' s2xx';
+      pill.textContent = 'In sync';
+    } else {
+      pill.className += ' s4xx';
+      pill.textContent = totalChanges + (totalChanges === 1 ? ' change' : ' changes');
+    }
+    header.appendChild(pill);
+
+    if (baselineExists && p.baselineSavedAt) {
+      var savedPill = document.createElement('span');
+      savedPill.className = 'api-metric-pill show';
+      savedPill.textContent = 'baseline: ' + this._formatSavedAt(p.baselineSavedAt);
+      savedPill.title = p.baselineSavedAt;
+      header.appendChild(savedPill);
+    }
+
+    // Summary chips for endpoint/schema buckets
+    if (diff && diff.summary && totalChanges > 0) {
+      var sumWrap = document.createElement('span');
+      sumWrap.className = 'api-swag-summary';
+      this._appendSumChip(sumWrap, 'EP', diff.summary.endpoints);
+      this._appendSumChip(sumWrap, 'SC', diff.summary.schemas);
+      header.appendChild(sumWrap);
+    }
+
+    var actions = document.createElement('div');
+    actions.style.marginLeft = 'auto';
+    actions.style.display = 'flex';
+    actions.style.gap = 'var(--space-2)';
+
+    var reloadBtn = document.createElement('button');
+    reloadBtn.className = 'api-json-action';
+    reloadBtn.textContent = 'Reload';
+    var self = this;
+    reloadBtn.addEventListener('click', function() {
+      if (self._handlers.onReload) self._handlers.onReload();
+    });
+    actions.appendChild(reloadBtn);
+
+    if (totalChanges > 0 && baselineExists && !baselineError) {
+      var copyAllBtn = document.createElement('button');
+      copyAllBtn.className = 'api-json-action';
+      copyAllBtn.textContent = 'Copy all';
+      copyAllBtn.addEventListener('click', function() {
+        self._copyText(self._formatAllChanges(diff));
+      });
+      actions.appendChild(copyAllBtn);
+    }
+
+    if (!baselineExists || baselineError) {
+      var saveBtn = document.createElement('button');
+      saveBtn.className = 'api-json-action api-swag-primary';
+      saveBtn.textContent = 'Save as baseline';
+      saveBtn.addEventListener('click', function() {
+        self._invokeBaseline('save', saveBtn);
+      });
+      actions.appendChild(saveBtn);
+    } else if (totalChanges > 0) {
+      var replaceBtn = document.createElement('button');
+      replaceBtn.className = 'api-json-action api-swag-primary';
+      replaceBtn.textContent = 'Replace baseline';
+      replaceBtn.title = 'Overwrite the committed baseline with current runtime spec.';
+      replaceBtn.addEventListener('click', function() {
+        if (!window.confirm('Replace the committed baseline with the current runtime spec? '
+          + 'This is a destructive write — review the diff before confirming.')) return;
+        self._invokeBaseline('replace', replaceBtn);
+      });
+      actions.appendChild(replaceBtn);
+    }
+
+    header.appendChild(actions);
+    return header;
+  }
+
+  _appendSumChip(wrap, prefix, bucket) {
+    if (!bucket) return;
+    var addAdded = (bucket.added | 0);
+    var addRem = (bucket.removed | 0);
+    var addMod = (bucket.modified | 0);
+    if (addAdded === 0 && addRem === 0 && addMod === 0) return;
+    var chip = document.createElement('span');
+    chip.className = 'api-swag-chip';
+    chip.innerHTML = '<span class="api-swag-chip-label">' + prefix + '</span>'
+      + (addAdded ? '<span class="api-swag-chip-add">+' + addAdded + '</span>' : '')
+      + (addMod ? '<span class="api-swag-chip-mod">~' + addMod + '</span>' : '')
+      + (addRem ? '<span class="api-swag-chip-rem">-' + addRem + '</span>' : '');
+    wrap.appendChild(chip);
+  }
+
+  _renderFirstRunBody(p) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-firstrun';
+    var card = document.createElement('div');
+    card.className = 'api-swag-firstrun-card';
+    var icon = document.createElement('div');
+    icon.className = 'api-swag-firstrun-icon';
+    icon.textContent = '\u25C6';
+    var title = document.createElement('div');
+    title.className = 'api-swag-firstrun-title';
+    title.textContent = 'No baseline to diff against';
+    var hint = document.createElement('div');
+    hint.className = 'api-swag-firstrun-hint';
+    hint.textContent = 'Save the current runtime spec as your baseline to start tracking contract changes. '
+      + 'The baseline is committed to data/swagger-baseline.json and reviewed in PRs.';
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(hint);
+
+    var ctaRow = document.createElement('div');
+    ctaRow.className = 'api-swag-firstrun-cta';
+    var primary = document.createElement('button');
+    primary.className = 'api-json-action api-swag-primary';
+    primary.textContent = 'Save as baseline';
+    var self = this;
+    primary.addEventListener('click', function() {
+      self._invokeBaseline('save', primary);
+    });
+    var secondary = document.createElement('button');
+    secondary.className = 'api-json-action';
+    secondary.textContent = this._showRawRuntime ? 'Hide runtime spec' : 'View runtime spec';
+    secondary.addEventListener('click', function() {
+      self._showRawRuntime = !self._showRawRuntime;
+      self._render();
+    });
+    ctaRow.appendChild(primary);
+    ctaRow.appendChild(secondary);
+    card.appendChild(ctaRow);
+    wrap.appendChild(card);
+
+    if (this._showRawRuntime && p.runtime) {
+      wrap.appendChild(this._renderRawSpec(p.runtime));
+    }
+    return wrap;
+  }
+
+  _renderBaselineErrorBody(errMsg) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-firstrun';
+    var card = document.createElement('div');
+    card.className = 'api-swag-firstrun-card';
+    var icon = document.createElement('div');
+    icon.className = 'api-swag-firstrun-icon';
+    icon.textContent = '\u26A0';
+    icon.style.color = 'var(--amber)';
+    var title = document.createElement('div');
+    title.className = 'api-swag-firstrun-title';
+    title.textContent = 'Baseline file is unreadable';
+    var hint = document.createElement('div');
+    hint.className = 'api-swag-firstrun-hint';
+    hint.textContent = errMsg + '. Replace the baseline with the current runtime spec or fix the file on disk.';
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(hint);
+    wrap.appendChild(card);
+    return wrap;
+  }
+
+  _renderCleanBody(p) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-firstrun';
+    var card = document.createElement('div');
+    card.className = 'api-swag-firstrun-card';
+    var icon = document.createElement('div');
+    icon.className = 'api-swag-firstrun-icon';
+    icon.textContent = '\u2713';
+    icon.style.color = 'var(--green)';
+    var title = document.createElement('div');
+    title.className = 'api-swag-firstrun-title';
+    title.textContent = 'Runtime matches baseline';
+    var hint = document.createElement('div');
+    hint.className = 'api-swag-firstrun-hint';
+    var when = p.baselineSavedAt ? ('Baseline saved ' + this._formatSavedAt(p.baselineSavedAt) + '.') : '';
+    hint.textContent = 'No contract drift detected. ' + when;
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(hint);
+
+    var ctaRow = document.createElement('div');
+    ctaRow.className = 'api-swag-firstrun-cta';
+    var self = this;
+    var rawBtn = document.createElement('button');
+    rawBtn.className = 'api-json-action';
+    rawBtn.textContent = this._showRawRuntime ? 'Hide runtime spec' : 'View runtime spec';
+    rawBtn.addEventListener('click', function() {
+      self._showRawRuntime = !self._showRawRuntime;
+      self._render();
+    });
+    ctaRow.appendChild(rawBtn);
+    card.appendChild(ctaRow);
+    wrap.appendChild(card);
+
+    if (this._showRawRuntime && p.runtime) {
+      wrap.appendChild(this._renderRawSpec(p.runtime));
+    }
+    return wrap;
+  }
+
+  _renderRawSpec(spec) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-raw';
+    var hdr = document.createElement('div');
+    hdr.className = 'api-swag-raw-header';
+    hdr.textContent = 'Runtime spec (read-only)';
+    wrap.appendChild(hdr);
+    var tree = document.createElement('div');
+    tree.className = 'json-tree';
+    wrap.appendChild(tree);
+    var jt = new JsonTree(tree);
+    jt.render(spec);
+    return wrap;
+  }
+
+  _renderDiffBody(diff) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-split';
+
+    var treePane = document.createElement('div');
+    treePane.className = 'api-swag-tree';
+    this._renderTree(treePane, diff);
+    wrap.appendChild(treePane);
+
+    var divider = document.createElement('div');
+    divider.className = 'api-swag-divider';
+    wrap.appendChild(divider);
+
+    var detailPane = document.createElement('div');
+    detailPane.className = 'api-swag-detail';
+    this._detailEl = detailPane;
+    this._renderDetail(diff);
+    wrap.appendChild(detailPane);
+
+    return wrap;
+  }
+
+  _renderTree(container, diff) {
+    container.innerHTML = '';
+    var changes = (diff && diff.changes) || [];
+    if (!changes.length) {
+      var empty = document.createElement('div');
+      empty.className = 'api-swag-tree-empty';
+      empty.textContent = 'No changes';
+      container.appendChild(empty);
+      return;
+    }
+    // Group by category → type
+    var groups = { endpoints: { added: [], modified: [], removed: [] },
+                   schemas: { added: [], modified: [], removed: [] } };
+    for (var i = 0; i < changes.length; i++) {
+      var ch = changes[i];
+      var cat = ch.category === 'schemas' ? 'schemas' : 'endpoints';
+      var t = (ch.type === 'added' || ch.type === 'removed' || ch.type === 'modified')
+        ? ch.type : 'modified';
+      groups[cat][t].push(ch);
+    }
+    if (!this._selectedChangeId && changes.length > 0) {
+      this._selectedChangeId = changes[0].id;
+    }
+    this._renderTreeGroup(container, 'Endpoints', 'endpoints', groups.endpoints);
+    this._renderTreeGroup(container, 'Schemas', 'schemas', groups.schemas);
+  }
+
+  _renderTreeGroup(container, label, catKey, buckets) {
+    var total = buckets.added.length + buckets.modified.length + buckets.removed.length;
+    if (total === 0) return;
+    var groupEl = document.createElement('div');
+    groupEl.className = 'api-swag-group';
+    var head = document.createElement('div');
+    head.className = 'api-swag-group-head';
+    head.innerHTML = '<span class="api-swag-group-tog">\u25BE</span>'
+      + '<span class="api-swag-group-label">' + label + '</span>'
+      + '<span class="api-swag-group-count">' + total + '</span>';
+    groupEl.appendChild(head);
+
+    var body = document.createElement('div');
+    body.className = 'api-swag-group-body';
+
+    this._renderBucket(body, 'added', buckets.added);
+    this._renderBucket(body, 'modified', buckets.modified);
+    this._renderBucket(body, 'removed', buckets.removed);
+
+    groupEl.appendChild(body);
+    container.appendChild(groupEl);
+
+    head.addEventListener('click', function() {
+      var open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : '';
+      head.querySelector('.api-swag-group-tog').textContent = open ? '\u25B8' : '\u25BE';
+    });
+  }
+
+  _renderBucket(container, type, entries) {
+    if (!entries.length) return;
+    var bucketHead = document.createElement('div');
+    bucketHead.className = 'api-swag-bucket-head api-swag-bucket-' + type;
+    var labelMap = { added: 'Added', modified: 'Modified', removed: 'Removed' };
+    bucketHead.innerHTML = '<span class="api-swag-bucket-label">' + labelMap[type] + '</span>'
+      + '<span class="api-swag-bucket-count">' + entries.length + '</span>';
+    container.appendChild(bucketHead);
+
+    for (var i = 0; i < entries.length; i++) {
+      container.appendChild(this._renderTreeEntry(entries[i]));
+    }
+  }
+
+  _renderTreeEntry(change) {
+    var row = document.createElement('div');
+    row.className = 'api-swag-row api-swag-row-' + change.type;
+    if (this._selectedChangeId === change.id) row.classList.add('active');
+    row.setAttribute('data-change-id', change.id);
+
+    var sigil = document.createElement('span');
+    sigil.className = 'api-swag-sigil';
+    sigil.textContent = change.type === 'added' ? '+' : (change.type === 'removed' ? '\u2212' : '~');
+    row.appendChild(sigil);
+
+    var key = document.createElement('span');
+    key.className = 'api-swag-key';
+    key.textContent = change.key;
+    row.appendChild(key);
+
+    var subCount = change.subChanges ? change.subChanges.length : 0;
+    if (subCount > 0) {
+      var badge = document.createElement('span');
+      badge.className = 'api-swag-subbadge';
+      badge.textContent = '\u25C7' + subCount;
+      badge.title = subCount + ' sub-' + (subCount === 1 ? 'change' : 'changes');
+      row.appendChild(badge);
+    }
+
+    var self = this;
+    row.addEventListener('click', function() {
+      self._selectedChangeId = change.id;
+      // Reset active class
+      var rows = self._container.querySelectorAll('.api-swag-row');
+      for (var i = 0; i < rows.length; i++) rows[i].classList.remove('active');
+      row.classList.add('active');
+      if (self._detailEl && self._payload && self._payload.diff) {
+        self._renderDetail(self._payload.diff);
+      }
+    });
+    return row;
+  }
+
+  _renderDetail(diff) {
+    var el = this._detailEl;
+    if (!el) return;
+    el.innerHTML = '';
+    var changes = (diff && diff.changes) || [];
+    var ch = null;
+    for (var i = 0; i < changes.length; i++) {
+      if (changes[i].id === this._selectedChangeId) { ch = changes[i]; break; }
+    }
+    if (!ch) {
+      var empty = document.createElement('div');
+      empty.className = 'api-swag-detail-empty';
+      empty.textContent = 'Select a change to view details.';
+      el.appendChild(empty);
+      return;
+    }
+
+    var head = document.createElement('div');
+    head.className = 'api-swag-detail-head';
+    var typePill = document.createElement('span');
+    typePill.className = 'api-swag-type-pill api-swag-type-' + ch.type;
+    typePill.textContent = ch.type;
+    head.appendChild(typePill);
+    var catPill = document.createElement('span');
+    catPill.className = 'api-swag-cat-pill';
+    catPill.textContent = ch.category === 'schemas' ? 'schema' : 'endpoint';
+    head.appendChild(catPill);
+    var keyEl = document.createElement('span');
+    keyEl.className = 'api-swag-detail-key';
+    keyEl.textContent = ch.key;
+    head.appendChild(keyEl);
+
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'api-json-action';
+    copyBtn.textContent = 'Copy';
+    copyBtn.style.marginLeft = 'auto';
+    var self = this;
+    copyBtn.addEventListener('click', function() {
+      self._copyText(self._formatChange(ch));
+    });
+    head.appendChild(copyBtn);
+
+    el.appendChild(head);
+
+    var body = document.createElement('div');
+    body.className = 'api-swag-detail-body';
+
+    if (ch.type === 'added') {
+      body.appendChild(this._renderJsonBlock('After (runtime)', ch.newValue));
+    } else if (ch.type === 'removed') {
+      body.appendChild(this._renderJsonBlock('Before (baseline)', ch.oldValue));
+    } else { // modified
+      var sub = ch.subChanges || [];
+      if (sub.length === 0) {
+        // Fallback: full diff side-by-side
+        body.appendChild(this._renderSideBySide(ch.oldValue, ch.newValue));
+      } else {
+        for (var j = 0; j < sub.length; j++) {
+          body.appendChild(this._renderSubChange(sub[j], ch.category));
+        }
+      }
+    }
+
+    el.appendChild(body);
+  }
+
+  _renderSubChange(sc, category) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-sub';
+    var head = document.createElement('div');
+    head.className = 'api-swag-sub-head';
+    var subType = sc.subType || sc.type || 'change';
+    var subPill = document.createElement('span');
+    subPill.className = 'api-swag-sub-pill api-swag-sub-' + this._subKind(subType);
+    subPill.textContent = subType;
+    head.appendChild(subPill);
+    if (sc.detail) {
+      var detEl = document.createElement('span');
+      detEl.className = 'api-swag-sub-detail';
+      detEl.textContent = sc.detail;
+      head.appendChild(detEl);
+    }
+    wrap.appendChild(head);
+
+    var hasOld = Object.prototype.hasOwnProperty.call(sc, 'oldValue');
+    var hasNew = Object.prototype.hasOwnProperty.call(sc, 'newValue');
+
+    if (hasOld && hasNew) {
+      wrap.appendChild(this._renderSideBySide(sc.oldValue, sc.newValue));
+    } else if (hasNew) {
+      wrap.appendChild(this._renderJsonBlock('After', sc.newValue));
+    } else if (hasOld) {
+      wrap.appendChild(this._renderJsonBlock('Before', sc.oldValue));
+    }
+
+    // Nested subChanges (schema property-modified can have further field-level diffs)
+    if (sc.subChanges && sc.subChanges.length) {
+      var nested = document.createElement('div');
+      nested.className = 'api-swag-sub-nested';
+      for (var k = 0; k < sc.subChanges.length; k++) {
+        nested.appendChild(this._renderSubChange(sc.subChanges[k], category));
+      }
+      wrap.appendChild(nested);
+    }
+    return wrap;
+  }
+
+  _subKind(subType) {
+    if (!subType) return 'mod';
+    if (subType.indexOf('added') !== -1) return 'add';
+    if (subType.indexOf('removed') !== -1) return 'rem';
+    return 'mod';
+  }
+
+  _renderJsonBlock(label, value) {
+    var wrap = document.createElement('div');
+    wrap.className = 'api-swag-block';
+    var hdr = document.createElement('div');
+    hdr.className = 'api-swag-block-label';
+    hdr.textContent = label;
+    wrap.appendChild(hdr);
+    var tree = document.createElement('div');
+    tree.className = 'json-tree api-swag-block-tree';
+    wrap.appendChild(tree);
+    var jt = new JsonTree(tree);
+    jt.render(value);
+    return wrap;
+  }
+
+  _renderSideBySide(oldVal, newVal) {
+    var grid = document.createElement('div');
+    grid.className = 'api-swag-sxs';
+    var beforeBlock = this._renderJsonBlock('Before (baseline)', oldVal);
+    var afterBlock = this._renderJsonBlock('After (runtime)', newVal);
+    beforeBlock.classList.add('api-swag-sxs-before');
+    afterBlock.classList.add('api-swag-sxs-after');
+    grid.appendChild(beforeBlock);
+    grid.appendChild(afterBlock);
+    return grid;
+  }
+
+  _formatChange(ch) {
+    var lines = [];
+    lines.push('[' + ch.type + '] ' + (ch.category === 'schemas' ? 'schema' : 'endpoint') + ' ' + ch.key);
+    if (Object.prototype.hasOwnProperty.call(ch, 'oldValue')) {
+      lines.push('--- baseline ---');
+      lines.push(this._safeJson(ch.oldValue));
+    }
+    if (Object.prototype.hasOwnProperty.call(ch, 'newValue')) {
+      lines.push('--- runtime ---');
+      lines.push(this._safeJson(ch.newValue));
+    }
+    if (ch.subChanges && ch.subChanges.length) {
+      lines.push('--- sub-changes ---');
+      for (var i = 0; i < ch.subChanges.length; i++) {
+        var sc = ch.subChanges[i];
+        var st = sc.subType || sc.type || 'change';
+        lines.push('  ' + st + (sc.detail ? ' ' + sc.detail : ''));
+      }
+    }
+    return lines.join('\n');
+  }
+
+  _formatAllChanges(diff) {
+    var out = [];
+    var s = diff.summary || {};
+    var ep = s.endpoints || {}; var sc = s.schemas || {};
+    out.push('# Swagger diff (' + (s.totalChanges | 0) + ' total)');
+    out.push('# endpoints — added:' + (ep.added | 0) + ' modified:' + (ep.modified | 0) + ' removed:' + (ep.removed | 0));
+    out.push('# schemas   — added:' + (sc.added | 0) + ' modified:' + (sc.modified | 0) + ' removed:' + (sc.removed | 0));
+    out.push('');
+    var changes = diff.changes || [];
+    for (var i = 0; i < changes.length; i++) {
+      out.push(this._formatChange(changes[i]));
+      out.push('');
+    }
+    return out.join('\n');
+  }
+
+  _safeJson(v) {
+    try { return JSON.stringify(v, null, 2); } catch (e) { return String(v); }
+  }
+
+  _copyText(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(function() {
+        if (window.edogToast) window.edogToast('Copied to clipboard', 'success');
+      }, function() {
+        if (window.edogToast) window.edogToast('Clipboard write failed', 'error');
+      });
+    } else if (window.edogToast) {
+      window.edogToast('Clipboard not available', 'warning');
+    }
+  }
+
+  _invokeBaseline(mode, btnEl) {
+    var self = this;
+    var fn = mode === 'save' ? this._handlers.onSaveBaseline : this._handlers.onReplaceBaseline;
+    if (!fn) return;
+    if (this._busy) return;
+    this._busy = true;
+    var origText = btnEl.textContent;
+    btnEl.textContent = mode === 'save' ? 'Saving\u2026' : 'Replacing\u2026';
+    btnEl.disabled = true;
+    var p = fn();
+    if (!p || typeof p.then !== 'function') {
+      btnEl.textContent = origText;
+      btnEl.disabled = false;
+      this._busy = false;
+      return;
+    }
+    p.then(function(result) {
+      self._busy = false;
+      btnEl.disabled = false;
+      btnEl.textContent = origText;
+      if (result && result.ok) {
+        if (window.edogToast) {
+          window.edogToast(mode === 'save' ? 'Baseline saved' : 'Baseline replaced', 'success');
+        }
+        if (self._handlers.onReload) self._handlers.onReload();
+      } else {
+        var msg = (result && result.message) || 'Baseline write failed';
+        if (window.edogToast) window.edogToast(msg, 'error');
+      }
+    }).catch(function(err) {
+      self._busy = false;
+      btnEl.disabled = false;
+      btnEl.textContent = origText;
+      if (window.edogToast) window.edogToast(err.message || String(err), 'error');
+    });
+  }
+
+  _formatSavedAt(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      var now = Date.now();
+      var diff = (now - d.getTime()) / 1000;
+      if (diff < 60) return Math.max(1, Math.floor(diff)) + 's ago';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+      return d.toISOString().slice(0, 10);
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  destroy() {
+    this._container.innerHTML = '';
+    this._payload = null;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
  * §5  HISTORY & SAVED REQUESTS
  * ══════════════════════════════════════════════════════════════ */
 
@@ -1749,8 +2486,10 @@ class ApiPlayground {
 
     this._requestBuilder = null;
     this._responseViewer = null;
+    this._swaggerSpecView = null;
     this._endpointCatalog = null;
     this._historySaved = null;
+    this._selectedEndpoint = null;
   }
 
   activate() {
@@ -1804,7 +2543,15 @@ class ApiPlayground {
     // Response panel
     var respPanel = document.createElement('div');
     respPanel.className = 'api-resp-panel';
+    this._respPanel = respPanel;
     this._responseViewer = new ResponseViewer(respPanel);
+    this._swaggerSpecView = new SwaggerSpecView(respPanel);
+    var self0 = this;
+    this._swaggerSpecView.setHandlers({
+      onSaveBaseline: function() { return self0._postBaseline(); },
+      onReplaceBaseline: function() { return self0._postBaseline(); },
+      onReload: function() { self0._loadSwaggerDiff(); }
+    });
     workspace.appendChild(respPanel);
 
     playground.appendChild(workspace);
@@ -1828,6 +2575,7 @@ class ApiPlayground {
 
     // Endpoint catalog selection -> populate builder
     this._endpointCatalog.onSelect = function(endpoint) {
+      self._selectedEndpoint = endpoint;
       var resolvedUrl = self._resolveUrl(endpoint.urlTemplate);
       var headers = [];
       if (endpoint.tokenType === 'bearer') {
@@ -1845,10 +2593,16 @@ class ApiPlayground {
         tokenType: endpoint.tokenType,
         queryParams: endpoint.queryParams || []
       });
+
+      // F09: spec endpoints auto-load the diff into the response panel.
+      if (endpoint.kind === 'spec') {
+        self._loadSwaggerDiff();
+      }
     };
 
-    // History/saved replay -> populate builder
+    // History/saved replay -> populate builder (clears spec-endpoint context)
     this._historySaved.onReplay = function(entry) {
+      self._selectedEndpoint = null;
       self._requestBuilder.setRequest({
         method: entry.method,
         url: entry.url,
@@ -1931,6 +2685,12 @@ class ApiPlayground {
 
     if (this._abortController) this._abortController.abort();
     this._abortController = new AbortController();
+
+    // F09: spec endpoint short-circuits — load diff, don't proxy.
+    if (this._selectedEndpoint && this._selectedEndpoint.kind === 'spec') {
+      this._loadSwaggerDiff();
+      return;
+    }
 
     var resolvedUrl = this._resolveUrl(request.url);
     var tokenType = request.tokenType || this._detectTokenType(resolvedUrl);
@@ -2048,6 +2808,58 @@ class ApiPlayground {
       self._requestBuilder.setSending(false);
       self._abortController = null;
     }, delay);
+  }
+
+  // F09: load swagger diff payload from dev-server and hand off to SwaggerSpecView.
+  // Sidesteps the proxy/token plumbing entirely — the dev-server fetches runtime
+  // swagger.json itself and compares against data/swagger-baseline.json.
+  _loadSwaggerDiff() {
+    var self = this;
+    if (this._abortController) this._abortController.abort();
+    this._abortController = new AbortController();
+    this._requestBuilder.setSending(true);
+    this._swaggerSpecView.showLoading();
+    fetch('/api/playground/swagger/diff', { signal: this._abortController.signal })
+      .then(function(resp) {
+        return resp.json().then(function(payload) {
+          return { ok: resp.ok, status: resp.status, payload: payload };
+        }).catch(function() {
+          return { ok: resp.ok, status: resp.status, payload: null };
+        });
+      })
+      .then(function(parsed) {
+        if (!parsed.ok || !parsed.payload) {
+          var msg = parsed.payload && parsed.payload.message
+            ? parsed.payload.message
+            : ('Failed to load swagger diff (HTTP ' + parsed.status + ')');
+          self._swaggerSpecView.showError(msg);
+        } else {
+          self._swaggerSpecView.showDiff(parsed.payload);
+        }
+        self._requestBuilder.setSending(false);
+        self._abortController = null;
+      })
+      .catch(function(e) {
+        if (e && e.name === 'AbortError') return;
+        self._swaggerSpecView.showError(e && e.message ? e.message : String(e));
+        self._requestBuilder.setSending(false);
+        self._abortController = null;
+      });
+  }
+
+  // F09: POST /api/playground/swagger/baseline — captures current runtime as baseline.
+  // Used for both first-save and replace flows; returns {ok, message?} for the view.
+  _postBaseline() {
+    return fetch('/api/playground/swagger/baseline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).then(function(resp) {
+      return resp.json().then(function(body) {
+        return { ok: resp.ok, status: resp.status, message: body && body.message };
+      }).catch(function() {
+        return { ok: resp.ok, status: resp.status };
+      });
+    });
   }
 
   _resolveUrl(template) {
