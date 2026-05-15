@@ -197,8 +197,14 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             catch (Exception ex)
             {
+                // method.Invoke wraps inner exceptions in TargetInvocationException —
+                // unwrap so the real root cause (Unity ResolutionFailedException, etc.)
+                // shows up in the probeError field instead of the useless wrapper text.
+                var root = ex is System.Reflection.TargetInvocationException tie && tie.InnerException != null
+                    ? tie.InnerException
+                    : ex;
                 status.Wrapped = false;
-                status.ProbeError = ex.Message;
+                status.ProbeError = root.Message;
                 status.ProbeMessage = "Resolve threw";
             }
 

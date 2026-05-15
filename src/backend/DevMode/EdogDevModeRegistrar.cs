@@ -74,54 +74,78 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
         }
 
-        private static void RegisterFeatureFlighterWrapper()
+        // ── TryWrap helper ──────────────────────────────────────────────────────
+        // Generic "resolve → check → register → re-resolve verify → record" for
+        // DI interceptors that wrap a singleton interface. Critical detail: MWC's
+        // Unity wrapper exposes a "set-then-throw" behavior — once the platform has
+        // resolved a singleton with `PerContainer` lifetime, calling RegisterInstance
+        // again throws `ValidateRegistrationStrategy` BUT the instance is still
+        // written into the LifetimeManager. So a thrown RegisterInstance does NOT
+        // necessarily mean the wrap failed. We must re-Resolve and check the
+        // returned type. The wrapper-presence test is the source of truth, not the
+        // exception. If the wrapper IS present after the call, record Ok; otherwise
+        // record Failed with the original exception message.
+        private static void TryWrap<T>(
+            string name,
+            Func<T, bool> isWrapper,
+            Func<T, T> wrap) where T : class
         {
-            const string name = "FeatureFlighter";
+            Exception regException = null;
             try
             {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.FeatureFlightProvider.IFeatureFlighter>();
-                if (inner is EdogFeatureFlighterWrapper)
+                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<T>();
+                if (isWrapper(inner))
                 {
-                    Console.WriteLine("[EDOG] ✓ FeatureFlighter interceptor already wrapped");
+                    Console.WriteLine($"[EDOG] ✓ {name} interceptor already wrapped");
                     EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
                     return;
                 }
-                var wrapper = new EdogFeatureFlighterWrapper(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.FeatureFlightProvider.IFeatureFlighter>(wrapper);
-                Console.WriteLine("[EDOG] ✓ FeatureFlighter interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
+
+                try
+                {
+                    var wrapper = wrap(inner);
+                    Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<T>(wrapper);
+                }
+                catch (Exception ex)
+                {
+                    // Capture but don't propagate yet — Unity may have written the
+                    // instance into the LifetimeManager before the validator threw.
+                    regException = ex;
+                }
+
+                var after = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<T>();
+                if (isWrapper(after))
+                {
+                    Console.WriteLine($"[EDOG] ✓ {name} interceptor registered");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
+                    return;
+                }
+
+                var msg = regException?.Message ?? "wrapper not present after RegisterInstance";
+                Console.WriteLine($"[EDOG] ✗ {name} interceptor failed: {msg}");
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, msg);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[EDOG] ✗ FeatureFlighter interceptor failed: {ex.Message}");
+                Console.WriteLine($"[EDOG] ✗ {name} interceptor failed: {ex.Message}");
                 EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
             }
         }
 
+        private static void RegisterFeatureFlighterWrapper()
+        {
+            TryWrap<Microsoft.LiveTable.Service.FeatureFlightProvider.IFeatureFlighter>(
+                "FeatureFlighter",
+                inner => inner is EdogFeatureFlighterWrapper,
+                inner => new EdogFeatureFlighterWrapper(inner));
+        }
+
         private static void RegisterPerfMarkerCallback()
         {
-            const string name = "PerfMarker";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<Microsoft.ServicePlatform.Telemetry.IServiceMonitoringCallback>();
-                if (inner is EdogPerfMarkerCallback)
-                {
-                    Console.WriteLine("[EDOG] ✓ PerfMarker interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogPerfMarkerCallback(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<Microsoft.ServicePlatform.Telemetry.IServiceMonitoringCallback>(wrapper);
-                Console.WriteLine("[EDOG] ✓ PerfMarker interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ PerfMarker interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.ServicePlatform.Telemetry.IServiceMonitoringCallback>(
+                "PerfMarker",
+                inner => inner is EdogPerfMarkerCallback,
+                inner => new EdogPerfMarkerCallback(inner));
         }
 
         private static void RegisterTokenInterceptor()
@@ -145,28 +169,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterFileSystemInterceptor()
         {
-            const string name = "FileSystemFactory";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.Persistence.Fs.IFileSystemFactory>();
-                if (inner is EdogFileSystemFactoryWrapper)
-                {
-                    Console.WriteLine("[EDOG] ✓ FileSystemFactory interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogFileSystemFactoryWrapper(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.Persistence.Fs.IFileSystemFactory>(wrapper);
-                Console.WriteLine("[EDOG] ✓ FileSystemFactory interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ FileSystemFactory interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.Persistence.Fs.IFileSystemFactory>(
+                "FileSystemFactory",
+                inner => inner is EdogFileSystemFactoryWrapper,
+                inner => new EdogFileSystemFactoryWrapper(inner));
         }
 
         private static void RegisterHttpPipelineHandler()
@@ -192,9 +198,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// Shared registration for both EdogTokenInterceptor and EdogHttpPipelineHandler.
         /// Wraps IHttpClientFactory with EdogHttpClientFactoryWrapper which injects both
         /// DelegatingHandlers into every HttpClient pipeline. Idempotent.
+        /// Uses the same set-then-throw verification as TryWrap — re-resolves after
+        /// RegisterInstance and treats wrapper-present as success regardless of any
+        /// exception thrown.
         /// </summary>
         /// <returns>
-        /// <c>true</c> if this call performed the wrap (newly registered);
+        /// <c>true</c> if this call performed the wrap (newly registered and verified);
         /// <c>false</c> if the wrap was already in place (idempotent no-op).
         /// </returns>
         private static bool EnsureHttpClientFactoryWrapped()
@@ -208,12 +217,32 @@ namespace Microsoft.LiveTable.Service.DevMode
                 _httpClientFactoryWrapped = true;
                 return false;
             }
-            var wrapper = new EdogHttpClientFactoryWrapper(inner);
-            Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                System.Net.Http.IHttpClientFactory>(wrapper);
-            _httpClientFactoryWrapped = true;
-            Console.WriteLine("[EDOG] ✓ HttpClientFactory interceptors registered (Token + HTTP pipeline)");
-            return true;
+
+            Exception regException = null;
+            try
+            {
+                var wrapper = new EdogHttpClientFactoryWrapper(inner);
+                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                    System.Net.Http.IHttpClientFactory>(wrapper);
+            }
+            catch (Exception ex)
+            {
+                regException = ex;
+            }
+
+            // Verify by re-resolving — Unity may have set-then-thrown.
+            var after = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                System.Net.Http.IHttpClientFactory>();
+            if (after is EdogHttpClientFactoryWrapper)
+            {
+                _httpClientFactoryWrapped = true;
+                Console.WriteLine("[EDOG] ✓ HttpClientFactory interceptors registered (Token + HTTP pipeline)");
+                return true;
+            }
+
+            // Wrapper not present after registration attempt — propagate failure to caller.
+            throw regException ?? new InvalidOperationException(
+                "EdogHttpClientFactoryWrapper not present after RegisterInstance");
         }
 
         private static void RegisterRetryInterceptor()
@@ -242,28 +271,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterSparkSessionInterceptor()
         {
-            const string name = "SparkSession";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.SparkHttp.ISparkClientFactory>();
-                if (inner is EdogSparkSessionInterceptor)
-                {
-                    Console.WriteLine("[EDOG] ✓ Spark session interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogSparkSessionInterceptor(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.SparkHttp.ISparkClientFactory>(wrapper);
-                Console.WriteLine("[EDOG] ✓ Spark session interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ Spark session interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.SparkHttp.ISparkClientFactory>(
+                "SparkSession",
+                inner => inner is EdogSparkSessionInterceptor,
+                inner => new EdogSparkSessionInterceptor(inner));
         }
 
         private static void RegisterDiRegistryCapture()
@@ -283,54 +294,18 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterTokenLifecycleInterceptor()
         {
-            const string name = "TokenLifecycle";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.TokenManagement.ITokenManager>();
-                if (inner is EdogTokenLifecycleInterceptor)
-                {
-                    Console.WriteLine("[EDOG] ✓ TokenLifecycle interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogTokenLifecycleInterceptor(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.TokenManagement.ITokenManager>(wrapper);
-                Console.WriteLine("[EDOG] ✓ TokenLifecycle interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ TokenLifecycle interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.TokenManagement.ITokenManager>(
+                "TokenLifecycle",
+                inner => inner is EdogTokenLifecycleInterceptor,
+                inner => new EdogTokenLifecycleInterceptor(inner));
         }
 
         private static void RegisterCatalogInterceptor()
         {
-            const string name = "Catalog";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.Catalog.ICatalogHandler>();
-                if (inner is EdogCatalogInterceptor)
-                {
-                    Console.WriteLine("[EDOG] ✓ Catalog interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogCatalogInterceptor(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.Catalog.ICatalogHandler>(wrapper);
-                Console.WriteLine("[EDOG] ✓ Catalog interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ Catalog interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.Catalog.ICatalogHandler>(
+                "Catalog",
+                inner => inner is EdogCatalogInterceptor,
+                inner => new EdogCatalogInterceptor(inner));
         }
 
         // ── RegisterFltOpsInterceptors ──────────────────────────────────────────
@@ -350,106 +325,34 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterRefreshTriggersInterceptor()
         {
-            const string name = "RefreshTriggers";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.Core.RefreshTrigger.IRefreshTriggersHandler>();
-                if (inner is EdogRefreshTriggersWrapper)
-                {
-                    Console.WriteLine("[EDOG] ✓ RefreshTriggers interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogRefreshTriggersWrapper(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.Core.RefreshTrigger.IRefreshTriggersHandler>(wrapper);
-                Console.WriteLine("[EDOG] ✓ RefreshTriggers interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ RefreshTriggers interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.Core.RefreshTrigger.IRefreshTriggersHandler>(
+                "RefreshTriggers",
+                inner => inner is EdogRefreshTriggersWrapper,
+                inner => new EdogRefreshTriggersWrapper(inner));
         }
 
         private static void RegisterMlvDefinitionInterceptor()
         {
-            const string name = "MLVDefinition";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.Persistence.IMLVExecutionDefinitionPersistenceManager>();
-                if (inner is EdogMLVDefinitionWrapper)
-                {
-                    Console.WriteLine("[EDOG] ✓ MLV Definition interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogMLVDefinitionWrapper(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.Persistence.IMLVExecutionDefinitionPersistenceManager>(wrapper);
-                Console.WriteLine("[EDOG] ✓ MLV Definition interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ MLV Definition interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.Persistence.IMLVExecutionDefinitionPersistenceManager>(
+                "MLVDefinition",
+                inner => inner is EdogMLVDefinitionWrapper,
+                inner => new EdogMLVDefinitionWrapper(inner));
         }
 
         private static void RegisterReportStateInterceptor()
         {
-            const string name = "ReportState";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.DataQuality.StateManagement.IReportStateManager>();
-                if (inner is EdogReportStateWrapper)
-                {
-                    Console.WriteLine("[EDOG] ✓ ReportState interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogReportStateWrapper(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.DataQuality.StateManagement.IReportStateManager>(wrapper);
-                Console.WriteLine("[EDOG] ✓ ReportState interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ ReportState interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.DataQuality.StateManagement.IReportStateManager>(
+                "ReportState",
+                inner => inner is EdogReportStateWrapper,
+                inner => new EdogReportStateWrapper(inner));
         }
 
         private static void RegisterTableMaintenanceInterceptor()
         {
-            const string name = "TableMaintenance";
-            try
-            {
-                var inner = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
-                    Microsoft.LiveTable.Service.Maintenance.MaintenanceHttp.ITableMaintenanceClientFactory>();
-                if (inner is EdogTableMaintenanceFactoryWrapper)
-                {
-                    Console.WriteLine("[EDOG] ✓ TableMaintenance interceptor already wrapped");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
-                    return;
-                }
-                var wrapper = new EdogTableMaintenanceFactoryWrapper(inner);
-                Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
-                    Microsoft.LiveTable.Service.Maintenance.MaintenanceHttp.ITableMaintenanceClientFactory>(wrapper);
-                Console.WriteLine("[EDOG] ✓ TableMaintenance interceptor registered");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] ✗ TableMaintenance interceptor failed: {ex.Message}");
-                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
-            }
+            TryWrap<Microsoft.LiveTable.Service.Maintenance.MaintenanceHttp.ITableMaintenanceClientFactory>(
+                "TableMaintenance",
+                inner => inner is EdogTableMaintenanceFactoryWrapper,
+                inner => new EdogTableMaintenanceFactoryWrapper(inner));
         }
 
         private static void StartNexusAggregator()
