@@ -233,18 +233,54 @@ def test_param_row_renders_type_badge_for_documented_params() -> None:
 
 
 def test_param_row_renders_select_for_known_enums() -> None:
-    """_paramRow must render <select> when meta has enumValues (known enum)."""
+    """_paramRow must render <select> for single enums; chip picker for enum-list."""
     src = PLAYGROUND_JS.read_text(encoding="utf-8")
-    # Loosely check for the enum branch — multiline so accept either pattern.
     assert "enumValues" in src, "_paramRow must consume meta.enumValues"
     assert "createElement('select')" in src, (
-        "_paramRow must render a <select> element for enum / enum-list types"
+        "_paramRow must render a <select> element for single-value enum params"
     )
 
 
-def test_sync_url_handles_multi_select_lists() -> None:
-    """_syncUrlFromParams must emit ?key=A&key=B for multi-select enum-list."""
+def test_param_row_renders_chip_picker_for_enum_list() -> None:
+    """enum-list params must render a chip picker (not a native multi-select listbox)."""
     src = PLAYGROUND_JS.read_text(encoding="utf-8")
-    assert "v.multiple" in src, (
-        "_syncUrlFromParams must detect SELECT.multiple to emit list-style query strings"
+    assert "api-param-chips" in src, (
+        "enum-list must render a chip picker container (.api-param-chips)"
     )
+    assert "api-param-chip" in src, (
+        "enum-list must render individual chips (.api-param-chip)"
+    )
+
+
+def test_sync_url_handles_chip_picker() -> None:
+    """_syncUrlFromParams must read selected chips and emit ?key=A&key=B."""
+    src = PLAYGROUND_JS.read_text(encoding="utf-8")
+    assert "api-param-chip.selected" in src, (
+        "_syncUrlFromParams must query selected chips to build the query string"
+    )
+    # Legacy select.multiple branch retained as safety net
+    assert "v.multiple" in src
+
+
+def test_kv_key_cell_is_flex_layout() -> None:
+    """.kv-key must use flex layout so type badge does not overflow into the value column."""
+    css_path = PLAYGROUND_JS.parent.parent / "css" / "api-playground.css"
+    css = css_path.read_text(encoding="utf-8")
+    # Find the .kv-key rule and verify it sets display: flex
+    import re
+    m = re.search(r"\.api-kv-table \.kv-key\s*\{([^}]+)\}", css)
+    assert m is not None, ".kv-key rule must exist"
+    body = m.group(1)
+    assert "flex" in body, ".kv-key must use display:flex to prevent badge overflow"
+    assert "white-space: nowrap" not in body, (
+        ".kv-key must NOT use white-space:nowrap (caused the type badge to overflow into kv-val)"
+    )
+
+
+def test_chip_picker_styled() -> None:
+    """.api-param-chip and selected state must be styled."""
+    css_path = PLAYGROUND_JS.parent.parent / "css" / "api-playground.css"
+    css = css_path.read_text(encoding="utf-8")
+    assert ".api-param-chip" in css
+    assert ".api-param-chip.selected" in css, "Selected chip state must be styled"
+    assert ".api-param-chips" in css, "Chip picker container must be styled"

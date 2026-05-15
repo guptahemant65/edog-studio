@@ -300,7 +300,8 @@
 .api-kv-table tr:hover td { background: var(--hover-bg); }
 .api-kv-table .kv-chk { width: 30px; text-align: center; }
 .api-kv-table .kv-key {
-  font-family: var(--font-mono); color: var(--blue); font-weight: 500; white-space: nowrap;
+  font-family: var(--font-mono); color: var(--blue); font-weight: 500;
+  display: flex; align-items: center; gap: 8px; min-width: 0;
 }
 .api-kv-table .kv-val {
   font-family: var(--font-mono); color: var(--text); word-break: break-all;
@@ -322,21 +323,30 @@
 
 /* ── F09 query-param enrichment (documented params from catalog) ── */
 .api-param-type {
+  flex: 0 0 auto;
   display: inline-block;
-  margin-left: var(--space-2);
   padding: 1px 6px;
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text);
   background: var(--bg-elev-2, var(--bg-elev));
-  border: 1px solid var(--border-subtle, var(--border));
+  border: 1px solid var(--border-bright, var(--border));
   border-radius: 3px;
   cursor: help;
   vertical-align: middle;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.75;
+}
+.api-param-type:hover {
+  opacity: 1;
 }
 .api-param-required .api-param-type {
   color: var(--accent);
   border-color: var(--accent);
+  opacity: 1;
 }
 .api-param-required .api-param-key {
   color: var(--accent) !important;
@@ -346,8 +356,36 @@
   font-family: var(--font-mono); font-size: var(--text-sm);
   color: var(--text); background: transparent;
 }
-.api-kv-table select.api-param-val[multiple] {
-  min-height: 60px;
+
+/* Chip picker for enum-list params */
+.api-param-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 2px 0;
+}
+.api-param-chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-bright, var(--border));
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  line-height: 1.4;
+}
+.api-param-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.api-param-chip.selected {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.api-param-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* ── Body editor ── */

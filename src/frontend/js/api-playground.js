@@ -702,7 +702,7 @@ class RequestBuilder {
     keyInput.className = 'api-param-key';
     keyInput.value = key;
     keyInput.placeholder = 'Param name';
-    keyInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;width:100%;outline:none';
+    keyInput.style.cssText = 'border:none;background:none;font:inherit;color:inherit;flex:1;min-width:0;outline:none';
     if (meta) {
       keyInput.readOnly = true;
       keyInput.title = meta.description || meta.name;
@@ -724,32 +724,42 @@ class RequestBuilder {
     var valCell = document.createElement('td');
     valCell.className = 'kv-val';
     var valInput;
-    if (meta && (meta.kind === 'enum' || meta.kind === 'enum-list') && Array.isArray(meta.enumValues) && meta.enumValues.length > 0) {
-      // Render a select for known enums. enum-list uses multi-select.
-      valInput = document.createElement('select');
-      if (meta.kind === 'enum-list') valInput.multiple = true;
-      else {
-        var blank = document.createElement('option');
-        blank.value = '';
-        blank.textContent = meta.defaultLiteral != null ? '(default: ' + meta.defaultLiteral + ')' : '';
-        valInput.appendChild(blank);
-      }
+    var isEnumList = meta && meta.kind === 'enum-list' && Array.isArray(meta.enumValues) && meta.enumValues.length > 0;
+    var isEnumSingle = meta && meta.kind === 'enum' && Array.isArray(meta.enumValues) && meta.enumValues.length > 0;
+    if (isEnumList) {
+      // Chip picker — single-line of toggleable pills. Toggling auto-checks the row.
+      valInput = document.createElement('div');
+      valInput.className = 'api-param-val api-param-chips';
+      var preselected = value ? String(value).split(',').map(function(s) { return s.trim(); }) : [];
       for (var ev = 0; ev < meta.enumValues.length; ev++) {
-        var opt = document.createElement('option');
-        opt.value = meta.enumValues[ev];
-        opt.textContent = meta.enumValues[ev];
-        valInput.appendChild(opt);
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'api-param-chip';
+        chip.textContent = meta.enumValues[ev];
+        chip.dataset.value = meta.enumValues[ev];
+        if (preselected.indexOf(meta.enumValues[ev]) !== -1) chip.classList.add('selected');
+        chip.addEventListener('click', (function(btn) {
+          return function() {
+            btn.classList.toggle('selected');
+            if (chk && !chk.checked) chk.checked = true;
+            self._syncUrlFromParams();
+          };
+        })(chip));
+        valInput.appendChild(chip);
       }
-      if (value) {
-        if (meta.kind === 'enum-list') {
-          var picks = String(value).split(',');
-          for (var pi = 0; pi < valInput.options.length; pi++) {
-            valInput.options[pi].selected = picks.indexOf(valInput.options[pi].value) !== -1;
-          }
-        } else {
-          valInput.value = value;
-        }
+    } else if (isEnumSingle) {
+      valInput = document.createElement('select');
+      var blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = meta.defaultLiteral != null ? '(default: ' + meta.defaultLiteral + ')' : '(none)';
+      valInput.appendChild(blank);
+      for (var es = 0; es < meta.enumValues.length; es++) {
+        var optS = document.createElement('option');
+        optS.value = meta.enumValues[es];
+        optS.textContent = meta.enumValues[es];
+        valInput.appendChild(optS);
       }
+      if (value) valInput.value = value;
       valInput.className = 'api-param-val';
       valInput.style.cssText = 'background:none;font:inherit;color:inherit;width:100%';
     } else {
@@ -817,8 +827,18 @@ class RequestBuilder {
       var v = rows[i].querySelector('.api-param-val');
       if (!k || !k.value.trim()) continue;
       var keyEnc = encodeURIComponent(k.value.trim());
-      if (v && v.tagName === 'SELECT' && v.multiple) {
-        // enum-list: emit `?key=A&key=B` style for ASP.NET model binding.
+      if (v && v.classList && v.classList.contains('api-param-chips')) {
+        // Chip picker (enum-list): emit ?key=A&key=B style for ASP.NET model binding.
+        var selChips = v.querySelectorAll('.api-param-chip.selected');
+        if (selChips.length === 0) {
+          parts.push(keyEnc + '=');
+        } else {
+          for (var ci = 0; ci < selChips.length; ci++) {
+            parts.push(keyEnc + '=' + encodeURIComponent(selChips[ci].dataset.value || ''));
+          }
+        }
+      } else if (v && v.tagName === 'SELECT' && v.multiple) {
+        // Legacy multi-select fallback (no longer rendered by _paramRow but kept for safety).
         var anySelected = false;
         for (var oi = 0; oi < v.options.length; oi++) {
           if (v.options[oi].selected && v.options[oi].value) {
