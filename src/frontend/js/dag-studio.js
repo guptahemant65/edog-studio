@@ -69,18 +69,37 @@ class ExecutionStateManager {
 
   /** Process SignalR telemetry event (primary channel). */
   processTelemetry(event) {
-    var t = event.data;
-    if (!t || !t.activityName) return;
-    // Ignore stale events from different iteration
-    if (t.iterationId && t.iterationId !== this._activeIterationId) return;
-    // Execution-level telemetry (RunDAG)
-    if (t.activityName === 'RunDAG') {
+    // Telemetry topic streams {sequenceId, timestamp, topic, data} — unwrap
+    var t = event.data || event;
+    if (!t || !t.activityName) {
+      console.log('[ESM-DIAG] Telemetry skipped — no activityName:', t);
+      return;
+    }
+    // Check iterationId from multiple sources (FLT may use attributes or correlationId)
+    var evtIterId = t.iterationId || (t.attributes && (t.attributes.iterationId || t.attributes.IterationId)) || null;
+    if (evtIterId && evtIterId !== this._activeIterationId) {
+      console.log('[ESM-DIAG] Telemetry skipped — iteration mismatch:', evtIterId, 'vs', this._activeIterationId);
+      return;
+    }
+    console.log('[ESM-DIAG] Processing telemetry:', t.activityName, t.activityStatus, 'attrs:', JSON.stringify(t.attributes || {}).substring(0, 200));
+    // Execution-level telemetry (RunDAG / RunDag — case-insensitive)
+    if (t.activityName.toLowerCase() === 'rundag') {
       this._processExecutionTelemetry(t);
       return;
     }
     // Node-level telemetry
+    var ts = this._toMs(event.timestamp || t.timestamp);
     var nodeId = this._resolveNodeId(t);
-    if (nodeId) this._processNodeTelemetry(nodeId, t, event.timestamp);
+    console.log('[ESM-DIAG] Resolved nodeId:', nodeId, 'for activity:', t.activityName);
+    if (nodeId) this._processNodeTelemetry(nodeId, t, ts);
+  }
+
+  /** Normalize timestamp to epoch ms. */
+  _toMs(ts) {
+    if (!ts) return Date.now();
+    if (typeof ts === 'number') return ts;
+    var parsed = new Date(ts).getTime();
+    return isNaN(parsed) ? Date.now() : parsed;
   }
 
   /** Process AutoDetector update (backup channel). Telemetry wins on conflict. */
@@ -121,17 +140,21 @@ class ExecutionStateManager {
   /** Load historical execution metrics (for viewing past runs). */
   loadHistorical(metrics) {
     this._nodeStates.clear();
-    if (!metrics || !metrics.nodeExecutionMetrices) return;
-    var nodes = metrics.nodeExecutionMetrices;
-    for (var i = 0; i < nodes.length; i++) {
-      var nm = nodes[i];
-      var nodeId = nm.nodeId || this._nodeNameIndex.get((nm.nodeName || '').toLowerCase());
+    if (!metrics) return;
+
+    var rawNodes = metrics.nodeExecutionMetrices || metrics.nodeExecutionMetrics || [];
+    var entries = Array.isArray(rawNodes) ? rawNodes : Object.entries(rawNodes || {});
+    for (var i = 0; i < entries.length; i++) {
+      var nm = Array.isArray(rawNodes) ? entries[i] : entries[i][1];
+      var fallbackName = Array.isArray(rawNodes) ? '' : entries[i][0];
+      var nodeName = nm.nodeName || fallbackName || '';
+      var nodeId = nm.nodeId || this._nodeNameIndex.get(nodeName.toLowerCase());
       if (!nodeId) continue;
       this._nodeStates.set(nodeId, {
-        status: this._mapNodeStatus(nm.nodeExecutionStatus),
-        startedAt: nm.startTime ? new Date(nm.startTime).getTime() : null,
-        endedAt: nm.endTime ? new Date(nm.endTime).getTime() : null,
-        errorCode: nm.errorCode || null,
+        status: this._mapNodeStatus(nm.nodeExecutionStatus || nm.status),
+        startedAt: nm.startedAt ? new Date(nm.startedAt).getTime() : (nm.startTime ? new Date(nm.startTime).getTime() : null),
+        endedAt: nm.endedAt ? new Date(nm.endedAt).getTime() : (nm.endTime ? new Date(nm.endTime).getTime() : null),
+        errorCode: nm.errorCode || nm.errorMessage || null,
         source: 'historical',
       });
     }
@@ -152,8 +175,9 @@ class ExecutionStateManager {
     } else {
       this._executionStatus = 'completed';
     }
-    this._startedAt = metrics.startTime ? new Date(metrics.startTime).getTime() : null;
-    this._endedAt = metrics.endTime ? new Date(metrics.endTime).getTime() : null;
+    var dagMetrics = metrics.dagExecutionMetrics || {};
+    this._startedAt = dagMetrics.startedAt ? new Date(dagMetrics.startedAt).getTime() : (metrics.startTime ? new Date(metrics.startTime).getTime() : null);
+    this._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : (metrics.endTime ? new Date(metrics.endTime).getTime() : null);
   }
 
   /** Reset to idle. */
@@ -169,16 +193,17 @@ class ExecutionStateManager {
 
   /** Resolve telemetry activityName to nodeId. */
   _resolveNodeId(telemetry) {
-    // Priority 1: explicit attributes
-    var attrName = null;
-    if (telemetry.attributes) {
-      attrName = telemetry.attributes.nodeName || telemetry.attributes.mlvName;
-    }
+    var attrs = telemetry.attributes || {};
+    // Priority 1: explicit node ID attribute
+    var directId = attrs.nodeId || attrs.NodeId;
+    if (directId && this._dagNodes.has(directId)) return directId;
+    // Priority 2: explicit name attributes (camelCase + PascalCase)
+    var attrName = attrs.nodeName || attrs.NodeName || attrs.mlvName || attrs.MlvName || attrs.MLVName;
     if (attrName) {
       var id = this._nodeNameIndex.get(attrName.toLowerCase());
       if (id) return id;
     }
-    // Priority 2: substring match in activityName
+    // Priority 3: substring match in activityName
     var activity = telemetry.activityName.toLowerCase();
     for (var entry of this._nodeNameIndex) {
       var name = entry[0];
@@ -193,6 +218,15 @@ class ExecutionStateManager {
     var current = this._nodeStates.get(nodeId);
     if (!current) return;
     var activityStatus = (t.activityStatus || '').toLowerCase();
+    var attrs = t.attributes || {};
+    var errorCode = t.errorCode || attrs.errorCode || attrs.ErrorCode || null;
+    // Infer startedAt from duration if this is a terminal event and we have no prior start
+    var inferredStart = current.startedAt;
+    if (!inferredStart && t.durationMs) {
+      inferredStart = (timestamp || Date.now()) - t.durationMs;
+    } else if (!inferredStart) {
+      inferredStart = timestamp || Date.now();
+    }
     var newState = null;
     if (activityStatus === 'started' || activityStatus === 'inprogress') {
       newState = {
@@ -205,7 +239,7 @@ class ExecutionStateManager {
     } else if (activityStatus === 'succeeded' || activityStatus === 'completed') {
       newState = {
         status: 'completed',
-        startedAt: current.startedAt,
+        startedAt: inferredStart,
         endedAt: timestamp || Date.now(),
         errorCode: null,
         source: 'telemetry',
@@ -213,15 +247,15 @@ class ExecutionStateManager {
     } else if (activityStatus === 'failed' || activityStatus === 'faulted') {
       newState = {
         status: 'failed',
-        startedAt: current.startedAt,
+        startedAt: inferredStart,
         endedAt: timestamp || Date.now(),
-        errorCode: t.errorCode || (t.attributes && t.attributes.errorCode) || null,
+        errorCode: errorCode,
         source: 'telemetry',
       };
     } else if (activityStatus === 'cancelled' || activityStatus === 'canceled') {
       newState = {
         status: 'cancelled',
-        startedAt: current.startedAt,
+        startedAt: inferredStart,
         endedAt: timestamp || Date.now(),
         errorCode: null,
         source: 'telemetry',
@@ -272,7 +306,8 @@ class ExecutionStateManager {
     var current = this._nodeStates.get(nodeId);
     if (!current) return;
     var validTransitions = {
-      pending: ['running', 'skipped'],
+      // FLT may emit terminal-only events (e.g., Succeeded without prior Started)
+      pending: ['running', 'completed', 'failed', 'cancelled', 'skipped'],
       running: ['completed', 'failed', 'cancelled', 'cancelling'],
       cancelling: ['cancelled'],
     };
@@ -362,8 +397,12 @@ class DagStudio {
     this._active = false;
     this._lockCheckInterval = null;
     this._elapsedInterval = null;
+    this._execPollInterval = null;
+    this._lastLockState = false;
     this._codeCache = new Map();
     this._workspaceId = null;
+    var self = this;
+    this._dagRetried = false;
 
     // DOM refs
     this._runBtn = document.getElementById('dagRunBtn');
@@ -372,10 +411,21 @@ class DagStudio {
     this._unlockBtn = document.getElementById('dagUnlockBtn');
     this._statusDot = document.getElementById('dagStatusDot');
     this._statusText = document.getElementById('dagStatusText');
+    this._statusTimer = document.getElementById('dagStatusTimer');
     this._graphPanel = document.getElementById('dagGraphPanel');
     this._historyContainer = document.getElementById('dagHistoryContainer');
     this._nodeDetail = document.getElementById('dagNodeDetail');
+    this._detailSection = document.getElementById('dagDetailSection');
     this._ganttContainer = document.getElementById('dagGanttContainer');
+    this._ganttCount = document.getElementById('dagGanttCount');
+    this._lockIndicator = null; // Removed — lock state now part of toolbar matrix
+    this._execModeBtn = document.getElementById('dagExecModeBtn');
+    this._execModeDropdown = document.getElementById('dagExecModeDropdown');
+    this._sumTotal = document.getElementById('dagSumTotal');
+    this._sumOk = document.getElementById('dagSumOk');
+    this._sumFail = document.getElementById('dagSumFail');
+    this._sumRun = document.getElementById('dagSumRun');
+    this._sumDur = document.getElementById('dagSumDur');
 
     // Bind event handlers
     this._onTelemetryEvent = this._onTelemetryEvent.bind(this);
@@ -396,6 +446,32 @@ class DagStudio {
     this._cancelBtn.addEventListener('click', this._onCancelClick);
     this._refreshBtn.addEventListener('click', this._onRefreshClick);
     this._unlockBtn.addEventListener('click', this._onUnlockClick);
+
+    // Exec mode dropdown
+    if (this._execModeBtn && this._execModeDropdown) {
+      this._execModeBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        self._execModeDropdown.classList.toggle('open');
+      });
+      var modeOptions = this._execModeDropdown.querySelectorAll('.exec-mode-option');
+      for (var i = 0; i < modeOptions.length; i++) {
+        modeOptions[i].addEventListener('click', function() {
+          var opts = self._execModeDropdown.querySelectorAll('.exec-mode-option');
+          for (var j = 0; j < opts.length; j++) {
+            opts[j].classList.remove('active');
+            opts[j].querySelector('.check').textContent = '';
+          }
+          this.classList.add('active');
+          this.querySelector('.check').textContent = '\u2713';
+          var label = document.getElementById('dagExecModeLabel');
+          if (label) label.textContent = this.textContent.trim().replace('\u2713', '').trim();
+          self._execModeDropdown.classList.remove('open');
+        });
+      }
+      document.addEventListener('click', function() {
+        self._execModeDropdown.classList.remove('open');
+      });
+    }
   }
 
   async activate() {
@@ -441,12 +517,12 @@ class DagStudio {
     this._signalR.subscribeTopic('log');
     // Keyboard shortcuts
     document.addEventListener('keydown', this._onKeyDown);
-    // Load DAG
-    await this._loadDag();
-    // Load history
-    await this._loadHistory();
-    // Start lock check polling
-    this._startLockCheck();
+    requestAnimationFrame(async function() {
+      if (!self._active) return;
+      await self._loadDag();
+      await self._loadHistory();
+      self._startLockCheck();
+    });
   }
 
   deactivate() {
@@ -465,25 +541,72 @@ class DagStudio {
     // Stop intervals
     this._stopLockCheck();
     this._stopElapsedTimer();
+    this._stopExecPoller();
   }
 
   async _loadDag() {
     try {
+      this._renderLoading();
       // Refresh config so MWC token and fabricBaseUrl are current
       await this._api.fetchConfig();
       var dag = await this._api.getLatestDag();
-      if (!dag || !dag.nodes) {
+      if (!dag && !this._dagRetried) {
+        this._dagRetried = true;
+        await new Promise(function(resolve) { setTimeout(resolve, 300); });
+        dag = await this._api.getLatestDag();
+      }
+      if (!dag) {
         this._renderEmpty('No DAG found. Ensure FLT is configured.');
         return;
       }
-      this._dag = dag;
-      this._esm.setDag(dag);
-      // Layout
-      var layoutResult = this._layout.layout(dag.nodes, dag.edges || []);
+
+      var rawNodes = Array.isArray(dag.nodes) ? dag.nodes : [];
+      var nodes = rawNodes.map(function(n) {
+        var node = Object.assign({}, n);
+        node.id = n.nodeId || n.id;
+        node.nodeId = n.nodeId || n.id;
+        // Ensure name is always populated — FLT source tables may have empty name
+        node.name = n.name || n.mlvName || n.tableName || n.nodeId || n.id;
+        return node;
+      }).filter(function(n) {
+        return !!n.id;
+      });
+
+      var edges = [];
+      if (Array.isArray(dag.edges) && dag.edges.length > 0) {
+        edges = dag.edges.map(function(e) {
+          return {
+            from: e.from || e.source || e.parentNodeId || e.parent || e.src,
+            to: e.to || e.target || e.childNodeId || e.child || e.dst,
+          };
+        }).filter(function(e) {
+          return !!(e.from && e.to);
+        });
+      } else {
+        for (var i = 0; i < nodes.length; i++) {
+          var node = nodes[i];
+          var children = Array.isArray(node.children) ? node.children : [];
+          for (var j = 0; j < children.length; j++) {
+            edges.push({ from: node.id, to: children[j] });
+          }
+        }
+      }
+
+      if (nodes.length === 0) {
+        this._renderEmpty('No DAG found. Ensure FLT is configured.');
+        return;
+      }
+
+      this._dagRetried = false;
+      this._dag = Object.assign({}, dag, { nodes: nodes, edges: edges });
+      this._esm.setDag(this._dag);
+      var layoutResult = this._layout.layout(nodes, edges);
       this._renderer.setData(layoutResult.nodes, layoutResult.edges);
       this._renderer.fitToScreen();
+      if (this._ganttCount) this._ganttCount.textContent = String(nodes.length);
       this._renderControls('idle');
       this._renderStatus('idle');
+      this._updateSummary();
     } catch (err) {
       console.error('[DagStudio] Failed to load DAG:', err);
       this._renderEmpty('Failed to load DAG: ' + (err.message || err));
@@ -492,24 +615,68 @@ class DagStudio {
 
   async _runDag() {
     try {
-      var iterationId = crypto.randomUUID();
       this._runBtn.disabled = true;
-      var result = await this._api.runDag(iterationId);
-      if (result === null) {
-        this._runBtn.disabled = false;
-        return;
+
+      // Check for stuck lock first
+      try {
+        var locked = await this._api.getLockedExecution();
+        if (locked) {
+          // API returns { LockedIterationIds: ["guid", ...] } or a string or array
+          var lockedId = null;
+          if (locked.LockedIterationIds && locked.LockedIterationIds.length > 0) {
+            lockedId = locked.LockedIterationIds[0];
+          } else if (locked.lockedIterationIds && locked.lockedIterationIds.length > 0) {
+            lockedId = locked.lockedIterationIds[0];
+          } else if (typeof locked === 'string') {
+            lockedId = locked;
+          } else if (Array.isArray(locked) && locked.length > 0) {
+            lockedId = locked[0];
+          } else if (locked.iterationId) {
+            lockedId = locked.iterationId;
+          }
+          if (lockedId) {
+            var shouldUnlock = confirm('DAG is locked by iteration ' + String(lockedId) + '\n\nForce unlock and run?');
+            if (!shouldUnlock) {
+              this._runBtn.disabled = false;
+              return;
+            }
+            await this._api.forceUnlockDag(lockedId);
+            this._lastLockState = false;
+            if (typeof edogToast === 'function') edogToast('DAG unlocked', 'info');
+          }
+        }
+      } catch (lockErr) {
+        // Lock check failed (401, etc.) — proceed anyway, runDag will fail if truly locked
       }
+
+      var iterationId = crypto.randomUUID();
+      // Start tracking BEFORE API call so early telemetry/log events aren't dropped
       this._esm.startTracking(iterationId);
-      // Initialize gantt with current DAG nodes
       if (this._gantt && this._dag && this._dag.nodes) {
         this._gantt.renderExecution(this._dag.nodes, Date.now());
       }
       this._renderControls('running');
       this._renderStatus('running');
       this._startElapsedTimer();
+      var result = await this._api.runDag(iterationId);
+      if (result === null) {
+        // API returned null (no MWC token) — roll back
+        this._esm.reset();
+        this._runBtn.disabled = false;
+        this._stopElapsedTimer();
+        this._renderControls('idle');
+        this._renderStatus('error', 'Run failed: not connected');
+        return;
+      }
+      if (typeof edogToast === 'function') edogToast('DAG execution started', 'info');
+      // Start polling execution metrics as a fallback for real-time updates
+      this._startExecPoller();
     } catch (err) {
       console.error('[DagStudio] Failed to run DAG:', err);
+      this._esm.reset();
       this._runBtn.disabled = false;
+      this._stopElapsedTimer();
+      this._renderControls('idle');
       this._renderStatus('error', 'Run failed: ' + (err.message || err));
     }
   }
@@ -517,6 +684,7 @@ class DagStudio {
   async _cancelDag() {
     var iterationId = this._esm.activeIterationId;
     if (!iterationId) return;
+    if (!confirm('Cancel the running DAG execution?')) return;
     try {
       this._cancelBtn.disabled = true;
       await this._api.cancelDag(iterationId);
@@ -529,6 +697,7 @@ class DagStudio {
 
   async _refreshDag() {
     this._esm.reset();
+    this._dagRetried = false;
     this._renderControls('idle');
     this._renderStatus('idle');
     this._stopElapsedTimer();
@@ -543,12 +712,30 @@ class DagStudio {
         this._unlockBtn.style.display = 'none';
         return;
       }
-      var lockedId = locked.iterationId || locked;
+      // Parse locked iteration ID from response
+      var lockedId = null;
+      if (locked.LockedIterationIds && locked.LockedIterationIds.length > 0) {
+        lockedId = locked.LockedIterationIds[0];
+      } else if (locked.lockedIterationIds && locked.lockedIterationIds.length > 0) {
+        lockedId = locked.lockedIterationIds[0];
+      } else if (typeof locked === 'string') {
+        lockedId = locked;
+      } else if (Array.isArray(locked) && locked.length > 0) {
+        lockedId = locked[0];
+      } else if (locked.iterationId) {
+        lockedId = locked.iterationId;
+      }
+      if (!lockedId) {
+        this._unlockBtn.style.display = 'none';
+        return;
+      }
       await this._api.forceUnlockDag(lockedId);
-      this._unlockBtn.style.display = 'none';
-      this._renderStatus('idle', 'DAG unlocked');
+      this._lastLockState = false;
+      this._renderToolbarState('idle', { locked: false, message: 'DAG unlocked' });
+      if (typeof edogToast === 'function') edogToast('DAG unlocked successfully', 'success');
     } catch (err) {
       console.error('[DagStudio] Failed to unlock DAG:', err);
+      if (typeof edogToast === 'function') edogToast('Failed to unlock DAG', 'error');
     }
   }
 
@@ -578,6 +765,8 @@ class DagStudio {
       }
       this._renderControls(this._esm.status);
       this._renderStatus(this._esm.status);
+      this._updateSummary();
+      if (this._statusTimer) this._statusTimer.style.display = 'none';
     } catch (err) {
       console.error('[DagStudio] Failed to load execution:', err);
     }
@@ -599,7 +788,10 @@ class DagStudio {
   async _checkLockState() {
     try {
       var locked = await this._api.getLockedExecution();
-      this._unlockBtn.style.display = locked ? '' : 'none';
+      var hasLock = !!(locked && ((locked.LockedIterationIds && locked.LockedIterationIds.length > 0) || (locked.lockedIterationIds && locked.lockedIterationIds.length > 0)));
+      this._lastLockState = hasLock;
+      // Re-render toolbar with current lock state
+      this._renderToolbarState(this._esm.status, { locked: hasLock });
     } catch (err) {
       // Silently ignore lock check failures
     }
@@ -609,10 +801,15 @@ class DagStudio {
     this._stopElapsedTimer();
     var startedAt = this._esm.startedAt || Date.now();
     var self = this;
+    if (this._statusTimer) this._statusTimer.style.display = 'inline';
     this._elapsedInterval = setInterval(function() {
       var elapsed = Date.now() - startedAt;
-      var secs = (elapsed / 1000).toFixed(1);
-      self._statusText.textContent = 'Running ' + secs + 's';
+      var totalSecs = Math.floor(elapsed / 1000);
+      var m = Math.floor(totalSecs / 60);
+      var s = totalSecs % 60;
+      var timeStr = m + ':' + (s < 10 ? '0' : '') + s;
+      if (self._statusTimer) self._statusTimer.textContent = timeStr;
+      self._statusText.textContent = 'Running';
     }, 100);
   }
 
@@ -623,19 +820,102 @@ class DagStudio {
     }
   }
 
+  /** Poll execution metrics every 5s during active run — guarantees UI updates even if SignalR is silent. */
+  _startExecPoller() {
+    this._stopExecPoller();
+    var self = this;
+    this._execPollInterval = setInterval(function() {
+      if (!self._esm.activeIterationId || self._esm.status !== 'running') {
+        self._stopExecPoller();
+        return;
+      }
+      self._pollExecMetrics();
+    }, 5000);
+  }
+
+  _stopExecPoller() {
+    if (this._execPollInterval) {
+      clearInterval(this._execPollInterval);
+      this._execPollInterval = null;
+    }
+  }
+
+  async _pollExecMetrics() {
+    var iterationId = this._esm.activeIterationId;
+    if (!iterationId) return;
+    try {
+      var metrics = await this._api.getDagExecMetrics(iterationId);
+      if (!metrics || !metrics.nodeExecutionMetrices) return;
+
+      // Update node states from polled metrics
+      var raw = metrics.nodeExecutionMetrices;
+      var entries = Array.isArray(raw) ? raw : Object.entries(raw);
+      for (var i = 0; i < entries.length; i++) {
+        var nid, nm;
+        if (Array.isArray(raw)) {
+          nm = entries[i];
+          nid = nm.nodeId || this._esm._nodeNameIndex.get((nm.nodeName || nm.mlvName || '').toLowerCase());
+        } else {
+          nid = entries[i][0];
+          nm = entries[i][1];
+        }
+        if (!nid || !nm) continue;
+        var current = this._esm.nodeStates.get(nid);
+        var newStatus = this._esm._mapNodeStatus(nm.status || nm.nodeExecutionStatus);
+        // Only update if status actually changed
+        if (current && current.status !== newStatus) {
+          var startMs = nm.startedAt ? new Date(nm.startedAt).getTime() : (nm.startTime ? new Date(nm.startTime).getTime() : current.startedAt);
+          var endMs = nm.endedAt ? new Date(nm.endedAt).getTime() : (nm.endTime ? new Date(nm.endTime).getTime() : null);
+          this._esm._nodeStates.set(nid, {
+            status: newStatus,
+            startedAt: startMs,
+            endedAt: endMs,
+            errorCode: nm.errorCode || null,
+            source: 'poll',
+          });
+          if (this._esm.onNodeStateChanged) this._esm.onNodeStateChanged(nid, this._esm._nodeStates.get(nid));
+        }
+      }
+
+      // Check overall execution status
+      var dagMetrics = metrics.dagExecutionMetrics || {};
+      var overallStatus = (dagMetrics.status || '').toLowerCase();
+      if (overallStatus === 'completed' || overallStatus === 'failed' || overallStatus === 'cancelled') {
+        this._esm._executionStatus = overallStatus;
+        this._esm._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : Date.now();
+        this._stopExecPoller();
+        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(overallStatus);
+        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, overallStatus);
+      } else {
+        this._updateSummary();
+      }
+    } catch (err) {
+      // Poll failed — silently retry next interval
+      console.log('[DAG-DIAG] Poll failed:', err.message);
+    }
+  }
+
   // --- Event handlers ---
 
   _onTelemetryEvent(event) {
     if (!this._esm.activeIterationId) return;
+    console.log('[DAG-DIAG] Telemetry event:', event && event.data ? event.data.activityName : 'no-data', event);
     this._esm.processTelemetry(event);
   }
 
   _onLogEntry(entry) {
     if (!this._esm.activeIterationId) return;
-    this._autoDetector.processLog(entry);
-    // Check if autoDetector has an active execution matching ours
+    // Log topic streams {sequenceId, timestamp, topic, data} — unwrap to get the actual log entry
+    var log = entry && entry.data ? entry.data : entry;
+    var msg = log.message || '';
+    // Only log DAG-relevant messages to avoid flooding
+    if (msg.includes('DAG') || msg.includes('Executing') || msg.includes('Executed') || msg.includes('node') || msg.includes('faulted')) {
+      console.log('[DAG-DIAG] Log entry:', msg.substring(0, 120), 'iterationId:', log.iterationId);
+    }
+    this._autoDetector.processLog(log);
     var exec = this._autoDetector.detectedExecutions.get(this._esm.activeIterationId);
     if (exec) {
+      console.log('[DAG-DIAG] AutoDetector match for', this._esm.activeIterationId, 'status:', exec.status, 'nodes:', exec.nodes ? exec.nodes.size : 0);
       this._esm.processAutoDetectorUpdate(exec);
     }
   }
@@ -647,23 +927,42 @@ class DagStudio {
   }
 
   _onExecutionStateChanged(status) {
+    console.log('[DAG-DIAG] Execution state changed:', status);
     this._renderControls(status);
     this._renderStatus(status);
+    this._updateSummary();
     if (status !== 'running') {
       this._stopElapsedTimer();
+      if (this._statusTimer) this._statusTimer.style.display = 'none';
     }
   }
 
   _onNodeStateChanged(nodeId, state) {
+    console.log('[DAG-DIAG] Node state changed:', nodeId.substring(0, 8), state.status, state.source);
     if (this._renderer) this._renderer.updateNodeState(nodeId, state.status);
     if (this._gantt) this._gantt.updateBar(nodeId, state);
+    this._updateSummary();
   }
 
   _onExecutionComplete(iterationId, finalStatus) {
     this._stopElapsedTimer();
+    this._stopExecPoller();
+    if (this._statusTimer) this._statusTimer.style.display = 'none';
     this._renderControls(finalStatus);
     this._renderStatus(finalStatus);
+    this._updateSummary();
     this._loadHistory();
+    // Refresh lock state — execution complete means lock should be released
+    this._checkLockState();
+    if (typeof edogToast === 'function') {
+      if (finalStatus === 'completed') {
+        edogToast('DAG completed successfully', 'success');
+      } else if (finalStatus === 'failed') {
+        edogToast('DAG execution failed', 'error');
+      } else if (finalStatus === 'cancelled') {
+        edogToast('DAG execution cancelled', 'info');
+      }
+    }
   }
 
   _onRunClick() { this._runDag(); }
@@ -677,10 +976,10 @@ class DagStudio {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
     if (e.key === 'Escape') {
-      // Deselect node, close detail panel
-      this._nodeDetail.classList.remove('open');
+      if (this._detailSection) this._detailSection.style.display = 'none';
       if (this._renderer) this._renderer.clearHighlight();
       if (this._gantt) this._gantt.unhoverNode();
+      if (this._execModeDropdown) this._execModeDropdown.classList.remove('open');
     } else if (e.key === '+' || e.key === '=') {
       // Zoom in — delegate to zoom button
       var zoomIn = document.getElementById('dagZoomIn');
@@ -697,43 +996,118 @@ class DagStudio {
 
   // --- UI rendering ---
 
-  _renderControls(status) {
-    var isIdle = status === 'idle' || status === 'completed' || status === 'failed' || status === 'cancelled';
-    var isRunning = status === 'running';
-    this._runBtn.style.display = isIdle ? '' : 'none';
+  /**
+   * Full toolbar state matrix.
+   * Controls: Run/Cancel visibility, Refresh disabled, Unlock visibility.
+   * Info bar: iteration ID, RAID.
+   * Status: dot color + text + timer.
+   */
+  _renderToolbarState(status, opts) {
+    opts = opts || {};
+    var isLocked = opts.locked || false;
+    var isIdle = status === 'idle' || status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'skipped';
+    var isRunning = status === 'running' || status === 'cancelling';
+
+    // --- Buttons ---
+    this._runBtn.style.display = isIdle && !isLocked ? '' : 'none';
     this._runBtn.disabled = false;
-    this._cancelBtn.style.display = isRunning ? '' : 'none';
+    this._runBtn.innerHTML = (status === 'failed') ? '&#9654; Re-run DAG' : '&#9654; Run DAG';
+    this._cancelBtn.style.display = (status === 'running') ? '' : 'none';
     this._cancelBtn.disabled = false;
     this._refreshBtn.disabled = isRunning;
+    // Unlock: show only when locked
+    this._unlockBtn.style.display = isLocked ? '' : 'none';
+
+    // --- Status dot + text ---
+    var dot = this._statusDot;
+    dot.style.animation = 'none';
+    if (status === 'running') {
+      dot.style.background = 'var(--accent)';
+      dot.style.animation = 'dagDotPulse 1.5s ease-in-out infinite';
+      this._statusText.textContent = opts.message || 'Running';
+    } else if (status === 'completed') {
+      dot.style.background = 'var(--status-succeeded)';
+      this._statusText.textContent = opts.message || 'Completed';
+    } else if (status === 'failed') {
+      dot.style.background = 'var(--status-failed)';
+      this._statusText.textContent = opts.message || 'Failed';
+    } else if (status === 'cancelled') {
+      dot.style.background = 'var(--status-cancelled)';
+      this._statusText.textContent = opts.message || 'Cancelled';
+    } else if (status === 'cancelling') {
+      dot.style.background = 'var(--status-cancelled)';
+      dot.style.animation = 'dagDotPulse 1.5s ease-in-out infinite';
+      this._statusText.textContent = 'Cancelling...';
+    } else if (status === 'skipped') {
+      dot.style.background = 'var(--status-pending)';
+      this._statusText.textContent = opts.message || 'Skipped (lock conflict)';
+    } else if (isLocked) {
+      dot.style.background = 'var(--status-cancelled)';
+      this._statusText.textContent = 'Locked';
+    } else if (status === 'error') {
+      dot.style.background = 'var(--status-failed)';
+      this._statusText.textContent = opts.message || 'Error';
+    } else {
+      dot.style.background = 'var(--status-pending)';
+      this._statusText.textContent = opts.message || 'Idle';
+    }
+
+    // --- Info bar: iteration ID + RAID ---
+    var infoEl = document.getElementById('dagToolbarInfo');
+    if (infoEl) {
+      var iterId = this._esm.activeIterationId;
+      if (iterId && (isRunning || status === 'completed' || status === 'failed' || status === 'cancelled')) {
+        var html = '<span class="dag-info-label">iter</span><span class="dag-info-val" title="Click to copy" data-copy="' + this._escapeHtml(iterId) + '">' + this._escapeHtml(iterId) + '</span>';
+        // RAID from autodetector
+        var exec = this._autoDetector.detectedExecutions.get(iterId);
+        if (exec && exec.raids && exec.raids.size > 0) {
+          var raid = exec.raids.values().next().value;
+          html += '<span class="dag-info-sep"></span><span class="dag-info-label">RAID</span><span class="dag-info-val" title="Click to copy" data-copy="' + this._escapeHtml(raid) + '">' + this._escapeHtml(raid) + '</span>';
+        }
+        infoEl.innerHTML = html;
+        infoEl.style.display = 'flex';
+        // Bind copy-on-click
+        var vals = infoEl.querySelectorAll('.dag-info-val');
+        for (var i = 0; i < vals.length; i++) {
+          vals[i].addEventListener('click', function() {
+            var text = this.getAttribute('data-copy');
+            if (text && navigator.clipboard) {
+              navigator.clipboard.writeText(text);
+              if (typeof edogToast === 'function') edogToast('Copied to clipboard', 'info');
+            }
+          });
+        }
+      } else {
+        infoEl.style.display = 'none';
+        infoEl.innerHTML = '';
+      }
+    }
+  }
+
+  // Backward-compat wrappers — all callers use these
+  _renderControls(status) {
+    this._renderToolbarState(status, { locked: this._lastLockState });
   }
 
   _renderStatus(status, message) {
-    var dot = this._statusDot;
-    // Remove all state classes
-    dot.className = 'dag-status-dot';
-    if (status === 'running') {
-      dot.classList.add('running');
-      if (!message) this._statusText.textContent = 'Running';
-    } else if (status === 'completed') {
-      dot.classList.add('completed');
-      this._statusText.textContent = message || 'Completed';
-    } else if (status === 'failed') {
-      dot.classList.add('failed');
-      this._statusText.textContent = message || 'Failed';
-    } else if (status === 'cancelled' || status === 'cancelling') {
-      dot.classList.add('cancelled');
-      this._statusText.textContent = message || (status === 'cancelling' ? 'Cancelling...' : 'Cancelled');
-    } else if (status === 'error') {
-      dot.classList.add('failed');
-      this._statusText.textContent = message || 'Error';
-    } else {
-      this._statusText.textContent = message || 'Idle';
+    this._renderToolbarState(status, { message: message, locked: this._lastLockState });
+  }
+
+  _renderLoading() {
+    var nodesLayer = this._graphPanel ? this._graphPanel.querySelector('#dagNodesLayer') : null;
+    if (nodesLayer) {
+      nodesLayer.innerHTML = '<div class="dag-loading">' +
+        '<div class="dag-loading-spinner"></div>' +
+        '<div class="dag-loading-text">Loading DAG</div>' +
+        '<div class="dag-loading-sub">Fetching graph structure...</div>' +
+      '</div>';
     }
   }
 
   _renderEmpty(message) {
-    if (this._renderer && this._renderer._nodesLayer) {
-      this._renderer._nodesLayer.innerHTML = '<div class="dag-empty-hint">' + message + '</div>';
+    var nodesLayer = this._graphPanel ? this._graphPanel.querySelector('#dagNodesLayer') : null;
+    if (nodesLayer) {
+      nodesLayer.innerHTML = '<div class="dag-empty-hint">' + message + '</div>';
     }
   }
 
@@ -743,20 +1117,28 @@ class DagStudio {
       return;
     }
     var html = '<table class="dag-history-table">';
-    html += '<tr><th>Iteration</th><th>Status</th><th>Time</th></tr>';
+    html += '<thead><tr><th>Run</th><th>Status</th><th>Duration</th><th>Time</th></tr></thead><tbody>';
     for (var i = 0; i < iterations.length; i++) {
       var it = iterations[i];
       var id = it.iterationId || it;
-      var shortId = (typeof id === 'string' && id.length > 8) ? id.substring(0, 8) : id;
-      var status = it.status || '\u2014';
-      var time = it.startTime ? new Date(it.startTime).toLocaleString() : '\u2014';
+      var shortId = id;
+      var status = (it.status || '\u2014').toString();
+      var statusClass = status.toLowerCase();
+      var startedAt = it.startedAt || it.startTime;
+      var endedAt = it.endedAt || it.endTime;
+      var duration = '\u2014';
+      if (startedAt && endedAt) {
+        duration = ((new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 1000).toFixed(1) + 's';
+      }
+      var time = startedAt ? new Date(startedAt).toLocaleString() : '\u2014';
       html += '<tr class="dag-history-row" data-iteration="' + id + '">';
       html += '<td title="' + id + '">' + shortId + '</td>';
-      html += '<td>' + status + '</td>';
+      html += '<td><span class="status-pill ' + statusClass + '">' + status + '</span></td>';
+      html += '<td>' + duration + '</td>';
       html += '<td>' + time + '</td>';
       html += '</tr>';
     }
-    html += '</table>';
+    html += '</tbody></table>';
     this._historyContainer.innerHTML = html;
     // Bind click handlers
     var self = this;
@@ -771,40 +1153,46 @@ class DagStudio {
 
   _renderNodeDetail(nodeId) {
     if (!nodeId || !this._dag) {
-      this._nodeDetail.classList.remove('open');
+      if (this._detailSection) this._detailSection.style.display = 'none';
       return;
     }
     var node = null;
     for (var i = 0; i < this._dag.nodes.length; i++) {
-      if (this._dag.nodes[i].nodeId === nodeId) {
-        node = this._dag.nodes[i];
+      var candidate = this._dag.nodes[i];
+      if ((candidate.nodeId || candidate.id) === nodeId) {
+        node = candidate;
         break;
       }
     }
     if (!node) {
-      this._nodeDetail.classList.remove('open');
+      if (this._detailSection) this._detailSection.style.display = 'none';
       return;
     }
     var state = this._esm.nodeStates.get(nodeId);
     var statusText = state ? state.status : 'pending';
-    var html = '<div class="dag-detail-header">';
-    html += '<span class="dag-detail-title">' + (node.name || node.nodeId) + '</span>';
-    html += '<button class="dag-detail-close" id="dagDetailClose">&#10005;</button>';
+    var kindText = node.kind || node.type || 'unknown';
+    var kindClass = kindText.toLowerCase();
+    var displayName = node.name || node.nodeId || node.id || nodeId;
+    var html = '<div class="detail-header">';
+    html += '<span class="node-name">' + this._escapeHtml(displayName) + '</span>';
+    html += '<span class="kind-badge ' + kindClass + '">' + this._escapeHtml(kindText) + '</span>';
+    html += '<button class="dag-detail-close" id="dagDetailClose" title="Close">&#10005;</button>';
     html += '</div>';
-    html += '<div class="dag-detail-body">';
-    html += '<div class="dag-detail-row"><span class="dag-detail-label">Status</span><span class="dag-status-dot ' + statusText + '"></span> ' + statusText + '</div>';
-    html += '<div class="dag-detail-row"><span class="dag-detail-label">Type</span>' + (node.kind || node.type || '\u2014') + '</div>';
-    html += '<div class="dag-detail-row"><span class="dag-detail-label">Node ID</span><span title="' + nodeId + '">' + nodeId.substring(0, 12) + '...</span></div>';
+    html += '<dl class="detail-grid">';
+    html += '<dt>Status</dt><dd><span class="status-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;background:' + this._statusColor(statusText) + ';vertical-align:middle"></span>' + this._escapeHtml(statusText) + '</dd>';
+    html += '<dt>Type</dt><dd>' + this._escapeHtml(kindText) + '</dd>';
+    html += '<dt>Node ID</dt><dd title="' + this._escapeHtml(nodeId) + '">' + this._escapeHtml(nodeId) + '</dd>';
     if (state && state.startedAt) {
-      html += '<div class="dag-detail-row"><span class="dag-detail-label">Started</span>' + new Date(state.startedAt).toLocaleTimeString() + '</div>';
+      html += '<dt>Started</dt><dd>' + new Date(state.startedAt).toLocaleString() + '</dd>';
     }
     if (state && state.endedAt) {
-      html += '<div class="dag-detail-row"><span class="dag-detail-label">Ended</span>' + new Date(state.endedAt).toLocaleTimeString() + '</div>';
-      html += '<div class="dag-detail-row"><span class="dag-detail-label">Duration</span>' + ((state.endedAt - state.startedAt) / 1000).toFixed(1) + 's</div>';
+      html += '<dt>Ended</dt><dd>' + new Date(state.endedAt).toLocaleString() + '</dd>';
+      html += '<dt>Duration</dt><dd>' + ((state.endedAt - state.startedAt) / 1000).toFixed(1) + 's</dd>';
     }
     if (state && state.errorCode) {
-      html += '<div class="dag-detail-row"><span class="dag-detail-label">Error</span><span class="error-text">' + state.errorCode + '</span></div>';
+      html += '<dt>Error</dt><dd class="error-text">' + this._escapeHtml(state.errorCode) + '</dd>';
     }
+    html += '</dl>';
     // ── Definition section (F21) ──
     var self = this;
     if (node.codeReference) {
@@ -825,14 +1213,13 @@ class DagStudio {
       html += '<div class="dag-detail-section-title">Definition</div>';
       html += '<div class="dag-code-empty">No code reference available</div>';
     }
-    html += '</div>';
     this._nodeDetail.innerHTML = html;
-    this._nodeDetail.classList.add('open');
+    if (this._detailSection) this._detailSection.style.display = '';
     // Close button
     var closeBtn = document.getElementById('dagDetailClose');
     if (closeBtn) {
       closeBtn.addEventListener('click', function() {
-        self._nodeDetail.classList.remove('open');
+        if (self._detailSection) self._detailSection.style.display = 'none';
         if (self._renderer) self._renderer.clearHighlight();
       });
     }
@@ -860,7 +1247,7 @@ class DagStudio {
   _loadNodeDefinition(nodeId) {
     var node = null;
     for (var i = 0; i < this._dag.nodes.length; i++) {
-      if (this._dag.nodes[i].nodeId === nodeId) {
+      if ((this._dag.nodes[i].nodeId || this._dag.nodes[i].id) === nodeId) {
         node = this._dag.nodes[i];
         break;
       }
@@ -914,6 +1301,40 @@ class DagStudio {
       self._codeCache.set(cacheKey, '-- Failed to load: ' + err.message);
       self._renderNodeDetail(nodeId);
     });
+  }
+
+  _statusColor(status) {
+    if (status === 'completed') return 'var(--status-succeeded)';
+    if (status === 'failed') return 'var(--status-failed)';
+    if (status === 'running') return 'var(--accent)';
+    if (status === 'cancelled' || status === 'cancelling') return 'var(--status-cancelled)';
+    return 'var(--status-pending)';
+  }
+
+  _updateSummary() {
+    var total = this._dag && this._dag.nodes ? this._dag.nodes.length : 0;
+    var ok = 0;
+    var fail = 0;
+    var run = 0;
+    for (var entry of this._esm.nodeStates) {
+      var state = entry[1];
+      if (state.status === 'completed') ok += 1;
+      if (state.status === 'failed') fail += 1;
+      if (state.status === 'running') run += 1;
+    }
+    if (this._sumTotal) this._sumTotal.textContent = String(total);
+    if (this._sumOk) this._sumOk.textContent = String(ok);
+    if (this._sumFail) this._sumFail.textContent = String(fail);
+    if (this._sumRun) this._sumRun.textContent = String(run);
+    if (this._ganttCount) this._ganttCount.textContent = total ? String(total) : '';
+
+    var durationText = '--';
+    if (this._esm.startedAt && this._esm.endedAt) {
+      durationText = ((this._esm.endedAt - this._esm.startedAt) / 1000).toFixed(1) + 's';
+    } else if (this._esm.status === 'running' && this._esm.startedAt) {
+      durationText = ((Date.now() - this._esm.startedAt) / 1000).toFixed(1) + 's';
+    }
+    if (this._sumDur) this._sumDur.textContent = durationText;
   }
 
   /** Escape HTML entities for safe insertion. */

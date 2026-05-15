@@ -2404,8 +2404,8 @@ class WorkspaceExplorer {
     }
 
     const capacityId = ws.capacityId || '';
-    this._lastDeployTarget = { workspaceId: ws.id, artifactId: lh.id, capacityId: capacityId, lakehouseName: lh.displayName || '' };
-    this._deployFlow.startDeploy(ws.id, lh.id, capacityId, lh.displayName || '');
+    this._lastDeployTarget = { workspaceId: ws.id, artifactId: lh.id, capacityId: capacityId, lakehouseName: lh.displayName || '', workspaceName: ws.displayName || '' };
+    this._deployFlow.startDeploy(ws.id, lh.id, capacityId, lh.displayName || '', false, ws.displayName || '');
   }
 
   _onDeployUpdate(state, lh, ws) {

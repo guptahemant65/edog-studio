@@ -438,7 +438,8 @@ class FabricApiClient {
 
   async cancelDag(iterationId) {
     if (!this._mwcToken) return null;
-    return this._fltFetch(`/liveTableSchedule/cancelDAG/${iterationId}`, { method: 'POST' });
+    // FLT uses HTTP DELETE for cancel — not GET or POST
+    return this._fltFetch(`/liveTableSchedule/cancelDAG/${iterationId}`, { method: 'DELETE' });
   }
 
   // --- DAG Studio APIs (MWC token, connected mode) ---

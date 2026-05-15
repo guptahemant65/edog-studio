@@ -58,8 +58,13 @@ var DagGantt = (function() {
       bar.style.width = '0%';
       track.appendChild(bar);
 
+      var time = document.createElement('span');
+      time.className = 'gantt-time';
+      time.textContent = '--';
+
       row.appendChild(label);
       row.appendChild(track);
+      row.appendChild(time);
       this._container.appendChild(row);
 
       var self = this;
@@ -78,6 +83,7 @@ var DagGantt = (function() {
       this._bars.set(nodeId, {
         el: row,
         barEl: bar,
+        timeEl: time,
         status: 'pending',
         startedAt: null,
         endedAt: null
@@ -101,6 +107,19 @@ var DagGantt = (function() {
     // Update bar CSS class
     entry.barEl.className = 'gantt-bar';
     if (state.status) entry.barEl.classList.add(state.status);
+
+    // Update time display
+    if (entry.timeEl) {
+      if (state.startedAt && state.endedAt) {
+        var dur = (state.endedAt - state.startedAt) / 1000;
+        entry.timeEl.textContent = dur.toFixed(1) + 's';
+      } else if (state.startedAt && state.status === 'running') {
+        var elapsed = (Date.now() - state.startedAt) / 1000;
+        entry.timeEl.textContent = elapsed.toFixed(1) + 's';
+      } else {
+        entry.timeEl.textContent = '--';
+      }
+    }
 
     this._recalcBars();
 

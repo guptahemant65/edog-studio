@@ -74,7 +74,7 @@ class DagLayout {
 
     // Build final output
     const totalLayers = layerBuckets.length;
-    return this._buildResult(nodes, positions, routedEdges, totalLayers);
+    return this._buildResult(nodes, positions, routedEdges, totalLayers, layerOf);
   }
 
   // ── Step 1: Layer Assignment (Kahn's topological sort) ────────────────
@@ -315,7 +315,7 @@ class DagLayout {
   // ── Result Builder ────────────────────────────────────────────────────
 
   /** Assemble the final layout result (only real nodes, no dummies). */
-  _buildResult(originalNodes, positions, routedEdges, totalLayers) {
+  _buildResult(originalNodes, positions, routedEdges, totalLayers, layerOf) {
     const positionedNodes = [];
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
@@ -327,6 +327,8 @@ class DagLayout {
         id: n.id,
         name: n.name || n.id,
         kind: n.kind || 'unknown',
+        tableType: n.tableType || null,
+        layer: layerOf ? (layerOf.get(n.id) ?? 0) : 0,
         x: pos.x,
         y: pos.y,
         w: this.nodeWidth,

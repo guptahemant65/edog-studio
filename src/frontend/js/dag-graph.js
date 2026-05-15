@@ -52,6 +52,15 @@ class DagCanvasRenderer {
 
   /* ── Status helpers ── */
 
+  /** Map numeric layer index to a named category based on position in total layers. */
+  _layerName(layerIndex, totalLayers) {
+    var names = ['raw', 'staging', 'transform', 'aggregate', 'report'];
+    if (totalLayers <= 1) return names[0];
+    var ratio = layerIndex / (totalLayers - 1);
+    var idx = Math.round(ratio * (names.length - 1));
+    return names[idx];
+  }
+
   _statusColor(status) {
     return {
       pending: '#8e95a5', running: '#6d5cff', completed: '#18a058',
@@ -73,6 +82,11 @@ class DagCanvasRenderer {
     this._nodes = nodes;
     this._edges = edges;
     this._nodeMap.clear();
+    var maxLayer = 0;
+    for (const n of nodes) {
+      if (n.layer != null && n.layer > maxLayer) maxLayer = n.layer;
+    }
+    this._totalLayers = maxLayer + 1;
     for (const n of nodes) {
       n.status = n.status || 'pending';
       this._nodeMap.set(n.id, n);
@@ -89,10 +103,10 @@ class DagCanvasRenderer {
     var ch = this._canvas.height / this._dpr;
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of this._nodes) {
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + n.w);
-      maxY = Math.max(maxY, n.y + n.h);
+      minX = Math.min(minX, n.x - n.w / 2);
+      minY = Math.min(minY, n.y - n.h / 2);
+      maxX = Math.max(maxX, n.x + n.w / 2);
+      maxY = Math.max(maxY, n.y + n.h / 2);
     }
     var pad = 80;
     var rangeX = maxX - minX + pad * 2;
@@ -143,8 +157,12 @@ class DagCanvasRenderer {
   resumeRendering() {
     if (this._paused) {
       this._paused = false;
-      this._resize();
-      this._startRenderLoop();
+      var self = this;
+      requestAnimationFrame(function() {
+        self._resize();
+        if (self._nodes.length > 0) self.fitToScreen();
+        self._startRenderLoop();
+      });
     }
   }
 
@@ -187,8 +205,25 @@ class DagCanvasRenderer {
       var el = document.createElement('div');
       el.className = 'dag-node status-' + n.status;
       el.dataset.id = n.id;
-      el.dataset.layer = n.kind || 'unknown';
-      el.style.cssText = 'left:' + n.x + 'px;top:' + n.y + 'px;width:' + n.w + 'px;height:' + n.h + 'px;';
+      el.dataset.layer = this._layerName(n.layer || 0, this._totalLayers || 1);
+      el.style.cssText = 'left:' + (n.x - n.w / 2) + 'px;top:' + (n.y - n.h / 2) + 'px;width:' + n.w + 'px;height:' + n.h + 'px;';
+
+      // Badge: MLV nodes show kind (SQL/PySpark), source tables show TABLE
+      var badgeText = '';
+      var badgeClass = '';
+      if (n.kind && n.kind.toLowerCase() !== 'unknown') {
+        badgeText = n.kind.toUpperCase();
+        badgeClass = n.kind.toLowerCase();
+      } else if (n.tableType) {
+        var tt = (typeof n.tableType === 'string' ? n.tableType : '').toUpperCase();
+        if (tt === 'MATERIALIZED_LAKE_VIEW' || tt === 'MATERIALIZED_VIEW') {
+          badgeText = 'MLV';
+          badgeClass = 'sql';
+        } else {
+          badgeText = 'TABLE';
+          badgeClass = 'table';
+        }
+      }
 
       var durStr = n.duration != null ? '<span class="dag-node-dur">' + n.duration.toFixed(1) + 's</span>' : '';
       el.innerHTML = '<div class="dag-node-body">' +
@@ -197,17 +232,43 @@ class DagCanvasRenderer {
           '<span class="dag-node-status-dot" style="background:' + color + '"></span>' +
         '</div>' +
         '<div class="dag-node-meta">' +
-          '<span class="dag-node-badge ' + (n.kind || 'unknown').toLowerCase() + '">' + (n.kind || '') + '</span>' +
+          (badgeText ? '<span class="dag-node-badge ' + badgeClass + '">' + badgeText + '</span>' : '') +
           durStr +
         '</div>' +
       '</div>';
 
-      el.addEventListener('mousedown', (function(self, id) {
+      el.addEventListener('mousedown', (function(self, nodeId, nodeEl) {
         return function(e) {
           e.stopPropagation();
-          self._selectNode(id);
+          e.preventDefault();
+          self._selectNode(nodeId);
+          // Start drag tracking
+          var node = self._nodeMap.get(nodeId);
+          if (!node) return;
+          var startX = e.clientX, startY = e.clientY;
+          var origX = node.x, origY = node.y;
+          var moved = false;
+
+          function onMove(me) {
+            var dx = (me.clientX - startX) / self._camera.scale;
+            var dy = (me.clientY - startY) / self._camera.scale;
+            if (!moved && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+            moved = true;
+            node.x = origX + dx;
+            node.y = origY + dy;
+            nodeEl.style.left = (node.x - node.w / 2) + 'px';
+            nodeEl.style.top = (node.y - node.h / 2) + 'px';
+            // Update edge points that reference this node
+            self._updateEdgesForNode(nodeId);
+          }
+          function onUp() {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+          }
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
         };
-      })(this, n.id));
+      })(this, n.id, el));
 
       el.addEventListener('mouseenter', (function(self, id) {
         return function() {
@@ -346,9 +407,9 @@ class DagCanvasRenderer {
         ctx.setLineDash([6 * cam.scale, 3 * cam.scale]);
         ctx.lineDashOffset = -this._animFrame * 0.5;
       } else {
-        ctx.strokeStyle = '#8e95a5';
-        ctx.lineWidth = 1.2 * cam.scale;
-        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 1.4 * cam.scale;
+        ctx.globalAlpha = 0.6;
         ctx.setLineDash([]);
       }
 
@@ -356,18 +417,32 @@ class DagCanvasRenderer {
       ctx.globalAlpha = 1;
       ctx.setLineDash([]);
 
-      // Arrowhead at the last point
-      var arrowLast = screenPts[screenPts.length - 1];
-      var arrowPrev = screenPts[screenPts.length - 2];
-      var angle = Math.atan2(arrowLast.y - arrowPrev.y, arrowLast.x - arrowPrev.x);
-      var arrowLen = 6 * cam.scale;
+      // Arrowhead — compute tangent direction at the curve endpoint
+      var arrowLen = 7 * cam.scale;
+      var endPt = screenPts[screenPts.length - 1];
+      // For Bezier curves, tangent at endpoint = direction from last control point to endpoint
+      // For 2-point edges, the last control point is (midX, ey) so tangent is horizontal
+      // Approximate: use the direction from second-to-last to last screen point
+      var prevPt = screenPts.length >= 2 ? screenPts[screenPts.length - 2] : endPt;
+      // For Bezier, override with the midpoint control direction (always horizontal for our curves)
+      var dx = endPt.x - prevPt.x;
+      var dy = endPt.y - prevPt.y;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 0.1) { dx = 1; dy = 0; } else { dx /= dist; dy /= dist; }
+
+      // Place arrowhead slightly before the endpoint so it doesn't hide behind node card
+      var tipX = endPt.x - dx * 2 * cam.scale;
+      var tipY = endPt.y - dy * 2 * cam.scale;
+      var angle = Math.atan2(dy, dx);
+      var halfAngle = 0.4;
+
       ctx.beginPath();
-      ctx.moveTo(arrowLast.x, arrowLast.y);
-      ctx.lineTo(arrowLast.x - arrowLen * Math.cos(angle - 0.35), arrowLast.y - arrowLen * Math.sin(angle - 0.35));
-      ctx.lineTo(arrowLast.x - arrowLen * Math.cos(angle + 0.35), arrowLast.y - arrowLen * Math.sin(angle + 0.35));
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX - arrowLen * Math.cos(angle - halfAngle), tipY - arrowLen * Math.sin(angle - halfAngle));
+      ctx.lineTo(tipX - arrowLen * Math.cos(angle + halfAngle), tipY - arrowLen * Math.sin(angle + halfAngle));
       ctx.closePath();
-      ctx.fillStyle = (isSelected || isHighlighted) ? '#6d5cff' : isFailed ? '#e5453b' : '#8e95a5';
-      ctx.globalAlpha = (isSelected || isHighlighted) ? 0.8 : 0.55;
+      ctx.fillStyle = (isSelected || isHighlighted) ? '#6d5cff' : isFailed ? '#e5453b' : '#5a6070';
+      ctx.globalAlpha = (isSelected || isHighlighted) ? 0.8 : 0.7;
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -386,10 +461,10 @@ class DagCanvasRenderer {
 
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of this._nodes) {
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + n.w);
-      maxY = Math.max(maxY, n.y + n.h);
+      minX = Math.min(minX, n.x - n.w / 2);
+      minY = Math.min(minY, n.y - n.h / 2);
+      maxX = Math.max(maxX, n.x + n.w / 2);
+      maxY = Math.max(maxY, n.y + n.h / 2);
     }
 
     var pad = 20;
@@ -407,15 +482,15 @@ class DagCanvasRenderer {
       var b = this._nodeMap.get(edge.to);
       if (!a || !b) continue;
       miniCtx.beginPath();
-      miniCtx.moveTo(offX + (a.x + a.w - minX + pad) * scaleM, offY + (a.y + a.h / 2 - minY + pad) * scaleM);
-      miniCtx.lineTo(offX + (b.x - minX + pad) * scaleM, offY + (b.y + b.h / 2 - minY + pad) * scaleM);
+      miniCtx.moveTo(offX + (a.x + a.w / 2 - minX + pad) * scaleM, offY + (a.y - minY + pad) * scaleM);
+      miniCtx.lineTo(offX + (b.x - b.w / 2 - minX + pad) * scaleM, offY + (b.y - minY + pad) * scaleM);
       miniCtx.stroke();
     }
 
     // Draw nodes as dots
     for (const n of this._nodes) {
-      var nx = offX + (n.x + n.w / 2 - minX + pad) * scaleM;
-      var ny = offY + (n.y + n.h / 2 - minY + pad) * scaleM;
+      var nx = offX + (n.x - minX + pad) * scaleM;
+      var ny = offY + (n.y - minY + pad) * scaleM;
       miniCtx.beginPath();
       miniCtx.arc(nx, ny, 2.5, 0, Math.PI * 2);
       miniCtx.fillStyle = this._statusColor(n.status);
@@ -557,5 +632,27 @@ class DagCanvasRenderer {
     var el = this._nodesLayer.querySelector('[data-id="' + nodeId + '"]');
     if (el) el.classList.add('selected');
     if (this.onNodeSelected) this.onNodeSelected(nodeId);
+  }
+
+  /** Recalculate edge endpoints when a node is dragged. */
+  _updateEdgesForNode(nodeId) {
+    var node = this._nodeMap.get(nodeId);
+    if (!node) return;
+    var hw = node.w / 2;
+    for (var i = 0; i < this._edges.length; i++) {
+      var edge = this._edges[i];
+      if (edge.from === nodeId) {
+        // Update source point (right-center)
+        if (edge.points && edge.points.length >= 1) {
+          edge.points[0] = { x: node.x + hw, y: node.y };
+        }
+      }
+      if (edge.to === nodeId) {
+        // Update target point (left-center)
+        if (edge.points && edge.points.length >= 2) {
+          edge.points[edge.points.length - 1] = { x: node.x - hw, y: node.y };
+        }
+      }
+    }
   }
 }
