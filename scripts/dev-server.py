@@ -28,6 +28,10 @@ from socketserver import ThreadingMixIn
 from file_watcher import FileWatcher
 from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
 from repo_discovery import find_flt_repos, get_configured_repo, validate_repo
+from swagger_baseline import load_baseline as _load_swagger_baseline
+from swagger_diff_assemble import build_diff_payload as _build_swagger_diff_payload
+from swagger_normalize import normalize as _normalize_swagger
+from swagger_runtime import fetch_runtime_swagger as _fetch_runtime_swagger
 
 PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
@@ -35,6 +39,7 @@ BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
+SWAGGER_BASELINE_PATH = PROJECT_DIR / "data" / "swagger-baseline.json"
 
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 
@@ -1903,6 +1908,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_ado_pr_diff()
         elif self.path == "/api/playground/catalog":
             self._serve_playground_catalog()
+        elif self.path == "/api/playground/swagger/diff":
+            self._serve_swagger_diff()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for GET {self.path}"})
 
@@ -2885,6 +2892,62 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         self._json_response(200, payload)
+
+    def _serve_swagger_diff(self):
+        """F09 SF-010: GET /api/playground/swagger/diff.
+
+        Fetches the live swagger.json from the running FLT instance,
+        loads the committed baseline (``data/swagger-baseline.json``),
+        and returns the typed diff alongside the raw runtime spec.
+
+        Response shapes:
+          200 {runtime, baselineExists, baselineSavedAt, baselineError, diff}
+              ``diff`` is null when no baseline is present (frontend
+              should render a "Save as baseline" CTA).
+          4xx/5xx envelope when the runtime fetch fails — the same error
+              taxonomy as swagger_runtime.fetch_runtime_swagger.
+        """
+        cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        ws_id = cfg.get("workspace_id", "")
+        art_id = cfg.get("artifact_id", "")
+        cap_id = cfg.get("capacity_id", "")
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+
+        runtime_spec, err = _fetch_runtime_swagger(
+            bearer, ws_id, art_id, cap_id, token_provider=_get_mwc_token,
+        )
+        if err is not None:
+            status = err.pop("status", 502)
+            err["runtime"] = None
+            self._json_response(status, err)
+            return
+
+        baseline_spec, baseline_meta = _load_swagger_baseline(SWAGGER_BASELINE_PATH)
+
+        diff_payload = None
+        if baseline_spec is not None:
+            try:
+                baseline_norm = _normalize_swagger(baseline_spec)
+                runtime_norm = _normalize_swagger(runtime_spec)
+                diff_payload = _build_swagger_diff_payload(baseline_norm, runtime_norm)
+            except (ValueError, KeyError, TypeError) as exc:
+                self._json_response(500, {
+                    "error": "diff-failed",
+                    "message": f"normalize/diff raised: {exc}",
+                    "runtime": runtime_spec,
+                    "baselineExists": True,
+                    "baselineSavedAt": baseline_meta.get("savedAt"),
+                })
+                return
+
+        self._json_response(200, {
+            "runtime": runtime_spec,
+            "baselineExists": baseline_meta.get("exists", False),
+            "baselineSavedAt": baseline_meta.get("savedAt"),
+            "baselineError": baseline_meta.get("error"),
+            "diff": diff_payload,
+        })
 
     def _serve_playground_dispatch(self):
         """Dispatcher for the F09 API Playground with custom header forwarding.
