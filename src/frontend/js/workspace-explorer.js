@@ -514,7 +514,7 @@ class WorkspaceExplorer {
     header.appendChild(addBtn);
   }
 
-  /** Bind "New Environment" button in the tree header to open Infra Wizard. */
+  /** Bind "New Infra" button in the tree header to open Infra Wizard. */
   _bindNewEnvironment() {
     var header = document.querySelector('.ws-tree-header');
     if (!header) return;
@@ -523,8 +523,8 @@ class WorkspaceExplorer {
     var self = this;
     var newEnvBtn = document.createElement('button');
     newEnvBtn.className = 'ws-toolbar-btn ws-new-env-btn';
-    newEnvBtn.title = 'Create new test environment';
-    newEnvBtn.textContent = '+ New Environment';
+    newEnvBtn.title = 'Create new infra environment';
+    newEnvBtn.textContent = '+ New Infra';
     newEnvBtn.addEventListener('click', function() {
       self._ctxNewInfra();
     });
