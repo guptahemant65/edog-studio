@@ -39,7 +39,7 @@ edog-config.json
 .env
 
 # Build output
-src/frontend/edog-studio.html
+src/edog-logs.html
 
 # Node modules (if any tooling added later)
 node_modules/
