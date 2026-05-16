@@ -52,7 +52,7 @@ class EdogHealthChip {
     }
 
     var available = interceptors && interceptors.available;
-    var summary = (interceptors && interceptors.summary) || { Total: 0, Wrapped: 0, Failed: 0 };
+    var summary = (interceptors && interceptors.summary) || { total: 0, wrapped: 0, failed: 0 };
     var warnings = (studioStatus && studioStatus.patchWarnings) || [];
 
     var color;
@@ -62,10 +62,10 @@ class EdogHealthChip {
       text = '? / ?';
       this._el.title = 'EDOG status endpoint unreachable\n' + (interceptors && interceptors.error ? interceptors.error : 'FLT may not have the interceptor registry loaded.');
     } else {
-      var wrapped = summary.Wrapped || 0;
-      var total = summary.Total || 0;
+      var wrapped = summary.wrapped || 0;
+      var total = summary.total || 0;
       text = wrapped + ' / ' + total;
-      if (warnings.length > 0 || (summary.Failed || 0) > 0) {
+      if (warnings.length > 0 || (summary.failed || 0) > 0) {
         color = 'red';
       } else if (wrapped < total) {
         color = 'amber';
@@ -74,7 +74,7 @@ class EdogHealthChip {
       }
       this._el.title = wrapped + ' of ' + total + ' EDOG interceptors wrapped'
         + (warnings.length ? '\n' + warnings.length + ' patch warning(s) — click for details' : '')
-        + (summary.Failed ? '\n' + summary.Failed + ' DI resolution failure(s)' : '');
+        + (summary.failed ? '\n' + summary.failed + ' DI resolution failure(s)' : '');
     }
 
     this._el.style.display = '';
@@ -151,16 +151,19 @@ class EdogHealthChip {
       parts.push('<div class="ehc-panel-section">');
       parts.push('<div class="ehc-section-title">Interceptors</div>');
       list.forEach(function(i) {
-        var ok = i.Wrapped === true;
-        var statusCls = ok ? 'ok' : (i.Kind === 'Static' ? 'static' : 'fail');
-        var statusGlyph = ok ? '\u2713' : (i.Kind === 'Static' ? '\u25CB' : '\u2717');
+        // Backend enum InterceptorKind serializes as integer: 0 = DiWrap, 1 = Static
+        var isStatic = i.kind === 1;
+        var ok = i.wrapped === true;
+        var statusCls = ok ? 'ok' : (isStatic ? 'static' : 'fail');
+        var statusGlyph = ok ? '\u2713' : (isStatic ? '\u25CB' : '\u2717');
         parts.push('<div class="ehc-row ' + statusCls + '">');
         parts.push('<span class="ehc-row-glyph">' + statusGlyph + '</span>');
-        parts.push('<span class="ehc-row-name">' + escapeHtml(i.Name || '?') + '</span>');
-        var kindLbl = i.Kind === 'Static' ? 'static' : (i.TargetType ? shortType(i.TargetType) : '');
+        parts.push('<span class="ehc-row-name">' + escapeHtml(i.name || '?') + '</span>');
+        var kindLbl = isStatic ? 'static' : (i.interfaceType ? shortType(i.interfaceType) : '');
         if (kindLbl) parts.push('<span class="ehc-row-kind">' + escapeHtml(kindLbl) + '</span>');
-        if (i.Error) {
-          parts.push('<div class="ehc-row-error">' + escapeHtml(i.Error) + '</div>');
+        var err = i.probeError || i.recordedError;
+        if (err) {
+          parts.push('<div class="ehc-row-error">' + escapeHtml(err) + '</div>');
         }
         parts.push('</div>');
       });
