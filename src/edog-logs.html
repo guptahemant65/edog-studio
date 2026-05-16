@@ -2509,9 +2509,7 @@ mark {
   letter-spacing: 0.02em;
   position: relative;
   overflow: hidden;
-  max-width: 180px;
   white-space: nowrap;
-  text-overflow: ellipsis;
   display: inline-block;
 }
 .ws-guid:hover {
@@ -9667,6 +9665,58 @@ mark {
   font-size: 10px; font-family: var(--font-mono);
   color: var(--text-muted); background: rgba(0,0,0,0.04);
   letter-spacing: 0.04em;
+}
+
+/* ── Swagger Diff Expand-to-Modal ── */
+.api-swag-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 22, 28, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--z-detail, 200);
+  padding: 4vh 4vw;
+  animation: api-swag-modal-fade-in 120ms ease-out;
+}
+@keyframes api-swag-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.api-swag-modal-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 1400px;
+  height: 100%; max-height: 92vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: api-swag-modal-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes api-swag-modal-pop-in {
+  from { opacity: 0; transform: scale(0.985) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.api-swag-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.api-swag-modal-placeholder {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  margin: var(--space-4);
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .api-swag-modal-overlay,
+  .api-swag-modal-dialog { animation: none; }
 }
 
 /* JSON block (used in detail body + side-by-side) */
@@ -28388,9 +28438,6 @@ window.onerror = function(msg, src, line, col, err) {
       </span>
     </div>
     <div class="topbar-center">
-      <div class="topbar-cmdk" title="Command Palette">
-        <kbd>Ctrl</kbd><span>+</span><kbd>K</kbd>
-      </div>
     </div>
     <div class="topbar-right">
       <span id="token-health" class="token-health none" title="Click for Token Inspector">
@@ -28425,7 +28472,9 @@ window.onerror = function(msg, src, line, col, err) {
     <nav id="sidebar" class="sidebar" role="navigation" aria-label="Main navigation">
       <div class="sidebar-nav">
         <div class="nav-item active" data-view="workspace" tabindex="0" role="button" aria-label="Workspace Explorer"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></div><span class="nav-label">Workspace</span><span class="nav-shortcut">1</span></div>
-        <div class="nav-item" data-view="runtime" data-phase="connected" tabindex="0" role="button" aria-label="Runtime" id="runtime-nav"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="rt-lock" id="rt-sidebar-lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></span><span class="nav-badge disconnected" id="runtime-badge"></span></div><span class="nav-label">Runtime</span><span class="nav-shortcut">2</span></div>
+        <div class="nav-item" data-view="environment" tabindex="0" role="button" aria-label="Environment"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span class="nav-label">Environment</span><span class="nav-shortcut">2</span></div>
+        <div class="nav-divider"></div>
+        <div class="nav-item" data-view="runtime" data-phase="connected" tabindex="0" role="button" aria-label="Runtime" id="runtime-nav"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg><span class="rt-lock" id="rt-sidebar-lock"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></span><span class="nav-badge disconnected" id="runtime-badge"></span></div><span class="nav-label">Runtime</span><span class="nav-shortcut">3</span></div>
         <div class="runtime-subitems" id="runtime-subitems">
           <div class="subitem-group-label">Debugging</div>
           <div class="sub-item active" data-subtab="logs" tabindex="-1" role="button"><span class="sub-icon"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 3h10M2 7h7M2 11h9"/></svg></span><span class="sub-label">Logs</span><span class="sub-shortcut">Alt+1</span></div>
@@ -28443,9 +28492,7 @@ window.onerror = function(msg, src, line, col, err) {
             <div class="sub-item" data-subtab="perf" tabindex="-1" role="button"><span class="sub-label">Perf Markers</span></div>
           </div>
         </div>
-        <div class="nav-divider"></div>
-        <div class="nav-item" data-view="api" tabindex="0" role="button" aria-label="API Playground"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div><span class="nav-label">API Playground</span><span class="nav-shortcut">3</span></div>
-        <div class="nav-item" data-view="environment" tabindex="0" role="button" aria-label="Environment"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div><span class="nav-label">Environment</span><span class="nav-shortcut">4</span></div>
+        <div class="nav-item connected-only" data-view="api" data-phase="connected" tabindex="0" role="button" aria-label="API Playground"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div><span class="nav-label">API Playground</span><span class="nav-shortcut">4</span></div>
         <div class="nav-item connected-only" data-view="dag" data-phase="connected" tabindex="0" role="button" aria-label="DAG Studio"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 12h4M14 5l3 5M14 19l3-5"/></svg></div><span class="nav-label">DAG Studio</span><span class="nav-shortcut">5</span></div>
         <div class="nav-item connected-only" data-view="qa" data-phase="connected" tabindex="0" role="button" aria-label="QA Testing"><div class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div><span class="nav-label">QA Testing</span><span class="nav-shortcut">6</span></div>
       </div>
@@ -28866,10 +28913,7 @@ window.onerror = function(msg, src, line, col, err) {
 
   <!-- Footer Status Bar (F3) -->
   <footer id="status-bar" class="status-bar">
-    <div class="sb-left">
-      <span class="sb-phase-dot disconnected" id="sb-phase-dot"></span>
-      <span class="sb-phase-label" id="sb-phase-label">Disconnected</span>
-    </div>
+    <div class="sb-left"></div>
     <div class="sb-center">
       <button class="sb-coverage" id="sb-coverage" title="Coverage details">--</button>
     </div>
@@ -40625,7 +40669,7 @@ class EdogHealthChip {
     }
 
     var available = interceptors && interceptors.available;
-    var summary = (interceptors && interceptors.summary) || { Total: 0, Wrapped: 0, Failed: 0 };
+    var summary = (interceptors && interceptors.summary) || { total: 0, wrapped: 0, failed: 0 };
     var warnings = (studioStatus && studioStatus.patchWarnings) || [];
 
     var color;
@@ -40635,10 +40679,10 @@ class EdogHealthChip {
       text = '? / ?';
       this._el.title = 'EDOG status endpoint unreachable\n' + (interceptors && interceptors.error ? interceptors.error : 'FLT may not have the interceptor registry loaded.');
     } else {
-      var wrapped = summary.Wrapped || 0;
-      var total = summary.Total || 0;
+      var wrapped = summary.wrapped || 0;
+      var total = summary.total || 0;
       text = wrapped + ' / ' + total;
-      if (warnings.length > 0 || (summary.Failed || 0) > 0) {
+      if (warnings.length > 0 || (summary.failed || 0) > 0) {
         color = 'red';
       } else if (wrapped < total) {
         color = 'amber';
@@ -40647,7 +40691,7 @@ class EdogHealthChip {
       }
       this._el.title = wrapped + ' of ' + total + ' EDOG interceptors wrapped'
         + (warnings.length ? '\n' + warnings.length + ' patch warning(s) — click for details' : '')
-        + (summary.Failed ? '\n' + summary.Failed + ' DI resolution failure(s)' : '');
+        + (summary.failed ? '\n' + summary.failed + ' DI resolution failure(s)' : '');
     }
 
     this._el.style.display = '';
@@ -40724,16 +40768,19 @@ class EdogHealthChip {
       parts.push('<div class="ehc-panel-section">');
       parts.push('<div class="ehc-section-title">Interceptors</div>');
       list.forEach(function(i) {
-        var ok = i.Wrapped === true;
-        var statusCls = ok ? 'ok' : (i.Kind === 'Static' ? 'static' : 'fail');
-        var statusGlyph = ok ? '\u2713' : (i.Kind === 'Static' ? '\u25CB' : '\u2717');
+        // Backend enum InterceptorKind serializes as integer: 0 = DiWrap, 1 = Static
+        var isStatic = i.kind === 1;
+        var ok = i.wrapped === true;
+        var statusCls = ok ? 'ok' : (isStatic ? 'static' : 'fail');
+        var statusGlyph = ok ? '\u2713' : (isStatic ? '\u25CB' : '\u2717');
         parts.push('<div class="ehc-row ' + statusCls + '">');
         parts.push('<span class="ehc-row-glyph">' + statusGlyph + '</span>');
-        parts.push('<span class="ehc-row-name">' + escapeHtml(i.Name || '?') + '</span>');
-        var kindLbl = i.Kind === 'Static' ? 'static' : (i.TargetType ? shortType(i.TargetType) : '');
+        parts.push('<span class="ehc-row-name">' + escapeHtml(i.name || '?') + '</span>');
+        var kindLbl = isStatic ? 'static' : (i.interfaceType ? shortType(i.interfaceType) : '');
         if (kindLbl) parts.push('<span class="ehc-row-kind">' + escapeHtml(kindLbl) + '</span>');
-        if (i.Error) {
-          parts.push('<div class="ehc-row-error">' + escapeHtml(i.Error) + '</div>');
+        var err = i.probeError || i.recordedError;
+        if (err) {
+          parts.push('<div class="ehc-row-error">' + escapeHtml(err) + '</div>');
         }
         parts.push('</div>');
       });
@@ -42032,7 +42079,7 @@ class Sidebar {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.ctrlKey || e.metaKey) return;
 
-    const views = ['workspace', 'runtime', 'api', 'environment', 'dag'];
+    const views = ['workspace', 'environment', 'runtime', 'api', 'dag', 'qa'];
     const primarySubTabs = ['logs', 'telemetry', 'sysfiles', 'spark', 'nexus'];
 
     /* Alt+1-5: runtime primary sub-tabs */
@@ -67242,7 +67289,6 @@ class WorkspaceExplorer {
     const envLabel = this._getEnvironmentLabel(ws);
     const health = this._getHealthStatus(ws);
     const lastMod = lh.lastUpdatedDate ? this._formatDate(lh.lastUpdatedDate) : null;
-    const truncGuid = lh.id.length > 12 ? lh.id.slice(0, 8) + '\u2026' + lh.id.slice(-4) : lh.id;
 
     // V2 Header — icon + name + status pill + meta row
     let html = '<div class="ws-lh-header">';
@@ -67255,7 +67301,7 @@ class WorkspaceExplorer {
     html += '<span class="ws-status-pill ws-pill-hidden" id="ws-status-pill"></span>';
     html += '</div>';
     html += '<div class="ws-content-meta">';
-    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID: ${this._esc(lh.id)}">${this._esc(truncGuid)}</span>`;
+    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID: ${this._esc(lh.id)}">${this._esc(lh.id)}</span>`;
     html += `<span class="ws-badge ws-badge-env">${this._esc(envLabel)}</span>`;
     if (ws._region) {
       html += `<span class="ws-badge ws-badge-region">${this._esc(ws._region)}</span>`;
@@ -68506,7 +68552,7 @@ class WorkspaceExplorer {
         <span class="ws-linked-card-name">${this._esc(name)}</span>
       </div>
       <div class="ws-linked-card-label">${this._esc(label)}</div>
-      <div class="ws-linked-card-id">${this._esc(typeBadge)} \u00b7 ${this._esc(String(itemId).substring(0, 8))}\u2026</div>
+      <div class="ws-linked-card-id">${this._esc(typeBadge)} \u00b7 ${this._esc(String(itemId))}</div>
     </div>`;
   }
 
@@ -68741,9 +68787,9 @@ class CommandPalette {
   _getCommands() {
     return [
       { group: 'Views', icon: '\u25A6', label: 'Workspace Explorer', shortcut: '1', action: () => this._sidebar.switchView('workspace') },
-      { group: 'Views', icon: '\u26A1', label: 'Runtime', shortcut: '2', action: () => this._sidebar.switchView('runtime') },
-      { group: 'Views', icon: '\u25B9', label: 'API Playground', shortcut: '3', action: () => this._sidebar.switchView('api') },
-      { group: 'Views', icon: '\u2699', label: 'Environment', shortcut: '4', action: () => this._sidebar.switchView('environment') },
+      { group: 'Views', icon: '\u2699', label: 'Environment', shortcut: '2', action: () => this._sidebar.switchView('environment') },
+      { group: 'Views', icon: '\u26A1', label: 'Runtime', shortcut: '3', action: () => this._sidebar.switchView('runtime') },
+      { group: 'Views', icon: '\u25B9', label: 'API Playground', shortcut: '4', action: () => this._sidebar.switchView('api') },
       { group: 'Actions', icon: '\u25B6', label: 'Run DAG', action: () => {} },
       { group: 'Actions', icon: '\u2718', label: 'Cancel DAG', action: () => {} },
       { group: 'Actions', icon: '\u21BB', label: 'Restart Service', action: () => {} },
@@ -69430,11 +69476,27 @@ class RequestBuilder {
     authPane.setAttribute('data-pane', 'auth');
     authPane.innerHTML = '<div class="api-auth-panel">'
       + '<div class="api-auth-row"><span class="api-auth-lbl">Token Type</span>'
-      + '<div class="api-auth-val">Auto-detected from URL</div></div>'
+      + '<div class="api-auth-val" data-auth-type>--</div></div>'
       + '<div class="api-auth-row"><span class="api-auth-lbl">Token</span>'
-      + '<div class="api-auth-val"><span>\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF</span>'
-      + '<button class="reveal">Show</button></div></div></div>';
+      + '<div class="api-auth-val">'
+      + '<span class="api-auth-token" data-auth-token>\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF</span>'
+      + '<button class="reveal" type="button" data-auth-reveal>Show</button>'
+      + '<button class="reveal" type="button" data-auth-copy style="display:none">Copy</button>'
+      + '</div></div>'
+      + '<div class="api-auth-row"><span class="api-auth-lbl"></span>'
+      + '<div class="api-auth-val api-auth-hint" data-auth-hint style="color:var(--text-muted);font-size:11px"></div></div>'
+      + '</div>';
     content.appendChild(authPane);
+
+    // Hold refs for reactive updates
+    this._authTypeEl = authPane.querySelector('[data-auth-type]');
+    this._authTokenEl = authPane.querySelector('[data-auth-token]');
+    this._authRevealBtn = authPane.querySelector('[data-auth-reveal]');
+    this._authCopyBtn = authPane.querySelector('[data-auth-copy]');
+    this._authHintEl = authPane.querySelector('[data-auth-hint]');
+    this._authRevealed = false;
+    this._authRevealedToken = null;
+    this._authRevealedType = null;
 
     this._container.appendChild(content);
 
@@ -69487,7 +69549,30 @@ class RequestBuilder {
     this._urlEl.addEventListener('input', function() {
       self._pinnedTokenType = null;
       self._renderParams();
+      self._updateAuthPane();
     });
+
+    // Show/Hide token
+    if (this._authRevealBtn) {
+      this._authRevealBtn.addEventListener('click', function() {
+        self._toggleTokenReveal();
+      });
+    }
+    if (this._authCopyBtn) {
+      this._authCopyBtn.addEventListener('click', function() {
+        if (!self._authRevealedToken) return;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(self._authRevealedToken).then(function() {
+            var prev = self._authCopyBtn.textContent;
+            self._authCopyBtn.textContent = 'Copied';
+            setTimeout(function() { self._authCopyBtn.textContent = prev; }, 1200);
+          });
+        }
+      });
+    }
+
+    // Initial paint of the auth pane label
+    this._updateAuthPane();
 
     // cURL copy
     curlBtn.addEventListener('click', function() {
@@ -69831,6 +69916,7 @@ class RequestBuilder {
     if (req.url !== undefined) this._urlEl.value = req.url;
     if (req.body !== undefined) this._bodyEl.value = req.body || '';
     if (req.tokenType) this._pinnedTokenType = req.tokenType;
+    this._updateAuthPane();
 
     // F09 query-param enrichment: documented params from catalog drive a
     // pre-seeded Params tab with type badges, defaults as placeholders, and
@@ -69886,6 +69972,147 @@ class RequestBuilder {
       parts.push("-d '" + req.body.replace(/'/g, "'\\''") + "'");
     }
     return parts.join(' \\\n  ');
+  }
+
+  _currentTokenType() {
+    return this._pinnedTokenType || this._detectTokenType(this._urlEl ? this._urlEl.value : '');
+  }
+
+  _updateAuthPane() {
+    if (!this._authTypeEl) return;
+    var type = this._currentTokenType();
+    var label;
+    if (type === 'bearer') label = 'Bearer (ARM/Fabric)';
+    else if (type === 'mwc') label = 'MwcToken';
+    else label = 'None (auto-detected from URL)';
+    this._authTypeEl.textContent = label;
+    if (this._authRevealed && this._authRevealedType !== type) {
+      this._collapseTokenReveal();
+    }
+    if (this._authRevealBtn) {
+      this._authRevealBtn.disabled = (type === 'none');
+      this._authRevealBtn.style.opacity = (type === 'none') ? '0.5' : '';
+      this._authRevealBtn.style.cursor = (type === 'none') ? 'not-allowed' : '';
+    }
+  }
+
+  _toggleTokenReveal() {
+    if (this._authRevealed) {
+      this._collapseTokenReveal();
+      return;
+    }
+    var type = this._currentTokenType();
+    if (type === 'none') return;
+    var self = this;
+    this._authRevealBtn.textContent = 'Loading...';
+    this._authRevealBtn.disabled = true;
+    fetch('/api/flt/config')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(cfg) {
+        if (!cfg) {
+          self._authRevealBtn.disabled = false;
+          self._showAuthHint('Could not reach /api/flt/config.');
+          self._authRevealBtn.textContent = 'Show';
+          return null;
+        }
+        // Bearer token comes back inline. MWC token is *deliberately* masked
+        // as "proxy-managed" in /api/flt/config — fetch the real JWT from the
+        // dedicated endpoint POST /api/edog/mwc-token (ws/lh/cap required).
+        if (type === 'bearer') {
+          return { token: cfg.bearerToken, type: 'bearer' };
+        }
+        if (!cfg.workspaceId || !cfg.artifactId || !cfg.capacityId) {
+          self._showAuthHint('MWC token needs workspace/lakehouse/capacity — deploy first or set them in workspace config.');
+          return null;
+        }
+        return fetch('/api/edog/mwc-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspaceId: cfg.workspaceId,
+            lakehouseId: cfg.artifactId,
+            capacityId: cfg.capacityId
+          })
+        })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+        .then(function(r) {
+          if (!r.ok) {
+            var msg = (r.body && r.body.message) ? r.body.message : 'mwc-token endpoint returned ' + (r.body && r.body.error || 'error');
+            self._showAuthHint(msg);
+            return null;
+          }
+          return { token: r.body.token, type: 'mwc' };
+        });
+      })
+      .then(function(result) {
+        self._authRevealBtn.disabled = false;
+        if (!result || !result.token) {
+          self._authRevealBtn.textContent = 'Show';
+          if (!self._authHintEl.textContent) {
+            self._showAuthHint(
+              type === 'bearer'
+                ? 'No bearer token available yet. Sign in via the Token Inspector.'
+                : 'No MWC token available yet. Deploy or regenerate from Token Inspector.'
+            );
+          }
+          return;
+        }
+        self._authRevealedToken = result.token;
+        self._authRevealedType = result.type;
+        self._authRevealed = true;
+        self._authTokenEl.textContent = result.token;
+        self._authTokenEl.style.wordBreak = 'break-all';
+        self._authTokenEl.style.fontFamily = 'var(--font-mono)';
+        self._authTokenEl.style.fontSize = '11px';
+        self._authTokenEl.style.userSelect = 'text';
+        self._authRevealBtn.textContent = 'Hide';
+        if (self._authCopyBtn) self._authCopyBtn.style.display = '';
+        self._showAuthHint(self._tokenHint(result.token, result.type));
+      })
+      .catch(function(err) {
+        self._authRevealBtn.disabled = false;
+        self._authRevealBtn.textContent = 'Show';
+        self._showAuthHint('Error: ' + (err && err.message ? err.message : String(err)));
+      });
+  }
+
+  _collapseTokenReveal() {
+    this._authRevealed = false;
+    this._authRevealedToken = null;
+    this._authRevealedType = null;
+    if (this._authTokenEl) {
+      this._authTokenEl.textContent = '\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF';
+      this._authTokenEl.style.wordBreak = '';
+      this._authTokenEl.style.fontFamily = '';
+      this._authTokenEl.style.fontSize = '';
+      this._authTokenEl.style.userSelect = '';
+    }
+    if (this._authRevealBtn) this._authRevealBtn.textContent = 'Show';
+    if (this._authCopyBtn) this._authCopyBtn.style.display = 'none';
+    this._showAuthHint('');
+  }
+
+  _showAuthHint(text) {
+    if (this._authHintEl) this._authHintEl.textContent = text || '';
+  }
+
+  _tokenHint(token, type) {
+    try {
+      var parts = token.split('.');
+      if (parts.length < 2) return type.toUpperCase() + ' token (' + token.length + ' chars)';
+      var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      var bits = [];
+      if (payload.exp) {
+        var ms = payload.exp * 1000 - Date.now();
+        var mins = Math.round(ms / 60000);
+        bits.push(mins > 0 ? ('expires in ' + mins + 'm') : ('expired ' + Math.abs(mins) + 'm ago'));
+      }
+      if (payload.aud) bits.push('aud: ' + (Array.isArray(payload.aud) ? payload.aud[0] : payload.aud));
+      if (payload.upn || payload.unique_name) bits.push(payload.upn || payload.unique_name);
+      return type.toUpperCase() + ' \u00b7 ' + bits.join(' \u00b7 ');
+    } catch (e) {
+      return type.toUpperCase() + ' token (' + token.length + ' chars)';
+    }
   }
 
   _detectTokenType(url) {
@@ -69950,6 +70177,16 @@ class ResponseViewer {
     empty.appendChild(title);
     empty.appendChild(hint);
     this._container.appendChild(empty);
+  }
+
+  clear() {
+    // Public reset: drops the last response and re-renders the empty state.
+    // Called when the user switches endpoints or replays a saved request so
+    // they don't read a stale response as if it belonged to the new endpoint.
+    this._lastResponse = null;
+    this._jsonTree = null;
+    this._activeTab = 'body';
+    this._showEmpty();
   }
 
   showLoading() {
@@ -70350,12 +70587,17 @@ class ResponseViewer {
 
 class SwaggerSpecView {
   constructor(container) {
+    this._inlineContainer = container;
     this._container = container;
     this._handlers = { onSaveBaseline: null, onReplaceBaseline: null, onReload: null };
     this._payload = null;
     this._selectedChangeId = null;
     this._showRawRuntime = false;
     this._busy = false;
+    this._expanded = false;
+    this._modalRoot = null;
+    this._modalBody = null;
+    this._escHandler = null;
   }
 
   setHandlers(h) {
@@ -70363,6 +70605,78 @@ class SwaggerSpecView {
     if (h.onSaveBaseline) this._handlers.onSaveBaseline = h.onSaveBaseline;
     if (h.onReplaceBaseline) this._handlers.onReplaceBaseline = h.onReplaceBaseline;
     if (h.onReload) this._handlers.onReload = h.onReload;
+  }
+
+  toggleExpanded() {
+    if (this._expanded) this._collapse();
+    else this._expand();
+  }
+
+  _expand() {
+    if (this._expanded) return;
+    this._expanded = true;
+    this._buildModal();
+    this._container = this._modalBody;
+    // The inline container becomes a stand-in while expanded so layout
+    // doesn't collapse to zero height behind the modal.
+    if (this._inlineContainer) {
+      this._inlineContainer.innerHTML = '';
+      var ph = document.createElement('div');
+      ph.className = 'api-swag-modal-placeholder';
+      ph.textContent = 'Diff is expanded \u2014 close the modal to return here';
+      this._inlineContainer.appendChild(ph);
+    }
+    if (this._payload) this._render();
+  }
+
+  _collapse() {
+    if (!this._expanded) return;
+    this._expanded = false;
+    this._tearDownModal();
+    this._container = this._inlineContainer;
+    if (this._payload) this._render();
+  }
+
+  _buildModal() {
+    var self = this;
+    var overlay = document.createElement('div');
+    overlay.className = 'api-swag-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Swagger diff expanded view');
+    // Backdrop click closes (target check avoids closing on inner clicks)
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) self._collapse();
+    });
+
+    var dialog = document.createElement('div');
+    dialog.className = 'api-swag-modal-dialog';
+
+    var body = document.createElement('div');
+    body.className = 'api-swag-modal-body api-resp';
+    dialog.appendChild(body);
+    overlay.appendChild(dialog);
+
+    document.body.appendChild(overlay);
+    this._modalRoot = overlay;
+    this._modalBody = body;
+
+    this._escHandler = function(e) {
+      if (e.key === 'Escape') self._collapse();
+    };
+    document.addEventListener('keydown', this._escHandler);
+  }
+
+  _tearDownModal() {
+    if (this._modalRoot && this._modalRoot.parentNode) {
+      this._modalRoot.parentNode.removeChild(this._modalRoot);
+    }
+    this._modalRoot = null;
+    this._modalBody = null;
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
   }
 
   showLoading() {
@@ -70510,10 +70824,23 @@ class SwaggerSpecView {
     actions.style.display = 'flex';
     actions.style.gap = 'var(--space-2)';
 
+    var self = this;
+
+    var expandBtn = document.createElement('button');
+    expandBtn.className = 'api-json-action';
+    if (self._expanded) {
+      expandBtn.textContent = '\u2922 Collapse';
+      expandBtn.title = 'Return the diff to the response panel (Esc)';
+    } else {
+      expandBtn.textContent = '\u2921 Expand';
+      expandBtn.title = 'Open the diff in a larger view';
+    }
+    expandBtn.addEventListener('click', function() { self.toggleExpanded(); });
+    actions.appendChild(expandBtn);
+
     var reloadBtn = document.createElement('button');
     reloadBtn.className = 'api-json-action';
     reloadBtn.textContent = 'Reload';
-    var self = this;
     reloadBtn.addEventListener('click', function() {
       if (self._handlers.onReload) self._handlers.onReload();
     });
@@ -71514,6 +71841,13 @@ class ApiPlayground {
       // `ui` kinds open in a new tab, everything else sends a request.
       self._requestBuilder.setSendLabel(endpoint.kind === 'ui' ? 'Open in browser' : 'Send');
 
+      // Clear the previous response so the user doesn't read a stale body
+      // as if it belonged to the newly selected endpoint. Spec endpoints
+      // are an exception — they auto-load the diff right below.
+      if (endpoint.kind !== 'spec') {
+        self._responseViewer.clear();
+      }
+
       // F09: spec endpoints auto-load the diff into the response panel.
       if (endpoint.kind === 'spec') {
         self._loadSwaggerDiff();
@@ -71531,6 +71865,8 @@ class ApiPlayground {
         body: entry.body || '',
         tokenType: entry.tokenType
       });
+      // Same reasoning as catalog selection: stale response is misleading.
+      self._responseViewer.clear();
     };
 
     // Cancel button
@@ -71818,41 +72154,22 @@ class ApiPlayground {
   }
 
   _openInBrowser(request) {
-    var config = (this._apiClient && this._apiClient.getConfig) ? this._apiClient.getConfig() : null;
-    var fltPort = config && config.fltPort ? config.fltPort : null;
-
-    if (!fltPort) {
-      this._responseViewer.showError({
-        message: 'FLT is not running \u2014 deploy first, then retry. Swagger UI lives on the FLT host (http://localhost:<fltPort>/).'
-      });
-      return;
-    }
-
-    var path = this._extractPath(this._resolveUrl(request.url)) || '/';
-    var browserUrl = 'http://localhost:' + fltPort + path;
-
-    var opened = null;
+    // Opens our self-hosted Swagger UI page (served by dev-server at /swagger).
+    // It fetches the live spec from /api/playground/swagger/spec — which
+    // proxies the FLT runtime swagger.json via the Fabric capacity edge.
+    // This sidesteps FLT's own Swagger UI being unreachable in DevMode (it
+    // binds to a random Workload-SDK localhost port that no browser tab can
+    // reach). Try-it-out is intentionally disabled; use API Playground for
+    // authenticated requests against FLT.
     try {
-      opened = window.open(browserUrl, '_blank', 'noopener,noreferrer');
+      window.open('/swagger', '_blank', 'noopener,noreferrer');
     } catch (e) {
-      opened = null;
-    }
-
-    if (!opened) {
       this._responseViewer.showInfo({
-        title: 'Popup blocked',
-        hint: 'Your browser blocked the new tab. Click the link below to open Swagger UI manually.',
-        url: browserUrl,
-        icon: '\u26A0'
+        title: 'Could not open Swagger UI',
+        hint: 'Browser blocked window.open. Navigate to /swagger manually.',
+        icon: '\u24D8'
       });
-      return;
     }
-
-    this._responseViewer.showInfo({
-      title: 'Opened Swagger UI in a new tab',
-      hint: 'This endpoint serves an interactive HTML page \u2014 not a JSON response \u2014 so it loads in your browser instead of the response panel.',
-      url: browserUrl
-    });
   }
 
   _buildEnvelopeHeaders(headerRows) {
