@@ -61,7 +61,68 @@ class FeatureFlagsMatrix {
 
   destroy() {
     this._destroyed = true;
+    if (this._syncPollTimer) {
+      clearTimeout(this._syncPollTimer);
+      this._syncPollTimer = null;
+    }
+    if (this._inspector) {
+      this._inspector.destroy();
+      this._inspector = null;
+    }
     this.deactivate();
+  }
+
+  /* ── Flag Inspector ───────────────────────────────────────────────── */
+
+  openInspector(wireKey) {
+    if (!wireKey || !this._catalog) return;
+    const row = (this._catalog.rows || []).find(r => r.wireKey === wireKey);
+    if (!row) return;
+    const matrixCard = this._mount.querySelector('#card-feature-flags');
+    const placeholder = this._mount.querySelector('#ffPlaceholderCard');
+    const inspectorMount = this._mount.querySelector('#ffInspectorMount');
+    if (!inspectorMount) return;
+    if (matrixCard) matrixCard.hidden = true;
+    if (placeholder) placeholder.hidden = true;
+    inspectorMount.hidden = false;
+    if (!this._inspector) {
+      this._inspector = new FlagInspector(inspectorMount, {
+        catalog: this._catalog,
+        overrides: this._overrides,
+        onClose: () => this.closeInspector(),
+        onOverrideSet: (k) => this.setOverride(k, true).then(() => this._refreshInspector()),
+        onOverrideClear: (k) => this.clearOverride(k).then(() => this._refreshInspector()),
+      });
+    }
+    this._inspector.show(row, {
+      catalog: this._catalog,
+      overrides: this._overrides,
+    });
+  }
+
+  closeInspector() {
+    const matrixCard = this._mount.querySelector('#card-feature-flags');
+    const placeholder = this._mount.querySelector('#ffPlaceholderCard');
+    const inspectorMount = this._mount.querySelector('#ffInspectorMount');
+    if (this._inspector) this._inspector.hide();
+    if (inspectorMount) inspectorMount.hidden = true;
+    if (matrixCard) matrixCard.hidden = false;
+    if (placeholder) placeholder.hidden = false;
+  }
+
+  _refreshInspector() {
+    if (this._inspector && !this._inspector.isHidden()) {
+      const wireKey = this._inspector.currentWireKey();
+      if (wireKey) {
+        const row = (this._catalog.rows || []).find(r => r.wireKey === wireKey);
+        if (row) {
+          this._inspector.show(row, {
+            catalog: this._catalog,
+            overrides: this._overrides,
+          });
+        }
+      }
+    }
   }
 
   /* ── Network ──────────────────────────────────────────────────────── */
@@ -77,11 +138,28 @@ class FeatureFlagsMatrix {
       this._catalog = catalogResp;
       this._overrides = overridesResp.overrides || {};
       this._render();
+      this._maybeScheduleSyncPoll();
     } catch (err) {
       this._renderError(err);
     } finally {
       this._loadInFlight = false;
     }
+  }
+
+  _maybeScheduleSyncPoll() {
+    const fm = (this._catalog && this._catalog.fm) || {};
+    // While the FM clone is in flight (or we're cold with 0 indexed flags),
+    // poll the catalog every 1.5s so the user doesn't sit on a wall of "?".
+    const needsPoll = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
+    if (this._syncPollTimer) {
+      clearTimeout(this._syncPollTimer);
+      this._syncPollTimer = null;
+    }
+    if (!needsPoll || this._destroyed) return;
+    this._syncPollTimer = setTimeout(() => {
+      this._syncPollTimer = null;
+      if (!this._destroyed) this.load();
+    }, 1500);
   }
 
   async setOverride(wireKey, value) {
@@ -201,7 +279,9 @@ class FeatureFlagsMatrix {
           <div class="ff-toast-strip" id="ffToast"></div>
         </div>
 
-        <div class="env-card">
+        <div class="flag-inspector-mount" id="ffInspectorMount" hidden></div>
+
+        <div class="env-card" id="ffPlaceholderCard">
           <div class="env-card-header">
             <div class="env-card-title"><span>Configuration · Auth · Deploy</span><span class="card-badge">coming soon</span></div>
           </div>
@@ -312,13 +392,26 @@ class FeatureFlagsMatrix {
 
     const body = `<tbody>${rows.map(r => this._renderRow(r, mainline, sovereign)).join('')}</tbody>`;
 
-    wrap.innerHTML = `<table class="ff-table ${this._sovExpanded ? 'sov-expanded' : ''}">${header}${body}</table>`;
+    const fm = (this._catalog && this._catalog.fm) || {};
+    const syncing = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
+    const tableCls = `ff-table ${this._sovExpanded ? 'sov-expanded' : ''}${syncing ? ' fm-syncing' : ''}`;
+    wrap.innerHTML = `<table class="${tableCls.trim()}">${header}${body}</table>`;
 
     // Wire toggle clicks
     wrap.querySelectorAll('.ff-switch[data-flag]').forEach(sw => {
       sw.addEventListener('click', () => this._onSwitchClick(sw));
       sw.addEventListener('keydown', (e) => {
         if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this._onSwitchClick(sw); }
+      });
+    });
+    // Wire flag-name click -> open Flag Inspector
+    wrap.querySelectorAll('.ff-name-link[data-flag]').forEach(link => {
+      link.addEventListener('click', () => this.openInspector(link.dataset.flag));
+      link.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          this.openInspector(link.dataset.flag);
+        }
       });
     });
   }
@@ -346,7 +439,7 @@ class FeatureFlagsMatrix {
         <td class="col-name">
           <div class="ff-name-cell">
             <div class="ff-name-line">
-              <span class="ff-name">${this._escape(row.name)}</span>
+              <span class="ff-name ff-name-link" data-flag="${this._escape(row.wireKey)}" tabindex="0" role="button" title="Open flag inspector">${this._escape(row.name)}</span>
               <span class="ff-wirekey">${this._escape(row.wireKey)}</span>
             </div>
           </div>
@@ -375,9 +468,18 @@ class FeatureFlagsMatrix {
       empty: 'Not deployed to this env',
       missing: 'Flag not found in FeatureManagement repo',
     };
+    let title = titleMap[state] || state;
+    if (state === 'partial' && Array.isArray(cell.targets) && cell.targets.length) {
+      const summary = cell.targets.map(t => `${t.pivot || '?'} · ${t.valueCount || 0}`).join(', ');
+      title = `Targeted rollout — ${summary}`;
+    }
+    if (cell.unevaluable) {
+      title = 'Targeted rollout — cannot evaluate locally (RegionName / MemberOf)';
+    }
     const inclMy = cell.includesMyWorkspace ? ' includes-my-ws' : '';
+    const hatched = state === 'partial' && cell.unevaluable ? ' unevaluable' : '';
     const kindCls = kind ? ` ${kind}` : '';
-    return `<td class="ff-cell state-${state}${inclMy}${kindCls}" title="${titleMap[state] || state}">${glyphMap[state] || '?'}</td>`;
+    return `<td class="ff-cell state-${state}${inclMy}${hatched}${kindCls}" title="${title}">${glyphMap[state] || '?'}</td>`;
   }
 
   _sovGlyph(row, sovereign) {

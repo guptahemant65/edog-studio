@@ -2031,6 +2031,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_feature_flags_catalog()
         elif self.path == "/api/edog/feature-flags/overrides":
             self._serve_feature_flags_overrides_get()
+        elif self.path.startswith("/api/edog/feature-flags/raw/"):
+            wire_key = urllib.parse.unquote(self.path[len("/api/edog/feature-flags/raw/") :])
+            self._serve_feature_flags_raw(wire_key)
         elif self.path.startswith("/api/mwc/tables"):
             self._serve_mwc_tables()
         elif self.path.startswith("/api/mwc/table-stats"):
@@ -4272,6 +4275,41 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "hash": hsh,
                 "count": len(snap),
                 "lastPush": last_push,
+            },
+        )
+
+    def _serve_feature_flags_raw(self, wire_key):
+        """GET /api/edog/feature-flags/raw/{wireKey} — raw FM definition.
+
+        Returns the JSON document indexed by ``Id == wireKey``. 404 if the
+        wire key is unknown to the FM cache (either the cache hasn't synced
+        or the flag is missing in FM).
+        """
+        if not wire_key:
+            self._json_response(400, {"error": "wire_key_required"})
+            return
+        try:
+            doc = _FM_CACHE.get(wire_key)
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(500, {"error": "fm_cache_unavailable", "detail": str(e)})
+            return
+        if doc is None:
+            self._json_response(
+                404,
+                {"error": "not_found", "wireKey": wire_key, "detail": "Flag not in FM cache"},
+            )
+            return
+        # FM repo URL pattern: Features/<area>/<file>.json. We can synthesize
+        # an "open in repo" URL by looking at the cache's known repo metadata.
+        status = _FM_CACHE.status()
+        self._json_response(
+            200,
+            {
+                "wireKey": wire_key,
+                "definition": doc,
+                "fmRepoUrl": status.get("repoUrl"),
+                "fmBranch": status.get("branch"),
             },
         )
 

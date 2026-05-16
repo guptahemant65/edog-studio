@@ -320,6 +320,27 @@ Testing belongs to Sentinel in P2/P5: parser tests for const-name vs wire-key mi
 ## 11. Open Questions
 
 1. Should the FM cache branch be exposed in Settings, or remain a hidden dev-server config defaulting to the current FeatureManagement default branch?
-2. Should target group detail reveal raw target values, or only group names and pivots, to avoid leaking large tenant lists into screenshots?
-3. Should locked partial rows distinguish "targeted by tenant" vs "targeted by workspace" in the main row, or only in tooltip/detail?
+2. ~~Should target group detail reveal raw target values, or only group names and pivots, to avoid leaking large tenant lists into screenshots?~~ **Resolved (2026-05-16):** Gated reveal. Default state is summary-only (`pivot · N values`); raw values are revealed behind an explicit `Show values` click in the Flag Inspector. Screenshot-safe by default.
+3. ~~Should locked partial rows distinguish "targeted by tenant" vs "targeted by workspace" in the main row, or only in tooltip/detail?~~ **Resolved (2026-05-16):** The cell-level purple dot stays the only row-level affordance ("your workspace matches"). Pivot kind (Tenant / Workspace / Capacity / Region / Member) is surfaced inside the Flag Inspector, not the matrix row.
 4. Should Reset all require confirmation when only one override exists? Phantom v3 confirms globally; CEO may prefer one-click for low count.
+
+## 12. Flag Inspector (v2 add-on, 2026-05-16)
+
+Resolved Q2/Q3 above expand into a dedicated **Flag Inspector** view that swaps in over the matrix when the user clicks a flag name. Trigger is the flag name only — the STATE toggle in the matrix row keeps its independent click target.
+
+**Sections (top-to-bottom):**
+
+| Section | Content | Notes |
+|---|---|---|
+| Breadcrumb | `Environment › Feature Flags › <flagName>`  +  `← Back` | Restores matrix scroll position |
+| Overview | Name, wire key, summary, "effective for your workspace" (`ON` / `OFF` / `FORCED`), source path (`Features/.../*.json`), `Open in repo ↗` link |  |
+| Per-env targeting | One row per env (mainline first, sov-rollup, then expand-to-8). Each row: state label + target-group sub-list with `pivot · N values  [Show values]` gated reveal. | Sub-list capped at 100 values per group, with "+M more"; raw values stay hidden until clicked. |
+| Override | Current override state + `Force ON` / `Clear override` primary button; shows the timestamp when the override was first stored. | No history timeline in V1 — only current state. |
+| Raw FM definition | Collapsed `[Show raw definition]`. When expanded, pretty-printed JSON with syntax coloring (read-only). |  |
+
+**Unevaluable cells:** target groups whose pivot is `RegionName` or `MemberOf` cannot be evaluated locally. In the matrix the cell renders `◐` with a diagonal-stripe hatch overlay (a `repeating-linear-gradient`) and a tooltip `"Cannot evaluate locally"`. In the Inspector the same row shows `Partial — cannot evaluate (RegionName, MemberOf)` instead of a target-group sub-list.
+
+**Backend additions:** one new endpoint, `GET /api/edog/feature-flags/raw/{wireKey}`, returning `_FM_CACHE.get_definition(wireKey)` or 404. Catalog already supplies every other field.
+
+**Out-of-scope for V1 (explicit):** override history / audit log, editing the FM definition, inline diff against another env.
+

@@ -369,7 +369,25 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 .ff-cell.state-on { color: var(--status-succeeded); font-weight: 600; }
 .ff-cell.state-off { color: var(--text-muted); }
 .ff-cell.state-partial { color: var(--level-warning); }
-.ff-cell.state-missing { color: var(--status-failed); opacity: 0.55; }
+.ff-cell.state-missing { color: var(--text-muted); opacity: 0.5; font-size: var(--text-xs); }
+
+/* While the FM clone is still in flight, every cell will be "missing".
+ * Don't shout — render a soft skeleton bar instead of a wall of `?`. */
+.ff-table.fm-syncing .ff-cell.state-missing { color: transparent; position: relative; }
+.ff-table.fm-syncing .ff-cell.state-missing::before {
+  content: "";
+  position: absolute;
+  inset: 50% 30%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--surface-3);
+  animation: ff-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes ff-skeleton {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
 
 .ff-cell.includes-my-ws::after {
   content: "";
@@ -381,6 +399,17 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   height: 4px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+/* Hatched overlay for partial cells whose pivots are all unevaluable
+ * locally (RegionName, MemberOf). Communicates "we know it's targeted
+ * but can't tell whether YOU match." */
+.ff-cell.state-partial.unevaluable {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 3px,
+    rgba(229, 148, 12, 0.18) 3px 5px
+  );
 }
 
 /* Sovereign rollup column */

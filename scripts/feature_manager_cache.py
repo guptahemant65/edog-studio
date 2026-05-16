@@ -39,6 +39,7 @@ import os
 import subprocess
 import threading
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -257,29 +258,63 @@ def classify_env(env_value: Any) -> str:
     return "empty"
 
 
+def _iter_target_entries(env_value: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Yield ``(group_name, entry_dict)`` pairs across both real and legacy
+    ``Targets`` shapes.
+
+    Real FM shape (observed in repo)::
+
+        "Targets": {
+            "PublicRollout": [{"Name": "PowerBI.MemberOf",
+                               "Parameters": {"Pivot": "RegionName",
+                                              "Values": ["UK South"]}}],
+            "RunnerTenants": [...]
+        }
+
+    Legacy/defensive shape::
+
+        "Targets": [{"Name": ..., "Pivot": ..., "Values": [...]}]
+    """
+    if not isinstance(env_value, dict):
+        return
+    targets = env_value.get("Targets")
+    if isinstance(targets, dict):
+        for group_name, entries in targets.items():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if isinstance(entry, dict):
+                    yield (str(group_name), entry)
+    elif isinstance(targets, list):
+        for entry in targets:
+            if isinstance(entry, dict):
+                yield ("", entry)
+
+
+def _entry_pivot(entry: dict[str, Any]) -> str:
+    params = entry.get("Parameters") if isinstance(entry.get("Parameters"), dict) else {}
+    pivot = params.get("Pivot") or entry.get("Pivot") or entry.get("PivotType") or ""
+    return str(pivot) if pivot else ""
+
+
+def _entry_values(entry: dict[str, Any]) -> list[Any]:
+    params = entry.get("Parameters") if isinstance(entry.get("Parameters"), dict) else {}
+    values = params.get("Values") or entry.get("Values") or entry.get("Members") or []
+    return values if isinstance(values, list) else []
+
+
 def extract_target_groups(env_value: Any) -> list[dict[str, Any]]:
     """Return a normalized list of target groups for the env-state ``partial``."""
-    if not isinstance(env_value, dict):
-        return []
-    targets = env_value.get("Targets")
-    if not isinstance(targets, list):
-        return []
     out: list[dict[str, Any]] = []
-    for t in targets:
-        if not isinstance(t, dict):
-            continue
-        # FM target group shape varies; capture the common fields defensively.
-        name = t.get("Name") or t.get("TargetName") or ""
-        pivot = t.get("Pivot") or t.get("PivotType") or ""
-        values = t.get("Values") or t.get("Members") or []
-        if not isinstance(values, list):
-            values = []
-        preview = [str(v) for v in values[:5]]
+    for group, entry in _iter_target_entries(env_value):
+        name = entry.get("Name") or entry.get("TargetName") or ""
+        values = _entry_values(entry)
         out.append(
             {
+                "group": group,
                 "name": str(name) if name else "",
-                "pivot": str(pivot) if pivot else "",
-                "valuesPreview": preview,
+                "pivot": _entry_pivot(entry),
+                "valuesPreview": [str(v) for v in values[:5]],
                 "valueCount": len(values),
             }
         )
@@ -298,29 +333,19 @@ def evaluate_my_ws(
     WorkspaceObjectId). RegionName and MemberOf are V1-out — they evaluate
     False but do not raise.
     """
-    if not isinstance(env_value, dict):
-        return False
-    targets = env_value.get("Targets")
-    if not isinstance(targets, list):
-        return False
     ids_by_pivot = {
         "TenantObjectId": (tenant_id or "").lower(),
         "CapacityObjectId": (capacity_id or "").lower(),
         "WorkspaceObjectId": (workspace_id or "").lower(),
     }
-    for t in targets:
-        if not isinstance(t, dict):
-            continue
-        pivot = t.get("Pivot") or t.get("PivotType") or ""
+    for _group, entry in _iter_target_entries(env_value):
+        pivot = _entry_pivot(entry)
         if pivot not in _EVALUABLE_PIVOTS:
             continue
         my_id = ids_by_pivot.get(pivot, "")
         if not my_id:
             continue
-        values = t.get("Values") or t.get("Members") or []
-        if not isinstance(values, list):
-            continue
-        for v in values:
+        for v in _entry_values(entry):
             if isinstance(v, str) and v.lower() == my_id:
                 return True
     return False
@@ -366,6 +391,13 @@ def build_per_env_cells(
             if cell_my_ws:
                 cell["includesMyWorkspace"] = True
                 any_my_ws = True
+            # Mark cells whose target groups are all unevaluable locally
+            # (RegionName / MemberOf or unknown pivots). The matrix uses
+            # this to render the cell with a hatch overlay; the Inspector
+            # uses it to suppress the value-reveal affordance.
+            cell["unevaluable"] = bool(cell["targets"]) and all(
+                t.get("pivot") not in _EVALUABLE_PIVOTS for t in cell["targets"]
+            )
         per_env[env] = cell
     return per_env, any_my_ws
 

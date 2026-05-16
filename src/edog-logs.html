@@ -11189,7 +11189,25 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 .ff-cell.state-on { color: var(--status-succeeded); font-weight: 600; }
 .ff-cell.state-off { color: var(--text-muted); }
 .ff-cell.state-partial { color: var(--level-warning); }
-.ff-cell.state-missing { color: var(--status-failed); opacity: 0.55; }
+.ff-cell.state-missing { color: var(--text-muted); opacity: 0.5; font-size: var(--text-xs); }
+
+/* While the FM clone is still in flight, every cell will be "missing".
+ * Don't shout — render a soft skeleton bar instead of a wall of `?`. */
+.ff-table.fm-syncing .ff-cell.state-missing { color: transparent; position: relative; }
+.ff-table.fm-syncing .ff-cell.state-missing::before {
+  content: "";
+  position: absolute;
+  inset: 50% 30%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--surface-3);
+  animation: ff-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes ff-skeleton {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
 
 .ff-cell.includes-my-ws::after {
   content: "";
@@ -11201,6 +11219,17 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   height: 4px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+/* Hatched overlay for partial cells whose pivots are all unevaluable
+ * locally (RegionName, MemberOf). Communicates "we know it's targeted
+ * but can't tell whether YOU match." */
+.ff-cell.state-partial.unevaluable {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 3px,
+    rgba(229, 148, 12, 0.18) 3px 5px
+  );
 }
 
 /* Sovereign rollup column */
@@ -11348,6 +11377,355 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 [data-theme="dark"] .override-strip { background: rgba(240, 180, 41, 0.08); border-bottom-color: rgba(240, 180, 41, 0.25); }
 [data-theme="dark"] table.ff-table tbody tr.overridden { background: rgba(240, 180, 41, 0.08); }
 [data-theme="dark"] table.ff-table tbody tr.overridden:hover { background: rgba(240, 180, 41, 0.14); }
+
+    /* === css/flag-inspector.css === */
+/* ──────────────────────────────────────────────────────────────────────
+ * Flag Inspector — F11 / C03 v2
+ * Read-only flag detail view that swaps in for the matrix on flag-name click.
+ *
+ * Pixel notes:
+ *   • Same surface/border/space tokens as the matrix.
+ *   • Section-caps titles, --text-md body, --font-mono only for IDs/JSON.
+ *   • Generous --space-5 between sections, --space-3 within.
+ * ────────────────────────────────────────────────────────────────────── */
+
+.flag-inspector-mount[hidden] { display: none; }
+
+.flag-inspector .inspector-breadcrumb {
+  gap: var(--space-3);
+}
+
+.inspector-back {
+  font-weight: 500;
+}
+
+.inspector-crumb {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.inspector-crumb-sep {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+.inspector-crumb-current {
+  font-size: var(--text-md);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.inspector-body {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ── Sections ─────────────────────────────────────────────────────── */
+.inspector-section { display: flex; flex-direction: column; gap: var(--space-3); }
+.inspector-section-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* ── Overview key/value rows ──────────────────────────────────────── */
+.inspector-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.ov-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--space-3);
+  align-items: baseline;
+  font-size: var(--text-sm);
+}
+.ov-key {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: var(--text-xs);
+}
+.ov-val { color: var(--text); }
+.ov-val.muted { color: var(--text-muted); }
+.ov-val.warn { color: var(--level-warning); font-weight: 500; }
+.ov-val.mono, .mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+.ov-effective-note {
+  margin-left: var(--space-2);
+  color: var(--text-dim);
+  font-size: var(--text-xs);
+}
+
+.inspector-link {
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
+}
+.inspector-link:hover { text-decoration: underline; }
+
+/* ── Per-env target list ──────────────────────────────────────────── */
+.inspector-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.env-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.env-block-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.env-name {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  min-width: 60px;
+}
+
+.env-state-pill {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+}
+.env-state-pill.state-on { background: rgba(24,160,88,0.10); color: var(--status-succeeded); border-color: rgba(24,160,88,0.25); }
+.env-state-pill.state-off { background: var(--surface-3); color: var(--text-muted); border-color: var(--border); }
+.env-state-pill.state-partial { background: rgba(229,148,12,0.10); color: var(--level-warning); border-color: rgba(229,148,12,0.25); }
+.env-state-pill.state-empty { background: var(--surface-3); color: var(--text-muted); border-color: var(--border); }
+.env-state-pill.state-missing { background: rgba(229,69,59,0.08); color: var(--status-failed); border-color: rgba(229,69,59,0.25); }
+
+.env-meta { font-size: var(--text-xs); color: var(--text-dim); }
+.env-my-match {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.env-block.unevaluable .env-block-head {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--surface-2) 0 8px,
+    rgba(229, 148, 12, 0.06) 8px 12px
+  );
+}
+
+.env-empty {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+}
+.muted { color: var(--text-dim); }
+
+.env-target-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.target-item {
+  border-top: 1px solid var(--border);
+}
+.target-item:first-child { border-top: none; }
+
+.target-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  flex-wrap: wrap;
+}
+.target-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+.target-pivot {
+  font-size: var(--text-xs);
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.target-group {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+}
+.target-count { font-size: var(--text-xs); }
+.target-reveal {
+  margin-left: auto;
+  font-size: var(--text-xs);
+}
+
+.target-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3) var(--space-4);
+}
+.target-values code {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--text);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.target-more {
+  align-self: center;
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
+.env-sov-fold {
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+}
+.env-sov-fold summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: var(--space-2);
+  list-style: none;
+}
+.env-sov-fold summary::-webkit-details-marker { display: none; }
+.env-sov-fold summary::before {
+  content: "▸ ";
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+  display: inline-block;
+}
+.env-sov-fold[open] summary::before { content: "▾ "; }
+.env-sov-fold[open] { background: var(--surface-2); }
+.env-sov-fold .env-block { margin-top: var(--space-2); }
+
+/* ── Override section ─────────────────────────────────────────────── */
+.inspector-override {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.inspector-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  max-width: 60ch;
+}
+.inspector-hint code {
+  font-family: var(--font-mono);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Raw JSON viewer ──────────────────────────────────────────────── */
+.inspector-raw .raw-toolbar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.inspector-raw-json {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text);
+  line-height: 1.5;
+  overflow: auto;
+  max-height: 480px;
+  white-space: pre;
+}
+.inspector-raw-json .json-key { color: var(--accent); }
+.inspector-raw-json .json-str { color: var(--status-succeeded); }
+.inspector-raw-json .json-num { color: var(--level-message); }
+.inspector-raw-json .json-bool { color: var(--level-warning); font-weight: 600; }
+.inspector-raw-json .json-null { color: var(--text-muted); font-style: italic; }
+
+.inspector-raw-loading { padding: var(--space-3) var(--space-4); font-size: var(--text-sm); }
+.inspector-error {
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(229,69,59,0.06);
+  border: 1px solid rgba(229,69,59,0.25);
+  border-radius: var(--radius-md);
+  color: var(--status-failed);
+  font-size: var(--text-sm);
+}
+
+/* Inline flag-name link in the matrix is the inspector trigger. */
+.ff-name.ff-name-link {
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+.ff-name.ff-name-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ff-name.ff-name-link:focus-visible {
+  outline: none;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Dark theme tweaks ────────────────────────────────────────────── */
+[data-theme="dark"] .inspector-overview { background: var(--surface-2); }
+[data-theme="dark"] .target-values code { background: var(--surface-3); }
+[data-theme="dark"] .inspector-raw-json { background: #1a1d23; }
 
     /* === css/token-inspector.css === */
 /* ── Token Inspector — List → Decode ── */
@@ -53559,7 +53937,68 @@ class FeatureFlagsMatrix {
 
   destroy() {
     this._destroyed = true;
+    if (this._syncPollTimer) {
+      clearTimeout(this._syncPollTimer);
+      this._syncPollTimer = null;
+    }
+    if (this._inspector) {
+      this._inspector.destroy();
+      this._inspector = null;
+    }
     this.deactivate();
+  }
+
+  /* ── Flag Inspector ───────────────────────────────────────────────── */
+
+  openInspector(wireKey) {
+    if (!wireKey || !this._catalog) return;
+    const row = (this._catalog.rows || []).find(r => r.wireKey === wireKey);
+    if (!row) return;
+    const matrixCard = this._mount.querySelector('#card-feature-flags');
+    const placeholder = this._mount.querySelector('#ffPlaceholderCard');
+    const inspectorMount = this._mount.querySelector('#ffInspectorMount');
+    if (!inspectorMount) return;
+    if (matrixCard) matrixCard.hidden = true;
+    if (placeholder) placeholder.hidden = true;
+    inspectorMount.hidden = false;
+    if (!this._inspector) {
+      this._inspector = new FlagInspector(inspectorMount, {
+        catalog: this._catalog,
+        overrides: this._overrides,
+        onClose: () => this.closeInspector(),
+        onOverrideSet: (k) => this.setOverride(k, true).then(() => this._refreshInspector()),
+        onOverrideClear: (k) => this.clearOverride(k).then(() => this._refreshInspector()),
+      });
+    }
+    this._inspector.show(row, {
+      catalog: this._catalog,
+      overrides: this._overrides,
+    });
+  }
+
+  closeInspector() {
+    const matrixCard = this._mount.querySelector('#card-feature-flags');
+    const placeholder = this._mount.querySelector('#ffPlaceholderCard');
+    const inspectorMount = this._mount.querySelector('#ffInspectorMount');
+    if (this._inspector) this._inspector.hide();
+    if (inspectorMount) inspectorMount.hidden = true;
+    if (matrixCard) matrixCard.hidden = false;
+    if (placeholder) placeholder.hidden = false;
+  }
+
+  _refreshInspector() {
+    if (this._inspector && !this._inspector.isHidden()) {
+      const wireKey = this._inspector.currentWireKey();
+      if (wireKey) {
+        const row = (this._catalog.rows || []).find(r => r.wireKey === wireKey);
+        if (row) {
+          this._inspector.show(row, {
+            catalog: this._catalog,
+            overrides: this._overrides,
+          });
+        }
+      }
+    }
   }
 
   /* ── Network ──────────────────────────────────────────────────────── */
@@ -53575,11 +54014,28 @@ class FeatureFlagsMatrix {
       this._catalog = catalogResp;
       this._overrides = overridesResp.overrides || {};
       this._render();
+      this._maybeScheduleSyncPoll();
     } catch (err) {
       this._renderError(err);
     } finally {
       this._loadInFlight = false;
     }
+  }
+
+  _maybeScheduleSyncPoll() {
+    const fm = (this._catalog && this._catalog.fm) || {};
+    // While the FM clone is in flight (or we're cold with 0 indexed flags),
+    // poll the catalog every 1.5s so the user doesn't sit on a wall of "?".
+    const needsPoll = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
+    if (this._syncPollTimer) {
+      clearTimeout(this._syncPollTimer);
+      this._syncPollTimer = null;
+    }
+    if (!needsPoll || this._destroyed) return;
+    this._syncPollTimer = setTimeout(() => {
+      this._syncPollTimer = null;
+      if (!this._destroyed) this.load();
+    }, 1500);
   }
 
   async setOverride(wireKey, value) {
@@ -53699,7 +54155,9 @@ class FeatureFlagsMatrix {
           <div class="ff-toast-strip" id="ffToast"></div>
         </div>
 
-        <div class="env-card">
+        <div class="flag-inspector-mount" id="ffInspectorMount" hidden></div>
+
+        <div class="env-card" id="ffPlaceholderCard">
           <div class="env-card-header">
             <div class="env-card-title"><span>Configuration · Auth · Deploy</span><span class="card-badge">coming soon</span></div>
           </div>
@@ -53810,13 +54268,26 @@ class FeatureFlagsMatrix {
 
     const body = `<tbody>${rows.map(r => this._renderRow(r, mainline, sovereign)).join('')}</tbody>`;
 
-    wrap.innerHTML = `<table class="ff-table ${this._sovExpanded ? 'sov-expanded' : ''}">${header}${body}</table>`;
+    const fm = (this._catalog && this._catalog.fm) || {};
+    const syncing = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
+    const tableCls = `ff-table ${this._sovExpanded ? 'sov-expanded' : ''}${syncing ? ' fm-syncing' : ''}`;
+    wrap.innerHTML = `<table class="${tableCls.trim()}">${header}${body}</table>`;
 
     // Wire toggle clicks
     wrap.querySelectorAll('.ff-switch[data-flag]').forEach(sw => {
       sw.addEventListener('click', () => this._onSwitchClick(sw));
       sw.addEventListener('keydown', (e) => {
         if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this._onSwitchClick(sw); }
+      });
+    });
+    // Wire flag-name click -> open Flag Inspector
+    wrap.querySelectorAll('.ff-name-link[data-flag]').forEach(link => {
+      link.addEventListener('click', () => this.openInspector(link.dataset.flag));
+      link.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          this.openInspector(link.dataset.flag);
+        }
       });
     });
   }
@@ -53844,7 +54315,7 @@ class FeatureFlagsMatrix {
         <td class="col-name">
           <div class="ff-name-cell">
             <div class="ff-name-line">
-              <span class="ff-name">${this._escape(row.name)}</span>
+              <span class="ff-name ff-name-link" data-flag="${this._escape(row.wireKey)}" tabindex="0" role="button" title="Open flag inspector">${this._escape(row.name)}</span>
               <span class="ff-wirekey">${this._escape(row.wireKey)}</span>
             </div>
           </div>
@@ -53873,9 +54344,18 @@ class FeatureFlagsMatrix {
       empty: 'Not deployed to this env',
       missing: 'Flag not found in FeatureManagement repo',
     };
+    let title = titleMap[state] || state;
+    if (state === 'partial' && Array.isArray(cell.targets) && cell.targets.length) {
+      const summary = cell.targets.map(t => `${t.pivot || '?'} · ${t.valueCount || 0}`).join(', ');
+      title = `Targeted rollout — ${summary}`;
+    }
+    if (cell.unevaluable) {
+      title = 'Targeted rollout — cannot evaluate locally (RegionName / MemberOf)';
+    }
     const inclMy = cell.includesMyWorkspace ? ' includes-my-ws' : '';
+    const hatched = state === 'partial' && cell.unevaluable ? ' unevaluable' : '';
     const kindCls = kind ? ` ${kind}` : '';
-    return `<td class="ff-cell state-${state}${inclMy}${kindCls}" title="${titleMap[state] || state}">${glyphMap[state] || '?'}</td>`;
+    return `<td class="ff-cell state-${state}${inclMy}${hatched}${kindCls}" title="${title}">${glyphMap[state] || '?'}</td>`;
   }
 
   _sovGlyph(row, sovereign) {
@@ -54020,6 +54500,354 @@ class FeatureFlagsMatrix {
 }
 
 window.FeatureFlagsMatrix = FeatureFlagsMatrix;
+
+// === js/flag-inspector.js ===
+/* ──────────────────────────────────────────────────────────────────────
+ * Environment Panel — Card 3 / Flag Inspector
+ * Click a flag name in the matrix → opens this read-only inspector view.
+ *
+ * Sections:
+ *   1. Breadcrumb + back button
+ *   2. Overview      — name, wireKey, summary, effective state, FM source
+ *   3. Per-env       — vertical list with target-group sub-rows + gated reveal
+ *   4. Override      — current state + Force ON / Clear button
+ *   5. Raw JSON      — collapsed, syntax-highlighted FM definition
+ *
+ * Talks to the matrix via callbacks (onClose, onOverrideSet, onOverrideClear).
+ * Fetches raw JSON on demand from GET /api/edog/feature-flags/raw/{wireKey}.
+ * ────────────────────────────────────────────────────────────────────── */
+
+class FlagInspector {
+  /**
+   * @param {HTMLElement} mountEl
+   * @param {{
+   *   catalog: any,
+   *   overrides: Record<string, boolean>,
+   *   onClose: () => void,
+   *   onOverrideSet: (wireKey: string) => Promise<void>,
+   *   onOverrideClear: (wireKey: string) => Promise<void>,
+   * }} ctx
+   */
+  constructor(mountEl, ctx) {
+    this._mount = mountEl;
+    this._ctx = ctx;
+    this._currentRow = null;
+    this._rawDoc = null;
+    this._rawLoading = false;
+    this._rawError = null;
+    this._showRaw = false;
+    this._showValuesFor = new Set();
+    this._hidden = true;
+  }
+
+  isHidden() { return this._hidden; }
+  currentWireKey() { return this._currentRow ? this._currentRow.wireKey : null; }
+
+  show(row, ctx) {
+    this._hidden = false;
+    this._currentRow = row;
+    this._ctx.catalog = ctx.catalog;
+    this._ctx.overrides = ctx.overrides;
+    // Reset transient state when switching flags
+    if (!this._lastWireKey || this._lastWireKey !== row.wireKey) {
+      this._rawDoc = null;
+      this._rawError = null;
+      this._showRaw = false;
+      this._showValuesFor = new Set();
+    }
+    this._lastWireKey = row.wireKey;
+    this._render();
+  }
+
+  hide() {
+    this._hidden = true;
+  }
+
+  destroy() {
+    this._mount.innerHTML = '';
+    this._currentRow = null;
+  }
+
+  /* ── Render ───────────────────────────────────────────────────────── */
+
+  _render() {
+    if (!this._currentRow) return;
+    const row = this._currentRow;
+    const overridden = !!row.isOverridden;
+    const effective = overridden ? 'FORCED ON' : (row.effectiveForMyWorkspace ? 'ON' : 'OFF');
+    const effectiveCls = overridden ? 'forced' : (row.effectiveForMyWorkspace ? 'on' : 'off');
+
+    const mainline = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.mainlineEnvs) || [];
+    const sovereign = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.sovereignEnvs) || [];
+
+    const sourcePath = this._sourcePath(row.wireKey);
+    const fmRepoLink = this._fmRepoLink(sourcePath);
+
+    this._mount.innerHTML = `
+      <div class="env-card flag-inspector">
+        <div class="env-card-header inspector-breadcrumb">
+          <div class="env-card-title">
+            <button class="env-btn inspector-back" id="fiBack" title="Back to matrix">&#8592; Back</button>
+            <span class="inspector-crumb">Feature Flags</span>
+            <span class="inspector-crumb-sep">/</span>
+            <span class="inspector-crumb-current">${this._escape(row.name)}</span>
+          </div>
+        </div>
+
+        <div class="inspector-body">
+
+          <section class="inspector-section">
+            <h3 class="inspector-section-title">Overview</h3>
+            <div class="inspector-overview">
+              <div class="ov-row"><span class="ov-key">Name</span><span class="ov-val">${this._escape(row.name)}</span></div>
+              <div class="ov-row"><span class="ov-key">Wire key</span><span class="ov-val mono">${this._escape(row.wireKey)}</span></div>
+              ${row.summary ? `<div class="ov-row"><span class="ov-key">Summary</span><span class="ov-val">${this._escape(row.summary)}</span></div>` : ''}
+              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (row.effectiveForMyWorkspace ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
+              ${row.missingReason === 'missing-in-fm'
+                ? `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val warn">Not found in FeatureManagement repo</span></div>`
+                : `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val"><span class="mono">${this._escape(sourcePath)}</span>${fmRepoLink ? ` <a class="inspector-link" href="${fmRepoLink}" target="_blank" rel="noopener">Open in repo &#8599;</a>` : ''}</span></div>`}
+            </div>
+          </section>
+
+          <section class="inspector-section">
+            <h3 class="inspector-section-title">Per-environment targeting</h3>
+            <div class="inspector-env-list">
+              ${mainline.map(env => this._renderEnvBlock(env, row.perEnv[env] || { state: 'missing' }, row.wireKey)).join('')}
+              <details class="env-sov-fold">
+                <summary>Sovereign envs (${sovereign.length})</summary>
+                ${sovereign.map(env => this._renderEnvBlock(env, row.perEnv[env] || { state: 'missing' }, row.wireKey)).join('')}
+              </details>
+            </div>
+          </section>
+
+          <section class="inspector-section">
+            <h3 class="inspector-section-title">Session override</h3>
+            <div class="inspector-override">
+              ${overridden
+                ? `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val"><span class="ff-effective forced">FORCED ON</span></span></div>
+                   <button class="env-btn danger" id="fiClearOverride">Clear override</button>`
+                : `<div class="ov-row"><span class="ov-key">Status</span><span class="ov-val muted">No override — effective state follows FM truth.</span></div>
+                   <button class="env-btn" id="fiSetOverride">Force ON for this session</button>`}
+              <p class="inspector-hint">Overrides take effect on <strong>future</strong> evaluations. Code paths that cached <code>IsEnabled</code> at startup are unaffected until FLT restarts.</p>
+            </div>
+          </section>
+
+          <section class="inspector-section">
+            <h3 class="inspector-section-title">Raw FM definition</h3>
+            <div class="inspector-raw">
+              ${this._renderRawSection(row.wireKey)}
+            </div>
+          </section>
+
+        </div>
+      </div>
+    `;
+
+    this._wireHandlers(row);
+  }
+
+  _renderEnvBlock(env, cell, wireKey) {
+    const state = cell.state || 'missing';
+    const stateLabel = {
+      on: 'ON', off: 'OFF', partial: 'Partial', empty: 'Not deployed', missing: 'Missing in FM',
+    }[state] || state;
+    const stateCls = `env-state-${state}` + (cell.unevaluable ? ' unevaluable' : '');
+    const meta = this._envMeta(cell);
+
+    let body = '';
+    if (state === 'partial') {
+      if (cell.unevaluable) {
+        body = `<div class="env-empty muted">All target groups use pivots we can\u2019t evaluate locally (RegionName, MemberOf). The cell renders as partial but matching can\u2019t be confirmed.</div>${this._renderTargets(cell, wireKey, env)}`;
+      } else {
+        body = this._renderTargets(cell, wireKey, env);
+      }
+    } else if (state === 'missing') {
+      body = '<div class="env-empty muted">Flag is declared by FLT but not present in the FeatureManagement repo.</div>';
+    } else if (state === 'empty') {
+      body = '<div class="env-empty muted">No configuration block for this environment.</div>';
+    }
+
+    return `
+      <div class="env-block ${stateCls}">
+        <div class="env-block-head">
+          <span class="env-name">${this._escape(env.toUpperCase())}</span>
+          <span class="env-state-pill state-${state}">${stateLabel}</span>
+          ${meta ? `<span class="env-meta muted">${meta}</span>` : ''}
+          ${cell.includesMyWorkspace ? '<span class="env-my-match" title="Your workspace matches a target group in this env">your match</span>' : ''}
+        </div>
+        ${body}
+      </div>
+    `;
+  }
+
+  _envMeta(cell) {
+    if (cell.state !== 'partial' || !Array.isArray(cell.targets)) return '';
+    const n = cell.targets.length;
+    if (n === 0) return '';
+    return n === 1 ? '1 target group' : `${n} target groups`;
+  }
+
+  _renderTargets(cell, wireKey, env) {
+    const targets = cell.targets || [];
+    if (targets.length === 0) return '<div class="env-empty muted">No target groups declared.</div>';
+    return `<ul class="env-target-list">${targets.map((t, idx) => this._renderTargetItem(t, idx, wireKey, env)).join('')}</ul>`;
+  }
+
+  _renderTargetItem(t, idx, wireKey, env) {
+    const revealKey = `${env}#${idx}`;
+    const revealed = this._showValuesFor.has(revealKey);
+    const pivot = t.pivot || '(unknown pivot)';
+    const valueCount = typeof t.valueCount === 'number' ? t.valueCount : (t.valuesPreview ? t.valuesPreview.length : 0);
+    const name = t.name || '(unnamed group)';
+    const group = t.group || '';
+    const hasValues = valueCount > 0;
+    const previewN = (t.valuesPreview || []).length;
+    const moreN = valueCount - previewN;
+
+    return `
+      <li class="target-item" data-reveal="${this._escape(revealKey)}">
+        <div class="target-head">
+          ${group ? `<span class="target-group" title="Rollout group from FM definition">${this._escape(group)}</span>` : ''}
+          <span class="target-name">${this._escape(name)}</span>
+          <span class="target-pivot mono">${this._escape(pivot)}</span>
+          <span class="target-count muted">${valueCount} ${valueCount === 1 ? 'value' : 'values'}</span>
+          ${hasValues ? `<button class="env-btn target-reveal" data-reveal-key="${this._escape(revealKey)}">${revealed ? 'Hide values' : 'Show values'}</button>` : ''}
+        </div>
+        ${revealed && hasValues
+          ? `<div class="target-values mono">${(t.valuesPreview || []).map(v => `<code>${this._escape(v)}</code>`).join('')}${moreN > 0 ? `<span class="target-more muted">+${moreN} more (not loaded)</span>` : ''}</div>`
+          : ''}
+      </li>
+    `;
+  }
+
+  _renderRawSection(wireKey) {
+    if (!this._showRaw) {
+      return `<button class="env-btn" id="fiToggleRaw">Show raw definition</button>`;
+    }
+    if (this._rawError) {
+      return `<button class="env-btn" id="fiToggleRaw">Hide</button>
+              <div class="inspector-error">Failed to load raw definition: ${this._escape(this._rawError)}</div>`;
+    }
+    if (this._rawLoading || !this._rawDoc) {
+      return `<button class="env-btn" id="fiToggleRaw">Hide</button>
+              <div class="inspector-raw-loading muted">Loading FM definition…</div>`;
+    }
+    return `
+      <div class="raw-toolbar">
+        <button class="env-btn" id="fiToggleRaw">Hide raw definition</button>
+        <button class="env-btn" id="fiCopyRaw" title="Copy JSON to clipboard">Copy JSON</button>
+      </div>
+      <pre class="inspector-raw-json"><code>${this._highlightJson(this._rawDoc)}</code></pre>
+    `;
+  }
+
+  _wireHandlers(row) {
+    const back = this._mount.querySelector('#fiBack');
+    if (back) back.addEventListener('click', () => this._ctx.onClose && this._ctx.onClose());
+
+    const setBtn = this._mount.querySelector('#fiSetOverride');
+    if (setBtn) setBtn.addEventListener('click', () => this._ctx.onOverrideSet && this._ctx.onOverrideSet(row.wireKey));
+
+    const clearBtn = this._mount.querySelector('#fiClearOverride');
+    if (clearBtn) clearBtn.addEventListener('click', () => this._ctx.onOverrideClear && this._ctx.onOverrideClear(row.wireKey));
+
+    this._mount.querySelectorAll('.target-reveal[data-reveal-key]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const k = btn.dataset.revealKey;
+        if (this._showValuesFor.has(k)) this._showValuesFor.delete(k);
+        else this._showValuesFor.add(k);
+        this._render();
+      });
+    });
+
+    const rawBtn = this._mount.querySelector('#fiToggleRaw');
+    if (rawBtn) {
+      rawBtn.addEventListener('click', () => {
+        if (this._showRaw) {
+          this._showRaw = false;
+          this._render();
+        } else {
+          this._showRaw = true;
+          if (!this._rawDoc && !this._rawLoading) this._loadRaw(row.wireKey);
+          else this._render();
+        }
+      });
+    }
+
+    const copyBtn = this._mount.querySelector('#fiCopyRaw');
+    if (copyBtn && this._rawDoc) {
+      copyBtn.addEventListener('click', () => {
+        try {
+          navigator.clipboard.writeText(JSON.stringify(this._rawDoc, null, 2));
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy JSON'; }, 1200);
+        } catch (_) { /* noop */ }
+      });
+    }
+  }
+
+  async _loadRaw(wireKey) {
+    this._rawLoading = true;
+    this._rawError = null;
+    this._render();
+    try {
+      const resp = await fetch(`/api/edog/feature-flags/raw/${encodeURIComponent(wireKey)}`);
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        this._rawError = body.detail || body.error || `HTTP ${resp.status}`;
+      } else {
+        const body = await resp.json();
+        this._rawDoc = body.definition;
+      }
+    } catch (err) {
+      this._rawError = err.message || String(err);
+    } finally {
+      this._rawLoading = false;
+      this._render();
+    }
+  }
+
+  /* ── Helpers ──────────────────────────────────────────────────────── */
+
+  _sourcePath(wireKey) {
+    // FM convention: Features/<area>/<wireKey>.json. We don't know the area
+    // for sure without the doc, but the path pattern is consistent enough
+    // for a "human-readable hint" until the user opens the raw definition.
+    return `Features/.../${wireKey}.json`;
+  }
+
+  _fmRepoLink(_sourcePath) {
+    // We could build a deep-link if we knew the area folder. Without that
+    // structural info, link to the repo root — the user can navigate from there.
+    const fm = (this._ctx.catalog && this._ctx.catalog.fm) || {};
+    return fm.repoUrl || null;
+  }
+
+  _highlightJson(value) {
+    const json = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    const escaped = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return escaped.replace(
+      /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
+      (match) => {
+        let cls = 'json-num';
+        if (/^"/.test(match)) cls = /:$/.test(match) ? 'json-key' : 'json-str';
+        else if (/true|false/.test(match)) cls = 'json-bool';
+        else if (/null/.test(match)) cls = 'json-null';
+        return `<span class="${cls}">${match}</span>`;
+      },
+    );
+  }
+
+  _escape(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+}
 
 // === js/tab-di.js ===
 /**
