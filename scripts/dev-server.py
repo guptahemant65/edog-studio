@@ -1860,6 +1860,19 @@ def _token_refresh_loop(ws_id, lh_id, cap_id):
 class EdogDevHandler(SimpleHTTPRequestHandler):
     """HTTP handler for EDOG development server."""
 
+    def handle_one_request(self):
+        # Client-side disconnects (browser navigation, Ctrl+R during in-flight
+        # request, AbortController.abort) raise socket errors deep in the
+        # response-write path. They're benign — the user just moved on — but
+        # the default handler prints a multi-page traceback. Collapse them to
+        # a single one-line warning so the console stays readable.
+        try:
+            super().handle_one_request()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError) as e:
+            sys.stderr.write(f"[client-disconnect] {self.command or '?'} {self.path or '?'} — {type(e).__name__}\n")
+        except Exception:
+            raise
+
     def do_GET(self):
         if self.path == "/api/flt/config":
             self._serve_config()
