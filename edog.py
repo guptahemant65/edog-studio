@@ -3546,20 +3546,33 @@ Examples:
     except KeyboardInterrupt:
         # On Windows + cmd, Ctrl+C is delivered to the whole console process
         # group, so the dev-server child already received SIGINT and is
-        # running its own shutdown (stop FLT, sweep orphans, revert patches,
-        # close socket). Do NOT call proc.terminate() — that's a hard
-        # TerminateProcess kill on Windows that would interrupt the child's
-        # cleanup mid-revert. Just wait for it to finish cleanly.
+        # running its own shutdown (kill FLT tree, sweep orphans, revert
+        # patches, close socket). Do NOT call proc.terminate() — that's a
+        # hard TerminateProcess kill on Windows that would interrupt the
+        # child's cleanup mid-revert. Just wait for it to finish cleanly.
         print("\n\nShutting down EDOG Studio...")
         try:
             proc.wait(timeout=35)  # ≥30s revert timeout + buffer
         except subprocess.TimeoutExpired:
-            print("  ⚠ Child didn't exit within 35s — forcing termination.")
-            proc.terminate()
+            print("  ⚠ Child didn't exit within 35s — force-killing its tree.")
+            # Kill the dev-server process tree (including any subprocess like
+            # `edog.py --revert` it may still be running).
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                        capture_output=True,
+                        timeout=10,
+                    )
+                else:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    proc.kill()
     # Use os._exit to skip Python's finalization on Windows — avoids the
     # cmd.exe "Terminate batch job (Y/N)?" prompt by ensuring this process
     # has already exited by the time the cmd interpreter regains control.

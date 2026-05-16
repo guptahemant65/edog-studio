@@ -5256,21 +5256,39 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nShutting down EDOG Studio...")
 
-        # 1. Stop the FLT process we launched in this session (if any).
+        # 1. Stop the FLT process tree we launched in this session (if any).
+        # _flt_process is `dotnet run --no-build` — the actual FLT EntryPoint
+        # runs as its CHILD. .terminate() only kills the dotnet wrapper and
+        # leaves the EntryPoint orphaned. Use taskkill /T on Windows so the
+        # whole tree dies in one shot. POSIX falls back to SIGTERM + reap.
         if _flt_process and _flt_process.poll() is None:
-            print(f"  Stopping FLT service (PID: {_flt_process.pid})...")
-            _flt_process.terminate()
+            pid = _flt_process.pid
+            print(f"  Stopping FLT process tree (root PID: {pid})...")
             try:
-                _flt_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                _flt_process.kill()
-            print("  ✓ FLT service stopped.")
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(pid)],
+                        capture_output=True,
+                        timeout=10,
+                    )
+                else:
+                    _flt_process.terminate()
+                    try:
+                        _flt_process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        _flt_process.kill()
+            except Exception as e:
+                print(f"  ⚠ Tree kill failed: {e}; falling back to terminate().")
+                with contextlib.suppress(Exception):
+                    _flt_process.terminate()
+                    _flt_process.wait(timeout=5)
+            print("  ✓ FLT process tree terminated.")
 
-        # 2. Sweep any orphan FLT processes from prior sessions. Patches and
-        # processes can outlive dev-server, so always check.
+        # 2. Sweep any orphan FLT processes from prior sessions OR any that
+        # escaped the tree-kill above (image-name-based, defensive).
         orphans = _kill_stale_flt_processes()
         if orphans:
-            print(f"  ✓ Killed {len(orphans)} orphan FLT process(es) from prior sessions.")
+            print(f"  ✓ Killed {len(orphans)} orphan FLT process(es) by image name.")
 
         # 3. Clean up injected DevMode token.
         with contextlib.suppress(Exception):
