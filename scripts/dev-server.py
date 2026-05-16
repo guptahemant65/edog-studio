@@ -5276,13 +5276,13 @@ if __name__ == "__main__":
         with contextlib.suppress(Exception):
             _cleanup_devmode_token()
 
-        # 4. Revert patches UNCONDITIONALLY if edog.py and a patch artefact
-        # exist. Patches survive sessions on disk; relying on _flt_process
-        # being set in this run missed the common case where FLT was deployed
-        # in a prior session and the user just opened the dev-server again.
+        # 4. Always run python edog.py --revert on shutdown. It is idempotent
+        # — when nothing is applied, it returns 0 quickly. The `.edog-changes.patch`
+        # artefact gets unlinked at the END of revert, so its presence is NOT a
+        # reliable "patches applied" indicator. Better to pay ~1-3s on every
+        # shutdown than leave a stale patched tree on disk.
         edog_py = PROJECT_DIR / "edog.py"
-        patch_file = PROJECT_DIR / ".edog-changes.patch"
-        if edog_py.exists() and (patch_file.exists() or _flt_process is not None):
+        if edog_py.exists():
             print("  Reverting EDOG patches (this may take ~10s)...")
             try:
                 result = subprocess.run(
@@ -5294,7 +5294,7 @@ if __name__ == "__main__":
                     errors="replace",
                 )
                 if result.returncode == 0:
-                    print("  ✓ Patches reverted.")
+                    print("  ✓ Patches reverted (or already clean).")
                 else:
                     print("  ⚠ Revert returned non-zero — run manually: python edog.py --revert")
                     if result.stderr:

@@ -12,3 +12,6 @@ REM
 REM Works from any directory when added to PATH.
 REM
 python "%~dp0edog.py" %*
+REM Suppress cmd's "Terminate batch job (Y/N)?" prompt on Ctrl+C by exiting
+REM the batch script cleanly with the python exit code.
+exit /b %errorlevel%
