@@ -5254,7 +5254,9 @@ if __name__ == "__main__":
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down...")
+        print("\nShutting down EDOG Studio...")
+
+        # 1. Stop the FLT process we launched in this session (if any).
         if _flt_process and _flt_process.poll() is None:
             print(f"  Stopping FLT service (PID: {_flt_process.pid})...")
             _flt_process.terminate()
@@ -5262,24 +5264,45 @@ if __name__ == "__main__":
                 _flt_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 _flt_process.kill()
-            print("  FLT service stopped.")
-            # Clean up injected DevMode token
-            _cleanup_devmode_token()
-            # Revert code changes
-            print("  Reverting EDOG patches...")
-            try:
-                import sys as _sys
+            print("  ✓ FLT service stopped.")
 
-                subprocess.run(
-                    [_sys.executable, str(PROJECT_DIR / "edog.py"), "--revert"],
+        # 2. Sweep any orphan FLT processes from prior sessions. Patches and
+        # processes can outlive dev-server, so always check.
+        orphans = _kill_stale_flt_processes()
+        if orphans:
+            print(f"  ✓ Killed {len(orphans)} orphan FLT process(es) from prior sessions.")
+
+        # 3. Clean up injected DevMode token.
+        with contextlib.suppress(Exception):
+            _cleanup_devmode_token()
+
+        # 4. Revert patches UNCONDITIONALLY if edog.py and a patch artefact
+        # exist. Patches survive sessions on disk; relying on _flt_process
+        # being set in this run missed the common case where FLT was deployed
+        # in a prior session and the user just opened the dev-server again.
+        edog_py = PROJECT_DIR / "edog.py"
+        patch_file = PROJECT_DIR / ".edog-changes.patch"
+        if edog_py.exists() and (patch_file.exists() or _flt_process is not None):
+            print("  Reverting EDOG patches (this may take ~10s)...")
+            try:
+                result = subprocess.run(
+                    [sys.executable, str(edog_py), "--revert"],
                     capture_output=True,
                     text=True,
                     timeout=30,
                     encoding="utf-8",
                     errors="replace",
                 )
-                print("  Patches reverted.")
-            except Exception:
-                print("  Revert failed — run: edog --revert")
+                if result.returncode == 0:
+                    print("  ✓ Patches reverted.")
+                else:
+                    print("  ⚠ Revert returned non-zero — run manually: python edog.py --revert")
+                    if result.stderr:
+                        print(f"     stderr: {result.stderr.strip()[:200]}")
+            except subprocess.TimeoutExpired:
+                print("  ⚠ Revert timed out after 30s — run manually: python edog.py --revert")
+            except Exception as e:
+                print(f"  ⚠ Revert failed: {e} — run manually: python edog.py --revert")
+
         server.server_close()
         print("Server stopped.")
