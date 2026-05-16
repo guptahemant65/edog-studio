@@ -388,7 +388,17 @@ class ExecutionPipeline {
 
   _buildRequestBody(stepDef, context, artifacts) {
     switch (stepDef.index) {
-      case 0: return { displayName: context.workspaceName };
+      // A Fabric workspace must be bound to a capacity at creation; without one it
+      // cannot host or execute any artifacts. We send capacityId in the same call
+      // rather than relying on Step 1's async assignToCapacity completing in time.
+      // Step 1 still runs as an idempotent safety net.
+      case 0: {
+        var ws = { displayName: context.workspaceName };
+        if (context.capacityId) {
+          ws.capacityId = context.capacityId;
+        }
+        return ws;
+      }
       case 1: return { capacityId: context.capacityId };
       // Fabric Lakehouse Create requires `enableSchemas` inside `creationPayload`
       // (top-level enableSchemas is silently ignored, leaving the lakehouse schema-less).
