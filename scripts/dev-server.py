@@ -4314,6 +4314,19 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         overrides_snapshot, _, _ = feature_overrides.get_snapshot()
+        # Seed the FM cache with the wire keys declared by FLT before the
+        # background sync runs. This caps indexing to ~30-50 files instead
+        # of the full ~13K FM repo. parse_feature_names is cheap (one .cs
+        # file read + regex) so calling it here in addition to inside
+        # build_catalog is acceptable.
+        try:
+            declared = feature_flags_catalog.parse_feature_names(Path(flt_repo_path))
+            _FM_CACHE.set_declared_keys(e["wireKey"] for e in declared)
+        except FileNotFoundError as e:
+            self._json_response(500, {"error": "feature_names_missing", "detail": str(e)})
+            return
+        except Exception:
+            traceback.print_exc()
         # Non-blocking: ensure a background sync is in flight when we're cold
         # or past TTL. UI gets stale=true in the response and re-polls.
         try:
