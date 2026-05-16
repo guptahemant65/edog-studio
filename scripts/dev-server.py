@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import ssl
 import subprocess
 import sys
@@ -26,6 +27,8 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from socketserver import ThreadingMixIn
 
+import feature_flags_catalog
+import feature_overrides
 from file_watcher import FileWatcher
 from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
 from repo_discovery import (
@@ -204,6 +207,12 @@ def _atomic_write(path: Path, data: str):
 
 # ── Studio State ──────────────────────────────────────────────────────────
 FLT_INTERNAL_PORT = 5557
+
+# Per-session control token for FLT's override HTTP endpoints. Regenerated
+# every dev-server start; written into FLT's env on spawn. Browser never sees
+# this value — dev-server adds the X-EDOG-Control-Token header when proxying
+# override writes to FLT. See F11/architecture.md §3.7.
+EDOG_CONTROL_TOKEN = secrets.token_urlsafe(32)
 
 
 def _is_edog_patch_warning(line: str) -> bool:
@@ -1807,6 +1816,9 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             entrypoint = Path(flt_repo) / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
             env = dict(os.environ)
             env["EDOG_STUDIO_PORT"] = str(FLT_INTERNAL_PORT)
+            # F11/architecture.md §3.7: per-session token gates the override
+            # control plane on FLT. Without this env var, FLT returns 503.
+            env["EDOG_CONTROL_TOKEN"] = EDOG_CONTROL_TOKEN
 
             # Zero-popup auth: inject Silent CBA token into workload-dev-mode.json
             # so DevConnection uses it directly instead of opening a browser
@@ -2009,6 +2021,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_patch_warnings()
         elif self.path == "/api/edog/interceptors-status":
             self._serve_interceptors_status()
+        elif self.path == "/api/edog/feature-flags/catalog":
+            self._serve_feature_flags_catalog()
+        elif self.path == "/api/edog/feature-flags/overrides":
+            self._serve_feature_flags_overrides_get()
         elif self.path.startswith("/api/mwc/tables"):
             self._serve_mwc_tables()
         elif self.path.startswith("/api/mwc/table-stats"):
@@ -2098,6 +2114,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_template_delete()
         elif self.path == "/api/playground/swagger/baseline":
             self._serve_swagger_baseline_delete()
+        elif self.path.startswith("/api/edog/feature-flags/overrides/"):
+            flag = urllib.parse.unquote(self.path[len("/api/edog/feature-flags/overrides/") :])
+            self._serve_feature_flags_overrides_delete(flag)
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for DELETE {self.path}"})
 
@@ -2110,6 +2129,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_repo_scan()
         elif self.path == "/api/edog/repo-set":
             self._serve_repo_set()
+        elif self.path == "/api/edog/feature-flags/overrides":
+            self._serve_feature_flags_overrides_post()
+        elif self.path == "/api/edog/feature-flags/overrides/reset":
+            self._serve_feature_flags_overrides_reset()
         elif self.path == "/api/edog/mwc-token":
             self._serve_mwc_token()
         elif self.path == "/api/mwc/table-details":
@@ -4164,6 +4187,162 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         """POST /api/edog/repo-scan — auto-detect FLT repos on disk."""
         result = find_flt_repos(max_depth=4, limit=10, timeout_sec=5.0)
         self._json_response(200, result)
+
+    # ── Feature-flag overrides (F11-C03) ──────────────────────────────────
+
+    def _push_overrides_to_flt(self, snapshot, revision):
+        """Push the snapshot to FLT (synchronous). Records the result and
+        returns a UI-friendly fltSync dict for inclusion in the response.
+        """
+        result = feature_overrides.push_snapshot_to_flt(
+            snapshot,
+            revision,
+            flt_port=FLT_INTERNAL_PORT,
+            control_token=EDOG_CONTROL_TOKEN,
+        )
+        feature_overrides.record_push(result)
+        return {
+            "fltSync": result.flt_sync,
+            "revision": result.revision,
+            "hash": result.local_hash,
+            "fltHash": result.flt_hash,
+            "fltRevision": result.flt_revision,
+            "statusCode": result.status_code,
+            "error": result.error,
+            "durationMs": round(result.duration_ms, 2),
+        }
+
+    def _serve_feature_flags_catalog(self):
+        """GET /api/edog/feature-flags/catalog — declared FLT flags + FM enrichment."""
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        except (OSError, json.JSONDecodeError) as e:
+            self._json_response(500, {"error": "config_read_failed", "detail": str(e)})
+            return
+        flt_repo_path = cfg.get("flt_repo_path", "")
+        if not flt_repo_path or not Path(flt_repo_path).is_dir():
+            self._json_response(
+                500,
+                {"error": "flt_repo_not_configured", "detail": "flt_repo_path missing or invalid"},
+            )
+            return
+
+        overrides_snapshot, _, _ = feature_overrides.get_snapshot()
+        try:
+            payload = feature_flags_catalog.build_catalog(
+                Path(flt_repo_path),
+                workspace_id=cfg.get("workspace_id") or None,
+                capacity_id=cfg.get("capacity_id") or None,
+                tenant_id=cfg.get("tenant_id") or None,
+                fm_cache_dir=None,
+                overrides_snapshot=overrides_snapshot,
+            )
+        except FileNotFoundError as e:
+            self._json_response(500, {"error": "feature_names_missing", "detail": str(e)})
+            return
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(500, {"error": "catalog_build_failed", "detail": str(e)})
+            return
+        self._json_response(200, payload)
+
+    def _serve_feature_flags_overrides_get(self):
+        """GET /api/edog/feature-flags/overrides — current map + last push status."""
+        snap, rev, hsh = feature_overrides.get_snapshot()
+        last_push = feature_overrides.get_last_push()
+        self._json_response(
+            200,
+            {
+                "overrides": snap,
+                "revision": rev,
+                "hash": hsh,
+                "count": len(snap),
+                "lastPush": last_push,
+            },
+        )
+
+    def _serve_feature_flags_overrides_post(self):
+        """POST /api/edog/feature-flags/overrides — body {flag, value:true}.
+
+        Sets a single force-ON override, then pushes the full map to FLT.
+        Returns the new snapshot and ``fltSync`` outcome (per architecture §3.6).
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+        except (json.JSONDecodeError, ValueError):
+            self._json_response(400, {"error": "invalid_json"})
+            return
+
+        flag = body.get("flag")
+        value = body.get("value")
+        if not isinstance(flag, str) or not flag:
+            self._json_response(400, {"error": "missing_flag"})
+            return
+        if value is not True:
+            self._json_response(
+                400,
+                {"error": "force_off_not_supported", "message": "Only value=true is allowed in V1"},
+            )
+            return
+
+        try:
+            snap, rev = feature_overrides.set_override(flag, value)
+        except ValueError as e:
+            self._json_response(400, {"error": "validation_failed", "detail": str(e)})
+            return
+
+        sync = self._push_overrides_to_flt(snap, rev)
+        self._json_response(
+            200,
+            {
+                "overrides": snap,
+                "revision": rev,
+                "hash": feature_overrides.compute_hash(snap),
+                "count": len(snap),
+                "fltSync": sync,
+            },
+        )
+
+    def _serve_feature_flags_overrides_delete(self, flag):
+        """DELETE /api/edog/feature-flags/overrides/{flag} — remove one entry."""
+        if not flag:
+            self._json_response(400, {"error": "missing_flag"})
+            return
+        try:
+            snap, rev, existed = feature_overrides.delete_override(flag)
+        except ValueError as e:
+            self._json_response(400, {"error": "validation_failed", "detail": str(e)})
+            return
+        if not existed:
+            self._json_response(404, {"error": "no_such_override", "flag": flag})
+            return
+        sync = self._push_overrides_to_flt(snap, rev)
+        self._json_response(
+            200,
+            {
+                "overrides": snap,
+                "revision": rev,
+                "hash": feature_overrides.compute_hash(snap),
+                "count": len(snap),
+                "fltSync": sync,
+            },
+        )
+
+    def _serve_feature_flags_overrides_reset(self):
+        """POST /api/edog/feature-flags/overrides/reset — clear all entries."""
+        snap, rev = feature_overrides.reset_overrides()
+        sync = self._push_overrides_to_flt(snap, rev)
+        self._json_response(
+            200,
+            {
+                "overrides": snap,
+                "revision": rev,
+                "hash": feature_overrides.compute_hash(snap),
+                "count": 0,
+                "fltSync": sync,
+            },
+        )
 
     def _serve_repo_set(self):
         """POST /api/edog/repo-set — validate and persist FLT repo path."""

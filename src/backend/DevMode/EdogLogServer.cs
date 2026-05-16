@@ -420,15 +420,13 @@ namespace Microsoft.LiveTable.Service.DevMode
         });
 
         // Feature-flag override control plane (per F11/architecture.md §3.5).
-        // Both endpoints require X-EDOG-Control-Token header. Token is set
-        // per-session by dev-server and passed to FLT via EDOG_CONTROL_TOKEN
-        // env var. Mounted unconditionally — NOT gated on apiProxy != null.
+        // POST requires X-EDOG-Control-Token header (per-session, set via
+        // EDOG_CONTROL_TOKEN env var). GET is exempt — read-only, same posture
+        // as the existing health and status routes (architecture §3.7).
         app.MapGet("/api/edog/feature-flags/overrides", async context =>
         {
             try
             {
-                if (!ValidateOverrideControlToken(context)) return;
-
                 var snapshot = EdogFeatureOverrideStore.GetSnapshot();
                 var payload = new
                 {
