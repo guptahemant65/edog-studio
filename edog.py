@@ -1888,8 +1888,7 @@ def apply_log_viewer_registration_workloadapp_cs(content):
         status_a = "already_applied"
     else:
         original_a = (
-            "WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, "
-            "CustomLiveTableTelemetryReporter>();"
+            "WireUp.RegisterSingletonType<ICustomLiveTableTelemetryReporter, CustomLiveTableTelemetryReporter>();"
         )
         replacement_a = (
             "// EDOG DevMode - Wrap telemetry reporter with web log viewer interceptor\n"
@@ -1903,9 +1902,7 @@ def apply_log_viewer_registration_workloadapp_cs(content):
             status_a = "applied"
         else:
             status_a = "pattern_not_found"
-            warnings.append(
-                "⚠️  Log viewer telemetry wrap (constructor anchor): pattern not found"
-            )
+            warnings.append("⚠️  Log viewer telemetry wrap (constructor anchor): pattern not found")
 
     # ── Patch B: Tracer reset + RegisterAll (post-InitializeAsync anchor) ─
     registrar_done = "EdogDevModeRegistrar.RegisterAll" in content
@@ -1931,9 +1928,7 @@ def apply_log_viewer_registration_workloadapp_cs(content):
             status_b = "applied"
         else:
             status_b = "pattern_not_found"
-            warnings.append(
-                "⚠️  Log viewer interceptor registrar (post-InitializeAsync anchor): pattern not found"
-            )
+            warnings.append("⚠️  Log viewer interceptor registrar (post-InitializeAsync anchor): pattern not found")
 
     # ── Combined status ────────────────────────────────────────────────────
     if status_a == "already_applied" and status_b == "already_applied":
@@ -1947,7 +1942,9 @@ def apply_log_viewer_registration_workloadapp_cs(content):
 def revert_log_viewer_registration_program_cs(content):
     """Revert log viewer registration from Program.cs."""
     # Remove the EDOG DevMode block (match from start comment to auth diagnostic call)
-    pattern = r"^[ \t]*// EDOG DevMode - Start log viewer server.*?EdogAuthDiagnostic\.CaptureDevModeToken\(\);[ \t]*\n\n?"
+    pattern = (
+        r"^[ \t]*// EDOG DevMode - Start log viewer server.*?EdogAuthDiagnostic\.CaptureDevModeToken\(\);[ \t]*\n\n?"
+    )
     new_content = re.sub(pattern, "", content, flags=re.DOTALL | re.MULTILINE)
     return new_content
 
@@ -2023,7 +2020,10 @@ def apply_dag_execution_hook_patch(content):
 
     # Insert as two separate lines — comment first, then hook (insert at same
     # index pushes earlier inserts down so order is preserved).
-    lines.insert(insert_idx, "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());")
+    lines.insert(
+        insert_idx,
+        "                    dagExecutionHooks.Add(new Microsoft.LiveTable.Service.DevMode.EdogDagExecutionHook());",
+    )
     lines.insert(insert_idx, "                    // EDOG DevMode - observability hook for DAG lifecycle events")
     return "\n".join(lines), "applied"
 
@@ -2074,7 +2074,7 @@ def apply_disable_flt_auth_test_json(content):
     # Anchored to end-of-file so we only match the file's true tail.
     pattern = re.compile(
         r'((?:"[^"\\]*(?:\\.[^"\\]*)*"|true|false|null|-?\d+(?:\.\d+)?|\]|\}))'
-        r'(\s*\n\s*\}\s*\n\s*\}\s*\n?\s*)\Z',
+        r"(\s*\n\s*\}\s*\n\s*\}\s*\n?\s*)\Z",
         re.DOTALL,
     )
     match = pattern.search(content)
@@ -2357,14 +2357,28 @@ def scan_flt_components(repo_root):
     components = set()
     bracket_pattern = re.compile(r'"\[([A-Za-z][A-Za-z0-9_]{2,})\]')
     marker_pattern = re.compile(r'(?:CodeMarkerScope|MonitoredScope)\s*\(\s*"([^"]+)"')
-    class_pattern = re.compile(r'^(?:\s+(?:public|internal|private)\s+(?:sealed\s+)?(?:partial\s+)?class\s+)(\w+Handler\w*|\w+Executor\w*|\w+Manager\w*|\w+Provider\w*|\w+Service\w*)')
+    class_pattern = re.compile(
+        r"^(?:\s+(?:public|internal|private)\s+(?:sealed\s+)?(?:partial\s+)?class\s+)(\w+Handler\w*|\w+Executor\w*|\w+Manager\w*|\w+Provider\w*|\w+Service\w*)"
+    )
 
     # Well-known FLT component prefixes (always included as baseline)
     baseline = {
-        "LiveTable", "DagExecution", "DagNode", "Catalog",
-        "Lakehouse", "Notebook", "SparkSession", "SQL_QUERY",
-        "FLT", "MLV", "Maintenance", "Schedule", "OneLake",
-        "CatalogSyncHandler", "DeltaTable", "Retention",
+        "LiveTable",
+        "DagExecution",
+        "DagNode",
+        "Catalog",
+        "Lakehouse",
+        "Notebook",
+        "SparkSession",
+        "SQL_QUERY",
+        "FLT",
+        "MLV",
+        "Maintenance",
+        "Schedule",
+        "OneLake",
+        "CatalogSyncHandler",
+        "DeltaTable",
+        "Retention",
     }
     components.update(baseline)
 
@@ -2858,7 +2872,9 @@ def _kill_stale_flt_processes_cli():
         if sys.platform == "win32":
             result = subprocess.run(
                 ["tasklist", "/FI", "IMAGENAME eq Microsoft.LiveTable.Service.EntryPoint.exe", "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             killed = []
             for line in result.stdout.splitlines():
@@ -2873,8 +2889,7 @@ def _kill_stale_flt_processes_cli():
                 except ValueError:
                     continue
                 try:
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                                   capture_output=True, timeout=10)
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=10)
                     killed.append(pid)
                 except Exception:
                     pass
@@ -2882,8 +2897,9 @@ def _kill_stale_flt_processes_cli():
                 print(f"   🧹 Cleaned up {len(killed)} stale FLT process(es): {killed}")
                 time.sleep(1)  # let Windows release port handles
         else:
-            result = subprocess.run(["pgrep", "-f", "Microsoft.LiveTable.Service.EntryPoint"],
-                                    capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                ["pgrep", "-f", "Microsoft.LiveTable.Service.EntryPoint"], capture_output=True, text=True, timeout=10
+            )
             killed = []
             for line in result.stdout.splitlines():
                 try:
@@ -3291,10 +3307,8 @@ def run_daemon(username, workspace_id, artifact_id, capacity_id, repo_root, laun
         else:
             print("\n✅ Code changes applied successfully")
         # Generate dynamic component allowlist for log noise filtering
-        try:
+        with contextlib.suppress(Exception):  # Non-fatal
             scan_flt_components(repo_root)
-        except Exception:
-            pass  # Non-fatal
     else:
         print("   Code patching deferred until authentication completes.")
 

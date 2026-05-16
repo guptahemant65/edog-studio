@@ -36,26 +36,32 @@ def diff_schemas(
 
     changes: list[dict[str, Any]] = []
     for key in left_schemas.keys() - right_schemas.keys():
-        changes.append({
-            "type": "schema-removed",
-            "key": key,
-            "oldValue": left_schemas[key],
-        })
-    for key in right_schemas.keys() - left_schemas.keys():
-        changes.append({
-            "type": "schema-added",
-            "key": key,
-            "newValue": right_schemas[key],
-        })
-    for key in left_schemas.keys() & right_schemas.keys():
-        if left_schemas[key] != right_schemas[key]:
-            changes.append({
-                "type": "schema-modified",
+        changes.append(
+            {
+                "type": "schema-removed",
                 "key": key,
                 "oldValue": left_schemas[key],
+            }
+        )
+    for key in right_schemas.keys() - left_schemas.keys():
+        changes.append(
+            {
+                "type": "schema-added",
+                "key": key,
                 "newValue": right_schemas[key],
-                "subChanges": _diff_one_schema(left_schemas[key], right_schemas[key]),
-            })
+            }
+        )
+    for key in left_schemas.keys() & right_schemas.keys():
+        if left_schemas[key] != right_schemas[key]:
+            changes.append(
+                {
+                    "type": "schema-modified",
+                    "key": key,
+                    "oldValue": left_schemas[key],
+                    "newValue": right_schemas[key],
+                    "subChanges": _diff_one_schema(left_schemas[key], right_schemas[key]),
+                }
+            )
 
     changes.sort(key=lambda c: c["key"])
     return changes
@@ -75,8 +81,7 @@ def _diff_one_schema(
         return []
 
     subs: list[dict[str, Any]] = []
-    subs.extend(_diff_properties(left.get("properties") or {},
-                                 right.get("properties") or {}))
+    subs.extend(_diff_properties(left.get("properties") or {}, right.get("properties") or {}))
     subs.extend(_diff_required(left.get("required"), right.get("required")))
     subs.extend(_diff_type(left.get("type"), right.get("type")))
     subs.extend(_diff_other_fields(left, right))
@@ -91,25 +96,31 @@ def _diff_properties(
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for name in left.keys() - right.keys():
-        out.append({
-            "subType": "property-removed",
-            "detail": name,
-            "oldValue": left[name],
-        })
-    for name in right.keys() - left.keys():
-        out.append({
-            "subType": "property-added",
-            "detail": name,
-            "newValue": right[name],
-        })
-    for name in left.keys() & right.keys():
-        if left[name] != right[name]:
-            out.append({
-                "subType": "property-modified",
+        out.append(
+            {
+                "subType": "property-removed",
                 "detail": name,
                 "oldValue": left[name],
+            }
+        )
+    for name in right.keys() - left.keys():
+        out.append(
+            {
+                "subType": "property-added",
+                "detail": name,
                 "newValue": right[name],
-            })
+            }
+        )
+    for name in left.keys() & right.keys():
+        if left[name] != right[name]:
+            out.append(
+                {
+                    "subType": "property-modified",
+                    "detail": name,
+                    "oldValue": left[name],
+                    "newValue": right[name],
+                }
+            )
     return out
 
 

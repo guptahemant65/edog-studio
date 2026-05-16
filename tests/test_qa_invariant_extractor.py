@@ -12,16 +12,13 @@ They also pin a small behavioral contract — the dispatcher in
 listed in the CodeInvariant XML doc so a new kind cannot ship without
 its rendering.
 """
+
 import re
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-EXTRACTOR = (
-    PROJECT_DIR / "src" / "backend" / "DevMode" / "EdogQaInvariantExtractor.cs"
-)
-ANALYZER = (
-    PROJECT_DIR / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs"
-)
+EXTRACTOR = PROJECT_DIR / "src" / "backend" / "DevMode" / "EdogQaInvariantExtractor.cs"
+ANALYZER = PROJECT_DIR / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs"
 
 
 def _read(path: Path) -> str:
@@ -152,9 +149,7 @@ def test_render_for_prompt_dispatches_every_kind():
     suppresses the rich symbol/value formatting — this guard makes the
     omission visible at PR review time."""
     src = _read(EXTRACTOR)
-    render_block = src.split("RenderForPrompt", 1)[1].split(
-        "// ──────────", 1
-    )[0]
+    render_block = src.split("RenderForPrompt", 1)[1].split("// ──────────", 1)[0]
     for kind in EXPECTED_KINDS:
         assert f'case "{kind}"' in render_block, f"render dispatch missing for: {kind}"
 

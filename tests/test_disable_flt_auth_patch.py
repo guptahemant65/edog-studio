@@ -51,21 +51,10 @@ CURRENT_LAYOUT = (
 )
 
 ARRAY_TAIL_LAYOUT = (
-    "{\n"
-    '  "parameters": {\n'
-    '    "FirstPartyAcceptedAudiences": [ "f10a234d-51d4-434e-9324-0553112ff091" ]\n'
-    "  }\n"
-    "}\n"
+    '{\n  "parameters": {\n    "FirstPartyAcceptedAudiences": [ "f10a234d-51d4-434e-9324-0553112ff091" ]\n  }\n}\n'
 )
 
-ALREADY_APPLIED = (
-    "{\n"
-    '  "parameters": {\n'
-    '    "IsSwaggerEnabled": true,\n'
-    '    "DisableFLTAuth": true\n'
-    "  }\n"
-    "}\n"
-)
+ALREADY_APPLIED = '{\n  "parameters": {\n    "IsSwaggerEnabled": true,\n    "DisableFLTAuth": true\n  }\n}\n'
 
 MALFORMED = "not a json object at all"
 
@@ -144,6 +133,7 @@ class TestProducedJsonValid:
 
     def test_legacy_layout_yields_parseable_json(self):
         import json
+
         new, _ = edog.apply_disable_flt_auth_test_json(LEGACY_LAYOUT)
         parsed = json.loads(new)
         params = parsed["parameters"]
@@ -152,6 +142,7 @@ class TestProducedJsonValid:
 
     def test_current_layout_yields_parseable_json(self):
         import json
+
         new, _ = edog.apply_disable_flt_auth_test_json(CURRENT_LAYOUT)
         parsed = json.loads(new)
         params = parsed["parameters"]

@@ -7,6 +7,7 @@ Covers:
     present and start empty, otherwise the topbar banner and `/api/edog/patch-warnings`
     endpoint will crash on first read.
 """
+
 import importlib.util
 import sys
 from pathlib import Path

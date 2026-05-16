@@ -46,8 +46,7 @@ def load_baseline(path: Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     try:
         stat = path.stat()
     except OSError as exc:
-        return None, {"exists": True, "savedAt": None, "size": None,
-                      "error": f"stat-failed: {exc}"}
+        return None, {"exists": True, "savedAt": None, "size": None, "error": f"stat-failed: {exc}"}
 
     size = stat.st_size
     saved_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
@@ -60,23 +59,24 @@ def load_baseline(path: Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
-        return None, {"exists": True, "savedAt": saved_at, "size": size,
-                      "error": f"read-failed: {exc}"}
+        return None, {"exists": True, "savedAt": saved_at, "size": size, "error": f"read-failed: {exc}"}
 
     try:
         spec = json.loads(text)
     except json.JSONDecodeError as exc:
-        return None, {"exists": True, "savedAt": saved_at, "size": size,
-                      "error": f"baseline-corrupt: {exc}"}
+        return None, {"exists": True, "savedAt": saved_at, "size": size, "error": f"baseline-corrupt: {exc}"}
 
     if not isinstance(spec, dict):
-        return None, {"exists": True, "savedAt": saved_at, "size": size,
-                      "error": "baseline-corrupt: top level is not an object"}
+        return None, {
+            "exists": True,
+            "savedAt": saved_at,
+            "size": size,
+            "error": "baseline-corrupt: top level is not an object",
+        }
 
     # An empty object ``{}`` is the seed placeholder — same UX as missing.
     if not spec:
-        return None, {"exists": True, "savedAt": saved_at, "size": size,
-                      "error": None}
+        return None, {"exists": True, "savedAt": saved_at, "size": size, "error": None}
 
     return spec, {"exists": True, "savedAt": saved_at, "size": size, "error": None}
 

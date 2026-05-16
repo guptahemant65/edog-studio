@@ -3,6 +3,7 @@
 These tests target pure functions in scripts/dev-server.py with no urllib
 dependency. The full dispatcher (with mocked urlopen) is tested separately.
 """
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -62,7 +63,7 @@ def test_sanitize_strips_denylist_silently(srv):
 
 def test_sanitize_preserves_allowed_custom(srv):
     raw = {
-        "If-Match": "\"etag123\"",
+        "If-Match": '"etag123"',
         "Prefer": "respond-async",
         "x-ms-client-request-id": "req-1",
         "Accept-Language": "en-US",

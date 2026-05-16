@@ -24,11 +24,13 @@ Typical call:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import ssl
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 SWAGGER_RELATIVE_PATH = "/swagger/v1/swagger.json"
 WORKLOAD_NAME = "LiveTable"
@@ -65,9 +67,7 @@ def _default_http_get_json(url: str, headers: dict, timeout: float = 30.0) -> tu
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         body = resp.read(MAX_SWAGGER_BYTES + 1)
         if len(body) > MAX_SWAGGER_BYTES:
-            raise ValueError(
-                f"Swagger response exceeds {MAX_SWAGGER_BYTES} bytes — refusing to load"
-            )
+            raise ValueError(f"Swagger response exceeds {MAX_SWAGGER_BYTES} bytes — refusing to load")
         return body, resp.status, dict(resp.headers.items())
 
 
@@ -121,7 +121,7 @@ def fetch_runtime_swagger(
 
     try:
         mwc_token, host = token_provider(bearer, ws_id, art_id, cap_id)
-    except Exception as exc:  # noqa: BLE001 — surface as structured error
+    except Exception as exc:
         return None, {
             "error": "mwc-token-failed",
             "message": str(exc),
@@ -142,10 +142,8 @@ def fetch_runtime_swagger(
         }
     except urllib.error.HTTPError as exc:
         err_body = ""
-        try:
+        with contextlib.suppress(Exception):
             err_body = exc.read().decode("utf-8", errors="replace")[:500]
-        except Exception:
-            pass
         return None, {
             "error": "spec-http-error",
             "message": f"swagger endpoint returned {exc.code}: {exc.reason}",

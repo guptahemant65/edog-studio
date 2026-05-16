@@ -140,9 +140,7 @@ class TestNetworkErrors:
 
     def test_http_500_returns_spec_http_error(self):
         def fail(*_args, **_kwargs):
-            raise urllib.error.HTTPError(
-                "url", 500, "Internal Server Error", {}, io.BytesIO(b"boom")
-            )
+            raise urllib.error.HTTPError("url", 500, "Internal Server Error", {}, io.BytesIO(b"boom"))
 
         doc, err = fetch_runtime_swagger(
             bearer="ey",

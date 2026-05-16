@@ -9,6 +9,7 @@ Proxy strategy (per docs/fabric-api-reference.md):
 import base64
 import contextlib
 import json
+import logging
 import os
 import re
 import ssl
@@ -47,6 +48,8 @@ MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
 
+logger = logging.getLogger(__name__)
+
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
 
 # In-memory MWC token cache — keyed by "ws:lh:cap" composite
@@ -74,10 +77,11 @@ _playground_catalog_lock = threading.Lock()
 def _get_flt_repo_dir() -> str:
     """Return configured flt_repo_path or empty string. Module-level so tests can patch."""
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
             return (json.load(f).get("flt_repo_path") or "").strip()
     except Exception:
         return ""
+
 
 # ── F09 API Playground header-forwarding policy ──────────────────────────
 # Denylist for headers the playground UI is NOT allowed to forward to upstream
@@ -87,15 +91,34 @@ def _get_flt_repo_dir() -> str:
 #   - framing: re-emitted by urllib from the actual body it sends
 #   - browser pollution: irrelevant or rejected by upstream
 #   - cookies: cross-context session leak risk
-_PLAYGROUND_HEADER_DENYLIST = frozenset({
-    "authorization", "proxy-authorization", "proxy-authenticate",
-    "connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade",
-    "host", "content-length",
-    "origin", "referer", "user-agent", "accept-encoding",
-    "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user",
-    "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform",
-    "cookie", "set-cookie",
-})
+_PLAYGROUND_HEADER_DENYLIST = frozenset(
+    {
+        "authorization",
+        "proxy-authorization",
+        "proxy-authenticate",
+        "connection",
+        "keep-alive",
+        "transfer-encoding",
+        "te",
+        "trailer",
+        "upgrade",
+        "host",
+        "content-length",
+        "origin",
+        "referer",
+        "user-agent",
+        "accept-encoding",
+        "sec-fetch-site",
+        "sec-fetch-mode",
+        "sec-fetch-dest",
+        "sec-fetch-user",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+        "cookie",
+        "set-cookie",
+    }
+)
 
 # RFC 7230 token grammar (header field names). Tightened slightly: no leading/trailing dot.
 _PLAYGROUND_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
@@ -113,7 +136,9 @@ _PLAYGROUND_MAX_TIMEOUT = 60
 _PLAYGROUND_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE"})
 _PLAYGROUND_BEARER_PATH_PREFIXES = ("/v1/", "/v1.0/", "/metadata/", "/workspaces")
 _PLAYGROUND_MWC_PATH_PREFIXES = (
-    "/liveTable", "/liveTableSchedule", "/liveTableMaintanance",
+    "/liveTable",
+    "/liveTableSchedule",
+    "/liveTableMaintanance",
 )
 
 # ── Azure OpenAI Proxy Config ────────────────────────────────────────────
@@ -124,8 +149,14 @@ def _load_openai_config() -> dict:
     """Load Azure OpenAI config from env vars or local .env file."""
     endpoint = os.environ.get("AZURE_OPENAI_PRO_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT")
     api_key = os.environ.get("AZURE_OPENAI_PRO_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY")
-    api_version = os.environ.get("AZURE_OPENAI_PRO_API_VERSION") or os.environ.get("AZURE_OPENAI_API_VERSION") or "2025-04-01-preview"
-    deployment = os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4-pro"
+    api_version = (
+        os.environ.get("AZURE_OPENAI_PRO_API_VERSION")
+        or os.environ.get("AZURE_OPENAI_API_VERSION")
+        or "2025-04-01-preview"
+    )
+    deployment = (
+        os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4-pro"
+    )
 
     if not endpoint or not api_key:
         # Load from .env in project root
@@ -142,8 +173,12 @@ def _load_openai_config() -> dict:
                 endpoint = env_vars.get("AZURE_OPENAI_PRO_ENDPOINT") or env_vars.get("AZURE_OPENAI_ENDPOINT")
             if not api_key:
                 api_key = env_vars.get("AZURE_OPENAI_PRO_API_KEY") or env_vars.get("AZURE_OPENAI_API_KEY")
-            api_version = env_vars.get("AZURE_OPENAI_PRO_API_VERSION") or env_vars.get("AZURE_OPENAI_API_VERSION") or api_version
-            deployment = env_vars.get("AZURE_OPENAI_PRO_DEPLOYMENT") or env_vars.get("AZURE_OPENAI_DEPLOYMENT") or deployment
+            api_version = (
+                env_vars.get("AZURE_OPENAI_PRO_API_VERSION") or env_vars.get("AZURE_OPENAI_API_VERSION") or api_version
+            )
+            deployment = (
+                env_vars.get("AZURE_OPENAI_PRO_DEPLOYMENT") or env_vars.get("AZURE_OPENAI_DEPLOYMENT") or deployment
+            )
 
     if endpoint and api_key:
         return {"endpoint": endpoint, "api_key": api_key, "api_version": api_version, "deployment": deployment}
@@ -531,7 +566,10 @@ def _get_ado_token() -> str:
         # Refresh inside the lock to prevent stampede
         result = subprocess.run(
             ["az", "account", "get-access-token", "--resource", ADO_RESOURCE_ID, "--query", "accessToken", "-o", "tsv"],
-            capture_output=True, text=True, timeout=30, shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            shell=True,
         )
         if result.returncode != 0:
             raise RuntimeError(f"az CLI failed: {result.stderr.strip()}")
@@ -552,6 +590,7 @@ def _parse_ado_pr_url(pr_url: str) -> dict:
     """
     global _ADO_PR_URL_RE
     import re
+
     if _ADO_PR_URL_RE is None:
         _ADO_PR_URL_RE = re.compile(
             r"https?://dev\.azure\.com/(?P<org>[^/]+)/(?P<project>[^/]+)/"
@@ -570,10 +609,13 @@ def _parse_ado_pr_url(pr_url: str) -> dict:
 
 def _ado_api_get(token: str, url: str) -> dict | str:
     """Call an ADO REST API endpoint. Returns parsed JSON or raw text."""
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/json",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+        },
+    )
     ctx = ssl.create_default_context()
     with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
         content_type = resp.headers.get("Content-Type", "")
@@ -585,10 +627,13 @@ def _ado_api_get(token: str, url: str) -> dict | str:
 
 def _ado_api_get_text(token: str, url: str) -> str:
     """Call an ADO REST API endpoint expecting raw text (file content)."""
-    req = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "text/plain",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "text/plain",
+        },
+    )
     ctx = ssl.create_default_context()
     with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
         raw = resp.read()
@@ -638,7 +683,22 @@ def _fetch_pr_diff(pr_url: str) -> dict:
     # 4. Build unified diff for each file
     MAX_FILES = 50
     MAX_FILE_BYTES = 200_000
-    SKIP_EXTENSIONS = {".dll", ".exe", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".zip", ".nupkg", ".snk"}
+    SKIP_EXTENSIONS = {
+        ".dll",
+        ".exe",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".zip",
+        ".nupkg",
+        ".snk",
+    }
 
     diff_parts = []
     skipped = []
@@ -716,7 +776,9 @@ def _fetch_pr_diff(pr_url: str) -> dict:
         base_lines = base_content.splitlines(keepends=True)
         target_lines = target_content.splitlines(keepends=True)
 
-        file_diff = list(difflib.unified_diff(base_lines, target_lines, fromfile=from_file, tofile=to_file, lineterm="\n"))
+        file_diff = list(
+            difflib.unified_diff(base_lines, target_lines, fromfile=from_file, tofile=to_file, lineterm="\n")
+        )
         if file_diff:
             diff_parts.append("".join(file_diff))
             for line in file_diff:
@@ -778,12 +840,15 @@ _PRIOR_TEST_METHOD_LIMIT = 60
 
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _HTML_ENTITY_MAP = {
-    "&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">",
-    "&quot;": '"', "&#39;": "'", "&apos;": "'",
+    "&nbsp;": " ",
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&apos;": "'",
 }
-_MD_URL_RE = re.compile(
-    r"https?://[^\s)\"'<>]+\.md(?:[?#][^\s)\"'<>]*)?", re.IGNORECASE
-)
+_MD_URL_RE = re.compile(r"https?://[^\s)\"'<>]+\.md(?:[?#][^\s)\"'<>]*)?", re.IGNORECASE)
 _TEST_METHOD_SIG_RE = re.compile(
     r"\[TestMethod[\s\S]{0,200}?\]\s*(?:\[[^\]]+\]\s*)*"
     r"public\s+(?:async\s+)?(?:Task|void|ValueTask)\s+(\w+)\s*\(",
@@ -804,9 +869,7 @@ def _strip_html(text: str) -> str:
     return plain.strip()
 
 
-def _collect_pr_context_extras(
-    token: str, base_url: str, pr_data: dict, change_entries: list
-) -> dict:
+def _collect_pr_context_extras(token: str, base_url: str, pr_data: dict, change_entries: list) -> dict:
     """Best-effort PR context for F27 LLM scenario generation.
 
     Returns a dict with: description, workItems, linkedSpecExcerpts,
@@ -831,9 +894,7 @@ def _collect_pr_context_extras(
     raw_desc = (pr_data.get("description") or "").strip()
     extras["description"] = raw_desc[:_PR_DESCRIPTION_MAX]
     if len(raw_desc) > _PR_DESCRIPTION_MAX:
-        extras["extrasWarnings"].append(
-            f"description_truncated_from_{len(raw_desc)}_chars"
-        )
+        extras["extrasWarnings"].append(f"description_truncated_from_{len(raw_desc)}_chars")
 
     # 2) Work-item acceptance criteria.
     wi_refs = pr_data.get("workItemRefs") or []
@@ -852,18 +913,18 @@ def _collect_pr_context_extras(
             )
             wi_data = _ado_api_get(token, wi_url)
             fields = wi_data.get("fields", {}) if isinstance(wi_data, dict) else {}
-            ac = _strip_html(
-                fields.get("Microsoft.VSTS.Common.AcceptanceCriteria", "")
-            )
+            ac = _strip_html(fields.get("Microsoft.VSTS.Common.AcceptanceCriteria", ""))
             desc = _strip_html(fields.get("System.Description", ""))
-            extras["workItems"].append({
-                "id": wi_id,
-                "title": fields.get("System.Title", ""),
-                "state": fields.get("System.State", ""),
-                "acceptanceCriteria": ac[:_WI_AC_MAX_CHARS],
-                "descriptionSnippet": desc[:_WI_DESC_MAX_CHARS],
-            })
-        except Exception as exc:  # noqa: BLE001 — best-effort
+            extras["workItems"].append(
+                {
+                    "id": wi_id,
+                    "title": fields.get("System.Title", ""),
+                    "state": fields.get("System.State", ""),
+                    "acceptanceCriteria": ac[:_WI_AC_MAX_CHARS],
+                    "descriptionSnippet": desc[:_WI_DESC_MAX_CHARS],
+                }
+            )
+        except Exception as exc:
             extras["extrasWarnings"].append(f"wi_{wi_id}_fetch_failed: {exc}")
 
     # 3) Linked spec excerpts — only ADO-hosted .md URLs are auth-reachable.
@@ -881,22 +942,22 @@ def _collect_pr_context_extras(
             try:
                 content = _ado_api_get_text(token, url)
                 if content:
-                    extras["linkedSpecExcerpts"].append({
-                        "url": url,
-                        "content": content[:_SPEC_EXCERPT_MAX_CHARS],
-                    })
-            except Exception as exc:  # noqa: BLE001
-                extras["extrasWarnings"].append(
-                    f"spec_fetch_failed_{url[:80]}: {exc}"
-                )
-    except Exception as exc:  # noqa: BLE001
+                    extras["linkedSpecExcerpts"].append(
+                        {
+                            "url": url,
+                            "content": content[:_SPEC_EXCERPT_MAX_CHARS],
+                        }
+                    )
+            except Exception as exc:
+                extras["extrasWarnings"].append(f"spec_fetch_failed_{url[:80]}: {exc}")
+    except Exception as exc:
         extras["extrasWarnings"].append(f"linkedSpecs_failed: {exc}")
 
     # 4) FLT API catalog filtered to changed controllers; 5) prior tests.
     flt_repo_path = ""
     try:
         flt_repo_path = _get_flt_repo_dir()
-    except Exception:  # noqa: BLE001
+    except Exception:
         flt_repo_path = ""
 
     changed_controllers: set = set()
@@ -911,17 +972,14 @@ def _collect_pr_context_extras(
         try:
             catalog = extract_catalog(flt_repo_path)
             endpoints = catalog.get("endpoints", []) if isinstance(catalog, dict) else []
-            filtered = [
-                ep for ep in endpoints
-                if ep.get("controller") in changed_controllers
-            ]
+            filtered = [ep for ep in endpoints if ep.get("controller") in changed_controllers]
             if filtered:
                 extras["apiCatalog"] = {
                     "controllers": sorted(changed_controllers),
                     "endpoints": filtered[:_CATALOG_ENDPOINT_LIMIT],
                     "truncated": len(filtered) > _CATALOG_ENDPOINT_LIMIT,
                 }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             extras["extrasWarnings"].append(f"catalog_failed: {exc}")
 
         try:
@@ -935,23 +993,21 @@ def _collect_pr_context_extras(
                             methods = _TEST_METHOD_SIG_RE.findall(text)
                             if methods:
                                 rel = hit.relative_to(flt_repo_path).as_posix()
-                                extras["priorTests"].append({
-                                    "file": rel,
-                                    "controller": ctrl,
-                                    "methods": methods[:_PRIOR_TEST_METHOD_LIMIT],
-                                    "totalMethods": len(methods),
-                                })
-                        except Exception as exc:  # noqa: BLE001
-                            extras["extrasWarnings"].append(
-                                f"prior_test_read_failed_{hit.name}: {exc}"
-                            )
+                                extras["priorTests"].append(
+                                    {
+                                        "file": rel,
+                                        "controller": ctrl,
+                                        "methods": methods[:_PRIOR_TEST_METHOD_LIMIT],
+                                        "totalMethods": len(methods),
+                                    }
+                                )
+                        except Exception as exc:
+                            extras["extrasWarnings"].append(f"prior_test_read_failed_{hit.name}: {exc}")
                         break  # one canonical test file per controller
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             extras["extrasWarnings"].append(f"prior_tests_failed: {exc}")
     elif changed_controllers and not flt_repo_path:
-        extras["extrasWarnings"].append(
-            "catalog_and_prior_tests_skipped: flt_repo_path_not_configured"
-        )
+        extras["extrasWarnings"].append("catalog_and_prior_tests_skipped: flt_repo_path_not_configured")
 
     return extras
 
@@ -1283,7 +1339,9 @@ def _kill_stale_flt_processes(keep_pid=None, deploy_id=None):
         if sys.platform == "win32":
             result = subprocess.run(
                 ["tasklist", "/FI", "IMAGENAME eq Microsoft.LiveTable.Service.EntryPoint.exe", "/FO", "CSV", "/NH"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             for line in result.stdout.splitlines():
                 line = line.strip()
@@ -1299,14 +1357,14 @@ def _kill_stale_flt_processes(keep_pid=None, deploy_id=None):
                 if keep_pid is not None and pid == keep_pid:
                     continue
                 try:
-                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
-                                   capture_output=True, timeout=10)
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True, timeout=10)
                     killed.append((pid, "stale FLT EntryPoint"))
                 except Exception as e:
                     print(f"[zombie-sweep] Failed to kill PID {pid}: {e}", file=sys.stderr)
         else:
-            result = subprocess.run(["pgrep", "-f", "Microsoft.LiveTable.Service.EntryPoint"],
-                                    capture_output=True, text=True, timeout=10)
+            result = subprocess.run(
+                ["pgrep", "-f", "Microsoft.LiveTable.Service.EntryPoint"], capture_output=True, text=True, timeout=10
+            )
             for line in result.stdout.splitlines():
                 try:
                     pid = int(line.strip())
@@ -1551,6 +1609,7 @@ def _cleanup_devmode_token():
         sys.path.insert(0, str(PROJECT_DIR))
         try:
             from edog import get_workload_dev_mode_path
+
             devmode_path = get_workload_dev_mode_path(flt_repo)
         finally:
             if str(PROJECT_DIR) in sys.path:
@@ -1623,13 +1682,14 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                     sys.path.insert(0, str(PROJECT_DIR))
                     try:
                         from edog import get_workload_dev_mode_path
+
                         wdm_path = get_workload_dev_mode_path(flt_repo)
                         if wdm_path and Path(wdm_path).exists():
                             wdm = json.loads(Path(wdm_path).read_text())
                             if wdm.get("CapacityGuid", "").lower() != cap_id.lower():
                                 wdm["CapacityGuid"] = cap_id
                                 _atomic_write(Path(wdm_path), json.dumps(wdm, indent=4))
-                                _deploy_log(f"Synced CapacityGuid in workload-dev-mode.json", "success")
+                                _deploy_log("Synced CapacityGuid in workload-dev-mode.json", "success")
                     except Exception as e:
                         _deploy_log(f"Could not sync CapacityGuid: {e}", "warn")
                     finally:
@@ -2207,9 +2267,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         print(f"  [ADO] Fetching PR diff: {pr_url}")
         try:
             result = _fetch_pr_diff(pr_url)
-            print(f"  [ADO] PR #{result['prId']}: {result['filesDiffed']} files diffed, "
-                  f"+{result['linesAdded']}/-{result['linesRemoved']}, "
-                  f"{len(result['diff'])} chars")
+            print(
+                f"  [ADO] PR #{result['prId']}: {result['filesDiffed']} files diffed, "
+                f"+{result['linesAdded']}/-{result['linesRemoved']}, "
+                f"{len(result['diff'])} chars"
+            )
             if result["skippedFiles"]:
                 print(f"  [ADO] Skipped: {[s['path'] for s in result['skippedFiles']]}")
             self._json_response(200, result)
@@ -2219,7 +2281,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(502, {"error": "ado_api_error", "message": str(e)})
         except urllib.error.HTTPError as e:
             status = 502 if e.code >= 500 else (401 if e.code in (401, 403) else 502)
-            self._json_response(status, {"error": f"ado_http_{e.code}", "message": f"ADO returned {e.code}: {e.reason}"})
+            self._json_response(
+                status, {"error": f"ado_http_{e.code}", "message": f"ADO returned {e.code}: {e.reason}"}
+            )
         except urllib.error.URLError as e:
             self._json_response(502, {"error": "ado_unreachable", "message": f"Cannot reach ADO: {e.reason}"})
         except subprocess.TimeoutExpired:
@@ -2241,8 +2305,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if not _openai_config:
             _openai_config = _load_openai_config()
         if not _openai_config:
-            self._json_response(503, {"error": "openai_not_configured",
-                                      "message": "Azure OpenAI credentials not found in env or donna-app/.env"})
+            self._json_response(
+                503,
+                {
+                    "error": "openai_not_configured",
+                    "message": "Azure OpenAI credentials not found in env or donna-app/.env",
+                },
+            )
             return
 
         content_length = int(self.headers.get("Content-Length", 0))
@@ -2286,7 +2355,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         print(f"  [OpenAI] Proxying via Responses API → {cfg['endpoint']} / {cfg['deployment']}")
         req = urllib.request.Request(
-            url, data=out_body, method="POST",
+            url,
+            data=out_body,
+            method="POST",
             headers={"Content-Type": "application/json", "api-key": cfg["api_key"]},
         )
         try:
@@ -2310,11 +2381,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "id": resp_data.get("id", ""),
                 "object": "chat.completion",
                 "model": resp_data.get("model", cfg["deployment"]),
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": content_text},
-                    "finish_reason": "stop",
-                }],
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {"role": "assistant", "content": content_text},
+                        "finish_reason": "stop",
+                    }
+                ],
                 "usage": {
                     "prompt_tokens": usage.get("input_tokens", 0),
                     "completion_tokens": usage.get("output_tokens", 0),
@@ -2431,23 +2504,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             cmd.extend(["--body", "(No description provided)"])
 
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=15
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
             if result.returncode == 0:
                 url = result.stdout.strip()
                 # Extract issue number from URL like https://github.com/.../issues/42
                 issue_number = None
                 if "/issues/" in url:
-                    try:
+                    with contextlib.suppress(ValueError, IndexError):
                         issue_number = int(url.rsplit("/issues/", 1)[1])
-                    except (ValueError, IndexError):
-                        pass
-                self._json_response(200, {
-                    "ok": True,
-                    "issueUrl": url,
-                    "issueNumber": issue_number,
-                })
+                self._json_response(
+                    200,
+                    {
+                        "ok": True,
+                        "issueUrl": url,
+                        "issueNumber": issue_number,
+                    },
+                )
             else:
                 logger.warning("gh issue create failed: %s", result.stderr)
                 self._json_response(502, {"error": "gh issue create failed", "detail": result.stderr.strip()})
@@ -2849,7 +2921,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         # Strip /api/flt-proxy prefix to get the controller-relative path
         flt_path = self.path
         if flt_path.startswith("/api/flt-proxy/"):
-            flt_path = flt_path[len("/api/flt-proxy"):]
+            flt_path = flt_path[len("/api/flt-proxy") :]
 
         try:
             mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id)
@@ -2891,10 +2963,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(resp_body)
         except urllib.error.HTTPError as e:
             err_body = ""
-            try:
+            with contextlib.suppress(Exception):
                 err_body = e.read().decode("utf-8", errors="replace")[:500]
-            except Exception:
-                pass
             self._json_response(e.code, {"error": "flt_proxy_error", "message": str(e), "detail": err_body})
         except Exception as e:
             self._json_response(502, {"error": "flt_proxy_error", "message": str(e)})
@@ -3031,7 +3101,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         bearer, _ = _read_cache(BEARER_CACHE)
 
         runtime_spec, err = _fetch_runtime_swagger(
-            bearer, ws_id, art_id, cap_id, token_provider=_get_mwc_token,
+            bearer,
+            ws_id,
+            art_id,
+            cap_id,
+            token_provider=_get_mwc_token,
         )
         if err is not None:
             status = err.pop("status", 502)
@@ -3059,7 +3133,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         """
         VENDOR_ROOT = (Path(__file__).parent / "vendor").resolve()
         # Strip the /vendor/ prefix and any query/fragment.
-        rel = self.path[len("/vendor/"):].split("?", 1)[0].split("#", 1)[0]
+        rel = self.path[len("/vendor/") :].split("?", 1)[0].split("#", 1)[0]
         # Reject empty paths and obvious traversal attempts up-front.
         if not rel or ".." in rel.replace("\\", "/").split("/"):
             self._json_response(400, {"error": "bad_path", "message": "Invalid vendor path"})
@@ -3296,10 +3370,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 </head>
 <body>
 <div class="edog-banner">
-  <span class="mark">\u25C6</span>
+  <span class="mark">\u25c6</span>
   <span class="title">FLT API \u2014 Reference</span>
   <span class="sep"></span>
-  <span class="meta">Served by EDOG Studio \u00B7 powered by Scalar</span>
+  <span class="meta">Served by EDOG Studio \u00b7 powered by Scalar</span>
   <span class="spacer"></span>
   <div class="mode-toggle" role="tablist">
     <button id="mode-ui" class="active" role="tab" aria-selected="true">Reference</button>
@@ -3388,7 +3462,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     var sz = new Blob([JSON.stringify(loadedSpec)]).size;
     var kb = (sz / 1024).toFixed(1);
     var v = (loadedSpec.info && loadedSpec.info.version) ? loadedSpec.info.version : '';
-    info.textContent = kb + ' KB' + (v ? ' \u00B7 v' + v : '');
+    info.textContent = kb + ' KB' + (v ? ' \u00b7 v' + v : '');
   }
 
   document.getElementById('json-copy').addEventListener('click', function() {
@@ -3533,7 +3607,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         bearer, _ = _read_cache(BEARER_CACHE)
 
         runtime_spec, err = _fetch_runtime_swagger(
-            bearer, ws_id, art_id, cap_id, token_provider=_get_mwc_token,
+            bearer,
+            ws_id,
+            art_id,
+            cap_id,
+            token_provider=_get_mwc_token,
         )
         if err is not None:
             status = err.pop("status", 502)
@@ -3545,15 +3623,18 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if baseline_path is None:
             # Repo not configured: surface a soft "no baseline" state so
             # the frontend renders the configure-CTA, not a hard error.
-            self._json_response(200, {
-                "runtime": runtime_spec,
-                "baselineExists": False,
-                "baselineSavedAt": None,
-                "baselineError": path_err.get("error"),
-                "baselinePath": None,
-                "baselineSource": "flt-repo",
-                "diff": None,
-            })
+            self._json_response(
+                200,
+                {
+                    "runtime": runtime_spec,
+                    "baselineExists": False,
+                    "baselineSavedAt": None,
+                    "baselineError": path_err.get("error"),
+                    "baselinePath": None,
+                    "baselineSource": "flt-repo",
+                    "diff": None,
+                },
+            )
             return
 
         baseline_spec, baseline_meta = _load_swagger_baseline(baseline_path)
@@ -3565,26 +3646,32 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 runtime_norm = _normalize_swagger(runtime_spec)
                 diff_payload = _build_swagger_diff_payload(baseline_norm, runtime_norm)
             except (ValueError, KeyError, TypeError) as exc:
-                self._json_response(500, {
-                    "error": "diff-failed",
-                    "message": f"normalize/diff raised: {exc}",
-                    "runtime": runtime_spec,
-                    "baselineExists": True,
-                    "baselineSavedAt": baseline_meta.get("savedAt"),
-                    "baselinePath": str(baseline_path),
-                    "baselineSource": "flt-repo",
-                })
+                self._json_response(
+                    500,
+                    {
+                        "error": "diff-failed",
+                        "message": f"normalize/diff raised: {exc}",
+                        "runtime": runtime_spec,
+                        "baselineExists": True,
+                        "baselineSavedAt": baseline_meta.get("savedAt"),
+                        "baselinePath": str(baseline_path),
+                        "baselineSource": "flt-repo",
+                    },
+                )
                 return
 
-        self._json_response(200, {
-            "runtime": runtime_spec,
-            "baselineExists": baseline_meta.get("exists", False),
-            "baselineSavedAt": baseline_meta.get("savedAt"),
-            "baselineError": baseline_meta.get("error"),
-            "baselinePath": str(baseline_path),
-            "baselineSource": "flt-repo",
-            "diff": diff_payload,
-        })
+        self._json_response(
+            200,
+            {
+                "runtime": runtime_spec,
+                "baselineExists": baseline_meta.get("exists", False),
+                "baselineSavedAt": baseline_meta.get("savedAt"),
+                "baselineError": baseline_meta.get("error"),
+                "baselinePath": str(baseline_path),
+                "baselineSource": "flt-repo",
+                "diff": diff_payload,
+            },
+        )
 
     def _serve_swagger_baseline_get(self):
         """F09 SF-011: GET /api/playground/swagger/baseline.
@@ -3595,14 +3682,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         """
         baseline_path, path_err = self._resolve_swagger_baseline_path()
         if baseline_path is None:
-            self._json_response(200, {
-                "exists": False,
-                "savedAt": None,
-                "size": None,
-                "error": path_err.get("error"),
-                "path": None,
-                "source": "flt-repo",
-            })
+            self._json_response(
+                200,
+                {
+                    "exists": False,
+                    "savedAt": None,
+                    "size": None,
+                    "error": path_err.get("error"),
+                    "path": None,
+                    "source": "flt-repo",
+                },
+            )
             return
         _, meta = _load_swagger_baseline(baseline_path)
         meta["path"] = str(baseline_path)
@@ -3629,7 +3719,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         bearer, _ = _read_cache(BEARER_CACHE)
 
         spec, err = _fetch_runtime_swagger(
-            bearer, ws_id, art_id, cap_id, token_provider=_get_mwc_token,
+            bearer,
+            ws_id,
+            art_id,
+            cap_id,
+            token_provider=_get_mwc_token,
         )
         if err is not None:
             status = err.pop("status", 502)
@@ -3639,10 +3733,13 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             meta = _save_swagger_baseline(baseline_path, spec)
         except (OSError, TypeError) as exc:
-            self._json_response(500, {
-                "error": "baseline-save-failed",
-                "message": str(exc),
-            })
+            self._json_response(
+                500,
+                {
+                    "error": "baseline-save-failed",
+                    "message": str(exc),
+                },
+            )
             return
 
         meta["path"] = str(baseline_path)
@@ -3663,16 +3760,22 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             removed = _remove_swagger_baseline(baseline_path)
         except OSError as exc:
-            self._json_response(500, {
-                "error": "baseline-delete-failed",
-                "message": str(exc),
-            })
+            self._json_response(
+                500,
+                {
+                    "error": "baseline-delete-failed",
+                    "message": str(exc),
+                },
+            )
             return
-        self._json_response(200, {
-            "removed": removed,
-            "path": str(baseline_path),
-            "source": "flt-repo",
-        })
+        self._json_response(
+            200,
+            {
+                "removed": removed,
+                "path": str(baseline_path),
+                "source": "flt-repo",
+            },
+        )
 
     def _serve_playground_dispatch(self):
         """Dispatcher for the F09 API Playground with custom header forwarding.
@@ -3818,7 +3921,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             "bodySize": len(upstream_body),
             "truncated": truncated,
         }
-        print(f"[PLAYGROUND] {token_type} {method} {path} -> {upstream_status} ({duration_ms}ms, {len(upstream_body)}B)")
+        print(
+            f"[PLAYGROUND] {token_type} {method} {path} -> {upstream_status} ({duration_ms}ms, {len(upstream_body)}B)"
+        )
         self._json_response(200, envelope_out)
 
     def _serve_certs(self):

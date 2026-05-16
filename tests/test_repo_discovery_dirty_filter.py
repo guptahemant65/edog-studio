@@ -34,7 +34,9 @@ def fake_flt_repo(tmp_path: Path) -> Path:
     """Minimal repo with FLT marker layout + an initial commit."""
     repo = tmp_path / "flt"
     (repo / "Service" / "Microsoft.LiveTable.Service" / "DevMode").mkdir(parents=True)
-    (repo / "Service" / "Microsoft.LiveTable.Service.EntryPoint" / "WorkloadParameters" / "Rollouts").mkdir(parents=True)
+    (repo / "Service" / "Microsoft.LiveTable.Service.EntryPoint" / "WorkloadParameters" / "Rollouts").mkdir(
+        parents=True
+    )
     workload_app = repo / "Service" / "Microsoft.LiveTable.Service" / "WorkloadApp.cs"
     workload_app.write_text("// original\n", encoding="utf-8")
     user_file = repo / "Service" / "Microsoft.LiveTable.Service" / "Controllers.cs"
@@ -69,22 +71,16 @@ def test_parse_porcelain_path_too_short():
 
 
 def test_is_edog_managed_devmode_dir():
-    assert repo_discovery._is_edog_managed(
-        "Service/Microsoft.LiveTable.Service/DevMode/EdogLogServer.cs", set()
-    )
+    assert repo_discovery._is_edog_managed("Service/Microsoft.LiveTable.Service/DevMode/EdogLogServer.cs", set())
 
 
 def test_is_edog_managed_patched_file():
     patched = {"Service/Microsoft.LiveTable.Service/WorkloadApp.cs"}
-    assert repo_discovery._is_edog_managed(
-        "Service/Microsoft.LiveTable.Service/WorkloadApp.cs", patched
-    )
+    assert repo_discovery._is_edog_managed("Service/Microsoft.LiveTable.Service/WorkloadApp.cs", patched)
 
 
 def test_is_edog_managed_user_file():
-    assert not repo_discovery._is_edog_managed(
-        "Service/Microsoft.LiveTable.Service/Controllers.cs", set()
-    )
+    assert not repo_discovery._is_edog_managed("Service/Microsoft.LiveTable.Service/Controllers.cs", set())
 
 
 def test_validate_repo_filters_devmode_untracked(fake_flt_repo: Path, monkeypatch):

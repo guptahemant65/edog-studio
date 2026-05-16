@@ -2,6 +2,7 @@
 baseline.json + runtime.json. Run only when the fixture intentionally needs
 updating (e.g. diff schema evolves). Snapshot test asserts byte-equality.
 """
+
 from __future__ import annotations
 
 import json

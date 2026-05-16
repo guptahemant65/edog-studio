@@ -91,28 +91,26 @@ EXCLUDED_FILES = frozenset(
 )
 
 _CLASS_ROUTE_RE = re.compile(r'\[Route\(\s*"([^"]+)"\s*\)\]')
-_HTTP_VERB_RE = re.compile(
-    r'\[Http(Get|Post|Put|Patch|Delete|Head|Options)(?:\(\s*"([^"]*)"\s*\))?\]'
-)
+_HTTP_VERB_RE = re.compile(r'\[Http(Get|Post|Put|Patch|Delete|Head|Options)(?:\(\s*"([^"]*)"\s*\))?\]')
 _METHOD_ROUTE_RE = re.compile(r'\[Route\(\s*"([^"]*)"\s*\)\]')
-_CLASS_DECL_RE = re.compile(r'public\s+(?:abstract\s+|sealed\s+)?class\s+(\w+)')
+_CLASS_DECL_RE = re.compile(r"public\s+(?:abstract\s+|sealed\s+)?class\s+(\w+)")
 _METHOD_DECL_RE = re.compile(
-    r'public\s+(?:async\s+)?'
-    r'(?:Task<IActionResult>|Task<ActionResult[^>]*>|IActionResult|ActionResult[^>]*|'
-    r'Task<IHttpActionResult>|IHttpActionResult)\s+(\w+)\s*\('
+    r"public\s+(?:async\s+)?"
+    r"(?:Task<IActionResult>|Task<ActionResult[^>]*>|IActionResult|ActionResult[^>]*|"
+    r"Task<IHttpActionResult>|IHttpActionResult)\s+(\w+)\s*\("
 )
 _XML_SUMMARY_RE = re.compile(
-    r'///\s*<summary>\s*(.*?)\s*///\s*</summary>',
+    r"///\s*<summary>\s*(.*?)\s*///\s*</summary>",
     re.DOTALL,
 )
-_XML_SUMMARY_LINE_RE = re.compile(r'///\s*(.*)')
+_XML_SUMMARY_LINE_RE = re.compile(r"///\s*(.*)")
 _FROM_QUERY_RE = re.compile(
-    r'\[FromQuery(?:\([^)]*\))?\]\s+'
-    r'(?:[A-Za-z_][\w<>\[\],?\s\.]*?)\s+'
-    r'([A-Za-z_]\w*)'
+    r"\[FromQuery(?:\([^)]*\))?\]\s+"
+    r"(?:[A-Za-z_][\w<>\[\],?\s\.]*?)\s+"
+    r"([A-Za-z_]\w*)"
 )
-_FROM_BODY_RE = re.compile(r'\[FromBody(?:\([^)]*\))?\]')
-_DYNAMIC_ROUTE_RE = re.compile(r'\[Route\(\s*[A-Za-z_]')  # [Route(Constants.Foo)]
+_FROM_BODY_RE = re.compile(r"\[FromBody(?:\([^)]*\))?\]")
+_DYNAMIC_ROUTE_RE = re.compile(r"\[Route\(\s*[A-Za-z_]")  # [Route(Constants.Foo)]
 
 # ── F09 query-param enrichment ────────────────────────────────────────────
 # Capture: optional [FromQuery(Name="alias")], type (preserving generics/?),
@@ -121,10 +119,10 @@ _DYNAMIC_ROUTE_RE = re.compile(r'\[Route\(\s*[A-Za-z_]')  # [Route(Constants.Foo
 # `int?`, `Microsoft.Foo.Bar`, etc.
 _FROM_QUERY_FULL_RE = re.compile(
     r'\[FromQuery(?:\(\s*(?:Name\s*=\s*"(?P<alias>[^"]*)")?\s*\))?\]\s+'
-    r'(?P<type>[A-Za-z_][\w<>\[\],?\s\.]*?)\s+'
-    r'(?P<name>[A-Za-z_]\w*)'
-    r'(?:\s*=\s*(?P<default>[^,)]+?))?'
-    r'\s*(?=,|\))',
+    r"(?P<type>[A-Za-z_][\w<>\[\],?\s\.]*?)\s+"
+    r"(?P<name>[A-Za-z_]\w*)"
+    r"(?:\s*=\s*(?P<default>[^,)]+?))?"
+    r"\s*(?=,|\))",
     re.DOTALL,
 )
 
@@ -134,17 +132,17 @@ _FROM_QUERY_FULL_RE = re.compile(
 #   public const string Y = "foo";
 #   public static readonly int Z = 50;
 _CONST_RE = re.compile(
-    r'(?:public|private|internal|protected)?\s*'
-    r'(?:(?:const)|(?:static\s+readonly))\s+'
-    r'(?P<type>[A-Za-z_][\w?]*)\s+'
-    r'(?P<name>[A-Za-z_]\w*)\s*=\s*'
-    r'(?P<value>[^;]+?)\s*;'
+    r"(?:public|private|internal|protected)?\s*"
+    r"(?:(?:const)|(?:static\s+readonly))\s+"
+    r"(?P<type>[A-Za-z_][\w?]*)\s+"
+    r"(?P<name>[A-Za-z_]\w*)\s*=\s*"
+    r"(?P<value>[^;]+?)\s*;"
 )
 
 # Enum declaration. Captures the enum name and the body between `{` and `}`.
 _ENUM_RE = re.compile(
-    r'public\s+enum\s+(?P<name>[A-Za-z_]\w*)\s*(?::\s*[A-Za-z_]\w*\s*)?\{'
-    r'(?P<body>[^}]*)\}',
+    r"public\s+enum\s+(?P<name>[A-Za-z_]\w*)\s*(?::\s*[A-Za-z_]\w*\s*)?\{"
+    r"(?P<body>[^}]*)\}",
     re.DOTALL,
 )
 
@@ -182,9 +180,7 @@ def extract_catalog(flt_repo_path: str) -> dict:
     }
 
     if not controllers_dir.is_dir():
-        result["warnings"].append(
-            f"Controllers directory not found: {controllers_dir}"
-        )
+        result["warnings"].append(f"Controllers directory not found: {controllers_dir}")
         return result
 
     cs_files = sorted(controllers_dir.rglob("*Controller.cs"))
@@ -203,9 +199,7 @@ def extract_catalog(flt_repo_path: str) -> dict:
         except ValueError:
             rel = Path(cs_file.name)
         if rel.parts and rel.parts[0] == "PublicAPI":
-            result["warnings"].append(
-                f"Deferred (PublicAPI): {cs_file.name} — bearer-vs-mwc routing unresolved"
-            )
+            result["warnings"].append(f"Deferred (PublicAPI): {cs_file.name} — bearer-vs-mwc routing unresolved")
             continue
 
         try:
@@ -214,9 +208,7 @@ def extract_catalog(flt_repo_path: str) -> dict:
             result["warnings"].append(f"Could not read {cs_file.name}: {exc}")
             continue
 
-        controller_endpoints, controller_warnings = _parse_controller(
-            text, cs_file.name, enum_values
-        )
+        controller_endpoints, controller_warnings = _parse_controller(text, cs_file.name, enum_values)
         if controller_endpoints is None:
             # Filtered (wrong class-route prefix) — silent.
             result["warnings"].extend(controller_warnings)
@@ -255,9 +247,7 @@ def extract_catalog(flt_repo_path: str) -> dict:
 # repo root, NOT the FLT repo. Loader is fault-tolerant: missing file →
 # warning + empty list, malformed file → warning + empty list.
 
-_FRAMEWORK_ENDPOINTS_PATH = (
-    Path(__file__).resolve().parent.parent / "data" / "framework-endpoints.json"
-)
+_FRAMEWORK_ENDPOINTS_PATH = Path(__file__).resolve().parent.parent / "data" / "framework-endpoints.json"
 
 _REQUIRED_FRAMEWORK_KEYS = (
     "id",
@@ -315,14 +305,10 @@ def _load_framework_endpoints() -> tuple[list[dict], list[str]]:
             continue
         missing = [k for k in _REQUIRED_FRAMEWORK_KEYS if k not in ep]
         if missing:
-            warnings.append(
-                f"Framework endpoint '{ep.get('id', f'#{idx}')}' missing keys: {missing} — skipped"
-            )
+            warnings.append(f"Framework endpoint '{ep.get('id', f'#{idx}')}' missing keys: {missing} — skipped")
             continue
         if ep["kind"] not in VALID_ENDPOINT_KINDS:
-            warnings.append(
-                f"Framework endpoint '{ep['id']}' has invalid kind '{ep['kind']}' — skipped"
-            )
+            warnings.append(f"Framework endpoint '{ep['id']}' has invalid kind '{ep['kind']}' — skipped")
             continue
         if ep["source"] != "framework":
             warnings.append(
@@ -410,18 +396,14 @@ def _parse_controller(
                     sibling_route = route_match.group(1)
 
         if _DYNAMIC_ROUTE_RE.search(window[:200]) and inline_route is None and sibling_route is None:
-            warnings.append(
-                f"{file_name}: skipped method (dynamic [Route(...)] cannot be resolved)"
-            )
+            warnings.append(f"{file_name}: skipped method (dynamic [Route(...)] cannot be resolved)")
             continue
 
         method_route = inline_route if inline_route is not None else (sibling_route or "")
 
         method_match = _METHOD_DECL_RE.search(window)
         if not method_match:
-            warnings.append(
-                f"{file_name}: [Http{verb.title()}] without matching method declaration"
-            )
+            warnings.append(f"{file_name}: [Http{verb.title()}] without matching method declaration")
             continue
         method_name = method_match.group(1)
 
@@ -433,18 +415,14 @@ def _parse_controller(
 
         # XML <param> descriptions live in the same preceding doc-comment block.
         # Strip the `///` prefixes so the regex sees clean XML.
-        cleaned_xml = "\n".join(
-            line.strip().lstrip("/").strip() for line in preceding.splitlines()
-        )
+        cleaned_xml = "\n".join(line.strip().lstrip("/").strip() for line in preceding.splitlines())
         param_docs = _extract_param_descriptions(cleaned_xml)
 
         # Query params are extracted from the method body parameter list.
         params_window = window[method_match.start() : method_match.start() + 2000]
         # Limit to the parameter list — first balanced parens.
         params_text = _slice_param_list(params_window)
-        query_params = _parse_query_params(
-            params_text, file_consts, enum_names, param_docs
-        )
+        query_params = _parse_query_params(params_text, file_consts, enum_names, param_docs)
         # Attach enum values when the type is a known enum (or list of one).
         for qp in query_params:
             if qp["kind"] in ("enum", "enum-list"):
@@ -601,10 +579,7 @@ def _derive_groups(endpoints: list[dict]) -> list[dict]:
         g = ep["group"]
         if g not in seen:
             seen.append(g)
-    return [
-        {"id": g, "label": _group_label(g), "order": i}
-        for i, g in enumerate(seen)
-    ]
+    return [{"id": g, "label": _group_label(g), "order": i} for i, g in enumerate(seen)]
 
 
 _GROUP_LABEL_OVERRIDES = {
@@ -800,17 +775,19 @@ def _parse_query_params(
         # Required iff non-nullable AND no default supplied.
         required = (not nullable) and (not has_default)
 
-        out.append({
-            "name": name,
-            "type": raw_type,
-            "kind": kind,
-            "default": default_value,
-            "defaultLiteral": default_literal,
-            "required": required,
-            "alias": alias,
-            "description": param_docs.get(name, ""),
-            "enumValues": None,
-        })
+        out.append(
+            {
+                "name": name,
+                "type": raw_type,
+                "kind": kind,
+                "default": default_value,
+                "defaultLiteral": default_literal,
+                "required": required,
+                "alias": alias,
+                "description": param_docs.get(name, ""),
+                "enumValues": None,
+            }
+        )
     return out
 
 
@@ -839,9 +816,7 @@ def _collect_enum_values(repo_path) -> dict:
             body = m.group("body")
             # Strip XML doc-comment lines (`/// ...`) — they contain `=` inside
             # attribute references which would break our comma splitting.
-            body_no_xml = "\n".join(
-                line for line in body.splitlines() if not line.lstrip().startswith("///")
-            )
+            body_no_xml = "\n".join(line for line in body.splitlines() if not line.lstrip().startswith("///"))
             # Strip attribute blocks `[Foo(...)]` (may span lines, contain `=`).
             body_no_attrs = _strip_balanced(body_no_xml, "[", "]")
             values = []

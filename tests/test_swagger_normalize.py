@@ -73,12 +73,14 @@ class TestVersionDetection:
 
 class TestOperationKeys:
     def test_method_path_keys(self):
-        spec = _v3_spec(paths={
-            "/users": {
-                "get": {"operationId": "listUsers", "responses": {"200": {"description": "ok"}}},
-                "post": {"operationId": "createUser", "responses": {"201": {"description": "ok"}}},
-            },
-        })
+        spec = _v3_spec(
+            paths={
+                "/users": {
+                    "get": {"operationId": "listUsers", "responses": {"200": {"description": "ok"}}},
+                    "post": {"operationId": "createUser", "responses": {"201": {"description": "ok"}}},
+                },
+            }
+        )
         ops = normalize(spec)["operations"]
         assert set(ops.keys()) == {"GET /users", "POST /users"}
         assert ops["GET /users"]["operationId"] == "listUsers"
@@ -89,29 +91,33 @@ class TestOperationKeys:
         assert "GET /x" in normalize(spec)["operations"]
 
     def test_skips_non_http_keys(self):
-        spec = _v3_spec(paths={
-            "/x": {
-                "parameters": [{"name": "id", "in": "query"}],
-                "summary": "path summary",
-                "get": {"responses": {"200": {"description": "ok"}}},
-            },
-        })
+        spec = _v3_spec(
+            paths={
+                "/x": {
+                    "parameters": [{"name": "id", "in": "query"}],
+                    "summary": "path summary",
+                    "get": {"responses": {"200": {"description": "ok"}}},
+                },
+            }
+        )
         ops = normalize(spec)["operations"]
         assert list(ops.keys()) == ["GET /x"]
 
 
 class TestPathLevelParameterMerge:
     def test_path_params_merged_into_each_op(self):
-        spec = _v3_spec(paths={
-            "/users/{id}": {
-                "parameters": [{"name": "id", "in": "path", "required": True}],
-                "get": {
-                    "parameters": [{"name": "verbose", "in": "query"}],
-                    "responses": {"200": {"description": "ok"}},
+        spec = _v3_spec(
+            paths={
+                "/users/{id}": {
+                    "parameters": [{"name": "id", "in": "path", "required": True}],
+                    "get": {
+                        "parameters": [{"name": "verbose", "in": "query"}],
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                    "delete": {"responses": {"204": {"description": "ok"}}},
                 },
-                "delete": {"responses": {"204": {"description": "ok"}}},
-            },
-        })
+            }
+        )
         ops = normalize(spec)["operations"]
         get_params = ops["GET /users/{id}"]["parameters"]
         delete_params = ops["DELETE /users/{id}"]["parameters"]
@@ -121,15 +127,17 @@ class TestPathLevelParameterMerge:
         assert "id" in del_names
 
     def test_op_param_overrides_path_param_on_same_in_name(self):
-        spec = _v3_spec(paths={
-            "/x": {
-                "parameters": [{"name": "id", "in": "query", "required": False}],
-                "get": {
-                    "parameters": [{"name": "id", "in": "query", "required": True}],
-                    "responses": {"200": {"description": "ok"}},
+        spec = _v3_spec(
+            paths={
+                "/x": {
+                    "parameters": [{"name": "id", "in": "query", "required": False}],
+                    "get": {
+                        "parameters": [{"name": "id", "in": "query", "required": True}],
+                        "responses": {"200": {"description": "ok"}},
+                    },
                 },
-            },
-        })
+            }
+        )
         params = normalize(spec)["operations"]["GET /x"]["parameters"]
         ids = [p for p in params if p["name"] == "id"]
         assert len(ids) == 1
@@ -138,19 +146,21 @@ class TestPathLevelParameterMerge:
 
 class TestParameterSorting:
     def test_params_sorted_by_in_then_name(self):
-        spec = _v3_spec(paths={
-            "/x": {
-                "get": {
-                    "parameters": [
-                        {"name": "z", "in": "query"},
-                        {"name": "a", "in": "query"},
-                        {"name": "h", "in": "header"},
-                        {"name": "p", "in": "path", "required": True},
-                    ],
-                    "responses": {"200": {"description": "ok"}},
+        spec = _v3_spec(
+            paths={
+                "/x": {
+                    "get": {
+                        "parameters": [
+                            {"name": "z", "in": "query"},
+                            {"name": "a", "in": "query"},
+                            {"name": "h", "in": "header"},
+                            {"name": "p", "in": "path", "required": True},
+                        ],
+                        "responses": {"200": {"description": "ok"}},
+                    },
                 },
-            },
-        })
+            }
+        )
         params = normalize(spec)["operations"]["GET /x"]["parameters"]
         keys = [(p["in"], p["name"]) for p in params]
         assert keys == sorted(keys)
@@ -183,25 +193,26 @@ class TestRefHandling:
         assert schema == {"$ref": "#/components/schemas/User"}
 
     def test_external_ref_marked_unsupported(self):
-        spec = _v3_spec(paths={
-            "/x": {
-                "get": {
-                    "responses": {
-                        "200": {
-                            "description": "ok",
-                            "content": {
-                                "application/json": {
-                                    "schema": {"$ref": "https://example.com/u.json#/User"},
+        spec = _v3_spec(
+            paths={
+                "/x": {
+                    "get": {
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "https://example.com/u.json#/User"},
+                                    },
                                 },
                             },
                         },
                     },
                 },
-            },
-        })
+            }
+        )
         out = normalize(spec)
-        schema = out["operations"]["GET /x"]["responses"]["200"][
-            "content"]["application/json"]["schema"]
+        schema = out["operations"]["GET /x"]["responses"]["200"]["content"]["application/json"]["schema"]
         assert schema == {
             "$unsupported": UNSUPPORTED_EXTERNAL_REF,
             "$ref": "https://example.com/u.json#/User",
@@ -281,8 +292,7 @@ class TestV2Lift:
                 "/users": {
                     "post": {
                         "parameters": [
-                            {"name": "body", "in": "body",
-                             "schema": {"$ref": "#/definitions/User"}},
+                            {"name": "body", "in": "body", "schema": {"$ref": "#/definitions/User"}},
                             {"name": "verbose", "in": "query"},
                         ],
                         "responses": {"201": {"description": "ok"}},
@@ -356,6 +366,5 @@ class TestInfoAndEdgeCases:
         )
         out = normalize(spec)
         # No exception, external ref marked, no socket call.
-        schema = out["operations"]["GET /x"]["responses"]["200"][
-            "content"]["application/json"]["schema"]
+        schema = out["operations"]["GET /x"]["responses"]["200"]["content"]["application/json"]["schema"]
         assert schema["$unsupported"] == UNSUPPORTED_EXTERNAL_REF

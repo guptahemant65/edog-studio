@@ -12,6 +12,7 @@ after scenario generation and surface its findings on `AnalysisResult`;
 the SignalR hub must broadcast a `QaLintFindings` event before the
 'complete' phase.
 """
+
 import re
 from pathlib import Path
 
@@ -72,7 +73,7 @@ def test_lint_severity_enum_values():
     assert "public enum LintSeverity" in src
     # Stable order — Info < Warning < Error — so serialized int values
     # in any future telemetry stay stable.
-    sev_block = src[src.index("public enum LintSeverity"): src.index("public enum LintSeverity") + 400]
+    sev_block = src[src.index("public enum LintSeverity") : src.index("public enum LintSeverity") + 400]
     assert "Info" in sev_block
     assert "Warning" in sev_block
     assert "Error" in sev_block
@@ -124,7 +125,7 @@ def test_rule_severity_assignments():
     def _severity_for(code: str) -> str:
         # Find the rule's emission block and look at the Severity field.
         idx = src.index(f'Code = "{code}"')
-        block = src[idx: idx + 240]
+        block = src[idx : idx + 240]
         m = re.search(r"Severity = LintSeverity\.(\w+)", block)
         assert m, f"could not find severity for {code} in block: {block[:200]}"
         return m.group(1)
@@ -151,8 +152,7 @@ def test_safe_run_wrapper_present():
     assert "private static void SafeRun" in src
     assert "LNT999_RuleFailed" in src
     # SafeRun must catch *all* exceptions, not just a specific type.
-    assert re.search(r"catch\s*\(\s*Exception\s+\w+\s*\)", src), \
-        "SafeRun must catch generic Exception"
+    assert re.search(r"catch\s*\(\s*Exception\s+\w+\s*\)", src), "SafeRun must catch generic Exception"
 
 
 def test_max_findings_cap():
@@ -196,8 +196,7 @@ def test_analyzer_runs_linter_after_scenarios():
     """`AnalyzeInternalAsync` must call `EdogQaScenarioLinter.Lint` after
     scenario generation and assign the result to `LintFindings`."""
     src = _read(ANALYZER)
-    assert "EdogQaScenarioLinter.Lint" in src, \
-        "analyzer pipeline does not invoke the linter"
+    assert "EdogQaScenarioLinter.Lint" in src, "analyzer pipeline does not invoke the linter"
     # The findings need a home on the result object.
     assert "public List<LintFinding> LintFindings" in src
 
@@ -209,7 +208,7 @@ def test_analyzer_lint_phase_wrapped_in_try():
     idx = src.index("EdogQaScenarioLinter.Lint")
     # Walk backwards a few hundred chars looking for try { ; this is a
     # cheap proxy for "the call site is exception-safe".
-    window = src[max(0, idx - 600): idx]
+    window = src[max(0, idx - 600) : idx]
     assert "try" in window, "linter call must be inside a try block"
 
 
@@ -229,8 +228,7 @@ def test_hub_passes_per_scenario_pinnacle_fields():
     src = _read(HUB)
     assert "technique = scn.Technique" in src
     assert "invariantsAddressed = scn.InvariantsAddressed" in src
-    assert "groundingEvidence" in src and "ev.File" not in src.split("groundingEvidence", 1)[1][:1] \
-        or True  # noqa: lambda-shaped — just assert presence
+    assert ("groundingEvidence" in src and "ev.File" not in src.split("groundingEvidence", 1)[1][:1]) or True
     assert "GroundingEvidence" in src
 
 
@@ -265,7 +263,7 @@ def test_technique_enum_values_match_spec():
         "HappyPath",
     ]
     enum_idx = src.index("public enum ScenarioTechnique")
-    enum_block = src[enum_idx: enum_idx + 600]
+    enum_block = src[enum_idx : enum_idx + 600]
     for value in expected:
         assert value in enum_block, f"ScenarioTechnique missing: {value}"
 
@@ -297,5 +295,6 @@ def test_scenario_carries_new_fields():
 def test_schema_version_bumped():
     """SchemaVersion bumped from 1 to 2 when the pinnacle fields landed."""
     src = _read(MODELS)
-    assert re.search(r"SchemaVersion\s*\{\s*get;\s*set;\s*\}\s*=\s*2\b", src), \
+    assert re.search(r"SchemaVersion\s*\{\s*get;\s*set;\s*\}\s*=\s*2\b", src), (
         "ScenarioMetadata.SchemaVersion must default to 2"
+    )

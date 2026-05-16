@@ -64,10 +64,7 @@ def test_get_configured_swagger_path_file_not_required(fake_flt_repo: Path):
 
 def test_get_configured_swagger_path_with_real_swagger_file(fake_flt_repo: Path):
     """Resolver returns a usable Path that points at an actual file."""
-    swagger_file = (
-        fake_flt_repo
-        / "Service" / "Microsoft.LiveTable.Service" / "Swagger" / "Swagger.json"
-    )
+    swagger_file = fake_flt_repo / "Service" / "Microsoft.LiveTable.Service" / "Swagger" / "Swagger.json"
     swagger_file.write_text(json.dumps({"openapi": "3.0.1"}), encoding="utf-8")
     cfg = {"flt_repo_path": str(fake_flt_repo)}
     got = repo_discovery.get_configured_swagger_path(cfg)

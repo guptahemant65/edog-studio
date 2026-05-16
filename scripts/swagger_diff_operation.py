@@ -29,12 +29,9 @@ def diff_operation(
 ) -> list[dict[str, Any]]:
     """Return the sub-change list for a single operation pair."""
     changes: list[dict[str, Any]] = []
-    changes.extend(_diff_parameters(left.get("parameters") or [],
-                                    right.get("parameters") or []))
-    changes.extend(_diff_request_body(left.get("requestBody"),
-                                       right.get("requestBody")))
-    changes.extend(_diff_responses(left.get("responses") or {},
-                                    right.get("responses") or {}))
+    changes.extend(_diff_parameters(left.get("parameters") or [], right.get("parameters") or []))
+    changes.extend(_diff_request_body(left.get("requestBody"), right.get("requestBody")))
+    changes.extend(_diff_responses(left.get("responses") or {}, right.get("responses") or {}))
     changes.extend(_diff_metadata(left, right))
     changes.sort(key=lambda c: (c["subType"], c.get("detail", "")))
     return changes
@@ -52,25 +49,31 @@ def _diff_parameters(
     right_map = {_param_key(p): p for p in right if isinstance(p, dict)}
     out: list[dict[str, Any]] = []
     for key in left_map.keys() - right_map.keys():
-        out.append({
-            "subType": "parameter-removed",
-            "detail": key,
-            "oldValue": left_map[key],
-        })
-    for key in right_map.keys() - left_map.keys():
-        out.append({
-            "subType": "parameter-added",
-            "detail": key,
-            "newValue": right_map[key],
-        })
-    for key in left_map.keys() & right_map.keys():
-        if left_map[key] != right_map[key]:
-            out.append({
-                "subType": "parameter-modified",
+        out.append(
+            {
+                "subType": "parameter-removed",
                 "detail": key,
                 "oldValue": left_map[key],
+            }
+        )
+    for key in right_map.keys() - left_map.keys():
+        out.append(
+            {
+                "subType": "parameter-added",
+                "detail": key,
                 "newValue": right_map[key],
-            })
+            }
+        )
+    for key in left_map.keys() & right_map.keys():
+        if left_map[key] != right_map[key]:
+            out.append(
+                {
+                    "subType": "parameter-modified",
+                    "detail": key,
+                    "oldValue": left_map[key],
+                    "newValue": right_map[key],
+                }
+            )
     return out
 
 
@@ -81,14 +84,11 @@ def _diff_request_body(
     if left is None and right is None:
         return []
     if left is None:
-        return [{"subType": "request-body-added", "detail": "requestBody",
-                 "newValue": right}]
+        return [{"subType": "request-body-added", "detail": "requestBody", "newValue": right}]
     if right is None:
-        return [{"subType": "request-body-removed", "detail": "requestBody",
-                 "oldValue": left}]
+        return [{"subType": "request-body-removed", "detail": "requestBody", "oldValue": left}]
     if left != right:
-        return [{"subType": "request-body-modified", "detail": "requestBody",
-                 "oldValue": left, "newValue": right}]
+        return [{"subType": "request-body-modified", "detail": "requestBody", "oldValue": left, "newValue": right}]
     return []
 
 
@@ -98,25 +98,31 @@ def _diff_responses(
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for status in left.keys() - right.keys():
-        out.append({
-            "subType": "response-removed",
-            "detail": str(status),
-            "oldValue": left[status],
-        })
-    for status in right.keys() - left.keys():
-        out.append({
-            "subType": "response-added",
-            "detail": str(status),
-            "newValue": right[status],
-        })
-    for status in left.keys() & right.keys():
-        if left[status] != right[status]:
-            out.append({
-                "subType": "response-modified",
+        out.append(
+            {
+                "subType": "response-removed",
                 "detail": str(status),
                 "oldValue": left[status],
+            }
+        )
+    for status in right.keys() - left.keys():
+        out.append(
+            {
+                "subType": "response-added",
+                "detail": str(status),
                 "newValue": right[status],
-            })
+            }
+        )
+    for status in left.keys() & right.keys():
+        if left[status] != right[status]:
+            out.append(
+                {
+                    "subType": "response-modified",
+                    "detail": str(status),
+                    "oldValue": left[status],
+                    "newValue": right[status],
+                }
+            )
     return out
 
 

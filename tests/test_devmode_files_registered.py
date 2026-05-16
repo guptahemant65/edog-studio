@@ -7,6 +7,7 @@ This caught the Phase 1 → Phase 2c regression: EdogInterceptorRegistry.cs
 was created in commit ff170f5 but never added to DEVMODE_FILES, so the
 Phase 2c Record() calls failed to compile on first deploy.
 """
+
 import importlib.util
 import sys
 from pathlib import Path
@@ -43,10 +44,9 @@ def test_every_devmode_cs_file_is_registered_for_deploy():
 
     missing = on_disk - listed
     assert not missing, (
-        f"src/backend/DevMode/ contains C# files not registered in "
-        f"edog.py DEVMODE_FILES — they will NOT be deployed to FLT and "
-        f"any reference to types in them will fail to compile:\n  "
-        + "\n  ".join(sorted(missing))
+        "src/backend/DevMode/ contains C# files not registered in "
+        "edog.py DEVMODE_FILES — they will NOT be deployed to FLT and "
+        "any reference to types in them will fail to compile:\n  " + "\n  ".join(sorted(missing))
     )
 
 

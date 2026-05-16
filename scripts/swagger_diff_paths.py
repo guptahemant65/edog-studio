@@ -36,25 +36,31 @@ def diff_paths(
 
     changes: list[dict[str, Any]] = []
     for key in left_ops.keys() - right_ops.keys():
-        changes.append({
-            "type": "removed",
-            "key": key,
-            "oldValue": left_ops[key],
-        })
-    for key in right_ops.keys() - left_ops.keys():
-        changes.append({
-            "type": "added",
-            "key": key,
-            "newValue": right_ops[key],
-        })
-    for key in left_ops.keys() & right_ops.keys():
-        if left_ops[key] != right_ops[key]:
-            changes.append({
-                "type": "modified",
+        changes.append(
+            {
+                "type": "removed",
                 "key": key,
                 "oldValue": left_ops[key],
+            }
+        )
+    for key in right_ops.keys() - left_ops.keys():
+        changes.append(
+            {
+                "type": "added",
+                "key": key,
                 "newValue": right_ops[key],
-            })
+            }
+        )
+    for key in left_ops.keys() & right_ops.keys():
+        if left_ops[key] != right_ops[key]:
+            changes.append(
+                {
+                    "type": "modified",
+                    "key": key,
+                    "oldValue": left_ops[key],
+                    "newValue": right_ops[key],
+                }
+            )
 
     changes.sort(key=lambda c: c["key"])
     return changes

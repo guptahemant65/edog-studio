@@ -233,9 +233,7 @@ class TestTerminalControls:
 
     def test_follow_tail_state_exists(self) -> None:
         src = _DEPLOY_JS.read_text(encoding="utf-8")
-        assert "_followTail" in src, (
-            "DeployFlow must track _followTail to pause autoscroll when user scrolls up"
-        )
+        assert "_followTail" in src, "DeployFlow must track _followTail to pause autoscroll when user scrolls up"
 
     def test_scroll_listener_updates_follow_tail(self) -> None:
         src = _DEPLOY_JS.read_text(encoding="utf-8")
@@ -290,21 +288,15 @@ class TestTerminalControlsCss:
     def test_action_button_styled(self) -> None:
         css = _DEPLOY_CSS.read_text(encoding="utf-8")
         assert ".deploy-terminal-btn" in css
-        assert ".deploy-terminal-btn.active" in css, (
-            "Active state for toggle buttons (wrap) must be styled"
-        )
+        assert ".deploy-terminal-btn.active" in css, "Active state for toggle buttons (wrap) must be styled"
 
     def test_expanded_mode_styled(self) -> None:
         css = _DEPLOY_CSS.read_text(encoding="utf-8")
-        assert ".deploy-terminal.expanded.open" in css, (
-            "Expanded terminal must have its own max-height"
-        )
+        assert ".deploy-terminal.expanded.open" in css, "Expanded terminal must have its own max-height"
 
     def test_nowrap_mode_styled(self) -> None:
         css = _DEPLOY_CSS.read_text(encoding="utf-8")
-        assert ".deploy-terminal.nowrap" in css, (
-            "Nowrap mode must override white-space on term-content"
-        )
+        assert ".deploy-terminal.nowrap" in css, "Nowrap mode must override white-space on term-content"
 
     def test_jump_badge_styled(self) -> None:
         css = _DEPLOY_CSS.read_text(encoding="utf-8")
@@ -348,15 +340,14 @@ class TestGitHeadCapture:
     def test_capture_git_head_helper_exists(self) -> None:
         ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
         src = ds.read_text(encoding="utf-8")
-        assert "def _capture_git_head" in src, (
-            "dev-server.py must expose _capture_git_head() to populate commit chip"
-        )
+        assert "def _capture_git_head" in src, "dev-server.py must expose _capture_git_head() to populate commit chip"
         # Single subprocess call to git log with the four fields the strip needs
         assert "commitSha" in src and "commitAuthor" in src and "commitMessage" in src
 
     def test_capture_git_head_returns_none_for_non_repo(self, tmp_path) -> None:
         import importlib.util
         import sys
+
         ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
         sys.path.insert(0, str(ds.parent))
         try:
@@ -373,6 +364,7 @@ class TestGitHeadCapture:
         """Sanity: when run against the edog-studio repo itself, returns a sha."""
         import importlib.util
         import sys
+
         ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
         sys.path.insert(0, str(ds.parent))
         try:
@@ -395,12 +387,8 @@ class TestDeployTargetCarriesWorkspaceName:
     def test_deploy_handler_reads_workspace_name(self) -> None:
         ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"
         src = ds.read_text(encoding="utf-8")
-        assert 'body.get("workspaceName"' in src, (
-            "POST /api/command/deploy must read workspaceName from request body"
-        )
-        assert '"workspaceName": ws_name' in src, (
-            "workspaceName must be stored in deployTarget for the Connected strip"
-        )
+        assert 'body.get("workspaceName"' in src, "POST /api/command/deploy must read workspaceName from request body"
+        assert '"workspaceName": ws_name' in src, "workspaceName must be stored in deployTarget for the Connected strip"
 
     def test_git_info_merged_into_deploy_target_on_running(self) -> None:
         ds = Path(__file__).resolve().parents[1] / "scripts" / "dev-server.py"

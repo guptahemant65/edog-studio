@@ -14,6 +14,7 @@ behaviour:
 
 Roundtrip: apply → revert must equal the original byte-for-byte.
 """
+
 import importlib.util
 import sys
 from pathlib import Path

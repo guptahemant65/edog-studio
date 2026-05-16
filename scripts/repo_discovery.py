@@ -20,9 +20,7 @@ FLT_MARKER = Path("Service") / "Microsoft.LiveTable.Service"
 # every deploy). Patched files (WorkloadApp.cs, Test.json, etc.) are
 # discovered dynamically from .edog-changes.patch when present, so this
 # stays in sync automatically as edog.py adds/removes patch sites.
-EDOG_DEVMODE_DIRS = (
-    "Service/Microsoft.LiveTable.Service/DevMode/",
-)
+EDOG_DEVMODE_DIRS = ("Service/Microsoft.LiveTable.Service/DevMode/",)
 EDOG_PATCH_FILE = Path(__file__).resolve().parents[1] / ".edog-changes.patch"
 
 
@@ -39,7 +37,7 @@ def _edog_patched_paths() -> set[str]:
     try:
         for line in EDOG_PATCH_FILE.read_text(encoding="utf-8").splitlines():
             if line.startswith("diff --git a/"):
-                rest = line[len("diff --git a/"):]
+                rest = line[len("diff --git a/") :]
                 sep = rest.find(" b/")
                 if sep > 0:
                     paths.add(rest[:sep])
@@ -70,6 +68,7 @@ def _parse_porcelain_path(line: str) -> str | None:
     if path.startswith('"') and path.endswith('"'):
         path = path[1:-1]
     return path.replace("\\", "/") or None
+
 
 SKIP_DIRS = frozenset(
     {
@@ -176,9 +175,7 @@ def get_configured_repo(config: dict) -> dict | None:
 # This is the canonical baseline for the API playground diff feature — the
 # source-of-truth Swagger.json that lives under source control, not a
 # separately-captured snapshot in the edog-studio working tree.
-FLT_SWAGGER_RELPATH = (
-    Path("Service") / "Microsoft.LiveTable.Service" / "Swagger" / "Swagger.json"
-)
+FLT_SWAGGER_RELPATH = Path("Service") / "Microsoft.LiveTable.Service" / "Swagger" / "Swagger.json"
 
 
 def get_flt_swagger_path(repo_root: Path | str) -> Path:

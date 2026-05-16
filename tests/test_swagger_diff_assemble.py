@@ -68,25 +68,35 @@ class TestEndpointDiffs:
         assert "id" in change
 
     def test_endpoint_modified_carries_subchanges(self):
-        left = _norm(operations={"GET /x": {
-            "summary": "old",
-            "parameters": [],
-            "responses": {"200": {"description": "ok"}},
-        }})
-        right = _norm(operations={"GET /x": {
-            "summary": "new",
-            "parameters": [],
-            "responses": {"200": {"description": "ok"}},
-        }})
+        left = _norm(
+            operations={
+                "GET /x": {
+                    "summary": "old",
+                    "parameters": [],
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        )
+        right = _norm(
+            operations={
+                "GET /x": {
+                    "summary": "new",
+                    "parameters": [],
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        )
         payload = build_diff_payload(left, right)
         [change] = payload["changes"]
         assert change["type"] == "modified"
-        assert change["subChanges"] == [{
-            "subType": "metadata-changed",
-            "detail": "summary",
-            "oldValue": "old",
-            "newValue": "new",
-        }]
+        assert change["subChanges"] == [
+            {
+                "subType": "metadata-changed",
+                "detail": "summary",
+                "oldValue": "old",
+                "newValue": "new",
+            }
+        ]
 
 
 class TestSchemaDiffs:
@@ -98,20 +108,20 @@ class TestSchemaDiffs:
         assert change["key"] == "User"
 
     def test_schema_modified_carries_subchanges(self):
-        left = _norm(schemas={"User": {"type": "object",
-                                        "properties": {"id": {"type": "string"}}}})
-        right = _norm(schemas={"User": {"type": "object",
-                                         "properties": {"id": {"type": "integer"}}}})
+        left = _norm(schemas={"User": {"type": "object", "properties": {"id": {"type": "string"}}}})
+        right = _norm(schemas={"User": {"type": "object", "properties": {"id": {"type": "integer"}}}})
         payload = build_diff_payload(left, right)
         [change] = payload["changes"]
         assert change["category"] == "schemas"
         assert change["type"] == "modified"
-        assert change["subChanges"] == [{
-            "subType": "property-modified",
-            "detail": "id",
-            "oldValue": {"type": "string"},
-            "newValue": {"type": "integer"},
-        }]
+        assert change["subChanges"] == [
+            {
+                "subType": "property-modified",
+                "detail": "id",
+                "oldValue": {"type": "string"},
+                "newValue": {"type": "integer"},
+            }
+        ]
 
 
 class TestCombined:
@@ -148,10 +158,12 @@ class TestChangeIds:
         assert all(len(i) >= 6 for i in ids)
 
     def test_ids_are_sequential(self):
-        right = _norm(operations={
-            "GET /a": {"responses": {"200": {"description": "ok"}}},
-            "GET /b": {"responses": {"200": {"description": "ok"}}},
-        })
+        right = _norm(
+            operations={
+                "GET /a": {"responses": {"200": {"description": "ok"}}},
+                "GET /b": {"responses": {"200": {"description": "ok"}}},
+            }
+        )
         ids = [c["id"] for c in build_diff_payload(_norm(), right)["changes"]]
         assert ids == ["ch-001", "ch-002"]
 

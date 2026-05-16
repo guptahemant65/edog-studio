@@ -35,7 +35,7 @@ def _make_fake_repo(tmp_path: Path, controllers: dict[str, str]) -> Path:
     return tmp_path
 
 
-SAMPLE_LIVETABLE_CTRL = '''
+SAMPLE_LIVETABLE_CTRL = """
 namespace Microsoft.LiveTable.Service.Controllers
 {
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
@@ -94,10 +94,10 @@ namespace Microsoft.LiveTable.Service.Controllers
         }
     }
 }
-'''
+"""
 
 
-SAMPLE_MAINTENANCE_CTRL = '''
+SAMPLE_MAINTENANCE_CTRL = """
 namespace Microsoft.LiveTable.Service.Controllers
 {
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTableMaintanance")]
@@ -117,10 +117,10 @@ namespace Microsoft.LiveTable.Service.Controllers
         }
     }
 }
-'''
+"""
 
 
-SAMPLE_INSIGHTS_CTRL = '''
+SAMPLE_INSIGHTS_CTRL = """
 namespace Microsoft.LiveTable.Service.Controllers
 {
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/insights")]
@@ -138,10 +138,10 @@ namespace Microsoft.LiveTable.Service.Controllers
         }
     }
 }
-'''
+"""
 
 
-SAMPLE_INTERNAL_CTRL = '''
+SAMPLE_INTERNAL_CTRL = """
 namespace Microsoft.LiveTable.Service.Controllers
 {
     [Route("internal")]
@@ -151,10 +151,10 @@ namespace Microsoft.LiveTable.Service.Controllers
         public IActionResult Health() => Ok();
     }
 }
-'''
+"""
 
 
-SAMPLE_DYNAMIC_ROUTE_CTRL = '''
+SAMPLE_DYNAMIC_ROUTE_CTRL = """
 namespace Microsoft.LiveTable.Service.Controllers
 {
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
@@ -171,12 +171,13 @@ namespace Microsoft.LiveTable.Service.Controllers
         public async Task<IActionResult> Bar() => Ok();
     }
 }
-'''
+"""
 
 
 # ════════════════════════════════════════════════════════════════
 # §1 _humanize_method_name
 # ════════════════════════════════════════════════════════════════
+
 
 class TestHumanizeMethodName:
     def test_strips_async_suffix(self):
@@ -202,6 +203,7 @@ class TestHumanizeMethodName:
 # ════════════════════════════════════════════════════════════════
 # §2 _danger_level
 # ════════════════════════════════════════════════════════════════
+
 
 class TestDangerLevel:
     def test_get_is_safe(self):
@@ -233,15 +235,13 @@ class TestDangerLevel:
 # §3 _make_id
 # ════════════════════════════════════════════════════════════════
 
+
 class TestMakeId:
     def test_simple_path(self):
         assert _make_id("GET", "/liveTable/getLatestDag") == "get-livetable-getlatestdag"
 
     def test_strips_placeholders(self):
-        assert (
-            _make_id("DELETE", "/liveTable/mlv/{id}")
-            == "delete-livetable-mlv-id"
-        )
+        assert _make_id("DELETE", "/liveTable/mlv/{id}") == "delete-livetable-mlv-id"
 
     def test_no_path(self):
         assert _make_id("GET", "/") == "get"
@@ -253,6 +253,7 @@ class TestMakeId:
 # ════════════════════════════════════════════════════════════════
 # §4 _compose_path
 # ════════════════════════════════════════════════════════════════
+
 
 class TestComposePath:
     def test_simple(self):
@@ -275,6 +276,7 @@ class TestComposePath:
 # §5 _slice_param_list
 # ════════════════════════════════════════════════════════════════
 
+
 class TestSliceParamList:
     def test_simple(self):
         text = "Foo(a, b)"
@@ -293,15 +295,14 @@ class TestSliceParamList:
 # §6 _extract_class_route
 # ════════════════════════════════════════════════════════════════
 
+
 class TestExtractClassRoute:
     def test_finds_route(self):
-        text = textwrap.dedent('''
+        text = textwrap.dedent("""
             [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
             public class FooController { }
-        ''')
-        assert _extract_class_route(text) == (
-            "v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable"
-        )
+        """)
+        assert _extract_class_route(text) == ("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")
 
     def test_no_class(self):
         assert _extract_class_route("// just a comment") is None
@@ -313,19 +314,18 @@ class TestExtractClassRoute:
     def test_picks_class_route_not_method(self):
         # Multiple [Route(...)] occurrences — the LAST one before the class
         # declaration wins (it's the class-level Route).
-        text = textwrap.dedent('''
+        text = textwrap.dedent("""
             // method-level Route in a comment example: [Route("getFoo")]
             [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
             public class LiveTableController { }
-        ''')
-        assert _extract_class_route(text) == (
-            "v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable"
-        )
+        """)
+        assert _extract_class_route(text) == ("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")
 
 
 # ════════════════════════════════════════════════════════════════
 # §7 _extract_last_summary
 # ════════════════════════════════════════════════════════════════
+
 
 class TestExtractLastSummary:
     def test_single_line(self):
@@ -333,29 +333,21 @@ class TestExtractLastSummary:
         assert _extract_last_summary(text) == "One line."
 
     def test_multi_line(self):
-        text = (
-            "/// <summary>\n"
-            "/// First line.\n"
-            "/// Second line.\n"
-            "/// </summary>"
-        )
+        text = "/// <summary>\n/// First line.\n/// Second line.\n/// </summary>"
         assert _extract_last_summary(text) == "First line. Second line."
 
     def test_no_summary(self):
         assert _extract_last_summary("// regular comment") == ""
 
     def test_picks_last_when_multiple(self):
-        text = (
-            "/// <summary>\n/// First.\n/// </summary>\n"
-            "void Skip();\n"
-            "/// <summary>\n/// Second.\n/// </summary>"
-        )
+        text = "/// <summary>\n/// First.\n/// </summary>\nvoid Skip();\n/// <summary>\n/// Second.\n/// </summary>"
         assert _extract_last_summary(text) == "Second."
 
 
 # ════════════════════════════════════════════════════════════════
 # §8 _parse_controller — full integration on synthetic C# text
 # ════════════════════════════════════════════════════════════════
+
 
 class TestParseController:
     def test_livetable_extracts_four_endpoints(self):
@@ -400,9 +392,7 @@ class TestParseController:
     def test_full_path_includes_workspace_lakehouse_placeholders(self):
         endpoints, _ = _parse_controller(SAMPLE_LIVETABLE_CTRL, "LiveTableController.cs")
         dag = next(e for e in endpoints if e["urlTemplate"] == "/liveTable/getLatestDag")
-        assert dag["fullPath"] == (
-            "/v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/getLatestDag"
-        )
+        assert dag["fullPath"] == ("/v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/getLatestDag")
 
     def test_token_type_is_always_mwc(self):
         endpoints, _ = _parse_controller(SAMPLE_LIVETABLE_CTRL, "LiveTableController.cs")
@@ -444,6 +434,7 @@ class TestParseController:
 # ════════════════════════════════════════════════════════════════
 # §9 extract_catalog — end-to-end with fake repo
 # ════════════════════════════════════════════════════════════════
+
 
 class TestExtractCatalog:
     def test_missing_controllers_dir_returns_empty_with_warning(self, tmp_path):
@@ -513,12 +504,14 @@ class TestExtractCatalog:
         assert result["extractedAt"].endswith("Z")
         # parseable as ISO 8601 (without the Z)
         from datetime import datetime
+
         datetime.fromisoformat(result["extractedAt"].rstrip("Z"))
 
 
 # ════════════════════════════════════════════════════════════════
 # §10 controllers_dir_mtime
 # ════════════════════════════════════════════════════════════════
+
 
 class TestControllersDirMtime:
     def test_returns_none_for_missing(self, tmp_path):
@@ -535,12 +528,14 @@ class TestControllersDirMtime:
         m1 = controllers_dir_mtime(str(repo))
         # Wait a tick and add a file with a newer mtime.
         import time
+
         time.sleep(0.05)
         ctrl_dir = repo / "Service" / "Microsoft.LiveTable.Service" / "Controllers"
         new_file = ctrl_dir / "LiveTableMaintenanceController.cs"
         new_file.write_text(SAMPLE_MAINTENANCE_CTRL)
         # Force a fresh mtime on the new file in case the FS resolution is coarse.
         import os
+
         now = time.time()
         os.utime(new_file, (now, now))
         m2 = controllers_dir_mtime(str(repo))
@@ -550,6 +545,7 @@ class TestControllersDirMtime:
 # ════════════════════════════════════════════════════════════════
 # §11 _derive_groups
 # ════════════════════════════════════════════════════════════════
+
 
 class TestDeriveGroups:
     def test_empty(self):
@@ -726,18 +722,18 @@ class TestExtractParamDescriptions:
         assert _extract_param_descriptions(block) == {"historyCount": "Number of past runs."}
 
     def test_multiple_params(self):
-        block = textwrap.dedent('''
+        block = textwrap.dedent("""
             /// <param name="startTime">Start of window.</param>
             /// <param name="endTime">End of window.</param>
-        ''')
+        """)
         out = _extract_param_descriptions(block)
         assert out == {"startTime": "Start of window.", "endTime": "End of window."}
 
     def test_multi_line_description(self):
-        block = textwrap.dedent('''
+        block = textwrap.dedent("""
             /// <param name="x">First line.
             /// Second line.</param>
-        ''')
+        """)
         out = _extract_param_descriptions(block)
         assert "First line." in out["x"]
         assert "Second line." in out["x"]
@@ -960,7 +956,7 @@ class TestEnrichedQueryParamsEndToEnd:
         assert qp[0]["default"] is False
 
     def test_required_param_marked(self, tmp_path):
-        ctrl = textwrap.dedent('''
+        ctrl = textwrap.dedent("""
             namespace X {
                 [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
                 public class LiveTableController : BaseApiController {
@@ -971,7 +967,7 @@ class TestEnrichedQueryParamsEndToEnd:
                         [FromQuery] string mustHave) => Ok();
                 }
             }
-        ''')
+        """)
         repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": ctrl})
         result = extract_catalog(str(repo))
         ep = result["endpoints"][0]
@@ -979,7 +975,7 @@ class TestEnrichedQueryParamsEndToEnd:
         assert qp["required"] is True
 
     def test_const_resolution_in_endpoint(self, tmp_path):
-        ctrl = textwrap.dedent('''
+        ctrl = textwrap.dedent("""
             namespace X {
                 [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
                 public class LiveTableController : BaseApiController {
@@ -992,7 +988,7 @@ class TestEnrichedQueryParamsEndToEnd:
                         [FromQuery] int dateRange = DefaultDateRangeDays) => Ok();
                 }
             }
-        ''')
+        """)
         repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": ctrl})
         result = extract_catalog(str(repo))
         ep = result["endpoints"][0]
@@ -1001,7 +997,7 @@ class TestEnrichedQueryParamsEndToEnd:
         assert qp["defaultLiteral"] == "DefaultDateRangeDays"
 
     def test_param_description_attached(self, tmp_path):
-        ctrl = textwrap.dedent('''
+        ctrl = textwrap.dedent("""
             namespace X {
                 [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
                 public class LiveTableController : BaseApiController {
@@ -1013,7 +1009,7 @@ class TestEnrichedQueryParamsEndToEnd:
                         [FromQuery] int historyCount = 10) => Ok();
                 }
             }
-        ''')
+        """)
         repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": ctrl})
         result = extract_catalog(str(repo))
         ep = result["endpoints"][0]
@@ -1021,7 +1017,7 @@ class TestEnrichedQueryParamsEndToEnd:
         assert qp["description"] == "Number of past runs to return."
 
     def test_enum_values_attached_when_known(self, tmp_path):
-        ctrl = textwrap.dedent('''
+        ctrl = textwrap.dedent("""
             namespace X {
                 [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
                 public class LiveTableController : BaseApiController {
@@ -1032,7 +1028,7 @@ class TestEnrichedQueryParamsEndToEnd:
                         [FromQuery] List<DagExecutionStatus> statuses = null) => Ok();
                 }
             }
-        ''')
+        """)
         # Create the enum file too
         repo = tmp_path
         ctrl_dir = repo / "Service" / "Microsoft.LiveTable.Service" / "Controllers"

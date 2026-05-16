@@ -36,8 +36,7 @@ def _op(parameters=None, request_body=None, responses=None, **meta):
 
 class TestNoChanges:
     def test_identical_ops(self):
-        op = _op(parameters=[{"name": "id", "in": "query"}],
-                 responses={"200": {"description": "ok"}})
+        op = _op(parameters=[{"name": "id", "in": "query"}], responses={"200": {"description": "ok"}})
         assert diff_operation(op, dict(op)) == []
 
 
@@ -46,52 +45,60 @@ class TestParameters:
         left = _op()
         right = _op(parameters=[{"name": "verbose", "in": "query"}])
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "parameter-added",
-            "detail": "query.verbose",
-            "newValue": {"name": "verbose", "in": "query"},
-        }]
+        assert changes == [
+            {
+                "subType": "parameter-added",
+                "detail": "query.verbose",
+                "newValue": {"name": "verbose", "in": "query"},
+            }
+        ]
 
     def test_parameter_removed(self):
         left = _op(parameters=[{"name": "id", "in": "path", "required": True}])
         right = _op()
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "parameter-removed",
-            "detail": "path.id",
-            "oldValue": {"name": "id", "in": "path", "required": True},
-        }]
+        assert changes == [
+            {
+                "subType": "parameter-removed",
+                "detail": "path.id",
+                "oldValue": {"name": "id", "in": "path", "required": True},
+            }
+        ]
 
     def test_parameter_modified_required_flip(self):
         left = _op(parameters=[{"name": "id", "in": "query", "required": False}])
         right = _op(parameters=[{"name": "id", "in": "query", "required": True}])
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "parameter-modified",
-            "detail": "query.id",
-            "oldValue": {"name": "id", "in": "query", "required": False},
-            "newValue": {"name": "id", "in": "query", "required": True},
-        }]
+        assert changes == [
+            {
+                "subType": "parameter-modified",
+                "detail": "query.id",
+                "oldValue": {"name": "id", "in": "query", "required": False},
+                "newValue": {"name": "id", "in": "query", "required": True},
+            }
+        ]
 
     def test_parameter_modified_schema_changed(self):
-        left = _op(parameters=[{"name": "id", "in": "query",
-                                "schema": {"type": "string"}}])
-        right = _op(parameters=[{"name": "id", "in": "query",
-                                 "schema": {"type": "integer"}}])
+        left = _op(parameters=[{"name": "id", "in": "query", "schema": {"type": "string"}}])
+        right = _op(parameters=[{"name": "id", "in": "query", "schema": {"type": "integer"}}])
         changes = diff_operation(left, right)
         assert len(changes) == 1
         assert changes[0]["subType"] == "parameter-modified"
         assert changes[0]["detail"] == "query.id"
 
     def test_multiple_parameter_changes(self):
-        left = _op(parameters=[
-            {"name": "id", "in": "query"},
-            {"name": "old", "in": "header"},
-        ])
-        right = _op(parameters=[
-            {"name": "id", "in": "query", "required": True},
-            {"name": "new", "in": "query"},
-        ])
+        left = _op(
+            parameters=[
+                {"name": "id", "in": "query"},
+                {"name": "old", "in": "header"},
+            ]
+        )
+        right = _op(
+            parameters=[
+                {"name": "id", "in": "query", "required": True},
+                {"name": "new", "in": "query"},
+            ]
+        )
         changes = diff_operation(left, right)
         sub_types = sorted((c["subType"], c["detail"]) for c in changes)
         assert sub_types == [
@@ -106,29 +113,37 @@ class TestRequestBody:
         left = _op()
         right = _op(request_body={"content": {"application/json": {"schema": {}}}})
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "request-body-added",
-            "detail": "requestBody",
-            "newValue": {"content": {"application/json": {"schema": {}}}},
-        }]
+        assert changes == [
+            {
+                "subType": "request-body-added",
+                "detail": "requestBody",
+                "newValue": {"content": {"application/json": {"schema": {}}}},
+            }
+        ]
 
     def test_request_body_removed(self):
         left = _op(request_body={"content": {"application/json": {"schema": {}}}})
         right = _op()
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "request-body-removed",
-            "detail": "requestBody",
-            "oldValue": {"content": {"application/json": {"schema": {}}}},
-        }]
+        assert changes == [
+            {
+                "subType": "request-body-removed",
+                "detail": "requestBody",
+                "oldValue": {"content": {"application/json": {"schema": {}}}},
+            }
+        ]
 
     def test_request_body_modified(self):
-        left = _op(request_body={
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/A"}}},
-        })
-        right = _op(request_body={
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/B"}}},
-        })
+        left = _op(
+            request_body={
+                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/A"}}},
+            }
+        )
+        right = _op(
+            request_body={
+                "content": {"application/json": {"schema": {"$ref": "#/components/schemas/B"}}},
+            }
+        )
         changes = diff_operation(left, right)
         assert len(changes) == 1
         assert changes[0]["subType"] == "request-body-modified"
@@ -138,35 +153,45 @@ class TestRequestBody:
 class TestResponses:
     def test_response_added(self):
         left = _op(responses={"200": {"description": "ok"}})
-        right = _op(responses={
-            "200": {"description": "ok"},
-            "404": {"description": "not found"},
-        })
+        right = _op(
+            responses={
+                "200": {"description": "ok"},
+                "404": {"description": "not found"},
+            }
+        )
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "response-added",
-            "detail": "404",
-            "newValue": {"description": "not found"},
-        }]
+        assert changes == [
+            {
+                "subType": "response-added",
+                "detail": "404",
+                "newValue": {"description": "not found"},
+            }
+        ]
 
     def test_response_removed(self):
-        left = _op(responses={
-            "200": {"description": "ok"},
-            "500": {"description": "boom"},
-        })
+        left = _op(
+            responses={
+                "200": {"description": "ok"},
+                "500": {"description": "boom"},
+            }
+        )
         right = _op(responses={"200": {"description": "ok"}})
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "response-removed",
-            "detail": "500",
-            "oldValue": {"description": "boom"},
-        }]
+        assert changes == [
+            {
+                "subType": "response-removed",
+                "detail": "500",
+                "oldValue": {"description": "boom"},
+            }
+        ]
 
     def test_response_modified(self):
-        left = _op(responses={"200": {"description": "ok",
-                                       "content": {"application/json": {"schema": {"type": "object"}}}}})
-        right = _op(responses={"200": {"description": "ok",
-                                        "content": {"application/json": {"schema": {"type": "array"}}}}})
+        left = _op(
+            responses={"200": {"description": "ok", "content": {"application/json": {"schema": {"type": "object"}}}}}
+        )
+        right = _op(
+            responses={"200": {"description": "ok", "content": {"application/json": {"schema": {"type": "array"}}}}}
+        )
         changes = diff_operation(left, right)
         assert len(changes) == 1
         assert changes[0]["subType"] == "response-modified"
@@ -178,39 +203,44 @@ class TestMetadata:
         left = _op(summary="old")
         right = _op(summary="new")
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "metadata-changed",
-            "detail": "summary",
-            "oldValue": "old",
-            "newValue": "new",
-        }]
+        assert changes == [
+            {
+                "subType": "metadata-changed",
+                "detail": "summary",
+                "oldValue": "old",
+                "newValue": "new",
+            }
+        ]
 
     def test_deprecated_flip(self):
         left = _op(deprecated=False)
         right = _op(deprecated=True)
         changes = diff_operation(left, right)
-        assert {"subType": "metadata-changed", "detail": "deprecated",
-                "oldValue": False, "newValue": True} in changes
+        assert {"subType": "metadata-changed", "detail": "deprecated", "oldValue": False, "newValue": True} in changes
 
     def test_tags_change(self):
         left = _op(tags=["a"])
         right = _op(tags=["a", "b"])
         changes = diff_operation(left, right)
-        assert changes == [{
-            "subType": "metadata-changed",
-            "detail": "tags",
-            "oldValue": ["a"],
-            "newValue": ["a", "b"],
-        }]
+        assert changes == [
+            {
+                "subType": "metadata-changed",
+                "detail": "tags",
+                "oldValue": ["a"],
+                "newValue": ["a", "b"],
+            }
+        ]
 
     def test_operation_id_change(self):
         changes = diff_operation(_op(operationId="x"), _op(operationId="y"))
-        assert changes == [{
-            "subType": "metadata-changed",
-            "detail": "operationId",
-            "oldValue": "x",
-            "newValue": "y",
-        }]
+        assert changes == [
+            {
+                "subType": "metadata-changed",
+                "detail": "operationId",
+                "oldValue": "x",
+                "newValue": "y",
+            }
+        ]
 
     def test_description_change_is_metadata(self):
         changes = diff_operation(_op(description="old"), _op(description="new"))
@@ -219,10 +249,11 @@ class TestMetadata:
 
 class TestStability:
     def test_output_sorted_by_subtype_then_detail(self):
-        left = _op(parameters=[{"name": "z", "in": "query"}],
-                   responses={"200": {"description": "ok"}, "500": {"description": "ok"}})
-        right = _op(parameters=[{"name": "a", "in": "query"}],
-                    responses={"201": {"description": "new"}})
+        left = _op(
+            parameters=[{"name": "z", "in": "query"}],
+            responses={"200": {"description": "ok"}, "500": {"description": "ok"}},
+        )
+        right = _op(parameters=[{"name": "a", "in": "query"}], responses={"201": {"description": "new"}})
         changes = diff_operation(left, right)
         keys = [(c["subType"], c["detail"]) for c in changes]
         assert keys == sorted(keys)

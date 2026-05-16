@@ -60,7 +60,7 @@ def clear_cache(srv):
     srv._playground_catalog_cache.clear()
 
 
-SAMPLE_CONTROLLER = '''
+SAMPLE_CONTROLLER = """
 namespace Microsoft.LiveTable.Service.Controllers
 {
     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable")]
@@ -80,7 +80,7 @@ namespace Microsoft.LiveTable.Service.Controllers
         }
     }
 }
-'''
+"""
 
 
 def _make_fake_repo(tmp_path: Path, controllers: dict[str, str]) -> Path:
@@ -179,15 +179,12 @@ class TestCaching:
             ctrl_dir = repo / "Service" / "Microsoft.LiveTable.Service" / "Controllers"
             new_file = ctrl_dir / "LiveTableMaintenanceController.cs"
             new_file.write_text(
-                SAMPLE_CONTROLLER.replace(
-                    "liveTable\"", "liveTableMaintanance\""
-                ).replace(
-                    "LiveTableController", "LiveTableMaintenanceController"
-                ).replace(
-                    "getLatestDag", "getLockedDAGExecutionIteration"
-                )
+                SAMPLE_CONTROLLER.replace('liveTable"', 'liveTableMaintanance"')
+                .replace("LiveTableController", "LiveTableMaintenanceController")
+                .replace("getLatestDag", "getLockedDAGExecutionIteration")
             )
             import os
+
             os.utime(new_file, (time.time() + 1, time.time() + 1))
 
             handler = _call_catalog(srv)
@@ -206,16 +203,20 @@ class TestCaching:
 
 class TestErrorHandling:
     def test_mtime_probe_failure_returns_500(self, srv, clear_cache):
-        with patch.object(srv, "_get_flt_repo_dir", return_value="/nonexistent"), \
-             patch.object(srv, "controllers_dir_mtime", side_effect=RuntimeError("boom")):
+        with (
+            patch.object(srv, "_get_flt_repo_dir", return_value="/nonexistent"),
+            patch.object(srv, "controllers_dir_mtime", side_effect=RuntimeError("boom")),
+        ):
             handler = _call_catalog(srv)
         assert handler.response_status == 500
         assert handler.response_payload["error"] == "extraction-failed"
 
     def test_extract_failure_returns_500(self, srv, clear_cache, tmp_path):
         repo = _make_fake_repo(tmp_path, {"LiveTableController.cs": SAMPLE_CONTROLLER})
-        with patch.object(srv, "_get_flt_repo_dir", return_value=str(repo)), \
-             patch.object(srv, "extract_catalog", side_effect=RuntimeError("parse failed")):
+        with (
+            patch.object(srv, "_get_flt_repo_dir", return_value=str(repo)),
+            patch.object(srv, "extract_catalog", side_effect=RuntimeError("parse failed")),
+        ):
             handler = _call_catalog(srv)
         assert handler.response_status == 500
         assert handler.response_payload["error"] == "extraction-failed"

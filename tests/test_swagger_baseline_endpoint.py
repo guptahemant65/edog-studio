@@ -51,18 +51,22 @@ class FakeHandler:
 
 def _resolver_ok(path: Path):
     """Return a fake ``_resolve_swagger_baseline_path`` that yields *path*."""
+
     def _impl(self):
         return path, None
+
     return _impl
 
 
 def _resolver_unconfigured():
     """Return a resolver that mimics 'FLT repo not configured'."""
+
     def _impl(self):
         return None, {
             "error": "flt-repo-not-configured",
             "message": "no repo",
         }
+
     return _impl
 
 
@@ -134,15 +138,21 @@ class TestBaselineGet:
 
 class TestBaselinePost:
     def test_fetches_runtime_and_saves_baseline(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         baseline_path = tmp_path / "data" / "baseline.json"
         runtime_spec = {"openapi": "3.0.0", "info": {"title": "FLT"}, "paths": {}}
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(runtime_spec, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(runtime_spec, None)),
+        ):
             h = _call_post(srv, _resolver_ok(baseline_path))
         assert h.response_status == 200
         assert h.response_payload["exists"] is True
@@ -151,34 +161,53 @@ class TestBaselinePost:
         assert json.loads(baseline_path.read_text()) == runtime_spec
 
     def test_runtime_fetch_failure_surfaces_error(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         baseline_path = tmp_path / "baseline.json"
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(None, {
-                              "error": "flt-not-running",
-                              "message": "no route",
-                              "status": 503,
-                          })):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(
+                srv,
+                "_fetch_runtime_swagger",
+                return_value=(
+                    None,
+                    {
+                        "error": "flt-not-running",
+                        "message": "no route",
+                        "status": 503,
+                    },
+                ),
+            ),
+        ):
             h = _call_post(srv, _resolver_ok(baseline_path))
         assert h.response_status == 503
         assert h.response_payload["error"] == "flt-not-running"
         assert not baseline_path.exists()
 
     def test_post_overwrites_existing_baseline(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         baseline_path = tmp_path / "baseline.json"
         baseline_path.write_text(json.dumps({"old": True}), encoding="utf-8")
         new_spec = {"openapi": "3.0.0", "paths": {"/y": {"get": {}}}}
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(new_spec, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(new_spec, None)),
+        ):
             h = _call_post(srv, _resolver_ok(baseline_path))
         assert h.response_status == 200
         assert json.loads(baseline_path.read_text()) == new_spec

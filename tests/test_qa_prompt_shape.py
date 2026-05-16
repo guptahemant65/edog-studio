@@ -11,12 +11,11 @@ points exactly at the missing line.
 If you intentionally renamed a section or replaced an exemplar, update
 the matching assertion in this file in the same commit.
 """
+
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-LLM_PROVIDER = (
-    PROJECT_DIR / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs"
-)
+LLM_PROVIDER = PROJECT_DIR / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs"
 
 
 def _read_source() -> str:
@@ -119,10 +118,7 @@ def test_invariant_id_citation_rule_present():
     """Every invariant ID must be cited in at least one scenario — this
     is the contract the linter (item 5) will enforce."""
     src = _read_source()
-    assert (
-        'Each invariant ID (e.g. ""inv-numeric_constant-abc123"") '
-        "MUST be cited in at least one scenario" in src
-    )
+    assert 'Each invariant ID (e.g. ""inv-numeric_constant-abc123"") MUST be cited in at least one scenario' in src
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -191,7 +187,4 @@ def test_user_message_contains_contract_sections():
 def test_api_surface_path_rule_present():
     """The path-match rule is the single biggest hallucination guard."""
     src = _read_source()
-    assert (
-        "**RULE: stimulus.path MUST match one of these endpoints exactly.**"
-        in src
-    )
+    assert "**RULE: stimulus.path MUST match one of these endpoints exactly.**" in src

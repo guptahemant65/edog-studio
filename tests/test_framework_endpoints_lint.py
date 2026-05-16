@@ -30,9 +30,7 @@ _DEFAULT_FLT_DIRS = [
     Path(__file__).resolve().parents[2] / "workload-fabriclivetable",
     Path(__file__).resolve().parents[2] / "workload-livetable",
 ]
-_FRAMEWORK_FILE = (
-    Path(__file__).resolve().parents[1] / "data" / "framework-endpoints.json"
-)
+_FRAMEWORK_FILE = Path(__file__).resolve().parents[1] / "data" / "framework-endpoints.json"
 
 
 def _resolve_flt_repo() -> Path | None:
@@ -137,6 +135,5 @@ class TestFrameworkEndpointsCoverage:
             )
         if signalr_entries and not hits:
             pytest.fail(
-                "data/framework-endpoints.json declares kind=signalr entries "
-                "but no MapHub<...> call was found in FLT."
+                "data/framework-endpoints.json declares kind=signalr entries but no MapHub<...> call was found in FLT."
             )

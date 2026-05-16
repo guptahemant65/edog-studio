@@ -3,6 +3,7 @@
 These tests exercise _serve_playground_dispatch end-to-end by instantiating
 a minimal fake handler and patching urllib.request.urlopen.
 """
+
 import importlib.util
 import io
 import json
@@ -71,9 +72,11 @@ def patched_environment(srv, *, bearer="fake-bearer", config=None, mwc=("fake-mw
     fake_config_path = MagicMock()
     fake_config_path.exists.return_value = True
     fake_config_path.read_text.return_value = json.dumps(config)
-    with patch.object(srv, "_read_cache", return_value=(bearer, 9999999999)), \
-         patch.object(srv, "_get_mwc_token", return_value=mwc), \
-         patch.object(srv, "CONFIG_PATH", fake_config_path):
+    with (
+        patch.object(srv, "_read_cache", return_value=(bearer, 9999999999)),
+        patch.object(srv, "_get_mwc_token", return_value=mwc),
+        patch.object(srv, "CONFIG_PATH", fake_config_path),
+    ):
         yield
 
 
@@ -192,7 +195,7 @@ def test_dispatch_default_content_type_for_body(srv):
 
     def fake_urlopen(req, timeout=30, context=None):
         captured["headers"] = dict(req.header_items())
-        return make_upstream_response(200, "OK", b'{}')
+        return make_upstream_response(200, "OK", b"{}")
 
     envelope = {
         "tokenType": "bearer",
@@ -343,8 +346,11 @@ def test_upstream_500_is_data_not_error(srv):
 
     def fake_urlopen(req, timeout=30, context=None):
         raise urllib.error.HTTPError(
-            req.full_url, 500, "Internal Server Error",
-            hdrs=None, fp=io.BytesIO(b'{"error":"upstream broke"}'),
+            req.full_url,
+            500,
+            "Internal Server Error",
+            hdrs=None,
+            fp=io.BytesIO(b'{"error":"upstream broke"}'),
         )
 
     envelope = {"tokenType": "bearer", "method": "GET", "path": "/v1/x"}
@@ -360,8 +366,11 @@ def test_upstream_500_is_data_not_error(srv):
 def test_upstream_401_envelope(srv):
     def fake_urlopen(req, timeout=30, context=None):
         raise urllib.error.HTTPError(
-            req.full_url, 401, "Unauthorized",
-            hdrs=None, fp=io.BytesIO(b""),
+            req.full_url,
+            401,
+            "Unauthorized",
+            hdrs=None,
+            fp=io.BytesIO(b""),
         )
 
     envelope = {"tokenType": "bearer", "method": "GET", "path": "/v1/x"}
@@ -404,12 +413,18 @@ def test_mwc_token_error_returns_502(srv):
     envelope = {"tokenType": "mwc", "method": "GET", "path": "/liveTable/x"}
     fake_config_path = MagicMock()
     fake_config_path.exists.return_value = True
-    fake_config_path.read_text.return_value = json.dumps({
-        "workspace_id": "WS", "artifact_id": "AID", "capacity_id": "CAP",
-    })
-    with patch.object(srv, "_read_cache", return_value=("fake-bearer", 9999999999)), \
-         patch.object(srv, "_get_mwc_token", side_effect=RuntimeError("token api down")), \
-         patch.object(srv, "CONFIG_PATH", fake_config_path):
+    fake_config_path.read_text.return_value = json.dumps(
+        {
+            "workspace_id": "WS",
+            "artifact_id": "AID",
+            "capacity_id": "CAP",
+        }
+    )
+    with (
+        patch.object(srv, "_read_cache", return_value=("fake-bearer", 9999999999)),
+        patch.object(srv, "_get_mwc_token", side_effect=RuntimeError("token api down")),
+        patch.object(srv, "CONFIG_PATH", fake_config_path),
+    ):
         h = call_dispatch(srv, envelope)
 
     assert h.response_status == 502

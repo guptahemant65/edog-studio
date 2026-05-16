@@ -73,8 +73,7 @@ def _detect_version(spec: dict[str, Any]) -> str:
     if isinstance(swagger, str) and swagger.startswith("2."):
         return "swagger-2.0"
     raise ValueError(
-        "Unrecognized OpenAPI/Swagger version. "
-        "Expected 'openapi' (3.x) or 'swagger' (2.0) key.",
+        "Unrecognized OpenAPI/Swagger version. Expected 'openapi' (3.x) or 'swagger' (2.0) key.",
     )
 
 
@@ -151,10 +150,9 @@ def _lift_v2_operation(op: dict[str, Any]) -> dict[str, Any]:
 def _rewrite_definition_refs(node: Any) -> Any:
     """Rewrite ``#/definitions/X`` -> ``#/components/schemas/X`` everywhere."""
     if isinstance(node, dict):
-        if "$ref" in node and isinstance(node["$ref"], str) \
-                and node["$ref"].startswith(DEFINITIONS_REF_PREFIX):
+        if "$ref" in node and isinstance(node["$ref"], str) and node["$ref"].startswith(DEFINITIONS_REF_PREFIX):
             new = dict(node)
-            new["$ref"] = SCHEMAS_REF_PREFIX + node["$ref"][len(DEFINITIONS_REF_PREFIX):]
+            new["$ref"] = SCHEMAS_REF_PREFIX + node["$ref"][len(DEFINITIONS_REF_PREFIX) :]
             return new
         return {k: _rewrite_definition_refs(v) for k, v in node.items()}
     if isinstance(node, list):

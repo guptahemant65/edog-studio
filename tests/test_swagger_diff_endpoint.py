@@ -51,12 +51,14 @@ class FakeHandler:
 def _resolver_ok(path: Path):
     def _impl(self):
         return path, None
+
     return _impl
 
 
 def _resolver_unconfigured():
     def _impl(self):
         return None, {"error": "flt-repo-not-configured", "message": "no repo"}
+
     return _impl
 
 
@@ -84,18 +86,31 @@ def _write_config(tmp_path, cfg):
 
 class TestRuntimeNotReachable:
     def test_returns_503_when_flt_not_running(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "BEARER_CACHE", tmp_path / ".bearer-noop"), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(None, {
-                              "error": "flt-not-running",
-                              "message": "no route",
-                              "status": 503,
-                          })):
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "BEARER_CACHE", tmp_path / ".bearer-noop"),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(
+                srv,
+                "_fetch_runtime_swagger",
+                return_value=(
+                    None,
+                    {
+                        "error": "flt-not-running",
+                        "message": "no route",
+                        "status": 503,
+                    },
+                ),
+            ),
+        ):
             handler = _call_diff(srv)
         assert handler.response_status == 503
         assert handler.response_payload["error"] == "flt-not-running"
@@ -103,14 +118,22 @@ class TestRuntimeNotReachable:
 
     def test_returns_503_when_config_missing(self, srv, tmp_path):
         cfg = _write_config(tmp_path, {})  # no ids
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(None, {
-                              "error": "missing-config",
-                              "message": "ids missing",
-                              "status": 503,
-                          })):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(
+                srv,
+                "_fetch_runtime_swagger",
+                return_value=(
+                    None,
+                    {
+                        "error": "missing-config",
+                        "message": "ids missing",
+                        "status": 503,
+                    },
+                ),
+            ),
+        ):
             handler = _call_diff(srv)
         assert handler.response_status == 503
         assert handler.response_payload["error"] == "missing-config"
@@ -121,9 +144,14 @@ class TestRuntimeNotReachable:
 
 class TestNoBaseline:
     def test_returns_200_with_runtime_and_null_diff(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         runtime = {
             "openapi": "3.0.0",
             "info": {"title": "FLT", "version": "1"},
@@ -131,10 +159,11 @@ class TestNoBaseline:
             "components": {"schemas": {}},
         }
         baseline_path = tmp_path / "baseline-missing.json"  # not created
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(runtime, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(runtime, None)),
+        ):
             handler = _call_diff(srv, _resolver_ok(baseline_path))
         assert handler.response_status == 200
         payload = handler.response_payload
@@ -144,17 +173,25 @@ class TestNoBaseline:
         assert payload["baselineSource"] == "flt-repo"
 
     def test_returns_200_when_flt_repo_not_configured(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         runtime = {
-            "openapi": "3.0.0", "info": {"title": "FLT", "version": "1"},
-            "paths": {}, "components": {"schemas": {}},
+            "openapi": "3.0.0",
+            "info": {"title": "FLT", "version": "1"},
+            "paths": {},
+            "components": {"schemas": {}},
         }
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(runtime, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(runtime, None)),
+        ):
             handler = _call_diff(srv, _resolver_unconfigured())
         assert handler.response_status == 200
         payload = handler.response_payload
@@ -169,9 +206,14 @@ class TestNoBaseline:
 
 class TestWithBaseline:
     def test_no_changes_yields_zero_total(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         spec = {
             "openapi": "3.0.0",
             "info": {"title": "FLT", "version": "1"},
@@ -180,10 +222,11 @@ class TestWithBaseline:
         }
         baseline_path = tmp_path / "baseline.json"
         baseline_path.write_text(json.dumps(spec), encoding="utf-8")
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(spec, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(spec, None)),
+        ):
             handler = _call_diff(srv, _resolver_ok(baseline_path))
         assert handler.response_status == 200
         payload = handler.response_payload
@@ -192,9 +235,14 @@ class TestWithBaseline:
         assert payload["diff"]["changes"] == []
 
     def test_added_endpoint_surfaces_in_diff(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         baseline_spec = {
             "openapi": "3.0.0",
             "info": {"title": "FLT", "version": "1"},
@@ -210,10 +258,11 @@ class TestWithBaseline:
         }
         baseline_path = tmp_path / "baseline.json"
         baseline_path.write_text(json.dumps(baseline_spec), encoding="utf-8")
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(runtime_spec, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(runtime_spec, None)),
+        ):
             handler = _call_diff(srv, _resolver_ok(baseline_path))
         assert handler.response_status == 200
         diff = handler.response_payload["diff"]
@@ -227,20 +276,27 @@ class TestWithBaseline:
 
 class TestCorruptBaseline:
     def test_corrupt_baseline_surfaces_error_not_500(self, srv, tmp_path):
-        cfg = _write_config(tmp_path, {
-            "workspace_id": "w", "artifact_id": "a", "capacity_id": "c",
-        })
+        cfg = _write_config(
+            tmp_path,
+            {
+                "workspace_id": "w",
+                "artifact_id": "a",
+                "capacity_id": "c",
+            },
+        )
         baseline_path = tmp_path / "baseline.json"
         baseline_path.write_text("{not json", encoding="utf-8")
         runtime = {
             "openapi": "3.0.0",
             "info": {"title": "FLT", "version": "1"},
-            "paths": {}, "components": {"schemas": {}},
+            "paths": {},
+            "components": {"schemas": {}},
         }
-        with patch.object(srv, "CONFIG_PATH", cfg), \
-             patch.object(srv, "_read_cache", return_value=("tok", None)), \
-             patch.object(srv, "_fetch_runtime_swagger",
-                          return_value=(runtime, None)):
+        with (
+            patch.object(srv, "CONFIG_PATH", cfg),
+            patch.object(srv, "_read_cache", return_value=("tok", None)),
+            patch.object(srv, "_fetch_runtime_swagger", return_value=(runtime, None)),
+        ):
             handler = _call_diff(srv, _resolver_ok(baseline_path))
         # Frontend gets a clean signal to ask "re-save baseline" — not a 5xx.
         assert handler.response_status == 200

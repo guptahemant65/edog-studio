@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
@@ -49,9 +48,7 @@ class TestRealFile:
 
 class TestMissingFile:
     def test_missing_file_returns_empty_with_warning(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            flt_catalog, "_FRAMEWORK_ENDPOINTS_PATH", tmp_path / "does-not-exist.json"
-        )
+        monkeypatch.setattr(flt_catalog, "_FRAMEWORK_ENDPOINTS_PATH", tmp_path / "does-not-exist.json")
         endpoints, warnings = _load_framework_endpoints()
         assert endpoints == []
         assert any("not found" in w.lower() for w in warnings)
@@ -157,9 +154,7 @@ class TestMtimeHelper:
         assert mt > 0
 
     def test_returns_none_when_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            flt_catalog, "_FRAMEWORK_ENDPOINTS_PATH", tmp_path / "missing.json"
-        )
+        monkeypatch.setattr(flt_catalog, "_FRAMEWORK_ENDPOINTS_PATH", tmp_path / "missing.json")
         assert framework_endpoints_mtime() is None
 
 
@@ -167,9 +162,7 @@ class TestTaxonomyConstants:
     """Belt-and-braces — SF-001 constants are part of the public surface."""
 
     def test_kinds(self):
-        assert VALID_ENDPOINT_KINDS == frozenset({"rest", "spec", "ui", "signalr"})
+        assert frozenset({"rest", "spec", "ui", "signalr"}) == VALID_ENDPOINT_KINDS
 
     def test_sources(self):
-        assert VALID_ENDPOINT_SOURCES == frozenset(
-            {"controller", "framework", "runtime"}
-        )
+        assert frozenset({"controller", "framework", "runtime"}) == VALID_ENDPOINT_SOURCES
