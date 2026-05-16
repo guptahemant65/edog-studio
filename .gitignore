@@ -51,5 +51,8 @@ scripts/token-helper/obj/
 .playwright-mcp/
 donna-app/
 
+# Git worktrees (isolated workspaces for parallel feature work)
+.worktrees/
+
 # Vendored third-party assets (downloaded by `make vendor`; do not commit)
 scripts/vendor/
