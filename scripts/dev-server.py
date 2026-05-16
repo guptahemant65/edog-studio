@@ -1401,6 +1401,81 @@ def _kill_stale_flt_processes(keep_pid=None, deploy_id=None):
     return killed
 
 
+def _kill_port_listeners(port: int) -> list[int]:
+    """Kill any process currently LISTENING on ``port`` on 127.0.0.1.
+
+    Windows in particular will happily let a second process bind to the same
+    port when the previous owner didn't release the socket cleanly (e.g.,
+    Ctrl-Break vs Ctrl-C), which then load-balances incoming connections
+    between stale and fresh code. Call this just before binding to guarantee
+    a clean slate.
+
+    Returns the list of killed PIDs.
+    """
+    killed: list[int] = []
+    own_pid = os.getpid()
+    try:
+        if sys.platform == "win32":
+            result = subprocess.run(
+                ["netstat", "-ano", "-p", "TCP"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            seen: set[int] = set()
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) < 5 or parts[0] != "TCP":
+                    continue
+                local, _remote, state, pid_str = parts[1], parts[2], parts[3], parts[4]
+                if state != "LISTENING":
+                    continue
+                if not (local.endswith(f":{port}")):
+                    continue
+                try:
+                    pid = int(pid_str)
+                except ValueError:
+                    continue
+                if pid == own_pid or pid in seen:
+                    continue
+                seen.add(pid)
+                try:
+                    subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=10)
+                    killed.append(pid)
+                except Exception as e:
+                    print(f"[port-guard] Failed to kill PID {pid} on :{port}: {e}", file=sys.stderr)
+        else:
+            # POSIX: lsof gives us the LISTEN-state PIDs.
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{port}", "-sTCP:LISTEN"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            for line in result.stdout.splitlines():
+                try:
+                    pid = int(line.strip())
+                except ValueError:
+                    continue
+                if pid == own_pid:
+                    continue
+                try:
+                    os.kill(pid, 9)
+                    killed.append(pid)
+                except Exception as e:
+                    print(f"[port-guard] Failed to kill PID {pid} on :{port}: {e}", file=sys.stderr)
+    except FileNotFoundError:
+        # netstat/lsof not on PATH — nothing we can do; let bind() fail loudly.
+        return killed
+    except Exception as e:
+        print(f"[port-guard] Sweep failed for :{port}: {e}", file=sys.stderr)
+
+    if killed:
+        # Give the kernel a moment to release the socket.
+        time.sleep(0.5)
+    return killed
+
+
 def _drain_flt_stdout(proc, deploy_id):
     """Read FLT process stdout continuously to prevent pipe buffer blocking.
 
@@ -4253,6 +4328,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 tenant_id=cfg.get("tenant_id") or None,
                 fm_cache=_FM_CACHE,
                 overrides_snapshot=overrides_snapshot,
+                home_env=cfg.get("edog_env") or None,
             )
         except FileNotFoundError as e:
             self._json_response(500, {"error": "feature_names_missing", "detail": str(e)})
@@ -5476,11 +5552,27 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Console may be cp1252 on Windows when stdout is piped to a non-terminal
+    # consumer (e.g., a launcher subprocess). Existing log lines use Unicode
+    # symbols (checkmarks, arrows, warnings); reconfigure to UTF-8 so they
+    # don't UnicodeEncodeError at startup.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
     class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
         """Handle each request in a new thread to avoid blocking on slow MWC calls."""
 
         daemon_threads = True
+
+    # Port-guard: kill any prior dev-server instance still holding :5555 so the
+    # OS doesn't load-balance requests between stale and fresh code (the
+    # "ghost 404" failure mode where two processes share the same listener).
+    _stale = _kill_port_listeners(5555)
+    if _stale:
+        print(f"  [port-guard] Reclaimed port 5555 from {len(_stale)} stale process(es): {_stale}")
 
     server = ThreadedHTTPServer(("127.0.0.1", 5555), EdogDevHandler)
 

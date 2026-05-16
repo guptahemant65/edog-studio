@@ -67,8 +67,12 @@ SOVEREIGN_ENVS: tuple[str, ...] = (
 )
 ALL_ENVS: tuple[str, ...] = MAINLINE_ENVS + SOVEREIGN_ENVS
 
-# Home ring for lock evaluation. CST is the canonical V1 choice (spec §2.1).
-HOME_ENV = "cst"
+# Default home ring used when edog-config.json doesn't override. EDOG Studio
+# typically runs against the test ring (`*.ccsctp.net` aka PPE), so 'test' is
+# the safe default. Override with edog-config.json :: ``edog_env``.
+DEFAULT_HOME_ENV = "test"
+# Back-compat alias — some callers still import HOME_ENV. Kept as the default.
+HOME_ENV = DEFAULT_HOME_ENV
 
 
 def _find_feature_names_file(flt_repo: Path) -> Path | None:
@@ -140,6 +144,7 @@ def build_catalog(
     tenant_id: str | None = None,
     fm_cache: FeatureManagementCache | None = None,
     overrides_snapshot: dict[str, bool] | None = None,
+    home_env: str | None = None,
 ) -> dict[str, Any]:
     """Build the full ``GET /api/edog/feature-flags/catalog`` response.
 
@@ -152,6 +157,9 @@ def build_catalog(
             synced, every row's cells are ``missing`` and ``fm.stale = true``.
         overrides_snapshot: Current force-ON map. Used to mark rows as
             ``isOverridden``.
+        home_env: Environment whose per-env state determines ``locked`` and
+            ``effectiveForMyWorkspace``. Falls back to :data:`DEFAULT_HOME_ENV`
+            (``test``) when not provided or unknown to :data:`ALL_ENVS`.
 
     Returns:
         Dict matching :class:`FeatureFlagsCatalogResponse` from C03 spec §3.1.
@@ -159,6 +167,9 @@ def build_catalog(
     generated_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     flags = parse_feature_names(flt_repo)
+
+    if home_env not in ALL_ENVS:
+        home_env = DEFAULT_HOME_ENV
 
     fm_block: dict[str, Any]
     fm_synced = False
@@ -205,7 +216,7 @@ def build_catalog(
             fm_description = fm_doc.get("Description")
             classification = _classify_flag(fm_doc)
 
-        home_cell = per_env.get(HOME_ENV, {"state": "missing"})
+        home_cell = per_env.get(home_env, {"state": "missing"})
         home_state = home_cell.get("state", "missing")
         if home_state == "on":
             effective = True
@@ -250,7 +261,7 @@ def build_catalog(
             "tenantId": tenant_id,
             "capacityId": capacity_id,
             "workspaceId": workspace_id,
-            "homeEnv": HOME_ENV,
+            "homeEnv": home_env,
             "mainlineEnvs": list(MAINLINE_ENVS),
             "sovereignEnvs": list(SOVEREIGN_ENVS),
         },
@@ -279,6 +290,7 @@ def _classify_flag(fm_doc: dict[str, Any]) -> str:
 
 __all__ = [
     "ALL_ENVS",
+    "DEFAULT_HOME_ENV",
     "HOME_ENV",
     "MAINLINE_ENVS",
     "SOVEREIGN_ENVS",

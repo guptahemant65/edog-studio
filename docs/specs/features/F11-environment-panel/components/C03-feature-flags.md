@@ -81,7 +81,7 @@ interface FlagRow {
 
 The 15 environments are exactly the P0 set: `onebox`, `test`, `daily`, `cst`, `dxt`, `msit`, `prod`, plus the eight sovereign/national clouds `mc`, `gcc`, `gcchigh`, `dod`, `usnat`, `ussec`, `bleu`, `usgovcanary`. The table renders seven mainline columns and a folded Sovereign(8) column. Cell states map P0's FM shapes directly: `{}` becomes `empty`; `{ "Enabled": true }` becomes `on`; `{ "Enabled": false }` becomes `off`; `{ "Targets": ... }` becomes `partial`; a declared FLT flag with no FM JSON becomes `missing`.
 
-Locking is computed for the current workspace, not for the global environment. For V1, the home ring is CST. A row is locked when CST is fully `on`, or CST is `partial` and `myWsTargeted === true`. In either case, FM already evaluates true for this workspace, so the STATE toggle is read-only and announced as locked.
+Locking is computed for the current workspace, not for the global environment. The home ring is whichever environment EDOG Studio is actually pointed at — configurable via `edog-config.json :: edog_env` and defaulting to `test` (PPE). A row is locked when the home env is fully `on`, or it is `partial` and `myWsTargeted === true`. In either case, FM already evaluates true for this workspace, so the STATE toggle is read-only and announced as locked.
 
 ### 2.2 Override map
 
@@ -186,7 +186,7 @@ interface FeatureFlagsCatalogResponse {
     tenantId?: string;
     capacityId?: string;
     workspaceId?: string;
-    homeEnv: 'cst';
+    homeEnv: string;       // env name from edog-config.json `edog_env` (default 'test')
   };
   rows: FlagRow[];
 }

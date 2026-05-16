@@ -1,6 +1,7 @@
 {
   "flt_repo_path": "",
   "feature_management_repo_path": "",
+  "edog_env": "test",
   "capacity_id": "",
   "workspace_id": "",
   "artifact_id": "",
