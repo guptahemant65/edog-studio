@@ -8,7 +8,7 @@
 PYTHON       ?= python
 PIP          ?= pip
 
-.PHONY: help install lint format test build clean all verify
+.PHONY: help install lint format test build clean all verify vendor vendor-scalar
 
 help: ## Show available targets
 	@echo.
@@ -19,6 +19,7 @@ help: ## Show available targets
 	@echo  format   - Auto-format code with ruff
 	@echo  test     - Run pytest with coverage
 	@echo  build    - Build HTML from templates
+	@echo  vendor   - Download all vendored third-party assets (Scalar, etc.)
 	@echo  verify   - Run ALL quality gates (build + jscheck + lint + test + gates)
 	@echo  clean    - Remove generated / cached files
 	@echo  all      - lint + test + build
@@ -50,3 +51,14 @@ all: lint test build ## Run full pipeline: lint → test → build
 
 verify: ## Run ALL quality gates — MANDATORY before every commit
 	$(PYTHON) scripts/pre-commit.py
+
+# ── Vendored third-party assets ─────────────────────────────────────────────
+# These targets fetch CDN-hosted libraries into scripts/vendor/ so the
+# dev-server can serve them locally without phoning home to any third party.
+# Files are gitignored — run `make vendor` after a fresh clone.
+SCALAR_VERSION ?= 1.57.2
+
+vendor: vendor-scalar ## Download all vendored third-party assets
+
+vendor-scalar: ## Download Scalar API Reference into scripts/vendor/scalar/
+	$(PYTHON) scripts/fetch-vendor.py scalar $(SCALAR_VERSION)

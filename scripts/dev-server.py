@@ -1994,6 +1994,12 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_swagger_diff()
         elif self.path == "/api/playground/swagger/baseline":
             self._serve_swagger_baseline_get()
+        elif self.path == "/api/playground/swagger/spec":
+            self._serve_swagger_spec()
+        elif self.path == "/swagger" or self.path == "/swagger/" or self.path == "/swagger/index.html":
+            self._serve_swagger_ui()
+        elif self.path.startswith("/vendor/"):
+            self._serve_vendor_asset()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for GET {self.path}"})
 
@@ -2320,7 +2326,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(chat_resp_bytes)))
-            self._cors_headers()
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
             self.wfile.write(chat_resp_bytes)
         except urllib.error.HTTPError as e:
@@ -3006,6 +3012,503 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 ),
             }
         return baseline_path, None
+
+    def _serve_swagger_spec(self):
+        """GET /api/playground/swagger/spec.
+
+        Returns the raw runtime swagger.json fetched from the live FLT instance
+        via the Fabric capacity endpoint. Used by the embedded Swagger UI page
+        served at /swagger so the UI can render endpoints/schemas/responses.
+
+        Response: 200 application/json (raw OpenAPI document)
+                  4xx/5xx envelope from swagger_runtime.fetch_runtime_swagger
+        """
+        cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+        ws_id = cfg.get("workspace_id", "")
+        art_id = cfg.get("artifact_id", "")
+        cap_id = cfg.get("capacity_id", "")
+
+        bearer, _ = _read_cache(BEARER_CACHE)
+
+        runtime_spec, err = _fetch_runtime_swagger(
+            bearer, ws_id, art_id, cap_id, token_provider=_get_mwc_token,
+        )
+        if err is not None:
+            status = err.pop("status", 502)
+            self._json_response(status, err)
+            return
+
+        body = json.dumps(runtime_spec).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_vendor_asset(self):
+        """GET /vendor/<path> — serve vendored static assets.
+
+        Used to ship third-party libraries (e.g., Scalar API Reference) from
+        the local dev-server instead of a public CDN, so the FLT OpenAPI
+        spec stays fully air-gapped. Files live in scripts/vendor/<...>.
+
+        Defends against path traversal by resolving the requested path under
+        VENDOR_ROOT and rejecting anything that escapes it.
+        """
+        VENDOR_ROOT = (Path(__file__).parent / "vendor").resolve()
+        # Strip the /vendor/ prefix and any query/fragment.
+        rel = self.path[len("/vendor/"):].split("?", 1)[0].split("#", 1)[0]
+        # Reject empty paths and obvious traversal attempts up-front.
+        if not rel or ".." in rel.replace("\\", "/").split("/"):
+            self._json_response(400, {"error": "bad_path", "message": "Invalid vendor path"})
+            return
+        try:
+            target = (VENDOR_ROOT / rel).resolve()
+        except (ValueError, OSError) as exc:
+            self._json_response(400, {"error": "bad_path", "message": str(exc)})
+            return
+        # Confine to VENDOR_ROOT — path-traversal guard.
+        try:
+            target.relative_to(VENDOR_ROOT)
+        except ValueError:
+            self._json_response(403, {"error": "forbidden", "message": "Path escapes vendor root"})
+            return
+        if not target.is_file():
+            self._json_response(404, {"error": "not_found", "message": f"No vendor asset at {rel}"})
+            return
+
+        # Minimal content-type sniffing — vendored assets are JS/CSS/fonts.
+        suffix = target.suffix.lower()
+        ctype = {
+            ".js": "application/javascript; charset=utf-8",
+            ".mjs": "application/javascript; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
+            ".map": "application/json; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+            ".woff": "font/woff",
+            ".woff2": "font/woff2",
+            ".svg": "image/svg+xml",
+        }.get(suffix, "application/octet-stream")
+
+        data = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        # Versioned filenames \u2192 immutable.
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _render_vendor_missing(self, asset: str, fix_cmd: str):
+        """Render a friendly HTML page when a vendored asset hasn't been fetched.
+
+        Hit by fresh clones before `make vendor` has been run.
+        """
+        html = (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<title>EDOG \u2014 vendor asset missing</title>"
+            "<style>body{margin:0;background:#f4f5f7;font-family:Inter,system-ui,sans-serif;"
+            "color:#1a1d23;display:grid;place-items:center;min-height:100vh}"
+            ".card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:6px;"
+            "padding:32px;max-width:560px;box-shadow:0 2px 8px rgba(0,0,0,.06)}"
+            "h2{margin:0 0 12px;font-size:15px;color:#d23f3f}p{font-size:13px;line-height:1.55}"
+            "code{background:#f4f5f7;padding:2px 8px;border-radius:4px;"
+            "font-family:'Cascadia Code',Consolas,monospace;font-size:12px;color:#6d5cff}"
+            ".muted{color:#8e95a5;margin-top:16px}</style></head><body>"
+            "<div class='card'>"
+            f"<h2>Vendored asset missing: {asset}</h2>"
+            "<p>The Swagger viewer ships third-party libraries from the local "
+            f"<code>scripts/vendor/</code> folder so the FLT spec stays air-gapped. "
+            f"The <strong>{asset}</strong> bundle hasn\u2019t been fetched yet.</p>"
+            f"<p>Run: <code>{fix_cmd}</code></p>"
+            "<p class='muted'>This is a one-time step after a fresh clone. "
+            "Vendored files are gitignored.</p>"
+            "</div></body></html>"
+        ).encode()
+        self.send_response(503)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(html)
+
+    def _serve_swagger_ui(self):
+        """GET /swagger — Swagger UI HTML wrapper.
+
+        Loads the vendored Scalar API Reference bundle from /vendor/scalar/
+        and configures it to fetch the OpenAPI spec from our local
+        /api/playground/swagger/spec endpoint, which proxies the live FLT
+        swagger.json. This works around FLT's own Swagger UI being unreachable
+        in DevMode (binds to a random Workload-SDK localhost port that no
+        browser tab can reach), and keeps the spec fully air-gapped — no CDN
+        beacons, no third-party telemetry.
+
+        Supports two view modes via a banner toggle:
+          - UI mode (default): Scalar API Reference (modern, beautiful)
+          - JSON mode: pretty-printed spec with copy + download
+        Deep-link friendly: ?mode=json switches to JSON on load.
+        """
+        # Pre-flight: if the vendored Scalar bundle is missing, render a
+        # helpful page instead of letting the browser fail with a cryptic
+        # 404 on the <script> tag. Fresh clones hit this first.
+        scalar_bundle = Path(__file__).parent / "vendor" / "scalar" / "api-reference-1.57.2.js"
+        if not scalar_bundle.is_file():
+            self._render_vendor_missing("scalar", "make vendor-scalar")
+            return
+        html = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>FLT API \u2014 Reference</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14' fill='%236d5cff'%3E%E2%97%86%3C/text%3E%3C/svg%3E">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #f4f5f7;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #1a1d23;
+  }
+  .edog-banner {
+    height: 44px; padding: 0 16px;
+    background: #ffffff;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px; color: #1a1d23;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .edog-banner .mark { color: #6d5cff; font-size: 14px; line-height: 1; }
+  .edog-banner .title { font-weight: 600; letter-spacing: -0.01em; }
+  .edog-banner .sep { width: 1px; height: 14px; background: rgba(0,0,0,0.08); }
+  .edog-banner .meta { color: #8e95a5; font-size: 12px; }
+  .edog-banner .spacer { flex: 1; }
+  .edog-banner a.back {
+    color: #6d5cff; text-decoration: none;
+    font-size: 12px; font-weight: 500;
+    padding: 4px 8px; border-radius: 4px;
+    transition: background 80ms ease-out;
+  }
+  .edog-banner a.back:hover { background: rgba(109,92,255,0.07); }
+
+  /* Segmented toggle (UI / JSON) */
+  .mode-toggle {
+    display: inline-flex; gap: 0;
+    background: #f4f5f7;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .mode-toggle button {
+    appearance: none; border: none; background: transparent;
+    font: inherit; font-size: 12px; font-weight: 500;
+    color: #5a6070;
+    padding: 4px 12px;
+    border-radius: 4px; cursor: pointer;
+    transition: all 80ms ease-out;
+  }
+  .mode-toggle button:hover { color: #1a1d23; }
+  .mode-toggle button.active {
+    background: #ffffff;
+    color: #1a1d23;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  .icon-btn {
+    appearance: none; background: transparent;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 4px; cursor: pointer;
+    padding: 4px 10px; font: inherit; font-size: 12px;
+    color: #5a6070; transition: all 80ms ease-out;
+  }
+  .icon-btn:hover { color: #1a1d23; background: rgba(109,92,255,0.04); border-color: rgba(0,0,0,0.12); }
+  .icon-btn.primary { color: #6d5cff; border-color: rgba(109,92,255,0.25); }
+  .icon-btn.primary:hover { background: rgba(109,92,255,0.07); }
+
+  /* Mode panes */
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  #ref-pane { background: #ffffff; min-height: calc(100vh - 44px); }
+  #scalar-app:empty + #scalar-err:empty::before {
+    content: 'Loading API reference\u2026';
+    display: block;
+    text-align: center;
+    color: #8e95a5;
+    font-size: 13px;
+    padding: 80px 20px;
+  }
+
+  /* JSON mode */
+  #json-pane {
+    padding: 16px;
+    background: #f4f5f7;
+    min-height: calc(100vh - 44px);
+  }
+  .json-toolbar {
+    display: flex; gap: 8px; margin-bottom: 12px;
+    align-items: center;
+  }
+  .json-toolbar .info-line { color: #8e95a5; font-size: 12px; margin-left: 8px; }
+  pre.json-view {
+    margin: 0; padding: 16px 20px;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 6px;
+    font-family: 'Cascadia Code', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px; line-height: 1.55;
+    color: #1a1d23;
+    overflow: auto;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    max-height: calc(100vh - 100px);
+    tab-size: 2;
+    white-space: pre;
+  }
+  /* Light JSON syntax tones */
+  .jk { color: #6d5cff; }           /* keys */
+  .jstr { color: #2d7d2d; }         /* strings */
+  .jnum { color: #c87900; }         /* numbers */
+  .jbool { color: #2d7ff9; }        /* booleans */
+  .jnull { color: #8e95a5; font-style: italic; } /* null */
+
+  /* Error card (light) */
+  .edog-err {
+    margin: 60px auto; max-width: 560px; padding: 24px;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 6px;
+    color: #1a1d23;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .edog-err h2 {
+    margin: 0 0 12px; font-size: 15px; font-weight: 600;
+    color: #d23f3f; letter-spacing: -0.01em;
+  }
+  .edog-err p { margin: 8px 0; font-size: 13px; line-height: 1.5; }
+  .edog-err code {
+    background: #f4f5f7; padding: 2px 6px; border-radius: 4px;
+    font-family: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+    font-size: 12px; color: #5a6070;
+  }
+  .edog-err .muted { color: #8e95a5; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="edog-banner">
+  <span class="mark">\u25C6</span>
+  <span class="title">FLT API \u2014 Reference</span>
+  <span class="sep"></span>
+  <span class="meta">Served by EDOG Studio \u00B7 powered by Scalar</span>
+  <span class="spacer"></span>
+  <div class="mode-toggle" role="tablist">
+    <button id="mode-ui" class="active" role="tab" aria-selected="true">Reference</button>
+    <button id="mode-json" role="tab" aria-selected="false">JSON</button>
+  </div>
+  <span class="sep"></span>
+  <a class="back" href="/" target="_self">\u2190 back to Studio</a>
+</div>
+
+<div id="ref-pane" class="pane active">
+  <div id="scalar-app"></div>
+  <div id="scalar-err"></div>
+</div>
+
+<div id="json-pane" class="pane">
+  <div class="json-toolbar">
+    <button class="icon-btn primary" id="json-copy">Copy</button>
+    <button class="icon-btn" id="json-download">Download swagger.json</button>
+    <span class="info-line" id="json-info"></span>
+  </div>
+  <pre class="json-view" id="json-view">Loading\u2026</pre>
+</div>
+
+<script src="/vendor/scalar/api-reference-1.57.2.js"></script>
+<script>
+(function() {
+  var loadedSpec = null;
+  var loadError = null;
+
+  function setMode(mode) {
+    var ui = document.getElementById('ref-pane');
+    var js = document.getElementById('json-pane');
+    var bu = document.getElementById('mode-ui');
+    var bj = document.getElementById('mode-json');
+    if (mode === 'json') {
+      ui.classList.remove('active'); js.classList.add('active');
+      bu.classList.remove('active'); bj.classList.add('active');
+      bu.setAttribute('aria-selected', 'false'); bj.setAttribute('aria-selected', 'true');
+      history.replaceState(null, '', '?mode=json');
+    } else {
+      js.classList.remove('active'); ui.classList.add('active');
+      bj.classList.remove('active'); bu.classList.add('active');
+      bj.setAttribute('aria-selected', 'false'); bu.setAttribute('aria-selected', 'true');
+      history.replaceState(null, '', location.pathname);
+    }
+  }
+
+  document.getElementById('mode-ui').addEventListener('click', function() { setMode('ui'); });
+  document.getElementById('mode-json').addEventListener('click', function() { setMode('json'); });
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>]/g, function(c) {
+      return c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;';
+    });
+  }
+
+  // Minimal JSON syntax tokenizer for the read-only view
+  function colorizeJson(json) {
+    var s = JSON.stringify(json, null, 2);
+    s = escapeHtml(s);
+    // Order matters: strings (incl keys) first, then numbers/booleans/null
+    s = s.replace(/("(?:[^"\\\\]|\\\\.)*")(\\s*:)?/g, function(m, str, colon) {
+      if (colon) return '<span class="jk">' + str + '</span>' + colon;
+      return '<span class="jstr">' + str + '</span>';
+    });
+    s = s.replace(/\\b(true|false)\\b/g, '<span class="jbool">$1</span>');
+    s = s.replace(/\\bnull\\b/g, '<span class="jnull">null</span>');
+    s = s.replace(/(^|[\\s,\\[])(-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)/g, '$1<span class="jnum">$2</span>');
+    return s;
+  }
+
+  function renderJsonPane() {
+    var pre = document.getElementById('json-view');
+    var info = document.getElementById('json-info');
+    if (loadError) {
+      pre.textContent = JSON.stringify(loadError, null, 2);
+      info.textContent = 'spec unavailable';
+      return;
+    }
+    if (!loadedSpec) {
+      pre.textContent = 'Loading\u2026';
+      info.textContent = '';
+      return;
+    }
+    pre.innerHTML = colorizeJson(loadedSpec);
+    var sz = new Blob([JSON.stringify(loadedSpec)]).size;
+    var kb = (sz / 1024).toFixed(1);
+    var v = (loadedSpec.info && loadedSpec.info.version) ? loadedSpec.info.version : '';
+    info.textContent = kb + ' KB' + (v ? ' \u00B7 v' + v : '');
+  }
+
+  document.getElementById('json-copy').addEventListener('click', function() {
+    if (!loadedSpec) return;
+    navigator.clipboard.writeText(JSON.stringify(loadedSpec, null, 2));
+    var btn = this; var orig = btn.textContent;
+    btn.textContent = 'Copied\u2713'; setTimeout(function() { btn.textContent = orig; }, 1200);
+  });
+  document.getElementById('json-download').addEventListener('click', function() {
+    if (!loadedSpec) return;
+    var blob = new Blob([JSON.stringify(loadedSpec, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = 'swagger.json'; document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  });
+
+  function renderErrorCard(err) {
+    document.getElementById('scalar-err').innerHTML =
+      '<div class="edog-err">' +
+        '<h2>Could not load FLT swagger spec</h2>' +
+        '<p><strong>Error:</strong> ' + escapeHtml(err.error || 'unknown') + '</p>' +
+        '<p>' + escapeHtml(err.message || JSON.stringify(err)) + '</p>' +
+        '<p class="muted">' +
+          'Make sure FLT is deployed and the configured workspace/artifact ' +
+          'still exists. The spec is fetched via <code>/api/playground/swagger/spec</code>.' +
+        '</p>' +
+      '</div>';
+  }
+
+  // Honor ?mode=json deep link
+  var params = new URLSearchParams(location.search);
+  if (params.get('mode') === 'json') setMode('json');
+
+  fetch('/api/playground/swagger/spec', { headers: { 'Accept': 'application/json' } })
+    .then(function(r) {
+      if (!r.ok) return r.json().then(function(j) { throw j; });
+      return r.json();
+    })
+    .then(function(spec) {
+      loadedSpec = spec;
+      // Hand the in-memory spec straight to Scalar so we don't double-fetch
+      // (and so the spec endpoint's auth/error envelope is honored once).
+      if (window.Scalar && typeof Scalar.createApiReference === 'function') {
+        // Sidebar polish: replace each operation summary with the last
+        // non-parameter path segment (e.g. "/getLatestDag" instead of the
+        // full "/v1/workspaces/{wsId}/...") so the sidebar is scannable.
+        // Mutates a deep clone — loadedSpec (used by JSON pane + Download)
+        // remains the untouched original.
+        var sidebarSpec = JSON.parse(JSON.stringify(spec));
+        var METHODS = ['get','post','put','patch','delete','head','options','trace'];
+        function shortLabel(path) {
+          var parts = String(path || '').split('/').filter(Boolean);
+          for (var i = parts.length - 1; i >= 0; i--) {
+            var seg = parts[i];
+            if (!(seg.charAt(0) === '{' && seg.charAt(seg.length - 1) === '}')) {
+              return '/' + seg;
+            }
+          }
+          return path || '/';
+        }
+        if (sidebarSpec && sidebarSpec.paths) {
+          Object.keys(sidebarSpec.paths).forEach(function(p) {
+            var item = sidebarSpec.paths[p];
+            if (!item) return;
+            METHODS.forEach(function(m) {
+              if (item[m] && typeof item[m] === 'object') {
+                item[m].summary = shortLabel(p);
+              }
+            });
+          });
+        }
+        Scalar.createApiReference('#scalar-app', {
+          content: sidebarSpec,
+          theme: 'default',
+          layout: 'modern',
+          documentDownloadType: 'none',
+          hideClientButton: false,
+          showSidebar: true,
+          // Privacy lock-down: the FLT spec is internal-only.
+          // - agent.disabled: kills the AI chat that would upload the
+          //   OpenAPI doc to Scalar's servers on first message
+          //   (otherwise enabled by default on localhost).
+          // - withDefaultFonts: don't pull fonts from fonts.scalar.com.
+          // - telemetry: opt out of any analytics plugin that may load.
+          agent: { disabled: true },
+          withDefaultFonts: false,
+          telemetry: false,
+          showDeveloperTools: 'never',
+          metaData: {
+            title: 'FLT API Reference',
+            description: 'Microsoft Fabric LiveTable workload \u2014 served by EDOG Studio'
+          },
+          defaultHttpClient: { targetKey: 'shell', clientKey: 'curl' }
+        });
+      } else {
+        renderErrorCard({
+          error: 'scalar-not-loaded',
+          message: 'Scalar reference library failed to load from CDN'
+        });
+      }
+      renderJsonPane();
+    })
+    .catch(function(err) {
+      loadError = err;
+      renderErrorCard(err);
+      renderJsonPane();
+    });
+})();
+</script>
+</body>
+</html>
+"""
+        body = html.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _serve_swagger_diff(self):
         """F09 SF-010: GET /api/playground/swagger/diff.

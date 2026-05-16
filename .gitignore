@@ -50,3 +50,6 @@ scripts/token-helper/obj/
 # Tool/session artifacts
 .playwright-mcp/
 donna-app/
+
+# Vendored third-party assets (downloaded by `make vendor`; do not commit)
+scripts/vendor/
