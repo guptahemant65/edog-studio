@@ -1461,7 +1461,6 @@ class WorkspaceExplorer {
     const envLabel = this._getEnvironmentLabel(ws);
     const health = this._getHealthStatus(ws);
     const lastMod = lh.lastUpdatedDate ? this._formatDate(lh.lastUpdatedDate) : null;
-    const truncGuid = lh.id.length > 12 ? lh.id.slice(0, 8) + '\u2026' + lh.id.slice(-4) : lh.id;
 
     // V2 Header — icon + name + status pill + meta row
     let html = '<div class="ws-lh-header">';
@@ -1474,7 +1473,7 @@ class WorkspaceExplorer {
     html += '<span class="ws-status-pill ws-pill-hidden" id="ws-status-pill"></span>';
     html += '</div>';
     html += '<div class="ws-content-meta">';
-    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID: ${this._esc(lh.id)}">${this._esc(truncGuid)}</span>`;
+    html += `<span class="ws-guid" data-copy-id="${this._esc(lh.id)}" title="Click to copy full ID: ${this._esc(lh.id)}">${this._esc(lh.id)}</span>`;
     html += `<span class="ws-badge ws-badge-env">${this._esc(envLabel)}</span>`;
     if (ws._region) {
       html += `<span class="ws-badge ws-badge-region">${this._esc(ws._region)}</span>`;
@@ -2725,7 +2724,7 @@ class WorkspaceExplorer {
         <span class="ws-linked-card-name">${this._esc(name)}</span>
       </div>
       <div class="ws-linked-card-label">${this._esc(label)}</div>
-      <div class="ws-linked-card-id">${this._esc(typeBadge)} \u00b7 ${this._esc(String(itemId).substring(0, 8))}\u2026</div>
+      <div class="ws-linked-card-id">${this._esc(typeBadge)} \u00b7 ${this._esc(String(itemId))}</div>
     </div>`;
   }
 

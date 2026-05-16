@@ -961,9 +961,7 @@
   letter-spacing: 0.02em;
   position: relative;
   overflow: hidden;
-  max-width: 180px;
   white-space: nowrap;
-  text-overflow: ellipsis;
   display: inline-block;
 }
 .ws-guid:hover {
