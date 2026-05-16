@@ -25,6 +25,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from feature_manager_cache import FeatureManagementCache, build_per_env_cells
+
 logger = logging.getLogger(__name__)
 
 # Wire-key regex captures the FLT C# const declarations.
@@ -121,11 +123,11 @@ def parse_feature_names(flt_repo: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def _empty_per_env(missing_reason: str = "stale-cache") -> dict[str, Any]:
+def _empty_per_env() -> dict[str, Any]:
     """Generate ``perEnv`` placeholder when FM cache is unavailable.
 
     All cells map to ``missing`` so the UI renders the row as
-    ``override-staged-unobserved`` until FM enrichment lands.
+    ``missing in FM`` until FM enrichment completes.
     """
     return {env: {"state": "missing"} for env in ALL_ENVS}
 
@@ -136,25 +138,20 @@ def build_catalog(
     workspace_id: str | None = None,
     capacity_id: str | None = None,
     tenant_id: str | None = None,
-    fm_cache_dir: Path | None = None,
+    fm_cache: FeatureManagementCache | None = None,
     overrides_snapshot: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     """Build the full ``GET /api/edog/feature-flags/catalog`` response.
 
-    FM cache enrichment is deferred — when ``fm_cache_dir`` is None or the
-    directory is missing, ``fm.stale = true`` and per-env cells default to
-    ``missing``. Rows still render with declared name + wireKey + summary.
-
     Args:
         flt_repo: Path to the FLT git clone.
         workspace_id, capacity_id, tenant_id: Identifiers for ``myWsTargeted``
-            evaluation. When None, target membership is treated as unknown and
-            the row's ``myWsTargeted`` is False.
-        fm_cache_dir: Local clone of the FeatureManagement repo. None disables
-            FM enrichment (catalog still returns 200 with ``stale=true``).
-        overrides_snapshot: Current force-ON map. Used for ``observationClass``
-            seeding — overridden flags start at ``unknown`` until the wrapper
-            stream confirms ``live`` or ``cached``.
+            evaluation. When None, partial cells render with ``includesMyWorkspace``
+            False and the row's ``myWsTargeted`` is False.
+        fm_cache: Optional :class:`FeatureManagementCache`. When None or not yet
+            synced, every row's cells are ``missing`` and ``fm.stale = true``.
+        overrides_snapshot: Current force-ON map. Used to mark rows as
+            ``isOverridden``.
 
     Returns:
         Dict matching :class:`FeatureFlagsCatalogResponse` from C03 spec §3.1.
@@ -163,16 +160,22 @@ def build_catalog(
 
     flags = parse_feature_names(flt_repo)
 
-    fm_stale = True
-    fm_error: str | None = "FM cache not yet implemented (Phase 2.1 follow-up)"
-    fm_synced_at: str | None = None
-    fm_age: int | None = None
-    if fm_cache_dir is not None and fm_cache_dir.is_dir():
-        # Placeholder — full enrichment lands in a follow-up commit.
-        # For now we only note that the directory exists, so a future
-        # implementation has a hint that the cache is there.
-        fm_stale = True
-        fm_error = "FM enrichment not implemented; using declared-only rows"
+    fm_block: dict[str, Any]
+    fm_synced = False
+    if fm_cache is None:
+        fm_block = {
+            "repoUrl": "https://powerbi.visualstudio.com/Power%20BI/_git/FeatureManagement",
+            "branch": "master",
+            "syncedAt": None,
+            "cacheAgeSeconds": None,
+            "stale": True,
+            "syncInProgress": False,
+            "error": "FM cache disabled",
+            "indexedCount": 0,
+        }
+    else:
+        fm_block = fm_cache.status()
+        fm_synced = fm_block.get("syncedAt") is not None
 
     overrides_snapshot = overrides_snapshot or {}
 
@@ -181,48 +184,97 @@ def build_catalog(
         name = entry["name"]
         wire_key = entry["wireKey"]
         summary = entry["summary"]
-        per_env = _empty_per_env()
+
+        fm_doc = fm_cache.get(wire_key) if (fm_cache and fm_synced) else None
+
+        if fm_doc is None:
+            per_env = _empty_per_env()
+            my_ws_targeted = False
+            missing_reason: str | None = "missing-in-fm" if fm_synced else "stale-cache"
+            fm_description = None
+            classification = "Behavioral"
+        else:
+            per_env, my_ws_targeted = build_per_env_cells(
+                fm_doc,
+                env_keys=ALL_ENVS,
+                tenant_id=tenant_id,
+                capacity_id=capacity_id,
+                workspace_id=workspace_id,
+            )
+            missing_reason = None
+            fm_description = fm_doc.get("Description")
+            classification = _classify_flag(fm_doc)
+
+        home_cell = per_env.get(HOME_ENV, {"state": "missing"})
+        home_state = home_cell.get("state", "missing")
+        if home_state == "on":
+            effective = True
+            locked = True
+        elif home_state == "partial":
+            effective = bool(home_cell.get("includesMyWorkspace"))
+            locked = effective
+        else:
+            effective = False
+            locked = False
+
         is_overridden = wire_key in overrides_snapshot
+        # Force-ON overrides flip the effective value to True regardless of
+        # underlying state (asymmetric model — V1 only supports force-ON).
+        if is_overridden and overrides_snapshot.get(wire_key) is True:
+            effective = True
+
         rows.append(
             {
                 "name": name,
                 "wireKey": wire_key,
-                "summary": summary,
-                # Classification heuristic deferred — default "Behavioral".
-                "classification": "Behavioral",
+                "summary": summary or (fm_description or ""),
+                "fmDescription": fm_description,
+                "classification": classification,
                 "cachedAtStartup": False,
-                # `observationClass`: dev-server tracks this via the wrapper
-                # event stream (Phase 3 work). Default unknown.
-                "observationClass": "unknown",
+                "observationClass": "unobserved",
                 "perEnv": per_env,
-                "myWsTargeted": False,
-                "effectiveForMyWorkspace": False,
-                "locked": False,
-                "missingReason": "stale-cache" if fm_stale else None,
+                "myWsTargeted": my_ws_targeted,
+                "effectiveForMyWorkspace": effective,
+                "locked": locked,
+                "missingReason": missing_reason,
                 "isOverridden": is_overridden,
+                "overrideValue": overrides_snapshot.get(wire_key),
             }
         )
 
     return {
         "generatedAt": generated_at,
         "fltRepoPath": str(flt_repo),
-        "fm": {
-            "repoUrl": "https://powerbi.visualstudio.com/Power%20BI/_git/FeatureManagement",
-            "branch": "master",
-            "syncedAt": fm_synced_at,
-            "cacheAgeSeconds": fm_age,
-            "stale": fm_stale,
-            "error": fm_error,
-        },
+        "fm": fm_block,
         "workspace": {
             "tenantId": tenant_id,
             "capacityId": capacity_id,
             "workspaceId": workspace_id,
             "homeEnv": HOME_ENV,
+            "mainlineEnvs": list(MAINLINE_ENVS),
+            "sovereignEnvs": list(SOVEREIGN_ENVS),
         },
         "rows": rows,
         "rowCount": len(rows),
     }
+
+
+def _classify_flag(fm_doc: dict[str, Any]) -> str:
+    """Best-effort classification (Behavioral vs Cached-at-startup).
+
+    The FM JSON sometimes has a top-level ``Tags`` / ``Category`` block; when
+    absent, default to ``Behavioral``. V1 is permissive — UI doesn't make
+    correctness decisions on classification.
+    """
+    tags = fm_doc.get("Tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            if isinstance(tag, str) and "cache" in tag.lower():
+                return "Cached"
+    category = fm_doc.get("Category")
+    if isinstance(category, str) and "cache" in category.lower():
+        return "Cached"
+    return "Behavioral"
 
 
 __all__ = [

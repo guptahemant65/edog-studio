@@ -846,6 +846,18 @@ class EdogLogViewer {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
+    } else if (viewId === 'environment') {
+      if (!this.featureFlagsMatrix) {
+        this.featureFlagsMatrix = new FeatureFlagsMatrix(
+          document.getElementById('view-environment'),
+          this.ws
+        );
+      }
+      this.featureFlagsMatrix.activate();
+      if (this.dagStudio) this.dagStudio.deactivate();
+      if (this.apiPlayground) this.apiPlayground.deactivate();
+      if (this.controlPanel) this.controlPanel.deactivate();
+      if (this.qaPanel) this.qaPanel.deactivate();
     } else if (viewId === 'api') {
       if (!this.apiPlayground) {
         this.apiPlayground = new ApiPlayground(
@@ -857,11 +869,13 @@ class EdogLogViewer {
       this.apiPlayground.activate();
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
+      if (this.featureFlagsMatrix) this.featureFlagsMatrix.deactivate();
     } else {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
       if (this.qaPanel) this.qaPanel.deactivate();
+      if (this.featureFlagsMatrix) this.featureFlagsMatrix.deactivate();
     }
   }
 

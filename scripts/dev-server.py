@@ -28,6 +28,7 @@ from pathlib import Path
 from socketserver import ThreadingMixIn
 
 import feature_flags_catalog
+import feature_manager_cache
 import feature_overrides
 from file_watcher import FileWatcher
 from flt_catalog import controllers_dir_mtime, extract_catalog, framework_endpoints_mtime
@@ -213,6 +214,11 @@ FLT_INTERNAL_PORT = 5557
 # this value — dev-server adds the X-EDOG-Control-Token header when proxying
 # override writes to FLT. See F11/architecture.md §3.7.
 EDOG_CONTROL_TOKEN = secrets.token_urlsafe(32)
+
+# Shared FeatureManagement cache. First catalog request kicks off the
+# background clone; subsequent requests reuse the in-memory index. See
+# feature_manager_cache.py for sync semantics.
+_FM_CACHE = feature_manager_cache.FeatureManagementCache()
 
 
 def _is_edog_patch_warning(line: str) -> bool:
@@ -2133,6 +2139,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_feature_flags_overrides_post()
         elif self.path == "/api/edog/feature-flags/overrides/reset":
             self._serve_feature_flags_overrides_reset()
+        elif self.path == "/api/edog/feature-flags/refresh":
+            self._serve_feature_flags_refresh()
         elif self.path == "/api/edog/mwc-token":
             self._serve_mwc_token()
         elif self.path == "/api/mwc/table-details":
@@ -4228,13 +4236,19 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         overrides_snapshot, _, _ = feature_overrides.get_snapshot()
+        # Non-blocking: ensure a background sync is in flight when we're cold
+        # or past TTL. UI gets stale=true in the response and re-polls.
+        try:
+            _FM_CACHE.ensure_synced()
+        except Exception:
+            traceback.print_exc()
         try:
             payload = feature_flags_catalog.build_catalog(
                 Path(flt_repo_path),
                 workspace_id=cfg.get("workspace_id") or None,
                 capacity_id=cfg.get("capacity_id") or None,
                 tenant_id=cfg.get("tenant_id") or None,
-                fm_cache_dir=None,
+                fm_cache=_FM_CACHE,
                 overrides_snapshot=overrides_snapshot,
             )
         except FileNotFoundError as e:
@@ -4341,6 +4355,21 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "hash": feature_overrides.compute_hash(snap),
                 "count": 0,
                 "fltSync": sync,
+            },
+        )
+
+    def _serve_feature_flags_refresh(self):
+        """POST /api/edog/feature-flags/refresh — force-refetch the FM cache.
+
+        Kicks off a sync regardless of TTL; returns immediately with the
+        current status (the background thread populates the index).
+        """
+        started = _FM_CACHE.ensure_synced(force=True)
+        self._json_response(
+            200,
+            {
+                "syncStarted": started,
+                "fm": _FM_CACHE.status(),
             },
         )
 
@@ -5430,6 +5459,56 @@ if __name__ == "__main__":
     print(f"  HTML:    {HTML_PATH}")
     print(f"  Proxy:   /api/fabric/* → {REDIRECT_HOST}/v1/*")
     print("  Open:    http://127.0.0.1:5555/edog-logs.html")
+
+    # ── Feature-flag override control plane bootstrap ─────────────────
+    # 1. Cold-start: clear any stale overrides FLT may have retained from a
+    #    prior dev-server process. Architecture §3.6 §2.b. Best-effort —
+    #    if FLT isn't running yet (the common case), this no-ops.
+    # 2. Drift detection: every 30s, GET FLT's snapshot and re-push if its
+    #    hash diverges from ours. Architecture §3.8.
+    def _coldstart_clear_flt_overrides():
+        try:
+            feature_overrides._internal_force_reset()
+            snap, rev, _ = feature_overrides.get_snapshot()
+            result = feature_overrides.push_snapshot_to_flt(
+                snap, rev, flt_port=FLT_INTERNAL_PORT, control_token=EDOG_CONTROL_TOKEN
+            )
+            if result.flt_sync == "applied":
+                print("  ✓ FLT override map cleared on cold-start.")
+        except Exception as e:
+            print(f"  ⚠ Cold-start FLT clear failed (non-fatal): {e}")
+
+    def _drift_detection_loop():
+        import urllib.error
+        import urllib.request
+
+        while True:
+            time.sleep(30)
+            try:
+                snap, rev, local_hash = feature_overrides.get_snapshot()
+                req = urllib.request.Request(
+                    f"http://localhost:{FLT_INTERNAL_PORT}/api/edog/feature-flags/overrides",
+                    method="GET",
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    body = json.loads(resp.read().decode("utf-8"))
+                flt_hash = body.get("hash")
+                if flt_hash and flt_hash != local_hash:
+                    print(f"  ⚠ Drift detected (FLT hash={flt_hash[:8]} vs local={local_hash[:8]}); re-pushing.")
+                    feature_overrides.push_snapshot_to_flt(
+                        snap, rev, flt_port=FLT_INTERNAL_PORT, control_token=EDOG_CONTROL_TOKEN
+                    )
+            except (urllib.error.URLError, OSError, TimeoutError):
+                # FLT not running or unreachable — silently retry next tick.
+                pass
+            except Exception as e:
+                print(f"  ⚠ Drift detection tick failed: {e}")
+
+    # Cold-start clear runs once in a daemon thread (defers ConnectionRefused
+    # latency away from the main listen path).
+    threading.Thread(target=_coldstart_clear_flt_overrides, daemon=True, name="edog-coldstart").start()
+    threading.Thread(target=_drift_detection_loop, daemon=True, name="edog-drift").start()
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:
