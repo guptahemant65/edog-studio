@@ -42855,11 +42855,8 @@ class Sidebar {
     this._bindKeyboard();
     this._observeLegacyTokenDot();
 
-    /* Restore saved view (if still valid) */
-    const saved = localStorage.getItem('edog-active-view');
-    if (saved && this._getNavItem(saved) && !this._getNavItem(saved).classList.contains('disabled')) {
-      this.switchView(saved);
-    }
+    /* Always boot into Workspace Explorer — index.html marks it active by
+       default, and we no longer restore a saved view across sessions. */
   }
 
   /* ── Public API ── */
@@ -42877,7 +42874,7 @@ class Sidebar {
     if (panel) panel.classList.add('active');
 
     this._activeView = viewId;
-    localStorage.setItem('edog-active-view', viewId);
+    /* No persistence — startup always lands on Workspace (index.html default). */
 
     /* Show/hide runtime subitems */
     this._updateSubitemsVisibility();
