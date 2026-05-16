@@ -296,7 +296,7 @@ class Sidebar {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     if (e.ctrlKey || e.metaKey) return;
 
-    const views = ['workspace', 'runtime', 'api', 'environment', 'dag'];
+    const views = ['workspace', 'environment', 'runtime', 'api', 'dag', 'qa'];
     const primarySubTabs = ['logs', 'telemetry', 'sysfiles', 'spark', 'nexus'];
 
     /* Alt+1-5: runtime primary sub-tabs */
