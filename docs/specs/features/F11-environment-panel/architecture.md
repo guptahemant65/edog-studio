@@ -253,7 +253,7 @@ GET    /api/edog/feature-flags/overrides
 
 All responses:
 {
-  "overrides": { ... },
+  "overrides": { "<flag>": { "value": true, "evalClass": "live" | "cached" | "unobserved" }, ... },
   "revision": 43,
   "fltSync": "applied" | "pending" | "failed" | "not-connected" | "wrapper-inactive",
   "fltHash": "ab12..." | null,
@@ -261,6 +261,11 @@ All responses:
   "warning": "<human-readable when fltSync != applied>" | null
 }
 ```
+
+The response carries **two orthogonal axes**:
+
+1. **`fltSync` (document-level)** — connection/wiring health. Did the snapshot reach FLT, and is the wrapper wired into DI?
+2. **`evalClass` (per-flag)** — observability of this specific flag's evaluation pattern. Even when `fltSync == applied`, an individual flag may be `cached` (FLT consumer cached the value at startup) or `unobserved` (we haven't seen any evals through the wrapper). See §3.9 for the classification rules.
 
 `fltSync` field semantics (rubber-duck §10):
 
@@ -353,6 +358,57 @@ Dev-server already detects FLT-reconnect via its existing health-polling and Sig
 
 Dev-server may also periodically (every 30s) call `GET /api/edog/feature-flags/overrides` from FLT to verify the live store still matches its local map. Mismatch detection is cheap (one HTTP call + hash compare) and catches the case where FLT was restarted by an external process (build script, debugger detach) without dev-server's involvement.
 
+### 3.9 Eval observation & per-flag classification (cached-at-startup detection)
+
+`fltSync` (§3.5) answers "did the snapshot reach FLT and is the wrapper wired?" — it cannot answer the harder question: **for this specific flag, will the override actually affect runtime behavior?** Some FLT code paths call `IsEnabled(name, ...)` once at startup, cache the result in a private field, and never re-evaluate. Our wrapper still gets called the one time, sees no override yet (because the user hasn't toggled), returns the MWC value, the caller caches `false`, and from that point forward the cached `false` is the operative truth — even if the user toggles force-ON ten seconds later.
+
+The wrapper publishes a `flag` topic event on **every** `IsEnabled` call (this is unchanged from existing observational behavior). Dev-server already consumes this stream. We add a per-flag aggregate keyed by `(fltSessionId, flagName)`:
+
+```
+type FlagEvalAggregate = {
+  firstSeenMs: number          // first observation in this FLT session
+  lastSeenMs: number           // most recent observation
+  evalCount: number            // total observations
+  fltStartupMs: number         // FLT process start (already in _studio_state)
+}
+```
+
+The map is process-local on dev-server, keyed by `fltSessionId` so it resets cleanly when FLT redeploys. No persistence.
+
+**Classification rule (evaluated at response time, not stored):**
+
+| Pattern                                                                                                              | `evalClass`     |
+|----------------------------------------------------------------------------------------------------------------------|-----------------|
+| `evalCount ≥ 5` OR (`lastSeenMs > fltStartupMs + 60_000` AND `lastSeenMs > now − 60_000`)                            | `live`          |
+| `evalCount ∈ [1, 2]` AND every observation falls within `[fltStartupMs, fltStartupMs + 60_000]`                       | `cached`        |
+| `evalCount == 0`, OR `evalCount` low but doesn't match the `cached` window rule                                       | `unobserved`    |
+
+The 60-second startup window is a heuristic. It is calibrated against the observed FLT bootstrap profile: cached-at-startup callers all evaluate within the first ~30s of process life; production code paths that run on actual request flow re-evaluate continuously thereafter. The thresholds may need a one-time tuning pass during P5 against real eval traces — they are not load-bearing for correctness, only for honest UI labelling.
+
+**Response shape:** Per-flag classification is attached to each row in `overrides[flag].evalClass`. The browser must not invert it to a per-class summary at the document level — the user is acting on individual rows.
+
+**UI mapping (drives C03 row state — see `components/C03-feature-flags.md` §4):**
+
+| `fltSync`           | `evalClass`     | C03 row state            | What the user sees                                                                                                          |
+|---------------------|-----------------|--------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| `applied`           | `live`          | `override-applied`       | Solid amber thumb. Eval-count pulse confirms hits within seconds. Clean apply.                                              |
+| `applied`           | `cached`        | `override-applied-cached`| Amber thumb + inline **[Restart FLT to apply]** chip. Tooltip explains the cached-at-startup pattern.                       |
+| `applied`           | `unobserved`    | `override-staged`        | Amber thumb + watching indicator. Copy: *"No evaluations observed yet. Override will apply on the next call. If you expect this flag to be evaluated continuously and the watcher stays empty, try restarting FLT."* |
+| `pending`           | (any)           | `override-pending`       | Optimistic thumb + spinner. Row disabled.                                                                                   |
+| `failed`            | (any)           | `override-failed`        | Red dot + retry button + error reason from `warning`.                                                                       |
+| `not-connected`     | (any)           | `override-cached-local`  | Amber thumb + "Will apply on FLT start" pill. Override is in dev-server map; will be replayed on reconnect.                 |
+| `wrapper-inactive`  | (any)           | `override-wrapper-off`   | Amber thumb + **[Restart FLT]** call-to-action. Wrapper isn't in the resolved DI chain; no `IsEnabled` call will see overrides this session. |
+
+**Why we do not claim per-flag "wrapper bypassed":**
+
+The ADR-005 pre-captured-reference problem (§10) is real: a consumer that resolved `IFeatureFlighter` before wrapper registration holds the unwrapped reference forever and our wrapper never sees its `IsEnabled` calls. For such a flag, `evalCount` stays at `0` indefinitely.
+
+But `evalCount == 0` is also the natural state for a flag whose code path simply hasn't been exercised yet in this session. The two are indistinguishable from dev-server's vantage point without a ground-truth manifest of "which flags are guaranteed to be evaluated in this process." We don't have that manifest and won't synthesize one for V1.
+
+So `unobserved` is the honest label — it tells the user *"we haven't seen evaluations, your toggle is staged, here are the two things that might be happening: (a) the code path hasn't run yet, or (b) a consumer cached the reference before our wrapper got in line; restart is the disambiguator."* No false certainty either way.
+
+This is the V1-terminal commitment to honesty over false promises. The cut is documented in §13 (Pre-captured-reference fix: cut, not deferred).
+
 ---
 
 ## 4. Catalog Data Plane (unchanged from P0)
@@ -378,7 +434,8 @@ C01–C05 were drafted by parallel agents in P1. Cross-card data flow is locked 
 | Wrapper status         | `GET /api/edog/interceptors/status` | C03                    | C03 gates the toggle UI on `FeatureFlighter.Wrapped == true`. Disconnected = toggles disabled. |
 | FLT phase              | `GET /api/studio/status` `phase` | All cards              | Disconnected vs. connected. Each card's empty/disabled state derives from this. |
 | `lastDeployedAt`       | `_studio_state` (new, persisted via `.edog-session.json`) | C01, C04               | C04 displays prominently; C01 shows in line with config snapshot.        |
-| `fltSync`              | dev-server in-memory | C03                    | Per §3.5 — drives override-row badges.                                   |
+| `fltSync`              | dev-server in-memory | C03                    | Per §3.5 — drives override-row badges (connection/wiring axis).          |
+| `evalClass` per flag   | dev-server in-memory (per-flag aggregate of `flag` topic) | C03 | Per §3.9 — drives the cached-at-startup `[Restart FLT to apply]` chip (observability axis). |
 | `restartRequired`      | C05's response       | C03 and C05            | Either C05's auth-mode change or C03's "cached startup" change can set this. Both surfaces share one restart-FLT action. See §6. |
 
 **No card reads from another card's UI state.** Cross-card communication happens through dev-server endpoints only; localStorage is for per-card collapse state only.
@@ -433,6 +490,8 @@ Anything over budget gets a perf investigation, not a "good enough" pass. Sentin
 | `POST /api/edog/feature-flags/overrides`  | FLT 5xx                            | 502, `{fltSync: failed}`           | Amber row dot + retry button                                 |
 | `POST /api/edog/feature-flags/overrides`  | FLT unreachable                    | 200, `{fltSync: not-connected}`    | Override stored locally; pill: "Will apply on FLT start"     |
 | `POST /api/edog/feature-flags/overrides`  | Bulk push echo hash mismatch       | 502, `{fltSync: failed}`           | Amber row dot + "verify with FLT" diagnostic                 |
+| `POST /api/edog/feature-flags/overrides`  | Push succeeded, but row classified `cached` (per §3.9) | 200, `{fltSync: applied, overrides.<flag>.evalClass: "cached"}` | Amber thumb + **[Restart FLT to apply]** chip; tooltip explains the cached-at-startup pattern |
+| `POST /api/edog/feature-flags/overrides`  | Push succeeded, but row classified `unobserved` (per §3.9) | 200, `{fltSync: applied, overrides.<flag>.evalClass: "unobserved"}` | Amber thumb + watching indicator; copy: "no evaluations observed yet — staged" |
 | `DELETE /overrides/{flag}` for unknown    | unknown flag                       | 404, `{error: "no such override"}` | Silent — UI already removed the row                          |
 | `GET /api/studio/status` returns disconnected | n/a                                | passthrough                        | C03 disables toggles; shows "FLT not running"                |
 | `GET /api/edog/interceptors/status` `FeatureFlighter.Wrapped: false` | n/a              | passthrough                        | C03 banner: "Interceptor inactive — Restart FLT"             |
