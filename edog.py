@@ -18,6 +18,7 @@ import asyncio
 import base64
 import contextlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -2847,6 +2848,57 @@ def get_entrypoint_path(repo_root):
     return repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
 
 
+def _kill_stale_flt_processes_cli():
+    """Kill orphaned FLT EntryPoint processes from prior runs (CLI variant).
+
+    Discovers by image name, kills by PID — never by name pattern.
+    Silent on failure (best-effort cleanup before launch).
+    """
+    try:
+        if sys.platform == "win32":
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq Microsoft.LiveTable.Service.EntryPoint.exe", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=10,
+            )
+            killed = []
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line or "INFO:" in line:
+                    continue
+                parts = [p.strip('"') for p in line.split('","')]
+                if len(parts) < 2:
+                    continue
+                try:
+                    pid = int(parts[1].strip('"'))
+                except ValueError:
+                    continue
+                try:
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                                   capture_output=True, timeout=10)
+                    killed.append(pid)
+                except Exception:
+                    pass
+            if killed:
+                print(f"   🧹 Cleaned up {len(killed)} stale FLT process(es): {killed}")
+                time.sleep(1)  # let Windows release port handles
+        else:
+            result = subprocess.run(["pgrep", "-f", "Microsoft.LiveTable.Service.EntryPoint"],
+                                    capture_output=True, text=True, timeout=10)
+            killed = []
+            for line in result.stdout.splitlines():
+                try:
+                    pid = int(line.strip())
+                    os.kill(pid, 9)
+                    killed.append(pid)
+                except (ValueError, ProcessLookupError, PermissionError):
+                    pass
+            if killed:
+                print(f"   🧹 Cleaned up {len(killed)} stale FLT process(es): {killed}")
+                time.sleep(1)
+    except Exception as e:
+        print(f"   ⚠️  Stale-process sweep failed (continuing): {e}")
+
+
 def start_flt_service(repo_root):
     """
     Start the FLT service using dotnet run.
@@ -2861,6 +2913,9 @@ def start_flt_service(repo_root):
         return None
 
     print(f"   Project: {entrypoint}")
+
+    # Sweep any stale FLT processes from prior runs (avoids port conflicts and orphan log spam)
+    _kill_stale_flt_processes_cli()
 
     try:
         # Step 1: Build first to ensure changes are compiled

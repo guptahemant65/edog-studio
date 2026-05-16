@@ -1272,6 +1272,62 @@ def _deploy_step(step, message, deploy_id):
 _flt_ready_event = threading.Event()
 
 
+def _kill_stale_flt_processes(keep_pid=None, deploy_id=None):
+    """Kill any orphaned FLT (Microsoft.LiveTable.Service.EntryPoint) processes from prior runs.
+
+    Returns the list of (pid, reason) killed. Skips keep_pid (the FLT we currently own).
+    On Windows, uses tasklist + taskkill; on POSIX, falls back to pgrep + kill.
+    """
+    killed = []
+    try:
+        if sys.platform == "win32":
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq Microsoft.LiveTable.Service.EntryPoint.exe", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=10,
+            )
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if not line or "INFO:" in line:
+                    continue
+                parts = [p.strip('"') for p in line.split('","')]
+                if len(parts) < 2:
+                    continue
+                try:
+                    pid = int(parts[1].strip('"'))
+                except ValueError:
+                    continue
+                if keep_pid is not None and pid == keep_pid:
+                    continue
+                try:
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],
+                                   capture_output=True, timeout=10)
+                    killed.append((pid, "stale FLT EntryPoint"))
+                except Exception as e:
+                    print(f"[zombie-sweep] Failed to kill PID {pid}: {e}", file=sys.stderr)
+        else:
+            result = subprocess.run(["pgrep", "-f", "Microsoft.LiveTable.Service.EntryPoint"],
+                                    capture_output=True, text=True, timeout=10)
+            for line in result.stdout.splitlines():
+                try:
+                    pid = int(line.strip())
+                except ValueError:
+                    continue
+                if keep_pid is not None and pid == keep_pid:
+                    continue
+                try:
+                    os.kill(pid, 9)
+                    killed.append((pid, "stale FLT EntryPoint"))
+                except Exception as e:
+                    print(f"[zombie-sweep] Failed to kill PID {pid}: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"[zombie-sweep] Sweep failed: {e}", file=sys.stderr)
+
+    if killed and deploy_id is not None:
+        for pid, reason in killed:
+            _deploy_log(f"Killed stale FLT process (PID {pid}): {reason}", "warn")
+    return killed
+
+
 def _drain_flt_stdout(proc, deploy_id):
     """Read FLT process stdout continuously to prevent pipe buffer blocking.
 
@@ -1678,6 +1734,13 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
                     _flt_process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     _flt_process.kill()
+
+            # Sweep any stale FLT processes from prior dev-server runs or crashes
+            # (our own _flt_process tracking only catches FLTs we spawned in this session)
+            stale_killed = _kill_stale_flt_processes(deploy_id=deploy_id)
+            if stale_killed:
+                # Give Windows a moment to release the port handles
+                time.sleep(1)
 
             config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
             flt_repo = config.get("flt_repo_path", "")
