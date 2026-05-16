@@ -66,7 +66,7 @@ Example response:
 }
 ```
 
-File parsing must return file:line references because P0 marks that as trivial required evidence (`p0-foundation.md:68`), and the mock already renders `Test.json:14` beside the `DisableFLTAuth` pill (`environment-shell.html:1141-1145`). The endpoint must not read or diff appsettings because P0 explicitly recommends dropping that row for V1.1 (`p0-foundation.md:70`).
+File parsing must return file:line references because P0 marks that as trivial required evidence (`p0-foundation.md:68`), and the mock already renders `Test.json:14` beside the `DisableFLTAuth` pill (`environment-shell.html:1141-1145`). The endpoint must not read or diff appsettings because P0 explicitly recommends dropping that row for V1 (`p0-foundation.md:70`).
 
 ### 3.2 `POST /api/edog/auth-mode { mode }` — NEW
 

@@ -1,7 +1,7 @@
 # Feature 11: Environment Panel
 
 > **Status:** PHASE 1 + 4 COMPLETE — P2 Architecture next
-> **Phase:** V1.1
+> **Phase:** V1
 > **Owner:** Pixel (JS/CSS), Vex (C# + Python), Sana (architecture), Sentinel (tests)
 > **Design Ref:** `docs/specs/design-spec-v2.md` §11 (legacy three-tab design)
 > **SOP:** `hivemind/FEATURE_DEV_SOP.md`
@@ -12,7 +12,7 @@
 > - P1 component specs → `components/C0{1..5}-*.md`
 > - P4 visual mock → `mocks/environment-shell.html` (Phantom v3 — locked)
 >
-> **Override model (locked in P1+P2):** Asymmetric — **force-ON only**, no force-OFF in V1.1. Rows where FM already enables the flag for the current workspace are **locked** (no useful override to set). Override entries live in dev-server in-memory map; pushed to FLT via plain HTTP POST to `EdogLogServer:5557` (control-token authenticated); wrapper reads from `EdogFeatureOverrideStore` snapshot before delegating; reset on dev-server restart is expected behavior (replay on wrapper reconnect across FLT redeploys). See `architecture.md` §3 for the full design.
+> **Override model (locked in P1+P2):** Asymmetric — **force-ON only**, no force-OFF in V1. Rows where FM already enables the flag for the current workspace are **locked** (no useful override to set). Override entries live in dev-server in-memory map; pushed to FLT via plain HTTP POST to `EdogLogServer:5557` (control-token authenticated); wrapper reads from `EdogFeatureOverrideStore` snapshot before delegating; reset on dev-server restart is expected behavior (replay on wrapper reconnect across FLT redeploys). See `architecture.md` §3 for the full design.
 >
 > **API namespace (locked):** All flag endpoints sit under `/api/edog/feature-flags/*` — see C03 §3 for the full set.
 
@@ -20,7 +20,7 @@
 
 ## 1. Problem
 
-The sidebar exposes an **Environment** tab today, but clicking it lands on a "coming in V1.1" empty state (`src/frontend/index.html:294`). Meanwhile, the information a developer actually needs to answer *"what is true about this running system right now?"* is scattered across five surfaces:
+The sidebar exposes an **Environment** tab today, but clicking it lands on a "coming in V1" empty state (`src/frontend/index.html:294`). Meanwhile, the information a developer actually needs to answer *"what is true about this running system right now?"* is scattered across five surfaces:
 
 | Question | Today's answer location |
 |---|---|
@@ -106,7 +106,7 @@ Single scrollable panel inside the existing `#view-environment` shell. Vertical 
 |---|---|---|
 | Sidebar entry | `src/frontend/index.html:97,291` | `data-view="environment"` already wired |
 | Mock implementation | `src/frontend/js/mock-renderer.js:858-1100` | Three-tab UI mock — Feature Flags row works, lock + orphans are static |
-| Empty state | `src/frontend/index.html:291-296` | Shows "coming in V1.1" today |
+| Empty state | `src/frontend/index.html:291-296` | Shows "coming in V1" today |
 | Feature flag wrapper (planned) | `src/backend/DevMode/EdogFeatureFlighterWrapper.cs` | Doesn't exist yet; in registry catalog at `src/backend/DevMode/EdogInterceptorRegistry.cs:40` |
 | Config source | `dev-server.py::_serve_config` (line 2010) | Already returns workspace/capacity/artifactId + fltPort + studioPhase |
 | Bearer cache | `BEARER_CACHE` in `dev-server.py` | Token state surface |
@@ -133,7 +133,7 @@ Single scrollable panel inside the existing `#view-environment` shell. Vertical 
 - [ ] Per-ring columns: onebox, test, daily, cst, dxt, msit, prod (sovereign rings collapsed under "+ N more")
 - [ ] Cell glyphs: ✓ (enabled), ✗ (disabled), ◐ (partial — targeted by tenant/capacity/workspace subset)
 - [ ] Search by name; group filter (All / Enabled / Partial / Disabled)
-- [ ] **Asymmetric force-ON override** per flag — single sliding STATE toggle whose only write is force-ON. No force-OFF in V1.1.
+- [ ] **Asymmetric force-ON override** per flag — single sliding STATE toggle whose only write is force-ON. No force-OFF in V1.
 - [ ] Rows where FM already enables the flag for the current workspace are **locked** (ON, reduced opacity, lock icon) — no useful override to set
 - [ ] Override changes POST to `/api/edog/feature-flags/overrides` on dev-server, which posts the full snapshot to FLT `EdogLogServer` via HTTP (control-token authenticated) — see `architecture.md` §3
 - [ ] Overrides persist in dev-server in-memory map; wrapper replays on reconnect after FLT redeploy (reset on dev-server restart is expected)
@@ -152,11 +152,11 @@ Single scrollable panel inside the existing `#view-environment` shell. Vertical 
 - [ ] DisableFLTAuth current value (from `Test.json` parse)
 - [ ] Env var overrides (anything in `EDOG_*` env)
 - [ ] appsettings diff (count only, expandable to full diff)
-- [ ] Read-only — toggling these is out of scope for V1.1
+- [ ] Read-only — toggling these is out of scope for V1
 
 ### Cross-cutting
 - [ ] Cards collapsible, state persists in `localStorage` (key `edog.env.cards.{cardId}`)
-- [ ] No "coming in V1.1" empty state — every card renders or shows specific guidance
+- [ ] No "coming in V1" empty state — every card renders or shows specific guidance
 - [ ] Theme: dark mode works
 - [ ] Keyboard: `4` switches to view (existing), `/` focuses Feature Flags search when card is open
 - [ ] All Sentinel gates pass (build, tests, lint)

@@ -31,7 +31,7 @@ The Feature Flags Matrix is the Environment Panel headline. It answers the quest
 
 This component must not become a generic FeatureManagement browser. P0 cuts that scope: "A naive table of 13K rows is hostile — and unnecessary" and "We only need FLT-relevant. Period." The row set therefore comes from `Service\Microsoft.LiveTable.Service\FeatureFlightProvider\FeatureNames.cs`, parsed as `public const string (\w+) = "([^"]+)"`. The C# const name is the display name; the const value is the wire key passed to MWC and used to resolve the FM JSON. P0 calls out the critical nuance that these often differ, for example `FLTIRQMAPartitionPruningEnabled = "EnableFMLVQMAPartitionPruning"`.
 
-C03 also makes local experimentation reversible. P0 §3 says the existing `EdogFeatureFlighterWrapper` is "purely observational" and "never short-circuits." This spec changes that: dev-server owns an in-memory override map, pushes it to FLT via HTTP POST to `EdogLogServer:5557` (control-token authenticated; see `architecture.md` §3), and the wrapper reads from `EdogFeatureOverrideStore`'s snapshot before delegating — short-circuiting when an override exists. Phantom v3 narrows the UI to the asymmetric model: one silky sliding STATE toggle whose only write is **force ON**. No force-off is exposed in V1.1. If FM already enables the flag for this workspace, the row is locked because there is no useful override to set.
+C03 also makes local experimentation reversible. P0 §3 says the existing `EdogFeatureFlighterWrapper` is "purely observational" and "never short-circuits." This spec changes that: dev-server owns an in-memory override map, pushes it to FLT via HTTP POST to `EdogLogServer:5557` (control-token authenticated; see `architecture.md` §3), and the wrapper reads from `EdogFeatureOverrideStore`'s snapshot before delegating — short-circuiting when an override exists. Phantom v3 narrows the UI to the asymmetric model: one silky sliding STATE toggle whose only write is **force ON**. No force-off is exposed in V1. If FM already enables the flag for this workspace, the row is locked because there is no useful override to set.
 
 ---
 
@@ -81,7 +81,7 @@ interface FlagRow {
 
 The 15 environments are exactly the P0 set: `onebox`, `test`, `daily`, `cst`, `dxt`, `msit`, `prod`, plus the eight sovereign/national clouds `mc`, `gcc`, `gcchigh`, `dod`, `usnat`, `ussec`, `bleu`, `usgovcanary`. The table renders seven mainline columns and a folded Sovereign(8) column. Cell states map P0's FM shapes directly: `{}` becomes `empty`; `{ "Enabled": true }` becomes `on`; `{ "Enabled": false }` becomes `off`; `{ "Targets": ... }` becomes `partial`; a declared FLT flag with no FM JSON becomes `missing`.
 
-Locking is computed for the current workspace, not for the global environment. For V1.1, the home ring is CST. A row is locked when CST is fully `on`, or CST is `partial` and `myWsTargeted === true`. In either case, FM already evaluates true for this workspace, so the STATE toggle is read-only and announced as locked.
+Locking is computed for the current workspace, not for the global environment. For V1, the home ring is CST. A row is locked when CST is fully `on`, or CST is `partial` and `myWsTargeted === true`. In either case, FM already evaluates true for this workspace, so the STATE toggle is read-only and announced as locked.
 
 ### 2.2 Override map
 

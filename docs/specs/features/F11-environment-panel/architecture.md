@@ -180,7 +180,7 @@ public static class EdogFeatureOverrideStore
 Key properties:
 
 - **No public mutable accessor.** Callers cannot grab the dictionary and modify it. The only write path is `ReplaceAll`.
-- **Force-ON only.** The store stores `bool`, but every write path (dev-server endpoint, bulk handler) validates `value == true`. Force-OFF is rejected at the HTTP layer with 400; the store itself stays a `bool` for forward compatibility in case V2 introduces force-OFF, but V1.1 never writes `false`.
+- **Force-ON only.** The store stores `bool` for symmetry with the underlying `IFeatureFlighter` contract, but every write path (dev-server endpoint, bulk handler) validates `value == true` and rejects `false` at the HTTP layer with 400. Force-OFF is **cut, not deferred** — F11 is V1-terminal; the asymmetric model is the model.
 - **`StringComparer.Ordinal`.** FLT flag names are case-sensitive (verified by reading `FeatureNames.cs` in P0). Do not lowercase.
 - **`FrozenDictionary<TKey, TValue>`** (.NET 8+) — read-optimized, immutable after construction. The hot path is `wrapper.IsEnabled() → store.TryGet()` which happens on every flag check.
 
@@ -428,7 +428,7 @@ Anything over budget gets a perf investigation, not a "good enough" pass. Sentin
 |-------------------------------------------|------------------------------------|------------------------------------|--------------------------------------------------------------|
 | `GET /api/edog/feature-flags/catalog`     | FeatureManagement git fetch failed | 502, `{error, stale: bool, asOf}` | Render cached catalog with "stale" badge; offer retry        |
 | `GET /api/edog/feature-flags/catalog`     | FLT repo missing FeatureNames.cs   | 500, `{error}`                     | Show fallback catalog (FM only); show config-warning toast   |
-| `POST /api/edog/feature-flags/overrides`  | Validation (value !== true)        | 400, `{error: "force-OFF not supported"}` | Toast: "Force-OFF not supported in V1.1"             |
+| `POST /api/edog/feature-flags/overrides`  | Validation (value !== true)        | 400, `{error: "force-OFF not supported"}` | Toast: "Force-OFF not supported in V1"               |
 | `POST /api/edog/feature-flags/overrides`  | FLT 401 (token mismatch)           | 502, `{error: "control-token-mismatch", fltSync: failed}` | Toast: "FLT/dev-server token mismatch — restart"   |
 | `POST /api/edog/feature-flags/overrides`  | FLT 5xx                            | 502, `{fltSync: failed}`           | Amber row dot + retry button                                 |
 | `POST /api/edog/feature-flags/overrides`  | FLT unreachable                    | 200, `{fltSync: not-connected}`    | Override stored locally; pill: "Will apply on FLT start"     |
@@ -502,12 +502,15 @@ Override-write events are **not** published on a SignalR topic; they are observa
 
 ---
 
-## 13. Open questions / deferred
+## 13. Out of scope (hard cuts, not deferred)
 
-- **Force-OFF (`value: false`)**: Out of scope V1.1. Asymmetric model is intentional — see C03 §1. If/when V2 enables force-OFF, the store schema is already `bool` and the wrapper logic is one branch change.
-- **Multi-flag bulk UI**: V1.1 toggles one flag at a time. A "Force ON: enable list" mass-toggle could land in V1.2 without store changes — just changes the browser-side aggregation.
-- **Override expiry**: V1.1 overrides live until cleared or dev-server restart. Time-bounded overrides (e.g., "force ON for 30 min") would require a background sweep on dev-server.
-- **Cross-session override persistence**: Explicitly out of scope (§3.6). If a user demands it, the right move is `.edog-session.json` persistence in dev-server, not durable FLT-side storage. Architecture allows this addition without protocol changes.
+F11 is V1-terminal. Every item below is **cut**, not parked for a hypothetical V2. If we change our minds, we open a new feature, not a F11 amendment.
+
+- **Force-OFF (`value: false`)**: Cut. The asymmetric force-ON model is intentional — see C03 §1. The store schema stays `bool` only because that matches the underlying `IFeatureFlighter` contract; it is not a "forward compatibility" affordance.
+- **Multi-flag bulk UI**: Cut. The override panel toggles one flag at a time. Power users with many flags use search + sequential toggles; the bulk POST endpoint is purely an implementation detail for snapshot-atomic writes, not a multi-select UI.
+- **Override expiry / TTL**: Cut. Overrides live until the user clears them or dev-server restarts. No timers, no background sweeps.
+- **Cross-session override persistence**: Cut (§3.6). Resets on dev-server restart are intentional — overrides are a debugging surface, not a stored preference. No `.edog-session.json` plumbing.
+- **Pre-captured-reference fix**: Cut. The ADR-005 late-DI window means callers that captured `IFeatureFlighter` before wrapping happened bypass us permanently. Fixing this would require hoisting wrapper registration into FLT's DI bootstrap (cross-team ADR amendment, large blast radius). The V1 commitment is **truth-telling, not mitigation**: when we detect a flag with no observed evaluations through the wrapper, the UI says "wrapper not in path for this flag — override stored but cannot apply" rather than pretending the toggle worked. See §6 phase table and §10.
 
 ---
 

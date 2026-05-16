@@ -67,7 +67,7 @@
 | `DisableFLTAuth (Test.json)` | Read FLT file, same regex | — | ❌ NOT yet exposed | `edog.py:2768`. Same as above. Two locations, both shown separately in the mock. |
 | `file:line ref` for each | grep for the line number at parse time | — | 🟡 trivial | Add to the endpoint payload. |
 | `env overrides` (`EDOG_*` env vars) | `os.environ` filter | — | ❌ Add | One-line scan. |
-| `appsettings diff count` | — | — | ❌ Decision needed | A "default appsettings" baseline doesn't exist as a file we can diff against. Either build the baseline (snapshot pristine FLT `appsettings.json` at deploy time, diff later) or **drop the row from the card**. V1.1 is terminal — no "coming soon" hedge. Recommendation: **drop the row**; the patch-warnings + DisableFLTAuth lines already cover the meaningful auth/config drift. |
+| `appsettings diff count` | — | — | ❌ Decision needed | A "default appsettings" baseline doesn't exist as a file we can diff against. Either build the baseline (snapshot pristine FLT `appsettings.json` at deploy time, diff later) or **drop the row from the card**. V1 is terminal — no "coming soon" hedge. Recommendation: **drop the row**; the patch-warnings + DisableFLTAuth lines already cover the meaningful auth/config drift. |
 
 ---
 
@@ -90,7 +90,7 @@ One method. No enumeration. No "ring" parameter. The implementation consults fla
 - **Default branch:** `master` (not `main`)
 - **Auth:** Windows credential manager — `git clone` works with cached creds on Microsoft dev boxes, no PAT setup needed. Verified by probe.
 - **Scale:** **13,326 flag JSON files** across 4 root dirs under `Features/`: `5256710/`, `Configuration/`, `Tools/`, `Validation/`. Whole repo `--depth=1 --filter=blob:none` ≈ 15 MB.
-- **README:** points at FMv2 wiki — this is "FeatureManagement v2". There are also `Exp/` (experiments), `ConfigOverrides/` (non-flag config), and Geneva Actions for runtime overrides (out of scope for V1.1).
+- **README:** points at FMv2 wiki — this is "FeatureManagement v2". There are also `Exp/` (experiments), `ConfigOverrides/` (non-flag config), and Geneva Actions for runtime overrides (out of scope for V1).
 
 ### Per-flag schema (verified by reading sample + complex flags)
 
@@ -208,7 +208,7 @@ State is in-memory in dev-server. **dev-server is the durable source of truth ac
 > **Superseded:** The illustrative snippet below has been replaced by the locked design in `architecture.md` §3.3–3.4. Highlights of the correction:
 > - Storage moved from `ConcurrentDictionary<string,bool>` inside the wrapper to a dedicated `EdogFeatureOverrideStore` static class using `volatile FrozenDictionary<string,bool>` for snapshot-atomic reads.
 > - Bulk writes use snapshot replacement (`Volatile.Write`), never `Clear()+foreach` — rubber-duck P2 critique §1.
-> - Force-ON only: store schema permits `bool` for future force-OFF in V2, but every write path rejects `value === false` at the HTTP layer.
+> - Force-ON only: store schema is `bool` to match the underlying `IFeatureFlighter` contract; every write path rejects `value === false` at the HTTP layer. Force-OFF is cut, not deferred — F11 is V1-terminal.
 > Keep the snippet here as historical record only.
 
 ```csharp
@@ -349,7 +349,7 @@ The restart action is **safe** because override persistence across redeploy (§3
 | Collapse/expand any card | Client-side, `localStorage["edog.env.card.{id}"]` | localStorage |
 | Toggle disconnected demo (mock-only) | Client-side state | — (this is a mock affordance, not a real feature) |
 | Copy "diagnostic line" | Client-side concat → clipboard | — |
-| Click `Test.json:14` file:line ref | (future) opens in VS Code via `vscode://file/...` URI | — |
+| Click `Test.json:14` file:line ref | Opens in VS Code via `vscode://file/<abs-path>:<line>` URI handler | — |
 
 ---
 
@@ -358,7 +358,7 @@ The restart action is **safe** because override persistence across redeploy (§3
 - ✅ **`IFeatureFlighter` enumeration:** Confirmed no API exists. Going with rollout JSON parse (Option A above).
 - ✅ **Ring metadata:** Confirmed rings = rollout JSON files, not API parameter. Per-ring view requires file enumeration.
 - ✅ **Late DI registration:** Wrapper already exists (`EdogFeatureFlighterWrapper.cs`), already in `EdogInterceptorRegistry.cs:39-43` catalog. No DI timing risk for the wrapper itself.
-- ✅ **Override sync mechanism:** SignalR push via existing `EdogTopicRouter` hub. <100ms latency. No "tighten later" — V1.1 is terminal, ship the right design now.
+- ✅ **Override sync mechanism:** SignalR push via existing `EdogTopicRouter` hub. <100ms latency. No "tighten later" — V1 is terminal, ship the right design now. **(Superseded by architecture.md §3 — control plane is HTTP, not SignalR.)**
 - ⚠️ **`Test.json` schema drift:** The parse logic in `edog.py:2768` is regex-based — tolerant. Mitigation already in place.
 
 ---
@@ -375,7 +375,7 @@ These changes inform the next mock iteration (and the P1 component spec for `C03
 
 ---
 
-## 9. Out-of-scope items (cut, not deferred — V1.1 is terminal)
+## 9. Out-of-scope items (cut, not deferred — V1 is terminal)
 
 The legacy spec mentioned several "moonshot" items. Without a V2, each must be **built now or cut now**:
 
