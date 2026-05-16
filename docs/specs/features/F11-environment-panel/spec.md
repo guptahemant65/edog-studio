@@ -1,11 +1,20 @@
 # Feature 11: Environment Panel
 
-> **Status:** PHASE 0 — Research not started
+> **Status:** PHASE 1 + 4 COMPLETE — P2 Architecture next
 > **Phase:** V1.1
 > **Owner:** Pixel (JS/CSS), Vex (C# + Python), Sana (architecture), Sentinel (tests)
 > **Design Ref:** `docs/specs/design-spec-v2.md` §11 (legacy three-tab design)
 > **SOP:** `hivemind/FEATURE_DEV_SOP.md`
 > **Supersedes:** `_legacy-flat-spec.md` (former three-tab design — Lock Monitor + Orphaned Resources moved out, see §10)
+>
+> **Locked surfaces:**
+> - P0 research → `research/p0-foundation.md` (override mechanic + asymmetric force-ON rules)
+> - P1 component specs → `components/C0{1..5}-*.md`
+> - P4 visual mock → `mocks/environment-shell.html` (Phantom v3 — locked)
+>
+> **Override model (locked in P1+P2):** Asymmetric — **force-ON only**, no force-OFF in V1.1. Rows where FM already enables the flag for the current workspace are **locked** (no useful override to set). Override entries live in dev-server in-memory map; pushed to FLT via plain HTTP POST to `EdogLogServer:5557` (control-token authenticated); wrapper reads from `EdogFeatureOverrideStore` snapshot before delegating; reset on dev-server restart is expected behavior (replay on wrapper reconnect across FLT redeploys). See `architecture.md` §3 for the full design.
+>
+> **API namespace (locked):** All flag endpoints sit under `/api/edog/feature-flags/*` — see C03 §3 for the full set.
 
 ---
 
@@ -120,15 +129,17 @@ Single scrollable panel inside the existing `#view-environment` shell. Vertical 
 - [ ] Disconnected (no FLT): card shows compact disconnected hint, not empty
 
 ### Card 3 — Feature Flags (headline)
-- [ ] Table of all FLT feature flags discovered via `IFeatureFlighter` enumeration
-- [ ] Per-ring columns: onebox, test, daily, cst, dxt, msit, prod
-- [ ] Cell glyphs: ✓ (enabled), ✗ (disabled), ◐ (conditional — tooltip explains)
+- [ ] Table of FLT-relevant feature flags discovered by parsing the FLT repo's `FeatureNames.cs` (~36 flags), with effective state per ring computed by joining the FeatureManagement repo's per-environment JSON.
+- [ ] Per-ring columns: onebox, test, daily, cst, dxt, msit, prod (sovereign rings collapsed under "+ N more")
+- [ ] Cell glyphs: ✓ (enabled), ✗ (disabled), ◐ (partial — targeted by tenant/capacity/workspace subset)
 - [ ] Search by name; group filter (All / Enabled / Partial / Disabled)
-- [ ] Local override toggle per flag — flows through `EdogFeatureFlighterWrapper`
-- [ ] Overrides persist across reload (stored in dev-server, not localStorage — `IFeatureFlighter` needs them on next call)
-- [ ] Reset-all-overrides button with confirmation
-- [ ] Override changes take effect on next `IsEnabled` call (verified via log)
-- [ ] Connected-only — when disconnected, shows static flag data (no overrides) with explanatory pill
+- [ ] **Asymmetric force-ON override** per flag — single sliding STATE toggle whose only write is force-ON. No force-OFF in V1.1.
+- [ ] Rows where FM already enables the flag for the current workspace are **locked** (ON, reduced opacity, lock icon) — no useful override to set
+- [ ] Override changes POST to `/api/edog/feature-flags/overrides` on dev-server, which posts the full snapshot to FLT `EdogLogServer` via HTTP (control-token authenticated) — see `architecture.md` §3
+- [ ] Overrides persist in dev-server in-memory map; wrapper replays on reconnect after FLT redeploy (reset on dev-server restart is expected)
+- [ ] Override changes take effect on next `IsEnabled` call (verified via SignalR `flag` topic publishing `overridden: true`)
+- [ ] Reset-all-overrides button with confirmation → `POST /api/edog/feature-flags/overrides/reset`
+- [ ] Connected-only — when disconnected, shows catalog read-only with explanatory pill (toggles disabled)
 
 ### Card 4 — Build & Patch
 - [ ] FLT git SHA + branch (read via repo_discovery)
@@ -197,7 +208,7 @@ docs/specs/features/F11-environment-panel/
 | `IFeatureFlighter` flag enumeration API may not exist — `IsEnabled(name)` is callable but listing all flag names may require reflection over a config source | P0 verifies. Fallback: ship a static list from FLT repo's `FeatureManagement` JSON files, refresh on each deploy. |
 | Ring metadata (which ring is current) isn't visible from `IsEnabled` alone — flags evaluate against tenant/capacity/workspace context | P0 reads the actual flag JSON shape. Each row's per-ring state may need to be computed by simulating with hardcoded ring tenant IDs (FLT repo has these constants). |
 | Late DI registration timing (same risk that bit interceptor wrappers) | Reuse the `RunAsync()` callback pattern already used by `EdogTokenLifecycleInterceptor`. Verified in `EdogDevModeRegistrar.cs`. |
-| Override persistence: localStorage isn't enough — wrapper needs them at request time, not page time | Store in dev-server state; wrapper polls `/api/edog/feature-overrides` on a debounce, or push via existing SignalR channel. P2 decides. |
+| Override persistence: localStorage isn't enough — wrapper needs them at request time, not page time | Store in dev-server in-memory map; push to `EdogLogServer:5557` via plain HTTP (control-token authenticated, snapshot-atomic). Reset on dev-server restart is expected; wrapper reconnect replays current map after FLT redeploy. Locked in P2; see `architecture.md` §3. |
 | `Test.json` parse may break on schema drift | P0 confirms current schema. Tolerate missing key; surface as "unknown" not error. |
 
 ## 9. Related Specs (Spin-Offs)

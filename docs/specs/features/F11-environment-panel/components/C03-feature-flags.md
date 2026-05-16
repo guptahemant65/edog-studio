@@ -31,7 +31,7 @@ The Feature Flags Matrix is the Environment Panel headline. It answers the quest
 
 This component must not become a generic FeatureManagement browser. P0 cuts that scope: "A naive table of 13K rows is hostile — and unnecessary" and "We only need FLT-relevant. Period." The row set therefore comes from `Service\Microsoft.LiveTable.Service\FeatureFlightProvider\FeatureNames.cs`, parsed as `public const string (\w+) = "([^"]+)"`. The C# const name is the display name; the const value is the wire key passed to MWC and used to resolve the FM JSON. P0 calls out the critical nuance that these often differ, for example `FLTIRQMAPartitionPruningEnabled = "EnableFMLVQMAPartitionPruning"`.
 
-C03 also makes local experimentation reversible. P0 §3 says the existing `EdogFeatureFlighterWrapper` is "purely observational" and "never short-circuits." This spec changes that: dev-server owns an in-memory override map, pushes it to FLT by SignalR, and the wrapper short-circuits before MWC when an override exists. Phantom v3 narrows the UI to the asymmetric model: one silky sliding STATE toggle whose only write is **force ON**. No force-off is exposed in V1.1. If FM already enables the flag for this workspace, the row is locked because there is no useful override to set.
+C03 also makes local experimentation reversible. P0 §3 says the existing `EdogFeatureFlighterWrapper` is "purely observational" and "never short-circuits." This spec changes that: dev-server owns an in-memory override map, pushes it to FLT via HTTP POST to `EdogLogServer:5557` (control-token authenticated; see `architecture.md` §3), and the wrapper reads from `EdogFeatureOverrideStore`'s snapshot before delegating — short-circuiting when an override exists. Phantom v3 narrows the UI to the asymmetric model: one silky sliding STATE toggle whose only write is **force ON**. No force-off is exposed in V1.1. If FM already enables the flag for this workspace, the row is locked because there is no useful override to set.
 
 ---
 
@@ -203,11 +203,11 @@ The dev-server reads `FeatureNames.cs`, resolves each wire key against the local
 | `DELETE /api/edog/feature-flags/overrides/{flag}` | — | Clears one entry and pushes full map. |
 | `POST /api/edog/feature-flags/overrides/reset` | — | Clears all entries and pushes `{}`. |
 
-After every mutation, dev-server publishes the complete map on the existing SignalR channel using a new `flag-overrides` topic. P0 §3d requires "SignalR push (no polling)" with wrapper reconnect replay after FLT redeploy.
+After every mutation, dev-server pushes the full snapshot to FLT via HTTP `POST /api/edog/feature-flags/overrides/bulk` on `EdogLogServer:5557` (the FLT-side Kestrel host). The control plane is plain HTTP with an `X-EDOG-Control-Token` header; SignalR remains data-plane only. See `architecture.md` §3 for the full corrected control-plane design and rationale for replacing P0's original SignalR-topic-based push.
 
-### 3.3 SignalR push from FLT
+### 3.3 SignalR push from FLT (data plane only)
 
-FLT publishes flag evaluation events on topic `flag`. The browser receives normalized `EvalEvent` objects through the existing EDOG live channel. Override pushes travel the other direction: dev-server → FLT wrapper.
+FLT publishes flag evaluation events on topic `flag`. The browser receives normalized `EvalEvent` objects through the existing EDOG live channel. Override pushes do **not** travel through SignalR — they use the HTTP control plane (§3.2 above and `architecture.md` §3).
 
 ---
 
@@ -218,7 +218,7 @@ FLT publishes flag evaluation events on topic `flag`. The browser receives norma
 | `loading` | Catalog or overrides request in flight. | Search/filter disabled; table skeleton. | Read FLT repo, FM cache, override map. | `loaded-locked` or `loaded-unlocked`. |
 | `loaded-locked` | CST fully ON, or CST partial + workspace targeted. | Toggle rejects with lock explanation. | No write. | Remains locked unless catalog refresh changes FM truth. |
 | `loaded-unlocked` | FM effective state is false for this workspace. | Space/click STATE toggle. | POST force-ON override. | `override-pending`. |
-| `override-pending` | Optimistic toggle awaiting POST response. | Row is disabled; spinner in thumb. | Persist in dev-server, push SignalR map. | `override-applied` or error rollback. |
+| `override-pending` | Optimistic toggle awaiting POST response. | Row is disabled; spinner in thumb. | Persist in dev-server, push full snapshot to FLT `EdogLogServer:5557` via HTTP `/bulk`. | `override-applied` or error rollback. |
 | `override-applied` | Override exists for wire key. | Toggle again or reset glyph. | DELETE one override. | `override-clearing`. |
 | `override-clearing` | Clear request in flight. | Row disabled. | Delete from map, push SignalR map. | `loaded-unlocked` or error rollback. |
 | `cached-needs-restart` | Override applied to cached-at-startup flag. | Click `Restart FLT to apply`. | `POST /api/studio/deploy`; replay overrides on reconnect. | `override-applied` after reconnect. |

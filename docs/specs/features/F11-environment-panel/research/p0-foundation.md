@@ -195,15 +195,21 @@ Tri-state (`Off · MWC · On`) was overengineering. The dict has no "passthrough
 _feature_overrides: dict[str, bool] = {}  # flagName -> forced value
 _feature_overrides_lock = threading.Lock()
 
-# POST   /api/edog/feature-overrides         {flag, value}
-# DELETE /api/edog/feature-overrides/{flag}
-# POST   /api/edog/feature-overrides/reset
-# GET    /api/edog/feature-overrides         → current map
+# POST   /api/edog/feature-flags/overrides         {flag, value}
+# DELETE /api/edog/feature-flags/overrides/{flag}
+# POST   /api/edog/feature-flags/overrides/reset
+# GET    /api/edog/feature-flags/overrides         → current map
 ```
 
 State is in-memory in dev-server. **dev-server is the durable source of truth across FLT restarts** — on wrapper reconnect, dev-server replays the map via SignalR. Reset on dev-server restart is expected behavior.
 
 ### 3c. Wrapper enhancement
+
+> **Superseded:** The illustrative snippet below has been replaced by the locked design in `architecture.md` §3.3–3.4. Highlights of the correction:
+> - Storage moved from `ConcurrentDictionary<string,bool>` inside the wrapper to a dedicated `EdogFeatureOverrideStore` static class using `volatile FrozenDictionary<string,bool>` for snapshot-atomic reads.
+> - Bulk writes use snapshot replacement (`Volatile.Write`), never `Clear()+foreach` — rubber-duck P2 critique §1.
+> - Force-ON only: store schema permits `bool` for future force-OFF in V2, but every write path rejects `value === false` at the HTTP layer.
+> Keep the snippet here as historical record only.
 
 ```csharp
 public class EdogFeatureFlighterWrapper : IFeatureFlighter
@@ -233,7 +239,9 @@ public class EdogFeatureFlighterWrapper : IFeatureFlighter
 }
 ```
 
-### 3d. Sync mechanic: SignalR push (no polling)
+### 3d. Sync mechanic: ~~SignalR push~~ HTTP control plane
+
+> **Superseded by architecture.md §3.** The original "SignalR `flag-overrides` topic" plan is architecturally invalid: `EdogTopicRouter` is publish-only (FLT → browser); there is no subscriber-side hook for FLT code to receive control messages. The locked design uses an HTTP control plane on `EdogLogServer:5557` instead. See `architecture.md` §3.1 for the rationale and §3.2–3.8 for the corrected topology.
 
 dev-server posts override changes to FLT via a new `flag-overrides` topic on the existing `EdogTopicRouter` hub. Wrapper subscribes on startup; on each message calls `Apply(next)`. <100ms latency. On wrapper reconnect after FLT redeploy, dev-server replays the current map. Reset = empty-map message.
 
@@ -261,9 +269,9 @@ The restart action is **safe** because override persistence across redeploy (§3
 
 ### 3f. UI mechanic summary
 
-- ON/OFF press → `POST /api/edog/feature-overrides {flag, value}`
-- Re-click active button → `DELETE /api/edog/feature-overrides/{flag}`
-- "Reset all overrides" → `POST /api/edog/feature-overrides/reset`
+- ON/OFF press → `POST /api/edog/feature-flags/overrides {flag, value}`
+- Re-click active button → `DELETE /api/edog/feature-flags/overrides/{flag}`
+- "Reset all overrides" → `POST /api/edog/feature-flags/overrides/reset`
 - Active override: `!` glyph on row name; relevant cell filled with accent
 - Cached classification: amber dot on row; inline restart button when toggle activated
 - Cell glyphs unchanged: `–` empty · `✓` true · `✗` false · `◐` Targets · `?` missing in FM
@@ -298,16 +306,19 @@ The restart action is **safe** because override persistence across redeploy (§3
 | `GET /api/edog/build-info` (sha, branch, patchHash, patchFileCount, lastDeployedAt, edogVersion) | Augments `/api/edog/health` | Vex (Py) |
 | `GET /api/edog/feature-flags/catalog` (parses FLT rollout JSON files, returns matrix) | — | Vex (Py) |
 | `GET /api/edog/feature-flags/observed` (live evaluations seen by wrapper) | — | Vex (Py) — projection from SignalR stream |
-| `GET /api/edog/feature-overrides` | — | Vex (Py) |
-| `POST /api/edog/feature-overrides` `{flag,value}` | — | Vex (Py) + Vex (C# wrapper) |
-| `POST /api/edog/feature-overrides/reset` | — | Vex (Py) |
+| `GET /api/edog/feature-flags/overrides` | — | Vex (Py) |
+| `POST /api/edog/feature-flags/overrides` `{flag,value}` | — | Vex (Py) + Vex (C# wrapper) |
+| `DELETE /api/edog/feature-flags/overrides/{flag}` | — | Vex (Py) |
+| `POST /api/edog/feature-flags/overrides/reset` | — | Vex (Py) |
 | (existing) `GET /api/studio/status` | Already returns `fltPort`, `phase`, `patchWarnings` | — |
 | (existing) `GET /api/flt/config` | Already returns workspace / capacity / artifact / fltPort / bearer presence | — |
 
 ### Endpoints to extend
 
 - `GET /api/edog/health` — add `mwcLastRefresh`, `gitSha`, `edogVersion`, `patchHash`, `patchFileCount`, `lastDeployedAt`.
-- `EdogFeatureFlighterWrapper.cs` — add override store + subscribe to `flag-overrides` SignalR topic from `EdogTopicRouter`.
+- `EdogFeatureFlighterWrapper.cs` — read from `EdogFeatureOverrideStore` snapshot before delegating; publish `overridden:true` field on the existing `flag` topic. ~~Subscribe to `flag-overrides` SignalR topic~~ — **superseded; control plane is HTTP, not SignalR — see `architecture.md` §3.**
+- `EdogFeatureOverrideStore.cs` (new) — static class, `volatile FrozenDictionary<string,bool>` snapshot, `ReplaceAll(map, revision)` for atomic write.
+- `EdogLogServer.cs` — add `/api/edog/feature-flags/overrides{,/bulk}` routes with `X-EDOG-Control-Token` middleware.
 
 ---
 
@@ -332,8 +343,8 @@ The restart action is **safe** because override persistence across redeploy (§3
 | Click copy ⧉ on any monospace value | `navigator.clipboard.writeText(value)` + toast | — |
 | Click "Regenerate" on bearer | Re-run silent-CBA flow: `POST /api/edog/auth {username}` | `.edog-bearer-cache` rewritten |
 | Click "Refresh" on MWC | `POST /api/edog/mwc-token` (already exists, `dev-server.py:1971`) | `MWC_CACHE` (in-memory + on-disk) rewritten |
-| Toggle flag override | `POST /api/edog/feature-overrides {flag, value}` | dev-server in-memory map; pushed to wrapper via SignalR `flag-overrides` topic |
-| Reset all overrides | `POST /api/edog/feature-overrides/reset` | dev-server map cleared; empty map pushed to wrapper |
+| Toggle flag override | `POST /api/edog/feature-flags/overrides {flag, value}` | dev-server in-memory map; pushed to FLT `EdogLogServer:5557` via HTTP `POST /api/edog/feature-flags/overrides/bulk` (snapshot-atomic, control-token authenticated) — see `architecture.md` §3 |
+| Reset all overrides | `POST /api/edog/feature-flags/overrides/reset` | dev-server map cleared; empty snapshot pushed to FLT via HTTP `/bulk` |
 | Search / group filter in flags table | Client-side filter, no backend | localStorage for last query |
 | Collapse/expand any card | Client-side, `localStorage["edog.env.card.{id}"]` | localStorage |
 | Toggle disconnected demo (mock-only) | Client-side state | — (this is a mock affordance, not a real feature) |
