@@ -86,6 +86,7 @@ DEVMODE_FILES = {
     "EdogInterceptorRegistry": SERVICE_PATH / "DevMode/EdogInterceptorRegistry.cs",
     "EdogDevModeRegistrar": SERVICE_PATH / "DevMode/EdogDevModeRegistrar.cs",
     "EdogFeatureFlighterWrapper": SERVICE_PATH / "DevMode/EdogFeatureFlighterWrapper.cs",
+    "EdogFeatureOverrideStore": SERVICE_PATH / "DevMode/EdogFeatureOverrideStore.cs",
     "EdogTokenInterceptor": SERVICE_PATH / "DevMode/EdogTokenInterceptor.cs",
     "EdogHttpPipelineHandler": SERVICE_PATH / "DevMode/EdogHttpPipelineHandler.cs",
     "EdogFileSystemInterceptor": SERVICE_PATH / "DevMode/EdogFileSystemInterceptor.cs",

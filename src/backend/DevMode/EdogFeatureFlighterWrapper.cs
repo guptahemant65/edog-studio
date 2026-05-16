@@ -12,9 +12,18 @@ namespace Microsoft.LiveTable.Service.DevMode
     using Microsoft.LiveTable.Service.FeatureFlightProvider;
 
     /// <summary>
-    /// Decorator that wraps <see cref="IFeatureFlighter"/> to capture flag evaluations.
-    /// Publishes FlagEvalEvent to the "flag" topic via <see cref="EdogTopicRouter"/>.
-    /// Thread-safe stateless decorator — _inner is readonly. Zero overhead on caller.
+    /// Decorator that wraps <see cref="IFeatureFlighter"/> with two behaviors:
+    /// <list type="bullet">
+    ///   <item>Observation: every evaluation is published to the <c>"flag"</c>
+    ///   topic via <see cref="EdogTopicRouter"/>.</item>
+    ///   <item>Override short-circuit: when
+    ///   <see cref="EdogFeatureOverrideStore"/> has an entry for the
+    ///   featureName, return its value WITHOUT calling the inner flighter
+    ///   (per <c>F11/architecture.md §3.4</c>).</item>
+    /// </list>
+    /// Force-ON only — the store enforces this. The wrapper trusts the store
+    /// and returns whatever value it has (always <c>true</c> in V1).
+    /// Thread-safe stateless decorator; _inner is readonly.
     /// </summary>
     public class EdogFeatureFlighterWrapper : IFeatureFlighter
     {
@@ -37,7 +46,21 @@ namespace Microsoft.LiveTable.Service.DevMode
             Guid? workspaceId)
         {
             var sw = Stopwatch.StartNew();
-            var result = _inner.IsEnabled(featureName, tenantId, capacityId, workspaceId);
+            bool overridden = false;
+            bool result;
+
+            if (EdogFeatureOverrideStore.TryGet(featureName, out var forced))
+            {
+                // Short-circuit: do NOT call _inner. Force-ON is the only path
+                // (the store enforces value == true at write time).
+                result = forced;
+                overridden = true;
+            }
+            else
+            {
+                result = _inner.IsEnabled(featureName, tenantId, capacityId, workspaceId);
+            }
+
             sw.Stop();
 
             var eventData = new
@@ -48,6 +71,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 workspaceId = workspaceId?.ToString(),
                 result,
                 durationMs = sw.Elapsed.TotalMilliseconds,
+                overridden,
             };
 
             EdogTopicRouter.Publish("flag", eventData);
@@ -56,3 +80,4 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
     }
 }
+

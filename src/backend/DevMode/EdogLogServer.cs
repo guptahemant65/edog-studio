@@ -418,6 +418,157 @@ namespace Microsoft.LiveTable.Service.DevMode
                 await context.Response.WriteAsync("{\"error\":\"interceptor status probe failed\"}");
             }
         });
+
+        // Feature-flag override control plane (per F11/architecture.md §3.5).
+        // Both endpoints require X-EDOG-Control-Token header. Token is set
+        // per-session by dev-server and passed to FLT via EDOG_CONTROL_TOKEN
+        // env var. Mounted unconditionally — NOT gated on apiProxy != null.
+        app.MapGet("/api/edog/feature-flags/overrides", async context =>
+        {
+            try
+            {
+                if (!ValidateOverrideControlToken(context)) return;
+
+                var snapshot = EdogFeatureOverrideStore.GetSnapshot();
+                var payload = new
+                {
+                    overrides = snapshot,
+                    revision = EdogFeatureOverrideStore.Revision,
+                    hash = EdogFeatureOverrideStore.Hash,
+                    count = snapshot.Count,
+                };
+                var json = JsonSerializer.Serialize(payload, JsonOptions);
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error serving feature-flag overrides GET: {ex}");
+                context.Response.StatusCode = 500;
+                await context.Response.WriteAsync("{\"error\":\"overrides read failed\"}");
+            }
+        });
+
+        app.MapPost("/api/edog/feature-flags/overrides/bulk", async context =>
+        {
+            try
+            {
+                if (!ValidateOverrideControlToken(context)) return;
+
+                BulkOverrideRequest body;
+                try
+                {
+                    body = await JsonSerializer.DeserializeAsync<BulkOverrideRequest>(
+                        context.Request.Body,
+                        new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true,
+                        });
+                }
+                catch (JsonException jex)
+                {
+                    context.Response.StatusCode = 400;
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync(
+                        $"{{\"error\":\"malformed JSON body\",\"detail\":\"{EscapeJson(jex.Message)}\"}}");
+                    return;
+                }
+
+                if (body == null)
+                {
+                    context.Response.StatusCode = 400;
+                    context.Response.ContentType = "application/json";
+                    await context.Response.WriteAsync("{\"error\":\"empty body\"}");
+                    return;
+                }
+
+                // Validate every value is true. Force-OFF rejected at HTTP.
+                if (body.Overrides != null)
+                {
+                    foreach (var kvp in body.Overrides)
+                    {
+                        if (kvp.Value != true)
+                        {
+                            context.Response.StatusCode = 400;
+                            context.Response.ContentType = "application/json";
+                            await context.Response.WriteAsync(
+                                $"{{\"error\":\"force-OFF not supported in V1\",\"flag\":\"{EscapeJson(kvp.Key)}\"}}");
+                            return;
+                        }
+                    }
+                }
+
+                var (rev, hash, count) = EdogFeatureOverrideStore.ReplaceAll(body.Overrides);
+                var payload = new
+                {
+                    revision = rev,
+                    hash,
+                    count,
+                };
+                var json = JsonSerializer.Serialize(payload, JsonOptions);
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync(json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error serving feature-flag overrides POST: {ex}");
+                context.Response.StatusCode = 500;
+                await context.Response.WriteAsync("{\"error\":\"overrides write failed\"}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Validates the X-EDOG-Control-Token header on a request. Writes a
+    /// 401 (or 503 when no token is configured) and returns false on
+    /// failure; returns true to let the caller proceed.
+    /// </summary>
+    private static bool ValidateOverrideControlToken(HttpContext context)
+    {
+        if (!EdogFeatureOverrideStore.ControlTokenConfigured)
+        {
+            context.Response.StatusCode = 503;
+            context.Response.ContentType = "application/json";
+            context.Response.WriteAsync(
+                "{\"error\":\"EDOG_CONTROL_TOKEN env var not configured on FLT process; restart with EDOG control token to enable overrides\"}").GetAwaiter().GetResult();
+            return false;
+        }
+
+        var presented = context.Request.Headers["X-EDOG-Control-Token"].ToString();
+        if (!EdogFeatureOverrideStore.ValidateControlToken(presented))
+        {
+            context.Response.StatusCode = 401;
+            context.Response.ContentType = "application/json";
+            context.Response.WriteAsync(
+                "{\"error\":\"X-EDOG-Control-Token missing or invalid\"}").GetAwaiter().GetResult();
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Minimal escaping for JSON string values built via string interpolation.
+    /// Used only on error paths where we surface dependency messages.
+    /// </summary>
+    private static string EscapeJson(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return string.Empty;
+        return s
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r")
+            .Replace("\t", "\\t");
+    }
+
+    /// <summary>
+    /// Request body for <c>POST /api/edog/feature-flags/overrides/bulk</c>.
+    /// </summary>
+    private sealed class BulkOverrideRequest
+    {
+        public Dictionary<string, bool> Overrides { get; set; }
+        public long? Revision { get; set; }
     }
 
     private static string FindEdogConfigDir()
