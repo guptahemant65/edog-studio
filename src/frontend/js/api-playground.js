@@ -600,11 +600,27 @@ class RequestBuilder {
     authPane.setAttribute('data-pane', 'auth');
     authPane.innerHTML = '<div class="api-auth-panel">'
       + '<div class="api-auth-row"><span class="api-auth-lbl">Token Type</span>'
-      + '<div class="api-auth-val">Auto-detected from URL</div></div>'
+      + '<div class="api-auth-val" data-auth-type>--</div></div>'
       + '<div class="api-auth-row"><span class="api-auth-lbl">Token</span>'
-      + '<div class="api-auth-val"><span>\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF</span>'
-      + '<button class="reveal">Show</button></div></div></div>';
+      + '<div class="api-auth-val">'
+      + '<span class="api-auth-token" data-auth-token>\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF</span>'
+      + '<button class="reveal" type="button" data-auth-reveal>Show</button>'
+      + '<button class="reveal" type="button" data-auth-copy style="display:none">Copy</button>'
+      + '</div></div>'
+      + '<div class="api-auth-row"><span class="api-auth-lbl"></span>'
+      + '<div class="api-auth-val api-auth-hint" data-auth-hint style="color:var(--text-muted);font-size:11px"></div></div>'
+      + '</div>';
     content.appendChild(authPane);
+
+    // Hold refs for reactive updates
+    this._authTypeEl = authPane.querySelector('[data-auth-type]');
+    this._authTokenEl = authPane.querySelector('[data-auth-token]');
+    this._authRevealBtn = authPane.querySelector('[data-auth-reveal]');
+    this._authCopyBtn = authPane.querySelector('[data-auth-copy]');
+    this._authHintEl = authPane.querySelector('[data-auth-hint]');
+    this._authRevealed = false;
+    this._authRevealedToken = null;
+    this._authRevealedType = null;
 
     this._container.appendChild(content);
 
@@ -657,7 +673,30 @@ class RequestBuilder {
     this._urlEl.addEventListener('input', function() {
       self._pinnedTokenType = null;
       self._renderParams();
+      self._updateAuthPane();
     });
+
+    // Show/Hide token
+    if (this._authRevealBtn) {
+      this._authRevealBtn.addEventListener('click', function() {
+        self._toggleTokenReveal();
+      });
+    }
+    if (this._authCopyBtn) {
+      this._authCopyBtn.addEventListener('click', function() {
+        if (!self._authRevealedToken) return;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(self._authRevealedToken).then(function() {
+            var prev = self._authCopyBtn.textContent;
+            self._authCopyBtn.textContent = 'Copied';
+            setTimeout(function() { self._authCopyBtn.textContent = prev; }, 1200);
+          });
+        }
+      });
+    }
+
+    // Initial paint of the auth pane label
+    this._updateAuthPane();
 
     // cURL copy
     curlBtn.addEventListener('click', function() {
@@ -1001,6 +1040,7 @@ class RequestBuilder {
     if (req.url !== undefined) this._urlEl.value = req.url;
     if (req.body !== undefined) this._bodyEl.value = req.body || '';
     if (req.tokenType) this._pinnedTokenType = req.tokenType;
+    this._updateAuthPane();
 
     // F09 query-param enrichment: documented params from catalog drive a
     // pre-seeded Params tab with type badges, defaults as placeholders, and
@@ -1056,6 +1096,147 @@ class RequestBuilder {
       parts.push("-d '" + req.body.replace(/'/g, "'\\''") + "'");
     }
     return parts.join(' \\\n  ');
+  }
+
+  _currentTokenType() {
+    return this._pinnedTokenType || this._detectTokenType(this._urlEl ? this._urlEl.value : '');
+  }
+
+  _updateAuthPane() {
+    if (!this._authTypeEl) return;
+    var type = this._currentTokenType();
+    var label;
+    if (type === 'bearer') label = 'Bearer (ARM/Fabric)';
+    else if (type === 'mwc') label = 'MwcToken';
+    else label = 'None (auto-detected from URL)';
+    this._authTypeEl.textContent = label;
+    if (this._authRevealed && this._authRevealedType !== type) {
+      this._collapseTokenReveal();
+    }
+    if (this._authRevealBtn) {
+      this._authRevealBtn.disabled = (type === 'none');
+      this._authRevealBtn.style.opacity = (type === 'none') ? '0.5' : '';
+      this._authRevealBtn.style.cursor = (type === 'none') ? 'not-allowed' : '';
+    }
+  }
+
+  _toggleTokenReveal() {
+    if (this._authRevealed) {
+      this._collapseTokenReveal();
+      return;
+    }
+    var type = this._currentTokenType();
+    if (type === 'none') return;
+    var self = this;
+    this._authRevealBtn.textContent = 'Loading...';
+    this._authRevealBtn.disabled = true;
+    fetch('/api/flt/config')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(cfg) {
+        if (!cfg) {
+          self._authRevealBtn.disabled = false;
+          self._showAuthHint('Could not reach /api/flt/config.');
+          self._authRevealBtn.textContent = 'Show';
+          return null;
+        }
+        // Bearer token comes back inline. MWC token is *deliberately* masked
+        // as "proxy-managed" in /api/flt/config — fetch the real JWT from the
+        // dedicated endpoint POST /api/edog/mwc-token (ws/lh/cap required).
+        if (type === 'bearer') {
+          return { token: cfg.bearerToken, type: 'bearer' };
+        }
+        if (!cfg.workspaceId || !cfg.artifactId || !cfg.capacityId) {
+          self._showAuthHint('MWC token needs workspace/lakehouse/capacity — deploy first or set them in workspace config.');
+          return null;
+        }
+        return fetch('/api/edog/mwc-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspaceId: cfg.workspaceId,
+            lakehouseId: cfg.artifactId,
+            capacityId: cfg.capacityId
+          })
+        })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+        .then(function(r) {
+          if (!r.ok) {
+            var msg = (r.body && r.body.message) ? r.body.message : 'mwc-token endpoint returned ' + (r.body && r.body.error || 'error');
+            self._showAuthHint(msg);
+            return null;
+          }
+          return { token: r.body.token, type: 'mwc' };
+        });
+      })
+      .then(function(result) {
+        self._authRevealBtn.disabled = false;
+        if (!result || !result.token) {
+          self._authRevealBtn.textContent = 'Show';
+          if (!self._authHintEl.textContent) {
+            self._showAuthHint(
+              type === 'bearer'
+                ? 'No bearer token available yet. Sign in via the Token Inspector.'
+                : 'No MWC token available yet. Deploy or regenerate from Token Inspector.'
+            );
+          }
+          return;
+        }
+        self._authRevealedToken = result.token;
+        self._authRevealedType = result.type;
+        self._authRevealed = true;
+        self._authTokenEl.textContent = result.token;
+        self._authTokenEl.style.wordBreak = 'break-all';
+        self._authTokenEl.style.fontFamily = 'var(--font-mono)';
+        self._authTokenEl.style.fontSize = '11px';
+        self._authTokenEl.style.userSelect = 'text';
+        self._authRevealBtn.textContent = 'Hide';
+        if (self._authCopyBtn) self._authCopyBtn.style.display = '';
+        self._showAuthHint(self._tokenHint(result.token, result.type));
+      })
+      .catch(function(err) {
+        self._authRevealBtn.disabled = false;
+        self._authRevealBtn.textContent = 'Show';
+        self._showAuthHint('Error: ' + (err && err.message ? err.message : String(err)));
+      });
+  }
+
+  _collapseTokenReveal() {
+    this._authRevealed = false;
+    this._authRevealedToken = null;
+    this._authRevealedType = null;
+    if (this._authTokenEl) {
+      this._authTokenEl.textContent = '\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF\u25CF';
+      this._authTokenEl.style.wordBreak = '';
+      this._authTokenEl.style.fontFamily = '';
+      this._authTokenEl.style.fontSize = '';
+      this._authTokenEl.style.userSelect = '';
+    }
+    if (this._authRevealBtn) this._authRevealBtn.textContent = 'Show';
+    if (this._authCopyBtn) this._authCopyBtn.style.display = 'none';
+    this._showAuthHint('');
+  }
+
+  _showAuthHint(text) {
+    if (this._authHintEl) this._authHintEl.textContent = text || '';
+  }
+
+  _tokenHint(token, type) {
+    try {
+      var parts = token.split('.');
+      if (parts.length < 2) return type.toUpperCase() + ' token (' + token.length + ' chars)';
+      var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      var bits = [];
+      if (payload.exp) {
+        var ms = payload.exp * 1000 - Date.now();
+        var mins = Math.round(ms / 60000);
+        bits.push(mins > 0 ? ('expires in ' + mins + 'm') : ('expired ' + Math.abs(mins) + 'm ago'));
+      }
+      if (payload.aud) bits.push('aud: ' + (Array.isArray(payload.aud) ? payload.aud[0] : payload.aud));
+      if (payload.upn || payload.unique_name) bits.push(payload.upn || payload.unique_name);
+      return type.toUpperCase() + ' \u00b7 ' + bits.join(' \u00b7 ');
+    } catch (e) {
+      return type.toUpperCase() + ' token (' + token.length + ' chars)';
+    }
   }
 
   _detectTokenType(url) {
@@ -1120,6 +1301,16 @@ class ResponseViewer {
     empty.appendChild(title);
     empty.appendChild(hint);
     this._container.appendChild(empty);
+  }
+
+  clear() {
+    // Public reset: drops the last response and re-renders the empty state.
+    // Called when the user switches endpoints or replays a saved request so
+    // they don't read a stale response as if it belonged to the new endpoint.
+    this._lastResponse = null;
+    this._jsonTree = null;
+    this._activeTab = 'body';
+    this._showEmpty();
   }
 
   showLoading() {
@@ -1520,12 +1711,17 @@ class ResponseViewer {
 
 class SwaggerSpecView {
   constructor(container) {
+    this._inlineContainer = container;
     this._container = container;
     this._handlers = { onSaveBaseline: null, onReplaceBaseline: null, onReload: null };
     this._payload = null;
     this._selectedChangeId = null;
     this._showRawRuntime = false;
     this._busy = false;
+    this._expanded = false;
+    this._modalRoot = null;
+    this._modalBody = null;
+    this._escHandler = null;
   }
 
   setHandlers(h) {
@@ -1533,6 +1729,78 @@ class SwaggerSpecView {
     if (h.onSaveBaseline) this._handlers.onSaveBaseline = h.onSaveBaseline;
     if (h.onReplaceBaseline) this._handlers.onReplaceBaseline = h.onReplaceBaseline;
     if (h.onReload) this._handlers.onReload = h.onReload;
+  }
+
+  toggleExpanded() {
+    if (this._expanded) this._collapse();
+    else this._expand();
+  }
+
+  _expand() {
+    if (this._expanded) return;
+    this._expanded = true;
+    this._buildModal();
+    this._container = this._modalBody;
+    // The inline container becomes a stand-in while expanded so layout
+    // doesn't collapse to zero height behind the modal.
+    if (this._inlineContainer) {
+      this._inlineContainer.innerHTML = '';
+      var ph = document.createElement('div');
+      ph.className = 'api-swag-modal-placeholder';
+      ph.textContent = 'Diff is expanded \u2014 close the modal to return here';
+      this._inlineContainer.appendChild(ph);
+    }
+    if (this._payload) this._render();
+  }
+
+  _collapse() {
+    if (!this._expanded) return;
+    this._expanded = false;
+    this._tearDownModal();
+    this._container = this._inlineContainer;
+    if (this._payload) this._render();
+  }
+
+  _buildModal() {
+    var self = this;
+    var overlay = document.createElement('div');
+    overlay.className = 'api-swag-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Swagger diff expanded view');
+    // Backdrop click closes (target check avoids closing on inner clicks)
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) self._collapse();
+    });
+
+    var dialog = document.createElement('div');
+    dialog.className = 'api-swag-modal-dialog';
+
+    var body = document.createElement('div');
+    body.className = 'api-swag-modal-body api-resp';
+    dialog.appendChild(body);
+    overlay.appendChild(dialog);
+
+    document.body.appendChild(overlay);
+    this._modalRoot = overlay;
+    this._modalBody = body;
+
+    this._escHandler = function(e) {
+      if (e.key === 'Escape') self._collapse();
+    };
+    document.addEventListener('keydown', this._escHandler);
+  }
+
+  _tearDownModal() {
+    if (this._modalRoot && this._modalRoot.parentNode) {
+      this._modalRoot.parentNode.removeChild(this._modalRoot);
+    }
+    this._modalRoot = null;
+    this._modalBody = null;
+    if (this._escHandler) {
+      document.removeEventListener('keydown', this._escHandler);
+      this._escHandler = null;
+    }
   }
 
   showLoading() {
@@ -1680,10 +1948,23 @@ class SwaggerSpecView {
     actions.style.display = 'flex';
     actions.style.gap = 'var(--space-2)';
 
+    var self = this;
+
+    var expandBtn = document.createElement('button');
+    expandBtn.className = 'api-json-action';
+    if (self._expanded) {
+      expandBtn.textContent = '\u2922 Collapse';
+      expandBtn.title = 'Return the diff to the response panel (Esc)';
+    } else {
+      expandBtn.textContent = '\u2921 Expand';
+      expandBtn.title = 'Open the diff in a larger view';
+    }
+    expandBtn.addEventListener('click', function() { self.toggleExpanded(); });
+    actions.appendChild(expandBtn);
+
     var reloadBtn = document.createElement('button');
     reloadBtn.className = 'api-json-action';
     reloadBtn.textContent = 'Reload';
-    var self = this;
     reloadBtn.addEventListener('click', function() {
       if (self._handlers.onReload) self._handlers.onReload();
     });
@@ -2684,6 +2965,13 @@ class ApiPlayground {
       // `ui` kinds open in a new tab, everything else sends a request.
       self._requestBuilder.setSendLabel(endpoint.kind === 'ui' ? 'Open in browser' : 'Send');
 
+      // Clear the previous response so the user doesn't read a stale body
+      // as if it belonged to the newly selected endpoint. Spec endpoints
+      // are an exception — they auto-load the diff right below.
+      if (endpoint.kind !== 'spec') {
+        self._responseViewer.clear();
+      }
+
       // F09: spec endpoints auto-load the diff into the response panel.
       if (endpoint.kind === 'spec') {
         self._loadSwaggerDiff();
@@ -2701,6 +2989,8 @@ class ApiPlayground {
         body: entry.body || '',
         tokenType: entry.tokenType
       });
+      // Same reasoning as catalog selection: stale response is misleading.
+      self._responseViewer.clear();
     };
 
     // Cancel button
@@ -2988,41 +3278,22 @@ class ApiPlayground {
   }
 
   _openInBrowser(request) {
-    var config = (this._apiClient && this._apiClient.getConfig) ? this._apiClient.getConfig() : null;
-    var fltPort = config && config.fltPort ? config.fltPort : null;
-
-    if (!fltPort) {
-      this._responseViewer.showError({
-        message: 'FLT is not running \u2014 deploy first, then retry. Swagger UI lives on the FLT host (http://localhost:<fltPort>/).'
-      });
-      return;
-    }
-
-    var path = this._extractPath(this._resolveUrl(request.url)) || '/';
-    var browserUrl = 'http://localhost:' + fltPort + path;
-
-    var opened = null;
+    // Opens our self-hosted Swagger UI page (served by dev-server at /swagger).
+    // It fetches the live spec from /api/playground/swagger/spec — which
+    // proxies the FLT runtime swagger.json via the Fabric capacity edge.
+    // This sidesteps FLT's own Swagger UI being unreachable in DevMode (it
+    // binds to a random Workload-SDK localhost port that no browser tab can
+    // reach). Try-it-out is intentionally disabled; use API Playground for
+    // authenticated requests against FLT.
     try {
-      opened = window.open(browserUrl, '_blank', 'noopener,noreferrer');
+      window.open('/swagger', '_blank', 'noopener,noreferrer');
     } catch (e) {
-      opened = null;
-    }
-
-    if (!opened) {
       this._responseViewer.showInfo({
-        title: 'Popup blocked',
-        hint: 'Your browser blocked the new tab. Click the link below to open Swagger UI manually.',
-        url: browserUrl,
-        icon: '\u26A0'
+        title: 'Could not open Swagger UI',
+        hint: 'Browser blocked window.open. Navigate to /swagger manually.',
+        icon: '\u24D8'
       });
-      return;
     }
-
-    this._responseViewer.showInfo({
-      title: 'Opened Swagger UI in a new tab',
-      hint: 'This endpoint serves an interactive HTML page \u2014 not a JSON response \u2014 so it loads in your browser instead of the response panel.',
-      url: browserUrl
-    });
   }
 
   _buildEnvelopeHeaders(headerRows) {

@@ -957,6 +957,58 @@
   letter-spacing: 0.04em;
 }
 
+/* ── Swagger Diff Expand-to-Modal ── */
+.api-swag-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 22, 28, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--z-detail, 200);
+  padding: 4vh 4vw;
+  animation: api-swag-modal-fade-in 120ms ease-out;
+}
+@keyframes api-swag-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.api-swag-modal-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 1400px;
+  height: 100%; max-height: 92vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: api-swag-modal-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes api-swag-modal-pop-in {
+  from { opacity: 0; transform: scale(0.985) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.api-swag-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.api-swag-modal-placeholder {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  margin: var(--space-4);
+  background: var(--surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .api-swag-modal-overlay,
+  .api-swag-modal-dialog { animation: none; }
+}
+
 /* JSON block (used in detail body + side-by-side) */
 .api-swag-block {
   border: 1px solid var(--border); border-radius: var(--radius-sm);
