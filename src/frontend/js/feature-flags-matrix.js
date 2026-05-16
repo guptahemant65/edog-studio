@@ -34,13 +34,20 @@ class FeatureFlagsMatrix {
     this._sovExpanded = false;
     this._initialized = false;
     this._destroyed = false;
+    this._active = false;
     this._loadInFlight = false;
+    this._refreshInFlight = false;
+    this._mutationsInFlight = new Set(); // wireKeys with in-flight POST/DELETE
+    this._filterDebounceTimer = null;
     this._onFlagEvent = this._onFlagEvent.bind(this);
+    this._onVisibilityChange = this._onVisibilityChange.bind(this);
   }
 
   /* ── Lifecycle ────────────────────────────────────────────────────── */
 
   activate() {
+    if (this._active) return; // re-entry guard — avoids duplicate event listeners
+    this._active = true;
     if (!this._initialized) {
       this._renderShell();
       this._initialized = true;
@@ -50,12 +57,38 @@ class FeatureFlagsMatrix {
       this._signalr.on('flag', this._onFlagEvent);
       try { this._signalr.subscribeTopic('flag'); } catch (_) { /* noop */ }
     }
+    document.addEventListener('visibilitychange', this._onVisibilityChange);
   }
 
   deactivate() {
+    if (!this._active) return;
+    this._active = false;
     if (this._signalr) {
       this._signalr.off('flag', this._onFlagEvent);
       try { this._signalr.unsubscribeTopic('flag'); } catch (_) { /* noop */ }
+    }
+    if (this._syncPollTimer) {
+      clearTimeout(this._syncPollTimer);
+      this._syncPollTimer = null;
+    }
+    if (this._filterDebounceTimer) {
+      clearTimeout(this._filterDebounceTimer);
+      this._filterDebounceTimer = null;
+    }
+    document.removeEventListener('visibilitychange', this._onVisibilityChange);
+  }
+
+  _onVisibilityChange() {
+    if (document.hidden) {
+      // Pause the sync poll while the user can't see the table — saves
+      // catalog round-trips when the tab/window is backgrounded.
+      if (this._syncPollTimer) {
+        clearTimeout(this._syncPollTimer);
+        this._syncPollTimer = null;
+      }
+    } else if (this._active) {
+      // Resume by re-loading once; load() reschedules the poll if needed.
+      this.load();
     }
   }
 
@@ -136,7 +169,23 @@ class FeatureFlagsMatrix {
         fetch('/api/edog/feature-flags/overrides').then(r => r.ok ? r.json() : Promise.reject(r)),
       ]);
       this._catalog = catalogResp;
-      this._overrides = overridesResp.overrides || {};
+      // Server snapshot, MERGED with in-flight optimistic mutations so we
+      // don't transiently revert a toggle the user just flipped while our
+      // POST is still on the wire (race window ~50-300 ms).
+      const serverOverrides = overridesResp.overrides || {};
+      if (this._mutationsInFlight.size === 0) {
+        this._overrides = serverOverrides;
+      } else {
+        const merged = { ...serverOverrides };
+        for (const k of this._mutationsInFlight) {
+          if (Object.prototype.hasOwnProperty.call(this._overrides, k)) {
+            merged[k] = this._overrides[k];
+          } else {
+            delete merged[k];
+          }
+        }
+        this._overrides = merged;
+      }
       this._syncCatalogOverrideFlags();
       this._render();
       this._maybeScheduleSyncPoll();
@@ -149,26 +198,32 @@ class FeatureFlagsMatrix {
 
   _maybeScheduleSyncPoll() {
     const fm = (this._catalog && this._catalog.fm) || {};
-    // While the FM clone is in flight (or we're cold with 0 indexed flags),
-    // poll the catalog every 500 ms so the user doesn't sit on a wall of "?".
-    // (Used to be 1.5 s — felt sluggish when FM sync itself completes in <200 ms.)
-    const needsPoll = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
     if (this._syncPollTimer) {
       clearTimeout(this._syncPollTimer);
       this._syncPollTimer = null;
     }
-    if (!needsPoll || this._destroyed) return;
+    if (this._destroyed || !this._active || document.hidden) return;
+    // Stop polling when the FM cache has reported a terminal error and is
+    // not in the middle of a retry. The user must click "Refresh FM" to
+    // re-attempt — otherwise we'd hammer git endlessly every 500 ms.
+    if (fm.error && !fm.syncInProgress) return;
+    // While the FM clone is in flight (or we're cold with 0 indexed flags),
+    // poll the catalog every 500 ms so the user doesn't sit on a wall of "?".
+    const needsPoll = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
+    if (!needsPoll) return;
     this._syncPollTimer = setTimeout(() => {
       this._syncPollTimer = null;
-      if (!this._destroyed) this.load();
+      if (!this._destroyed && this._active && !document.hidden) this.load();
     }, 500);
   }
 
   async setOverride(wireKey, value) {
     // V1: only force-ON. Cleared via DELETE, not value=false.
+    if (this._mutationsInFlight.has(wireKey)) return; // guard against double-click races
     const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
       ? this._overrides[wireKey]
       : undefined;
+    this._mutationsInFlight.add(wireKey);
     // Optimistic — flip the switch immediately so the user sees feedback
     // before the HTTP round-trip + FLT push completes (~50-300 ms).
     this._overrides = { ...this._overrides, [wireKey]: !!value };
@@ -196,13 +251,18 @@ class FeatureFlagsMatrix {
     } catch (err) {
       this._revertOverride(wireKey, prev);
       this._toast('failed', err.message || String(err));
+    } finally {
+      this._mutationsInFlight.delete(wireKey);
+      this._render();
     }
   }
 
   async clearOverride(wireKey) {
+    if (this._mutationsInFlight.has(wireKey)) return;
     const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
       ? this._overrides[wireKey]
       : undefined;
+    this._mutationsInFlight.add(wireKey);
     // Optimistic clear so the switch flips back to off immediately.
     const next = { ...this._overrides };
     delete next[wireKey];
@@ -228,6 +288,9 @@ class FeatureFlagsMatrix {
     } catch (err) {
       this._revertOverride(wireKey, prev);
       this._toast('failed', err.message || String(err));
+    } finally {
+      this._mutationsInFlight.delete(wireKey);
+      this._render();
     }
   }
 
@@ -305,12 +368,36 @@ class FeatureFlagsMatrix {
   }
 
   async refreshFM() {
+    if (this._refreshInFlight) return;
+    this._refreshInFlight = true;
+    this._updateRefreshBtn();
     try {
       const resp = await fetch('/api/edog/feature-flags/refresh', { method: 'POST' });
-      if (!resp.ok) return;
-      // Poll once after a beat — sync runs on a background thread.
-      setTimeout(() => this.load(), 1500);
-    } catch (_) { /* noop */ }
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        this._toast('failed', body.detail || body.error || `HTTP ${resp.status}`);
+        return;
+      }
+      // The endpoint kicks off a background sync. Reload immediately — the
+      // catalog response will carry syncInProgress=true and the poller picks
+      // up the cadence from there.
+      await this.load();
+    } catch (err) {
+      this._toast('failed', err.message || String(err));
+    } finally {
+      this._refreshInFlight = false;
+      this._updateRefreshBtn();
+    }
+  }
+
+  _updateRefreshBtn() {
+    const btn = this._mount.querySelector('#ffRefreshBtn');
+    if (!btn) return;
+    const fm = (this._catalog && this._catalog.fm) || {};
+    const syncing = this._refreshInFlight || fm.syncInProgress === true;
+    btn.disabled = syncing;
+    btn.classList.toggle('is-loading', syncing);
+    btn.textContent = syncing ? 'Refreshing…' : 'Refresh FM';
   }
 
   /* ── Render ───────────────────────────────────────────────────────── */
@@ -339,7 +426,7 @@ class FeatureFlagsMatrix {
           </div>
 
           <div class="override-strip" id="ffOverrideStrip">
-            <span><span class="strip-count" id="ffStripCount">0</span><span class="strip-text"> override(s) active this session.</span></span>
+            <span><span class="strip-count" id="ffStripCount">0</span><span class="strip-text" id="ffStripText"> overrides active this session.</span></span>
             <span class="strip-chips" id="ffStripChips"></span>
             <span class="strip-hint">Applies to <strong>future</strong> evaluations only.</span>
           </div>
@@ -347,13 +434,14 @@ class FeatureFlagsMatrix {
           <div class="ff-filterbar">
             <label class="ff-search">
               <span class="ff-search-icon" aria-hidden="true">&#128269;</span>
-              <input type="text" id="ffFilterInput" placeholder="Filter by name or wire key" autocomplete="off">
+              <input type="text" id="ffFilterInput" placeholder="Filter by name or wire key" autocomplete="off" aria-label="Filter flags by name or wire key">
+              <button class="ff-search-clear" id="ffFilterClear" hidden aria-label="Clear filter" title="Clear filter">&#10005;</button>
             </label>
-            <span class="ff-pill" data-filter="overridden">Overridden</span>
-            <span class="ff-pill" data-filter="partial">Partial</span>
-            <span class="ff-pill" data-filter="missing">Missing in FM</span>
+            <span class="ff-pill" data-filter="overridden" role="button" tabindex="0" aria-pressed="false">Overridden</span>
+            <span class="ff-pill" data-filter="partial" role="button" tabindex="0" aria-pressed="false">Partial</span>
+            <span class="ff-pill" data-filter="missing" role="button" tabindex="0" aria-pressed="false">Missing in FM</span>
             <span class="ff-spacer"></span>
-            <span class="ff-pill" id="ffSovToggle" title="Show 8 sovereign envs as separate columns">Sov: folded</span>
+            <span class="ff-pill" id="ffSovToggle" role="button" tabindex="0" aria-pressed="false" title="Show 8 sovereign envs as separate columns">Sov: folded</span>
           </div>
 
           <div class="ff-table-wrap" id="ffTableWrap">
@@ -388,32 +476,61 @@ class FeatureFlagsMatrix {
           <div class="env-card-header">
             <div class="env-card-title"><span>Configuration · Auth · Deploy</span><span class="card-badge">coming soon</span></div>
           </div>
-          <div class="env-card-placeholder">Cards 1, 2, 4, 5 land in follow-up commits.</div>
+          <div class="env-card-placeholder">Auth status, FLT deploy state, runtime config, and EDOG diagnostics cards are landing next. Card 3 (Feature Flags) is fully wired today.</div>
         </div>
       </div>
     `;
 
     this._mount.querySelector('#ffRefreshBtn').addEventListener('click', () => this.refreshFM());
     this._mount.querySelector('#ffResetBtn').addEventListener('click', () => this.resetAll());
-    this._mount.querySelector('#ffFilterInput').addEventListener('input', (e) => {
-      this._filterText = (e.target.value || '').toLowerCase().trim();
-      this._renderTable();
-    });
-    this._mount.querySelectorAll('.ff-pill[data-filter]').forEach(el => {
-      el.addEventListener('click', () => {
-        const key = el.dataset.filter;
-        if (this._activeFilters.has(key)) this._activeFilters.delete(key);
-        else this._activeFilters.add(key);
-        el.classList.toggle('active');
+    const filterInput = this._mount.querySelector('#ffFilterInput');
+    const filterClear = this._mount.querySelector('#ffFilterClear');
+    filterInput.addEventListener('input', (e) => {
+      const next = (e.target.value || '').toLowerCase().trim();
+      filterClear.hidden = !e.target.value;
+      // Debounce — 36 rows is cheap to re-render but keystrokes can still
+      // feel laggy when each fires a synchronous innerHTML rebuild.
+      if (this._filterDebounceTimer) clearTimeout(this._filterDebounceTimer);
+      this._filterDebounceTimer = setTimeout(() => {
+        this._filterDebounceTimer = null;
+        if (this._filterText === next) return;
+        this._filterText = next;
         this._renderTable();
+      }, 80);
+    });
+    filterClear.addEventListener('click', () => {
+      filterInput.value = '';
+      filterClear.hidden = true;
+      this._filterText = '';
+      this._renderTable();
+      filterInput.focus();
+    });
+    const togglePill = (el) => {
+      const key = el.dataset.filter;
+      if (this._activeFilters.has(key)) this._activeFilters.delete(key);
+      else this._activeFilters.add(key);
+      const active = this._activeFilters.has(key);
+      el.classList.toggle('active', active);
+      el.setAttribute('aria-pressed', active ? 'true' : 'false');
+      this._renderTable();
+    };
+    this._mount.querySelectorAll('.ff-pill[data-filter]').forEach(el => {
+      el.addEventListener('click', () => togglePill(el));
+      el.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); togglePill(el); }
       });
     });
     const sovBtn = this._mount.querySelector('#ffSovToggle');
-    sovBtn.addEventListener('click', () => {
+    const toggleSov = () => {
       this._sovExpanded = !this._sovExpanded;
       sovBtn.classList.toggle('active', this._sovExpanded);
+      sovBtn.setAttribute('aria-pressed', this._sovExpanded ? 'true' : 'false');
       sovBtn.textContent = this._sovExpanded ? 'Sov: expanded' : 'Sov: folded';
       this._renderTable();
+    };
+    sovBtn.addEventListener('click', toggleSov);
+    sovBtn.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSov(); }
     });
   }
 
@@ -422,6 +539,17 @@ class FeatureFlagsMatrix {
     this._renderHeader();
     this._renderStrip();
     this._renderTable();
+    this._updateRefreshBtn();
+    const resetBtn = this._mount.querySelector('#ffResetBtn');
+    if (resetBtn) {
+      const count = Object.keys(this._overrides).length;
+      resetBtn.disabled = count === 0;
+      resetBtn.title = count === 0 ? 'No overrides to clear' : `Clear ${count} override${count === 1 ? '' : 's'}`;
+    }
+    // Keep the inspector pane in sync with optimistic mutations (it pins to
+    // a specific row, and the row object is patched in place — but the
+    // overrides reference is replaced, so we re-show with the fresh map).
+    this._refreshInspector();
   }
 
   _renderHeader() {
@@ -458,13 +586,24 @@ class FeatureFlagsMatrix {
     }
     strip.classList.add('visible');
     this._mount.querySelector('#ffStripCount').textContent = String(keys.length);
+    const stripText = this._mount.querySelector('#ffStripText');
+    if (stripText) {
+      stripText.textContent = keys.length === 1
+        ? ' override active this session.'
+        : ' overrides active this session.';
+    }
     const chipsEl = this._mount.querySelector('#ffStripChips');
     chipsEl.innerHTML = '';
     keys.forEach(k => {
       const chip = document.createElement('span');
       chip.className = 'strip-chip';
-      chip.innerHTML = `<span>${this._escape(k)}</span><span class="chip-x" title="Clear override">&#10005;</span>`;
-      chip.querySelector('.chip-x').addEventListener('click', () => this.clearOverride(k));
+      const safe = this._escape(k);
+      chip.innerHTML = `<span>${safe}</span><span class="chip-x" role="button" tabindex="0" aria-label="Clear override for ${safe}" title="Clear override">&#10005;</span>`;
+      const x = chip.querySelector('.chip-x');
+      x.addEventListener('click', () => this.clearOverride(k));
+      x.addEventListener('keydown', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.clearOverride(k); }
+      });
       chipsEl.appendChild(chip);
     });
   }
@@ -530,7 +669,9 @@ class FeatureFlagsMatrix {
     const effectiveLabel = overridden
       ? '<span class="ff-effective forced">FORCED</span>'
       : (effective ? '<span class="ff-effective on">on</span>' : '<span class="ff-effective off">off</span>');
-    const switchCls = overridden ? 'ff-switch on' : 'ff-switch';
+    const inFlight = this._mutationsInFlight.has(row.wireKey);
+    const switchCls = `ff-switch${overridden ? ' on' : ''}${inFlight ? ' is-loading' : ''}`;
+    const switchAria = inFlight ? ' aria-busy="true" aria-disabled="true"' : '';
 
     const obsClass = this._observationClassFor(row.wireKey);
     const obsCell = `<span class="ff-obs ${obsClass}" title="${this._obsTooltip(obsClass)}">${obsClass}</span>`;
@@ -552,7 +693,7 @@ class FeatureFlagsMatrix {
         ${sovCells}
         <td class="col-state">
           <div class="ff-toggle">
-            <span class="${switchCls}" role="switch" aria-checked="${overridden}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="Click to ${overridden ? 'clear' : 'force-ON'} override"></span>
+            <span class="${switchCls}" role="switch" aria-checked="${overridden}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="${inFlight ? 'Working…' : `Click to ${overridden ? 'clear' : 'force-ON'} override`}"${switchAria}></span>
             ${effectiveLabel}
           </div>
         </td>

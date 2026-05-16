@@ -142,9 +142,25 @@
   transition: all var(--transition-normal);
   white-space: nowrap;
 }
-.env-btn:hover { color: var(--text); background: var(--accent-hover); border-color: var(--accent); }
+.env-btn:hover:not(:disabled) { color: var(--text); background: var(--accent-hover); border-color: var(--accent); }
 .env-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.env-btn.danger:hover { color: var(--status-failed); border-color: var(--status-failed); background: rgba(229,69,59,0.04); }
+.env-btn.danger:hover:not(:disabled) { color: var(--status-failed); border-color: var(--status-failed); background: rgba(229,69,59,0.04); }
+.env-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.env-btn.is-loading { position: relative; padding-left: calc(var(--space-3) + 14px); cursor: progress; }
+.env-btn.is-loading::before {
+  content: "";
+  position: absolute;
+  left: var(--space-2);
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  border-top-color: transparent;
+  animation: ff-spin 0.8s linear infinite;
+}
+@keyframes ff-spin { to { transform: rotate(360deg); } }
 
 /* ── Filter bar ───────────────────────────────────────────────────── */
 .ff-filterbar {
@@ -186,6 +202,18 @@
 }
 .ff-search input::placeholder { color: var(--text-muted); }
 .ff-search .ff-search-icon { font-size: 13px; color: var(--text-muted); }
+.ff-search-clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+}
+.ff-search-clear:hover { color: var(--text); }
+.ff-search-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .ff-pill {
   font-size: var(--text-xs);
@@ -200,6 +228,7 @@
   transition: all var(--transition-normal);
 }
 .ff-pill:hover { color: var(--text); background: var(--accent-hover); }
+.ff-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ff-pill.active {
   background: var(--accent);
   color: var(--text-on-accent);
@@ -249,9 +278,16 @@
   opacity: 0.6;
   font-size: 13px;
   line-height: 1;
-  transition: color var(--transition-fast);
+  padding: 0 2px;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), opacity var(--transition-fast);
 }
 .override-strip .strip-chip .chip-x:hover { opacity: 1; color: var(--status-failed); }
+.override-strip .strip-chip .chip-x:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--status-failed);
+  outline-offset: 1px;
+}
 
 .override-strip .strip-hint {
   margin-left: auto;
@@ -468,7 +504,20 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 }
 .ff-switch:hover { background: var(--text-muted); }
 .ff-switch.on:hover { background: #d68200; }
-.ff-switch[aria-disabled="true"] { opacity: 0.35; cursor: not-allowed; }
+.ff-switch[aria-disabled="true"] { opacity: 0.55; cursor: progress; }
+.ff-switch.is-loading {
+  background: var(--surface-3);
+  pointer-events: none;
+}
+.ff-switch.is-loading::after {
+  border: 1.5px solid var(--text-muted);
+  border-top-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  animation: ff-spin 0.7s linear infinite;
+}
+.ff-switch.is-loading.on { background: rgba(229, 148, 12, 0.5); }
+.ff-switch.is-loading.on::after { border-color: var(--text-on-accent); border-top-color: transparent; }
 
 .ff-effective {
   font-size: var(--text-xs);
