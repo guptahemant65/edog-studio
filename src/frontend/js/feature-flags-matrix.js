@@ -177,16 +177,20 @@ class FeatureFlagsMatrix {
           </div>
 
           <div class="override-strip" id="ffOverrideStrip">
-            <span><span class="strip-count" id="ffStripCount">0</span><span class="strip-text"> override(s) active in this session.</span></span>
+            <span><span class="strip-count" id="ffStripCount">0</span><span class="strip-text"> override(s) active this session.</span></span>
             <span class="strip-chips" id="ffStripChips"></span>
-            <span style="margin-left:auto;font-size:11px;color:var(--text-muted);">Applies to <strong>future</strong> evaluations only.</span>
+            <span class="strip-hint">Applies to <strong>future</strong> evaluations only.</span>
           </div>
 
           <div class="ff-filterbar">
-            <input type="text" id="ffFilterInput" placeholder="Filter by flag name or wire key…" autocomplete="off">
+            <label class="ff-search">
+              <span class="ff-search-icon" aria-hidden="true">&#128269;</span>
+              <input type="text" id="ffFilterInput" placeholder="Filter by name or wire key" autocomplete="off">
+            </label>
             <span class="ff-pill" data-filter="overridden">Overridden</span>
             <span class="ff-pill" data-filter="partial">Partial</span>
             <span class="ff-pill" data-filter="missing">Missing in FM</span>
+            <span class="ff-spacer"></span>
             <span class="ff-pill" id="ffSovToggle" title="Show 8 sovereign envs as separate columns">Sov: folded</span>
           </div>
 
@@ -296,12 +300,12 @@ class FeatureFlagsMatrix {
     const header = `
       <thead>
         <tr>
-          <th>Flag</th>
-          ${mainline.map(e => `<th class="ff-cell" title="${this._escape(e)}">${this._escape(e)}</th>`).join('')}
-          <th class="ff-cell">${this._sovExpanded ? '' : 'sov(8)'}</th>
-          ${sovereign.map(e => `<th class="ff-cell sov-col" title="${this._escape(e)}">${this._escape(e)}</th>`).join('')}
-          <th>State</th>
-          <th>Obs</th>
+          <th class="col-name">Flag</th>
+          ${mainline.map(e => `<th class="col-env" title="${this._escape(e)}">${this._escape(e)}</th>`).join('')}
+          <th class="col-sov-rollup" title="Sovereign rollup">Sov</th>
+          ${sovereign.map(e => `<th class="col-sov" title="${this._escape(e)}">${this._escape(e)}</th>`).join('')}
+          <th class="col-state">State</th>
+          <th class="col-obs">Obs</th>
         </tr>
       </thead>
     `;
@@ -322,43 +326,46 @@ class FeatureFlagsMatrix {
   _renderRow(row, mainline, sovereign) {
     const overridden = !!row.isOverridden;
     const rowCls = overridden ? 'overridden' : '';
-    const mainCells = mainline.map(env => this._renderCell(row.perEnv[env] || { state: 'missing' })).join('');
-    const sovCells = sovereign.map(env => `<td class="sov-col">${this._renderCell(row.perEnv[env] || { state: 'missing' })}</td>`).join('');
-    const sovRollup = this._sovExpanded ? '<td class="ff-cell">&nbsp;</td>' : `<td class="ff-cell" title="${this._sovTooltip(row, sovereign)}">${this._sovGlyph(row, sovereign)}</td>`;
+    const mainCells = mainline.map(env => this._renderCell(row.perEnv[env] || { state: 'missing' }, '')).join('');
+    const sovCells = sovereign.map(env => this._renderCell(row.perEnv[env] || { state: 'missing' }, 'sov')).join('');
+    const sovRollup = `<td class="ff-cell ff-sov-rollup col-sov-rollup" title="${this._sovTooltip(row, sovereign)}">${this._sovGlyph(row, sovereign)}</td>`;
 
     const effective = row.effectiveForMyWorkspace;
     const effectiveLabel = overridden
-      ? '<span class="ff-effective forced">FORCED ON</span>'
+      ? '<span class="ff-effective forced">FORCED</span>'
       : (effective ? '<span class="ff-effective on">on</span>' : '<span class="ff-effective off">off</span>');
     const switchCls = overridden ? 'ff-switch on' : 'ff-switch';
 
     const obsClass = this._observationClassFor(row.wireKey);
     const obsCell = `<span class="ff-obs ${obsClass}" title="${this._obsTooltip(obsClass)}">${obsClass}</span>`;
 
+    const rowTitle = row.summary ? this._escape(row.summary) : this._escape(row.wireKey);
+
     return `
-      <tr class="${rowCls}" data-flag="${this._escape(row.wireKey)}">
-        <td>
+      <tr class="${rowCls}" data-flag="${this._escape(row.wireKey)}" title="${rowTitle}">
+        <td class="col-name">
           <div class="ff-name-cell">
-            <span class="ff-name">${this._escape(row.name)}</span>
-            <span class="ff-wirekey">${this._escape(row.wireKey)}</span>
-            ${row.summary ? `<span class="ff-summary">${this._escape(this._trunc(row.summary, 120))}</span>` : ''}
+            <div class="ff-name-line">
+              <span class="ff-name">${this._escape(row.name)}</span>
+              <span class="ff-wirekey">${this._escape(row.wireKey)}</span>
+            </div>
           </div>
         </td>
-        ${mainCells.split('<td').slice(1).map(s => '<td' + s).join('')}
+        ${mainCells}
         ${sovRollup}
         ${sovCells}
-        <td>
+        <td class="col-state">
           <div class="ff-toggle">
             <span class="${switchCls}" role="switch" aria-checked="${overridden}" tabindex="0" data-flag="${this._escape(row.wireKey)}" title="Click to ${overridden ? 'clear' : 'force-ON'} override"></span>
             ${effectiveLabel}
           </div>
         </td>
-        <td>${obsCell}</td>
+        <td class="col-obs">${obsCell}</td>
       </tr>
     `;
   }
 
-  _renderCell(cell) {
+  _renderCell(cell, kind) {
     const state = cell.state || 'missing';
     const glyphMap = { on: '&#10003;', off: '&#10005;', partial: '&#9680;', empty: '&#8211;', missing: '?' };
     const titleMap = {
@@ -369,16 +376,16 @@ class FeatureFlagsMatrix {
       missing: 'Flag not found in FeatureManagement repo',
     };
     const inclMy = cell.includesMyWorkspace ? ' includes-my-ws' : '';
-    return `<td class="ff-cell state-${state}${inclMy}" title="${titleMap[state] || state}">${glyphMap[state] || '?'}</td>`;
+    const kindCls = kind ? ` ${kind}` : '';
+    return `<td class="ff-cell state-${state}${inclMy}${kindCls}" title="${titleMap[state] || state}">${glyphMap[state] || '?'}</td>`;
   }
 
   _sovGlyph(row, sovereign) {
-    // Roll up the 8 sovereign cells to a single glyph: any 'on' → ✓, any 'partial' → ◐, else –.
     const states = sovereign.map(e => (row.perEnv[e] || {}).state || 'missing');
-    if (states.includes('on')) return '<span style="color:var(--accent-success);">&#10003;</span>';
-    if (states.includes('partial')) return '<span style="color:var(--accent-warning);">&#9680;</span>';
-    if (states.every(s => s === 'missing' || s === 'empty')) return '<span style="color:var(--text-disabled);">&#8211;</span>';
-    return '<span style="color:var(--text-disabled);">&#10005;</span>';
+    if (states.includes('on')) return '<span style="color:var(--status-succeeded);">&#10003;</span>';
+    if (states.includes('partial')) return '<span style="color:var(--level-warning);">&#9680;</span>';
+    if (states.every(s => s === 'missing' || s === 'empty')) return '<span style="color:var(--text-muted);">&#8211;</span>';
+    return '<span style="color:var(--text-muted);">&#10005;</span>';
   }
 
   _sovTooltip(row, sovereign) {
