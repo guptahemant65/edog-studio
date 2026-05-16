@@ -3534,7 +3534,7 @@ Examples:
 
     try:
         proc = subprocess.Popen(
-            [sys.executable, str(dev_server)],
+            [sys.executable, "-u", str(dev_server)],
             cwd=str(Path(__file__).parent),
         )
         # Give server a moment to bind, then open browser
