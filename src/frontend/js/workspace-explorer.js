@@ -257,8 +257,8 @@ class WorkspaceExplorer {
     const wizard = new InfraWizardDialog(this._api, {
       existingWorkspaces: this._workspaces
     });
-    wizard.onClose = () => { this._refreshAll(); };
-    wizard.onComplete = () => { this._refreshAll(); };
+    wizard.onClose = () => { this.loadWorkspaces(); };
+    wizard.onComplete = () => { this.loadWorkspaces(); };
     wizard.open();
   }
 
@@ -281,8 +281,8 @@ class WorkspaceExplorer {
       initialState: seedState,
       existingWorkspaces: this._workspaces
     });
-    wizard.onClose = () => { this._refreshAll(); };
-    wizard.onComplete = () => { this._refreshAll(); };
+    wizard.onClose = () => { this.loadWorkspaces(); };
+    wizard.onComplete = () => { this.loadWorkspaces(); };
     wizard.open();
   }
 
