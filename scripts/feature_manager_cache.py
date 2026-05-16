@@ -369,34 +369,44 @@ def classify_env(env_value: Any) -> str:
         {}                      → 'empty'
         { Enabled: true }       → 'on'
         { Enabled: false }      → 'off'
-        { Targets: [...] }      → 'partial'
+        { Targets: [...] }      → 'partial'  (OR-of-targets)
+        { Requires: [...] }     → 'partial'  (AND-of-predicates)
         anything else           → 'empty'  (defensive)
+
+    Both ``Targets`` and ``Requires`` produce ``partial`` — they're FM's two
+    ways of expressing "conditionally on for some pivot subset". Targets is
+    an allowlist (OR semantics across entries); Requires is a predicate list
+    (AND semantics across entries). See ``evaluate_my_ws`` for how the
+    distinction is honored when computing ``includesMyWorkspace``.
     """
     if not isinstance(env_value, dict) or not env_value:
         return "empty"
     if "Enabled" in env_value and isinstance(env_value["Enabled"], bool):
         return "on" if env_value["Enabled"] else "off"
-    if env_value.get("Targets"):
+    if env_value.get("Targets") or env_value.get("Requires"):
         return "partial"
     return "empty"
 
 
-def _iter_target_entries(env_value: Any) -> Iterator[tuple[str, dict[str, Any]]]:
-    """Yield ``(group_name, entry_dict)`` pairs across both real and legacy
-    ``Targets`` shapes.
+# FM rule names. ``PowerBI.MemberOf`` is the inclusion predicate; the
+# ``Not``-variant inverts it. Everything else is treated as MemberOf for
+# evaluation (existing forward-compat behavior).
+_RULE_NOT_MEMBER_OF = "PowerBI.NotMemberOf"
 
-    Real FM shape (observed in repo)::
 
-        "Targets": {
-            "PublicRollout": [{"Name": "PowerBI.MemberOf",
-                               "Parameters": {"Pivot": "RegionName",
-                                              "Values": ["UK South"]}}],
-            "RunnerTenants": [...]
-        }
+def _iter_rule_entries(env_value: Any) -> Iterator[tuple[str, str, dict[str, Any]]]:
+    """Yield ``(kind, group_name, entry)`` for every rule entry in this cell.
 
-    Legacy/defensive shape::
+    ``kind`` is ``"Targets"`` or ``"Requires"``. ``group_name`` is the
+    rollout-group label for Targets (``PublicRollout`` etc.) and an empty
+    string for Requires (which has no group structure in FM).
 
-        "Targets": [{"Name": ..., "Pivot": ..., "Values": [...]}]
+    Targets shapes accepted (per FM repo observation):
+        * Dict-of-groups: ``{"PublicRollout": [...], "RunnerTenants": [...]}``
+        * Legacy flat list: ``[{Name, Parameters:{Pivot, Values}}, ...]``
+
+    Requires shape:
+        * Flat list: ``[{Name, Parameters:{Pivot, Values}}, ...]``
     """
     if not isinstance(env_value, dict):
         return
@@ -407,11 +417,30 @@ def _iter_target_entries(env_value: Any) -> Iterator[tuple[str, dict[str, Any]]]
                 continue
             for entry in entries:
                 if isinstance(entry, dict):
-                    yield (str(group_name), entry)
+                    yield ("Targets", str(group_name), entry)
     elif isinstance(targets, list):
         for entry in targets:
             if isinstance(entry, dict):
-                yield ("", entry)
+                yield ("Targets", "", entry)
+    requires = env_value.get("Requires")
+    if isinstance(requires, list):
+        for entry in requires:
+            if isinstance(entry, dict):
+                yield ("Requires", "", entry)
+
+
+# Back-compat alias: callers that only needed Targets iteration can still use
+# this name; behavior is identical to ``_iter_rule_entries`` since Targets is
+# yielded first and exhaustively. Kept until external callers (none today)
+# are migrated; remove once the codebase only uses ``_iter_rule_entries``.
+def _iter_target_entries(env_value: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+    for _kind, group, entry in _iter_rule_entries(env_value):
+        yield (group, entry)
+
+
+def _entry_rule_name(entry: dict[str, Any]) -> str:
+    name = entry.get("Name") or entry.get("TargetName") or ""
+    return str(name).strip()
 
 
 def _entry_pivot(entry: dict[str, Any]) -> str:
@@ -427,15 +456,31 @@ def _entry_values(entry: dict[str, Any]) -> list[Any]:
 
 
 def extract_target_groups(env_value: Any) -> list[dict[str, Any]]:
-    """Return a normalized list of target groups for the env-state ``partial``."""
+    """Return a normalized list of rule entries for the env-state ``partial``.
+
+    Each entry carries:
+        * ``kind`` — ``"Targets"`` or ``"Requires"``
+        * ``group`` — rollout-group name (Targets) or ``"Requires"`` so the
+          frontend has a label to render in the rule pill. We deliberately
+          stuff the kind into ``group`` for Requires entries so existing UI
+          code (matrix tooltip, inspector list) shows the distinction without
+          a frontend change.
+        * ``name`` — the rule name from FM (e.g. ``PowerBI.MemberOf``,
+          ``PowerBI.NotMemberOf``). The inspector displays this verbatim so
+          ``Not``-variants are visible to humans.
+        * ``pivot`` — pivot key (``WorkspaceObjectId`` etc.)
+        * ``valuesPreview`` — first 5 string values
+        * ``valueCount`` — total values declared
+    """
     out: list[dict[str, Any]] = []
-    for group, entry in _iter_target_entries(env_value):
-        name = entry.get("Name") or entry.get("TargetName") or ""
+    for kind, group, entry in _iter_rule_entries(env_value):
         values = _entry_values(entry)
+        display_group = group or ("Requires" if kind == "Requires" else "")
         out.append(
             {
-                "group": group,
-                "name": str(name) if name else "",
+                "kind": kind,
+                "group": display_group,
+                "name": _entry_rule_name(entry),
                 "pivot": _entry_pivot(entry),
                 "valuesPreview": [str(v) for v in values[:5]],
                 "valueCount": len(values),
@@ -444,34 +489,116 @@ def extract_target_groups(env_value: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _evaluate_entry(
+    entry: dict[str, Any],
+    ids_by_pivot: dict[str, str],
+) -> bool | None:
+    """Evaluate a single rule entry against the configured principal IDs.
+
+    Returns:
+        True   — principal matches the rule's predicate
+        False  — principal definitively does NOT match
+        None   — pivot is unknown / non-evaluable / principal ID not configured
+                 → caller cannot conclude one way or the other
+    """
+    pivot = _entry_pivot(entry)
+    if pivot not in _EVALUABLE_PIVOTS:
+        return None
+    my_id = ids_by_pivot.get(pivot, "")
+    if not my_id:
+        return None
+    values_lower = {v.lower() for v in _entry_values(entry) if isinstance(v, str)}
+    in_set = my_id in values_lower
+    if _entry_rule_name(entry) == _RULE_NOT_MEMBER_OF:
+        # Inclusion predicate inverted: principal matches when NOT in the set.
+        return not in_set
+    # All other rule names (PowerBI.MemberOf and unknown forward-compat names)
+    # are treated as positive membership.
+    return in_set
+
+
 def evaluate_my_ws(
     env_value: Any,
     *,
     tenant_id: str | None,
     capacity_id: str | None,
     workspace_id: str | None,
-) -> bool:
-    """True iff the configured workspace falls into one of the cell's target
-    groups via an evaluable pivot (TenantObjectId / CapacityObjectId /
-    WorkspaceObjectId). RegionName and MemberOf are V1-out — they evaluate
-    False but do not raise.
+) -> bool | None:
+    """Tri-state evaluation of "is this cell's predicate true for my workspace".
+
+    Returns:
+        True   — principal satisfies the cell's predicate(s)
+        False  — principal definitively does NOT satisfy
+        None   — at least one relevant rule cannot be decided locally
+                 (non-evaluable pivot, missing principal ID, etc.)
+
+    Semantics:
+        * ``Requires`` rules are AND-combined: every rule must evaluate True.
+          Any ``None`` in Requires propagates to a ``None`` result because we
+          cannot conclude the conjunction holds.
+        * ``Targets`` rules are OR-combined: any rule evaluating True yields
+          True for the Targets portion. Targets evaluating to None alone do
+          NOT short-circuit to None — they only matter when no Targets rule
+          conclusively matched.
+        * When both ``Requires`` and ``Targets`` are present, the cell is on
+          for the principal iff Requires AND Targets both hold.
+        * When neither is present, the cell isn't ``partial`` in the first
+          place and this function should not be called — callers guard via
+          ``classify_env``.
     """
+    if not isinstance(env_value, dict):
+        return False
     ids_by_pivot = {
         "TenantObjectId": (tenant_id or "").lower(),
         "CapacityObjectId": (capacity_id or "").lower(),
         "WorkspaceObjectId": (workspace_id or "").lower(),
     }
-    for _group, entry in _iter_target_entries(env_value):
-        pivot = _entry_pivot(entry)
-        if pivot not in _EVALUABLE_PIVOTS:
+
+    requires = env_value.get("Requires")
+    has_requires = isinstance(requires, list) and bool(requires)
+    has_targets = bool(env_value.get("Targets"))
+
+    requires_result: bool | None = True
+    if has_requires:
+        for entry in requires:
+            if not isinstance(entry, dict):
+                continue
+            r = _evaluate_entry(entry, ids_by_pivot)
+            if r is None:
+                requires_result = None
+                break
+            if not r:
+                requires_result = False
+                break
+
+    if not has_targets:
+        return requires_result
+
+    targets_result: bool | None = False
+    saw_unknown = False
+    for kind, _group, entry in _iter_rule_entries(env_value):
+        if kind != "Targets":
             continue
-        my_id = ids_by_pivot.get(pivot, "")
-        if not my_id:
-            continue
-        for v in _entry_values(entry):
-            if isinstance(v, str) and v.lower() == my_id:
-                return True
-    return False
+        r = _evaluate_entry(entry, ids_by_pivot)
+        if r is True:
+            targets_result = True
+            break
+        if r is None:
+            saw_unknown = True
+    if targets_result is False and saw_unknown:
+        # Couldn't find a definite match; at least one Targets rule was
+        # undecidable — escalate to None so the cell is marked unevaluable.
+        targets_result = None
+
+    if not has_requires:
+        return targets_result
+
+    # Both present: AND of the two component results, with tri-state rules.
+    if requires_result is False or targets_result is False:
+        return False
+    if requires_result is None or targets_result is None:
+        return None
+    return True
 
 
 def build_per_env_cells(
@@ -505,22 +632,22 @@ def build_per_env_cells(
         cell: dict[str, Any] = {"state": state}
         if state == "partial":
             cell["targets"] = extract_target_groups(env_value)
-            cell_my_ws = evaluate_my_ws(
+            ws_result = evaluate_my_ws(
                 env_value,
                 tenant_id=tenant_id,
                 capacity_id=capacity_id,
                 workspace_id=workspace_id,
             )
-            if cell_my_ws:
+            if ws_result is True:
                 cell["includesMyWorkspace"] = True
                 any_my_ws = True
-            # Mark cells whose target groups are all unevaluable locally
-            # (RegionName / MemberOf or unknown pivots). The matrix uses
-            # this to render the cell with a hatch overlay; the Inspector
-            # uses it to suppress the value-reveal affordance.
-            cell["unevaluable"] = bool(cell["targets"]) and all(
-                t.get("pivot") not in _EVALUABLE_PIVOTS for t in cell["targets"]
-            )
+            # ``unevaluable`` means "we cannot tell whether this cell is on
+            # for the configured workspace". That's the case when either no
+            # rule uses an evaluable pivot, OR a required rule was undecided
+            # (``evaluate_my_ws`` returned None). The matrix paints these
+            # with a hatch overlay; the inspector suppresses confident
+            # claims like "EFFECTIVE: ON".
+            cell["unevaluable"] = ws_result is None
         per_env[env] = cell
     return per_env, any_my_ws
 
