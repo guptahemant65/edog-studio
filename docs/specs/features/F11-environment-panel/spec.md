@@ -200,14 +200,7 @@ docs/specs/features/F11-environment-panel/
 | Override persistence: localStorage isn't enough — wrapper needs them at request time, not page time | Store in dev-server state; wrapper polls `/api/edog/feature-overrides` on a debounce, or push via existing SignalR channel. P2 decides. |
 | `Test.json` parse may break on schema drift | P0 confirms current schema. Tolerate missing key; surface as "unknown" not error. |
 
-## 9. Moonshot Vision (V2+)
-
-- **Flag experiment mode** — set overrides per-request via header, A/B locally without flipping global state.
-- **Flag dependency graph** — show which code paths gate on which flag (static analysis over the FLT source).
-- **One-click "Create rollout PR"** — pre-fills a PR against the FeatureManagement repo with the diff of current overrides vs. the prod ring.
-- **Time-travel** — diff config snapshot against a previous deploy.
-
-## 10. Related Specs (Spin-Offs)
+## 9. Related Specs (Spin-Offs)
 
 These were in the legacy three-tab F11 design and have moved:
 
