@@ -69,9 +69,15 @@ class FlagInspector {
   _render() {
     if (!this._currentRow) return;
     const row = this._currentRow;
-    const overridden = !!row.isOverridden;
-    const effective = overridden ? 'FORCED ON' : (row.effectiveForMyWorkspace ? 'ON' : 'OFF');
-    const effectiveCls = overridden ? 'forced' : (row.effectiveForMyWorkspace ? 'on' : 'off');
+    const liveOverrides = (this._ctx && this._ctx.overrides) || {};
+    const overridden = !!liveOverrides[row.wireKey];
+    // Server stamps effectiveForMyWorkspace at catalog-build time; mirror
+    // the force-ON logic client-side so optimistic toggles render correctly
+    // without re-fetching the catalog.
+    const baseEffective = !!row.effectiveForMyWorkspace;
+    const effectiveOn = overridden ? true : baseEffective;
+    const effective = overridden ? 'FORCED ON' : (effectiveOn ? 'ON' : 'OFF');
+    const effectiveCls = overridden ? 'forced' : (effectiveOn ? 'on' : 'off');
 
     const mainline = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.mainlineEnvs) || [];
     const sovereign = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.sovereignEnvs) || [];
@@ -98,7 +104,7 @@ class FlagInspector {
               <div class="ov-row"><span class="ov-key">Name</span><span class="ov-val">${this._escape(row.name)}</span></div>
               <div class="ov-row"><span class="ov-key">Wire key</span><span class="ov-val mono">${this._escape(row.wireKey)}</span></div>
               ${row.summary ? `<div class="ov-row"><span class="ov-key">Summary</span><span class="ov-val">${this._escape(row.summary)}</span></div>` : ''}
-              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (row.effectiveForMyWorkspace ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
+              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (baseEffective ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
               ${row.missingReason === 'missing-in-fm'
                 ? `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val warn">Not found in FeatureManagement repo</span></div>`
                 : `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val"><span class="mono">${this._escape(sourcePath)}</span>${fmRepoLink ? ` <a class="inspector-link" href="${fmRepoLink}" target="_blank" rel="noopener">Open in repo &#8599;</a>` : ''}</span></div>`}

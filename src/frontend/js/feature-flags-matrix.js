@@ -137,6 +137,7 @@ class FeatureFlagsMatrix {
       ]);
       this._catalog = catalogResp;
       this._overrides = overridesResp.overrides || {};
+      this._syncCatalogOverrideFlags();
       this._render();
       this._maybeScheduleSyncPoll();
     } catch (err) {
@@ -149,7 +150,8 @@ class FeatureFlagsMatrix {
   _maybeScheduleSyncPoll() {
     const fm = (this._catalog && this._catalog.fm) || {};
     // While the FM clone is in flight (or we're cold with 0 indexed flags),
-    // poll the catalog every 1.5s so the user doesn't sit on a wall of "?".
+    // poll the catalog every 500 ms so the user doesn't sit on a wall of "?".
+    // (Used to be 1.5 s — felt sluggish when FM sync itself completes in <200 ms.)
     const needsPoll = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
     if (this._syncPollTimer) {
       clearTimeout(this._syncPollTimer);
@@ -159,11 +161,20 @@ class FeatureFlagsMatrix {
     this._syncPollTimer = setTimeout(() => {
       this._syncPollTimer = null;
       if (!this._destroyed) this.load();
-    }, 1500);
+    }, 500);
   }
 
   async setOverride(wireKey, value) {
     // V1: only force-ON. Cleared via DELETE, not value=false.
+    const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
+      ? this._overrides[wireKey]
+      : undefined;
+    // Optimistic — flip the switch immediately so the user sees feedback
+    // before the HTTP round-trip + FLT push completes (~50-300 ms).
+    this._overrides = { ...this._overrides, [wireKey]: !!value };
+    this._lastOverrideMutationAt = Date.now();
+    this._patchRowOverride(wireKey, !!value);
+    this._render();
     try {
       const resp = await fetch('/api/edog/feature-flags/overrides', {
         method: 'POST',
@@ -171,51 +182,124 @@ class FeatureFlagsMatrix {
         body: JSON.stringify({ flag: wireKey, value: !!value }),
       });
       if (!resp.ok) {
+        // Revert optimistic mutation.
+        this._revertOverride(wireKey, prev);
         const body = await resp.json().catch(() => ({}));
         this._toast(`failed`, body.message || body.error || `HTTP ${resp.status}`);
         return;
       }
       const body = await resp.json();
       this._overrides = body.overrides || {};
-      this._lastOverrideMutationAt = Date.now();
+      this._syncCatalogOverrideFlags();
       this._showFltSyncToast(body.fltSync);
       this._render();
     } catch (err) {
+      this._revertOverride(wireKey, prev);
       this._toast('failed', err.message || String(err));
     }
   }
 
   async clearOverride(wireKey) {
+    const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
+      ? this._overrides[wireKey]
+      : undefined;
+    // Optimistic clear so the switch flips back to off immediately.
+    const next = { ...this._overrides };
+    delete next[wireKey];
+    this._overrides = next;
+    this._lastOverrideMutationAt = Date.now();
+    this._patchRowOverride(wireKey, false);
+    this._render();
     try {
       const resp = await fetch(`/api/edog/feature-flags/overrides/${encodeURIComponent(wireKey)}`, {
         method: 'DELETE',
       });
       if (!resp.ok) {
+        this._revertOverride(wireKey, prev);
         const body = await resp.json().catch(() => ({}));
         this._toast('failed', body.message || body.error || `HTTP ${resp.status}`);
         return;
       }
       const body = await resp.json();
       this._overrides = body.overrides || {};
-      this._lastOverrideMutationAt = Date.now();
+      this._syncCatalogOverrideFlags();
       this._showFltSyncToast(body.fltSync);
       this._render();
     } catch (err) {
+      this._revertOverride(wireKey, prev);
       this._toast('failed', err.message || String(err));
     }
   }
 
+  /* Mutate the in-memory catalog row so subsequent renders reflect the
+   * current override map without re-fetching /catalog. The server stamps
+   * isOverridden + effectiveForMyWorkspace at catalog-build time and we
+   * mirror the same logic client-side here. */
+  _patchRowOverride(wireKey, overridden) {
+    if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
+    const row = this._catalog.rows.find(r => r && r.wireKey === wireKey);
+    if (!row) return;
+    row.isOverridden = !!overridden;
+    if (overridden) {
+      row._preOverrideEffective = row._preOverrideEffective ?? row.effectiveForMyWorkspace;
+      row.effectiveForMyWorkspace = true;
+      row.overrideValue = true;
+    } else {
+      row.overrideValue = null;
+      if (row._preOverrideEffective != null) {
+        row.effectiveForMyWorkspace = row._preOverrideEffective;
+        row._preOverrideEffective = null;
+      }
+    }
+  }
+
+  _syncCatalogOverrideFlags() {
+    if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
+    for (const row of this._catalog.rows) {
+      const isOn = !!this._overrides[row.wireKey];
+      this._patchRowOverride(row.wireKey, isOn);
+    }
+  }
+
+  _revertOverride(wireKey, prev) {
+    if (prev === undefined) {
+      const next = { ...this._overrides };
+      delete next[wireKey];
+      this._overrides = next;
+      this._patchRowOverride(wireKey, false);
+    } else {
+      this._overrides = { ...this._overrides, [wireKey]: prev };
+      this._patchRowOverride(wireKey, !!prev);
+    }
+    this._render();
+  }
+
   async resetAll() {
     if (!confirm('Clear ALL feature-flag overrides for this session?')) return;
+    const previousOverrides = { ...this._overrides };
+    // Optimistic clear-all.
+    this._overrides = {};
+    this._lastOverrideMutationAt = Date.now();
+    this._syncCatalogOverrideFlags();
+    this._render();
     try {
       const resp = await fetch('/api/edog/feature-flags/overrides/reset', { method: 'POST' });
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        this._overrides = previousOverrides;
+        this._syncCatalogOverrideFlags();
+        this._render();
+        this._toast('failed', `HTTP ${resp.status}`);
+        return;
+      }
       const body = await resp.json();
       this._overrides = body.overrides || {};
-      this._lastOverrideMutationAt = Date.now();
+      this._syncCatalogOverrideFlags();
       this._showFltSyncToast(body.fltSync);
       this._render();
     } catch (err) {
+      this._overrides = previousOverrides;
+      this._syncCatalogOverrideFlags();
+      this._render();
       this._toast('failed', err.message || String(err));
     }
   }
@@ -273,7 +357,26 @@ class FeatureFlagsMatrix {
           </div>
 
           <div class="ff-table-wrap" id="ffTableWrap">
-            <div class="ff-empty"><span class="empty-glyph">&#9881;</span>Loading feature flags…</div>
+            <div class="ff-skeleton" aria-busy="true" aria-live="polite">
+              <div class="ff-skeleton-head">
+                <span class="sk-bar sk-name"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-state"></span>
+              </div>
+              <div class="ff-skeleton-rows">
+                <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+                <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+                <div class="sk-row"></div><div class="sk-row"></div>
+              </div>
+              <div class="ff-skeleton-label">Loading feature flags…</div>
+            </div>
           </div>
 
           <div class="ff-toast-strip" id="ffToast"></div>

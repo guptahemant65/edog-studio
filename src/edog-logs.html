@@ -11343,6 +11343,56 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   opacity: 0.4;
 }
 
+/* Pre-first-render skeleton — gives the user something to look at while
+ * the catalog endpoint round-trips. Mirrors the table's general shape so
+ * the layout doesn't jump when real rows arrive. */
+.ff-skeleton {
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+.ff-skeleton-head {
+  display: grid;
+  grid-template-columns: 2.5fr repeat(8, 1fr) 1.2fr;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-2);
+}
+.ff-skeleton .sk-bar {
+  height: 10px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  animation: ff-skeleton 1.4s ease-in-out infinite;
+}
+.ff-skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ff-skeleton .sk-row {
+  height: 24px;
+  border-radius: 4px;
+  background: linear-gradient(90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 30%,
+    var(--surface-3) 70%,
+    var(--surface-2) 100%);
+  background-size: 240% 100%;
+  animation: ff-skeleton-shimmer 1.6s ease-in-out infinite;
+  opacity: 0.55;
+}
+.ff-skeleton-label {
+  margin-top: var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@keyframes ff-skeleton-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
 .ff-error {
   margin: var(--space-3) var(--space-4);
   padding: var(--space-3) var(--space-4);
@@ -54013,6 +54063,7 @@ class FeatureFlagsMatrix {
       ]);
       this._catalog = catalogResp;
       this._overrides = overridesResp.overrides || {};
+      this._syncCatalogOverrideFlags();
       this._render();
       this._maybeScheduleSyncPoll();
     } catch (err) {
@@ -54025,7 +54076,8 @@ class FeatureFlagsMatrix {
   _maybeScheduleSyncPoll() {
     const fm = (this._catalog && this._catalog.fm) || {};
     // While the FM clone is in flight (or we're cold with 0 indexed flags),
-    // poll the catalog every 1.5s so the user doesn't sit on a wall of "?".
+    // poll the catalog every 500 ms so the user doesn't sit on a wall of "?".
+    // (Used to be 1.5 s — felt sluggish when FM sync itself completes in <200 ms.)
     const needsPoll = fm.syncInProgress === true || (fm.indexedCount === 0 && fm.stale === true);
     if (this._syncPollTimer) {
       clearTimeout(this._syncPollTimer);
@@ -54035,11 +54087,20 @@ class FeatureFlagsMatrix {
     this._syncPollTimer = setTimeout(() => {
       this._syncPollTimer = null;
       if (!this._destroyed) this.load();
-    }, 1500);
+    }, 500);
   }
 
   async setOverride(wireKey, value) {
     // V1: only force-ON. Cleared via DELETE, not value=false.
+    const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
+      ? this._overrides[wireKey]
+      : undefined;
+    // Optimistic — flip the switch immediately so the user sees feedback
+    // before the HTTP round-trip + FLT push completes (~50-300 ms).
+    this._overrides = { ...this._overrides, [wireKey]: !!value };
+    this._lastOverrideMutationAt = Date.now();
+    this._patchRowOverride(wireKey, !!value);
+    this._render();
     try {
       const resp = await fetch('/api/edog/feature-flags/overrides', {
         method: 'POST',
@@ -54047,51 +54108,124 @@ class FeatureFlagsMatrix {
         body: JSON.stringify({ flag: wireKey, value: !!value }),
       });
       if (!resp.ok) {
+        // Revert optimistic mutation.
+        this._revertOverride(wireKey, prev);
         const body = await resp.json().catch(() => ({}));
         this._toast(`failed`, body.message || body.error || `HTTP ${resp.status}`);
         return;
       }
       const body = await resp.json();
       this._overrides = body.overrides || {};
-      this._lastOverrideMutationAt = Date.now();
+      this._syncCatalogOverrideFlags();
       this._showFltSyncToast(body.fltSync);
       this._render();
     } catch (err) {
+      this._revertOverride(wireKey, prev);
       this._toast('failed', err.message || String(err));
     }
   }
 
   async clearOverride(wireKey) {
+    const prev = Object.prototype.hasOwnProperty.call(this._overrides, wireKey)
+      ? this._overrides[wireKey]
+      : undefined;
+    // Optimistic clear so the switch flips back to off immediately.
+    const next = { ...this._overrides };
+    delete next[wireKey];
+    this._overrides = next;
+    this._lastOverrideMutationAt = Date.now();
+    this._patchRowOverride(wireKey, false);
+    this._render();
     try {
       const resp = await fetch(`/api/edog/feature-flags/overrides/${encodeURIComponent(wireKey)}`, {
         method: 'DELETE',
       });
       if (!resp.ok) {
+        this._revertOverride(wireKey, prev);
         const body = await resp.json().catch(() => ({}));
         this._toast('failed', body.message || body.error || `HTTP ${resp.status}`);
         return;
       }
       const body = await resp.json();
       this._overrides = body.overrides || {};
-      this._lastOverrideMutationAt = Date.now();
+      this._syncCatalogOverrideFlags();
       this._showFltSyncToast(body.fltSync);
       this._render();
     } catch (err) {
+      this._revertOverride(wireKey, prev);
       this._toast('failed', err.message || String(err));
     }
   }
 
+  /* Mutate the in-memory catalog row so subsequent renders reflect the
+   * current override map without re-fetching /catalog. The server stamps
+   * isOverridden + effectiveForMyWorkspace at catalog-build time and we
+   * mirror the same logic client-side here. */
+  _patchRowOverride(wireKey, overridden) {
+    if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
+    const row = this._catalog.rows.find(r => r && r.wireKey === wireKey);
+    if (!row) return;
+    row.isOverridden = !!overridden;
+    if (overridden) {
+      row._preOverrideEffective = row._preOverrideEffective ?? row.effectiveForMyWorkspace;
+      row.effectiveForMyWorkspace = true;
+      row.overrideValue = true;
+    } else {
+      row.overrideValue = null;
+      if (row._preOverrideEffective != null) {
+        row.effectiveForMyWorkspace = row._preOverrideEffective;
+        row._preOverrideEffective = null;
+      }
+    }
+  }
+
+  _syncCatalogOverrideFlags() {
+    if (!this._catalog || !Array.isArray(this._catalog.rows)) return;
+    for (const row of this._catalog.rows) {
+      const isOn = !!this._overrides[row.wireKey];
+      this._patchRowOverride(row.wireKey, isOn);
+    }
+  }
+
+  _revertOverride(wireKey, prev) {
+    if (prev === undefined) {
+      const next = { ...this._overrides };
+      delete next[wireKey];
+      this._overrides = next;
+      this._patchRowOverride(wireKey, false);
+    } else {
+      this._overrides = { ...this._overrides, [wireKey]: prev };
+      this._patchRowOverride(wireKey, !!prev);
+    }
+    this._render();
+  }
+
   async resetAll() {
     if (!confirm('Clear ALL feature-flag overrides for this session?')) return;
+    const previousOverrides = { ...this._overrides };
+    // Optimistic clear-all.
+    this._overrides = {};
+    this._lastOverrideMutationAt = Date.now();
+    this._syncCatalogOverrideFlags();
+    this._render();
     try {
       const resp = await fetch('/api/edog/feature-flags/overrides/reset', { method: 'POST' });
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        this._overrides = previousOverrides;
+        this._syncCatalogOverrideFlags();
+        this._render();
+        this._toast('failed', `HTTP ${resp.status}`);
+        return;
+      }
       const body = await resp.json();
       this._overrides = body.overrides || {};
-      this._lastOverrideMutationAt = Date.now();
+      this._syncCatalogOverrideFlags();
       this._showFltSyncToast(body.fltSync);
       this._render();
     } catch (err) {
+      this._overrides = previousOverrides;
+      this._syncCatalogOverrideFlags();
+      this._render();
       this._toast('failed', err.message || String(err));
     }
   }
@@ -54149,7 +54283,26 @@ class FeatureFlagsMatrix {
           </div>
 
           <div class="ff-table-wrap" id="ffTableWrap">
-            <div class="ff-empty"><span class="empty-glyph">&#9881;</span>Loading feature flags…</div>
+            <div class="ff-skeleton" aria-busy="true" aria-live="polite">
+              <div class="ff-skeleton-head">
+                <span class="sk-bar sk-name"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-env"></span>
+                <span class="sk-bar sk-state"></span>
+              </div>
+              <div class="ff-skeleton-rows">
+                <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+                <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+                <div class="sk-row"></div><div class="sk-row"></div>
+              </div>
+              <div class="ff-skeleton-label">Loading feature flags…</div>
+            </div>
           </div>
 
           <div class="ff-toast-strip" id="ffToast"></div>
@@ -54573,9 +54726,15 @@ class FlagInspector {
   _render() {
     if (!this._currentRow) return;
     const row = this._currentRow;
-    const overridden = !!row.isOverridden;
-    const effective = overridden ? 'FORCED ON' : (row.effectiveForMyWorkspace ? 'ON' : 'OFF');
-    const effectiveCls = overridden ? 'forced' : (row.effectiveForMyWorkspace ? 'on' : 'off');
+    const liveOverrides = (this._ctx && this._ctx.overrides) || {};
+    const overridden = !!liveOverrides[row.wireKey];
+    // Server stamps effectiveForMyWorkspace at catalog-build time; mirror
+    // the force-ON logic client-side so optimistic toggles render correctly
+    // without re-fetching the catalog.
+    const baseEffective = !!row.effectiveForMyWorkspace;
+    const effectiveOn = overridden ? true : baseEffective;
+    const effective = overridden ? 'FORCED ON' : (effectiveOn ? 'ON' : 'OFF');
+    const effectiveCls = overridden ? 'forced' : (effectiveOn ? 'on' : 'off');
 
     const mainline = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.mainlineEnvs) || [];
     const sovereign = (this._ctx.catalog.workspace && this._ctx.catalog.workspace.sovereignEnvs) || [];
@@ -54602,7 +54761,7 @@ class FlagInspector {
               <div class="ov-row"><span class="ov-key">Name</span><span class="ov-val">${this._escape(row.name)}</span></div>
               <div class="ov-row"><span class="ov-key">Wire key</span><span class="ov-val mono">${this._escape(row.wireKey)}</span></div>
               ${row.summary ? `<div class="ov-row"><span class="ov-key">Summary</span><span class="ov-val">${this._escape(row.summary)}</span></div>` : ''}
-              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (row.effectiveForMyWorkspace ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
+              <div class="ov-row"><span class="ov-key">Effective</span><span class="ov-val"><span class="ff-effective ${effectiveCls}">${effective}</span><span class="ov-effective-note">${overridden ? 'force-ON override active for this session' : (baseEffective ? 'enabled for your workspace via FM' : 'no env matches your workspace')}</span></span></div>
               ${row.missingReason === 'missing-in-fm'
                 ? `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val warn">Not found in FeatureManagement repo</span></div>`
                 : `<div class="ov-row"><span class="ov-key">FM source</span><span class="ov-val"><span class="mono">${this._escape(sourcePath)}</span>${fmRepoLink ? ` <a class="inspector-link" href="${fmRepoLink}" target="_blank" rel="noopener">Open in repo &#8599;</a>` : ''}</span></div>`}

@@ -523,6 +523,56 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   opacity: 0.4;
 }
 
+/* Pre-first-render skeleton — gives the user something to look at while
+ * the catalog endpoint round-trips. Mirrors the table's general shape so
+ * the layout doesn't jump when real rows arrive. */
+.ff-skeleton {
+  padding: var(--space-3) var(--space-4) var(--space-6);
+}
+.ff-skeleton-head {
+  display: grid;
+  grid-template-columns: 2.5fr repeat(8, 1fr) 1.2fr;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-2);
+}
+.ff-skeleton .sk-bar {
+  height: 10px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  animation: ff-skeleton 1.4s ease-in-out infinite;
+}
+.ff-skeleton-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ff-skeleton .sk-row {
+  height: 24px;
+  border-radius: 4px;
+  background: linear-gradient(90deg,
+    var(--surface-2) 0%,
+    var(--surface-3) 30%,
+    var(--surface-3) 70%,
+    var(--surface-2) 100%);
+  background-size: 240% 100%;
+  animation: ff-skeleton-shimmer 1.6s ease-in-out infinite;
+  opacity: 0.55;
+}
+.ff-skeleton-label {
+  margin-top: var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+@keyframes ff-skeleton-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
 .ff-error {
   margin: var(--space-3) var(--space-4);
   padding: var(--space-3) var(--space-4);
