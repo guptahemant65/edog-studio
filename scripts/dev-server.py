@@ -5228,19 +5228,6 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, format, *args):
-        msg = str(args)
-        quiet_paths = (
-            "/api/flt/config",
-            "/ws/logs",
-            "/api/logs",
-            "/api/telemetry",
-            "/api/stats",
-        )
-        if any(p in msg for p in quiet_paths):
-            return
-        super().log_message(format, *args)
-
 
 if __name__ == "__main__":
 
