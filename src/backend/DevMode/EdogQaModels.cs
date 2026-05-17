@@ -311,6 +311,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// the linter cross-checks consistency under <c>LNT008_EvidenceConsistency</c>.
         /// </summary>
         public string InvariantId { get; set; }
+
+        /// <summary>
+        /// Generation-time identifier of the Architect-emitted evidence record
+        /// that produced this engine <see cref="GroundingEvidence"/> entry
+        /// (F27 P9 §3.3, "evidence audit trail"). Set by
+        /// <c>EdogQaScenarioProjector</c> when the V2 pipeline is on/shadow;
+        /// null for legacy-bridge scenarios. Carrying the original
+        /// <c>evidenceId</c> forward lets the curation UI render the audit
+        /// path (Editor → Architect plan → this engine record) and lets the
+        /// eval harness reconcile V2 output against the Architect plan log.
+        /// </summary>
+        public string SourceEvidenceId { get; set; }
     }
 
     // ──────────────────────────────────────────────

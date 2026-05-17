@@ -910,3 +910,212 @@ def test_llm_client_schemas_pass_strict_mode_validator(
 
 
 
+
+
+
+# ── F27 P9 T1c-a — Scenario Validator ───────────────────────────────────
+
+VALIDATOR_REQUIRED_CODES = [
+    "GROUNDING_REF_UNKNOWN",
+    "GROUNDING_LINE_NOT_IN_DIFF",
+    "GROUNDING_SIDE_MISMATCH",
+    "GROUNDING_MISSING",
+    "FIELD_EMPTY",
+    "FIELD_TOO_LONG",
+    "FIELD_OUT_OF_RANGE",
+    "ENUM_VALUE_INVALID",
+    "EXPECTATIONS_MISSING",
+    "TOPIC_UNKNOWN",
+    "CONFIDENCE_CAPPED",
+    "DUPLICATE_IN_BATCH",
+]
+
+
+def test_qa_scenario_validator_class_present() -> None:
+    """T1c-a — the defense-in-depth Validator (spec ~A73.2) ships as a
+    pure static class with one entry point: `Validate(plan, scenarios,
+    diff, context) -> ValidationResult`. Quarantines on failure rather
+    than throws, so the Orchestrator can record per-scenario reasons.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioValidator.cs"
+    ).read_text(encoding="utf-8")
+    assert "internal static class EdogQaScenarioValidator" in src, (
+        "Validator must be a static class within DevMode assembly."
+    )
+    assert "public static ValidationResult Validate(" in src, (
+        "Validator must expose a single Validate entry point."
+    )
+    assert "public sealed class ValidationResult" in src, (
+        "ValidationResult must be a public sealed class so harness + "
+        "orchestrator can consume it."
+    )
+    assert "public sealed class QuarantineReason" in src
+    assert "public sealed class AcceptedScenario" in src
+    assert "public sealed class QuarantinedScenario" in src
+
+
+def test_qa_scenario_validator_declares_required_codes() -> None:
+    """All twelve wire-stable codes must exist as string constants.
+    Reused by the UI inline-error renderer and the orchestrator's
+    audit log; renaming them is a breaking change.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioValidator.cs"
+    ).read_text(encoding="utf-8")
+    for code in VALIDATOR_REQUIRED_CODES:
+        assert f"\"{code}\"" in src, f"Validator missing stable code: {code}"
+
+
+def test_grounding_evidence_carries_source_evidence_id() -> None:
+    """The engine `GroundingEvidence` record must carry an optional
+    `SourceEvidenceId` field so the Projector (T1c-a-2) can forward the
+    Architect's `evidenceId` into engine-shape scenarios for the audit
+    trail. Null on the legacy bridge path.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaModels.cs"
+    ).read_text(encoding="utf-8")
+    assert "SourceEvidenceId" in src, (
+        "GroundingEvidence must carry SourceEvidenceId for the V2 audit "
+        "trail; the Projector populates it when EDOG_QA_LLM_V2 is on."
+    )
+
+
+def test_validator_gate_matrix(harness_environment, built_harness) -> None:
+    """T1c-a — every gate must trip the expected code on its dedicated
+    canned input. Thirteen cases, each scoped to one Validator
+    behaviour: 5 grounding gates, 4 schema gates, 1 topic gate, 1
+    confidence-clamp accept, 1 dedup, 1 multi-failure scenario.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
+    assert data["ok"] is True, data
+    cases = {c["caseId"]: c for c in data["cases"]}
+
+    expected = {
+        "happy_path": (1, 0, []),
+        "grounding_ref_unknown": (0, 1, ["GROUNDING_REF_UNKNOWN"]),
+        "grounding_line_not_in_diff": (0, 1, ["GROUNDING_LINE_NOT_IN_DIFF"]),
+        "grounding_side_mismatch": (0, 1, ["GROUNDING_SIDE_MISMATCH"]),
+        "grounding_missing": (0, 1, ["GROUNDING_MISSING"]),
+        "title_too_long": (0, 1, ["FIELD_TOO_LONG"]),
+        "priority_out_of_range": (0, 1, ["FIELD_OUT_OF_RANGE"]),
+        "enum_value_invalid": (0, 1, ["ENUM_VALUE_INVALID"]),
+        "expectations_missing": (0, 1, ["EXPECTATIONS_MISSING"]),
+        "topic_unknown": (0, 1, ["TOPIC_UNKNOWN"]),
+        "confidence_clamped": (1, 0, []),
+        "duplicate_in_batch": (1, 1, ["DUPLICATE_IN_BATCH"]),
+    }
+    for case_id, (accepted, quarantined, codes) in expected.items():
+        c = cases[case_id]
+        assert c["acceptedCount"] == accepted, (case_id, c)
+        assert c["quarantinedCount"] == quarantined, (case_id, c)
+        if codes:
+            actual_codes = []
+            for q in c["quarantined"]:
+                actual_codes.extend(q["codes"])
+            for required in codes:
+                assert required in actual_codes, (case_id, required, actual_codes)
+
+
+def test_validator_multi_failure_reports_all_reasons(
+    harness_environment, built_harness
+) -> None:
+    """When a single scenario trips multiple gates, EVERY reason must be
+    recorded so curation has the full picture for repair. The
+    'multi_failure' case deliberately violates four gates; the
+    Validator must surface all four codes on the single quarantined
+    record.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    multi = cases["multi_failure"]
+    assert multi["quarantinedCount"] == 1, multi
+    codes = set(multi["quarantined"][0]["codes"])
+    # title empty + priority out of range + grounding ref unknown +
+    # topic unknown — four codes, distinct gates.
+    assert "FIELD_EMPTY" in codes, codes
+    assert "FIELD_OUT_OF_RANGE" in codes, codes
+    assert "GROUNDING_REF_UNKNOWN" in codes, codes
+    assert "TOPIC_UNKNOWN" in codes, codes
+
+
+def test_validator_semantic_hash_is_deterministic(
+    harness_environment, built_harness
+) -> None:
+    """The semantic-hash dedup key must be deterministic: the same
+    scenario (same stimulus + sorted expectations) hashed twice
+    produces an identical hex digest. The 'happy_path' and
+    'confidence_clamped' cases share an identical structural scenario
+    — only the confidence value differs (which is intentionally
+    excluded from the hash) — so their digests MUST match.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    happy_hash = cases["happy_path"]["accepted"][0]["semanticHash"]
+    clamped_hash = cases["confidence_clamped"]["accepted"][0]["semanticHash"]
+    dedup_hash = cases["duplicate_in_batch"]["accepted"][0]["semanticHash"]
+    assert happy_hash == clamped_hash, (
+        "Semantic hash must EXCLUDE confidence — same structure with "
+        "different confidence must hash identically."
+    )
+    assert happy_hash == dedup_hash, (
+        "Semantic hash must EXCLUDE title — the duplicate case has a "
+        "different title but identical stimulus + expectations."
+    )
+    # Hash format: lowercase hex, 64 chars (SHA-256 full).
+    assert len(happy_hash) == 64, happy_hash
+    assert all(ch in "0123456789abcdef" for ch in happy_hash), happy_hash
+
+
+def test_validator_confidence_is_clamped_to_unit_interval(
+    harness_environment, built_harness
+) -> None:
+    """Gate 4 must clamp confidence into [0.0, 1.0] silently. Source
+    value 1.7 ⇒ 1.0. This guards against an LLM producing an
+    out-of-band probability that would otherwise crash downstream
+    Bayesian aggregation.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    clamped = cases["confidence_clamped"]
+    assert clamped["acceptedCount"] == 1, clamped
+    assert clamped["accepted"][0]["calibratedConfidence"] == 1.0, clamped
+
+
+def test_validator_parses_unified_diff_correctly(
+    harness_environment, built_harness
+) -> None:
+    """The grounding-existence gate depends on a correct unified-diff
+    parser. The canonical sample has 3 added lines (right side) at
+    12/13/14 and 1 deleted line (left side) at 12. Garbage input
+    must yield an empty set, not throw.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
+    samples = {s["label"]: s for s in data["diffParseSamples"]}
+
+    canonical = samples["canonical"]
+    right_lines = [r["Line"] for r in canonical["rightLines"]]
+    left_lines = [item["Line"] for item in canonical["leftLines"]]
+    assert right_lines == [12, 13, 14], canonical
+    assert left_lines == [12], canonical
+    assert all(r["Path"] == "src/Foo.cs" for r in canonical["rightLines"]), canonical
+
+    assert samples["empty_diff"]["changedLineCount"] == 0
+    assert samples["garbage_input"]["changedLineCount"] == 0
+
+
+def test_validator_enum_vocabularies_are_published(
+    harness_environment, built_harness
+) -> None:
+    """The Validator exposes its enum vocabularies for the orchestrator
+    + UI to share. The harness captures them so this test pins the
+    canonical sets — a careless rename surfaces here.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
+    enum_vocab = data["enumVocabulary"]
+    assert "DirectInvoke" in enum_vocab["stimulusTypes"]
+    assert "HttpRequest" in enum_vocab["stimulusTypes"]
+    assert len(enum_vocab["stimulusTypes"]) == 6, enum_vocab["stimulusTypes"]
+    assert len(enum_vocab["expectationTypes"]) >= 6, enum_vocab["expectationTypes"]
+    assert "HappyPath" in enum_vocab["categories"], enum_vocab["categories"]

@@ -14,6 +14,7 @@
 //   history-store      - F27 P7: durability + restart of EdogQaRunStore.
 //   capability-probe   - F27 P9 T1a: real Azure OpenAI capability probe.
 //   llm-client         - F27 P9 T1b: Architect/Editor LLM client behavioural matrix.
+//   validator          - F27 P9 T1c-a: scenario validator behavioural matrix.
 //
 // Each subcommand emits a single JSON block delimited by HARNESS-JSON-BEGIN
 // / HARNESS-JSON-END markers on stdout. The pytest wrapper parses those.
@@ -32,7 +33,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator}");
                 return 2;
             }
 
@@ -50,6 +51,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "history-store" => await QaHistoryStoreHarness.RunAsync(cts.Token),
                     "capability-probe" => await CapabilityProbeHarness.RunAsync(cts.Token),
                     "llm-client" => await LlmClientHarness.RunAsync(cts.Token),
+                    "validator" => await ValidatorHarness.RunAsync(cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }

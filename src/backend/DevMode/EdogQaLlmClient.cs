@@ -209,6 +209,14 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             public string HunkId { get; set; }
 
+            /// <summary>
+            /// Line number in the diff side's view (spec §4: "line in the
+            /// side's view"). When <see cref="Side"/> = "left" this is the
+            /// pre-change line number; when "right" it is the post-change
+            /// line number. Rubber-duck T1c review #2 flagged the field name
+            /// as misleading — kept for spec/schema compatibility, the
+            /// Validator interprets it side-relative.
+            /// </summary>
             public int NewLine { get; set; }
 
             public string Excerpt { get; set; }

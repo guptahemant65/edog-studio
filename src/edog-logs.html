@@ -12368,6 +12368,11 @@ mark {
   color: var(--text);
 }
 
+/* Prevent flex children from shrinking — let the panel scroll instead */
+.environment-panel > * {
+  flex-shrink: 0;
+}
+
 .environment-panel .panel-header {
   display: flex;
   align-items: baseline;
@@ -51937,8 +51942,10 @@ class SystemFilesTab {
 
   activate() {
     this._active = true;
-    this._signalr.on('fileop', this._onEvent);
-    this._signalr.subscribeTopic('fileop');
+    if (this._signalr) {
+      this._signalr.on('fileop', this._onEvent);
+      this._signalr.subscribeTopic('fileop');
+    }
     document.addEventListener('click', this._onDocClick);
     document.addEventListener('keydown', this._onDocKeyDown);
     this._createBodyEls();
@@ -51947,10 +51954,13 @@ class SystemFilesTab {
 
   deactivate() {
     this._active = false;
-    this._signalr.unsubscribeTopic('fileop');
-    this._signalr.off('fileop', this._onEvent);
+    if (this._signalr) {
+      this._signalr.unsubscribeTopic('fileop');
+      this._signalr.off('fileop', this._onEvent);
+    }
     document.removeEventListener('click', this._onDocClick);
     document.removeEventListener('keydown', this._onDocKeyDown);
+    clearTimeout(this._toastTimer);
     this._removeBodyEls();
   }
 
@@ -54469,8 +54479,10 @@ class TokensTab {
 
   activate() {
     this._isActive = true;
-    this._signalr.on('token', this._onEvent);
-    this._signalr.subscribeTopic('token');
+    if (this._signalr) {
+      this._signalr.on('token', this._onEvent);
+      this._signalr.subscribeTopic('token');
+    }
     document.addEventListener('click', this._onDocClick);
     this._startTicking();
     this._render();
@@ -54479,8 +54491,10 @@ class TokensTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('click', this._onDocClick);
-    this._signalr.unsubscribeTopic('token');
-    this._signalr.off('token', this._onEvent);
+    if (this._signalr) {
+      this._signalr.unsubscribeTopic('token');
+      this._signalr.off('token', this._onEvent);
+    }
     this._stopTicking();
   }
 
@@ -55393,11 +55407,6 @@ class CachesTab {
     // DOM refs (set in _buildDOM)
     this._els = {};
 
-    // Resize state
-    this._resizing = false;
-    this._resizeStartY = 0;
-    this._resizeStartH = 0;
-
     // Active state
     this._active = false;
 
@@ -55701,29 +55710,26 @@ class CachesTab {
       });
     }
 
-    // Detail panel resize
+    // Detail panel resize — scoped listeners (add on mousedown, remove on mouseup)
     els.detailResize.addEventListener('mousedown', (e) => {
-      this._resizing = true;
-      this._resizeStartY = e.clientY;
-      this._resizeStartH = this._detailHeight;
+      const startY = e.clientY;
+      const startH = this._detailHeight;
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!this._resizing) return;
-      this._detailHeight = Math.max(120,
-        Math.min(500, this._resizeStartH - (e.clientY - this._resizeStartY))
-      );
-      els.detailPanel.style.height = this._detailHeight + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (this._resizing) {
-        this._resizing = false;
+      const onMove = (ev) => {
+        this._detailHeight = Math.max(120,
+          Math.min(500, startH - (ev.clientY - startY))
+        );
+        els.detailPanel.style.height = this._detailHeight + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-      }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
 
     // Keyboard navigation — registered in activate(), removed in deactivate()
@@ -56914,29 +56920,25 @@ class HttpPipelineTab {
       self._closeDetail();
     });
 
-    // Detail resize
-    var resizing = false;
-    var startY = 0;
-    var startH = 0;
+    // Detail resize — scoped listeners (add on mousedown, remove on mouseup)
     this._els.resize.addEventListener('mousedown', function(e) {
-      resizing = true;
-      startY = e.clientY;
-      startH = self._els.detail.offsetHeight;
+      var startY = e.clientY;
+      var startH = self._els.detail.offsetHeight;
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!resizing) return;
-      var h = Math.max(120, startH - (e.clientY - startY));
-      self._els.detail.style.height = h + 'px';
-      self._detailHeight = h;
-    });
-    document.addEventListener('mouseup', function() {
-      if (resizing) {
-        resizing = false;
+      var onMove = function(ev) {
+        var h = Math.max(120, startH - (ev.clientY - startY));
+        self._els.detail.style.height = h + 'px';
+        self._detailHeight = h;
+      };
+      var onUp = function() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-      }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
 
     // Keyboard navigation
@@ -62418,16 +62420,20 @@ class PerfMarkersTab {
   /** Called when the tab becomes visible. Subscribe to perf topic. */
   activate() {
     this._active = true;
-    this._signalr.on('perf', this._onEvent);
-    this._signalr.subscribeTopic('perf');
+    if (this._signalr) {
+      this._signalr.on('perf', this._onEvent);
+      this._signalr.subscribeTopic('perf');
+    }
     this._render();
   }
 
   /** Called when the tab is hidden. Unsubscribe to save resources. */
   deactivate() {
     this._active = false;
-    this._signalr.off('perf', this._onEvent);
-    this._signalr.unsubscribeTopic('perf');
+    if (this._signalr) {
+      this._signalr.off('perf', this._onEvent);
+      this._signalr.unsubscribeTopic('perf');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -62792,30 +62798,24 @@ class PerfMarkersTab {
       navigator.clipboard.writeText(JSON.stringify(obj, null, 2)).catch(() => {});
     });
 
-    // Detail resize
-    let resizing = false;
-    let startY = 0;
-    let startH = 0;
+    // Detail resize — scoped listeners (add on mousedown, remove on mouseup)
     this._resizeHandle.addEventListener('mousedown', (e) => {
-      resizing = true;
-      startY = e.clientY;
-      startH = this._detailEl.offsetHeight;
+      const startY = e.clientY;
+      const startH = this._detailEl.offsetHeight;
       document.body.style.userSelect = 'none';
-    });
-    const onMouseMove = (e) => {
-      if (!resizing) return;
-      const h = Math.max(120, startH - (e.clientY - startY));
-      this._detailEl.style.height = h + 'px';
-      this._detailHeight = h;
-    };
-    const onMouseUp = () => {
-      if (resizing) {
-        resizing = false;
+      const onMouseMove = (ev) => {
+        const h = Math.max(120, startH - (ev.clientY - startY));
+        this._detailEl.style.height = h + 'px';
+        this._detailHeight = h;
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
         document.body.style.userSelect = '';
-      }
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
 
     // Keyboard
     this._container.addEventListener('keydown', (e) => this._onKeyDown(e));
