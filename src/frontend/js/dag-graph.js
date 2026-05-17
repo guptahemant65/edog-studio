@@ -361,34 +361,27 @@ class DagCanvasRenderer {
         };
       });
 
-      // Draw smooth curve through points.
-      // For left-to-right DAGs, we use horizontal-dominant Bézier curves:
-      // control points extend horizontally from each endpoint, keeping
-      // curves clean even when source/target are at very different Y positions.
+      // Draw smooth curve through dagre waypoints.
+      // dagre provides well-computed waypoints — we draw gentle curves through
+      // each pair using horizontal-tension Bézier (keeps edges clean in LR layouts).
       ctx.beginPath();
       ctx.moveTo(screenPts[0].x, screenPts[0].y);
 
       if (screenPts.length === 2) {
         var sx = screenPts[0].x, sy = screenPts[0].y;
         var ex = screenPts[1].x, ey = screenPts[1].y;
-        // Horizontal tension: control points extend 40% of the X gap outward
-        // from each endpoint, keeping the curve horizontal at both ends.
-        var dx = Math.abs(ex - sx);
-        var tension = Math.max(dx * 0.4, 30 * cam.scale);
+        var gapX = Math.abs(ex - sx);
+        var tension = Math.max(gapX * 0.3, 20 * cam.scale);
         ctx.bezierCurveTo(sx + tension, sy, ex - tension, ey, ex, ey);
       } else {
-        // Multi-point: smooth Catmull-Rom style through waypoints
+        // dagre gives 3+ points (start, midpoints, end). Draw a cubic Bézier
+        // between each consecutive pair using horizontal tension.
         for (var i = 1; i < screenPts.length; i++) {
-          var p0 = screenPts[Math.max(0, i - 2)];
-          var p1 = screenPts[i - 1];
-          var p2 = screenPts[i];
-          var p3 = screenPts[Math.min(screenPts.length - 1, i + 1)];
-          // Convert Catmull-Rom segment to cubic Bézier
-          var cp1x = p1.x + (p2.x - p0.x) / 6;
-          var cp1y = p1.y + (p2.y - p0.y) / 6;
-          var cp2x = p2.x - (p3.x - p1.x) / 6;
-          var cp2y = p2.y - (p3.y - p1.y) / 6;
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+          var sp = screenPts[i - 1];
+          var ep = screenPts[i];
+          var segGap = Math.abs(ep.x - sp.x);
+          var segTension = Math.max(segGap * 0.3, 15 * cam.scale);
+          ctx.bezierCurveTo(sp.x + segTension, sp.y, ep.x - segTension, ep.y, ep.x, ep.y);
         }
       }
 

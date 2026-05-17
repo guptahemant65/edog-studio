@@ -14,8 +14,8 @@ class DagLayout {
    * @param {number} [opts.nodeHeight=56]     Node card height (px)
    */
   constructor(opts = {}) {
-    this.layerSpacing = opts.layerSpacing ?? 200;
-    this.nodeSpacing = opts.nodeSpacing ?? 80;
+    this.layerSpacing = opts.layerSpacing ?? 160;
+    this.nodeSpacing = opts.nodeSpacing ?? 40;
     this.nodeWidth = opts.nodeWidth ?? 160;
     this.nodeHeight = opts.nodeHeight ?? 56;
   }
