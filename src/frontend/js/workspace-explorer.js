@@ -423,10 +423,23 @@ class WorkspaceCreateDialog {
     d.textContent = str;
     return d.innerHTML;
   }
+
+  _showNoAuth() {
+    if (!this._dialogEl) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'ws-cd-noauth';
+    overlay.innerHTML = '<div class="ws-cd-noauth-msg">Sign in to create workspaces</div>';
+    var btn = document.createElement('button');
+    btn.className = 'ws-cd-btn ws-cd-btn-primary';
+    btn.textContent = 'Close';
+    btn.addEventListener('click', this.close.bind(this));
+    overlay.appendChild(btn);
+    this._dialogEl.appendChild(overlay);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   LakehouseCreateDialog — modal for creating a lakehouse in a workspace
+   LakehouseCreateDialog— modal for creating a lakehouse in a workspace
    States: empty → valid/invalid → schemas → creating → success/failure
    ═══════════════════════════════════════════════════════════════ */
 class LakehouseCreateDialog {
@@ -1357,246 +1370,49 @@ class WorkspaceExplorer {
     });
   }
 
-  /** Show inline form at top of tree for creating a new workspace with optional capacity. */
+  /** Open modal dialog for creating a new workspace. */
   _showCreateWorkspaceInput() {
-    if (!this._treeEl) return;
-    if (this._treeEl.querySelector('.ws-create-form')) return;
-
     var self = this;
-    var form = document.createElement('div');
-    form.className = 'ws-create-form';
-
-    // -- Name row --
-    var nameLabel = document.createElement('div');
-    nameLabel.className = 'ws-create-label';
-    nameLabel.textContent = 'WORKSPACE NAME';
-    form.appendChild(nameLabel);
-
-    var nameRow = document.createElement('div');
-    nameRow.className = 'ws-create-row';
-    var nameInput = document.createElement('input');
-    nameInput.className = 'ws-create-input';
-    nameInput.type = 'text';
-    nameInput.placeholder = 'Enter workspace name';
-    nameInput.setAttribute('aria-label', 'New workspace name');
-    nameRow.appendChild(nameInput);
-    form.appendChild(nameRow);
-
-    // -- Capacity row --
-    var capLabel = document.createElement('div');
-    capLabel.className = 'ws-create-label';
-    capLabel.textContent = 'CAPACITY (OPTIONAL)';
-    form.appendChild(capLabel);
-
-    var capRow = document.createElement('div');
-    capRow.className = 'ws-create-row';
-    var capSelect = document.createElement('select');
-    capSelect.className = 'ws-create-select';
-    capSelect.setAttribute('aria-label', 'Select capacity');
-    var defaultOpt = document.createElement('option');
-    defaultOpt.value = '';
-    defaultOpt.textContent = 'Default capacity';
-    capSelect.appendChild(defaultOpt);
-    capRow.appendChild(capSelect);
-    form.appendChild(capRow);
-
-    // Hint
-    var hint = document.createElement('div');
-    hint.className = 'ws-create-hint';
-    hint.textContent = 'Enter \u2193 Tab to select capacity, Enter to create, Esc to cancel';
-    form.appendChild(hint);
-
-    this._treeEl.insertBefore(form, this._treeEl.firstChild);
-    nameInput.focus();
-
-    // Load capacities async
-    self._loadCapacityOptions(capSelect);
-
-    var committed = false;
-    var commit = function() {
-      var name = nameInput.value.trim();
-      var capacityId = capSelect.value || null;
-      cleanup();
-      if (!name) return;
-      self._createWorkspaceWithCapacity(name, capacityId);
-    };
-
-    var cleanup = function() {
-      if (form.parentNode) form.remove();
-    };
-
-    var onKey = function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (document.activeElement === nameInput && nameInput.value.trim()) {
-          capSelect.focus();
-        } else if (document.activeElement === capSelect) {
-          committed = true;
-          commit();
-        } else if (nameInput.value.trim()) {
-          committed = true;
-          commit();
-        }
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        committed = true;
-        cleanup();
-      }
-    };
-
-    nameInput.addEventListener('keydown', onKey);
-    capSelect.addEventListener('keydown', onKey);
-  }
-
-  /** Fetch capacities and populate a select element. */
-  _loadCapacityOptions(selectEl) {
-    var self = this;
-    if (this._isMock) {
-      var caps = window.MockEdogData ? window.MockEdogData.capacities : [];
-      for (var i = 0; i < caps.length; i++) {
-        var opt = document.createElement('option');
-        opt.value = caps[i].id;
-        opt.textContent = caps[i].displayName + ' (' + caps[i].sku + ')';
-        selectEl.appendChild(opt);
-      }
-      return;
-    }
-    this._api.listCapacities().then(function(resp) {
-      var caps = (resp && resp.value) ? resp.value : [];
-      for (var i = 0; i < caps.length; i++) {
-        var opt = document.createElement('option');
-        opt.value = caps[i].id;
-        var label = caps[i].displayName || caps[i].id;
-        if (caps[i].sku) label = label + ' (' + caps[i].sku + ')';
-        opt.textContent = label;
-        selectEl.appendChild(opt);
-      }
-    }).catch(function() {
-      // Silently degrade — user can still create with default capacity
+    var hasAuth = this._api.hasBearerToken();
+    var dialog = new WorkspaceCreateDialog(this._api, {
+      existingWorkspaces: this._workspaces
     });
-  }
-
-  /** Create workspace and optionally assign to capacity. */
-  _createWorkspaceWithCapacity(name, capacityId) {
-    var self = this;
-    this._api.createWorkspace(name, capacityId).then(function(result) {
-      self._toast('Created workspace "' + name + '"', 'success');
-      return self.loadWorkspaces().then(function() {
+    dialog.onComplete = function(result) {
+      self.loadWorkspaces().then(function() {
         if (result && result.id) {
           self._expanded.add(result.id);
           self._renderTree();
         }
       });
-    }).catch(function(err) {
-      self._toast('Create failed: ' + err.message, 'error');
-    });
+    };
+    dialog.open();
+    if (!hasAuth) dialog._showNoAuth();
   }
 
   /** Context menu action: create lakehouse inside selected workspace. */
   async _ctxCreateLakehouse() {
-    const t = this._ctxTarget;
+    var t = this._ctxTarget;
     if (!t || !t.isWorkspace) return;
+    var ws = t.workspace;
 
-    // Expand workspace so children are visible
-    if (!this._expanded.has(t.workspace.id)) {
-      await this._toggleWorkspace(t.workspace);
-    }
+    // Get existing items for duplicate name detection
+    var children = this._children[ws.id] || [];
+    var self = this;
 
-    if (!this._treeEl) return;
-    // Find insertion point: after workspace's last child in tree
-    const allRows = Array.from(this._treeEl.querySelectorAll('.ws-tree-item'));
-    let insertAfter = null;
-    let foundWs = false;
-    for (const row of allRows) {
-      const nameEl = row.querySelector('.ws-tree-name');
-      if (nameEl && nameEl.textContent === t.workspace.displayName && !foundWs) {
-        foundWs = true;
-        insertAfter = row;
-        continue;
-      }
-      // Subsequent child rows (depth 1) belong to this workspace
-      if (foundWs) {
-        const pl = parseInt(row.style.paddingLeft, 10) || 0;
-        if (pl > 12) {
-          insertAfter = row;
-        } else {
-          break;
-        }
-      }
-    }
-
-    // Avoid duplicates
-    if (this._treeEl.querySelector('.ws-create-row')) return;
-
-    const row = document.createElement('div');
-    row.className = 'ws-create-row';
-    row.style.paddingLeft = '28px';
-
-    const dot = document.createElement('span');
-    dot.className = 'ws-tree-dot lakehouse';
-    row.appendChild(dot);
-
-    const input = document.createElement('input');
-    input.className = 'ws-create-input';
-    input.type = 'text';
-    input.placeholder = 'New lakehouse name';
-    input.setAttribute('aria-label', 'New lakehouse name');
-    row.appendChild(input);
-
-    if (insertAfter && insertAfter.nextSibling) {
-      this._treeEl.insertBefore(row, insertAfter.nextSibling);
-    } else {
-      this._treeEl.appendChild(row);
-    }
-    input.focus();
-
-    let committed = false;
-    const commit = async () => {
-      const name = input.value.trim();
-      cleanup();
-      if (!name) return;
-      try {
-        await this._api.createLakehouse(t.workspace.id, name);
-        this._toast(`Created lakehouse "${name}"`, 'success');
-        // Refresh children
-        delete this._children[t.workspace.id];
-        this._expanded.add(t.workspace.id);
-        await this._toggleWorkspace(t.workspace);
-        // toggleWorkspace collapsed it since it was expanded — expand again
-        if (!this._expanded.has(t.workspace.id)) {
-          await this._toggleWorkspace(t.workspace);
-        }
-      } catch (err) {
-        this._toast(`Create failed: ${err.message}`, 'error');
-      }
+    var dialog = new LakehouseCreateDialog(this._api, {
+      workspaceId: ws.id,
+      workspaceName: ws.displayName,
+      existingItems: children
+    });
+    dialog.onComplete = function() {
+      // Refresh workspace children
+      delete self._children[ws.id];
+      self._expanded.add(ws.id);
+      self.loadWorkspaces().then(function() {
+        self._renderTree();
+      });
     };
-
-    const cleanup = () => {
-      if (row.parentNode) row.remove();
-      input.removeEventListener('keydown', onKey);
-      input.removeEventListener('blur', onBlur);
-    };
-
-    const onKey = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        committed = true;
-        commit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        committed = true;
-        cleanup();
-      }
-    };
-    const onBlur = () => {
-      if (!committed) {
-        committed = true;
-        commit();
-      }
-    };
-
-    input.addEventListener('keydown', onKey);
-    input.addEventListener('blur', onBlur);
+    dialog.open();
   }
 
   /** Context menu action: create notebook inside selected workspace. */
