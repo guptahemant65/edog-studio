@@ -283,19 +283,42 @@ class DagLayout {
     const hw = this.nodeWidth / 2;
     const hh = this.nodeHeight / 2;
 
+    // Pre-compute outgoing/incoming edge counts + indices for port spreading
+    const outCount = new Map();  // nodeId → total outgoing edges
+    const outIndex = new Map();  // "from->to" → index among from's outgoing edges
+    const inCount = new Map();   // nodeId → total incoming edges
+    const inIndex = new Map();   // "from->to" → index among to's incoming edges
+    for (const e of originalEdges) {
+      outCount.set(e.from, (outCount.get(e.from) || 0) + 1);
+      inCount.set(e.to, (inCount.get(e.to) || 0) + 1);
+    }
+    const outCur = new Map();
+    const inCur = new Map();
+    for (const e of originalEdges) {
+      const oi = outCur.get(e.from) || 0;
+      outIndex.set(`${e.from}->${e.to}`, oi);
+      outCur.set(e.from, oi + 1);
+      const ii = inCur.get(e.to) || 0;
+      inIndex.set(`${e.from}->${e.to}`, ii);
+      inCur.set(e.to, ii + 1);
+    }
+
     for (const e of originalEdges) {
       const srcPos = positions.get(e.from);
       const tgtPos = positions.get(e.to);
       if (!srcPos || !tgtPos) continue;
 
       const points = [];
+      const edgeKey = `${e.from}->${e.to}`;
 
-      // Source: right-center of source node
-      points.push({ x: srcPos.x + hw, y: srcPos.y });
+      // Spread source ports vertically when node has multiple outgoing edges
+      const srcTotal = outCount.get(e.from) || 1;
+      const srcIdx = outIndex.get(edgeKey) || 0;
+      const srcSpread = srcTotal > 1 ? (srcIdx - (srcTotal - 1) / 2) * (this.nodeHeight * 0.6 / srcTotal) : 0;
+      points.push({ x: srcPos.x + hw, y: srcPos.y + srcSpread });
 
       // Dummy waypoints (center of each dummy)
-      const chainKey = `${e.from}->${e.to}`;
-      const chain = dummyChains.get(chainKey);
+      const chain = dummyChains.get(edgeKey);
       if (chain) {
         for (const dummyId of chain) {
           const dp = positions.get(dummyId);
@@ -303,8 +326,11 @@ class DagLayout {
         }
       }
 
-      // Target: left-center of target node
-      points.push({ x: tgtPos.x - hw, y: tgtPos.y });
+      // Spread target ports vertically when node has multiple incoming edges
+      const tgtTotal = inCount.get(e.to) || 1;
+      const tgtIdx = inIndex.get(edgeKey) || 0;
+      const tgtSpread = tgtTotal > 1 ? (tgtIdx - (tgtTotal - 1) / 2) * (this.nodeHeight * 0.6 / tgtTotal) : 0;
+      points.push({ x: tgtPos.x - hw, y: tgtPos.y + tgtSpread });
 
       routed.push({ from: e.from, to: e.to, points });
     }
