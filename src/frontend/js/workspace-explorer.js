@@ -2293,6 +2293,7 @@ class WorkspaceExplorer {
 
   _showTableInspector(table) {
     if (!this._inspectorEl) return;
+    this._selectedTable = table;
     let html = '<div class="ws-insp-section">';
     html += '<div class="ws-insp-title">Table Info</div>';
     html += '<dl class="ws-insp-kv">';
@@ -2370,38 +2371,29 @@ class WorkspaceExplorer {
     return html;
   }
 
-  /** Render data preview section — shows column headers from schema or a placeholder. */
+  /** Render the Preview/Definition section.
+   *
+   * The Preview area is rendered as a "tap to load" stub on first paint so we
+   * don't hit OneLake for every selected table. Loading state, the actual
+   * fetched metadata, and error states are all rendered by `_handlePreviewLoad`
+   * (single source of truth for that lifecycle).
+   *
+   * Why a button instead of auto-load: the table metadata is a separate
+   * OneLake DFS round-trip per table; opening a workspace with 100 tables
+   * would otherwise fan out 100 requests. Tap-to-load keeps it scoped.
+   */
   _renderPreviewSection(table) {
-    let html = '<div class="ws-insp-section ws-preview-section">';
-    html += '<div class="ws-insp-title">Preview</div>';
-
-    if (table.schema && table.schema.length > 0) {
-      // Show column headers as an empty preview table
-      const maxCols = 6;
-      const cols = table.schema.slice(0, maxCols);
-      const colCount = cols.length;
-      html += '<table class="ws-preview-table"><thead><tr>';
-      for (const col of cols) {
-        html += `<th>${this._esc(col.name)}</th>`;
-      }
-      if (table.schema.length > maxCols) {
-        html += `<th>\u22ef</th>`;
-      }
-      html += '</tr></thead><tbody>';
-      html += `<tr><td colspan="${table.schema.length > maxCols ? colCount + 1 : colCount}" class="ws-preview-empty">`;
-      html += 'Deploy to load preview data</td></tr>';
-      html += '</tbody></table>';
-      html += '<div class="ws-preview-note">';
-      html += '<button class="ws-action-btn ws-preview-btn">Load Preview</button>';
-      html += '</div>';
-    } else {
-      html += '<div class="ws-preview-placeholder">';
-      html += '<div class="ws-empty-desc">Table preview requires a running FLT service</div>';
-      html += '<button class="ws-action-btn ws-preview-btn">Load Preview</button>';
-      html += '</div>';
-    }
-
-    html += '</div>';
+    const isMlv =
+      table?.tableType === 'MATERIALIZED_LAKE_VIEW' ||
+      (table?.type || '').toUpperCase().includes('MATERIALIZED');
+    const sectionTitle = isMlv ? 'Definition' : 'Preview';
+    const ctaLabel = isMlv ? 'View SELECT statement' : 'View DDL & properties';
+    let html = `<div class="ws-insp-section ws-preview-section" data-loaded="false">`;
+    html += `<div class="ws-insp-title">${sectionTitle}</div>`;
+    html += '<div class="ws-preview-placeholder">';
+    html += `<div class="ws-empty-desc">${isMlv ? 'Tap to load the materialized lake view SELECT.' : 'Tap to load CREATE TABLE DDL and table properties.'}</div>`;
+    html += `<button class="ws-action-btn ws-preview-btn" type="button">${ctaLabel}</button>`;
+    html += '</div></div>';
     return html;
   }
 
@@ -2413,32 +2405,326 @@ class WorkspaceExplorer {
     btn.addEventListener('click', () => this._handlePreviewLoad(table));
   }
 
-  /** Handle Load Preview click — show shimmer then phase-1 message. */
-  _handlePreviewLoad(table) {
+  /** Handle Preview/Definition load — fetch OneLake metadata and render. */
+  async _handlePreviewLoad(table) {
     if (!this._inspectorEl) return;
     const section = this._inspectorEl.querySelector('.ws-preview-section');
     if (!section) return;
+    if (section.getAttribute('data-loading') === 'true') return;
+    section.setAttribute('data-loading', 'true');
 
-    // Replace content with shimmer rows
-    let shimmer = '<div class="ws-insp-title">Preview</div>';
+    const isMlv =
+      table?.tableType === 'MATERIALIZED_LAKE_VIEW' ||
+      (table?.type || '').toUpperCase().includes('MATERIALIZED');
+    const sectionTitle = isMlv ? 'Definition' : 'Preview';
+
+    // Shimmer
+    let shimmer = `<div class="ws-insp-title">${sectionTitle}</div>`;
     shimmer += '<div class="ws-insp-skel">';
     shimmer += '<div class="skel-line skel-line--lg"></div>';
+    shimmer += '<div class="skel-line skel-line--lg"></div>';
     shimmer += '<div class="skel-line skel-line--md"></div>';
-    shimmer += '<div class="skel-line skel-line--sm"></div>';
     shimmer += '</div>';
     section.innerHTML = shimmer;
 
-    // After 2s, show phase-1 unavailable message
-    setTimeout(() => {
-      if (!this._inspectorEl) return;
-      const s = this._inspectorEl.querySelector('.ws-preview-section');
-      if (!s) return;
-      let msg = '<div class="ws-insp-title">Preview</div>';
-      msg += '<div class="ws-preview-placeholder">';
-      msg += '<div class="ws-empty-desc">Preview not available \u2014 deploy to enable</div>';
-      msg += '</div>';
-      s.innerHTML = msg;
-    }, 2000);
+    const ws = this._selectedWorkspace;
+    const lh = this._selectedItem;
+    const schema = table?.schemaName || 'dbo';
+    const tableName = table?.name;
+
+    if (!ws || !lh || !tableName) {
+      this._renderPreviewError(section, sectionTitle, 'Missing workspace / lakehouse context.');
+      section.removeAttribute('data-loading');
+      return;
+    }
+
+    let metadata;
+    try {
+      metadata = await this._api.getTableMetadata(ws.id, lh.id, schema, tableName);
+    } catch (err) {
+      const detail = err?.body?.message || err?.message || 'Unknown error.';
+      this._renderPreviewError(section, sectionTitle, detail);
+      section.removeAttribute('data-loading');
+      return;
+    }
+
+    if (!metadata) {
+      // No FLT-managed metadata. Fall back to the schema we already have on
+      // the inspector — we can still render a synthesized DDL from it.
+      this._renderPreviewFallbackDdl(section, table, sectionTitle);
+      section.setAttribute('data-loaded', 'true');
+      section.removeAttribute('data-loading');
+      return;
+    }
+
+    if (isMlv && metadata.viewText) {
+      this._renderPreviewMlv(section, metadata, table);
+    } else {
+      this._renderPreviewTable(section, metadata, table);
+    }
+    section.setAttribute('data-loaded', 'true');
+    section.removeAttribute('data-loading');
+  }
+
+  /** Render a clear error state inside the preview section. */
+  _renderPreviewError(section, title, message) {
+    let html = `<div class="ws-insp-title">${title}</div>`;
+    html += '<div class="ws-preview-placeholder ws-preview-error">';
+    html += `<div class="ws-empty-desc">${this._esc(message)}</div>`;
+    html += '<button class="ws-action-btn ws-preview-btn" type="button">Retry</button>';
+    html += '</div>';
+    section.innerHTML = html;
+    section.removeAttribute('data-loaded');
+    const btn = section.querySelector('.ws-preview-btn');
+    if (btn) {
+      btn.addEventListener('click', () => {
+        const t = this._selectedTable;
+        if (t) this._handlePreviewLoad(t);
+      });
+    }
+  }
+
+  /** MLV → render the SELECT statement and source entities. */
+  _renderPreviewMlv(section, md, table) {
+    const lang = (md.properties?.['fabric.mlv.source.language'] || 'sql').toUpperCase();
+    const refresh = md.properties?.['fabric.mlv.refreshTimestamp'];
+    const sparkVer = md.properties?.['fabric.mlv.sparkversion'];
+
+    let html = '<div class="ws-insp-title">Definition</div>';
+
+    // SELECT statement block
+    html += '<div class="ws-preview-block">';
+    html += '<div class="ws-preview-block-head">';
+    html += `<span class="ws-preview-block-label">SELECT</span>`;
+    html += `<span class="ws-preview-lang-badge">${this._esc(lang)}</span>`;
+    html += '<button class="ws-preview-copy-btn" type="button" data-copy="sql" title="Copy SELECT">Copy</button>';
+    html += '</div>';
+    html += `<pre class="ws-sql-block" data-sql>${this._esc(md.viewText)}</pre>`;
+    html += '</div>';
+
+    // Source entities
+    if (Array.isArray(md.sourceEntities) && md.sourceEntities.length > 0) {
+      html += '<div class="ws-preview-block">';
+      html += '<div class="ws-preview-block-head"><span class="ws-preview-block-label">Source tables</span></div>';
+      html += '<ul class="ws-source-entities">';
+      for (const e of md.sourceEntities) {
+        const ns = e.namespace || {};
+        const fqn = [ns.workspaceName, ns.artifactName, ns.schemaName, e.tableName].filter(Boolean).join('.');
+        const cdf = e.properties?.cdfEnabled === 'true';
+        html += '<li class="ws-source-entity">';
+        html += `<span class="ws-source-fqn">${this._esc(fqn)}</span>`;
+        if (cdf) html += '<span class="ws-source-tag">CDF</span>';
+        html += '</li>';
+      }
+      html += '</ul></div>';
+    }
+
+    // Refresh metadata
+    html += '<dl class="ws-insp-kv ws-preview-meta">';
+    if (refresh) html += `<dt>Last refresh</dt><dd>${this._esc(this._formatTs(refresh))}</dd>`;
+    if (sparkVer) html += `<dt>Spark version</dt><dd>${this._esc(sparkVer)}</dd>`;
+    if (md.properties?.['delta.enableChangeDataFeed'] === 'true') {
+      html += '<dt>CDF</dt><dd>Enabled</dd>';
+    }
+    html += '</dl>';
+
+    section.innerHTML = html;
+    this._wirePreviewCopyButtons(section);
+  }
+
+  /** Regular table → render synthesized DDL + Delta properties. */
+  _renderPreviewTable(section, md, table) {
+    // Prefer metadata columns, fall back to inspector's schema (auto-discovered
+    // tables have empty allColumns in _metadata/table.json.gz).
+    let cols = Array.isArray(md.allColumns) && md.allColumns.length > 0 ? md.allColumns : null;
+    if (!cols && Array.isArray(table?.schema)) {
+      cols = table.schema.map((c) => ({
+        name: c.name,
+        colType: c.type || c.dataType || 'string',
+        nullable: c.nullable !== false,
+      }));
+    }
+    const partKeys = Array.isArray(md.partitionColumnNames) ? md.partitionColumnNames : [];
+    const fqn = `${table?.schemaName || 'dbo'}.${table?.name || ''}`;
+
+    let html = '<div class="ws-insp-title">Preview</div>';
+
+    // DDL
+    html += '<div class="ws-preview-block">';
+    html += '<div class="ws-preview-block-head">';
+    html += '<span class="ws-preview-block-label">CREATE TABLE</span>';
+    html += '<span class="ws-preview-lang-badge">DDL</span>';
+    if (cols && cols.length) {
+      html += '<button class="ws-preview-copy-btn" type="button" data-copy="sql" title="Copy DDL">Copy</button>';
+    }
+    html += '</div>';
+    if (cols && cols.length > 0) {
+      html += `<pre class="ws-sql-block" data-sql>${this._esc(this._buildDdl(fqn, cols, partKeys, md.provider))}</pre>`;
+    } else {
+      html += '<div class="ws-preview-empty-block">Columns not yet materialized — Delta log has no committed schema.</div>';
+    }
+    html += '</div>';
+
+    // Storage
+    if (md.storage?.locationUri) {
+      html += '<div class="ws-preview-block">';
+      html += '<div class="ws-preview-block-head"><span class="ws-preview-block-label">Storage</span></div>';
+      html += `<pre class="ws-sql-block ws-storage-uri">${this._esc(md.storage.locationUri)}</pre>`;
+      html += '</div>';
+    }
+
+    // Properties — filter to Delta-relevant + Fabric source keys
+    const props = md.properties || {};
+    const interesting = [
+      'provider',
+      'delta.lastCommitTimestamp',
+      'delta.lastUpdateVersion',
+      'delta.minReaderVersion',
+      'delta.minWriterVersion',
+      'delta.enableChangeDataFeed',
+      'trident.autodiscovered.table',
+      'fabric.source.creationCompletedAt',
+    ];
+    const rows = [];
+    if (md.provider) rows.push(['Provider', md.provider]);
+    if (partKeys.length) rows.push(['Partition keys', partKeys.join(', ')]);
+    for (const key of interesting) {
+      if (key === 'provider') continue;
+      const v = props[key];
+      if (v === undefined) continue;
+      if (key === 'delta.lastCommitTimestamp') {
+        rows.push(['Last commit', this._formatTs(Number(v))]);
+        continue;
+      }
+      if (key === 'fabric.source.creationCompletedAt') {
+        rows.push(['Created', this._formatTs(v)]);
+        continue;
+      }
+      rows.push([this._propLabel(key), v]);
+    }
+    if (rows.length) {
+      html += '<dl class="ws-insp-kv ws-preview-meta">';
+      for (const [k, v] of rows) {
+        html += `<dt>${this._esc(k)}</dt><dd>${this._esc(String(v))}</dd>`;
+      }
+      html += '</dl>';
+    }
+
+    section.innerHTML = html;
+    this._wirePreviewCopyButtons(section);
+  }
+
+  /** Last-resort: no _metadata/table.json.gz at all. Use inspector's schema. */
+  _renderPreviewFallbackDdl(section, table, title) {
+    const cols = Array.isArray(table?.schema) ? table.schema : [];
+    const fqn = `${table?.schemaName || 'dbo'}.${table?.name || ''}`;
+    let html = `<div class="ws-insp-title">${title}</div>`;
+    html += '<div class="ws-preview-block">';
+    html += '<div class="ws-preview-block-head">';
+    html += '<span class="ws-preview-block-label">CREATE TABLE</span>';
+    html += '<span class="ws-preview-lang-badge">DDL</span>';
+    if (cols.length) html += '<button class="ws-preview-copy-btn" type="button" data-copy="sql" title="Copy DDL">Copy</button>';
+    html += '</div>';
+    if (cols.length) {
+      const mapped = cols.map((c) => ({
+        name: c.name,
+        colType: c.type || c.dataType || 'string',
+        nullable: c.nullable !== false,
+      }));
+      html += `<pre class="ws-sql-block" data-sql>${this._esc(this._buildDdl(fqn, mapped, [], 'delta'))}</pre>`;
+    } else {
+      html += '<div class="ws-preview-empty-block">No catalog metadata available for this table.</div>';
+    }
+    html += '</div>';
+    html += '<div class="ws-preview-note-line">No FLT-managed metadata; DDL synthesized from inspector schema.</div>';
+    section.innerHTML = html;
+    this._wirePreviewCopyButtons(section);
+  }
+
+  /** Build a CREATE TABLE DDL string from an allColumns-style list. */
+  _buildDdl(fqn, cols, partKeys, provider) {
+    const lines = [`CREATE TABLE ${fqn} (`];
+    const colLines = cols.map((c, i) => {
+      const t = this._parseColType(c.colType);
+      const nn = c.nullable === false ? ' NOT NULL' : '';
+      const sep = i === cols.length - 1 ? '' : ',';
+      return `  ${c.name} ${t}${nn}${sep}`;
+    });
+    lines.push(...colLines);
+    lines.push(')');
+    lines.push(`USING ${provider || 'delta'}`);
+    if (partKeys && partKeys.length) {
+      lines.push(`PARTITIONED BY (${partKeys.join(', ')})`);
+    }
+    return lines.join('\n');
+  }
+
+  /** colType from FLT comes as a JSON-encoded type string like "\"integer\"" or
+   *  "{\"type\":\"struct\",...}". Strip the outer quoting and pretty up common types. */
+  _parseColType(raw) {
+    if (raw == null) return 'string';
+    if (typeof raw !== 'string') return String(raw);
+    let s = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === 'string') s = parsed;
+      else if (parsed && typeof parsed === 'object') {
+        if (parsed.type === 'array' && parsed.elementType) return `ARRAY<${parsed.elementType}>`;
+        if (parsed.type === 'struct') return 'STRUCT';
+        if (parsed.type) return String(parsed.type);
+      }
+    } catch {
+      // raw wasn't JSON; use as-is
+    }
+    return s.toUpperCase();
+  }
+
+  /** Friendly label for known property keys. */
+  _propLabel(key) {
+    const map = {
+      'delta.lastUpdateVersion': 'Delta version',
+      'delta.minReaderVersion': 'Min reader version',
+      'delta.minWriterVersion': 'Min writer version',
+      'delta.enableChangeDataFeed': 'CDF',
+      'trident.autodiscovered.table': 'Auto-discovered',
+    };
+    return map[key] || key;
+  }
+
+  /** Format unix-ms or ISO timestamp for display. */
+  _formatTs(v) {
+    if (v == null || v === '') return '\u2014';
+    let d;
+    if (typeof v === 'number') d = new Date(v);
+    else d = new Date(v);
+    if (Number.isNaN(d.getTime())) return String(v);
+    return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, 'Z');
+  }
+
+  /** Wire Copy buttons inside a preview section. */
+  _wirePreviewCopyButtons(section) {
+    const buttons = section.querySelectorAll('.ws-preview-copy-btn');
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pre = btn.closest('.ws-preview-block')?.querySelector('[data-sql]');
+        if (!pre) return;
+        const text = pre.textContent || '';
+        navigator.clipboard.writeText(text).then(
+          () => {
+            const orig = btn.textContent;
+            btn.textContent = 'Copied';
+            btn.classList.add('is-copied');
+            setTimeout(() => {
+              btn.textContent = orig;
+              btn.classList.remove('is-copied');
+            }, 1200);
+          },
+          () => {
+            btn.textContent = 'Copy failed';
+          },
+        );
+      });
+    });
   }
 
   /** Auto-fetch schema for a single table and update the inspector in-place. */
@@ -2518,11 +2804,19 @@ class WorkspaceExplorer {
     shimmer.replaceWith(frag);
   }
 
-  /** Update the preview section in-place once schema becomes available. */
+  /** Update the preview section in-place once schema becomes available.
+   *
+   * Bails if the user already triggered Preview load (data-loaded or
+   * data-loading set) — otherwise a slow schema fetch would clobber
+   * the already-rendered DDL/SELECT block. */
   _updatePreviewWithSchema(table) {
     if (!this._inspectorEl) return;
     const section = this._inspectorEl.querySelector('.ws-preview-section');
     if (!section) return;
+    if (section.getAttribute('data-loaded') === 'true' ||
+        section.getAttribute('data-loading') === 'true') {
+      return;
+    }
     const previewHtml = this._renderPreviewSection(table);
     const frag = document.createRange().createContextualFragment(previewHtml);
     const btn = frag.querySelector('.ws-preview-btn');

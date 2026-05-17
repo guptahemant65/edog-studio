@@ -22,6 +22,7 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -2305,6 +2306,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_mwc_tables()
         elif self.path.startswith("/api/mwc/table-stats"):
             self._serve_table_stats()
+        elif self.path.startswith("/api/onelake/table-metadata"):
+            self._serve_onelake_table_metadata()
         elif self.path.startswith("/api/notebook/content"):
             self._serve_notebook_content()
         elif self.path.startswith("/api/notebook/kernel-specs"):
@@ -5132,6 +5135,112 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self._json_response(e.code, {"error": "onelake_error", "message": body})
         except Exception as e:
             self._json_response(502, {"error": "stats_error", "message": str(e)})
+
+    def _serve_onelake_table_metadata(self):
+        """GET /api/onelake/table-metadata — read FLT/Spark catalog metadata for a single table.
+
+        Query params (all required): wsId, lhId, schema, table.
+
+        Fetches `{lh}/Tables/{schema}/{table}/_metadata/table.json.gz` from OneLake DFS
+        and zlib-decompresses it (note: the file uses raw zlib despite the `.gz` suffix —
+        FLT writes it with `ZlibStream`, not GZipStream; see workload-fabriclivetable's
+        LakeHouseMetastoreClientWithShortcutSupport.GetIfTableAsync).
+
+        For MATERIALIZED_LAKE_VIEW tables, the returned JSON includes `viewText`
+        (the SELECT statement) and `sourceEntities` (the upstream tables it reads).
+        For regular MANAGED tables, it includes `allColumns`, `partitionColumnNames`,
+        `storage`, and Delta `properties`. No deployed FLT service is required —
+        the file is written by Spark/Lakehouse at table creation time.
+
+        Returns:
+            200 + parsed JSON body on success.
+            404 + `{error: "metadata_not_found"}` when the `_metadata/` directory does
+                not exist (auto-discovered Delta tables without FLT-managed metadata).
+            401 if the OneLake bearer cannot be minted.
+            502 on parse/decompression errors.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        lh_id = params.get("lhId", [None])[0]
+        schema = params.get("schema", [None])[0]
+        table = params.get("table", [None])[0]
+
+        if not all([ws_id, lh_id, schema, table]):
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "wsId, lhId, schema, and table are required",
+                },
+            )
+            return
+
+        try:
+            onelake_bearer = _ensure_onelake_bearer()
+        except RuntimeError as e:
+            self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
+            return
+
+        # Canonical FLT path. Constants.DefaultTableMetadataFilePath = "_metadata/table.json.gz".
+        path = f"/{ws_id}/{lh_id}/Tables/{schema}/{table}/_metadata/table.json.gz"
+        url = f"{ONELAKE_HOST}{path}"
+        ctx = ssl.create_default_context()
+
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"Authorization": f"Bearer {onelake_bearer}"},
+            )
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                raw = resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                self._json_response(
+                    404,
+                    {
+                        "error": "metadata_not_found",
+                        "message": (
+                            "No FLT-managed metadata for this table. "
+                            "Auto-discovered Delta tables don't have a _metadata/table.json.gz."
+                        ),
+                        "schemaName": schema,
+                        "tableName": table,
+                    },
+                )
+                return
+            body = e.read().decode("utf-8", "replace")[:200]
+            self._json_response(e.code, {"error": "onelake_error", "message": body})
+            return
+        except Exception as e:
+            self._json_response(502, {"error": "fetch_error", "message": str(e)})
+            return
+
+        # FLT uses ZlibStream (RFC 1950) — first 2 bytes are 78 9C / 78 DA. Some
+        # writers may use gzip (1F 8B); handle both defensively.
+        try:
+            if len(raw) >= 2 and raw[0] == 0x1F and raw[1] == 0x8B:
+                # gzip
+                decompressed = zlib.decompress(raw, wbits=zlib.MAX_WBITS | 16)
+            else:
+                # raw zlib (FLT default)
+                decompressed = zlib.decompress(raw)
+            metadata = json.loads(decompressed)
+        except (zlib.error, json.JSONDecodeError) as e:
+            self._json_response(
+                502,
+                {
+                    "error": "decode_error",
+                    "message": f"Failed to decompress/parse table.json.gz: {e}",
+                },
+            )
+            return
+
+        # Echo identifiers so the client doesn't have to track them across the round-trip.
+        # `name` in the JSON itself is not always populated (FLT sets it at runtime).
+        metadata.setdefault("schemaName", schema)
+        metadata.setdefault("tableName", table)
+        self._json_response(200, metadata)
 
     def _serve_mwc_token(self):
         """POST /api/edog/mwc-token — explicitly generate and return an MWC token."""

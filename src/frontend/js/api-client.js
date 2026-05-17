@@ -158,6 +158,49 @@ class FabricApiClient {
     return resp.json();
   }
 
+  /**
+   * Get FLT/Spark catalog metadata for a single table from OneLake.
+   *
+   * Reads {lh}/Tables/{schema}/{table}/_metadata/table.json.gz directly — no
+   * deployed FLT service required. For MLVs the response includes `viewText`
+   * (the SELECT statement) and `sourceEntities`. For regular tables it
+   * includes `allColumns`, `partitionColumnNames`, `storage`, `properties`.
+   *
+   * @param {string} workspaceId
+   * @param {string} lakehouseId
+   * @param {string} schema - Schema the table lives in (REQUIRED — auto-discovered
+   *   via /api/onelake/schemas; pass the value the user clicked).
+   * @param {string} table - Table name (case-sensitive on the wire).
+   * @returns {Promise<object>} Parsed catalog JSON, or `null` when no FLT
+   *   metadata exists (auto-discovered tables without _metadata/ — 404 is
+   *   not exceptional and surfaces as null for the caller to render gracefully).
+   * @throws {Error} On non-404 errors (auth, decode failures, etc.).
+   */
+  async getTableMetadata(workspaceId, lakehouseId, schema, table) {
+    const qs = new URLSearchParams({
+      wsId: workspaceId,
+      lhId: lakehouseId,
+      schema,
+      table,
+    }).toString();
+    const resp = await fetch(`/api/onelake/table-metadata?${qs}`);
+    if (resp.status === 404) {
+      const body = await resp.json().catch(() => ({}));
+      if (body.error === 'metadata_not_found') return null;
+    }
+    if (!resp.ok) {
+      const err = new Error(`Table metadata failed: ${resp.status}`);
+      err.status = resp.status;
+      try {
+        err.body = await resp.json();
+      } catch {
+        err.body = null;
+      }
+      throw err;
+    }
+    return resp.json();
+  }
+
   // --- Fabric CRUD APIs ---
 
   /**
