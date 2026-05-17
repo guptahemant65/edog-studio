@@ -2176,8 +2176,8 @@ class WorkspaceExplorer {
         el.textContent = it.label;
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
-          this._hideContextMenu();
           it.action();
+          this._hideContextMenu();
         });
         this._ctxMenu.appendChild(el);
       }
