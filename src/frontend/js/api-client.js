@@ -112,10 +112,14 @@ class FabricApiClient {
    * @param {string} workspaceId
    * @param {string} lakehouseId
    * @param {string} capacityId
-   * @param {string[]} tableNames - Array of table names to get details for.
-   * @returns {Promise<object>} Result with per-table schema, type, location.
+   * @param {Array<{name: string, schema: string}>} tables - Tables with schema annotation.
+   *   Schemas-enabled lakehouses partition tables under per-schema endpoints; we MUST
+   *   pass `schema` so the server can route each batch to the right `/schemas/{name}/`
+   *   endpoint. The server falls back to "dbo" for bare-string entries (legacy callers),
+   *   which only works for default-schema-only lakehouses.
+   * @returns {Promise<{tables: Array<object>, errors?: Array<{schema, error}>}>}
    */
-  async getTableDetails(workspaceId, lakehouseId, capacityId, tableNames) {
+  async getTableDetails(workspaceId, lakehouseId, capacityId, tables) {
     const resp = await fetch('/api/mwc/table-details', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -123,7 +127,7 @@ class FabricApiClient {
         wsId: workspaceId,
         lhId: lakehouseId,
         capId: capacityId,
-        tables: tableNames,
+        tables,
       }),
     });
     if (!resp.ok) {
@@ -134,10 +138,22 @@ class FabricApiClient {
     return resp.json();
   }
 
-  /** Get row count and size for a single table via OneLake delta log. */
-  async getTableStats(workspaceId, lakehouseId, tableName) {
-    const params = `wsId=${workspaceId}&lhId=${lakehouseId}&tableName=${encodeURIComponent(tableName)}`;
-    const resp = await fetch(`/api/mwc/table-stats?${params}`);
+  /**
+   * Get row count and size for a single table via OneLake delta log.
+   * @param {string} workspaceId
+   * @param {string} lakehouseId
+   * @param {string} tableName
+   * @param {string} [schema='dbo'] - Schema the table lives in. Required for
+   *   schemas-enabled lakehouses; defaults to 'dbo' for backwards compat.
+   */
+  async getTableStats(workspaceId, lakehouseId, tableName, schema) {
+    const parts = [
+      `wsId=${workspaceId}`,
+      `lhId=${lakehouseId}`,
+      `tableName=${encodeURIComponent(tableName)}`,
+    ];
+    if (schema) parts.push(`schema=${encodeURIComponent(schema)}`);
+    const resp = await fetch(`/api/mwc/table-stats?${parts.join('&')}`);
     if (!resp.ok) return null;
     return resp.json();
   }

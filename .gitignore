@@ -26,6 +26,7 @@ Thumbs.db
 # EDOG runtime files (never commit)
 .edog-token-cache
 .edog-bearer-cache
+.edog-onelake-bearer-cache
 .edog-session.json
 .edog-jscheck-tmp.js
 .edog-jscheck-runner.js

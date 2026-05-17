@@ -570,6 +570,72 @@
   font-weight: 500; letter-spacing: 0.02em;
 }
 
+/* ──────────────────────────────────────────────────────────────
+   Schema sections — schemas-enabled lakehouse table grouping.
+   One collapsible card per schema; default-open with state
+   persisted in localStorage per (workspace, lakehouse).
+   ────────────────────────────────────────────────────────────── */
+.ws-schemas-container {
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.ws-schema-group {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface); box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.ws-schema-header {
+  display: flex; align-items: center; gap: var(--space-2);
+  width: 100%; padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: none; border-bottom: 1px solid var(--border);
+  cursor: pointer; font: inherit; color: var(--text); text-align: left;
+  transition: background var(--transition-fast);
+}
+.ws-schema-header:hover { background: var(--surface-3); }
+.ws-schema-header:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+.ws-schema-group[data-collapsed="true"] .ws-schema-header { border-bottom-color: transparent; }
+.ws-schema-chevron {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 12px; height: 12px;
+  color: var(--text-muted); font-size: 10px; flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+.ws-schema-group[data-collapsed="true"] .ws-schema-chevron { transform: rotate(-90deg); }
+.ws-schema-name {
+  font-family: var(--font-mono); font-size: var(--text-md);
+  font-weight: 600; color: var(--text);
+}
+.ws-schema-meta {
+  font-size: var(--text-xs); color: var(--text-muted);
+  margin-left: var(--space-1); font-variant-numeric: tabular-nums;
+}
+.ws-schema-badges { display: inline-flex; gap: var(--space-1); margin-left: auto; }
+.ws-schema-tag {
+  font-size: var(--text-xs); padding: 2px var(--space-2);
+  border-radius: var(--radius-full); background: var(--surface-3);
+  color: var(--text-dim); font-weight: 500; letter-spacing: 0.02em;
+}
+.ws-schema-tag.shortcut { background: var(--accent-dim); color: var(--accent); }
+.ws-schema-tag.error    { background: var(--level-error-tint); color: var(--status-failed); }
+.ws-schema-body {
+  max-height: 360px; overflow-y: auto;
+}
+.ws-schema-group[data-collapsed="true"] .ws-schema-body { display: none; }
+.ws-schema-body .ws-table { border-radius: 0; box-shadow: none; }
+.ws-schema-body .ws-table thead { background: var(--surface); }
+.ws-schema-empty {
+  padding: var(--space-4); text-align: center;
+  font-size: var(--text-sm); color: var(--text-muted);
+}
+.ws-schema-error-detail {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-xs); color: var(--status-failed);
+  background: var(--level-error-tint);
+  font-family: var(--font-mono);
+}
+
 /* MLV cards */
 .ws-mlv-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
 .ws-mlv-card {

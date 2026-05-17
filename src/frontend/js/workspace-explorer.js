@@ -921,7 +921,8 @@ class WorkspaceExplorer {
    * @param {HTMLElement} tablesEl - the ws-tables-list element
    */
   _insertTableFilter(tablesEl) {
-    const container = tablesEl.querySelector('.ws-table-container');
+    // The filter sits above the schemas container (or legacy single-table container).
+    const container = tablesEl.querySelector('.ws-schemas-container') || tablesEl.querySelector('.ws-table-container');
     if (!container) return;
 
     const filterDiv = document.createElement('div');
@@ -944,11 +945,24 @@ class WorkspaceExplorer {
     const applyFilter = () => {
       const query = input.value.toLowerCase();
       let visible = 0;
+      // Track visible-row count per section so we can dim empty sections.
+      const visibleBySchema = new Map();
       rows.forEach(row => {
         const name = (row.dataset.tableName || '').toLowerCase();
         const match = !query || name.includes(query);
         row.style.display = match ? '' : 'none';
         if (match) visible++;
+        const schema = row.dataset.schemaName || 'dbo';
+        if (match) visibleBySchema.set(schema, (visibleBySchema.get(schema) || 0) + 1);
+      });
+      // When filtering, hide sections with zero matches; restore them when cleared.
+      container.querySelectorAll('.ws-schema-group').forEach(group => {
+        const schema = group.dataset.schema;
+        if (!query) {
+          group.style.display = '';
+        } else {
+          group.style.display = visibleBySchema.get(schema) ? '' : 'none';
+        }
       });
       if (query) {
         countEl.textContent = `${visible} of ${totalCount}`;
@@ -1009,17 +1023,25 @@ class WorkspaceExplorer {
 
   async _loadTables(wsId, lhId, capId) {
     if (this._isMock && typeof MockData !== 'undefined') {
-      return MockData.tablesForLakehouse || [];
+      const tables = MockData.tablesForLakehouse || [];
+      return { tables, schemas: [], errors: [] };
     }
-    // Try public API first (works for non-schema lakehouses)
+    // Try public API first (works for non-schema lakehouses).
+    // Public API returns a flat list with no schema metadata — synthesize an empty
+    // schemas array so the renderer falls back to a single implicit "dbo" section.
     try {
       const data = await this._api.listTables(wsId, lhId);
-      return (data && (data.value || data.data)) || [];
+      const tables = (data && (data.value || data.data)) || [];
+      return { tables, schemas: [], errors: [] };
     } catch (e) {
-      // 400 = schema-enabled lakehouse → fall back to capacity host
+      // 400 = schemas-enabled lakehouse → fall back to capacity host which
+      // enumerates schemas via OneLake DFS and merges across them.
       if (e.status === 400 && capId) {
         const data = await this._api.listTablesViaCapacity(wsId, lhId, capId);
-        return (data && (data.value || data.data)) || [];
+        const tables = (data && (data.value || data.data)) || [];
+        const schemas = (data && data.schemas) || [];
+        const errors = (data && data.errors) || [];
+        return { tables, schemas, errors };
       }
       throw e;
     }
@@ -1541,7 +1563,7 @@ class WorkspaceExplorer {
           '<div class="skel-row"><div class="skel-circle"></div><div class="skel-lines"><div class="skel-line skel-line--lg"></div><div class="skel-line skel-line--sm"></div></div></div>' +
           '</div></div>';
       }
-      const tables = await this._loadTables(ws.id, lh.id, ws.capacityId);
+      const { tables, schemas, errors } = await this._loadTables(ws.id, lh.id, ws.capacityId);
       tablesEl = document.getElementById('ws-tables-list');
       if (!tablesEl) return;
 
@@ -1549,7 +1571,7 @@ class WorkspaceExplorer {
       const titleEl = tablesEl.closest('.ws-section')?.querySelector('.ws-section-title');
       if (titleEl) titleEl.innerHTML = `Tables <span class="ws-section-count">${tables.length}</span>`;
 
-      if (tables.length === 0) {
+      if (tables.length === 0 && schemas.length === 0) {
         tablesEl.innerHTML =
           '<div class="ws-empty-state ws-empty-inline">' +
           '<div class="ws-empty-title">No tables</div>' +
@@ -1562,79 +1584,79 @@ class WorkspaceExplorer {
       this._tableSort = { col: 'name', dir: 'asc' };
       this._tableSortOriginalRows = null;
 
-      let tableHtml = '<div class="ws-table-container"><table class="ws-table"><thead><tr>';
-      tableHtml += '<th class="sortable sorted" data-col="name">Name <span class="sort-icon">\u25B2</span></th>';
-      tableHtml += '<th class="sortable" data-col="type">Type <span class="sort-icon">\u25B2\u25BC</span></th>';
-      tableHtml += '<th class="sortable" data-col="format">Format <span class="sort-icon">\u25B2\u25BC</span></th>';
-      tableHtml += '<th class="sortable num" data-col="rows">Rows <span class="sort-icon">\u25B2\u25BC</span></th>';
-      tableHtml += '<th class="sortable num" data-col="size">Size <span class="sort-icon">\u25B2\u25BC</span></th>';
-      tableHtml += '</tr></thead><tbody>';
-      for (const t of tables) {
-        const tType = t.tableType || t.type || '';
-        const tFormat = t.tableFormat || t.format || 'delta';
-        const iconCls = this._tableIconClass(tType);
-        const iconChar = this._tableIconChar(tType);
-        tableHtml += `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}">`;
-        tableHtml += `<td class="ws-table-name"><span class="ws-table-icon ${iconCls}">${iconChar}</span>${this._esc(t.name)}</td>`;
-        tableHtml += `<td><span class="ws-type-badge ${iconCls}">${this._esc(this._tableTypeBadge(tType))}</span></td>`;
-        tableHtml += `<td>${this._esc(tFormat)}</td>`;
-        tableHtml += '<td class="num">\u2014</td>';
-        tableHtml += '<td class="num">\u2014</td>';
-        tableHtml += '</tr>';
-      }
-      tableHtml += '</tbody></table></div>';
-      tablesEl.innerHTML = tableHtml;
-
-      // Store tables for enrichment merging — normalize field names
+      // Store tables for enrichment merging — normalize field names. Each row keeps
+      // its `schemaName` (server-annotated) so the inspector + enrichment can
+      // disambiguate same-named tables in different schemas.
       this._currentTables = tables.map(t => ({
         ...t,
         type: t.tableType || t.type || '',
         format: t.tableFormat || t.format || 'delta',
+        schemaName: t.schemaName || 'dbo',
       }));
 
-      // Insert table filter bar above the table container
+      // Build the schema sections: one collapsible card per schema with its own
+      // table inside. For non-schemas-enabled lakehouses (public REST path) the
+      // backend returns no `schemas` array; we synthesize a single implicit "dbo"
+      // section so the renderer is uniform.
+      this._renderTablesBySchema(tablesEl, this._currentTables, schemas, errors, ws.id, lh.id);
+
+      // Insert table filter bar above the schema container
       this._insertTableFilter(tablesEl);
 
-      // Bind sort handlers on column headers
+      // Bind sort handlers on every section's column headers
       tablesEl.querySelectorAll('.ws-table th.sortable').forEach(th => {
         th.addEventListener('click', () => this._sortTable(th.dataset.col, tablesEl));
       });
 
-      // Bind table row clicks → inspector (use this._currentTables for enriched data)
+      // Bind table row clicks → inspector. Rows now carry both data-table-name
+      // and data-schema-name so we look up by the (name, schema) pair.
       tablesEl.querySelectorAll('.ws-table-row[data-table-name]').forEach(row => {
         row.addEventListener('click', () => {
           tablesEl.querySelectorAll('.ws-table-row').forEach(r => r.classList.remove('selected'));
           row.classList.add('selected');
           const src = this._currentTables || tables;
-          const tbl = src.find(x => x.name === row.dataset.tableName);
+          const tbl = src.find(x =>
+            x.name === row.dataset.tableName &&
+            (x.schemaName || 'dbo') === (row.dataset.schemaName || 'dbo'),
+          );
           if (tbl) this._showTableInspector(tbl);
         });
       });
 
-      // Auto-enrich: fetch detailed metadata (type, schema) in background
+      // Auto-enrich: fetch detailed metadata (type, schema, rowCount, size) in
+      // background. We MUST pass (name, schema) per table — schemas-enabled
+      // lakehouses route batchGetTableDetails through `/schemas/{name}/...`.
       if (ws.capacityId && tables.length > 0) {
-        const tableNames = tables.map(t => t.name);
-        this._api.getTableDetails(ws.id, lh.id, ws.capacityId, tableNames)
+        const enrichList = this._currentTables.map(t => ({
+          name: t.name,
+          schema: t.schemaName || 'dbo',
+        }));
+        this._api.getTableDetails(ws.id, lh.id, ws.capacityId, enrichList)
           .then(result => this._enrichTableRows(result))
           .catch(() => this._clearTableShimmer());
 
-        // Fetch row count + size for each table via OneLake delta log
-        for (const t of tables) {
-          this._api.getTableStats(ws.id, lh.id, t.name)
+        // Fetch row count + size for each table via OneLake delta log.
+        // OneLake paths include the schema (`Tables/{schema}/{name}/_delta_log`),
+        // so we MUST pass the schema for non-dbo tables or the backend 502s.
+        for (const t of this._currentTables) {
+          const schemaName = t.schemaName || 'dbo';
+          this._api.getTableStats(ws.id, lh.id, t.name, schemaName)
             .then(stats => {
               if (!stats) return;
-              // Update even if only one of rowCount/sizeBytes is available
               const hasRows = stats.rowCount != null;
               const hasSize = stats.sizeBytes != null;
               if (!hasRows && !hasSize) return;
-              // Update stored table
-              const stored = (this._currentTables || []).find(x => x.name === t.name);
+              const stored = (this._currentTables || []).find(x =>
+                x.name === t.name && (x.schemaName || 'dbo') === schemaName,
+              );
               if (stored) {
                 if (hasRows) stored.rowCount = stats.rowCount;
                 if (hasSize) stored.sizeInBytes = stats.sizeBytes;
               }
-              // Update DOM
-              const row = document.querySelector(`.ws-table-row[data-table-name="${CSS.escape(t.name)}"]`);
+              // DOM update — disambiguate by both name + schema
+              const row = tablesEl.querySelector(
+                `.ws-table-row[data-table-name="${CSS.escape(t.name)}"][data-schema-name="${CSS.escape(schemaName)}"]`,
+              );
               if (row) {
                 const rowsCell = row.children[3];
                 const sizeCell = row.children[4];
@@ -1692,6 +1714,175 @@ class WorkspaceExplorer {
   }
 
   // ────────────────────────────────────────────
+  // Schema-grouped table rendering
+  // ────────────────────────────────────────────
+
+  /**
+   * Render tables grouped into collapsible sections by schema.
+   * @param {HTMLElement} tablesEl - the #ws-tables-list container
+   * @param {Array<object>} tables - normalized tables (each with `schemaName`)
+   * @param {Array<{name,isShortcut,tableCount,error?}>} schemas - server-reported schemas
+   * @param {Array<{schema,error}>} errors - per-schema fetch errors from the server
+   * @param {string} wsId
+   * @param {string} lhId
+   */
+  _renderTablesBySchema(tablesEl, tables, schemas, errors, wsId, lhId) {
+    // Group tables by schema name.
+    const bySchema = new Map();
+    for (const t of tables) {
+      const s = t.schemaName || 'dbo';
+      if (!bySchema.has(s)) bySchema.set(s, []);
+      bySchema.get(s).push(t);
+    }
+
+    // Build authoritative schema list: prefer the server-reported order
+    // (preserves OneLake DFS directory order). Fall back to whatever names
+    // we saw on the rows themselves (non-schemas-enabled lakehouses).
+    let schemaList;
+    if (schemas && schemas.length > 0) {
+      schemaList = schemas.map(s => ({
+        name: s.name,
+        isShortcut: !!s.isShortcut,
+        error: s.error || null,
+        tables: bySchema.get(s.name) || [],
+      }));
+    } else if (bySchema.size > 0) {
+      schemaList = Array.from(bySchema.keys()).sort().map(name => ({
+        name, isShortcut: false, error: null, tables: bySchema.get(name),
+      }));
+    } else {
+      schemaList = [{ name: 'dbo', isShortcut: false, error: null, tables: [] }];
+    }
+
+    // Surface schema-level fetch errors that weren't already in `schemas`.
+    if (errors && errors.length > 0) {
+      const seen = new Set(schemaList.map(s => s.name));
+      for (const e of errors) {
+        if (!seen.has(e.schema)) {
+          schemaList.push({ name: e.schema, isShortcut: false, error: e.error, tables: [] });
+        }
+      }
+    }
+
+    const collapseState = this._loadSchemaCollapseState(wsId, lhId);
+    const showSingle = schemaList.length > 1;
+
+    const parts = ['<div class="ws-schemas-container">'];
+    for (const s of schemaList) {
+      const safeName = this._esc(s.name);
+      const sid = `ws-schema-body-${s.name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+      const collapsed = collapseState[s.name] === 'closed';
+      const mlvCount = s.tables.filter(t => (t.tableType || t.type || '').toUpperCase() === 'MATERIALIZED_LAKE_VIEW').length;
+      const tableCount = s.tables.length;
+      let metaText;
+      if (tableCount === 0) {
+        metaText = s.error ? 'fetch failed' : 'empty';
+      } else if (mlvCount > 0) {
+        const tCount = tableCount - mlvCount;
+        const tWord = tCount === 1 ? 'table' : 'tables';
+        const mWord = mlvCount === 1 ? 'MLV' : 'MLVs';
+        metaText = tCount > 0 ? `${tCount} ${tWord} · ${mlvCount} ${mWord}` : `${mlvCount} ${mWord}`;
+      } else {
+        metaText = `${tableCount} ${tableCount === 1 ? 'table' : 'tables'}`;
+      }
+
+      const badges = [];
+      if (s.isShortcut) badges.push('<span class="ws-schema-tag shortcut">shortcut</span>');
+      if (s.error) badges.push('<span class="ws-schema-tag error">error</span>');
+
+      parts.push(
+        `<section class="ws-schema-group" data-schema="${safeName}" data-collapsed="${collapsed}">` +
+        `<button class="ws-schema-header" type="button" aria-expanded="${!collapsed}" aria-controls="${sid}">` +
+        '<span class="ws-schema-chevron" aria-hidden="true">\u25BE</span>' +
+        `<span class="ws-schema-name">${safeName}</span>` +
+        `<span class="ws-schema-meta">${this._esc(metaText)}</span>` +
+        (badges.length ? `<span class="ws-schema-badges">${badges.join('')}</span>` : '') +
+        '</button>' +
+        `<div class="ws-schema-body" id="${sid}">`,
+      );
+
+      if (s.error) {
+        parts.push(`<div class="ws-schema-error-detail">${this._esc(s.error)}</div>`);
+      }
+
+      if (s.tables.length === 0 && !s.error) {
+        parts.push('<div class="ws-schema-empty">No tables in this schema</div>');
+      } else if (s.tables.length > 0) {
+        parts.push('<table class="ws-table"><thead><tr>');
+        parts.push('<th class="sortable sorted" data-col="name">Name <span class="sort-icon">\u25B2</span></th>');
+        parts.push('<th class="sortable" data-col="type">Type <span class="sort-icon">\u25B2\u25BC</span></th>');
+        parts.push('<th class="sortable" data-col="format">Format <span class="sort-icon">\u25B2\u25BC</span></th>');
+        parts.push('<th class="sortable num" data-col="rows">Rows <span class="sort-icon">\u25B2\u25BC</span></th>');
+        parts.push('<th class="sortable num" data-col="size">Size <span class="sort-icon">\u25B2\u25BC</span></th>');
+        parts.push('</tr></thead><tbody>');
+        for (const t of s.tables) {
+          const tType = t.tableType || t.type || '';
+          const tFormat = t.tableFormat || t.format || 'delta';
+          const iconCls = this._tableIconClass(tType);
+          const iconChar = this._tableIconChar(tType);
+          parts.push(
+            `<tr class="ws-table-row" data-table-name="${this._esc(t.name)}" data-schema-name="${safeName}">` +
+            `<td class="ws-table-name"><span class="ws-table-icon ${iconCls}">${iconChar}</span>${this._esc(t.name)}</td>` +
+            `<td><span class="ws-type-badge ${iconCls}">${this._esc(this._tableTypeBadge(tType))}</span></td>` +
+            `<td>${this._esc(tFormat)}</td>` +
+            '<td class="num">\u2014</td>' +
+            '<td class="num">\u2014</td>' +
+            '</tr>',
+          );
+        }
+        parts.push('</tbody></table>');
+      }
+
+      parts.push('</div></section>');
+    }
+    parts.push('</div>');
+    tablesEl.innerHTML = parts.join('');
+
+    // Wire collapse/expand toggles.
+    tablesEl.querySelectorAll('.ws-schema-header').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const group = btn.closest('.ws-schema-group');
+        if (!group) return;
+        const wasCollapsed = group.dataset.collapsed === 'true';
+        group.dataset.collapsed = wasCollapsed ? 'false' : 'true';
+        btn.setAttribute('aria-expanded', wasCollapsed ? 'true' : 'false');
+        const name = group.dataset.schema;
+        const state = this._loadSchemaCollapseState(wsId, lhId);
+        if (wasCollapsed) delete state[name];
+        else state[name] = 'closed';
+        this._saveSchemaCollapseState(wsId, lhId, state);
+      });
+    });
+
+    // If single schema and user has never customized state, leave open — no
+    // section header collapsing surprise. (Multi-schema case is the default.)
+    void showSingle;
+  }
+
+  _schemaStateKey(wsId, lhId) {
+    return `edog:ws-explorer:schema-state:${wsId}:${lhId}`;
+  }
+
+  _loadSchemaCollapseState(wsId, lhId) {
+    try {
+      const raw = localStorage.getItem(this._schemaStateKey(wsId, lhId));
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return (obj && typeof obj === 'object') ? obj : {};
+    } catch {
+      return {};
+    }
+  }
+
+  _saveSchemaCollapseState(wsId, lhId, state) {
+    try {
+      localStorage.setItem(this._schemaStateKey(wsId, lhId), JSON.stringify(state));
+    } catch {
+      // localStorage may be unavailable (private mode); ignore.
+    }
+  }
+
+  // ────────────────────────────────────────────
   // Table sorting (DOM-only, no re-fetch)
   // ────────────────────────────────────────────
 
@@ -1701,17 +1892,20 @@ class WorkspaceExplorer {
    * @param {HTMLElement} container - the ws-tables-list element
    */
   _sortTable(column, container) {
-    const table = container.querySelector('.ws-table');
-    if (!table) return;
-    const tbody = table.querySelector('tbody');
-    if (!tbody) return;
+    const tables = container.querySelectorAll('.ws-table');
+    if (tables.length === 0) return;
 
-    // Capture original order on first sort interaction
+    // Capture original order on first sort interaction — per tbody (each
+    // section has its own table, so we keep one snapshot per tbody).
     if (!this._tableSortOriginalRows) {
-      this._tableSortOriginalRows = Array.from(tbody.querySelectorAll('tr'));
+      this._tableSortOriginalRows = new Map();
+      tables.forEach(tbl => {
+        const tb = tbl.querySelector('tbody');
+        if (tb) this._tableSortOriginalRows.set(tb, Array.from(tb.querySelectorAll('tr')));
+      });
     }
 
-    // Determine next direction
+    // Determine next direction (single global state shared across sections)
     let nextDir;
     if (this._tableSort.col === column) {
       if (this._tableSort.dir === 'asc') nextDir = 'desc';
@@ -1723,14 +1917,18 @@ class WorkspaceExplorer {
 
     this._tableSort = { col: nextDir ? column : null, dir: nextDir };
 
-    // Column index mapping
     const colIndex = { name: 0, type: 1, format: 2, rows: 3, size: 4 }[column] ?? 0;
     const isNumeric = column === 'rows' || column === 'size';
 
-    if (!nextDir) {
-      // Restore original order
-      for (const row of this._tableSortOriginalRows) tbody.appendChild(row);
-    } else {
+    // Apply sort to every section's tbody independently.
+    tables.forEach(tbl => {
+      const tbody = tbl.querySelector('tbody');
+      if (!tbody) return;
+      if (!nextDir) {
+        const snap = this._tableSortOriginalRows.get(tbody) || [];
+        for (const row of snap) tbody.appendChild(row);
+        return;
+      }
       const rows = Array.from(tbody.querySelectorAll('tr'));
       const mult = nextDir === 'asc' ? 1 : -1;
       rows.sort((a, b) => {
@@ -1746,10 +1944,10 @@ class WorkspaceExplorer {
         return aLow < bLow ? -1 * mult : aLow > bLow ? 1 * mult : 0;
       });
       for (const row of rows) tbody.appendChild(row);
-    }
+    });
 
-    // Update header icons
-    table.querySelectorAll('th.sortable').forEach(th => {
+    // Update header icons across every section.
+    container.querySelectorAll('.ws-table th.sortable').forEach(th => {
       const icon = th.querySelector('.sort-icon');
       if (!icon) return;
       if (th.dataset.col === this._tableSort.col) {
@@ -1828,17 +2026,26 @@ class WorkspaceExplorer {
    * @param {object} result - Response from getTableDetails API
    */
   _enrichTableRows(result) {
-    // API response: { result: { value: [...] }, id, status }
-    const items = result?.result?.value || result?.value || [];
+    // API response shapes (in order of precedence):
+    //   - New schemas-aware shape: `{ tables: [...] }` — rows already have `schemaName`
+    //   - LRO poll shape: `{ result: { value: [...] } }` — legacy single-schema path
+    //   - Direct shape: `{ value: [...] }`
+    const items = result?.tables || result?.result?.value || result?.value || [];
+
+    // Map by (schemaName, tableName) so same-named tables in different schemas
+    // don't shadow each other.
     const detailMap = new Map();
+    const keyOf = (schema, name) => `${schema || 'dbo'}::${name}`;
     for (const item of items) {
-      if (item.tableName) detailMap.set(item.tableName, item);
+      const name = item.tableName || item.name;
+      if (!name) continue;
+      detailMap.set(keyOf(item.schemaName, name), item);
     }
 
     // Merge onto stored table objects for inspector use
     if (this._currentTables) {
       for (const tbl of this._currentTables) {
-        const detail = detailMap.get(tbl.name);
+        const detail = detailMap.get(keyOf(tbl.schemaName, tbl.name));
         if (!detail) continue;
         if (detail.result) {
           tbl.location = detail.result.location || tbl.location;
@@ -1853,40 +2060,32 @@ class WorkspaceExplorer {
       }
     }
 
-    // Update DOM cells
+    // Update DOM cells — match each row by (schemaName, tableName)
     const tablesEl = document.getElementById('ws-tables-list');
     if (!tablesEl) return;
 
     tablesEl.querySelectorAll('.ws-table-row[data-table-name]').forEach(row => {
       const name = row.dataset.tableName;
-      const detail = detailMap.get(name);
+      const schema = row.dataset.schemaName || 'dbo';
+      const detail = detailMap.get(keyOf(schema, name));
 
-      // Rows cell (index 3)
       const rowsCell = row.children[3];
-      // Size cell (index 4)
       const sizeCell = row.children[4];
 
       if (detail && detail.result) {
-        // Update type badge if enriched type is available
         const typeBadge = row.children[1]?.querySelector('.ws-type-badge');
         if (typeBadge && detail.result.type) {
           typeBadge.textContent = this._tableTypeBadge(detail.result.type);
         }
-
-        // Rows — only overwrite if we have actual data OR cell is still placeholder
         if (rowsCell && detail.result.rowCount != null) {
           rowsCell.className = 'num';
           rowsCell.textContent = this._numFmt.format(detail.result.rowCount);
         }
-        // If null, leave cell as-is (getTableStats may have already populated it)
-
-        // Size — same: only overwrite with real data
         if (sizeCell && detail.result.sizeInBytes != null) {
           sizeCell.className = 'num';
           sizeCell.textContent = this._formatSize(detail.result.sizeInBytes);
         }
       }
-      // If no detail at all, leave cells as-is — getTableStats handles them
     });
 
     // If inspector is showing a table that just got enriched, refresh it
@@ -2249,10 +2448,16 @@ class WorkspaceExplorer {
     if (!ws || !lh) return;
 
     try {
-      const result = await this._api.getTableDetails(ws.id, lh.id, ws.capacityId, [table.name]);
-      // API response: { result: { value: [...] }, id, status }
-      const allDetails = result?.result?.value || result?.value || [];
-      const details = allDetails.find(v => v.tableName === table.name) || null;
+      const result = await this._api.getTableDetails(
+        ws.id, lh.id, ws.capacityId,
+        [{ name: table.name, schema: table.schemaName || 'dbo' }],
+      );
+      // Response shape: `{ tables: [...] }` (new) or `{ result: { value: [...] } }` (legacy).
+      const allDetails = result?.tables || result?.result?.value || result?.value || [];
+      const details = allDetails.find(v =>
+        (v.tableName || v.name) === table.name &&
+        (v.schemaName || 'dbo') === (table.schemaName || 'dbo'),
+      ) || null;
 
       if (details && details.result) {
         // Merge enrichment onto the stored table object

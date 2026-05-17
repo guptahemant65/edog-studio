@@ -22,6 +22,7 @@ import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -48,6 +49,7 @@ from swagger_runtime import fetch_runtime_swagger as _fetch_runtime_swagger
 PROJECT_DIR = Path(__file__).parent.parent
 CONFIG_PATH = PROJECT_DIR / "edog-config.json"
 BEARER_CACHE = PROJECT_DIR / ".edog-bearer-cache"
+ONELAKE_BEARER_CACHE = PROJECT_DIR / ".edog-onelake-bearer-cache"
 MWC_CACHE = PROJECT_DIR / ".edog-token-cache"
 SESSION_FILE = PROJECT_DIR / ".edog-session.json"
 HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
@@ -55,6 +57,13 @@ HTML_PATH = PROJECT_DIR / "src" / "edog-logs.html"
 logger = logging.getLogger(__name__)
 
 REDIRECT_HOST = "https://biazure-int-edog-redirect.analysis-df.windows.net"
+ONELAKE_HOST = "https://onelake-int-edog.dfs.pbidedicated.windows-int.net"
+ONELAKE_RESOURCE = "https://storage.azure.com"
+TOKEN_HELPER_CLIENT_ID = "ea0616ba-638b-4df5-95b9-636659ae5121"
+TOKEN_HELPER_AUTHORITY = "https://login.windows-ppe.net/organizations"
+
+# Lock for OneLake bearer mint — prevent N parallel mints racing on cold start
+_onelake_mint_lock = threading.Lock()
 
 # In-memory MWC token cache — keyed by "ws:lh:cap" composite
 _mwc_cache: dict = {}  # value: {"token": str, "host": str, "expiry": float}
@@ -1102,6 +1111,189 @@ def _get_mwc_token(bearer: str, ws_id: str, artifact_id: str, cap_id: str, workl
 def _capacity_base_path(cap_id: str, ws_id: str) -> str:
     """Build the MWC API base path for a capacity/workspace pair."""
     return f"/webapi/capacities/{cap_id}/workloads/Lakehouse/LakehouseService/automatic/v1/workspaces/{ws_id}"
+
+
+def _find_token_helper() -> Path | None:
+    """Locate the compiled token-helper.exe, preferring net8.0 then net472."""
+    base = PROJECT_DIR / "scripts" / "token-helper" / "bin" / "Debug"
+    for tfm in ("net8.0", "net472"):
+        candidate = base / tfm / "token-helper.exe"
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _parse_jwt_expiry(jwt: str) -> float:
+    """Extract `exp` claim from a JWT. Returns time.time()+3600 on parse failure."""
+    try:
+        parts = jwt.split(".")
+        if len(parts) != 3:
+            return time.time() + 3600
+        payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(payload_b64).decode("utf-8", "replace"))
+        return float(claims.get("exp", time.time() + 3600))
+    except Exception:
+        return time.time() + 3600
+
+
+def _mint_token_for_resource(resource: str) -> tuple[str, float]:
+    """Mint a CBA token for a specific resource audience using the cached cert + username.
+
+    Args:
+        resource: Audience URI (e.g. "https://storage.azure.com" for OneLake DFS).
+
+    Returns:
+        Tuple of (jwt, expiry_unix_seconds).
+
+    Raises:
+        RuntimeError if token-helper is missing, no username is configured, or the
+        matching CBA cert cannot be found in the Windows cert store.
+    """
+    helper = _find_token_helper()
+    if helper is None:
+        raise RuntimeError("token-helper not built (run `make token-helper`)")
+
+    # Username — prefer config (synced at every successful auth), fall back to session.
+    username = None
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+        username = cfg.get("username")
+    except Exception:
+        username = None
+    if not username:
+        session = _load_session()
+        username = session.get("lastUsername")
+    if not username:
+        raise RuntimeError("No authenticated user — sign in once first")
+
+    # Find the CBA cert that matches this user (CN convention: user@tenant -> user.tenant)
+    cert_cn = username.replace("@", ".")
+    try:
+        list_result = subprocess.run(
+            [str(helper), "--list-certs"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Cert discovery timed out (10s)") from exc
+
+    if list_result.returncode != 0:
+        raise RuntimeError(f"Cert discovery failed: {list_result.stderr.strip()[:200]}")
+
+    thumbprint = None
+    try:
+        certs = json.loads(list_result.stdout)
+        cn_lower = cert_cn.lower()
+        for c in certs:
+            if cn_lower in c.get("cn", "").lower() or cn_lower in c.get("subject", "").lower():
+                thumbprint = c.get("thumbprint")
+                break
+    except Exception as exc:
+        raise RuntimeError(f"Cert list parse failed: {exc}") from exc
+
+    if not thumbprint:
+        raise RuntimeError(f"No CBA cert matching {cert_cn} in current-user store")
+
+    # Mint the token with the requested resource audience.
+    try:
+        result = subprocess.run(
+            [str(helper), thumbprint, username, TOKEN_HELPER_CLIENT_ID, TOKEN_HELPER_AUTHORITY, resource],
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"Token mint timed out for {resource}") from exc
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Token mint failed for {resource}: {result.stderr.strip()[:300]}")
+
+    token = result.stdout.strip()
+    if not token or "." not in token:
+        raise RuntimeError(f"Token mint returned malformed token (len={len(token)})")
+
+    expiry = _parse_jwt_expiry(token)
+    return token, expiry
+
+
+def _ensure_onelake_bearer() -> str:
+    """Return a valid OneLake-scoped bearer (audience https://storage.azure.com).
+
+    The OneLake DFS endpoint validates a different audience than the Power BI bearer
+    cached in `.edog-bearer-cache`. We cache the OneLake token separately and mint a
+    fresh one (via token-helper) when the cache is empty or expired.
+    """
+    cached, _ = _read_cache(ONELAKE_BEARER_CACHE)
+    if cached:
+        return cached
+
+    # Serialize concurrent mints — token-helper drives Silent CBA which takes ~10-30s.
+    with _onelake_mint_lock:
+        cached, _ = _read_cache(ONELAKE_BEARER_CACHE)
+        if cached:
+            return cached
+
+        print(f"  [OneLake] Minting bearer for audience {ONELAKE_RESOURCE}...")
+        token, expiry = _mint_token_for_resource(ONELAKE_RESOURCE)
+        _write_cache(ONELAKE_BEARER_CACHE, token, expiry)
+        remaining = int((expiry - time.time()) / 60)
+        print(f"  [OneLake] Bearer cached, expires in {remaining} min")
+        return token
+
+
+def _list_lakehouse_schemas(ws_id: str, lh_id: str, timeout: int = 30) -> list[dict]:
+    """List schemas in a schemas-enabled lakehouse via OneLake DFS.
+
+    Each directory under `Tables/` is a schema. Mirrors FLT's own discovery path
+    (see workload-fabriclivetable's LakeHouseMetastoreClientWithShortcutSupport.ListAllSchemasAsync).
+
+    Args:
+        ws_id: Workspace object ID.
+        lh_id: Lakehouse object ID.
+        timeout: Per-request timeout in seconds (default 30; first call is slow).
+
+    Returns:
+        List of `{"name": str, "isShortcut": bool}` dicts in directory order.
+
+    Raises:
+        urllib.error.HTTPError: On non-2xx responses from OneLake DFS.
+        RuntimeError: If the OneLake bearer cannot be obtained.
+    """
+    token = _ensure_onelake_bearer()
+    qs = urllib.parse.urlencode(
+        {
+            "directory": f"{lh_id}/Tables",
+            "recursive": "false",
+            "resource": "filesystem",
+            "getShortcutMetadata": "true",
+        }
+    )
+    url = f"{ONELAKE_HOST}/{ws_id}?{qs}"
+    print(f"  [OneLake] GET schemas → {url[:90]}...")
+
+    ctx = ssl.create_default_context()
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+        payload = json.loads(resp.read())
+
+    schemas: list[dict] = []
+    for entry in payload.get("paths", []):
+        if not entry.get("isDirectory"):
+            continue
+        name = entry.get("name", "")
+        # name shape: "{lh_id}/Tables/{schemaName}" → take the last segment
+        schema_name = name.rsplit("/", 1)[-1]
+        if not schema_name:
+            continue
+        schemas.append(
+            {
+                "name": schema_name,
+                # OneLake returns "isShortcut" only when true; absence means false.
+                "isShortcut": bool(entry.get("isShortcut", False)),
+            }
+        )
+    return schemas
 
 
 def _jupyter_api_path(cap_id: str, ws_id: str, nb_id: str) -> str:
@@ -4544,7 +4736,19 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self._json_response(200, info)
 
     def _serve_mwc_tables(self):
-        """GET /api/mwc/tables — list lakehouse tables via MWC token."""
+        """GET /api/mwc/tables — list lakehouse tables across all schemas.
+
+        Schemas-enabled lakehouses partition tables under `/schemas/{name}/tables`. The
+        legacy public REST endpoint returns 400 `UnsupportedOperationForSchemasEnabledLakehouse`
+        for these. We:
+          1. Enumerate schemas via OneLake DFS (each directory under `Tables/` is a schema).
+          2. Fan out a MWC `/schemas/{name}/tables` call per schema in parallel.
+          3. Merge results with `schemaName` annotated on each table row.
+
+        Envelope: `{tables: [...], schemas: [{name, isShortcut, tableCount}]}` plus a
+        per-schema `errors` array for partial failures (one bad shortcut schema
+        shouldn't kill the whole listing).
+        """
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
         ws_id = params.get("wsId", [None])[0]
@@ -4560,6 +4764,30 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
 
+        # Step 1 — enumerate schemas via OneLake DFS.
+        try:
+            schemas = _list_lakehouse_schemas(ws_id, lh_id)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:500]
+            self._json_response(
+                e.code,
+                {"error": "schema_listing_failed", "message": body, "detail": "OneLake DFS request failed"},
+            )
+            return
+        except RuntimeError as e:
+            self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
+            return
+        except Exception as e:
+            traceback.print_exc()
+            self._json_response(502, {"error": "schema_listing_failed", "message": str(e)})
+            return
+
+        if not schemas:
+            # Lakehouse exists but has no schemas yet — return empty envelope.
+            self._json_response(200, {"data": [], "schemas": [], "continuationToken": None})
+            return
+
+        # Step 2 — acquire an MWC token (one token serves all per-schema calls).
         try:
             token, host = _get_mwc_token(bearer, ws_id, lh_id, cap_id)
         except urllib.error.HTTPError as e:
@@ -4572,40 +4800,95 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         base = _capacity_base_path(cap_id, ws_id)
-        url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/dbo/tables"
-        print(f"  [MWC] GET tables → {url[:80]}...")
+        mwc_headers = {
+            "Authorization": f"MwcToken {token}",
+            "x-ms-workload-resource-moniker": lh_id,
+            "Content-Type": "application/json",
+        }
+        ctx = ssl.create_default_context()
 
-        try:
-            ctx = ssl.create_default_context()
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "Authorization": f"MwcToken {token}",
-                    "x-ms-workload-resource-moniker": lh_id,
-                    "Content-Type": "application/json",
-                },
-                method="GET",
-            )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp_body = resp.read()
-                self.send_response(resp.status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Content-Length", str(len(resp_body)))
-                self.end_headers()
-                self.wfile.write(resp_body)
-        except urllib.error.HTTPError as e:
-            resp_body = e.read()
-            self.send_response(e.code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp_body)))
-            self.end_headers()
-            self.wfile.write(resp_body)
-        except Exception as e:
-            self._json_response(502, {"error": "mwc_request_error", "message": str(e)})
+        def fetch_schema(schema: dict) -> tuple[dict, list[dict] | None, str | None]:
+            """Fetch tables for a single schema. Returns (schema, tables, error_msg)."""
+            sname = schema["name"]
+            url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/{sname}/tables"
+            try:
+                req = urllib.request.Request(url, headers=mwc_headers, method="GET")
+                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                    payload = json.loads(resp.read())
+                rows = payload.get("data") or payload.get("value") or []
+                for row in rows:
+                    row["schemaName"] = sname
+                return schema, rows, None
+            except urllib.error.HTTPError as exc:
+                msg = exc.read().decode("utf-8", "replace")[:200]
+                return schema, None, f"HTTP {exc.code}: {msg}"
+            except Exception as exc:
+                return schema, None, f"{type(exc).__name__}: {exc}"
+
+        # Step 3 — fan out per-schema calls. Cap at 6 workers — schemas usually 1-4,
+        # but we don't want a runaway lakehouse with 50 schemas to DoS the upstream.
+        merged_tables: list[dict] = []
+        schema_results: list[dict] = []
+        errors: list[dict] = []
+        print(f"  [MWC] Fetching tables across {len(schemas)} schema(s): {[s['name'] for s in schemas]}")
+        with ThreadPoolExecutor(max_workers=min(6, len(schemas))) as pool:
+            futures = [pool.submit(fetch_schema, s) for s in schemas]
+            for fut in as_completed(futures):
+                schema, rows, err = fut.result()
+                if err is not None:
+                    errors.append({"schema": schema["name"], "error": err})
+                    schema_results.append(
+                        {
+                            "name": schema["name"],
+                            "isShortcut": schema.get("isShortcut", False),
+                            "tableCount": 0,
+                            "error": err,
+                        }
+                    )
+                    continue
+                merged_tables.extend(rows)
+                schema_results.append(
+                    {
+                        "name": schema["name"],
+                        "isShortcut": schema.get("isShortcut", False),
+                        "tableCount": len(rows),
+                    }
+                )
+
+        # Preserve the directory-order schema sequence (parallel futures complete in
+        # any order; restore by sorting against the original schemas list).
+        order = {s["name"]: i for i, s in enumerate(schemas)}
+        schema_results.sort(key=lambda r: order.get(r["name"], 999))
+
+        print(
+            f"  [MWC] Merged {len(merged_tables)} table(s) across {len(schema_results)} schema(s)"
+            + (f"; {len(errors)} schema error(s)" if errors else "")
+        )
+
+        self._json_response(
+            200,
+            {
+                "data": merged_tables,
+                "schemas": schema_results,
+                "continuationToken": None,
+                **({"errors": errors} if errors else {}),
+            },
+        )
 
     def _serve_mwc_table_details(self):
-        """POST /api/mwc/table-details — batch get table details with polling."""
+        """POST /api/mwc/table-details — batch get table details, grouped per schema.
+
+        Request body accepts either shape:
+          - New: `tables: [{name, schema}, ...]` (schemas-aware)
+          - Legacy: `tables: ["name1", ...]` (assumes "dbo" — kept for backwards compat
+            but will hit the same MWC 400 the legacy callers used to hit on schemas-
+            enabled lakehouses; new callers should always send the new shape).
+
+        Tables are grouped by schema → one `/schemas/{name}/batchGetTableDetails` call
+        per schema. Each call may return an `operationId` requiring polling — we poll
+        each operation in parallel after kickoff. Final response merges all per-schema
+        results into a single `tables` array, with `schemaName` annotated on every row.
+        """
         content_len = int(self.headers.get("Content-Length", 0))
         if content_len == 0:
             self._json_response(400, {"error": "empty_body", "message": "Request body required"})
@@ -4615,9 +4898,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         ws_id = body.get("wsId")
         lh_id = body.get("lhId")
         cap_id = body.get("capId")
-        tables = body.get("tables", [])
+        tables_raw = body.get("tables", [])
 
-        if not all([ws_id, lh_id, cap_id, tables]):
+        if not all([ws_id, lh_id, cap_id, tables_raw]):
             self._json_response(
                 400,
                 {
@@ -4625,6 +4908,20 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     "message": "wsId, lhId, capId, and tables are required",
                 },
             )
+            return
+
+        # Group requested tables by schema. Legacy string entries fall back to "dbo".
+        by_schema: dict[str, list[str]] = {}
+        for entry in tables_raw:
+            if isinstance(entry, str):
+                by_schema.setdefault("dbo", []).append(entry)
+            elif isinstance(entry, dict) and entry.get("name"):
+                sname = entry.get("schema") or entry.get("schemaName") or "dbo"
+                by_schema.setdefault(sname, []).append(entry["name"])
+            # Silently skip malformed entries — frontend shouldn't be sending those.
+
+        if not by_schema:
+            self._json_response(400, {"error": "no_valid_tables", "message": "No valid table entries in request"})
             return
 
         bearer, _ = _read_cache(BEARER_CACHE)
@@ -4643,96 +4940,129 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         base = _capacity_base_path(cap_id, ws_id)
-        url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/dbo/batchGetTableDetails"
         mwc_headers = {
             "Authorization": f"MwcToken {token}",
             "x-ms-workload-resource-moniker": lh_id,
             "Content-Type": "application/json",
         }
-        print(f"  [MWC] POST batchGetTableDetails ({len(tables)} tables)")
+        ctx = ssl.create_default_context()
+        print(
+            f"  [MWC] POST batchGetTableDetails across {len(by_schema)} schema(s): "
+            + ", ".join(f"{s}({len(t)})" for s, t in by_schema.items())
+        )
 
-        try:
-            ctx = ssl.create_default_context()
-            req_body = json.dumps({"tables": tables}).encode()
-            req = urllib.request.Request(url, data=req_body, headers=mwc_headers, method="POST")
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                resp_data = json.loads(resp.read())
+        def fetch_schema_details(schema_name: str, names: list[str]) -> tuple[str, dict | None, str | None]:
+            """Submit + poll batchGetTableDetails for one schema. Returns (schema, payload, error)."""
+            url = f"{host}{base}/artifacts/DataArtifact/{lh_id}/schemas/{schema_name}/batchGetTableDetails"
+            try:
+                req_body = json.dumps({"tables": names}).encode()
+                req = urllib.request.Request(url, data=req_body, headers=mwc_headers, method="POST")
+                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                    resp_data = json.loads(resp.read())
 
-            operation_id = resp_data.get("operationId")
-            if not operation_id:
-                self._json_response(200, resp_data)
-                return
+                operation_id = resp_data.get("operationId")
+                if not operation_id:
+                    return schema_name, resp_data, None
 
-            # Poll for async operation completion
-            poll_url = f"{url}/operationResults/{operation_id}"
-            print(f"  [MWC] Polling operation {operation_id[:8]}...")
-            for attempt in range(20):
-                time.sleep(1)
-                poll_req = urllib.request.Request(poll_url, headers=mwc_headers, method="GET")
-                with urllib.request.urlopen(poll_req, timeout=30, context=ctx) as poll_resp:
-                    poll_data = json.loads(poll_resp.read())
+                # Poll until the operation completes (max 20s per schema).
+                poll_url = f"{url}/operationResults/{operation_id}"
+                for attempt in range(20):
+                    time.sleep(1)
+                    poll_req = urllib.request.Request(poll_url, headers=mwc_headers, method="GET")
+                    with urllib.request.urlopen(poll_req, timeout=30, context=ctx) as poll_resp:
+                        poll_data = json.loads(poll_resp.read())
 
-                status = poll_data.get("status", "").lower()
-                if status in ("succeeded", "completed"):
-                    print(f"  [MWC] Operation completed after {attempt + 1}s")
-                    self._json_response(200, poll_data)
-                    return
-                if status in ("failed", "cancelled"):
-                    print(f"  [MWC] Operation {status} after {attempt + 1}s")
-                    self._json_response(500, {"error": "operation_failed", "detail": poll_data})
-                    return
+                    status = (poll_data.get("status") or "").lower()
+                    if status in ("succeeded", "completed"):
+                        print(f"  [MWC] {schema_name} batch completed after {attempt + 1}s")
+                        return schema_name, poll_data, None
+                    if status in ("failed", "cancelled"):
+                        return schema_name, None, f"operation_{status}"
 
-            self._json_response(
-                504,
-                {
-                    "error": "poll_timeout",
-                    "message": f"Operation {operation_id} did not complete in 20s",
-                },
-            )
-        except urllib.error.HTTPError as e:
-            resp_body = e.read()
-            self.send_response(e.code)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(resp_body)))
-            self.end_headers()
-            self.wfile.write(resp_body)
-        except Exception as e:
-            self._json_response(502, {"error": "mwc_request_error", "message": str(e)})
+                return schema_name, None, f"poll_timeout (operation {operation_id})"
+            except urllib.error.HTTPError as exc:
+                msg = exc.read().decode("utf-8", "replace")[:200]
+                return schema_name, None, f"HTTP {exc.code}: {msg}"
+            except Exception as exc:
+                return schema_name, None, f"{type(exc).__name__}: {exc}"
+
+        merged_tables: list[dict] = []
+        errors: list[dict] = []
+        with ThreadPoolExecutor(max_workers=min(6, len(by_schema))) as pool:
+            futures = {pool.submit(fetch_schema_details, sname, names): sname for sname, names in by_schema.items()}
+            for fut in as_completed(futures):
+                sname, payload, err = fut.result()
+                if err is not None:
+                    errors.append({"schema": sname, "error": err})
+                    continue
+                # LRO response shape from MWC is `{ result: { value: [...] }, id, status }`.
+                # We also accept the rarer flat shapes for defensive forward-compat.
+                inner_result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+                rows = (
+                    inner_result.get("value")
+                    or payload.get("tables")
+                    or payload.get("data")
+                    or payload.get("value")
+                    or []
+                )
+                for row in rows:
+                    if isinstance(row, dict):
+                        row["schemaName"] = sname
+                        merged_tables.append(row)
+
+        # Partial-success semantics: 200 with results + an `errors` array if any schema failed.
+        # The frontend can decide whether to surface per-row failures.
+        status = 200 if merged_tables or not errors else 502
+        self._json_response(
+            status,
+            {
+                "tables": merged_tables,
+                **({"errors": errors} if errors else {}),
+            },
+        )
 
     def _serve_table_stats(self):
         """GET /api/mwc/table-stats — read row count and size from OneLake delta log.
 
-        Query params: wsId, lhId, tableName
-        Returns: { rowCount: int, sizeBytes: int }
+        Query params:
+          - wsId, lhId, tableName (required)
+          - schema (optional; defaults to "dbo" for backwards compat with non-schemas
+            lakehouses, but new callers should always pass the schema discovered via
+            /api/mwc/tables)
+
+        Returns: `{ tableName, rowCount, sizeBytes, fileCount }`. Returns
+        `{rowCount: null, error: "delta_log_not_found"}` on 404 (table not materialized
+        yet, e.g. a freshly-created MLV).
         """
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
         ws_id = params.get("wsId", [None])[0]
         lh_id = params.get("lhId", [None])[0]
         table_name = params.get("tableName", [None])[0]
+        schema = params.get("schema", ["dbo"])[0] or "dbo"
 
         if not all([ws_id, lh_id, table_name]):
             self._json_response(400, {"error": "missing_params", "message": "wsId, lhId, and tableName required"})
             return
 
-        bearer, _ = _read_cache(BEARER_CACHE)
-        if not bearer:
-            self._json_response(401, {"error": "no_bearer_token"})
+        # OneLake DFS requires a storage-scoped bearer (different audience from the
+        # cached Power BI bearer). The previous version of this endpoint used the wrong
+        # bearer and silently returned 404/401 on every call.
+        try:
+            onelake_bearer = _ensure_onelake_bearer()
+        except RuntimeError as e:
+            self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
             return
 
-        onelake_host = "https://onelake-int-edog.dfs.pbidedicated.windows-int.net"
-        log_path = f"/{ws_id}/{lh_id}/Tables/dbo/{table_name}/_delta_log"
+        log_path = f"/{ws_id}/{lh_id}/Tables/{schema}/{table_name}/_delta_log"
         ctx = ssl.create_default_context()
 
         try:
             # List delta log files
-            list_url = f"{onelake_host}{log_path}?resource=filesystem&recursive=false"
+            list_url = f"{ONELAKE_HOST}{log_path}?resource=filesystem&recursive=false"
             req = urllib.request.Request(
                 list_url,
-                headers={
-                    "Authorization": f"Bearer {bearer}",
-                    "x-ms-version": "2021-06-08",
-                },
+                headers={"Authorization": f"Bearer {onelake_bearer}"},
             )
             with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
                 listing = json.loads(resp.read())
@@ -4749,13 +5079,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             # Read each commit and accumulate active files
             active_files = {}  # path → {size, numRecords}
             for jf in json_files:
-                file_url = f"{onelake_host}/{ws_id}/{jf}"
+                file_url = f"{ONELAKE_HOST}/{ws_id}/{jf}"
                 req = urllib.request.Request(
                     file_url,
-                    headers={
-                        "Authorization": f"Bearer {bearer}",
-                        "x-ms-version": "2021-06-08",
-                    },
+                    headers={"Authorization": f"Bearer {onelake_bearer}"},
                 )
                 with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
                     content = resp.read().decode()
@@ -4782,6 +5109,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 200,
                 {
                     "tableName": table_name,
+                    "schemaName": schema,
                     "rowCount": total_rows,
                     "sizeBytes": total_size,
                     "fileCount": len(active_files),
@@ -4793,6 +5121,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     200,
                     {
                         "tableName": table_name,
+                        "schemaName": schema,
                         "rowCount": None,
                         "sizeBytes": None,
                         "error": "delta_log_not_found",
