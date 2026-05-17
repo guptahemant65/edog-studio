@@ -657,6 +657,22 @@ class DagStudio {
       var iterationId = crypto.randomUUID();
       // Start tracking BEFORE API call so early telemetry/log events aren't dropped
       this._esm.startTracking(iterationId);
+      // Bootstrap the SmartContextBar immediately so the user sees feedback
+      // the instant they click Run, regardless of whether SignalR delivers
+      // logs/telemetry. The poll fallback keeps it updated.
+      if (this._autoDetector) {
+        this._autoDetector.ensureExecution(iterationId);
+        var execBoot = this._autoDetector.detectedExecutions.get(iterationId);
+        if (execBoot) {
+          execBoot.status = 'Running';
+          execBoot.startTime = Date.now();
+          if (this._dag && this._dag.nodes) execBoot.nodeCount = this._dag.nodes.length;
+          this._autoDetector.activeExecutionId = iterationId;
+          if (this._autoDetector.onExecutionDetected) {
+            this._autoDetector.onExecutionDetected(execBoot, iterationId);
+          }
+        }
+      }
       if (this._gantt && this._dag && this._dag.nodes) {
         this._gantt.renderExecution(this._dag.nodes, Date.now());
       }
@@ -850,10 +866,10 @@ class DagStudio {
     if (!iterationId) return;
     try {
       var metrics = await this._api.getDagExecMetrics(iterationId);
-      if (!metrics || !metrics.nodeExecutionMetrices) return;
+      if (!metrics) return;
 
-      // Update node states from polled metrics
-      var raw = metrics.nodeExecutionMetrices;
+      // Accept both spellings the FLT controller may emit.
+      var raw = metrics.nodeExecutionMetrices || metrics.nodeExecutionMetrics || {};
       var entries = Array.isArray(raw) ? raw : Object.entries(raw);
       for (var i = 0; i < entries.length; i++) {
         var nid, nm;
@@ -863,11 +879,13 @@ class DagStudio {
         } else {
           nid = entries[i][0];
           nm = entries[i][1];
+          if (nm && !nm.nodeId && this._esm._nodeNameIndex.has(nid.toLowerCase())) {
+            nid = this._esm._nodeNameIndex.get(nid.toLowerCase());
+          }
         }
         if (!nid || !nm) continue;
         var current = this._esm.nodeStates.get(nid);
         var newStatus = this._esm._mapNodeStatus(nm.status || nm.nodeExecutionStatus);
-        // Only update if status actually changed
         if (current && current.status !== newStatus) {
           var startMs = nm.startedAt ? new Date(nm.startedAt).getTime() : (nm.startTime ? new Date(nm.startTime).getTime() : current.startedAt);
           var endMs = nm.endedAt ? new Date(nm.endedAt).getTime() : (nm.endTime ? new Date(nm.endTime).getTime() : null);
@@ -882,21 +900,80 @@ class DagStudio {
         }
       }
 
-      // Check overall execution status
+      // Always refresh overall execution status — even when nodes haven't
+      // populated yet (FLT may report `notStarted` for several seconds after
+      // RunDAG returns 202). The summary/strip must still update.
       var dagMetrics = metrics.dagExecutionMetrics || {};
       var overallStatus = (dagMetrics.status || '').toLowerCase();
-      if (overallStatus === 'completed' || overallStatus === 'failed' || overallStatus === 'cancelled') {
-        this._esm._executionStatus = overallStatus;
+      if (overallStatus === 'completed' || overallStatus === 'succeeded' || overallStatus === 'failed' || overallStatus === 'cancelled') {
+        this._esm._executionStatus = overallStatus === 'succeeded' ? 'completed' : overallStatus;
         this._esm._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : Date.now();
         this._stopExecPoller();
-        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(overallStatus);
-        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, overallStatus);
+        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(this._esm._executionStatus);
+        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, this._esm._executionStatus);
       } else {
+        // notStarted / running / queued — keep polling, keep UI alive.
         this._updateSummary();
+        this._pushPollToAutoDetector(iterationId, dagMetrics, entries, Array.isArray(raw));
       }
     } catch (err) {
       // Poll failed — silently retry next interval
       console.log('[DAG-DIAG] Poll failed:', err.message);
+    }
+  }
+
+  /**
+   * Feed poll results into the AutoDetector so the SmartContextBar appears
+   * even when SignalR log/telemetry events are silent (e.g. very early in a
+   * 202-accepted execution, or if the stream subscription isn't live yet).
+   */
+  _pushPollToAutoDetector(iterationId, dagMetrics, entries, isArray) {
+    if (!this._autoDetector) return;
+    this._autoDetector.ensureExecution(iterationId);
+    var exec = this._autoDetector.detectedExecutions.get(iterationId);
+    if (!exec) return;
+    // Map FLT status to AutoDetector vocabulary.
+    var status = (dagMetrics.status || '').toLowerCase();
+    if (status === 'notstarted' || status === 'queued') {
+      exec.status = 'Running';
+    } else if (status === 'running' || status === 'inprogress') {
+      exec.status = 'Running';
+    } else if (status === 'succeeded' || status === 'completed') {
+      exec.status = 'Completed';
+    } else if (status === 'failed') {
+      exec.status = 'Failed';
+    } else if (status === 'cancelled') {
+      exec.status = 'Cancelled';
+    } else if (!exec.status || exec.status === 'Unknown') {
+      exec.status = 'Running';
+    }
+    if (!exec.startTime) {
+      exec.startTime = dagMetrics.startedAt || this._esm.startedAt || Date.now();
+    }
+    // Recount nodes from the polled snapshot.
+    var done = 0, failed = 0;
+    if (entries && entries.length) {
+      for (var i = 0; i < entries.length; i++) {
+        var nm = isArray ? entries[i] : entries[i][1];
+        var s = ((nm && (nm.status || nm.nodeExecutionStatus)) || '').toLowerCase();
+        if (s === 'succeeded' || s === 'completed') done++;
+        else if (s === 'failed') failed++;
+      }
+      exec.completedNodes = done;
+      exec.failedNodes = failed;
+      if (!exec.nodeCount) exec.nodeCount = entries.length;
+    } else if (!exec.nodeCount && this._dag && this._dag.nodes) {
+      exec.nodeCount = this._dag.nodes.length;
+    }
+    // First detection — fire onExecutionDetected so SmartContextBar reveals
+    // itself; subsequent ticks fire onExecutionUpdated.
+    if (this._autoDetector.activeExecutionId !== iterationId) {
+      this._autoDetector.activeExecutionId = iterationId;
+      if (this._autoDetector.onExecutionDetected) {
+        this._autoDetector.onExecutionDetected(exec, iterationId);
+      }
+    } else if (this._autoDetector.onExecutionUpdated) {
+      this._autoDetector.onExecutionUpdated(exec, iterationId);
     }
   }
 

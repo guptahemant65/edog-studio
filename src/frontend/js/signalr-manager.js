@@ -108,6 +108,15 @@ class SignalRManager {
               this.connection.invoke('Subscribe', topic).catch(() => {});
             }
           }
+          // Flush Phase-3 stream subscriptions queued while disconnected.
+          // Without this, callers (e.g. DagStudio) that subscribe before the
+          // initial connect completes never receive any topic events — the
+          // streams are only started on reconnect via _resubscribeAll().
+          const pending = [...this._pendingTopics];
+          this._pendingTopics.clear();
+          for (const topic of pending) {
+            this.subscribeTopic(topic);
+          }
         })
         .catch((err) => {
           console.error('SignalR connection failed:', err);

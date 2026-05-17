@@ -36450,6 +36450,15 @@ class SignalRManager {
               this.connection.invoke('Subscribe', topic).catch(() => {});
             }
           }
+          // Flush Phase-3 stream subscriptions queued while disconnected.
+          // Without this, callers (e.g. DagStudio) that subscribe before the
+          // initial connect completes never receive any topic events — the
+          // streams are only started on reconnect via _resubscribeAll().
+          const pending = [...this._pendingTopics];
+          this._pendingTopics.clear();
+          for (const topic of pending) {
+            this.subscribeTopic(topic);
+          }
         })
         .catch((err) => {
           console.error('SignalR connection failed:', err);
@@ -42904,8 +42913,8 @@ class DagLayout {
    * @param {number} [opts.nodeHeight=56]     Node card height (px)
    */
   constructor(opts = {}) {
-    this.layerSpacing = opts.layerSpacing ?? 200;
-    this.nodeSpacing = opts.nodeSpacing ?? 80;
+    this.layerSpacing = opts.layerSpacing ?? 160;
+    this.nodeSpacing = opts.nodeSpacing ?? 40;
     this.nodeWidth = opts.nodeWidth ?? 160;
     this.nodeHeight = opts.nodeHeight ?? 56;
   }
@@ -43385,34 +43394,27 @@ class DagCanvasRenderer {
         };
       });
 
-      // Draw smooth curve through points.
-      // For left-to-right DAGs, we use horizontal-dominant Bézier curves:
-      // control points extend horizontally from each endpoint, keeping
-      // curves clean even when source/target are at very different Y positions.
+      // Draw smooth curve through dagre waypoints.
+      // dagre provides well-computed waypoints — we draw gentle curves through
+      // each pair using horizontal-tension Bézier (keeps edges clean in LR layouts).
       ctx.beginPath();
       ctx.moveTo(screenPts[0].x, screenPts[0].y);
 
       if (screenPts.length === 2) {
         var sx = screenPts[0].x, sy = screenPts[0].y;
         var ex = screenPts[1].x, ey = screenPts[1].y;
-        // Horizontal tension: control points extend 40% of the X gap outward
-        // from each endpoint, keeping the curve horizontal at both ends.
-        var dx = Math.abs(ex - sx);
-        var tension = Math.max(dx * 0.4, 30 * cam.scale);
+        var gapX = Math.abs(ex - sx);
+        var tension = Math.max(gapX * 0.3, 20 * cam.scale);
         ctx.bezierCurveTo(sx + tension, sy, ex - tension, ey, ex, ey);
       } else {
-        // Multi-point: smooth Catmull-Rom style through waypoints
+        // dagre gives 3+ points (start, midpoints, end). Draw a cubic Bézier
+        // between each consecutive pair using horizontal tension.
         for (var i = 1; i < screenPts.length; i++) {
-          var p0 = screenPts[Math.max(0, i - 2)];
-          var p1 = screenPts[i - 1];
-          var p2 = screenPts[i];
-          var p3 = screenPts[Math.min(screenPts.length - 1, i + 1)];
-          // Convert Catmull-Rom segment to cubic Bézier
-          var cp1x = p1.x + (p2.x - p0.x) / 6;
-          var cp1y = p1.y + (p2.y - p0.y) / 6;
-          var cp2x = p2.x - (p3.x - p1.x) / 6;
-          var cp2y = p2.y - (p3.y - p1.y) / 6;
-          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+          var sp = screenPts[i - 1];
+          var ep = screenPts[i];
+          var segGap = Math.abs(ep.x - sp.x);
+          var segTension = Math.max(segGap * 0.3, 15 * cam.scale);
+          ctx.bezierCurveTo(sp.x + segTension, sp.y, ep.x - segTension, ep.y, ep.x, ep.y);
         }
       }
 
@@ -44543,6 +44545,11 @@ class DagStudio {
       var layoutResult = this._layout.layout(nodes, edges);
       this._renderer.setData(layoutResult.nodes, layoutResult.edges);
       this._renderer.fitToScreen();
+      // Restore canvas visibility after data is ready (hidden by _renderLoading)
+      var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
+      if (canvas) canvas.style.opacity = '1';
+      var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
+      if (minimap) minimap.style.opacity = '1';
       if (this._ganttCount) this._ganttCount.textContent = String(nodes.length);
       this._renderControls('idle');
       this._renderStatus('idle');
@@ -44592,6 +44599,22 @@ class DagStudio {
       var iterationId = crypto.randomUUID();
       // Start tracking BEFORE API call so early telemetry/log events aren't dropped
       this._esm.startTracking(iterationId);
+      // Bootstrap the SmartContextBar immediately so the user sees feedback
+      // the instant they click Run, regardless of whether SignalR delivers
+      // logs/telemetry. The poll fallback keeps it updated.
+      if (this._autoDetector) {
+        this._autoDetector.ensureExecution(iterationId);
+        var execBoot = this._autoDetector.detectedExecutions.get(iterationId);
+        if (execBoot) {
+          execBoot.status = 'Running';
+          execBoot.startTime = Date.now();
+          if (this._dag && this._dag.nodes) execBoot.nodeCount = this._dag.nodes.length;
+          this._autoDetector.activeExecutionId = iterationId;
+          if (this._autoDetector.onExecutionDetected) {
+            this._autoDetector.onExecutionDetected(execBoot, iterationId);
+          }
+        }
+      }
       if (this._gantt && this._dag && this._dag.nodes) {
         this._gantt.renderExecution(this._dag.nodes, Date.now());
       }
@@ -44785,10 +44808,10 @@ class DagStudio {
     if (!iterationId) return;
     try {
       var metrics = await this._api.getDagExecMetrics(iterationId);
-      if (!metrics || !metrics.nodeExecutionMetrices) return;
+      if (!metrics) return;
 
-      // Update node states from polled metrics
-      var raw = metrics.nodeExecutionMetrices;
+      // Accept both spellings the FLT controller may emit.
+      var raw = metrics.nodeExecutionMetrices || metrics.nodeExecutionMetrics || {};
       var entries = Array.isArray(raw) ? raw : Object.entries(raw);
       for (var i = 0; i < entries.length; i++) {
         var nid, nm;
@@ -44798,11 +44821,13 @@ class DagStudio {
         } else {
           nid = entries[i][0];
           nm = entries[i][1];
+          if (nm && !nm.nodeId && this._esm._nodeNameIndex.has(nid.toLowerCase())) {
+            nid = this._esm._nodeNameIndex.get(nid.toLowerCase());
+          }
         }
         if (!nid || !nm) continue;
         var current = this._esm.nodeStates.get(nid);
         var newStatus = this._esm._mapNodeStatus(nm.status || nm.nodeExecutionStatus);
-        // Only update if status actually changed
         if (current && current.status !== newStatus) {
           var startMs = nm.startedAt ? new Date(nm.startedAt).getTime() : (nm.startTime ? new Date(nm.startTime).getTime() : current.startedAt);
           var endMs = nm.endedAt ? new Date(nm.endedAt).getTime() : (nm.endTime ? new Date(nm.endTime).getTime() : null);
@@ -44817,21 +44842,80 @@ class DagStudio {
         }
       }
 
-      // Check overall execution status
+      // Always refresh overall execution status — even when nodes haven't
+      // populated yet (FLT may report `notStarted` for several seconds after
+      // RunDAG returns 202). The summary/strip must still update.
       var dagMetrics = metrics.dagExecutionMetrics || {};
       var overallStatus = (dagMetrics.status || '').toLowerCase();
-      if (overallStatus === 'completed' || overallStatus === 'failed' || overallStatus === 'cancelled') {
-        this._esm._executionStatus = overallStatus;
+      if (overallStatus === 'completed' || overallStatus === 'succeeded' || overallStatus === 'failed' || overallStatus === 'cancelled') {
+        this._esm._executionStatus = overallStatus === 'succeeded' ? 'completed' : overallStatus;
         this._esm._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : Date.now();
         this._stopExecPoller();
-        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(overallStatus);
-        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, overallStatus);
+        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(this._esm._executionStatus);
+        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, this._esm._executionStatus);
       } else {
+        // notStarted / running / queued — keep polling, keep UI alive.
         this._updateSummary();
+        this._pushPollToAutoDetector(iterationId, dagMetrics, entries, Array.isArray(raw));
       }
     } catch (err) {
       // Poll failed — silently retry next interval
       console.log('[DAG-DIAG] Poll failed:', err.message);
+    }
+  }
+
+  /**
+   * Feed poll results into the AutoDetector so the SmartContextBar appears
+   * even when SignalR log/telemetry events are silent (e.g. very early in a
+   * 202-accepted execution, or if the stream subscription isn't live yet).
+   */
+  _pushPollToAutoDetector(iterationId, dagMetrics, entries, isArray) {
+    if (!this._autoDetector) return;
+    this._autoDetector.ensureExecution(iterationId);
+    var exec = this._autoDetector.detectedExecutions.get(iterationId);
+    if (!exec) return;
+    // Map FLT status to AutoDetector vocabulary.
+    var status = (dagMetrics.status || '').toLowerCase();
+    if (status === 'notstarted' || status === 'queued') {
+      exec.status = 'Running';
+    } else if (status === 'running' || status === 'inprogress') {
+      exec.status = 'Running';
+    } else if (status === 'succeeded' || status === 'completed') {
+      exec.status = 'Completed';
+    } else if (status === 'failed') {
+      exec.status = 'Failed';
+    } else if (status === 'cancelled') {
+      exec.status = 'Cancelled';
+    } else if (!exec.status || exec.status === 'Unknown') {
+      exec.status = 'Running';
+    }
+    if (!exec.startTime) {
+      exec.startTime = dagMetrics.startedAt || this._esm.startedAt || Date.now();
+    }
+    // Recount nodes from the polled snapshot.
+    var done = 0, failed = 0;
+    if (entries && entries.length) {
+      for (var i = 0; i < entries.length; i++) {
+        var nm = isArray ? entries[i] : entries[i][1];
+        var s = ((nm && (nm.status || nm.nodeExecutionStatus)) || '').toLowerCase();
+        if (s === 'succeeded' || s === 'completed') done++;
+        else if (s === 'failed') failed++;
+      }
+      exec.completedNodes = done;
+      exec.failedNodes = failed;
+      if (!exec.nodeCount) exec.nodeCount = entries.length;
+    } else if (!exec.nodeCount && this._dag && this._dag.nodes) {
+      exec.nodeCount = this._dag.nodes.length;
+    }
+    // First detection — fire onExecutionDetected so SmartContextBar reveals
+    // itself; subsequent ticks fire onExecutionUpdated.
+    if (this._autoDetector.activeExecutionId !== iterationId) {
+      this._autoDetector.activeExecutionId = iterationId;
+      if (this._autoDetector.onExecutionDetected) {
+        this._autoDetector.onExecutionDetected(exec, iterationId);
+      }
+    } else if (this._autoDetector.onExecutionUpdated) {
+      this._autoDetector.onExecutionUpdated(exec, iterationId);
     }
   }
 
@@ -45042,6 +45126,12 @@ class DagStudio {
         '<div class="dag-loading-sub">Fetching graph structure...</div>' +
       '</div>';
     }
+    // Hide the canvas during loading — prevents stale edges from rendering
+    // while the "Loading DAG" overlay is visible. Restored by _loadDag after setData.
+    var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
+    if (canvas) canvas.style.opacity = '0';
+    var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
+    if (minimap) minimap.style.opacity = '0';
   }
 
   _renderEmpty(message) {
