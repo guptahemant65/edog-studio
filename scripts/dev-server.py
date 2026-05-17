@@ -1243,6 +1243,201 @@ def _ensure_onelake_bearer() -> str:
         return token
 
 
+def _enumerate_delta_active_files_full(
+    ws_id: str,
+    lh_id: str,
+    schema: str,
+    table_name: str,
+    *,
+    max_commits: int = 200,
+    timeout: int = 15,
+) -> tuple[dict, list[str]]:
+    """Replay a Delta table's commit log → set of currently-active `add` actions.
+
+    Delta tables do not have a "latest file" notion at the storage layer: the
+    current snapshot is `(checkpointAdds union subsequentAdds) minus subsequentRemoves`.
+    Reading raw parquet from `Tables/{schema}/{table}/` without log replay will
+    silently resurrect tombstoned files and partition columns vanish (they live
+    in `add.partitionValues`, not in the parquet itself).
+
+    v1 limitations (surfaced as warnings, never as failures):
+      - Skips `*.checkpoint.parquet` — replays only `.json` commits. For tables
+        with > `max_commits` commits, the oldest are truncated and a warning is
+        appended; the active-file set may be incomplete.
+      - Does not honor deletion vectors. If any active file has a
+        `deletionVector` action, a warning is appended so the UI can surface it.
+
+    Returns:
+        (active_files, warnings) where:
+          - active_files: dict[str, dict] mapping relative path → full Delta
+            `add` action (includes `path`, `size`, `partitionValues`,
+            optionally `stats`, `deletionVector`).
+          - warnings: list[str] of human-readable caveats about replay fidelity.
+
+    Raises:
+        urllib.error.HTTPError: On non-2xx responses (404 = no `_delta_log/`).
+        RuntimeError: If the OneLake bearer cannot be minted.
+    """
+    onelake_bearer = _ensure_onelake_bearer()
+    log_path = f"/{ws_id}/{lh_id}/Tables/{schema}/{table_name}/_delta_log"
+    ctx = ssl.create_default_context()
+    warnings: list[str] = []
+
+    list_url = f"{ONELAKE_HOST}{log_path}?resource=filesystem&recursive=false"
+    req = urllib.request.Request(
+        list_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+        listing = json.loads(resp.read())
+
+    json_files = sorted(
+        p["name"]
+        for p in listing.get("paths", [])
+        if p["name"].endswith(".json") and not p.get("isDirectory")
+    )
+
+    has_checkpoint = any(
+        p["name"].endswith(".checkpoint.parquet")
+        for p in listing.get("paths", [])
+    )
+    if has_checkpoint:
+        warnings.append(
+            "Delta checkpoint detected; preview replays commit JSONs only and "
+            "may miss state captured in the checkpoint."
+        )
+
+    if len(json_files) > max_commits:
+        warnings.append(
+            f"Long Delta log: replaying only the latest {max_commits} of "
+            f"{len(json_files)} commits."
+        )
+        json_files = json_files[-max_commits:]
+
+    active: dict[str, dict] = {}
+    has_dv = False
+    for jf in json_files:
+        file_url = f"{ONELAKE_HOST}/{ws_id}/{jf}"
+        req = urllib.request.Request(
+            file_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
+        )
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            content = resp.read().decode()
+        for line in content.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if "add" in entry:
+                add = entry["add"]
+                if add.get("deletionVector"):
+                    has_dv = True
+                active[add["path"]] = add
+            elif "remove" in entry:
+                active.pop(entry["remove"]["path"], None)
+
+    if has_dv:
+        warnings.append(
+            "Deletion vectors present; preview does not yet honor them, so "
+            "some rows shown below may be logically deleted."
+        )
+
+    return active, warnings
+
+
+def _coerce_parquet_value(v):
+    """Convert a value produced by `pyarrow.Table.to_pylist()` to a JSON-safe form.
+
+    pyarrow returns native Python types: int/float/str/bool/None for primitives;
+    `datetime.datetime|date|time` for temporal; `decimal.Decimal` for decimals;
+    `bytes` for binary; `dict`/`list` (recursive) for struct/list/map.
+
+    JSON has no native support for datetimes, decimals, or binary. We coerce:
+      - temporals  -> ISO 8601 string
+      - decimals   -> string (preserves precision; JS Number would lose it)
+      - binary     -> "0x..." hex (<=64B) or "<binary, N bytes>" placeholder
+      - struct/list -> recursive coercion
+      - everything else -> str() fallback (never crash the response)
+    """
+    import datetime
+    import decimal
+
+    if v is None or isinstance(v, (bool, int, float, str)):
+        return v
+    if isinstance(v, decimal.Decimal):
+        return str(v)
+    if isinstance(v, (datetime.datetime, datetime.date, datetime.time)):
+        return v.isoformat()
+    if isinstance(v, (bytes, bytearray, memoryview)):
+        b = bytes(v)
+        if len(b) <= 64:
+            return f"0x{b.hex()}"
+        return f"<binary, {len(b)} bytes>"
+    if isinstance(v, dict):
+        return {k: _coerce_parquet_value(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_coerce_parquet_value(x) for x in v]
+    return str(v)
+
+
+def _coerce_partition_value(raw):
+    """Cast a Delta partition value (always serialized as a string) to a number
+    when it cleanly parses; otherwise leave it as a string.
+
+    The Delta protocol stores `add.partitionValues` as `dict[str, str|null]`,
+    where `null` represents the partition NULL. We don't have the schema column
+    type guaranteed here, so we just try int → float, and otherwise leave it.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        return raw
+    if raw == "":
+        return ""
+    try:
+        if "." not in raw and "e" not in raw.lower():
+            return int(raw)
+    except ValueError:
+        pass
+    try:
+        return float(raw)
+    except ValueError:
+        return raw
+
+
+def _arrow_type_label(arrow_type) -> str:
+    """Short, human-readable label for a pyarrow type (mirrors Spark DDL names)."""
+    import pyarrow as pa
+
+    if pa.types.is_string(arrow_type) or pa.types.is_large_string(arrow_type):
+        return "string"
+    if pa.types.is_boolean(arrow_type):
+        return "boolean"
+    if (
+        pa.types.is_int8(arrow_type)
+        or pa.types.is_int16(arrow_type)
+        or pa.types.is_int32(arrow_type)
+        or pa.types.is_uint8(arrow_type)
+        or pa.types.is_uint16(arrow_type)
+        or pa.types.is_uint32(arrow_type)
+    ):
+        return "int"
+    if pa.types.is_int64(arrow_type) or pa.types.is_uint64(arrow_type):
+        return "long"
+    if pa.types.is_floating(arrow_type):
+        return "double"
+    if pa.types.is_date(arrow_type):
+        return "date"
+    if pa.types.is_timestamp(arrow_type):
+        return "timestamp"
+    if pa.types.is_decimal(arrow_type):
+        return f"decimal({arrow_type.precision},{arrow_type.scale})"
+    if pa.types.is_binary(arrow_type) or pa.types.is_large_binary(arrow_type):
+        return "binary"
+    return str(arrow_type)
+
+
 def _list_lakehouse_schemas(ws_id: str, lh_id: str, timeout: int = 30) -> list[dict]:
     """List schemas in a schemas-enabled lakehouse via OneLake DFS.
 
@@ -2308,6 +2503,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_table_stats()
         elif self.path.startswith("/api/onelake/table-metadata"):
             self._serve_onelake_table_metadata()
+        elif self.path.startswith("/api/onelake/table-preview-rows"):
+            self._serve_onelake_table_rows()
         elif self.path.startswith("/api/notebook/content"):
             self._serve_notebook_content()
         elif self.path.startswith("/api/notebook/kernel-specs"):
@@ -5241,6 +5438,212 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         metadata.setdefault("schemaName", schema)
         metadata.setdefault("tableName", table)
         self._json_response(200, metadata)
+
+    def _serve_onelake_table_rows(self):
+        """GET /api/onelake/table-preview-rows — read first N rows of a Lakehouse Delta table.
+
+        Query params (required): wsId, lhId, schema, table.
+        Query params (optional): limit (default 10, max 100).
+
+        Approach: replay `_delta_log/*.json` via `_enumerate_delta_active_files_full`
+        to find the current snapshot's active parquet files, deterministically pick
+        the first one (sorted by path), download it via OneLake DFS, and read up
+        to `limit` rows via pyarrow. Partition columns (which Delta stores in the
+        log, not in parquet) are injected as a separate group of trailing columns
+        and marked `isPartition: true`.
+
+        Returns 200 with:
+            {
+              schemaName, tableName,
+              columns: [{name, type, isPartition?}],
+              rows: [{colName: value, ...}],
+              rowsReturned, truncated, fileCount, sourceFile, warnings: []
+            }
+
+        Returns 404 with `error: "delta_log_not_found"` if the table has no
+        `_delta_log/` directory (not a Delta table or never materialized).
+        Returns 502 on parquet fetch/parse failures.
+
+        v1 caveats (surfaced via the `warnings` array):
+          - Deletion vectors are not honored — deleted rows may appear.
+          - Tables with > 200 commits replay only the most recent 200.
+          - Tables with checkpoint parquet files: state in the checkpoint is
+            skipped (only commit JSONs are read).
+          - Struct/list/map columns render as JSON; binary as hex (<=64B) or
+            "<binary, N bytes>" placeholder.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        params = urllib.parse.parse_qs(parsed.query)
+        ws_id = params.get("wsId", [None])[0]
+        lh_id = params.get("lhId", [None])[0]
+        schema = params.get("schema", [None])[0]
+        table = params.get("table", [None])[0]
+        try:
+            limit = max(1, min(100, int(params.get("limit", ["10"])[0])))
+        except (TypeError, ValueError):
+            limit = 10
+
+        if not all([ws_id, lh_id, schema, table]):
+            self._json_response(
+                400,
+                {
+                    "error": "missing_params",
+                    "message": "wsId, lhId, schema, and table are required",
+                },
+            )
+            return
+
+        try:
+            active, warnings = _enumerate_delta_active_files_full(
+                ws_id, lh_id, schema, table
+            )
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                self._json_response(
+                    404,
+                    {
+                        "error": "delta_log_not_found",
+                        "message": (
+                            "Table has no _delta_log/ directory. "
+                            "Either it is not a Delta table or it has never been materialized."
+                        ),
+                        "schemaName": schema,
+                        "tableName": table,
+                    },
+                )
+                return
+            body = e.read().decode("utf-8", "replace")[:200]
+            self._json_response(e.code, {"error": "onelake_error", "message": body})
+            return
+        except RuntimeError as e:
+            self._json_response(
+                401, {"error": "onelake_bearer_unavailable", "message": str(e)}
+            )
+            return
+        except Exception as e:
+            self._json_response(
+                502, {"error": "delta_log_replay_failed", "message": str(e)}
+            )
+            return
+
+        if not active:
+            self._json_response(
+                200,
+                {
+                    "schemaName": schema,
+                    "tableName": table,
+                    "columns": [],
+                    "rows": [],
+                    "rowsReturned": 0,
+                    "truncated": False,
+                    "fileCount": 0,
+                    "warnings": [
+                        *warnings,
+                        "No active data files in Delta log — table is empty.",
+                    ],
+                },
+            )
+            return
+
+        # Deterministic pick: smallest path. (Delta does not order add actions
+        # semantically; first-in-sort gives the user a stable preview.)
+        chosen_path = sorted(active.keys())[0]
+        add = active[chosen_path]
+        partition_values = add.get("partitionValues") or {}
+
+        try:
+            onelake_bearer = _ensure_onelake_bearer()
+        except RuntimeError as e:
+            self._json_response(
+                401, {"error": "onelake_bearer_unavailable", "message": str(e)}
+            )
+            return
+
+        # Delta `add.path` is relative to the table directory and already
+        # URL-encoded per Delta protocol. Concatenate as-is.
+        file_url = (
+            f"{ONELAKE_HOST}/{ws_id}/{lh_id}/Tables/{schema}/{table}/{chosen_path}"
+        )
+        ctx = ssl.create_default_context()
+        try:
+            req = urllib.request.Request(
+                file_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
+            )
+            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                raw_parquet = resp.read()
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", "replace")[:200]
+            self._json_response(
+                e.code, {"error": "parquet_fetch_failed", "message": body}
+            )
+            return
+        except Exception as e:
+            self._json_response(
+                502, {"error": "parquet_fetch_failed", "message": str(e)}
+            )
+            return
+
+        try:
+            import io
+
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+
+            pf = pq.ParquetFile(io.BytesIO(raw_parquet))
+            # Pull only the first batch capped at `limit` — avoids materializing
+            # large parquet files (a single row group is often 100K+ rows).
+            first = next(pf.iter_batches(batch_size=limit), None)
+            if first is None:
+                arrow_schema = pf.schema_arrow
+                py_rows: list[dict] = []
+            else:
+                tbl = pa.Table.from_batches([first])
+                if tbl.num_rows > limit:
+                    tbl = tbl.slice(0, limit)
+                arrow_schema = tbl.schema
+                py_rows = tbl.to_pylist()
+        except Exception as e:
+            self._json_response(
+                502, {"error": "parquet_parse_failed", "message": str(e)}
+            )
+            return
+
+        # Parquet columns first, then partition columns (Delta stores them
+        # separately; injecting them as trailing columns matches Spark behavior).
+        columns: list[dict] = [
+            {"name": f.name, "type": _arrow_type_label(f.type)}
+            for f in arrow_schema
+        ]
+        existing_names = {c["name"] for c in columns}
+        for pcol in partition_values:
+            if pcol not in existing_names:
+                columns.append({"name": pcol, "type": "string", "isPartition": True})
+
+        coerced_rows: list[dict] = []
+        coerced_part = {
+            k: _coerce_partition_value(v) for k, v in partition_values.items()
+        }
+        for r in py_rows:
+            out = {k: _coerce_parquet_value(v) for k, v in r.items()}
+            for pcol, pval in coerced_part.items():
+                # Don't clobber a real column that happens to share the partition name.
+                out.setdefault(pcol, pval)
+            coerced_rows.append(out)
+
+        self._json_response(
+            200,
+            {
+                "schemaName": schema,
+                "tableName": table,
+                "columns": columns,
+                "rows": coerced_rows,
+                "rowsReturned": len(coerced_rows),
+                "truncated": len(coerced_rows) >= limit,
+                "fileCount": len(active),
+                "sourceFile": chosen_path,
+                "warnings": warnings,
+            },
+        )
 
     def _serve_mwc_token(self):
         """POST /api/edog/mwc-token — explicitly generate and return an MWC token."""

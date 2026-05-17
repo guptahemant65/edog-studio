@@ -2553,9 +2553,12 @@ class WorkspaceExplorer {
     }
     html += '</dl>';
 
+    html += this._renderPreviewSampleRowsBlock(table?.schemaName || 'dbo', table?.name || '');
+
     section.innerHTML = html;
     this._wirePreviewCopyButtons(section);
     this._wirePreviewSourceLinks(section);
+    this._wirePreviewSampleRows(section);
   }
 
   /**
@@ -2604,6 +2607,230 @@ class WorkspaceExplorer {
       notebookId,
       entryFunction: typeof obj.source_entry_function === 'string' ? obj.source_entry_function.trim() : '',
     };
+  }
+
+  /**
+   * Render the collapsed "Sample rows" affordance — a tap-to-load button.
+   * Tap-to-load (not auto-load) is deliberate: same Preview discipline as the
+   * outer block. Avoids fan-out for users who only want to read the DDL.
+   * Stores `schemaName`/`tableName` on the block for the click handler to read,
+   * so we don't have to thread them through closures when re-rendering.
+   */
+  _renderPreviewSampleRowsBlock(schemaName, tableName) {
+    if (!tableName) return '';
+    return (
+      '<div class="ws-preview-block ws-preview-rows-block" ' +
+      `data-rows-schema="${this._esc(schemaName)}" ` +
+      `data-rows-table="${this._esc(tableName)}">` +
+      '<div class="ws-preview-block-head">' +
+      '<span class="ws-preview-block-label">Sample rows</span>' +
+      '<span class="ws-preview-lang-badge">DATA</span>' +
+      '</div>' +
+      '<button class="ws-preview-rows-load-btn" type="button" data-rows-load>' +
+      'Load first 10 rows' +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  /**
+   * Wire the "Load N rows" button inside a `.ws-preview-rows-block`.
+   * On click → shimmer → fetch → render grid (or empty/error state).
+   * Guards against re-entry while loading and after a successful load.
+   */
+  _wirePreviewSampleRows(section) {
+    const block = section.querySelector('.ws-preview-rows-block');
+    if (!block) return;
+    const btn = block.querySelector('[data-rows-load]');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const schemaName = block.getAttribute('data-rows-schema') || 'dbo';
+      const tableName = block.getAttribute('data-rows-table') || '';
+      if (!tableName) return;
+      this._handlePreviewSampleLoad(block, schemaName, tableName);
+    });
+  }
+
+  /**
+   * Fetch + render sample rows into the given block. Replaces the load button
+   * with a shimmer, then with the grid (or empty/error state). Idempotent —
+   * once loaded, the block keeps its rendered state until the inspector re-renders.
+   */
+  async _handlePreviewSampleLoad(block, schemaName, tableName) {
+    if (block.getAttribute('data-rows-loading') === 'true') return;
+    block.setAttribute('data-rows-loading', 'true');
+
+    const head = block.querySelector('.ws-preview-block-head');
+    const oldBtn = block.querySelector('[data-rows-load]');
+    if (oldBtn) oldBtn.remove();
+    const skel = document.createElement('div');
+    skel.className = 'ws-insp-skel ws-preview-rows-skel';
+    skel.innerHTML =
+      '<div class="skel-line skel-line--lg"></div>' +
+      '<div class="skel-line skel-line--lg"></div>' +
+      '<div class="skel-line skel-line--md"></div>';
+    block.appendChild(skel);
+
+    const ws = this._selectedWorkspace;
+    const lh = this._selectedItem;
+    if (!ws || !lh) {
+      this._renderPreviewSampleError(block, skel, 'Missing workspace / lakehouse context.');
+      return;
+    }
+
+    let result;
+    try {
+      result = await this._api.getTablePreviewRows(ws.id, lh.id, schemaName, tableName, 10);
+    } catch (err) {
+      const detail = err?.body?.message || err?.message || 'Unknown error.';
+      this._renderPreviewSampleError(block, skel, detail);
+      return;
+    }
+
+    skel.remove();
+    block.removeAttribute('data-rows-loading');
+    block.setAttribute('data-rows-loaded', 'true');
+
+    if (result === null) {
+      const empty = document.createElement('div');
+      empty.className = 'ws-preview-empty-block';
+      empty.textContent =
+        'No Delta log for this table — not materialized yet, or not a Delta table.';
+      block.appendChild(empty);
+      // Re-attach a refresh affordance in the header for parity with copy buttons.
+      if (head) {
+        const retry = document.createElement('button');
+        retry.className = 'ws-preview-copy-btn';
+        retry.type = 'button';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', () => {
+          block.removeAttribute('data-rows-loaded');
+          empty.remove();
+          retry.remove();
+          const newBtn = document.createElement('button');
+          newBtn.className = 'ws-preview-rows-load-btn';
+          newBtn.type = 'button';
+          newBtn.setAttribute('data-rows-load', '');
+          newBtn.textContent = 'Load first 10 rows';
+          newBtn.addEventListener('click', () =>
+            this._handlePreviewSampleLoad(block, schemaName, tableName),
+          );
+          block.appendChild(newBtn);
+        });
+        head.appendChild(retry);
+      }
+      return;
+    }
+
+    if (Array.isArray(result.warnings) && result.warnings.length) {
+      for (const w of result.warnings) {
+        const warn = document.createElement('div');
+        warn.className = 'ws-preview-rows-warning';
+        warn.textContent = w;
+        block.appendChild(warn);
+      }
+    }
+
+    const cols = Array.isArray(result.columns) ? result.columns : [];
+    const rows = Array.isArray(result.rows) ? result.rows : [];
+
+    if (!cols.length || !rows.length) {
+      const empty = document.createElement('div');
+      empty.className = 'ws-preview-empty-block';
+      empty.textContent = rows.length
+        ? 'Rows returned but column schema is empty.'
+        : 'Table is empty — no rows in any active Delta file.';
+      block.appendChild(empty);
+      return;
+    }
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ws-preview-rows-wrap';
+    const tbl = document.createElement('table');
+    tbl.className = 'ws-preview-rows-grid';
+    let thead = '<thead><tr>';
+    for (const c of cols) {
+      const pcCls = c.isPartition ? ' is-partition' : '';
+      const title = c.isPartition
+        ? `${c.name} (partition column, ${c.type})`
+        : `${c.name} (${c.type})`;
+      thead +=
+        `<th class="ws-preview-rows-th${pcCls}" title="${this._esc(title)}">` +
+        `<span class="ws-preview-rows-col-name">${this._esc(c.name)}</span>` +
+        `<span class="ws-preview-rows-col-type">${this._esc(c.type)}</span>` +
+        '</th>';
+    }
+    thead += '</tr></thead>';
+    let tbody = '<tbody>';
+    for (const r of rows) {
+      tbody += '<tr>';
+      for (const c of cols) {
+        const v = r[c.name];
+        tbody += `<td class="ws-preview-rows-td">${this._formatCellValue(v)}</td>`;
+      }
+      tbody += '</tr>';
+    }
+    tbody += '</tbody>';
+    tbl.innerHTML = thead + tbody;
+    wrap.appendChild(tbl);
+    block.appendChild(wrap);
+
+    if (result.truncated || result.fileCount > 1) {
+      const note = document.createElement('div');
+      note.className = 'ws-preview-note-line';
+      const truncTxt = result.truncated
+        ? `Showing first ${result.rowsReturned} rows`
+        : `Showing ${result.rowsReturned} rows`;
+      const fileTxt =
+        result.fileCount > 1
+          ? ` from 1 of ${result.fileCount} active files.`
+          : '.';
+      note.textContent = truncTxt + fileTxt;
+      block.appendChild(note);
+    }
+  }
+
+  /** Render an error state inside the sample-rows block; allow retry. */
+  _renderPreviewSampleError(block, skel, message) {
+    if (skel && skel.parentNode === block) skel.remove();
+    block.removeAttribute('data-rows-loading');
+    const err = document.createElement('div');
+    err.className = 'ws-preview-empty-block ws-preview-rows-error';
+    err.textContent = message;
+    block.appendChild(err);
+    const retry = document.createElement('button');
+    retry.className = 'ws-preview-rows-load-btn';
+    retry.type = 'button';
+    retry.setAttribute('data-rows-load', '');
+    retry.textContent = 'Retry';
+    retry.addEventListener('click', () => {
+      err.remove();
+      retry.remove();
+      const schemaName = block.getAttribute('data-rows-schema') || 'dbo';
+      const tableName = block.getAttribute('data-rows-table') || '';
+      this._handlePreviewSampleLoad(block, schemaName, tableName);
+    });
+    block.appendChild(retry);
+  }
+
+  /**
+   * Format a single sample-row cell for the grid:
+   *   - null         → muted "NULL"
+   *   - objects/arrays → pretty JSON in a mono span
+   *   - everything else → escaped string
+   */
+  _formatCellValue(v) {
+    if (v === null || v === undefined) {
+      return '<span class="ws-preview-rows-null">NULL</span>';
+    }
+    if (typeof v === 'object') {
+      try {
+        return `<span class="ws-preview-rows-nested">${this._esc(JSON.stringify(v))}</span>`;
+      } catch {
+        return `<span class="ws-preview-rows-nested">${this._esc(String(v))}</span>`;
+      }
+    }
+    return this._esc(String(v));
   }
 
   /** Regular table → render synthesized DDL + Delta properties. */
@@ -2684,8 +2911,11 @@ class WorkspaceExplorer {
       html += '</dl>';
     }
 
+    html += this._renderPreviewSampleRowsBlock(table?.schemaName || 'dbo', table?.name || '');
+
     section.innerHTML = html;
     this._wirePreviewCopyButtons(section);
+    this._wirePreviewSampleRows(section);
   }
 
   /** Last-resort: no _metadata/table.json.gz at all. Use inspector's schema. */
@@ -2711,8 +2941,10 @@ class WorkspaceExplorer {
     }
     html += '</div>';
     html += '<div class="ws-preview-note-line">No FLT-managed metadata; DDL synthesized from inspector schema.</div>';
+    html += this._renderPreviewSampleRowsBlock(table?.schemaName || 'dbo', table?.name || '');
     section.innerHTML = html;
     this._wirePreviewCopyButtons(section);
+    this._wirePreviewSampleRows(section);
   }
 
   /** Build a CREATE TABLE DDL string from an allColumns-style list. */

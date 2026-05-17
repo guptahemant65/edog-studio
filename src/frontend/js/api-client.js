@@ -201,6 +201,57 @@ class FabricApiClient {
     return resp.json();
   }
 
+  /**
+   * Fetch the first N rows of a Lakehouse Delta table.
+   *
+   * Backend replays the table's Delta log to find active parquet files,
+   * deterministically picks the first by path, reads via pyarrow, and
+   * coerces values for JSON safety (temporals → ISO, decimals → string,
+   * binary → hex, struct/list → recursive). Partition columns are
+   * appended as trailing columns marked `isPartition: true`.
+   *
+   * @param {string} workspaceId - Workspace GUID.
+   * @param {string} lakehouseId - Lakehouse GUID.
+   * @param {string} schema - Schema name (`"dbo"` for non-schemas-enabled).
+   * @param {string} table - Table name.
+   * @param {number} [limit=10] - Max rows (server caps at 100).
+   * @returns {Promise<{
+   *   schemaName: string, tableName: string,
+   *   columns: Array<{name: string, type: string, isPartition?: boolean}>,
+   *   rows: Array<Object>,
+   *   rowsReturned: number, truncated: boolean,
+   *   fileCount?: number, sourceFile?: string,
+   *   warnings: Array<string>
+   * } | null>} Resolves to null when the table has no `_delta_log/`
+   *   (404 from server — surface a "not materialized" empty state).
+   * @throws {Error} On non-404 errors (auth, parse failures, network).
+   */
+  async getTablePreviewRows(workspaceId, lakehouseId, schema, table, limit = 10) {
+    const qs = new URLSearchParams({
+      wsId: workspaceId,
+      lhId: lakehouseId,
+      schema,
+      table,
+      limit: String(limit),
+    }).toString();
+    const resp = await fetch(`/api/onelake/table-preview-rows?${qs}`);
+    if (resp.status === 404) {
+      const body = await resp.json().catch(() => ({}));
+      if (body.error === 'delta_log_not_found') return null;
+    }
+    if (!resp.ok) {
+      const err = new Error(`Table preview rows failed: ${resp.status}`);
+      err.status = resp.status;
+      try {
+        err.body = await resp.json();
+      } catch {
+        err.body = null;
+      }
+      throw err;
+    }
+    return resp.json();
+  }
+
   // --- Fabric CRUD APIs ---
 
   /**
