@@ -2539,6 +2539,15 @@ class WorkspaceExplorer {
     html += '<dl class="ws-insp-kv ws-preview-meta">';
     if (refresh) html += `<dt>Last refresh</dt><dd>${this._esc(this._formatTs(refresh))}</dd>`;
     if (sparkVer) html += `<dt>Spark version</dt><dd>${this._esc(sparkVer)}</dd>`;
+    const sourceInfo = this._parseMlvSourceInfo(md.properties?.['fabric.mlv.sourceinfo']);
+    if (sourceInfo) {
+      const url = `https://app.fabric.microsoft.com/groups/${encodeURIComponent(sourceInfo.workspaceId)}/synapsenotebooks/${encodeURIComponent(sourceInfo.notebookId)}`;
+      const title = `Notebook ${sourceInfo.notebookId} in workspace ${sourceInfo.workspaceId}`;
+      const label = sourceInfo.entryFunction
+        ? `Open in Fabric \u00b7 ${sourceInfo.entryFunction}()`
+        : 'Open in Fabric';
+      html += `<dt>Source notebook</dt><dd><a class="ws-preview-link" href="${this._esc(url)}" target="_blank" rel="noopener" title="${this._esc(title)}">${this._esc(label)} \u2197</a></dd>`;
+    }
     if (md.properties?.['delta.enableChangeDataFeed'] === 'true') {
       html += '<dt>CDF</dt><dd>Enabled</dd>';
     }
@@ -2573,6 +2582,28 @@ class WorkspaceExplorer {
         }
       });
     });
+  }
+
+  /**
+   * Parse the `fabric.mlv.sourceinfo` catalog property (a JSON string written
+   * by Fabric when an MLV is created). Returns `{ workspaceId, notebookId,
+   * entryFunction }` when both IDs are present and valid, or `null` for any
+   * absent / empty / malformed / partial value. SQL MLVs may legally omit
+   * sourceinfo entirely.
+   */
+  _parseMlvSourceInfo(raw) {
+    if (!raw || typeof raw !== 'string' || !raw.trim()) return null;
+    let obj;
+    try { obj = JSON.parse(raw); } catch { return null; }
+    if (!obj || typeof obj !== 'object') return null;
+    const workspaceId = typeof obj.source_workspace_id === 'string' ? obj.source_workspace_id.trim() : '';
+    const notebookId = typeof obj.source_notebook_id === 'string' ? obj.source_notebook_id.trim() : '';
+    if (!workspaceId || !notebookId) return null;
+    return {
+      workspaceId,
+      notebookId,
+      entryFunction: typeof obj.source_entry_function === 'string' ? obj.source_entry_function.trim() : '',
+    };
   }
 
   /** Regular table → render synthesized DDL + Delta properties. */
