@@ -63,6 +63,8 @@ ONELAKE_RESOURCE = "https://storage.azure.com"
 TOKEN_HELPER_CLIENT_ID = "ea0616ba-638b-4df5-95b9-636659ae5121"
 TOKEN_HELPER_AUTHORITY = "https://login.windows-ppe.net/organizations"
 
+# Lock for bearer mint — prevent N parallel mints racing on expiry
+_bearer_mint_lock = threading.Lock()
 # Lock for OneLake bearer mint — prevent N parallel mints racing on cold start
 _onelake_mint_lock = threading.Lock()
 
@@ -1241,6 +1243,117 @@ def _ensure_onelake_bearer() -> str:
         remaining = int((expiry - time.time()) / 60)
         print(f"  [OneLake] Bearer cached, expires in {remaining} min")
         return token
+
+
+def _mint_bearer() -> tuple[str, float]:
+    """Mint a fresh Fabric bearer token using Silent CBA.
+
+    Uses the same 2-argument token-helper invocation as ``_serve_auth`` so the
+    resulting JWT carries the default Power BI audience.
+
+    Returns:
+        Tuple of (jwt, expiry_unix_seconds).
+
+    Raises:
+        RuntimeError if token-helper is missing, no saved username exists, or
+        the matching CBA certificate cannot be found.
+    """
+    helper = _find_token_helper()
+    if helper is None:
+        raise RuntimeError("token-helper not built (run `make token-helper`)")
+
+    username = None
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+        username = cfg.get("username")
+    except Exception:
+        username = None
+    if not username:
+        session = _load_session()
+        username = session.get("lastUsername")
+    if not username:
+        raise RuntimeError("No authenticated user — sign in once first")
+
+    cert_cn = username.replace("@", ".")
+    try:
+        list_result = subprocess.run(
+            [str(helper), "--list-certs"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Cert discovery timed out (10s)") from exc
+
+    if list_result.returncode != 0:
+        raise RuntimeError(f"Cert discovery failed: {list_result.stderr.strip()[:200]}")
+
+    thumbprint = None
+    try:
+        certs = json.loads(list_result.stdout)
+        cn_lower = cert_cn.lower()
+        for c in certs:
+            if cn_lower in c.get("cn", "").lower() or cn_lower in c.get("subject", "").lower():
+                thumbprint = c.get("thumbprint")
+                break
+    except Exception as exc:
+        raise RuntimeError(f"Cert list parse failed: {exc}") from exc
+
+    if not thumbprint:
+        raise RuntimeError(f"No CBA cert matching {cert_cn} in current-user store")
+
+    try:
+        result = subprocess.run(
+            [str(helper), thumbprint, username],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Bearer mint timed out (30s)") from exc
+
+    if result.returncode != 0:
+        raise RuntimeError(f"Bearer mint failed: {result.stderr.strip()[:300]}")
+
+    token = result.stdout.strip()
+    if not token or "." not in token:
+        raise RuntimeError(f"Bearer mint returned malformed token (len={len(token)})")
+
+    expiry = _parse_jwt_expiry(token)
+    return token, expiry
+
+
+def _ensure_bearer() -> str | None:
+    """Return a valid Fabric bearer token, auto-refreshing via CBA if expired.
+
+    Returns the cached bearer if still valid.  When the cache is empty or
+    expired and a ``lastUsername`` is stored in the session, silently mints a
+    fresh token using CBA (same mechanism as the /api/edog/auth endpoint).
+
+    Returns:
+        Bearer JWT string, or ``None`` if no user has ever authenticated and
+        silent refresh is therefore impossible.
+    """
+    cached, _ = _read_cache(BEARER_CACHE)
+    if cached:
+        return cached
+
+    with _bearer_mint_lock:
+        # Double-check after acquiring lock — another thread may have refreshed.
+        cached, _ = _read_cache(BEARER_CACHE)
+        if cached:
+            return cached
+
+        try:
+            print("  [Bearer] Auto-refreshing expired Fabric bearer token...")
+            token, expiry = _mint_bearer()
+            _write_cache(BEARER_CACHE, token, expiry)
+            remaining = int((expiry - time.time()) / 60)
+            print(f"  [Bearer] Bearer cached, expires in {remaining} min")
+            return token
+        except RuntimeError as exc:
+            print(f"  [Bearer] Auto-refresh failed: {exc}")
+            return None
 
 
 def _enumerate_delta_active_files_full(
@@ -2446,17 +2559,19 @@ def _monitor_flt(deploy_id):
 
 
 def _token_refresh_loop(ws_id, lh_id, cap_id):
-    """Refresh MWC token every 50 minutes."""
+    """Refresh bearer and MWC tokens every 50 minutes."""
     while True:
         time.sleep(50 * 60)
         with _studio_lock:
             if _studio_state["phase"] != "running":
                 return
         try:
-            bearer, _ = _read_cache(BEARER_CACHE)
+            bearer = _ensure_bearer()
             if bearer:
                 _get_mwc_token(bearer, ws_id, lh_id, cap_id)
                 _deploy_log("MWC token refreshed", "success")
+            else:
+                _deploy_log("Token refresh skipped — bearer unavailable", "warn")
         except Exception as e:
             _deploy_log(f"Token refresh failed: {e}", "warn")
 
@@ -2656,6 +2771,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             config = json.loads(CONFIG_PATH.read_text())
 
         bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            bearer = _ensure_bearer()
 
         with _studio_lock:
             flt_port = _studio_state.get("fltPort")
@@ -2697,6 +2814,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
     def _proxy_fabric(self, method):
         """Proxy /api/fabric/* to redirect host with bearer token."""
         bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            bearer = _ensure_bearer()
         if not bearer:
             self._send_json(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
@@ -4961,6 +5080,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         bearer, _ = _read_cache(BEARER_CACHE)
         if not bearer:
+            bearer = _ensure_bearer()
+        if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
 
@@ -5125,6 +5246,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            bearer = _ensure_bearer()
         if not bearer:
             self._json_response(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
             return
