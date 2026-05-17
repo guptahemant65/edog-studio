@@ -1,0 +1,85 @@
+<!--
+  F27 P2 — DevMode C# build gate.
+
+  Compiles every file in src/backend/DevMode against the real FLT DLLs sitting
+  in $(FltBin). The goal is to catch C# compile errors before the files are
+  deployed to FLT, where a compile error means FLT itself won't start.
+
+  Hermetic: zero NuGet restore. Pulls type metadata exclusively from:
+    - The .NET 8 reference assemblies the SDK ships with
+    - The Microsoft.AspNetCore.App shared framework (for Hub, SignalR types)
+    - The DLLs FLT itself produced (referenced via HintPath)
+
+  $(FltBin) must point at the FLT entry-point bin directory, e.g.
+    C:\…\workload-fabriclivetable\Service\Microsoft.LiveTable.Service.EntryPoint\bin\Debug\net8.0\win-x64
+
+  The Python test wrapper resolves this and passes it as an MSBuild property.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AssemblyName>Microsoft.LiveTable.Service</AssemblyName>
+    <RootNamespace>Microsoft.LiveTable.Service.DevMode</RootNamespace>
+    <NoWarn>$(NoWarn);CS1591;CS0162;CS0168;CS0219;CS8632;CS8618;CS8601;CS8602;CS8603;CS8604;CS8625</NoWarn>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <SignAssembly>false</SignAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="**/*.cs" />
+    <Compile Include="..\..\src\backend\DevMode\*.cs" />
+  </ItemGroup>
+
+  <!--
+    Reference every FLT-produced DLL by HintPath. We deliberately scope the
+    wildcard to FLT-owned namespaces so we don't accidentally shadow the
+    SDK's BCL reference assemblies (which live in the same bin dir as a
+    self-contained publish).
+
+    A custom target is required because MSBuild item-metadata batching
+    (the %(X) syntax) only resolves correctly *inside* a target body.
+    The previous attempt used an outer-scope ItemGroup transform which
+    silently produced zero Reference items.
+  -->
+  <Target Name="AddFltReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(FltBin)' == ''"
+           Text="FltBin property is required. Pass via -p:FltBin=path." />
+    <Error Condition="!Exists('$(FltBin)\Microsoft.LiveTable.Service.dll')"
+           Text="FltBin '$(FltBin)' does not contain Microsoft.LiveTable.Service.dll. Build FLT first." />
+
+    <ItemGroup>
+      <_FltAssembly Include="$(FltBin)\Microsoft.LiveTable.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.MWC.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Fabric.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.ServicePlatform*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Identity.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Azure.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Azure.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Data.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Newtonsoft.Json.dll" />
+      <_FltAssembly Include="$(FltBin)\MessagePack*.dll" />
+
+      <Reference Include="%(_FltAssembly.Filename)">
+        <HintPath>%(_FltAssembly.Identity)</HintPath>
+        <Private>false</Private>
+        <SpecificVersion>false</SpecificVersion>
+      </Reference>
+    </ItemGroup>
+
+    <Message Text="EdogDevModeBuild: referencing @(_FltAssembly->Count()) FLT DLLs from $(FltBin)"
+             Importance="high" />
+  </Target>
+
+</Project>

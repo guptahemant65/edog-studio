@@ -57,3 +57,7 @@ donna-app/
 
 # Vendored third-party assets (downloaded by `make vendor`; do not commit)
 scripts/vendor/
+
+# F27 P2 ? C# build gate artifacts
+tests/_csbuild/obj/
+tests/_csbuild/bin/
