@@ -13,6 +13,7 @@
 //   pipeline-chaos     - F27 P5: behavioural HTTP chaos pipeline.
 //   history-store      - F27 P7: durability + restart of EdogQaRunStore.
 //   capability-probe   - F27 P9 T1a: real Azure OpenAI capability probe.
+//   llm-client         - F27 P9 T1b: Architect/Editor LLM client behavioural matrix.
 //
 // Each subcommand emits a single JSON block delimited by HARNESS-JSON-BEGIN
 // / HARNESS-JSON-END markers on stdout. The pytest wrapper parses those.
@@ -31,7 +32,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client}");
                 return 2;
             }
 
@@ -48,6 +49,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "pipeline-chaos" => await PipelineChaosHarness.RunAsync(cts.Token),
                     "history-store" => await QaHistoryStoreHarness.RunAsync(cts.Token),
                     "capability-probe" => await CapabilityProbeHarness.RunAsync(cts.Token),
+                    "llm-client" => await LlmClientHarness.RunAsync(cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }

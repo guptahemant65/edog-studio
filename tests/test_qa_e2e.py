@@ -655,3 +655,258 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     assert data.get("status") in ("PENDING_T1B", "PENDING"), data
     assert isinstance(data.get("prs"), list), data
 
+
+# ─── F27 P9 T1b — EdogQaLlmClient (Architect + Editor) ────────────────────
+
+
+def test_qa_llm_client_declares_required_error_codes() -> None:
+    """The V2 client (F27 P9 §3.1) must export nine wire-stable error
+    codes. The orchestrator + UI inline-error renderer (T1c/T1d) read
+    these by exact string match; changing them is a breaking change.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    ).read_text(encoding="utf-8")
+    required = (
+        "CLIENT_CONFIG_MISSING_ARCHITECT",
+        "CLIENT_CONFIG_MISSING_EDITOR",
+        "ARCHITECT_NETWORK_ERROR",
+        "ARCHITECT_RESPONSE_UNPARSEABLE",
+        "ARCHITECT_PLAN_INVALID",
+        "EDITOR_NETWORK_ERROR",
+        "EDITOR_RESPONSE_UNPARSEABLE",
+        "EDITOR_SCHEMA_VIOLATION",
+        "EDITOR_GROUNDING_VIOLATION",
+    )
+    for code in required:
+        assert code in src, f"EdogQaLlmClient must declare error code '{code}'"
+
+
+def test_qa_llm_client_uses_strict_json_schema_not_json_object() -> None:
+    """Defect #1 from spec §1 — the legacy provider's
+    ``response_format = json_object`` is unconstrained. The V2 client
+    must use ``json_schema`` strict-mode constrained decoding so the
+    wire output is well-formed by construction.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    ).read_text(encoding="utf-8")
+    assert '"json_object"' not in src, (
+        "EdogQaLlmClient must not use response_format=json_object — that is the "
+        "defect P9 exists to fix. Use strict json_schema constrained decoding."
+    )
+    assert 'type = "json_schema"' in src, (
+        "EdogQaLlmClient must request text.format.type=\"json_schema\"."
+    )
+    assert "strict = true" in src, (
+        "EdogQaLlmClient must set strict=true on the json_schema format."
+    )
+
+
+def test_qa_llm_client_architect_editor_split_present() -> None:
+    """Spec §3.1 mandates the Architect/Editor split. Both paths must
+    be visible in the source as separate methods + separate configs
+    + distinct prompt cache keys.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    ).read_text(encoding="utf-8")
+    assert "ArchitectOnceAsync" in src, "missing Architect test-entry method"
+    assert "EditorOnceAsync" in src, "missing Editor test-entry method"
+    assert "ArchitectConfig" in src, "missing ArchitectConfig record"
+    assert "EditorConfig" in src, "missing EditorConfig record"
+    assert "PromptCacheKeyArchitect" in src and "PromptCacheKeyEditor" in src, (
+        "Architect and Editor must declare distinct prompt_cache_key constants "
+        "so cache hits are reported per-role (spec §3.4)."
+    )
+    assert 'ArchitectReasoningEffort = "high"' in src, (
+        "Architect must default to reasoning.effort=high (spec §3.1)."
+    )
+    assert 'EditorReasoningEffort = "low"' in src, (
+        "Editor must default to reasoning.effort=low (spec §3.1)."
+    )
+    assert "ArchitectMaxOutputTokens = 65536" in src, (
+        "Architect must allow ≥65536 max_output_tokens — the original "
+        "NO_SCENARIOS_GENERATED bug was a 8192 budget starved by reasoning."
+    )
+
+
+def test_qa_llm_client_diff_marked_untrusted() -> None:
+    """Spec §14 security envelope: diff content authored by the PR
+    submitter must be framed as untrusted in the prompt envelope.
+    The field name + the prompt markers carry that constraint.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    ).read_text(encoding="utf-8")
+    assert "UntrustedRedactedDiff" in src, (
+        "ZoneContext must name the diff field UntrustedRedactedDiff so "
+        "downstream callers cannot mistake it for trusted content."
+    )
+    assert "BEGIN UNTRUSTED DIFF" in src and "END UNTRUSTED DIFF" in src, (
+        "Architect + Editor user messages must wrap the diff in "
+        "BEGIN/END UNTRUSTED DIFF sentinels (spec §14)."
+    )
+
+
+def test_llm_client_architect_matrix(harness_environment, built_harness) -> None:
+    """T1b — every Architect branch must classify cleanly. Seven cases
+    via injected HttpMessageHandler: happy path, config missing, network
+    error, response unparseable, status=incomplete (truncation), plan
+    invalid (testable + zero sketches), and the explicit no_testable_changes
+    signal.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "llm-client")
+    assert data["ok"] is True, data
+    cases = {c["caseId"]: c for c in data["architectCases"]}
+
+    c = cases["happy_path"]
+    assert c["status"] == "Ok", c
+    assert c["planNonNull"] is True, c
+    assert c["planOutcome"] == "testable", c
+    assert c["sketchCount"] >= 1, c
+    assert c["evidenceCount"] >= 1, c
+    assert c["errorCount"] == 0, c
+    assert c["handlerInvocations"] == 1, c
+    assert c["architectReasoningTokens"] > 0, c
+
+    c = cases["config_missing"]
+    assert c["status"] == "Failed", c
+    assert "CLIENT_CONFIG_MISSING_ARCHITECT" in c["errorCodes"], c
+    assert c["handlerInvocations"] == 0, "config-missing must short-circuit before HTTP"
+
+    c = cases["network_error"]
+    assert c["status"] == "Failed", c
+    assert "ARCHITECT_NETWORK_ERROR" in c["errorCodes"], c
+    assert c["handlerInvocations"] == 1, c
+
+    c = cases["response_unparseable"]
+    assert c["status"] == "Failed", c
+    assert "ARCHITECT_RESPONSE_UNPARSEABLE" in c["errorCodes"], c
+
+    c = cases["truncated_status"]
+    assert c["status"] == "Failed", c
+    assert "ARCHITECT_RESPONSE_UNPARSEABLE" in c["errorCodes"], (
+        "status=incomplete must surface as unparseable so the orchestrator "
+        "knows the output is not safe to consume."
+    )
+
+    c = cases["plan_invalid_zero_sketches"]
+    assert c["status"] == "Failed", c
+    assert "ARCHITECT_PLAN_INVALID" in c["errorCodes"], c
+
+    c = cases["no_testable_changes"]
+    assert c["status"] == "NoTestableChanges", c
+    assert c["errorCount"] == 0, c
+    assert c["planOutcome"] == "no_testable_changes", c
+    assert c["sketchCount"] == 0, c
+
+
+def test_llm_client_editor_matrix(harness_environment, built_harness) -> None:
+    """T1b — every Editor branch must classify cleanly. Six cases.
+    The evidence-binding rule (spec §3.3) is the headline assertion:
+    a scenario referencing an evidenceId NOT in the Architect plan
+    must produce EDITOR_GROUNDING_VIOLATION and emit zero scenarios.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "llm-client")
+    cases = {c["caseId"]: c for c in data["editorCases"]}
+
+    c = cases["happy_path"]
+    assert c["status"] == "Ok", c
+    assert c["scenarioCount"] >= 1, c
+    assert c["errorCount"] == 0, c
+
+    c = cases["config_missing"]
+    assert c["status"] == "Failed", c
+    assert "CLIENT_CONFIG_MISSING_EDITOR" in c["errorCodes"], c
+    assert c["handlerInvocations"] == 0, c
+
+    c = cases["network_error"]
+    assert c["status"] == "Failed", c
+    assert "EDITOR_NETWORK_ERROR" in c["errorCodes"], c
+
+    c = cases["schema_violation"]
+    assert c["status"] == "Failed", c
+    assert "EDITOR_SCHEMA_VIOLATION" in c["errorCodes"], c
+    assert c["scenarioCount"] == 0, "schema-violating batches must produce zero accepted scenarios"
+
+    c = cases["grounding_violation"]
+    assert c["status"] == "Failed", c
+    assert "EDITOR_GROUNDING_VIOLATION" in c["errorCodes"], (
+        "Editor referencing an evidenceId not in the Architect plan must "
+        "produce EDITOR_GROUNDING_VIOLATION — spec §3.3 forbids the Editor "
+        "from introducing new grounding citations."
+    )
+    assert c["scenarioCount"] == 0, "grounding violations must drop the entire batch"
+
+    c = cases["response_unparseable"]
+    assert c["status"] == "Failed", c
+    assert "EDITOR_RESPONSE_UNPARSEABLE" in c["errorCodes"], c
+
+
+def test_llm_client_architect_request_shape(harness_environment, built_harness) -> None:
+    """T1b wire contract for the Architect request — pin every field
+    that orchestrator + UI + capability probe consume so any future
+    refactor that drifts the wire shape fails this gate before it
+    reaches production.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "llm-client")
+    shape = data["architectRequestShape"]
+    assert shape["hitsResponsesEndpoint"] is True, shape
+    assert shape["hasApiKeyHeader"] is True, shape
+    assert shape["hasStrictJsonSchema"] is True, shape
+    assert shape["hasReasoningEffortHigh"] is True, shape
+    assert shape["hasMaxOutputTokens"] is True, (
+        "Architect must request max_output_tokens=65536 — undersizing here "
+        "is the root cause of NO_SCENARIOS_GENERATED. shape=" + repr(shape)
+    )
+    assert shape["hasPromptCacheKey"] is True, shape
+    assert shape["modelMentioned"] is True, shape
+    assert shape["schemaNamePinned"] is True, shape
+
+
+def test_llm_client_editor_request_shape(harness_environment, built_harness) -> None:
+    """T1b wire contract for the Editor request — model, effort, schema,
+    cache key, and the security-envelope markers (plan + UNTRUSTED DIFF).
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "llm-client")
+    shape = data["editorRequestShape"]
+    assert shape["hitsResponsesEndpoint"] is True, shape
+    assert shape["hasApiKeyHeader"] is True, shape
+    assert shape["hasStrictJsonSchema"] is True, shape
+    assert shape["hasReasoningEffortLow"] is True, shape
+    assert shape["hasMaxOutputTokens"] is True, shape
+    assert shape["hasPromptCacheKey"] is True, shape
+    assert shape["modelMentioned"] is True, shape
+    assert shape["schemaNamePinned"] is True, shape
+    assert shape["planInPrompt"] is True, (
+        "Editor user message must include the Architect plan so the Editor "
+        "can ground its scenarios in the plan's evidence pool."
+    )
+    assert shape["diffMarkedUntrusted"] is True, (
+        "Editor user message must frame the diff as UNTRUSTED (spec §14)."
+    )
+
+
+def test_llm_client_schemas_pass_strict_mode_validator(
+    harness_environment, built_harness
+) -> None:
+    """Defense-in-depth: OpenAI strict-mode rejects ``additionalProperties:true``
+    + any property missing from ``required`` + ``type`` arrays at runtime.
+    The harness recursively walks both schemas — Architect plan and Editor
+    scenario batch — and reports any violation BEFORE we send a real
+    request.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "llm-client")
+    strictness = data["schemaStrictness"]
+    assert strictness["architectViolations"] == [], (
+        "Architect plan schema violates OpenAI strict-mode rules: "
+        + repr(strictness["architectViolations"])
+    )
+    assert strictness["scenarioViolations"] == [], (
+        "Editor scenario batch schema violates OpenAI strict-mode rules: "
+        + repr(strictness["scenarioViolations"])
+    )
+
+
+

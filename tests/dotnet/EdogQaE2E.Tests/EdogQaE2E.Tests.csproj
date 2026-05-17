@@ -54,6 +54,7 @@
     <Compile Include="PipelineChaosHarness.cs" />
     <Compile Include="QaHistoryStoreHarness.cs" />
     <Compile Include="CapabilityProbeHarness.cs" />
+    <Compile Include="LlmClientHarness.cs" />
   </ItemGroup>
 
   <!-- Bundle fixture files into the output so the harness can read them at runtime -->

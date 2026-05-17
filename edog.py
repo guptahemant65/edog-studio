@@ -115,6 +115,7 @@ DEVMODE_FILES = {
     "EdogQaFeatureFlags": SERVICE_PATH / "DevMode/EdogQaFeatureFlags.cs",
     "EdogQaGraphProvider": SERVICE_PATH / "DevMode/EdogQaGraphProvider.cs",
     "EdogQaInvariantExtractor": SERVICE_PATH / "DevMode/EdogQaInvariantExtractor.cs",
+    "EdogQaLlmClient": SERVICE_PATH / "DevMode/EdogQaLlmClient.cs",
     "EdogQaLlmProvider": SERVICE_PATH / "DevMode/EdogQaLlmProvider.cs",
     "EdogQaModels": SERVICE_PATH / "DevMode/EdogQaModels.cs",
     "EdogQaOmniSharpProvider": SERVICE_PATH / "DevMode/EdogQaOmniSharpProvider.cs",
