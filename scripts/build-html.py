@@ -73,6 +73,7 @@ CSS_MODULES = [
 # Vendor libraries — inlined BEFORE our JS modules (order matters)
 LIB_MODULES = [
     "signalr.min.js",
+    "dagre.min.js",
 ]
 
 # JS modules — order matters (dependencies first, then features, then main)

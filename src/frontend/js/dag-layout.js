@@ -1,25 +1,23 @@
 /**
- * DagLayout — Sugiyama layered graph layout algorithm.
+ * DagLayout — dagre-based layered graph layout.
  *
- * Pure algorithm module: nodes + edges in, positioned nodes + routed edges out.
- * Five steps: layer assignment, dummy insertion, crossing minimization,
- * coordinate assignment, edge routing. O(V² + E).
+ * Thin wrapper around dagre (Sugiyama with Brandes-Kopf coordinate
+ * assignment and proper crossing minimization). Translates between
+ * our data model and dagre's graphlib API.
  */
 class DagLayout {
   /**
    * @param {Object} [opts]
-   * @param {number} [opts.layerSpacing=200]      Horizontal gap between layers (px)
-   * @param {number} [opts.nodeSpacing=80]         Vertical gap between nodes in a layer (px)
-   * @param {number} [opts.nodeWidth=160]          Node card width (px)
-   * @param {number} [opts.nodeHeight=56]          Node card height (px)
-   * @param {number} [opts.edgeControlOffset=40]   Bezier control point offset (px)
+   * @param {number} [opts.layerSpacing=200]  Horizontal gap between layers (px)
+   * @param {number} [opts.nodeSpacing=80]    Vertical gap between nodes in a layer (px)
+   * @param {number} [opts.nodeWidth=160]     Node card width (px)
+   * @param {number} [opts.nodeHeight=56]     Node card height (px)
    */
   constructor(opts = {}) {
     this.layerSpacing = opts.layerSpacing ?? 200;
     this.nodeSpacing = opts.nodeSpacing ?? 80;
     this.nodeWidth = opts.nodeWidth ?? 160;
     this.nodeHeight = opts.nodeHeight ?? 56;
-    this.edgeControlOffset = opts.edgeControlOffset ?? 40;
   }
 
   /**
@@ -39,352 +37,96 @@ class DagLayout {
       return { nodes: [], edges: [], layers: 0, bounds: { x: 0, y: 0, w: 0, h: 0 } };
     }
 
-    // Filter self-edges
-    const cleanEdges = edges.filter(e => e.from !== e.to);
+    var g = new dagre.graphlib.Graph();
+    g.setGraph({
+      rankdir: 'LR',
+      ranksep: this.layerSpacing,
+      nodesep: this.nodeSpacing,
+      edgesep: 20,
+      marginx: 40,
+      marginy: 40,
+    });
+    g.setDefaultEdgeLabel(function () { return {}; });
 
-    // Build adjacency structures
-    const nodeMap = new Map();
-    for (const n of nodes) {
-      nodeMap.set(n.id, { ...n, _children: [], _parents: [] });
+    var nodeById = new Map();
+    for (var i = 0; i < nodes.length; i++) {
+      var n = nodes[i];
+      nodeById.set(n.id, n);
+      g.setNode(n.id, { width: this.nodeWidth, height: this.nodeHeight });
     }
-    for (const e of cleanEdges) {
-      const src = nodeMap.get(e.from);
-      const tgt = nodeMap.get(e.to);
-      if (src && tgt) {
-        src._children.push(tgt.id);
-        tgt._parents.push(src.id);
+
+    var cleanEdges = [];
+    for (var j = 0; j < edges.length; j++) {
+      var e = edges[j];
+      if (e.from !== e.to && nodeById.has(e.from) && nodeById.has(e.to)) {
+        g.setEdge(e.from, e.to);
+        cleanEdges.push(e);
       }
     }
 
-    // Step 1 — Layer assignment
-    const layerOf = this._assignLayers(nodeMap);
+    dagre.layout(g);
 
-    // Step 2 — Dummy node insertion
-    const { allNodes, allEdges, dummyChains } = this._insertDummies(nodeMap, cleanEdges, layerOf);
+    // Read positioned nodes — dagre returns center coords, we keep center
+    // coords since the renderer positions DOM with top-left = (x - w/2, y - h/2)
+    var positionedNodes = [];
+    var maxRank = 0;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    // Step 3 — Build layer buckets and minimize crossings
-    const layerBuckets = this._buildLayerBuckets(allNodes, layerOf);
-    this._minimizeCrossings(layerBuckets, allEdges, layerOf);
+    var nodeIds = g.nodes();
+    for (var k = 0; k < nodeIds.length; k++) {
+      var id = nodeIds[k];
+      var gn = g.node(id);
+      var orig = nodeById.get(id);
+      if (!orig || !gn) continue;
 
-    // Step 4 — Coordinate assignment
-    const positions = this._assignCoordinates(layerBuckets);
+      var rank = gn.rank || 0;
+      if (rank > maxRank) maxRank = rank;
 
-    // Step 5 — Edge routing
-    const routedEdges = this._routeEdges(cleanEdges, dummyChains, positions, nodeMap);
-
-    // Build final output
-    const totalLayers = layerBuckets.length;
-    return this._buildResult(nodes, positions, routedEdges, totalLayers, layerOf);
-  }
-
-  // ── Step 1: Layer Assignment (Kahn's topological sort) ────────────────
-
-  /**
-   * Assign each node to a layer using longest-path layering.
-   * @param {Map} nodeMap
-   * @returns {Map<string, number>} nodeId -> layer
-   */
-  _assignLayers(nodeMap) {
-    const layerOf = new Map();
-    const inDegree = new Map();
-
-    for (const [id, n] of nodeMap) {
-      inDegree.set(id, n._parents.length);
-    }
-
-    // Seed queue with roots (in-degree 0)
-    const queue = [];
-    for (const [id, deg] of inDegree) {
-      if (deg === 0) {
-        queue.push(id);
-        layerOf.set(id, 0);
-      }
-    }
-
-    // BFS — assign layer = max(parent layers) + 1
-    let head = 0;
-    while (head < queue.length) {
-      const id = queue[head++];
-      const node = nodeMap.get(id);
-      const myLayer = layerOf.get(id);
-
-      for (const childId of node._children) {
-        const childLayer = Math.max(layerOf.get(childId) ?? 0, myLayer + 1);
-        layerOf.set(childId, childLayer);
-
-        const remaining = inDegree.get(childId) - 1;
-        inDegree.set(childId, remaining);
-        if (remaining === 0) {
-          queue.push(childId);
-        }
-      }
-    }
-
-    // Handle disconnected nodes with no parents and no children (isolates)
-    for (const [id] of nodeMap) {
-      if (!layerOf.has(id)) {
-        layerOf.set(id, 0);
-      }
-    }
-
-    return layerOf;
-  }
-
-  // ── Step 2: Dummy Node Insertion ──────────────────────────────────────
-
-  /**
-   * Insert dummy nodes for edges that span more than one layer.
-   * @returns {{ allNodes: Map, allEdges: Array, dummyChains: Map }}
-   */
-  _insertDummies(nodeMap, edges, layerOf) {
-    const allNodes = new Map(nodeMap);
-    const allEdges = [];
-    const dummyChains = new Map(); // "from->to" -> [dummyId, ...]
-    let dummyCounter = 0;
-
-    for (const e of edges) {
-      const srcLayer = layerOf.get(e.from);
-      const tgtLayer = layerOf.get(e.to);
-
-      if (srcLayer == null || tgtLayer == null) continue;
-
-      const span = tgtLayer - srcLayer;
-      if (span <= 1) {
-        allEdges.push({ from: e.from, to: e.to });
-        continue;
-      }
-
-      // Insert chain of dummy nodes
-      const chain = [];
-      let prev = e.from;
-      for (let layer = srcLayer + 1; layer < tgtLayer; layer++) {
-        const dummyId = `__dummy_${dummyCounter++}`;
-        chain.push(dummyId);
-        allNodes.set(dummyId, {
-          id: dummyId,
-          _dummy: true,
-          _edgeFrom: e.from,
-          _edgeTo: e.to,
-          _children: [],
-          _parents: [prev],
-        });
-        layerOf.set(dummyId, layer);
-        allEdges.push({ from: prev, to: dummyId });
-        prev = dummyId;
-      }
-      allEdges.push({ from: prev, to: e.to });
-      dummyChains.set(`${e.from}->${e.to}`, chain);
-    }
-
-    return { allNodes, allEdges, dummyChains };
-  }
-
-  // ── Step 3: Crossing Minimization (Barycenter Heuristic) ──────────────
-
-  /** Build array-of-arrays: layerBuckets[layer] = [nodeId, ...] */
-  _buildLayerBuckets(allNodes, layerOf) {
-    const buckets = [];
-    for (const [id] of allNodes) {
-      const layer = layerOf.get(id);
-      if (layer == null) continue;
-      while (buckets.length <= layer) buckets.push([]);
-      buckets[layer].push(id);
-    }
-    return buckets;
-  }
-
-  /** Multi-pass barycenter crossing minimization (alternating top-down / bottom-up). */
-  _minimizeCrossings(layerBuckets, allEdges, layerOf) {
-    // Build adjacency for fast lookup
-    const childrenOf = new Map();
-    const parentsOf = new Map();
-    for (const e of allEdges) {
-      if (!childrenOf.has(e.from)) childrenOf.set(e.from, []);
-      childrenOf.get(e.from).push(e.to);
-      if (!parentsOf.has(e.to)) parentsOf.set(e.to, []);
-      parentsOf.get(e.to).push(e.from);
-    }
-
-    // Run multiple passes — each pass reduces crossings further.
-    // 4 iterations is standard for Sugiyama; diminishing returns beyond that.
-    for (let iter = 0; iter < 4; iter++) {
-      // Top-down pass: order each layer based on parent positions
-      for (let i = 1; i < layerBuckets.length; i++) {
-        this._sortByBarycenter(layerBuckets, i, parentsOf, layerBuckets[i - 1]);
-      }
-      // Bottom-up pass: order each layer based on child positions
-      for (let i = layerBuckets.length - 2; i >= 0; i--) {
-        this._sortByBarycenter(layerBuckets, i, childrenOf, layerBuckets[i + 1]);
-      }
-    }
-  }
-
-  /**
-   * Sort nodes in layerBuckets[layerIdx] by their barycenter w.r.t. adjacentLayer.
-   * @param {Map} adjacencyMap  Maps nodeId -> [connected nodeIds in adjacent layer]
-   * @param {Array} refLayer    The adjacent layer used for position reference
-   */
-  _sortByBarycenter(layerBuckets, layerIdx, adjacencyMap, refLayer) {
-    const posInRef = new Map();
-    for (let i = 0; i < refLayer.length; i++) {
-      posInRef.set(refLayer[i], i);
-    }
-
-    const barycenters = new Map();
-    for (const nodeId of layerBuckets[layerIdx]) {
-      const neighbors = adjacencyMap.get(nodeId) || [];
-      const positions = neighbors
-        .map(n => posInRef.get(n))
-        .filter(p => p != null);
-
-      if (positions.length > 0) {
-        const avg = positions.reduce((a, b) => a + b, 0) / positions.length;
-        barycenters.set(nodeId, avg);
-      } else {
-        // Keep original relative order for unconnected nodes
-        barycenters.set(nodeId, layerBuckets[layerIdx].indexOf(nodeId));
-      }
-    }
-
-    layerBuckets[layerIdx].sort((a, b) => barycenters.get(a) - barycenters.get(b));
-  }
-
-  // ── Step 4: Coordinate Assignment ─────────────────────────────────────
-
-  /**
-   * Assign (x, y) coordinates. Horizontal = layers, vertical = position in layer.
-   * @returns {Map<string, {x: number, y: number}>}
-   */
-  _assignCoordinates(layerBuckets) {
-    const positions = new Map();
-
-    for (let layer = 0; layer < layerBuckets.length; layer++) {
-      const bucket = layerBuckets[layer];
-      const x = layer * this.layerSpacing;
-      const totalHeight = (bucket.length - 1) * this.nodeSpacing;
-      const startY = -totalHeight / 2;
-
-      for (let pos = 0; pos < bucket.length; pos++) {
-        positions.set(bucket[pos], {
-          x,
-          y: startY + pos * this.nodeSpacing,
-        });
-      }
-    }
-
-    return positions;
-  }
-
-  // ── Step 5: Edge Routing ──────────────────────────────────────────────
-
-  /**
-   * Route each original edge through its dummy nodes to build waypoints.
-   * @returns {Array<{from: string, to: string, points: Array<{x: number, y: number}>}>}
-   */
-  _routeEdges(originalEdges, dummyChains, positions, nodeMap) {
-    const routed = [];
-    const hw = this.nodeWidth / 2;
-    const hh = this.nodeHeight / 2;
-
-    // Pre-compute outgoing/incoming edge counts + indices for port spreading
-    const outCount = new Map();  // nodeId → total outgoing edges
-    const outIndex = new Map();  // "from->to" → index among from's outgoing edges
-    const inCount = new Map();   // nodeId → total incoming edges
-    const inIndex = new Map();   // "from->to" → index among to's incoming edges
-    for (const e of originalEdges) {
-      outCount.set(e.from, (outCount.get(e.from) || 0) + 1);
-      inCount.set(e.to, (inCount.get(e.to) || 0) + 1);
-    }
-    const outCur = new Map();
-    const inCur = new Map();
-    for (const e of originalEdges) {
-      const oi = outCur.get(e.from) || 0;
-      outIndex.set(`${e.from}->${e.to}`, oi);
-      outCur.set(e.from, oi + 1);
-      const ii = inCur.get(e.to) || 0;
-      inIndex.set(`${e.from}->${e.to}`, ii);
-      inCur.set(e.to, ii + 1);
-    }
-
-    for (const e of originalEdges) {
-      const srcPos = positions.get(e.from);
-      const tgtPos = positions.get(e.to);
-      if (!srcPos || !tgtPos) continue;
-
-      const points = [];
-      const edgeKey = `${e.from}->${e.to}`;
-
-      // Spread source ports vertically when node has multiple outgoing edges
-      const srcTotal = outCount.get(e.from) || 1;
-      const srcIdx = outIndex.get(edgeKey) || 0;
-      const srcSpread = srcTotal > 1 ? (srcIdx - (srcTotal - 1) / 2) * (this.nodeHeight * 0.6 / srcTotal) : 0;
-      points.push({ x: srcPos.x + hw, y: srcPos.y + srcSpread });
-
-      // Dummy waypoints (center of each dummy)
-      const chain = dummyChains.get(edgeKey);
-      if (chain) {
-        for (const dummyId of chain) {
-          const dp = positions.get(dummyId);
-          if (dp) points.push({ x: dp.x, y: dp.y });
-        }
-      }
-
-      // Spread target ports vertically when node has multiple incoming edges
-      const tgtTotal = inCount.get(e.to) || 1;
-      const tgtIdx = inIndex.get(edgeKey) || 0;
-      const tgtSpread = tgtTotal > 1 ? (tgtIdx - (tgtTotal - 1) / 2) * (this.nodeHeight * 0.6 / tgtTotal) : 0;
-      points.push({ x: tgtPos.x - hw, y: tgtPos.y + tgtSpread });
-
-      routed.push({ from: e.from, to: e.to, points });
-    }
-
-    return routed;
-  }
-
-  // ── Result Builder ────────────────────────────────────────────────────
-
-  /** Assemble the final layout result (only real nodes, no dummies). */
-  _buildResult(originalNodes, positions, routedEdges, totalLayers, layerOf) {
-    const positionedNodes = [];
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    for (const n of originalNodes) {
-      const pos = positions.get(n.id);
-      if (!pos) continue;
-
-      const node = {
-        id: n.id,
-        name: n.name || n.id,
-        kind: n.kind || 'unknown',
-        tableType: n.tableType || null,
-        layer: layerOf ? (layerOf.get(n.id) ?? 0) : 0,
-        x: pos.x,
-        y: pos.y,
+      var node = {
+        id: orig.id,
+        name: orig.name || orig.id,
+        kind: orig.kind || 'unknown',
+        tableType: orig.tableType || null,
+        layer: rank,
+        x: gn.x,
+        y: gn.y,
         w: this.nodeWidth,
         h: this.nodeHeight,
       };
       positionedNodes.push(node);
 
-      // Track bounding box (using node rectangle)
-      const left = pos.x - this.nodeWidth / 2;
-      const right = pos.x + this.nodeWidth / 2;
-      const top = pos.y - this.nodeHeight / 2;
-      const bottom = pos.y + this.nodeHeight / 2;
+      var left = gn.x - this.nodeWidth / 2;
+      var right = gn.x + this.nodeWidth / 2;
+      var top = gn.y - this.nodeHeight / 2;
+      var bottom = gn.y + this.nodeHeight / 2;
       if (left < minX) minX = left;
       if (right > maxX) maxX = right;
       if (top < minY) minY = top;
       if (bottom > maxY) maxY = bottom;
     }
 
-    const bounds = positionedNodes.length > 0
+    // Read routed edges — dagre provides waypoints including border connection
+    var routedEdges = [];
+    for (var m = 0; m < cleanEdges.length; m++) {
+      var ce = cleanEdges[m];
+      var ge = g.edge(ce.from, ce.to);
+      if (!ge) continue;
+      routedEdges.push({
+        from: ce.from,
+        to: ce.to,
+        points: ge.points || [],
+      });
+    }
+
+    var bounds = positionedNodes.length > 0
       ? { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
       : { x: 0, y: 0, w: 0, h: 0 };
 
     return {
       nodes: positionedNodes,
       edges: routedEdges,
-      layers: totalLayers,
-      bounds,
+      layers: maxRank + 1,
+      bounds: bounds,
     };
   }
 }
