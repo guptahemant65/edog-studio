@@ -54,7 +54,7 @@ class SmartContextBar {
       ${nodeText ? '<span class="node-progress">' + nodeText + '</span>' : ''}
       <span class="elapsed">${elapsed}s</span>
       ${exec.endpoint ? '<span class="endpoint">' + exec.endpoint + '</span>' : ''}
-      <span class="iter-id">${shortId}</span>
+      <span class="iter-id">${iterationId}</span>
       <span class="dismiss" onclick="document.getElementById('smart-context-bar').classList.remove('active')">\u2715</span>
     `;
     this.element.classList.add('active');
