@@ -1,0 +1,1071 @@
+diff --git a/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/InsightsMetricsTableManager.cs b/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/InsightsMetricsTableManager.cs
+index c86be386..920c89f7 100644
+--- a/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/InsightsMetricsTableManager.cs
++++ b/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/InsightsMetricsTableManager.cs
+@@ -356,6 +356,9 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+             sb.AppendLine("    failed_nodes INT,");
+             sb.AppendLine("    skipped_nodes INT,");
+             sb.AppendLine("    cancelled_nodes INT,");
++            sb.AppendLine("    fraction_full DOUBLE,");
++            sb.AppendLine("    fraction_incremental DOUBLE,");
++            sb.AppendLine("    fraction_no_refresh DOUBLE,");
+             sb.AppendLine("    submit_user STRING,");
+             sb.AppendLine("    job_invoke_type STRING,");
+             sb.AppendLine("    mlv_exec_def_id STRING,");
+diff --git a/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs b/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs
+index b5bd2654..c247942f 100644
+--- a/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs
++++ b/Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs
+@@ -142,7 +142,7 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+             string errorMessage = terminalInfo?.ErrorMessage;
+             string errorSource = string.IsNullOrEmpty(errorCode) ? null : terminalInfo?.ErrorSource.ToString();
+ 
+-            return new RunMetricsRow
++            var row = new RunMetricsRow
+             {
+                 IterationId = dagExecInstance.IterationId.ToString(),
+                 StartedAt = dagMetrics.StartedAt?.ToString("O"),
+@@ -169,6 +169,37 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+                 WrittenAt = now.ToString("O"),
+                 RunDate = dagMetrics.StartedAt?.ToString("yyyy-MM-dd") ?? endedAt.ToString("yyyy-MM-dd"),
+             };
++
++            // Compute per-run refresh mode fractions from terminal nodes (Completed + Failed)
++            // that have a recognized RefreshPolicy. Null/empty policy and unrecognized values
++            // are excluded from both numerator and denominator to preserve the sum-to-1.0 invariant.
++            if (nodeMetrics != null)
++            {
++                var knownPolicies = new[]
++                {
++                    Common.Constants.FullRefreshPolicyValue,
++                    Common.Constants.IncrementalRefreshPolicyValue,
++                    Common.Constants.NoRefreshPolicyValue,
++                };
++
++                var terminalWithKnownPolicy = nodeMetrics.Values
++                    .Where(m => (m.Status == NodeExecutionStatus.Completed || m.Status == NodeExecutionStatus.Failed)
++                                && knownPolicies.Any(p => string.Equals(m.RefreshPolicy, p, StringComparison.OrdinalIgnoreCase)))
++                    .ToList();
++
++                int denominator = terminalWithKnownPolicy.Count;
++                if (denominator > 0)
++                {
++                    row.FractionFull = (double)terminalWithKnownPolicy.Count(m =>
++                        string.Equals(m.RefreshPolicy, Common.Constants.FullRefreshPolicyValue, StringComparison.OrdinalIgnoreCase)) / denominator;
++                    row.FractionIncremental = (double)terminalWithKnownPolicy.Count(m =>
++                        string.Equals(m.RefreshPolicy, Common.Constants.IncrementalRefreshPolicyValue, StringComparison.OrdinalIgnoreCase)) / denominator;
++                    row.FractionNoRefresh = (double)terminalWithKnownPolicy.Count(m =>
++                        string.Equals(m.RefreshPolicy, Common.Constants.NoRefreshPolicyValue, StringComparison.OrdinalIgnoreCase)) / denominator;
++                }
++            }
++
++            return row;
+         }
+ 
+         /// <summary>
+@@ -183,7 +214,7 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+         {
+             var sb = new StringBuilder();
+ 
+-            sb.AppendLine("from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType");
++            sb.AppendLine("from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType, DoubleType");
+             sb.AppendLine("schema = StructType([");
+             sb.AppendLine("    StructField('iteration_id', StringType(), False),");
+             sb.AppendLine("    StructField('started_at', StringType(), True),");
+@@ -202,6 +233,9 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+             sb.AppendLine("    StructField('failed_nodes', IntegerType(), True),");
+             sb.AppendLine("    StructField('skipped_nodes', IntegerType(), True),");
+             sb.AppendLine("    StructField('cancelled_nodes', IntegerType(), True),");
++            sb.AppendLine("    StructField('fraction_full', DoubleType(), True),");
++            sb.AppendLine("    StructField('fraction_incremental', DoubleType(), True),");
++            sb.AppendLine("    StructField('fraction_no_refresh', DoubleType(), True),");
+             sb.AppendLine("    StructField('submit_user', StringType(), True),");
+             sb.AppendLine("    StructField('job_invoke_type', StringType(), True),");
+             sb.AppendLine("    StructField('mlv_exec_def_id', StringType(), True),");
+@@ -211,7 +245,7 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+ 
+             sb.AppendLine("data = [");
+             sb.AppendLine(string.Format(
+-                "    ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16}, {17}, {18}, {19}, {20}, {21})",
++                "    ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15}, {16}, {17}, {18}, {19}, {20}, {21}, {22}, {23}, {24})",
+                 DagHookUtils.EscapePyStringOrNull(row.IterationId),
+                 DagHookUtils.EscapePyStringOrNull(row.StartedAt),
+                 DagHookUtils.EscapePyStringOrNull(row.EndedAt),
+@@ -229,6 +263,9 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+                 row.FailedNodes,
+                 row.SkippedNodes,
+                 row.CancelledNodes,
++                FormatDouble(row.FractionFull),
++                FormatDouble(row.FractionIncremental),
++                FormatDouble(row.FractionNoRefresh),
+                 DagHookUtils.EscapePyStringOrNull(row.SubmitUser),
+                 DagHookUtils.EscapePyStringOrNull(row.JobInvokeType),
+                 DagHookUtils.EscapePyStringOrNull(row.MlvExecDefId),
+@@ -270,7 +307,24 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+         }
+ 
+         /// <summary>
+-        /// Data transfer object holding all 22 column values for a single <c>sys_run_metrics</c> row.
++        /// Formats a double as a Python <c>float(...)</c> call for inclusion in generated
++        /// PySpark code. Wrapping in <c>float()</c> guarantees that
++        /// <c>createDataFrame</c> sees a Python <see langword="float"/> regardless of how the
++        /// numeric literal would otherwise be parsed — values like <c>0</c> or <c>1</c> would
++        /// be Python <see langword="int"/>s and silently rejected against a <c>DoubleType</c>
++        /// schema, causing the entire row to be dropped from the MERGE.
++        /// The <c>"R"</c> (round-trip) format specifier preserves full double precision and
++        /// invariant culture ensures decimal points (not commas) regardless of locale.
++        /// </summary>
++        /// <param name="value">The double value.</param>
++        /// <returns>A Python expression evaluating to a <see langword="float"/>.</returns>
++        internal static string FormatDouble(double value)
++        {
++            return FormattableString.Invariant($"float({value:R})");
++        }
++
++        /// <summary>
++        /// Data transfer object holding all 25 column values for a single <c>sys_run_metrics</c> row.
+         /// Used as an intermediate representation between data collection and PySpark code generation
+         /// to keep <see cref="CollectRunMetricsRow"/> and <see cref="BuildPySparkMergeCode"/> independently testable.
+         /// </summary>
+@@ -310,6 +364,12 @@ namespace Microsoft.LiveTable.Service.DagExecutionHooks.Insights
+ 
+             public int CancelledNodes { get; set; }
+ 
++            public double FractionFull { get; set; }
++
++            public double FractionIncremental { get; set; }
++
++            public double FractionNoRefresh { get; set; }
++
+             public string SubmitUser { get; set; }
+ 
+             public string JobInvokeType { get; set; }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs b/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
+index 07a6e610..d1694257 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
+@@ -58,6 +58,9 @@ SELECT
+     SUM(CASE WHEN run_date >= @startDate AND status = '{StatusCancelled}' THEN 1 ELSE 0 END) AS cancelledRuns,
+     AVG(CASE WHEN run_date >= @startDate THEN CAST(duration_ms AS FLOAT) END) AS avgDurationMs,
+     MAX(CASE WHEN run_date >= @startDate THEN written_at END) AS lastUpdatedAt,
++    SUM(CASE WHEN run_date >= @startDate THEN COALESCE(fraction_full, 0) ELSE 0 END) AS fractionFullSum,
++    SUM(CASE WHEN run_date >= @startDate THEN COALESCE(fraction_incremental, 0) ELSE 0 END) AS fractionIncrementalSum,
++    SUM(CASE WHEN run_date >= @startDate THEN COALESCE(fraction_no_refresh, 0) ELSE 0 END) AS fractionNoRefreshSum,
+     COUNT(CASE WHEN run_date < @startDate THEN 1 END) AS prevTotalRuns,
+     SUM(CASE WHEN run_date < @startDate AND status = '{StatusCompleted}' THEN 1 ELSE 0 END) AS prevCompletedRuns,
+     SUM(CASE WHEN run_date < @startDate AND status = '{StatusFailed}' THEN 1 ELSE 0 END) AS prevFailedRuns,
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs
+index f6f95dbf..5328e573 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs
+@@ -87,5 +87,12 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         /// </summary>
+         [JsonProperty("lastUpdatedAt")]
+         public DateTime? LastUpdatedAt { get; set; }
++
++        /// <summary>
++        /// Gets or sets the fractional refresh policy distribution across runs in the date range.
++        /// Each run contributes exactly 1.0, split by per-node effective refresh policy.
++        /// </summary>
++        [JsonProperty("refreshPolicyDistribution")]
++        public RefreshPolicyDistribution RefreshPolicyDistribution { get; set; } = new RefreshPolicyDistribution();
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/RefreshPolicyDistribution.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/RefreshPolicyDistribution.cs
+new file mode 100644
+index 00000000..4dc16d10
+--- /dev/null
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/RefreshPolicyDistribution.cs
+@@ -0,0 +1,28 @@
++// <copyright file="RefreshPolicyDistribution.cs" company="Microsoft">
++// Copyright (c) Microsoft. All rights reserved.
++// </copyright>
++
++namespace Microsoft.LiveTable.Service.Trends.Models
++{
++    using Newtonsoft.Json;
++
++    /// <summary>
++    /// Fractional refresh policy distribution across DAG runs.
++    /// Each run contributes exactly 1.0, split proportionally by per-node effective refresh policy.
++    /// The sum of all three fields equals the number of runs with at least one refresh-eligible node.
++    /// </summary>
++    public class RefreshPolicyDistribution
++    {
++        /// <summary>Gets or sets the sum of full-refresh fractions across runs.</summary>
++        [JsonProperty("full")]
++        public double Full { get; set; }
++
++        /// <summary>Gets or sets the sum of incremental-refresh fractions across runs.</summary>
++        [JsonProperty("incremental")]
++        public double Incremental { get; set; }
++
++        /// <summary>Gets or sets the sum of no-refresh fractions across runs.</summary>
++        [JsonProperty("noRefresh")]
++        public double NoRefresh { get; set; }
++    }
++}
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs b/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
+index cfe729f9..10e54866 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
+@@ -6,6 +6,7 @@ namespace Microsoft.LiveTable.Service.Trends
+ {
+     using System;
+     using System.Collections.Generic;
++    using System.Data.Common;
+     using System.Diagnostics;
+     using System.Diagnostics.CodeAnalysis;
+     using System.Text.RegularExpressions;
+@@ -365,50 +366,7 @@ namespace Microsoft.LiveTable.Service.Trends
+                 command.Parameters.AddWithValue("@prevStartDate", prevStartDate);
+ 
+                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+-                var response = new InsightsSummaryResponse();
+-
+-                if (await reader.ReadAsync(cancellationToken))
+-                {
+-                    response.TotalRuns = await reader.IsDBNullAsync(reader.GetOrdinal("totalRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("totalRuns"));
+-                    response.FailedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("failedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("failedRuns"));
+-                    response.SkippedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("skippedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("skippedRuns"));
+-                    response.CancelledRuns = await reader.IsDBNullAsync(reader.GetOrdinal("cancelledRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("cancelledRuns"));
+-
+-                    int completedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("completedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("completedRuns"));
+-                    double avgDurMs = await reader.IsDBNullAsync(reader.GetOrdinal("avgDurationMs"), cancellationToken) ? 0 : reader.GetDouble(reader.GetOrdinal("avgDurationMs"));
+-                    string lastUpdatedAtStr = await GetStringOrNullAsync(reader, "lastUpdatedAt", cancellationToken);
+-
+-                    response.CompletedRuns = completedRuns;
+-                    response.SuccessRatePct = response.TotalRuns > 0
+-                        ? Math.Round((double)completedRuns / response.TotalRuns * 100, 1)
+-                        : 0;
+-                    response.AvgDurationMin = Math.Round(avgDurMs / 60000.0, 1);
+-                    response.LastUpdatedAt = DateTime.TryParse(lastUpdatedAtStr, out var lua) ? lua : null;
+-
+-                    // Previous period values for delta computation
+-                    int prevTotalRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevTotalRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevTotalRuns"));
+-                    int prevCompletedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevCompletedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevCompletedRuns"));
+-                    int prevFailedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevFailedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevFailedRuns"));
+-                    double prevAvgDurMs = await reader.IsDBNullAsync(reader.GetOrdinal("prevAvgDurationMs"), cancellationToken) ? 0 : reader.GetDouble(reader.GetOrdinal("prevAvgDurationMs"));
+-
+-                    // Compute deltas only when previous period has data
+-                    if (prevTotalRuns > 0)
+-                    {
+-                        response.TotalRunsDeltaPct = ComputeDeltaPct(response.TotalRuns, prevTotalRuns);
+-
+-                        double prevSuccessRate = Math.Round((double)prevCompletedRuns / prevTotalRuns * 100, 1);
+-                        response.SuccessRateDeltaPct = Math.Round(response.SuccessRatePct - prevSuccessRate, 1);
+-
+-                        response.FailedRunsDeltaPct = ComputeDeltaPct(response.FailedRuns, prevFailedRuns);
+-
+-                        double prevAvgDurMin = Math.Round(prevAvgDurMs / 60000.0, 1);
+-                        response.AvgDurationDeltaPct = prevAvgDurMin > 0
+-                            ? ComputeDeltaPct(response.AvgDurationMin, prevAvgDurMin)
+-                            : null;
+-                    }
+-                }
+-
+-                return response;
++                return await MapSummaryResponseAsync(reader, cancellationToken);
+             }
+             catch (SqlException ex) when (IsTableNotFoundError(ex))
+             {
+@@ -639,6 +597,74 @@ namespace Microsoft.LiveTable.Service.Trends
+                 .Replace("_", "[_]");
+         }
+ 
++        /// <summary>
++        /// Maps a <see cref="DbDataReader"/> positioned before the first row to an <see cref="InsightsSummaryResponse"/>.
++        /// Extracted from <see cref="GetSummaryAsync"/> for testability — the reader is provided by a real SQL connection
++        /// in production but can be mocked via <see cref="DbDataReader"/> in unit tests.
++        /// </summary>
++        /// <param name="reader">The data reader to read from.</param>
++        /// <param name="cancellationToken">Cancellation token.</param>
++        /// <returns>A populated <see cref="InsightsSummaryResponse"/>.</returns>
++        internal static async Task<InsightsSummaryResponse> MapSummaryResponseAsync(DbDataReader reader, CancellationToken cancellationToken)
++        {
++            var response = new InsightsSummaryResponse();
++
++            if (await reader.ReadAsync(cancellationToken))
++            {
++                response.TotalRuns = await reader.IsDBNullAsync(reader.GetOrdinal("totalRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("totalRuns"));
++                response.FailedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("failedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("failedRuns"));
++                response.SkippedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("skippedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("skippedRuns"));
++                response.CancelledRuns = await reader.IsDBNullAsync(reader.GetOrdinal("cancelledRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("cancelledRuns"));
++
++                int completedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("completedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("completedRuns"));
++                double avgDurMs = await reader.IsDBNullAsync(reader.GetOrdinal("avgDurationMs"), cancellationToken) ? 0 : reader.GetDouble(reader.GetOrdinal("avgDurationMs"));
++
++                int lastUpdatedAtOrdinal = reader.GetOrdinal("lastUpdatedAt");
++                string lastUpdatedAtStr = await reader.IsDBNullAsync(lastUpdatedAtOrdinal, cancellationToken)
++                    ? null
++                    : reader.GetString(lastUpdatedAtOrdinal);
++
++                response.CompletedRuns = completedRuns;
++                response.SuccessRatePct = response.TotalRuns > 0
++                    ? Math.Round((double)completedRuns / response.TotalRuns * 100, 1)
++                    : 0;
++                response.AvgDurationMin = Math.Round(avgDurMs / 60000.0, 1);
++                response.LastUpdatedAt = DateTime.TryParse(lastUpdatedAtStr, out var lua) ? lua : null;
++
++                // Refresh policy distribution (fractional model)
++                response.RefreshPolicyDistribution = new Models.RefreshPolicyDistribution
++                {
++                    Full = await reader.IsDBNullAsync(reader.GetOrdinal("fractionFullSum"), cancellationToken) ? 0 : Math.Round(reader.GetDouble(reader.GetOrdinal("fractionFullSum")), 1),
++                    Incremental = await reader.IsDBNullAsync(reader.GetOrdinal("fractionIncrementalSum"), cancellationToken) ? 0 : Math.Round(reader.GetDouble(reader.GetOrdinal("fractionIncrementalSum")), 1),
++                    NoRefresh = await reader.IsDBNullAsync(reader.GetOrdinal("fractionNoRefreshSum"), cancellationToken) ? 0 : Math.Round(reader.GetDouble(reader.GetOrdinal("fractionNoRefreshSum")), 1),
++                };
++
++                // Previous period values for delta computation
++                int prevTotalRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevTotalRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevTotalRuns"));
++                int prevCompletedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevCompletedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevCompletedRuns"));
++                int prevFailedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevFailedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevFailedRuns"));
++                double prevAvgDurMs = await reader.IsDBNullAsync(reader.GetOrdinal("prevAvgDurationMs"), cancellationToken) ? 0 : reader.GetDouble(reader.GetOrdinal("prevAvgDurationMs"));
++
++                // Compute deltas only when previous period has data
++                if (prevTotalRuns > 0)
++                {
++                    response.TotalRunsDeltaPct = ComputeDeltaPct(response.TotalRuns, prevTotalRuns);
++
++                    double prevSuccessRate = Math.Round((double)prevCompletedRuns / prevTotalRuns * 100, 1);
++                    response.SuccessRateDeltaPct = Math.Round(response.SuccessRatePct - prevSuccessRate, 1);
++
++                    response.FailedRunsDeltaPct = ComputeDeltaPct(response.FailedRuns, prevFailedRuns);
++
++                    double prevAvgDurMin = Math.Round(prevAvgDurMs / 60000.0, 1);
++                    response.AvgDurationDeltaPct = prevAvgDurMin > 0
++                        ? ComputeDeltaPct(response.AvgDurationMin, prevAvgDurMin)
++                        : null;
++                }
++            }
++
++            return response;
++        }
++
+         /// <summary>
+         /// Computes percentage change: ((current - previous) / previous) * 100, rounded to 1 decimal.
+         /// </summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/InsightsMetricsTableManagerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/InsightsMetricsTableManagerTests.cs
+index ad3c31fd..0b7dec89 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/InsightsMetricsTableManagerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/InsightsMetricsTableManagerTests.cs
+@@ -228,6 +228,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+                 "refresh_mode", "error_code", "error_message", "error_source",
+                 "display_name", "parallel_node_limit", "environment_id",
+                 "total_nodes", "succeeded_nodes", "failed_nodes", "skipped_nodes", "cancelled_nodes",
++                "fraction_full", "fraction_incremental", "fraction_no_refresh",
+                 "submit_user", "job_invoke_type", "mlv_exec_def_id",
+                 "written_at", "run_date",
+             };
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/RunMetricsTableWriterTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/RunMetricsTableWriterTests.cs
+index 65cbb634..70bfb58e 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/RunMetricsTableWriterTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/RunMetricsTableWriterTests.cs
+@@ -35,7 +35,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+     [ExcludeFromCodeCoverage]
+     public class RunMetricsTableWriterTests
+     {
+-        private const int ExpectedColumnCount = 22;
++        private const int ExpectedColumnCount = 25;
+         private const string ExpectedMergeCondition = "'t.iteration_id = s.iteration_id'";
+         private const string SuccessStatus = "Completed";
+         private const string FailedStatus = "Failed";
+@@ -1056,6 +1056,233 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+             Assert.IsTrue(code.Contains("None"), "Status should be None when terminalInfo is null");
+         }
+ 
++        // ===== Fraction Computation Tests =====
++
++        /// <summary>
++        /// Verifies that all-FullRefresh terminal nodes produce fraction_full = 1.0 and others = 0.0.
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_AllFullRefresh_FractionFullIsOne()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithRefreshPolicies(
++                new[] { NodeExecutionStatus.Completed, NodeExecutionStatus.Completed, NodeExecutionStatus.Failed },
++                new[] { "FULLREFRESH", "FULLREFRESH", "FULLREFRESH" });
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            Assert.AreEqual(1.0, row.FractionFull, 0.001);
++            Assert.AreEqual(0.0, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.0, row.FractionNoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies mixed refresh policies produce correct fractions (2 Full, 1 Incremental out of 3).
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_MixedRefreshPolicies_ComputesCorrectFractions()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithRefreshPolicies(
++                new[] { NodeExecutionStatus.Completed, NodeExecutionStatus.Completed, NodeExecutionStatus.Failed },
++                new[] { "FULLREFRESH", "INCREMENTALREFRESH", "FULLREFRESH" });
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            Assert.AreEqual(2.0 / 3.0, row.FractionFull, 0.001);
++            Assert.AreEqual(1.0 / 3.0, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.0, row.FractionNoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies that case-insensitive matching works (e.g., "FullRefresh" matches FULLREFRESH constant).
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_MixedCaseRefreshPolicy_MatchesCaseInsensitive()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithRefreshPolicies(
++                new[] { NodeExecutionStatus.Completed, NodeExecutionStatus.Completed },
++                new[] { "FullRefresh", "IncrementalRefresh" });
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            Assert.AreEqual(0.5, row.FractionFull, 0.001);
++            Assert.AreEqual(0.5, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.0, row.FractionNoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies that nodes with null/empty RefreshPolicy are excluded from denominator.
++        /// 2 terminal nodes with policy (1 Full, 1 Incremental), 1 terminal with empty → denominator=2.
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_EmptyRefreshPolicy_ExcludedFromDenominator()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithRefreshPolicies(
++                new[] { NodeExecutionStatus.Completed, NodeExecutionStatus.Completed, NodeExecutionStatus.Completed },
++                new[] { "FULLREFRESH", "INCREMENTALREFRESH", string.Empty });
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            Assert.AreEqual(0.5, row.FractionFull, 0.001);
++            Assert.AreEqual(0.5, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.0, row.FractionNoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies that skipped/cancelled nodes are excluded from fraction computation (not terminal).
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_SkippedAndCancelledNodes_ExcludedFromFractions()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithRefreshPolicies(
++                new[] { NodeExecutionStatus.Completed, NodeExecutionStatus.Skipped, NodeExecutionStatus.Cancelled, NodeExecutionStatus.Failed },
++                new[] { "FULLREFRESH", "FULLREFRESH", "INCREMENTALREFRESH", "NOREFRESH" });
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            // Only Completed (Full) and Failed (NoRefresh) are terminal → denominator=2
++            Assert.AreEqual(0.5, row.FractionFull, 0.001);
++            Assert.AreEqual(0.0, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.5, row.FractionNoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies that zero terminal nodes with policy produce all fractions = 0.0.
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_NoTerminalNodesWithPolicy_FractionsAreZero()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithRefreshPolicies(
++                new[] { NodeExecutionStatus.Skipped, NodeExecutionStatus.Cancelled },
++                new[] { "FULLREFRESH", "INCREMENTALREFRESH" });
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            Assert.AreEqual(0.0, row.FractionFull, 0.001);
++            Assert.AreEqual(0.0, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.0, row.FractionNoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies that null nodeMetrics (no nodes at all) produce all fractions = 0.0.
++        /// </summary>
++        [TestMethod]
++        public void CollectRunMetricsRow_NullNodeMetrics_FractionsAreZero()
++        {
++            var dagExecInstance = CreateDagExecInstanceWithWorkspace();
++            dagExecInstance.DagExecutionMetrics.StartedAt = DateTime.UtcNow.AddMinutes(-5);
++            dagExecInstance.DagExecutionMetrics.RefreshMode = RefreshMode.Full;
++
++            var row = RunMetricsTableWriter.CollectRunMetricsRow(dagExecInstance, null);
++
++            Assert.AreEqual(0.0, row.FractionFull, 0.001);
++            Assert.AreEqual(0.0, row.FractionIncremental, 0.001);
++            Assert.AreEqual(0.0, row.FractionNoRefresh, 0.001);
++        }
++
++        // ===== FormatDouble Tests =====
++
++        /// <summary>
++        /// Verifies FormatDouble emits invariant-culture numeric formatting (decimal point, not comma)
++        /// regardless of system locale.
++        /// </summary>
++        [TestMethod]
++        public void FormatDouble_InvariantCulture_UsesDecimalPoint()
++        {
++            var result = RunMetricsTableWriter.FormatDouble(0.333);
++            Assert.IsTrue(result.Contains("."), $"Expected decimal point in '{result}'");
++            Assert.IsFalse(result.Contains(","), $"Unexpected comma in '{result}'");
++        }
++
++        /// <summary>
++        /// Verifies FormatDouble wraps the value in a Python <c>float(...)</c> call so that
++        /// exact zero becomes <c>float(0)</c> — guaranteed to be a Python float, not int.
++        /// PySpark's createDataFrame with an explicit DoubleType schema rejects Python int
++        /// values and silently drops the entire row; wrapping in <c>float()</c> sidesteps that
++        /// without any literal-shape detection. Regression test for sys_run_metrics zero-rows bug.
++        /// </summary>
++        [TestMethod]
++        public void FormatDouble_Zero_EmitsPythonFloatCall()
++        {
++            Assert.AreEqual("float(0)", RunMetricsTableWriter.FormatDouble(0.0));
++        }
++
++        /// <summary>
++        /// Verifies FormatDouble wraps integer-valued doubles in <c>float(...)</c>, ensuring
++        /// PySpark treats them as floats (e.g., <c>1.0</c> → <c>"float(1)"</c>).
++        /// </summary>
++        [TestMethod]
++        public void FormatDouble_IntegerValuedDouble_EmitsPythonFloatCall()
++        {
++            Assert.AreEqual("float(1)", RunMetricsTableWriter.FormatDouble(1.0));
++            Assert.AreEqual("float(-1)", RunMetricsTableWriter.FormatDouble(-1.0));
++            Assert.AreEqual("float(42)", RunMetricsTableWriter.FormatDouble(42.0));
++        }
++
++        /// <summary>
++        /// Verifies FormatDouble preserves full double precision via the round-trip ("R") format
++        /// specifier for non-integer values, while still wrapping in <c>float(...)</c>.
++        /// </summary>
++        [TestMethod]
++        public void FormatDouble_NonIntegerValue_PreservesRoundTripPrecision()
++        {
++            // 0.2 in "R" (round-trip) is "0.2" with full double precision preserved on parse.
++            var result = RunMetricsTableWriter.FormatDouble(0.2);
++            Assert.IsTrue(result.StartsWith("float(") && result.EndsWith(")"), $"Expected float(...) wrapper in '{result}'");
++            var inner = result.Substring("float(".Length, result.Length - "float(".Length - 1);
++            Assert.AreEqual(0.2, double.Parse(inner, System.Globalization.CultureInfo.InvariantCulture));
++        }
++
++        /// <summary>
++        /// Regression test for sys_run_metrics zero-rows bug: every value flowing through
++        /// FormatDouble must be a Python float regardless of magnitude, so the DoubleType
++        /// schema accepts the row and the MERGE inserts it.
++        /// </summary>
++        [TestMethod]
++        public void FormatDouble_AllValues_AreWrappedInPythonFloatCall()
++        {
++            Assert.IsTrue(RunMetricsTableWriter.FormatDouble(0.0).StartsWith("float("));
++            Assert.IsTrue(RunMetricsTableWriter.FormatDouble(1.0).StartsWith("float("));
++            Assert.IsTrue(RunMetricsTableWriter.FormatDouble(0.2).StartsWith("float("));
++            Assert.IsTrue(RunMetricsTableWriter.FormatDouble(double.MaxValue).StartsWith("float("));
++        }
++
++        // ===== PySpark Schema Fraction Tests =====
++
++        /// <summary>
++        /// Verifies that BuildPySparkMergeCode includes DoubleType import and fraction StructFields.
++        /// </summary>
++        [TestMethod]
++        public void BuildPySparkMergeCode_IncludesFractionColumnsInSchema()
++        {
++            var row = CreateMinimalRow();
++            var code = RunMetricsTableWriter.BuildPySparkMergeCode(row, TestTableName);
++
++            Assert.IsTrue(code.Contains("DoubleType"), "PySpark schema should import DoubleType");
++            Assert.IsTrue(code.Contains("StructField('fraction_full', DoubleType(), True)"), "Schema must include fraction_full");
++            Assert.IsTrue(code.Contains("StructField('fraction_incremental', DoubleType(), True)"), "Schema must include fraction_incremental");
++            Assert.IsTrue(code.Contains("StructField('fraction_no_refresh', DoubleType(), True)"), "Schema must include fraction_no_refresh");
++        }
++
++        /// <summary>
++        /// Verifies that BuildPySparkMergeCode includes fraction values in the data row,
++        /// each wrapped in a Python <c>float(...)</c> call so PySpark accepts them against
++        /// the DoubleType schema even when the value is exactly zero or integer-valued.
++        /// </summary>
++        [TestMethod]
++        public void BuildPySparkMergeCode_IncludesFractionValuesInDataRow()
++        {
++            var row = CreateMinimalRow();
++            row.FractionFull = 0.667;
++            row.FractionIncremental = 0.333;
++            row.FractionNoRefresh = 0.0;
++
++            var code = RunMetricsTableWriter.BuildPySparkMergeCode(row, TestTableName);
++
++            Assert.IsTrue(code.Contains("float(0.667)"), $"Data row should contain fraction_full as float() call. Code:\n{code}");
++            Assert.IsTrue(code.Contains("float(0.333)"), $"Data row should contain fraction_incremental as float() call. Code:\n{code}");
++            Assert.IsTrue(code.Contains("float(0)"), $"Data row should contain fraction_no_refresh as float(0) — guarding against zero-as-int bug. Code:\n{code}");
++        }
++
+         // ===== Helper Methods =====
+ 
+         /// <summary>
+@@ -1139,6 +1366,39 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+             return dagExecInstance;
+         }
+ 
++        /// <summary>
++        /// Creates a DagExecutionInstance with nodes that have specific statuses and refresh policies.
++        /// </summary>
++        private static DagExecutionInstance CreateDagExecInstanceWithRefreshPolicies(
++            NodeExecutionStatus[] nodeStatuses,
++            string[] refreshPolicies)
++        {
++            var mockDag = new Mock<Dag>();
++            mockDag.SetupGet(d => d.WorkspaceName).Returns(TestWorkspaceName);
++            mockDag.SetupGet(d => d.LakehouseName).Returns(TestLakehouseName);
++            mockDag.Object.Name = "TestDag";
++            var dag = mockDag.Object;
++
++            var nodeIds = new Guid[nodeStatuses.Length];
++            for (int i = 0; i < nodeIds.Length; i++)
++            {
++                nodeIds[i] = dag.AddNode($"Node{i}", "MATERIALIZED_LAKE_VIEW", "sql");
++            }
++
++            var dagExecInstance = new DagExecutionInstance(dag, Guid.NewGuid());
++            dagExecInstance.DagExecutionMetrics.StartedAt = DateTime.UtcNow.AddMinutes(-5);
++            dagExecInstance.DagExecutionMetrics.RefreshMode = RefreshMode.Full;
++
++            for (int i = 0; i < nodeStatuses.Length; i++)
++            {
++                var nodeMetrics = dagExecInstance.GetOrAddNodeExecutionMetrics(nodeIds[i]);
++                var refreshOutput = new MLVRefreshOutput { RefreshPolicy = refreshPolicies[i] };
++                nodeMetrics.MarkExecutionEnded(DateTime.UtcNow, nodeStatuses[i], mlvRefreshOutput: refreshOutput);
++            }
++
++            return dagExecInstance;
++        }
++
+         /// <summary>
+         /// Creates a DagExecutionInstance with workspace and lakehouse names set via a mock Dag.
+         /// Needed because <see cref="Dag.WorkspaceName"/> and <see cref="Dag.LakehouseName"/> have private setters.
+@@ -1164,5 +1424,19 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+             mock.Setup(m => m.GetHostParameter<TimeSpan>("HttpRetryMaxDelayInSeconds")).Returns(TimeSpan.FromMilliseconds(20));
+             return mock;
+         }
++
++        /// <summary>
++        /// Creates a minimal RunMetricsRow for PySpark code generation tests.
++        /// </summary>
++        private static RunMetricsTableWriter.RunMetricsRow CreateMinimalRow()
++        {
++            return new RunMetricsTableWriter.RunMetricsRow
++            {
++                IterationId = Guid.NewGuid().ToString(),
++                Status = SuccessStatus,
++                WrittenAt = DateTime.UtcNow.ToString("O"),
++                RunDate = DateTime.UtcNow.ToString("yyyy-MM-dd"),
++            };
++        }
+     }
+ }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
+index b34f64bb..9e8f23ba 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
+@@ -628,5 +628,58 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+             Assert.AreEqual(10.0, response.AvgDurationDeltaPct);
+             Assert.IsNull(response.FailedRunsDeltaPct, "Null delta should deserialize as null.");
+         }
++
++        // ===== Fraction Column Tests =====
++
++        /// <summary>
++        /// Verifies that BuildSummaryQuery includes fraction SUM columns with COALESCE for null safety.
++        /// </summary>
++        [TestMethod]
++        public void BuildSummaryQuery_IncludesFractionSumColumns()
++        {
++            var query = InsightsQueryBuilder.BuildSummaryQuery();
++            Assert.IsTrue(query.Contains("fractionFullSum"), "Summary query should select fractionFullSum.");
++            Assert.IsTrue(query.Contains("fractionIncrementalSum"), "Summary query should select fractionIncrementalSum.");
++            Assert.IsTrue(query.Contains("fractionNoRefreshSum"), "Summary query should select fractionNoRefreshSum.");
++        }
++
++        /// <summary>
++        /// Verifies that fraction columns use COALESCE to handle pre-existing NULL values.
++        /// </summary>
++        [TestMethod]
++        public void BuildSummaryQuery_FractionColumnsUseCoalesce()
++        {
++            var query = InsightsQueryBuilder.BuildSummaryQuery();
++            Assert.IsTrue(query.Contains("COALESCE(fraction_full, 0)"), "Should COALESCE fraction_full for NULL safety.");
++            Assert.IsTrue(query.Contains("COALESCE(fraction_incremental, 0)"), "Should COALESCE fraction_incremental for NULL safety.");
++            Assert.IsTrue(query.Contains("COALESCE(fraction_no_refresh, 0)"), "Should COALESCE fraction_no_refresh for NULL safety.");
++        }
++
++        /// <summary>
++        /// Verifies that InsightsSummaryResponse deserializes refreshPolicyDistribution from JSON.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_RefreshPolicyDistribution_Deserialize()
++        {
++            var json = "{\"totalRuns\":10,\"refreshPolicyDistribution\":{\"full\":3.5,\"incremental\":4.5,\"noRefresh\":2.0}}";
++            var response = Newtonsoft.Json.JsonConvert.DeserializeObject<InsightsSummaryResponse>(json);
++            Assert.IsNotNull(response.RefreshPolicyDistribution);
++            Assert.AreEqual(3.5, response.RefreshPolicyDistribution.Full, 0.001);
++            Assert.AreEqual(4.5, response.RefreshPolicyDistribution.Incremental, 0.001);
++            Assert.AreEqual(2.0, response.RefreshPolicyDistribution.NoRefresh, 0.001);
++        }
++
++        /// <summary>
++        /// Verifies that InsightsSummaryResponse has a non-null default RefreshPolicyDistribution.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_RefreshPolicyDistribution_DefaultsToZeros()
++        {
++            var response = new InsightsSummaryResponse();
++            Assert.IsNotNull(response.RefreshPolicyDistribution, "RefreshPolicyDistribution should never be null.");
++            Assert.AreEqual(0.0, response.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(0.0, response.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, response.RefreshPolicyDistribution.NoRefresh);
++        }
+     }
+ }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
+index b6fae1d2..450cf72c 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
+@@ -6,6 +6,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+ {
+     using System;
+     using System.Collections.Generic;
++    using System.Data.Common;
+     using System.Net.Http;
+     using System.Threading;
+     using System.Threading.Tasks;
+@@ -1144,6 +1145,317 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+             Assert.AreEqual("hello world", result);
+         }
+ 
++        // ===================================================================
++        // MapSummaryResponseAsync tests (reader mapping logic)
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies that <see cref="SqlEndpointQueryService.MapSummaryResponseAsync"/> returns a default
++        /// response with zeros when the reader has no rows.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_NoRows_ReturnsDefaultResponseAsync()
++        {
++            var mockReader = new Mock<DbDataReader>();
++            mockReader.Setup(r => r.ReadAsync(It.IsAny<CancellationToken>())).ReturnsAsync(false);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.IsNotNull(result);
++            Assert.AreEqual(0, result.TotalRuns);
++            Assert.AreEqual(0, result.CompletedRuns);
++            Assert.AreEqual(0, result.FailedRuns);
++            Assert.AreEqual(0, result.SkippedRuns);
++            Assert.AreEqual(0, result.CancelledRuns);
++            Assert.AreEqual(0.0, result.SuccessRatePct);
++            Assert.AreEqual(0.0, result.AvgDurationMin);
++            Assert.IsNull(result.LastUpdatedAt);
++            Assert.IsNull(result.TotalRunsDeltaPct);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Verifies that <see cref="SqlEndpointQueryService.MapSummaryResponseAsync"/> correctly maps
++        /// all columns including refresh policy distribution fractions and computes derived values.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_AllValues_MapsCorrectlyAsync()
++        {
++            var columns = new Dictionary<string, object>
++            {
++                { "totalRuns", 10 },
++                { "failedRuns", 2 },
++                { "skippedRuns", 1 },
++                { "cancelledRuns", 0 },
++                { "completedRuns", 7 },
++                { "avgDurationMs", 120000.0 },
++                { "lastUpdatedAt", "2024-06-15T10:30:00" },
++                { "fractionFullSum", 3.5 },
++                { "fractionIncrementalSum", 4.2 },
++                { "fractionNoRefreshSum", 2.3 },
++                { "prevTotalRuns", 0 },
++                { "prevCompletedRuns", 0 },
++                { "prevFailedRuns", 0 },
++                { "prevAvgDurationMs", 0.0 },
++            };
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(10, result.TotalRuns);
++            Assert.AreEqual(7, result.CompletedRuns);
++            Assert.AreEqual(2, result.FailedRuns);
++            Assert.AreEqual(1, result.SkippedRuns);
++            Assert.AreEqual(0, result.CancelledRuns);
++            Assert.AreEqual(70.0, result.SuccessRatePct);
++            Assert.AreEqual(2.0, result.AvgDurationMin);
++            Assert.AreEqual(new DateTime(2024, 6, 15, 10, 30, 0), result.LastUpdatedAt);
++            Assert.AreEqual(3.5, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(4.2, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(2.3, result.RefreshPolicyDistribution.NoRefresh);
++            Assert.IsNull(result.TotalRunsDeltaPct);
++        }
++
++        /// <summary>
++        /// Verifies that null fraction columns default to zero in the <see cref="RefreshPolicyDistribution"/>.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_NullFractions_DefaultsToZeroAsync()
++        {
++            var columns = CreateBaseSummaryColumns();
++            columns["fractionFullSum"] = DBNull.Value;
++            columns["fractionIncrementalSum"] = DBNull.Value;
++            columns["fractionNoRefreshSum"] = DBNull.Value;
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Verifies that null aggregate columns default to zero and null lastUpdatedAt yields null DateTime.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_NullAggregates_DefaultsToZeroAndNullDateAsync()
++        {
++            var columns = new Dictionary<string, object>
++            {
++                { "totalRuns", DBNull.Value },
++                { "failedRuns", DBNull.Value },
++                { "skippedRuns", DBNull.Value },
++                { "cancelledRuns", DBNull.Value },
++                { "completedRuns", DBNull.Value },
++                { "avgDurationMs", DBNull.Value },
++                { "lastUpdatedAt", DBNull.Value },
++                { "fractionFullSum", DBNull.Value },
++                { "fractionIncrementalSum", DBNull.Value },
++                { "fractionNoRefreshSum", DBNull.Value },
++                { "prevTotalRuns", DBNull.Value },
++                { "prevCompletedRuns", DBNull.Value },
++                { "prevFailedRuns", DBNull.Value },
++                { "prevAvgDurationMs", DBNull.Value },
++            };
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(0, result.TotalRuns);
++            Assert.AreEqual(0, result.CompletedRuns);
++            Assert.AreEqual(0, result.FailedRuns);
++            Assert.AreEqual(0, result.SkippedRuns);
++            Assert.AreEqual(0, result.CancelledRuns);
++            Assert.AreEqual(0.0, result.AvgDurationMin);
++            Assert.IsNull(result.LastUpdatedAt);
++            Assert.IsNull(result.TotalRunsDeltaPct);
++        }
++
++        /// <summary>
++        /// Verifies that when previous period has data, deltas are computed correctly.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_WithPreviousPeriod_ComputesDeltasAsync()
++        {
++            var columns = new Dictionary<string, object>
++            {
++                { "totalRuns", 20 },
++                { "failedRuns", 4 },
++                { "skippedRuns", 0 },
++                { "cancelledRuns", 0 },
++                { "completedRuns", 16 },
++                { "avgDurationMs", 180000.0 },
++                { "lastUpdatedAt", "2024-06-15" },
++                { "fractionFullSum", 10.0 },
++                { "fractionIncrementalSum", 8.0 },
++                { "fractionNoRefreshSum", 2.0 },
++                { "prevTotalRuns", 10 },
++                { "prevCompletedRuns", 8 },
++                { "prevFailedRuns", 2 },
++                { "prevAvgDurationMs", 120000.0 },
++            };
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(100.0, result.TotalRunsDeltaPct);
++            Assert.AreEqual(0.0, result.SuccessRateDeltaPct);
++            Assert.AreEqual(100.0, result.FailedRunsDeltaPct);
++            Assert.AreEqual(50.0, result.AvgDurationDeltaPct);
++        }
++
++        /// <summary>
++        /// Verifies that when previous period has runs but zero average duration,
++        /// <see cref="InsightsSummaryResponse.AvgDurationDeltaPct"/> is null.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_ZeroPrevAvgDuration_AvgDeltaNullAsync()
++        {
++            var columns = CreateBaseSummaryColumns();
++            columns["prevTotalRuns"] = 5;
++            columns["prevCompletedRuns"] = 5;
++            columns["prevFailedRuns"] = 0;
++            columns["prevAvgDurationMs"] = 0.0;
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.IsNotNull(result.TotalRunsDeltaPct);
++            Assert.IsNull(result.AvgDurationDeltaPct);
++        }
++
++        /// <summary>
++        /// Verifies that when previous failed runs is zero but current has failures,
++        /// <see cref="InsightsSummaryResponse.FailedRunsDeltaPct"/> is 100.0.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_ZeroPrevFailedRuns_DeltaIs100Async()
++        {
++            var columns = CreateBaseSummaryColumns();
++            columns["failedRuns"] = 3;
++            columns["prevTotalRuns"] = 5;
++            columns["prevCompletedRuns"] = 5;
++            columns["prevFailedRuns"] = 0;
++            columns["prevAvgDurationMs"] = 60000.0;
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(100.0, result.FailedRunsDeltaPct);
++        }
++
++        /// <summary>
++        /// Verifies that fraction values are rounded to 1 decimal place.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapSummaryResponseAsync_FractionRounding_RoundsTo1DecimalAsync()
++        {
++            var columns = CreateBaseSummaryColumns();
++            columns["fractionFullSum"] = 3.456789;
++            columns["fractionIncrementalSum"] = 2.151;
++            columns["fractionNoRefreshSum"] = 0.049;
++            var mockReader = CreateMockSummaryReader(columns);
++
++            var result = await SqlEndpointQueryService.MapSummaryResponseAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(3.5, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(2.2, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Creates a base set of summary columns with reasonable defaults for test scenarios
++        /// that only need to override specific columns.
++        /// </summary>
++        private static Dictionary<string, object> CreateBaseSummaryColumns()
++        {
++            return new Dictionary<string, object>
++            {
++                { "totalRuns", 10 },
++                { "failedRuns", 1 },
++                { "skippedRuns", 0 },
++                { "cancelledRuns", 0 },
++                { "completedRuns", 9 },
++                { "avgDurationMs", 60000.0 },
++                { "lastUpdatedAt", "2024-06-15" },
++                { "fractionFullSum", 5.0 },
++                { "fractionIncrementalSum", 3.0 },
++                { "fractionNoRefreshSum", 2.0 },
++                { "prevTotalRuns", 0 },
++                { "prevCompletedRuns", 0 },
++                { "prevFailedRuns", 0 },
++                { "prevAvgDurationMs", 0.0 },
++            };
++        }
++
++        /// <summary>
++        /// Creates a <see cref="Mock{DbDataReader}"/> configured to return one row with the specified column values.
++        /// Supports int, double, string, and DBNull values.
++        /// </summary>
++        private static Mock<DbDataReader> CreateMockSummaryReader(Dictionary<string, object> columnValues)
++        {
++            var mock = new Mock<DbDataReader>();
++            var columns = new List<string>(columnValues.Keys);
++
++            for (int i = 0; i < columns.Count; i++)
++            {
++                int ordinal = i;
++                mock.Setup(r => r.GetOrdinal(columns[i])).Returns(ordinal);
++            }
++
++            mock.SetupSequence(r => r.ReadAsync(It.IsAny<CancellationToken>()))
++                .ReturnsAsync(true)
++                .ReturnsAsync(false);
++
++            for (int i = 0; i < columns.Count; i++)
++            {
++                int ordinal = i;
++                var value = columnValues[columns[i]];
++
++                if (value == null || value is DBNull)
++                {
++                    mock.Setup(r => r.IsDBNullAsync(ordinal, It.IsAny<CancellationToken>())).ReturnsAsync(true);
++                }
++                else
++                {
++                    mock.Setup(r => r.IsDBNullAsync(ordinal, It.IsAny<CancellationToken>())).ReturnsAsync(false);
++
++                    if (value is int intVal)
++                    {
++                        mock.Setup(r => r.GetInt32(ordinal)).Returns(intVal);
++                    }
++                    else if (value is double dblVal)
++                    {
++                        mock.Setup(r => r.GetDouble(ordinal)).Returns(dblVal);
++                    }
++                    else if (value is string strVal)
++                    {
++                        mock.Setup(r => r.GetString(ordinal)).Returns(strVal);
++                    }
++                }
++            }
++
++            return mock;
++        }
++
++        private SqlEndpointQueryService CreateService()
++        {
++            return new SqlEndpointQueryService(
++                this.mockFabricApiClient.Object,
++                this.mockParametersProvider.Object);
++        }
++
+         private LakehouseDetails CreateValidLakehouseDetails(string provisioningStatus = "Success")
+         {
+             return new LakehouseDetails
+@@ -1159,12 +1471,5 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+                 },
+             };
+         }
+-
+-        private SqlEndpointQueryService CreateService()
+-        {
+-            return new SqlEndpointQueryService(
+-                this.mockFabricApiClient.Object,
+-                this.mockParametersProvider.Object);
+-        }
+     }
+ }

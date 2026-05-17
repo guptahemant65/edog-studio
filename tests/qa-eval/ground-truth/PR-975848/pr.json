@@ -1,0 +1,58 @@
+{
+  "pr_number": "975848",
+  "pr_url": "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/975848",
+  "repo": "workload-fabriclivetable",
+  "title": "Merged PR 975848: Add refreshPolicyDistribution (fractional model) to Insights /summary API",
+  "description": "Add refreshPolicyDistribution to /summary API",
+  "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+  "head_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+  "author_email": "guptahemant@microsoft.com",
+  "authored_date": "2026-05-14T15:56:59Z",
+  "files_changed": 10,
+  "files": [
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/InsightsMetricsTableManager.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs"
+    },
+    {
+      "status": "A",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/RefreshPolicyDistribution.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/InsightsMetricsTableManagerTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/RunMetricsTableWriterTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs"
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 58745,
+  "captured_at": "2026-05-17T19:38:46Z",
+  "captured_from": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable (local clone)"
+}

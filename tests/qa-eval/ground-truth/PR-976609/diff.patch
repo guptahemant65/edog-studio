@@ -1,0 +1,363 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs b/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
+index d1694257..b01a6ef3 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
+@@ -133,13 +133,19 @@ WHERE run_date >= @startDate AND run_date <= @endDate
+                 dateExpression = "run_date";
+             }
+ 
++            // Refresh policy distribution: SUM(COALESCE(fraction_*, 0)) protects against pre-PR1 rows
++            // that have NULL fractions (their NULLs would otherwise propagate through SUM and surface
++            // as null in the result set).
+             return $@"
+ SELECT
+     {dateExpression} AS run_date,
+     SUM(CASE WHEN status = '{StatusCompleted}' THEN 1 ELSE 0 END) AS completed,
+     SUM(CASE WHEN status = '{StatusFailed}' THEN 1 ELSE 0 END) AS failed,
+     SUM(CASE WHEN status = '{StatusSkipped}' THEN 1 ELSE 0 END) AS skipped,
+-    SUM(CASE WHEN status = '{StatusCancelled}' THEN 1 ELSE 0 END) AS cancelled
++    SUM(CASE WHEN status = '{StatusCancelled}' THEN 1 ELSE 0 END) AS cancelled,
++    SUM(COALESCE(fraction_full, 0)) AS fractionFull,
++    SUM(COALESCE(fraction_incremental, 0)) AS fractionIncremental,
++    SUM(COALESCE(fraction_no_refresh, 0)) AS fractionNoRefresh
+ FROM {RunMetricsTable}
+ WHERE run_date >= @startDate AND run_date <= @endDate
+ GROUP BY {dateExpression}
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs
+index 4b3fd34f..7eba2cc2 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs
+@@ -30,5 +30,15 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         /// <summary>Gets or sets cancelled run count.</summary>
+         [JsonProperty("cancelled")]
+         public int Cancelled { get; set; }
++
++        /// <summary>
++        /// Gets or sets the fractional refresh-policy distribution for runs in this period.
++        /// Each run contributes exactly 1.0, split proportionally by per-node effective refresh policy.
++        /// The sum of <see cref="RefreshPolicyDistribution.Full"/> + <see cref="RefreshPolicyDistribution.Incremental"/>
++        /// + <see cref="RefreshPolicyDistribution.NoRefresh"/> equals the number of runs in this period
++        /// that had at least one refresh-eligible node.
++        /// </summary>
++        [JsonProperty("refreshPolicyDistribution")]
++        public RefreshPolicyDistribution RefreshPolicyDistribution { get; set; } = new RefreshPolicyDistribution();
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs b/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
+index 10e54866..36400ca9 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
+@@ -502,14 +502,7 @@ namespace Microsoft.LiveTable.Service.Trends
+                     await using var trendReader = await trendCmd.ExecuteReaderAsync(cancellationToken);
+                     while (await trendReader.ReadAsync(cancellationToken))
+                     {
+-                        response.DailyTrend.Add(new DailyTrendEntry
+-                        {
+-                            RunDate = await GetStringOrNullAsync(trendReader, "run_date", cancellationToken),
+-                            Completed = trendReader.GetInt32(trendReader.GetOrdinal("completed")),
+-                            Failed = trendReader.GetInt32(trendReader.GetOrdinal("failed")),
+-                            Skipped = trendReader.GetInt32(trendReader.GetOrdinal("skipped")),
+-                            Cancelled = trendReader.GetInt32(trendReader.GetOrdinal("cancelled")),
+-                        });
++                        response.DailyTrend.Add(await MapTrendEntryAsync(trendReader, cancellationToken));
+                     }
+                 }
+ 
+@@ -665,6 +658,49 @@ namespace Microsoft.LiveTable.Service.Trends
+             return response;
+         }
+ 
++        /// <summary>
++        /// Maps the current row of a positioned <see cref="DbDataReader"/> to a <see cref="DailyTrendEntry"/>.
++        /// Uses <see cref="DbDataReader"/> (abstract base of <see cref="SqlDataReader"/>) so the mapping
++        /// can be unit-tested with a mocked reader — same pattern as <see cref="MapSummaryResponseAsync"/>.
++        /// Fraction values are <see cref="Math.Round(double, int)"/>-rounded to 1 decimal to match the
++        /// summary endpoint's <see cref="RefreshPolicyDistribution"/> precision.
++        /// </summary>
++        /// <param name="reader">A <see cref="DbDataReader"/> positioned on the row to map.</param>
++        /// <param name="cancellationToken">Cancellation token.</param>
++        /// <returns>A populated <see cref="DailyTrendEntry"/>.</returns>
++        internal static async Task<DailyTrendEntry> MapTrendEntryAsync(DbDataReader reader, CancellationToken cancellationToken)
++        {
++            int runDateOrd = reader.GetOrdinal("run_date");
++            string runDate = await reader.IsDBNullAsync(runDateOrd, cancellationToken)
++                ? null
++                : reader.GetString(runDateOrd);
++
++            int fractionFullOrd = reader.GetOrdinal("fractionFull");
++            int fractionIncOrd = reader.GetOrdinal("fractionIncremental");
++            int fractionNrOrd = reader.GetOrdinal("fractionNoRefresh");
++
++            return new DailyTrendEntry
++            {
++                RunDate = runDate,
++                Completed = reader.GetInt32(reader.GetOrdinal("completed")),
++                Failed = reader.GetInt32(reader.GetOrdinal("failed")),
++                Skipped = reader.GetInt32(reader.GetOrdinal("skipped")),
++                Cancelled = reader.GetInt32(reader.GetOrdinal("cancelled")),
++                RefreshPolicyDistribution = new RefreshPolicyDistribution
++                {
++                    Full = await reader.IsDBNullAsync(fractionFullOrd, cancellationToken)
++                        ? 0
++                        : Math.Round(reader.GetDouble(fractionFullOrd), 1),
++                    Incremental = await reader.IsDBNullAsync(fractionIncOrd, cancellationToken)
++                        ? 0
++                        : Math.Round(reader.GetDouble(fractionIncOrd), 1),
++                    NoRefresh = await reader.IsDBNullAsync(fractionNrOrd, cancellationToken)
++                        ? 0
++                        : Math.Round(reader.GetDouble(fractionNrOrd), 1),
++                },
++            };
++        }
++
+         /// <summary>
+         /// Computes percentage change: ((current - previous) / previous) * 100, rounded to 1 decimal.
+         /// </summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
+index 9e8f23ba..a2d3af35 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
+@@ -174,6 +174,34 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+             Assert.IsTrue(query.Contains("AS cancelled"), "Should have cancelled aggregate.");
+         }
+ 
++        /// <summary>
++        /// Verifies the daily trend query (day grouping) selects SUM(COALESCE(...)) of all three
++        /// refresh-policy fraction columns. COALESCE protects against pre-PR1 rows where the
++        /// fraction columns are NULL.
++        /// </summary>
++        [TestMethod]
++        public void BuildDailyTrendQuery_Day_SelectsRefreshPolicyFractions()
++        {
++            var query = InsightsQueryBuilder.BuildDailyTrendQuery("day");
++            Assert.IsTrue(query.Contains("SUM(COALESCE(fraction_full, 0)) AS fractionFull"), "Day query should SUM(COALESCE) fraction_full.");
++            Assert.IsTrue(query.Contains("SUM(COALESCE(fraction_incremental, 0)) AS fractionIncremental"), "Day query should SUM(COALESCE) fraction_incremental.");
++            Assert.IsTrue(query.Contains("SUM(COALESCE(fraction_no_refresh, 0)) AS fractionNoRefresh"), "Day query should SUM(COALESCE) fraction_no_refresh.");
++        }
++
++        /// <summary>
++        /// Verifies the daily trend query (week grouping) also includes refresh-policy fraction aggregates
++        /// — fractions must roll up at both day and week granularity so the UI can switch grouping without
++        /// losing the distribution.
++        /// </summary>
++        [TestMethod]
++        public void BuildDailyTrendQuery_Week_SelectsRefreshPolicyFractions()
++        {
++            var query = InsightsQueryBuilder.BuildDailyTrendQuery("week");
++            Assert.IsTrue(query.Contains("SUM(COALESCE(fraction_full, 0)) AS fractionFull"), "Week query should SUM(COALESCE) fraction_full.");
++            Assert.IsTrue(query.Contains("SUM(COALESCE(fraction_incremental, 0)) AS fractionIncremental"), "Week query should SUM(COALESCE) fraction_incremental.");
++            Assert.IsTrue(query.Contains("SUM(COALESCE(fraction_no_refresh, 0)) AS fractionNoRefresh"), "Week query should SUM(COALESCE) fraction_no_refresh.");
++        }
++
+         /// <summary>
+         /// Verifies the top errors query limits to 5 results.
+         /// </summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
+index 450cf72c..f0a68cb2 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
+@@ -1374,6 +1374,204 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+             Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
+         }
+ 
++        // ===================================================================
++        // MapTrendEntryAsync tests (per-day reader mapping logic)
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies that <see cref="SqlEndpointQueryService.MapTrendEntryAsync"/> maps all
++        /// columns including the nested refresh policy distribution from a populated row.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapTrendEntryAsync_AllValues_MapsCorrectlyAsync()
++        {
++            var columns = CreateBaseTrendColumns();
++            columns["run_date"] = "2024-06-15";
++            columns["completed"] = 7;
++            columns["failed"] = 2;
++            columns["skipped"] = 1;
++            columns["cancelled"] = 0;
++            columns["fractionFull"] = 3.5;
++            columns["fractionIncremental"] = 4.2;
++            columns["fractionNoRefresh"] = 2.3;
++            var mockReader = CreateMockTrendReader(columns);
++
++            var result = await SqlEndpointQueryService.MapTrendEntryAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual("2024-06-15", result.RunDate);
++            Assert.AreEqual(7, result.Completed);
++            Assert.AreEqual(2, result.Failed);
++            Assert.AreEqual(1, result.Skipped);
++            Assert.AreEqual(0, result.Cancelled);
++            Assert.IsNotNull(result.RefreshPolicyDistribution);
++            Assert.AreEqual(3.5, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(4.2, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(2.3, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Verifies that all-NULL fraction columns default to zero (no NULL propagation into the DTO).
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapTrendEntryAsync_NullFractions_DefaultsToZeroAsync()
++        {
++            var columns = CreateBaseTrendColumns();
++            columns["fractionFull"] = DBNull.Value;
++            columns["fractionIncremental"] = DBNull.Value;
++            columns["fractionNoRefresh"] = DBNull.Value;
++            var mockReader = CreateMockTrendReader(columns);
++
++            var result = await SqlEndpointQueryService.MapTrendEntryAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Verifies that a partially-NULL row (one fraction NULL, others present) maps the
++        /// NULL column to zero and preserves the others — protects against mid-rollout rows
++        /// where only some fractions were backfilled.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapTrendEntryAsync_PartialNullFractions_OnlyMissingDefaultedAsync()
++        {
++            var columns = CreateBaseTrendColumns();
++            columns["fractionFull"] = 1.0;
++            columns["fractionIncremental"] = DBNull.Value;
++            columns["fractionNoRefresh"] = 2.0;
++            var mockReader = CreateMockTrendReader(columns);
++
++            var result = await SqlEndpointQueryService.MapTrendEntryAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(1.0, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(2.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Verifies an all-Full-refresh day maps cleanly — all weight on Full, zeros elsewhere.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapTrendEntryAsync_AllFull_MapsCorrectlyAsync()
++        {
++            var columns = CreateBaseTrendColumns();
++            columns["fractionFull"] = 5.0;
++            columns["fractionIncremental"] = 0.0;
++            columns["fractionNoRefresh"] = 0.0;
++            var mockReader = CreateMockTrendReader(columns);
++
++            var result = await SqlEndpointQueryService.MapTrendEntryAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(5.0, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Verifies a NULL <c>run_date</c> column maps to <c>null</c> rather than throwing.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapTrendEntryAsync_NullRunDate_MapsNullAsync()
++        {
++            var columns = CreateBaseTrendColumns();
++            columns["run_date"] = DBNull.Value;
++            var mockReader = CreateMockTrendReader(columns);
++
++            var result = await SqlEndpointQueryService.MapTrendEntryAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.IsNull(result.RunDate);
++        }
++
++        /// <summary>
++        /// Verifies fraction values are rounded to 1 decimal place — matching the summary endpoint's
++        /// <see cref="RefreshPolicyDistribution"/> precision so the UI sees a consistent contract.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task MapTrendEntryAsync_FractionRounding_RoundsTo1DecimalAsync()
++        {
++            var columns = CreateBaseTrendColumns();
++            columns["fractionFull"] = 3.456789;
++            columns["fractionIncremental"] = 2.151;
++            columns["fractionNoRefresh"] = 0.049;
++            var mockReader = CreateMockTrendReader(columns);
++
++            var result = await SqlEndpointQueryService.MapTrendEntryAsync(mockReader.Object, CancellationToken.None);
++
++            Assert.AreEqual(3.5, result.RefreshPolicyDistribution.Full);
++            Assert.AreEqual(2.2, result.RefreshPolicyDistribution.Incremental);
++            Assert.AreEqual(0.0, result.RefreshPolicyDistribution.NoRefresh);
++        }
++
++        /// <summary>
++        /// Creates a base set of trend columns with reasonable defaults for test scenarios
++        /// that only need to override specific columns.
++        /// </summary>
++        private static Dictionary<string, object> CreateBaseTrendColumns()
++        {
++            return new Dictionary<string, object>
++            {
++                { "run_date", "2024-06-15" },
++                { "completed", 5 },
++                { "failed", 0 },
++                { "skipped", 0 },
++                { "cancelled", 0 },
++                { "fractionFull", 5.0 },
++                { "fractionIncremental", 0.0 },
++                { "fractionNoRefresh", 0.0 },
++            };
++        }
++
++        /// <summary>
++        /// Creates a <see cref="Mock{DbDataReader}"/> positioned on a single synthetic row with
++        /// the specified column values. Used to drive <see cref="SqlEndpointQueryService.MapTrendEntryAsync"/>
++        /// in unit tests without a real SQL connection. Supports <see cref="int"/>, <see cref="double"/>,
++        /// <see cref="string"/>, and <see cref="DBNull"/> values.
++        /// Note: <c>ReadAsync</c> is not set up because the SUT only reads the current row.
++        /// </summary>
++        private static Mock<DbDataReader> CreateMockTrendReader(Dictionary<string, object> columnValues)
++        {
++            var mock = new Mock<DbDataReader>();
++            var columns = new List<string>(columnValues.Keys);
++
++            for (int i = 0; i < columns.Count; i++)
++            {
++                int ordinal = i;
++                mock.Setup(r => r.GetOrdinal(columns[i])).Returns(ordinal);
++
++                var value = columnValues[columns[i]];
++                if (value == null || value is DBNull)
++                {
++                    mock.Setup(r => r.IsDBNullAsync(ordinal, It.IsAny<CancellationToken>())).ReturnsAsync(true);
++                }
++                else
++                {
++                    mock.Setup(r => r.IsDBNullAsync(ordinal, It.IsAny<CancellationToken>())).ReturnsAsync(false);
++
++                    if (value is int intVal)
++                    {
++                        mock.Setup(r => r.GetInt32(ordinal)).Returns(intVal);
++                    }
++                    else if (value is double dblVal)
++                    {
++                        mock.Setup(r => r.GetDouble(ordinal)).Returns(dblVal);
++                    }
++                    else if (value is string strVal)
++                    {
++                        mock.Setup(r => r.GetString(ordinal)).Returns(strVal);
++                    }
++                }
++            }
++
++            return mock;
++        }
++
+         /// <summary>
+         /// Creates a base set of summary columns with reasonable defaults for test scenarios
+         /// that only need to override specific columns.

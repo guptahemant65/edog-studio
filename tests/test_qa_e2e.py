@@ -421,9 +421,13 @@ def test_qa_feature_flags_llm_v2_kill_switch_exists() -> None:
 
 
 def test_qa_capability_probe_declares_required_error_codes() -> None:
-    """F27 P9 §3.6 — the capability probe defines four stable error codes
-    that the orchestrator + hub key off when refusing to flip LlmV2 to
-    shadow/on. The codes are part of our wire contract and must not drift."""
+    """F27 P9 §3.6 — the capability probe defines stable error codes that
+    the orchestrator + hub key off when refusing to flip LlmV2 to
+    shadow/on. The codes are part of our wire contract and must not drift.
+
+    T1a expands the matrix beyond the four AOAI capability codes to cover
+    config and transport failures so the orchestrator can render a clear,
+    actionable inline error instead of a generic "probe failed"."""
     src = (
         REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs"
     ).read_text(encoding="utf-8")
@@ -432,6 +436,10 @@ def test_qa_capability_probe_declares_required_error_codes() -> None:
         "AOAI_RESPONSES_API_UNAVAILABLE",
         "AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED",
         "AOAI_REASONING_UNSUPPORTED",
+        # T1a additions — config + transport + parse failures.
+        "PROBE_CONFIG_MISSING",
+        "PROBE_NETWORK_ERROR",
+        "PROBE_RESPONSE_UNPARSEABLE",
     )
     for code in required_codes:
         assert code in src, f"EdogQaCapabilityProbe must declare {code}."
@@ -440,6 +448,37 @@ def test_qa_capability_probe_declares_required_error_codes() -> None:
     assert "IsAzureOpenAiReadyForV2" in src, (
         "EdogQaCapabilityProbe must expose IsAzureOpenAiReadyForV2 — the "
         "single gate the orchestrator consults before honouring EDOG_QA_LLM_V2."
+    )
+    # T1a: the T0 sentinel must be gone (replaced by real codes).
+    assert "PROBE_STUB_T0" not in src, (
+        "EdogQaCapabilityProbe must no longer carry the T0 stub sentinel — "
+        "T1a replaced it with a real handshake. Drop ErrorCodeStubT0."
+    )
+
+
+def test_qa_capability_probe_real_handshake() -> None:
+    """T1a — the probe must POST to /openai/responses with strict
+    json_schema + reasoning.effort=low. Verified by source-grep so the
+    test runs without FLT bin and is fast in CI."""
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs"
+    ).read_text(encoding="utf-8")
+    assert "/openai/responses?api-version=" in src, (
+        "Probe must POST to the Responses API endpoint with api-version "
+        "(not the legacy Chat Completions endpoint)."
+    )
+    assert "ProbeOnceAsync" in src, (
+        "Probe must expose a no-cache ProbeOnceAsync overload so tests can "
+        "exercise each capability branch without mutating the process cache."
+    )
+    assert 'type = "json_schema"' in src, (
+        "Probe must request strict json_schema constrained decoding."
+    )
+    assert "strict = true" in src, (
+        "Probe must set strict=true on the json_schema format."
+    )
+    assert 'effort = "low"' in src, (
+        "Probe must set reasoning.effort=\"low\" so probe cost is negligible."
     )
 
 
@@ -468,4 +507,151 @@ def test_qa_llm_provider_default_deployment_is_gpt54() -> None:
     assert 'or "gpt-5.4"' in py_src, (
         "dev-server.py default deployment must be 'gpt-5.4'."
     )
+
+
+# ─── F27 P9 T1a — Capability probe behavioural matrix ─────────────────────
+
+
+def test_capability_probe_matrix(harness_environment, built_harness) -> None:
+    """T1a — every branch of EdogQaCapabilityProbe.ProbeOnceAsync must
+    populate the expected fields and accumulate the right error codes.
+    The harness exercises 9 cases via an injected HttpMessageHandler:
+    happy path, two config-missing flavours, network error, four HTTP
+    rejection shapes, and a 200-with-unparseable-body case.
+
+    This is the gate that proves the probe is wire-correct before T1b
+    can flip ``EDOG_QA_LLM_V2`` to ``shadow``."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "capability-probe")
+    assert data["ok"] is True, data
+    cases = {c["caseId"]: c for c in data["cases"]}
+
+    # ── Happy path: all four capabilities confirmed, IsReady=true ──
+    c = cases["happy_path"]
+    assert c["isReady"] is True, c
+    assert c["responsesApiAvailable"] is True, c
+    assert c["jsonSchemaStrictSupported"] is True, c
+    assert c["reasoningSupported"] is True, c
+    assert c["maxOutputTokensVerified"] == 2048, c
+    assert c["errorCount"] == 0, c
+    assert c["handlerInvocations"] == 1, c
+    assert c["deployment"] == "gpt-5.4", c
+    assert c["endpointHost"] == "aoai.example.test", c
+
+    # ── Config missing: probe must NOT call the handler ──
+    for case_id in ("config_missing_no_endpoint", "config_missing_no_key"):
+        c = cases[case_id]
+        assert c["isReady"] is False, c
+        assert "PROBE_CONFIG_MISSING" in c["errorCodes"], c
+        assert c["handlerInvocations"] == 0, (
+            f"{case_id} must short-circuit before any HTTP call"
+        )
+
+    # ── Network error: handler throws, probe must classify cleanly ──
+    c = cases["network_error"]
+    assert c["isReady"] is False, c
+    assert "PROBE_NETWORK_ERROR" in c["errorCodes"], c
+    assert c["handlerInvocations"] == 1, c
+
+    # ── 404 with DeploymentNotFound → AOAI_DEPLOYMENT_NOT_FOUND ──
+    c = cases["deployment_not_found"]
+    assert c["isReady"] is False, c
+    assert "AOAI_DEPLOYMENT_NOT_FOUND" in c["errorCodes"], c
+    assert "AOAI_RESPONSES_API_UNAVAILABLE" not in c["errorCodes"], (
+        "404 with DeploymentNotFound must NOT be misclassified as Responses-API absent."
+    )
+
+    # ── 404 without DeploymentNotFound → AOAI_RESPONSES_API_UNAVAILABLE ──
+    c = cases["responses_api_unavailable"]
+    assert c["isReady"] is False, c
+    assert "AOAI_RESPONSES_API_UNAVAILABLE" in c["errorCodes"], c
+
+    # ── 400 mentioning text.format → AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED ──
+    c = cases["json_schema_unsupported"]
+    assert c["isReady"] is False, c
+    assert "AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED" in c["errorCodes"], c
+
+    # ── 200 without usage.output_tokens_details → AOAI_REASONING_UNSUPPORTED ──
+    c = cases["reasoning_unsupported"]
+    assert c["isReady"] is False, c
+    assert c["responsesApiAvailable"] is True, (
+        "200 envelope must still promote ResponsesApiAvailable even when "
+        "reasoning is unsupported."
+    )
+    assert c["jsonSchemaStrictSupported"] is True, c
+    assert c["reasoningSupported"] is False, c
+    assert "AOAI_REASONING_UNSUPPORTED" in c["errorCodes"], c
+
+    # ── 200 with unparseable body → PROBE_RESPONSE_UNPARSEABLE ──
+    c = cases["response_unparseable"]
+    assert c["isReady"] is False, c
+    assert "PROBE_RESPONSE_UNPARSEABLE" in c["errorCodes"], c
+    assert c["responsesApiAvailable"] is False, c
+
+
+def test_capability_probe_request_shape(harness_environment, built_harness) -> None:
+    """T1a — the wire payload the probe emits must contain strict
+    json_schema + reasoning.effort=low + max_output_tokens=2048, and
+    must hit /openai/responses?api-version=... with an api-key header.
+
+    These are the contract promises the orchestrator depends on; if any
+    drift, the probe is no longer a faithful proxy for the V2 pipeline's
+    behaviour and the readiness signal becomes a lie."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "capability-probe")
+    shape = data["requestShape"]
+    assert shape["hitsResponsesEndpoint"] is True, shape
+    assert shape["hasApiKeyHeader"] is True, shape
+    assert shape["hasStrictJsonSchema"] is True, shape
+    assert shape["hasReasoningEffort"] is True, shape
+    assert shape["hasMaxOutputTokens"] is True, shape
+
+
+# ─── F27 P9 T1a — Gold-corpus fixture shape ───────────────────────────────
+
+
+def test_gold_corpus_fixtures_present() -> None:
+    """T1a ships three ground-truth PR fixtures under
+    ``tests/qa-eval/ground-truth/``. Each fixture must carry ``pr.json``
+    (metadata), ``diff.patch`` (the LLM input), ``expected.json``
+    (gold-standard scenarios, placeholder until hand-graded), and
+    ``notes.md`` (curator notes).
+
+    These three PRs come from the same FLT clone Hemant uses for QA
+    sessions. Adding more PRs (different domain shapes — DAG, retry,
+    schema migration) lands in T2 once the V2 pipeline is live."""
+    import json as _json
+
+    ground_truth_dir = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
+    required_prs = ("PR-977882", "PR-976609", "PR-975848")
+    for pr in required_prs:
+        d = ground_truth_dir / pr
+        assert d.is_dir(), f"Missing fixture directory: {d.relative_to(REPO_ROOT)}"
+        for required_file in ("pr.json", "diff.patch", "expected.json", "notes.md"):
+            f = d / required_file
+            assert f.exists() and f.stat().st_size > 0, (
+                f"Fixture {pr}/{required_file} missing or empty."
+            )
+        # pr.json must declare a non-empty diff.
+        with (d / "pr.json").open(encoding="utf-8") as fh:
+            meta = _json.load(fh)
+        assert meta.get("pr_number") == pr.split("-")[1], meta
+        assert meta.get("diff_size_bytes", 0) > 0, meta
+        assert meta.get("files_changed", 0) > 0, meta
+
+
+def test_gold_corpus_baseline_scaffold_exists() -> None:
+    """T1a creates ``tests/qa-eval/baseline.json`` as a placeholder
+    leaderboard. T1b will populate it with the legacy pipeline's score
+    against this corpus — the floor the V2 pipeline must beat."""
+    import json as _json
+
+    baseline = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
+    assert baseline.exists(), (
+        "tests/qa-eval/baseline.json must exist as the T1a scaffold. "
+        "Run `python tests/qa-eval/run_eval.py` to create it."
+    )
+    with baseline.open(encoding="utf-8") as fh:
+        data = _json.load(fh)
+    assert data.get("schema_version") == "1.0", data
+    assert data.get("status") in ("PENDING_T1B", "PENDING"), data
+    assert isinstance(data.get("prs"), list), data
 

@@ -1,0 +1,650 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
+index 03e953ab..ad8017cd 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
+@@ -62,6 +62,7 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         private const int MaxPageSize = 200;
+         private const int DefaultDateRangeDays = 7;
+         private const int MaxDateRangeDays = 90;
++        private const int MaxStrictDateRangeDays = 60;
+         private const int MaxDisplayNameLength = 256;
+         private const int DefaultTopErrorsLimit = 5;
+         private const string DefaultGroupBy = "day";
+@@ -91,9 +92,8 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         /// </summary>
+         /// <param name="workspaceId">Workspace ID.</param>
+         /// <param name="artifactId">Lakehouse artifact ID.</param>
+-        /// <param name="dateRange">Number of days to look back (default: 7, max: 90). Ignored if startTime/endTime are provided.</param>
+-        /// <param name="startTime">Optional start time (ISO 8601). Takes precedence over dateRange.</param>
+-        /// <param name="endTime">Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.</param>
++        /// <param name="startTime">Optional start time (ISO-8601 date-time). Must be within the last 60 days and ≤ endTime. Defaults to now − 7 days.</param>
++        /// <param name="endTime">Optional end time (ISO-8601 date-time). Must be &gt; startTime and ≤ now. Window must not exceed 60 days. Defaults to now.</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+         /// <returns>KPI summary object.</returns>
+         [HttpGet("summary")]
+@@ -107,9 +107,8 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         public async Task<IActionResult> GetSummaryAsync(
+             [FromRoute] Guid workspaceId,
+             [FromRoute] Guid artifactId,
+-            [FromQuery] int dateRange = DefaultDateRangeDays,
+-            [FromQuery] DateTime? startTime = null,
+-            [FromQuery] DateTime? endTime = null,
++            [FromQuery] DateTimeOffset? startTime = null,
++            [FromQuery] DateTimeOffset? endTime = null,
+             CancellationToken cancellationToken = default)
+         {
+             HttpStatusCode resultCode = HttpStatusCode.OK;
+@@ -134,7 +133,7 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     return error;
+                 }
+ 
+-                var (startDate, endDate, dateError) = ResolveDateRange(dateRange, startTime, endTime);
++                var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);
+                 if (dateError != null)
+                 {
+                     resultCode = HttpStatusCode.BadRequest;
+@@ -143,10 +142,10 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+ 
+                 // Compute previous period start date for period-over-period comparison.
+                 // Previous period has the same length as current, shifted back.
+-                var start = DateTime.Parse(startDate);
+-                var end = DateTime.Parse(endDate);
++                var start = DateTime.Parse(startDate, System.Globalization.CultureInfo.InvariantCulture);
++                var end = DateTime.Parse(endDate, System.Globalization.CultureInfo.InvariantCulture);
+                 var periodDays = (end - start).Days + 1;
+-                var prevStartDate = start.AddDays(-periodDays).ToString("yyyy-MM-dd");
++                var prevStartDate = start.AddDays(-periodDays).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+ 
+                 var response = await this.QueryService.GetSummaryAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, prevStartDate, cancellationToken);
+ 
+@@ -293,9 +292,8 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         /// </summary>
+         /// <param name="workspaceId">Workspace ID.</param>
+         /// <param name="artifactId">Lakehouse artifact ID.</param>
+-        /// <param name="dateRange">Number of days to look back (default: 7, max: 90). Ignored if startTime/endTime are provided.</param>
+-        /// <param name="startTime">Optional start time (ISO 8601). Takes precedence over dateRange.</param>
+-        /// <param name="endTime">Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.</param>
++        /// <param name="startTime">Optional start time (ISO-8601 date-time). Must be within the last 60 days and ≤ endTime. Defaults to now − 7 days.</param>
++        /// <param name="endTime">Optional end time (ISO-8601 date-time). Must be &gt; startTime and ≤ now. Window must not exceed 60 days. Defaults to now.</param>
+         /// <param name="groupBy">Grouping interval for trend chart: "day" (default) or "week".</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+         /// <returns>Trends data with daily/weekly breakdown.</returns>
+@@ -310,9 +308,8 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         public async Task<IActionResult> GetTrendsAsync(
+             [FromRoute] Guid workspaceId,
+             [FromRoute] Guid artifactId,
+-            [FromQuery] int dateRange = DefaultDateRangeDays,
+-            [FromQuery] DateTime? startTime = null,
+-            [FromQuery] DateTime? endTime = null,
++            [FromQuery] DateTimeOffset? startTime = null,
++            [FromQuery] DateTimeOffset? endTime = null,
+             [FromQuery] string groupBy = DefaultGroupBy,
+             CancellationToken cancellationToken = default)
+         {
+@@ -338,7 +335,7 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     return error;
+                 }
+ 
+-                var (startDate, endDate, dateError) = ResolveDateRange(dateRange, startTime, endTime);
++                var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);
+                 if (dateError != null)
+                 {
+                     resultCode = HttpStatusCode.BadRequest;
+@@ -385,9 +382,8 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         /// </summary>
+         /// <param name="workspaceId">Workspace ID.</param>
+         /// <param name="artifactId">Lakehouse artifact ID.</param>
+-        /// <param name="dateRange">Number of days to look back (default: 7, max: 90). Ignored if startTime/endTime are provided.</param>
+-        /// <param name="startTime">Optional start time (ISO 8601). Takes precedence over dateRange.</param>
+-        /// <param name="endTime">Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.</param>
++        /// <param name="startTime">Optional start time (ISO-8601 date-time). Must be within the last 60 days and ≤ endTime. Defaults to now − 7 days.</param>
++        /// <param name="endTime">Optional end time (ISO-8601 date-time). Must be &gt; startTime and ≤ now. Window must not exceed 60 days. Defaults to now.</param>
+         /// <param name="limit">Maximum number of top error codes to return (1-20, default: 5).</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+         /// <returns>Top error codes sorted by count descending.</returns>
+@@ -402,9 +398,8 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         public async Task<IActionResult> GetTopErrorsAsync(
+             [FromRoute] Guid workspaceId,
+             [FromRoute] Guid artifactId,
+-            [FromQuery] int dateRange = DefaultDateRangeDays,
+-            [FromQuery] DateTime? startTime = null,
+-            [FromQuery] DateTime? endTime = null,
++            [FromQuery] DateTimeOffset? startTime = null,
++            [FromQuery] DateTimeOffset? endTime = null,
+             [FromQuery] int limit = DefaultTopErrorsLimit,
+             CancellationToken cancellationToken = default)
+         {
+@@ -430,7 +425,7 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     return error;
+                 }
+ 
+-                var (startDate, endDate, dateError) = ResolveDateRange(dateRange, startTime, endTime);
++                var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);
+                 if (dateError != null)
+                 {
+                     resultCode = HttpStatusCode.BadRequest;
+@@ -587,6 +582,46 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+             return (startDate, endDate, null);
+         }
+ 
++        /// <summary>
++        /// Resolves the date range for Insights v2.0.6 endpoints (/summary, /trends, /errors/top).
++        /// Enforces the v2.0.6 §3.3 contract verbatim:
++        ///   startTime: ISO-8601 date-time, ≥ now − 60d, ≤ endTime, default = now − 7d.
++        ///   endTime:   ISO-8601 date-time, &gt; startTime, ≤ now, window ≤ 60d, default = now.
++        /// Defaults are applied independently when a side is omitted.
++        /// Comparisons run at full DateTimeOffset instant precision; the SQL layer is day-bucketed
++        /// (results in yyyy-MM-dd UTC) so same-day windows are honored at day resolution.
++        /// </summary>
++        private (string StartDate, string EndDate, IActionResult Error) ResolveStrictDateRange(DateTimeOffset? startTime, DateTimeOffset? endTime)
++        {
++            var now = DateTimeOffset.UtcNow;
++            var start = startTime ?? now.AddDays(-DefaultDateRangeDays);
++            var end = endTime ?? now;
++
++            if (start < now.AddDays(-MaxStrictDateRangeDays))
++            {
++                return (null, null, BadRequest(new { error = $"startTime must be within the last {MaxStrictDateRangeDays} days." }));
++            }
++
++            if (end > now)
++            {
++                return (null, null, BadRequest(new { error = "endTime cannot be in the future." }));
++            }
++
++            if (end <= start)
++            {
++                return (null, null, BadRequest(new { error = "endTime must be after startTime." }));
++            }
++
++            if ((end - start) > TimeSpan.FromDays(MaxStrictDateRangeDays))
++            {
++                return (null, null, BadRequest(new { error = $"Date range must not exceed {MaxStrictDateRangeDays} days." }));
++            }
++
++            var startStr = start.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
++            var endStr = end.UtcDateTime.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
++            return (startStr, endStr, null);
++        }
++
+         /// <summary>
+         /// Parses a comma-separated status string into a validated list of canonical PascalCase status values.
+         /// Returns null list if input is null/empty (no filter).
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs
+index 982b80b2..ecda8779 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs
+@@ -497,33 +497,12 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             Assert.AreEqual(1, trends.DailyTrend.Count);
+         }
+ 
+-        /// <summary>
+-        /// Verifies GetSummaryAsync returns 400 when dateRange is zero.
+-        /// </summary>
+-        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+-        [TestMethod]
+-        public async Task GetSummaryAsync_DateRangeZero_ReturnsBadRequest()
+-        {
+-            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+-
+-            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, dateRange: 0);
+-
+-            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+-        }
+-
+-        /// <summary>
+-        /// Verifies GetSummaryAsync returns 400 when dateRange exceeds maximum.
+-        /// </summary>
+-        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+-        [TestMethod]
+-        public async Task GetSummaryAsync_DateRangeTooLarge_ReturnsBadRequest()
+-        {
+-            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+-
+-            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, dateRange: 366);
+-
+-            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+-        }
++        // ===================================================================
++        // dateRange-based tests for /summary, /trends, /errors/top removed:
++        // v2.0.6 (A1) dropped the dateRange parameter from these three endpoints.
++        // New v2.0.6 strict date-contract tests live further below in this file.
++        // GetRunsAsync continues to accept dateRange and its tests remain unchanged.
++        // ===================================================================
+ 
+         /// <summary>
+         /// Verifies GetRunsAsync clamps pageSize to 1 when zero is provided.
+@@ -603,33 +582,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+         }
+ 
+-        /// <summary>
+-        /// Verifies GetTrendsAsync returns 400 when dateRange is zero.
+-        /// </summary>
+-        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+-        [TestMethod]
+-        public async Task GetTrendsAsync_DateRangeZero_ReturnsBadRequest()
+-        {
+-            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+-
+-            var result = await controller.GetTrendsAsync(TestWorkspaceId, TestArtifactId, dateRange: 0);
+-
+-            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+-        }
+-
+-        /// <summary>
+-        /// Verifies GetTrendsAsync returns 400 when dateRange exceeds maximum.
+-        /// </summary>
+-        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+-        [TestMethod]
+-        public async Task GetTrendsAsync_DateRangeTooLarge_ReturnsBadRequest()
+-        {
+-            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+-
+-            var result = await controller.GetTrendsAsync(TestWorkspaceId, TestArtifactId, dateRange: 999);
+-
+-            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+-        }
++        // GetTrendsAsync dateRange tests removed — see note above. v2.0.6 strict date tests are below.
+ 
+         /// <summary>
+         /// Verifies GetRunsAsync returns 400 when status filter is invalid.
+@@ -727,18 +680,18 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         // ===================================================================
+-        // New tests: startTime/endTime precedence and multi-status parsing
++        // v2.0.6 strict date-contract tests for /summary, /trends, /errors/top
+         // ===================================================================
+ 
+         /// <summary>
+-        /// Verifies GetSummaryAsync uses startTime/endTime when both are provided, ignoring dateRange.
++        /// Verifies GetSummaryAsync forwards the explicit startTime/endTime instants to the query service.
+         /// </summary>
+         /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+         [TestMethod]
+-        public async Task GetSummaryAsync_StartTimeEndTime_UsesPrecedenceOverDateRange()
++        public async Task GetSummaryAsync_StartTimeEndTime_ForwardsDatesToQueryService()
+         {
+-            var expectedStart = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+-            var expectedEnd = new DateTime(2024, 3, 10, 0, 0, 0, DateTimeKind.Utc);
++            var expectedStart = DateTime.UtcNow.Date.AddDays(-10);
++            var expectedEnd = DateTime.UtcNow.Date.AddDays(-1);
+             string capturedStartDate = null;
+             string capturedEndDate = null;
+             this.mockQueryService
+@@ -760,16 +713,16 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 .ReturnsAsync(new InsightsSummaryResponse());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+-            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, dateRange: 7, startTime: expectedStart, endTime: expectedEnd);
++            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, startTime: expectedStart, endTime: expectedEnd);
+ 
+             var okResult = result as OkObjectResult;
+-            Assert.IsNotNull(okResult, "Should return 200 OK when startTime/endTime override dateRange.");
+-            Assert.AreEqual("2024-03-01", capturedStartDate, "startDate should come from startTime, not dateRange.");
+-            Assert.AreEqual("2024-03-10", capturedEndDate, "endDate should come from endTime, not dateRange.");
++            Assert.IsNotNull(okResult, "Should return 200 OK when startTime/endTime are provided.");
++            Assert.AreEqual(expectedStart.ToString("yyyy-MM-dd"), capturedStartDate, "startDate should be the UTC date portion of startTime.");
++            Assert.AreEqual(expectedEnd.ToString("yyyy-MM-dd"), capturedEndDate, "endDate should be the UTC date portion of endTime.");
+         }
+ 
+         /// <summary>
+-        /// Verifies GetSummaryAsync defaults endTime to today when only startTime is provided.
++        /// Verifies GetSummaryAsync defaults endTime to now when only startTime is provided.
+         /// </summary>
+         /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+         [TestMethod]
+@@ -789,23 +742,128 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         /// <summary>
+-        /// Verifies GetSummaryAsync defaults startTime from default date range when only endTime is provided.
++        /// Verifies GetSummaryAsync defaults startTime to now − 7d when only endTime is provided.
+         /// </summary>
+         /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+         [TestMethod]
+-        public async Task GetSummaryAsync_EndTimeOnly_DefaultsStartTimeFromDefault()
++        public async Task GetSummaryAsync_EndTimeOnly_DefaultsStartTimeToSevenDaysBefore()
+         {
+-            var endDate = new DateTime(2024, 3, 10, 0, 0, 0, DateTimeKind.Utc);
+-            var expectedStart = "2024-03-04"; // endDate - (DefaultDateRangeDays - 1) = 2024-03-10 - 6 = 2024-03-04
++            var endTime = DateTime.UtcNow.Date.AddDays(-1);
++            string capturedStartDate = null;
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), expectedStart, "2024-03-10", It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Callback<string, Guid, Guid, string, string, string, string, CancellationToken>(
++                    (t, w, a, tok, start, end, prev, ct) => { capturedStartDate = start; })
+                 .ReturnsAsync(new InsightsSummaryResponse());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+-            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, endTime: endDate);
++            // Bracket the call so that an unlucky UTC midnight rollover between
++            // the test's clock read and the controller's clock read does not flake.
++            var startLowerBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, endTime: endTime);
++            var startUpperBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
+ 
+             var okResult = result as OkObjectResult;
+             Assert.IsNotNull(okResult, "Should return 200 OK.");
++            CollectionAssert.Contains(
++                new[] { startLowerBound, startUpperBound },
++                capturedStartDate,
++                $"startDate should default to now − 7d (expected '{startLowerBound}' or '{startUpperBound}', got '{capturedStartDate}').");
++        }
++
++        /// <summary>
++        /// Verifies GetSummaryAsync defaults both startTime and endTime when neither is provided.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetSummaryAsync_NoTimeParams_DefaultsToLastSevenDays()
++        {
++            string capturedStartDate = null;
++            string capturedEndDate = null;
++            this.mockQueryService
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Callback<string, Guid, Guid, string, string, string, string, CancellationToken>(
++                    (t, w, a, tok, start, end, prev, ct) =>
++                    {
++                        capturedStartDate = start;
++                        capturedEndDate = end;
++                    })
++                .ReturnsAsync(new InsightsSummaryResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            // Bracket so a UTC midnight rollover between the test's clock read
++            // and the controller's clock read does not cause a 1-day-off flake.
++            var startLowerBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var endLowerBound = DateTime.UtcNow.ToString("yyyy-MM-dd");
++            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId);
++            var startUpperBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var endUpperBound = DateTime.UtcNow.ToString("yyyy-MM-dd");
++
++            var okResult = result as OkObjectResult;
++            Assert.IsNotNull(okResult, "Should return 200 OK with default window.");
++            CollectionAssert.Contains(
++                new[] { startLowerBound, startUpperBound },
++                capturedStartDate,
++                $"startDate should default to now − 7d (expected '{startLowerBound}' or '{startUpperBound}', got '{capturedStartDate}').");
++            CollectionAssert.Contains(
++                new[] { endLowerBound, endUpperBound },
++                capturedEndDate,
++                $"endDate should default to now (expected '{endLowerBound}' or '{endUpperBound}', got '{capturedEndDate}').");
++        }
++
++        /// <summary>
++        /// Verifies GetSummaryAsync supports same-day queries when explicit timestamps are provided.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetSummaryAsync_SameDayWithTimestamps_ReturnsOk()
++        {
++            var todayMorning = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(-1).AddHours(9), TimeSpan.Zero);
++            var todayEvening = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(-1).AddHours(17), TimeSpan.Zero);
++            this.mockQueryService
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new InsightsSummaryResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, startTime: todayMorning, endTime: todayEvening);
++
++            Assert.IsInstanceOfType(result, typeof(OkObjectResult), "Same-day windows with explicit timestamps must be accepted.");
++        }
++
++        /// <summary>
++        /// Verifies GetSummaryAsync returns 400 when startTime is older than the 60-day floor.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetSummaryAsync_StartTimeOlderThanSixtyDays_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetSummaryAsync(
++                TestWorkspaceId,
++                TestArtifactId,
++                startTime: DateTime.UtcNow.AddDays(-61),
++                endTime: DateTime.UtcNow);
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetSummaryAsync returns 400 when endTime is in the future.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetSummaryAsync_EndTimeInFuture_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetSummaryAsync(
++                TestWorkspaceId,
++                TestArtifactId,
++                startTime: DateTime.UtcNow.AddDays(-7),
++                endTime: DateTime.UtcNow.AddDays(1));
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+         }
+ 
+         /// <summary>
+@@ -820,30 +878,175 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             var result = await controller.GetSummaryAsync(
+                 TestWorkspaceId,
+                 TestArtifactId,
+-                startTime: new DateTime(2024, 4, 1, 0, 0, 0, DateTimeKind.Utc),
+-                endTime: new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Utc));
++                startTime: DateTime.UtcNow.AddDays(-1),
++                endTime: DateTime.UtcNow.AddDays(-5));
+ 
+             Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+         }
+ 
+         /// <summary>
+-        /// Verifies GetSummaryAsync returns 400 when startTime/endTime span exceeds 90 days.
++        /// Verifies GetSummaryAsync returns 400 when startTime equals endTime (bare-date same-day with no timestamps).
+         /// </summary>
+         /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+         [TestMethod]
+-        public async Task GetSummaryAsync_DateRangeExceeds90Days_ReturnsBadRequest()
++        public async Task GetSummaryAsync_StartTimeEqualsEndTime_ReturnsBadRequest()
+         {
++            var sameInstant = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(-2), TimeSpan.Zero);
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+-            var result = await controller.GetSummaryAsync(
++            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, startTime: sameInstant, endTime: sameInstant);
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetSummaryAsync returns 400 when the requested window exceeds 60 days.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetSummaryAsync_WindowExceedsSixtyDays_ReturnsBadRequest()
++        {
++            var endTime = DateTime.UtcNow;
++            var startTime = endTime.AddDays(-61);
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, startTime: startTime, endTime: endTime);
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetTrendsAsync defaults both startTime and endTime when neither is provided.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTrendsAsync_NoTimeParams_DefaultsToLastSevenDays()
++        {
++            string capturedStartDate = null;
++            string capturedEndDate = null;
++            this.mockQueryService
++                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Callback<string, Guid, Guid, string, string, string, string, CancellationToken>(
++                    (t, w, a, tok, start, end, grp, ct) =>
++                    {
++                        capturedStartDate = start;
++                        capturedEndDate = end;
++                    })
++                .ReturnsAsync(new InsightsTrendsResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var startLowerBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var endLowerBound = DateTime.UtcNow.ToString("yyyy-MM-dd");
++            var result = await controller.GetTrendsAsync(TestWorkspaceId, TestArtifactId);
++            var startUpperBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var endUpperBound = DateTime.UtcNow.ToString("yyyy-MM-dd");
++
++            Assert.IsInstanceOfType(result, typeof(OkObjectResult), "Should return 200 OK with default window.");
++            CollectionAssert.Contains(new[] { startLowerBound, startUpperBound }, capturedStartDate);
++            CollectionAssert.Contains(new[] { endLowerBound, endUpperBound }, capturedEndDate);
++        }
++
++        /// <summary>
++        /// Verifies GetTrendsAsync returns 400 when startTime is older than the 60-day floor.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTrendsAsync_StartTimeOlderThanSixtyDays_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTrendsAsync(
+                 TestWorkspaceId,
+                 TestArtifactId,
+-                startTime: new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+-                endTime: new DateTime(2024, 5, 1, 0, 0, 0, DateTimeKind.Utc)); // 121 days apart
++                startTime: DateTime.UtcNow.AddDays(-61),
++                endTime: DateTime.UtcNow);
+ 
+             Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+         }
+ 
++        /// <summary>
++        /// Verifies GetTrendsAsync returns 400 when the requested window exceeds 60 days.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTrendsAsync_WindowExceedsSixtyDays_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTrendsAsync(
++                TestWorkspaceId,
++                TestArtifactId,
++                startTime: DateTime.UtcNow.AddDays(-61),
++                endTime: DateTime.UtcNow.AddDays(-1)); // 60d but start floor fails — confirms strict-floor
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync defaults both startTime and endTime when neither is provided.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_NoTimeParams_DefaultsToLastSevenDays()
++        {
++            string capturedStartDate = null;
++            string capturedEndDate = null;
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .Callback<string, Guid, Guid, string, string, string, int, CancellationToken>(
++                    (t, w, a, tok, start, end, top, ct) =>
++                    {
++                        capturedStartDate = start;
++                        capturedEndDate = end;
++                    })
++                .ReturnsAsync(new InsightsTopErrorsResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var startLowerBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var endLowerBound = DateTime.UtcNow.ToString("yyyy-MM-dd");
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++            var startUpperBound = DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
++            var endUpperBound = DateTime.UtcNow.ToString("yyyy-MM-dd");
++
++            Assert.IsInstanceOfType(result, typeof(OkObjectResult), "Should return 200 OK with default window.");
++            CollectionAssert.Contains(new[] { startLowerBound, startUpperBound }, capturedStartDate);
++            CollectionAssert.Contains(new[] { endLowerBound, endUpperBound }, capturedEndDate);
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 400 when startTime is after endTime.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_StartTimeAfterEndTime_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(
++                TestWorkspaceId,
++                TestArtifactId,
++                startTime: DateTime.UtcNow.AddDays(-1),
++                endTime: DateTime.UtcNow.AddDays(-5));
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies that the three v2.0.6 endpoints no longer expose a dateRange query parameter.
++        /// </summary>
++        [TestMethod]
++        public void V206Endpoints_DoNotExposeDateRangeParameter()
++        {
++            var controllerType = typeof(LiveTableInsightsController);
++            foreach (var methodName in new[] { "GetSummaryAsync", "GetTrendsAsync", "GetTopErrorsAsync" })
++            {
++                var method = controllerType.GetMethod(methodName);
++                Assert.IsNotNull(method, $"Action {methodName} must exist.");
++                var hasDateRange = method.GetParameters().Any(p => p.Name == "dateRange");
++                Assert.IsFalse(hasDateRange, $"{methodName} must not declare a 'dateRange' parameter under v2.0.6.");
++            }
++        }
++
+         /// <summary>
+         /// Verifies GetRunsAsync parses multiple comma-separated statuses correctly.
+         /// </summary>
+@@ -1150,33 +1353,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             Assert.AreSame(blockedResponse, result, "Should return blocked response when GetInsightsTopErrorsPolicy is throttled.");
+         }
+ 
+-        /// <summary>
+-        /// Verifies GetTopErrorsAsync returns 400 when dateRange is zero.
+-        /// </summary>
+-        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+-        [TestMethod]
+-        public async Task GetTopErrorsAsync_DateRangeZero_ReturnsBadRequest()
+-        {
+-            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+-
+-            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, dateRange: 0);
+-
+-            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+-        }
+-
+-        /// <summary>
+-        /// Verifies GetTopErrorsAsync returns 400 when dateRange exceeds maximum.
+-        /// </summary>
+-        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+-        [TestMethod]
+-        public async Task GetTopErrorsAsync_DateRangeTooLarge_ReturnsBadRequest()
+-        {
+-            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+-
+-            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, dateRange: 999);
+-
+-            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
+-        }
++        // GetTopErrorsAsync dateRange tests removed — see note above. v2.0.6 strict date tests are below.
+ 
+         /// <summary>
+         /// Verifies GetTopErrorsAsync clamps limit to max when over 20.

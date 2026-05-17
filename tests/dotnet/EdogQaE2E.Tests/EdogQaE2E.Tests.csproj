@@ -53,6 +53,7 @@
     <Compile Include="FallbackPolicyHarness.cs" />
     <Compile Include="PipelineChaosHarness.cs" />
     <Compile Include="QaHistoryStoreHarness.cs" />
+    <Compile Include="CapabilityProbeHarness.cs" />
   </ItemGroup>
 
   <!-- Bundle fixture files into the output so the harness can read them at runtime -->

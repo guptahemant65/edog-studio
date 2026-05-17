@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "captured_at": null,
+  "pipeline": "legacy_chat_completions",
+  "status": "PENDING_T1B",
+  "notes": "Baseline is the legacy pipeline's score against this corpus — the floor the V2 pipeline (F27 P9 T1b/T1c) must beat. T1a ships only the scaffold; run_eval.py will populate this once the V2 client lands and the expected.json files are hand-graded.",
+  "prs": [
+    {
+      "pr_number": "975848",
+      "recall": null,
+      "precision": null,
+      "grounding_violations": null,
+      "scenarios_generated": null
+    },
+    {
+      "pr_number": "976609",
+      "recall": null,
+      "precision": null,
+      "grounding_violations": null,
+      "scenarios_generated": null
+    },
+    {
+      "pr_number": "977882",
+      "recall": null,
+      "precision": null,
+      "grounding_violations": null,
+      "scenarios_generated": null
+    }
+  ]
+}

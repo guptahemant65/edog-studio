@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "pr_number": "975848",
+  "curator": "PENDING_HUMAN_GRADING",
+  "curated_at": null,
+  "scenarios": [],
+  "notes": "Hand-grade required: list the scenarios a production-grade LLM SHOULD generate for this PR. Each scenario must include id, title, category, grounding (file + side + hunkId + newLine), assertions, and a confidence floor. See docs/specs/features/F27-qa-testing/p9-production-grade-llm.md §4 for the schema."
+}

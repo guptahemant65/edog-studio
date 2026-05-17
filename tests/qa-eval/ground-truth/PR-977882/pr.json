@@ -1,0 +1,26 @@
+{
+  "pr_number": "977882",
+  "pr_url": "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/977882",
+  "repo": "workload-fabriclivetable",
+  "title": "Merge pull request 977882 from users/guptahemant/insights-date-contract-v2.0.6 into main",
+  "description": "Insights date contract v2.0.6",
+  "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
+  "head_sha": "85497d9d8c28712a039fa8dc3e14190da513382e",
+  "author_email": "guptahemant@microsoft.com",
+  "authored_date": "2026-05-15T13:31:11Z",
+  "files_changed": 2,
+  "files": [
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs"
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 37719,
+  "captured_at": "2026-05-17T19:38:45Z",
+  "captured_from": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable (local clone)"
+}

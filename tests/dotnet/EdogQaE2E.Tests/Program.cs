@@ -5,11 +5,14 @@
 // F27 P3 - Entry point for the E2E harness binary.
 //
 // Usage: dotnet run -- <subcommand>
-//   analyze         - Run the analyzer pipeline against the pr-baseline fixture.
-//   aggregate       - Run the aggregator against canned mixed-verdict results.
-//   compose         - Run analyzer to aggregator, asserting no scenario IDs drift.
-//   classify-llm    - F27 P4: pin LlmProviderExceptionClassifier matrix.
-//   fallback-policy - F27 P4: pin QaAnalysisFallbackPolicy env-gate + tagging.
+//   analyze            - Run the analyzer pipeline against the pr-baseline fixture.
+//   aggregate          - Run the aggregator against canned mixed-verdict results.
+//   compose            - Run analyzer to aggregator, asserting no scenario IDs drift.
+//   classify-llm       - F27 P4: pin LlmProviderExceptionClassifier matrix.
+//   fallback-policy    - F27 P4: pin QaAnalysisFallbackPolicy env-gate + tagging.
+//   pipeline-chaos     - F27 P5: behavioural HTTP chaos pipeline.
+//   history-store      - F27 P7: durability + restart of EdogQaRunStore.
+//   capability-probe   - F27 P9 T1a: real Azure OpenAI capability probe.
 //
 // Each subcommand emits a single JSON block delimited by HARNESS-JSON-BEGIN
 // / HARNESS-JSON-END markers on stdout. The pytest wrapper parses those.
@@ -28,7 +31,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe}");
                 return 2;
             }
 
@@ -44,6 +47,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "fallback-policy" => await FallbackPolicyHarness.RunAsync(),
                     "pipeline-chaos" => await PipelineChaosHarness.RunAsync(cts.Token),
                     "history-store" => await QaHistoryStoreHarness.RunAsync(cts.Token),
+                    "capability-probe" => await CapabilityProbeHarness.RunAsync(cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }

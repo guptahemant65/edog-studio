@@ -1,0 +1,38 @@
+{
+  "pr_number": "976609",
+  "pr_url": "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/976609",
+  "repo": "workload-fabriclivetable",
+  "title": "Merged PR 976609: Add refreshPolicyDistribution (fractional model) to Insights /trends API",
+  "description": "Add refreshPolicyDistribution to /trends API",
+  "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+  "head_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
+  "author_email": "guptahemant@microsoft.com",
+  "authored_date": "2026-05-15T08:37:31Z",
+  "files_changed": 5,
+  "files": [
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs"
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 19769,
+  "captured_at": "2026-05-17T19:38:45Z",
+  "captured_from": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable (local clone)"
+}

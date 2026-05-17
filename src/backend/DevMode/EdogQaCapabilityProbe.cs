@@ -9,7 +9,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Net.Http;
+    using System.Text;
+    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -19,10 +22,10 @@ namespace Microsoft.LiveTable.Service.DevMode
     // The production-grade LLM scenario generation pipeline depends on
     // four Azure OpenAI deployment capabilities that are NOT universal:
     //
-    //   1. Deployment exists and is reachable
-    //   2. Responses API (vs Chat Completions only)
-    //   3. JSON Schema strict-mode constrained decoding
-    //   4. Reasoning effort parameter accepted
+    //   1. Deployment exists and is reachable          (AOAI_DEPLOYMENT_NOT_FOUND)
+    //   2. Responses API (vs Chat Completions only)    (AOAI_RESPONSES_API_UNAVAILABLE)
+    //   3. JSON Schema strict-mode constrained decoding (AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED)
+    //   4. Reasoning effort parameter accepted          (AOAI_REASONING_UNSUPPORTED)
     //
     // Different tenants / regions / SKUs expose different subsets. We
     // refuse to flip <see cref="EdogQaFeatureFlags.LlmV2"/> from
@@ -33,17 +36,26 @@ namespace Microsoft.LiveTable.Service.DevMode
     // <see cref="IsAzureOpenAiReadyForV2"/> is the single boolean the
     // orchestrator + hub consult before honouring the feature flag.
     //
-    // ── Implementation status ─────────────────────────────────────────
-    // T0 (this commit): the class, types, and cache are wired. The
-    //   <see cref="ProbeAsync"/> body is a deterministic stub that
-    //   records "PROBE_STUB_T0" and returns IsReady=false. The hub
-    //   therefore behaves as today — V2 is dormant.
+    // ── Implementation status (T1a) ───────────────────────────────────
+    // ProbeAsync now performs a real handshake against Azure OpenAI:
+    //   • POST {endpoint}/openai/responses?api-version=… with strict
+    //     json_schema constrained decoding + reasoning.effort=low.
+    //   • HTTP 200 + status="completed" + parseable {"ok":true} payload
+    //     promotes ResponsesApiAvailable + JsonSchemaStrictSupported.
+    //   • Presence of usage.output_tokens_details.reasoning_tokens
+    //     promotes ReasoningSupported.
+    //   • All four ⇒ IsReady=true.
     //
-    // T1: ProbeAsync performs a real minimal-request handshake to the
-    //   configured deployment and populates each capability flag from
-    //   the response. T1 exit gate: probe returns IsReady=true against
-    //   the Azure deployment in CI and against operator-supplied prod
-    //   tenants.
+    // Network + config failures map to stable error codes (below) so
+    // the orchestrator can render an actionable inline error and the
+    // operator can recover without console diving.
+    //
+    // ── Tests ─────────────────────────────────────────────────────────
+    // ProbeOnceAsync accepts an explicit <see cref="ProbeConfig"/> and
+    // never touches the cache — the harness pattern in
+    // tests/dotnet/EdogQaE2E.Tests/CapabilityProbeHarness.cs uses it to
+    // exercise all branches via an injected HttpMessageHandler without
+    // any live network call.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
@@ -53,7 +65,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     internal static class EdogQaCapabilityProbe
     {
-        // ── Error codes ────────────────────────────────────────────────
+        // ── Error codes (wire-stable) ──────────────────────────────────
 
         /// <summary>Emitted when the configured deployment name resolves to no model.</summary>
         internal const string ErrorCodeDeploymentNotFound = "AOAI_DEPLOYMENT_NOT_FOUND";
@@ -64,11 +76,31 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Emitted when <c>text.format.type = "json_schema"</c> is rejected.</summary>
         internal const string ErrorCodeJsonSchemaStrictUnsupported = "AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED";
 
-        /// <summary>Emitted when <c>reasoning.effort</c> is rejected or silently ignored.</summary>
+        /// <summary>Emitted when <c>reasoning.effort</c> is rejected or the deployment is not reasoning-capable.</summary>
         internal const string ErrorCodeReasoningUnsupported = "AOAI_REASONING_UNSUPPORTED";
 
-        /// <summary>Sentinel error written by the T0 stub. Replaced by real errors in T1.</summary>
-        internal const string ErrorCodeStubT0 = "PROBE_STUB_T0";
+        /// <summary>Emitted when no endpoint or no API key is configured.</summary>
+        internal const string ErrorCodeConfigMissing = "PROBE_CONFIG_MISSING";
+
+        /// <summary>Emitted when the HTTP call throws (transport / DNS / TLS / timeout).</summary>
+        internal const string ErrorCodeNetworkError = "PROBE_NETWORK_ERROR";
+
+        /// <summary>Emitted when the response body is HTTP 200 but not parseable as the expected Responses-API shape.</summary>
+        internal const string ErrorCodeResponseUnparseable = "PROBE_RESPONSE_UNPARSEABLE";
+
+        // ── Probe inputs ───────────────────────────────────────────────
+
+        /// <summary>Explicit probe configuration. Production callers use the env-driven overload; tests inject a <see cref="ProbeConfig"/> directly.</summary>
+        internal sealed class ProbeConfig
+        {
+            public string Endpoint { get; set; }
+
+            public string ApiKey { get; set; }
+
+            public string Deployment { get; set; }
+
+            public string ApiVersion { get; set; }
+        }
 
         // ── Result type ────────────────────────────────────────────────
 
@@ -93,7 +125,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// <summary>True if a strict json_schema request was honoured (output matched schema).</summary>
             public bool JsonSchemaStrictSupported { get; set; }
 
-            /// <summary>True if <c>reasoning_tokens &gt; 0</c> was reported in usage.</summary>
+            /// <summary>True if usage.output_tokens_details.reasoning_tokens was reported.</summary>
             public bool ReasoningSupported { get; set; }
 
             /// <summary>Largest <c>max_output_tokens</c> the deployment accepted without rejection.</summary>
@@ -133,13 +165,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             Volatile.Write(ref _cached, null);
         }
 
-        // ── Probe ──────────────────────────────────────────────────────
+        // ── Production entry point (env-driven, cached) ────────────────
 
         /// <summary>
         /// Runs the capability probe at most once per process and returns
-        /// the cached result. T0 stub: records ErrorCodeStubT0 and returns
-        /// IsReady=false without making any network call. T1 fills in a real
-        /// handshake.
+        /// the cached result. Configuration is read from environment
+        /// variables (AZURE_OPENAI_PRO_* preferred, AZURE_OPENAI_* fallback).
         /// </summary>
         /// <param name="httpClient">Shared HttpClient — supplied by the registrar.</param>
         /// <param name="ct">Cancellation token (typically host shutdown).</param>
@@ -154,33 +185,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 cached = Volatile.Read(ref _cached);
                 if (cached != null) return cached;
 
-                var deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_DEPLOYMENT")
-                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
-                    ?? "gpt-5.4";
-
-                var endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_ENDPOINT")
-                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
-                    ?? "";
-
-                var apiVersion = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_API_VERSION")
-                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION")
-                    ?? "2025-04-01-preview";
-
-                var result = new ProbeResult
-                {
-                    IsReady = false,
-                    Deployment = deployment,
-                    EndpointHost = SafeHost(endpoint),
-                    ApiVersion = apiVersion,
-                    ResponsesApiAvailable = false,
-                    JsonSchemaStrictSupported = false,
-                    ReasoningSupported = false,
-                    MaxOutputTokensVerified = 0,
-                    Errors = { ErrorCodeStubT0 + " — capability probe not yet implemented (F27 P9 T1)" },
-                    ProbedAt = DateTimeOffset.UtcNow,
-                    ElapsedMilliseconds = 0,
-                };
-
+                var cfg = ReadConfigFromEnv();
+                var result = await ProbeOnceAsync(httpClient, cfg, ct).ConfigureAwait(false);
                 Volatile.Write(ref _cached, result);
                 return result;
             }
@@ -190,11 +196,360 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
         }
 
+        // ── Test entry point (explicit config, no cache) ───────────────
+
+        /// <summary>
+        /// Runs a single probe attempt against the supplied config without
+        /// touching the process-wide cache. Used by the test harness to
+        /// exercise each capability branch with an injected
+        /// <see cref="HttpMessageHandler"/>.
+        /// </summary>
+        internal static async Task<ProbeResult> ProbeOnceAsync(
+            HttpClient httpClient,
+            ProbeConfig cfg,
+            CancellationToken ct)
+        {
+            if (httpClient == null) throw new ArgumentNullException(nameof(httpClient));
+            cfg ??= new ProbeConfig();
+
+            var deployment = string.IsNullOrWhiteSpace(cfg.Deployment) ? "gpt-5.4" : cfg.Deployment.Trim();
+            var apiVersion = string.IsNullOrWhiteSpace(cfg.ApiVersion) ? "2025-04-01-preview" : cfg.ApiVersion.Trim();
+            var endpoint = (cfg.Endpoint ?? string.Empty).Trim();
+            var apiKey = (cfg.ApiKey ?? string.Empty).Trim();
+
+            var result = new ProbeResult
+            {
+                IsReady = false,
+                Deployment = deployment,
+                EndpointHost = SafeHost(endpoint),
+                ApiVersion = apiVersion,
+                ResponsesApiAvailable = false,
+                JsonSchemaStrictSupported = false,
+                ReasoningSupported = false,
+                MaxOutputTokensVerified = 0,
+                ProbedAt = DateTimeOffset.UtcNow,
+                ElapsedMilliseconds = 0,
+            };
+
+            if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
+            {
+                result.Errors.Add(ErrorCodeConfigMissing
+                    + " — set AZURE_OPENAI_PRO_ENDPOINT + AZURE_OPENAI_PRO_API_KEY"
+                    + " (or AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY) and restart.");
+                return result;
+            }
+
+            const int RequestedMaxOutputTokens = 2048;
+            var url = $"{endpoint.TrimEnd('/')}/openai/responses?api-version={apiVersion}";
+            var requestBody = BuildProbeRequestBody(deployment, RequestedMaxOutputTokens);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("api-key", apiKey);
+            request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+
+            var sw = Stopwatch.StartNew();
+            HttpResponseMessage response;
+            string responseBody;
+            try
+            {
+                response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
+                responseBody = response.Content == null
+                    ? string.Empty
+                    : await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                result.ElapsedMilliseconds = sw.ElapsedMilliseconds;
+                result.Errors.Add(ErrorCodeNetworkError + " — " + ex.GetType().Name + ": " + Truncate(ex.Message, 240));
+                return result;
+            }
+            finally
+            {
+                sw.Stop();
+                result.ElapsedMilliseconds = sw.ElapsedMilliseconds;
+            }
+
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    ClassifyHttpError((int)response.StatusCode, responseBody, result);
+                    return result;
+                }
+
+                // HTTP 200 — parse the Responses-API envelope.
+                if (!TryParseProbeResponse(responseBody, RequestedMaxOutputTokens, result))
+                {
+                    // Errors already populated by TryParseProbeResponse.
+                    return result;
+                }
+
+                result.IsReady =
+                    result.ResponsesApiAvailable
+                    && result.JsonSchemaStrictSupported
+                    && result.ReasoningSupported
+                    && result.MaxOutputTokensVerified > 0;
+
+                return result;
+            }
+        }
+
         // ── Helpers ────────────────────────────────────────────────────
+
+        private static ProbeConfig ReadConfigFromEnv()
+        {
+            return new ProbeConfig
+            {
+                Endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_ENDPOINT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+                    ?? string.Empty,
+                ApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_API_KEY")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")
+                    ?? string.Empty,
+                Deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_DEPLOYMENT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+                    ?? "gpt-5.4",
+                ApiVersion = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_API_VERSION")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION")
+                    ?? "2025-04-01-preview",
+            };
+        }
+
+        private static string BuildProbeRequestBody(string deployment, int maxOutputTokens)
+        {
+            // Strict json_schema with a trivial {ok:boolean} contract is
+            // the minimum surface that proves all four capabilities work
+            // together. The user prompt is deliberately small to keep
+            // probe cost negligible (~$0.0005 against gpt-5.4 mini).
+            var payload = new
+            {
+                model = deployment,
+                input = new[]
+                {
+                    new
+                    {
+                        role = "user",
+                        content = "You are a deployment probe. Reply with the JSON object that matches the schema. Set ok to true.",
+                    },
+                },
+                reasoning = new { effort = "low" },
+                max_output_tokens = maxOutputTokens,
+                text = new
+                {
+                    format = new
+                    {
+                        type = "json_schema",
+                        name = "edog_probe",
+                        strict = true,
+                        schema = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                ok = new { type = "boolean" },
+                            },
+                            required = new[] { "ok" },
+                            additionalProperties = false,
+                        },
+                    },
+                },
+            };
+
+            return JsonSerializer.Serialize(payload);
+        }
+
+        private static void ClassifyHttpError(int statusCode, string body, ProbeResult result)
+        {
+            body ??= string.Empty;
+            var bodyLower = body.ToLowerInvariant();
+
+            if (statusCode == 404)
+            {
+                // Two flavours: deployment name unknown vs Responses API not enabled.
+                if (bodyLower.Contains("deploymentnotfound")
+                    || bodyLower.Contains("deployment not found")
+                    || bodyLower.Contains("the api deployment for this resource does not exist"))
+                {
+                    result.Errors.Add(ErrorCodeDeploymentNotFound
+                        + $" — deployment '{result.Deployment}' is not provisioned in this resource.");
+                    return;
+                }
+
+                result.Errors.Add(ErrorCodeResponsesApiUnavailable
+                    + " — POST /openai/responses returned 404."
+                    + " The Responses API requires api-version=2025-04-01-preview (or later)"
+                    + " and an Azure OpenAI deployment that supports it.");
+                return;
+            }
+
+            if (statusCode == 400)
+            {
+                if (bodyLower.Contains("text.format")
+                    || bodyLower.Contains("json_schema")
+                    || bodyLower.Contains("response_format")
+                    || bodyLower.Contains("structured output"))
+                {
+                    result.Errors.Add(ErrorCodeJsonSchemaStrictUnsupported
+                        + " — text.format.type=\"json_schema\" with strict=true was rejected. "
+                        + Truncate(body, 200));
+                    return;
+                }
+
+                if (bodyLower.Contains("reasoning"))
+                {
+                    result.Errors.Add(ErrorCodeReasoningUnsupported
+                        + " — reasoning.effort was rejected. " + Truncate(body, 200));
+                    return;
+                }
+
+                result.Errors.Add(ErrorCodeNetworkError
+                    + $" — HTTP 400. " + Truncate(body, 240));
+                return;
+            }
+
+            // Generic catch-all (401/403/429/5xx etc.). These are not
+            // capability failures; map to NETWORK_ERROR so the orchestrator
+            // can render a clear "transient" message and the operator can
+            // retry without redeploying.
+            result.Errors.Add(ErrorCodeNetworkError
+                + $" — HTTP {statusCode}. " + Truncate(body, 240));
+        }
+
+        private static bool TryParseProbeResponse(string body, int requestedMaxOutputTokens, ProbeResult result)
+        {
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                result.Errors.Add(ErrorCodeResponseUnparseable + " — empty response body on HTTP 200.");
+                return false;
+            }
+
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                result.Errors.Add(ErrorCodeResponseUnparseable
+                    + " — could not parse response JSON: " + Truncate(ex.Message, 200));
+                return false;
+            }
+
+            using (doc)
+            {
+                var root = doc.RootElement;
+
+                // The Responses-API envelope must have a "status" and an "output" array.
+                if (!root.TryGetProperty("status", out var statusElement)
+                    || statusElement.ValueKind != JsonValueKind.String
+                    || !root.TryGetProperty("output", out var outputElement)
+                    || outputElement.ValueKind != JsonValueKind.Array)
+                {
+                    result.Errors.Add(ErrorCodeResponseUnparseable
+                        + " — Responses-API envelope missing 'status' or 'output'.");
+                    return false;
+                }
+
+                var status = statusElement.GetString();
+                if (!string.Equals(status, "completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Errors.Add(ErrorCodeResponseUnparseable
+                        + $" — status was '{status}', expected 'completed'.");
+                    return false;
+                }
+
+                // ResponsesApiAvailable is true as soon as we got a valid envelope back.
+                result.ResponsesApiAvailable = true;
+
+                // Extract the assistant message text and verify it parses as our schema.
+                var messageText = ExtractFirstMessageText(outputElement);
+                if (!string.IsNullOrWhiteSpace(messageText)
+                    && TryParseSchemaPayload(messageText, out var ok))
+                {
+                    // Strict schema honoured ⇒ ok must be a boolean and the JSON must parse.
+                    result.JsonSchemaStrictSupported = ok;
+                }
+                else
+                {
+                    result.Errors.Add(ErrorCodeJsonSchemaStrictUnsupported
+                        + " — model did not emit a JSON payload matching the requested schema."
+                        + " message text was: " + Truncate(messageText ?? "<null>", 200));
+                    // Continue — we still want to learn about reasoning support.
+                }
+
+                // Reasoning support: usage.output_tokens_details.reasoning_tokens must be present.
+                if (root.TryGetProperty("usage", out var usage)
+                    && usage.ValueKind == JsonValueKind.Object
+                    && usage.TryGetProperty("output_tokens_details", out var details)
+                    && details.ValueKind == JsonValueKind.Object
+                    && details.TryGetProperty("reasoning_tokens", out var reasoningTokens)
+                    && reasoningTokens.ValueKind == JsonValueKind.Number)
+                {
+                    result.ReasoningSupported = true;
+                }
+                else
+                {
+                    result.Errors.Add(ErrorCodeReasoningUnsupported
+                        + " — usage.output_tokens_details.reasoning_tokens not reported."
+                        + " The deployment is not a reasoning model OR did not include the field.");
+                }
+
+                // The probe completed with the requested ceiling not rejected.
+                result.MaxOutputTokensVerified = requestedMaxOutputTokens;
+
+                return true;
+            }
+        }
+
+        private static string ExtractFirstMessageText(JsonElement outputArray)
+        {
+            foreach (var item in outputArray.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) continue;
+                if (!item.TryGetProperty("type", out var typeElement)
+                    || typeElement.ValueKind != JsonValueKind.String) continue;
+                if (typeElement.GetString() != "message") continue;
+                if (!item.TryGetProperty("content", out var content)
+                    || content.ValueKind != JsonValueKind.Array) continue;
+
+                foreach (var contentItem in content.EnumerateArray())
+                {
+                    if (contentItem.ValueKind != JsonValueKind.Object) continue;
+                    if (!contentItem.TryGetProperty("text", out var textElement)) continue;
+                    if (textElement.ValueKind != JsonValueKind.String) continue;
+                    return textElement.GetString();
+                }
+            }
+
+            return null;
+        }
+
+        private static bool TryParseSchemaPayload(string text, out bool okValue)
+        {
+            okValue = false;
+            try
+            {
+                using var doc = JsonDocument.Parse(text);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+                if (!doc.RootElement.TryGetProperty("ok", out var okElement)) return false;
+                if (okElement.ValueKind == JsonValueKind.True) { okValue = true; return true; }
+                if (okElement.ValueKind == JsonValueKind.False) { okValue = false; return true; }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         private static string SafeHost(string endpoint)
         {
-            if (string.IsNullOrWhiteSpace(endpoint)) return "";
+            if (string.IsNullOrWhiteSpace(endpoint)) return string.Empty;
             try
             {
                 var u = new Uri(endpoint.TrimEnd('/') + "/");
@@ -202,8 +557,16 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             catch
             {
-                return "";
+                return string.Empty;
             }
+        }
+
+        private static string Truncate(string s, int max)
+        {
+            if (string.IsNullOrEmpty(s)) return s ?? string.Empty;
+            if (s.Length <= max) return s;
+            return s.Substring(0, max) + "…";
         }
     }
 }
+
