@@ -4536,30 +4536,40 @@ class WorkspaceExplorer {
       return;
     }
 
+    const isModal = !!(opts && opts.modal);
     const wrap = document.createElement('div');
     wrap.className = 'ws-preview-rows-wrap';
     const tbl = document.createElement('table');
     tbl.className =
-      'ws-preview-rows-grid' + (opts && opts.modal ? ' ws-preview-rows-grid--wide' : '');
+      'ws-preview-rows-grid' + (isModal ? ' ws-preview-rows-grid--wide' : '');
     let thead = '<thead><tr>';
+    if (isModal) {
+      thead += '<th class="ws-preview-rows-th ws-rv-rownum-th"><span class="ws-preview-rows-col-name">#</span></th>';
+    }
     for (const c of cols) {
       const pcCls = c.isPartition ? ' is-partition' : '';
       const title = c.isPartition
         ? `${c.name} (partition column, ${c.type})`
         : `${c.name} (${c.type})`;
+      const typeGroup = this._typeGroup(c.type);
       thead +=
         `<th class="ws-preview-rows-th${pcCls}" title="${this._esc(title)}">` +
         `<span class="ws-preview-rows-col-name">${this._esc(c.name)}</span>` +
-        `<span class="ws-preview-rows-col-type">${this._esc(c.type)}</span>` +
+        `<span class="ws-preview-rows-col-type" data-type-group="${typeGroup}">${this._esc(c.type)}</span>` +
         '</th>';
     }
     thead += '</tr></thead>';
     let tbody = '<tbody>';
-    for (const r of rows) {
+    for (let ri = 0; ri < rows.length; ri++) {
+      const r = rows[ri];
       tbody += '<tr>';
+      if (isModal) {
+        tbody += `<td class="ws-preview-rows-td ws-rv-rownum">${ri + 1}</td>`;
+      }
       for (const c of cols) {
         const v = r[c.name];
-        tbody += `<td class="ws-preview-rows-td">${this._formatCellValue(v)}</td>`;
+        const numCls = typeof v === 'number' ? ' style="text-align:right"' : '';
+        tbody += `<td class="ws-preview-rows-td"${numCls}>${this._formatCellValue(v, c.name, opts)}</td>`;
       }
       tbody += '</tr>';
     }
@@ -4728,18 +4738,39 @@ class WorkspaceExplorer {
     const dialog = document.createElement('div');
     dialog.className = 'ws-sample-modal-dialog';
 
+    /* ── Header ── */
     const header = document.createElement('div');
     header.className = 'ws-sample-modal-header';
 
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'ws-sample-modal-header-left';
+
+    const breadcrumb = document.createElement('div');
+    breadcrumb.className = 'ws-sample-modal-breadcrumb';
+    breadcrumb.innerHTML =
+      '<span>Sample Rows</span>' +
+      '<span class="ws-sample-modal-breadcrumb-sep">\u203A</span>' +
+      '<span>Preview</span>';
+    headerLeft.appendChild(breadcrumb);
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'ws-sample-modal-title-row';
+
     const title = document.createElement('div');
     title.className = 'ws-sample-modal-title';
-    title.textContent = `${state.schemaName}.${state.tableName}`;
-    header.appendChild(title);
+    title.innerHTML =
+      `<span class="ws-sample-modal-title-schema">${this._esc(state.schemaName || 'dbo')}</span>` +
+      '<span class="ws-sample-modal-title-dot">.</span>' +
+      `<span class="ws-sample-modal-title-name">${this._esc(state.tableName)}</span>`;
+    titleRow.appendChild(title);
+    headerLeft.appendChild(titleRow);
 
     const meta = document.createElement('div');
     meta.className = 'ws-sample-modal-meta';
-    header.appendChild(meta);
+    headerLeft.appendChild(meta);
     state.modalMetaEl = meta;
+
+    header.appendChild(headerLeft);
 
     const actions = document.createElement('div');
     actions.className = 'ws-sample-modal-actions';
@@ -4764,11 +4795,18 @@ class WorkspaceExplorer {
     actions.appendChild(close);
     header.appendChild(actions);
 
+    /* ── Body ── */
     const body = document.createElement('div');
     body.className = 'ws-sample-modal-body';
 
+    /* ── Footer ── */
+    const footer = document.createElement('div');
+    footer.className = 'ws-sample-modal-footer';
+    state.modalFooterEl = footer;
+
     dialog.appendChild(header);
     dialog.appendChild(body);
+    dialog.appendChild(footer);
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
@@ -4813,6 +4851,7 @@ class WorkspaceExplorer {
     state.modalEl = null;
     state.modalBodyEl = null;
     state.modalMetaEl = null;
+    state.modalFooterEl = null;
     this._openSampleModals.delete(block);
     const prev = state.prevActiveElement;
     state.prevActiveElement = null;
@@ -4821,7 +4860,7 @@ class WorkspaceExplorer {
     }
   }
 
-  /** Compose the modal header meta line from the current result. */
+  /** Compose the modal header meta pills + footer from the current result. */
   _updateModalMeta(block) {
     const state = block._rowsState;
     if (!state || !state.modalMetaEl) return;
@@ -4831,34 +4870,157 @@ class WorkspaceExplorer {
       return;
     }
     const rowCount = Array.isArray(r.rows) ? r.rows.length : r.rowsReturned || 0;
-    let txt = `${rowCount} ${rowCount === 1 ? 'row' : 'rows'}`;
+    const colCount = Array.isArray(r.columns) ? r.columns.length : 0;
+
+    // Header pills
+    let pillsHtml =
+      `<span class="ws-sample-modal-pill ws-sample-modal-pill--accent">` +
+      `<span class="ws-sample-modal-pill-num">${rowCount}</span> ${rowCount === 1 ? 'row' : 'rows'}</span>`;
+
+    pillsHtml +=
+      `<span class="ws-sample-modal-pill">` +
+      `<span class="ws-sample-modal-pill-num">${colCount}</span> columns</span>`;
+
     if (r.fileCount && r.fileCount > 1) {
-      txt += ` \u00b7 1 of ${r.fileCount} files`;
+      pillsHtml +=
+        `<span class="ws-sample-modal-pill">` +
+        `<span class="ws-sample-modal-pill-num">${r.filesRead || 1}</span> of ${r.fileCount} files</span>`;
     }
     if (Array.isArray(r.warnings) && r.warnings.length) {
-      txt += ` \u00b7 ${r.warnings.length} warning${r.warnings.length === 1 ? '' : 's'}`;
+      pillsHtml +=
+        `<span class="ws-sample-modal-pill">` +
+        `${r.warnings.length} warning${r.warnings.length === 1 ? '' : 's'}</span>`;
     }
-    state.modalMetaEl.textContent = txt;
+    state.modalMetaEl.innerHTML = pillsHtml;
+
+    // Footer
+    if (state.modalFooterEl) {
+      let footerHtml = '<div class="ws-sample-modal-footer-left">';
+      footerHtml +=
+        `<span class="ws-sample-modal-stat">` +
+        `<span class="ws-sample-modal-stat-num">${rowCount}</span>` +
+        `<span class="ws-sample-modal-stat-label"> rows</span></span>`;
+      footerHtml +=
+        `<span class="ws-sample-modal-stat">` +
+        `<span class="ws-sample-modal-stat-num">${colCount}</span>` +
+        `<span class="ws-sample-modal-stat-label"> columns</span></span>`;
+      footerHtml += '</div><div class="ws-sample-modal-footer-right">';
+      if (r.truncated) {
+        footerHtml +=
+          `<span class="ws-sample-modal-truncation-warn">` +
+          `Results truncated \u2014 showing first ${r.rowsReturned || rowCount} rows</span>`;
+      }
+      footerHtml += '</div>';
+      state.modalFooterEl.innerHTML = footerHtml;
+    }
   }
 
   /**
-   * Format a single sample-row cell for the grid:
-   *   - null         → muted "NULL"
-   *   - objects/arrays → pretty JSON in a mono span
-   *   - everything else → escaped string
+   * Format a single sample-row cell for the grid. Smart renderers:
+   *   - null/undefined  → dimmed italic "NULL"
+   *   - ISO timestamps  → "May 14, 14:35:54"
+   *   - duration (ms)   → "7m 33s" or "312ms" (when colName contains "duration")
+   *   - status strings  → colored pill
+   *   - GUIDs           → truncated 8-char prefix with tooltip
+   *   - long strings    → truncated with tooltip
+   *   - numbers         → right-aligned locale-formatted
+   *   - objects/arrays  → pretty JSON
    */
-  _formatCellValue(v) {
+  _formatCellValue(v, colName, opts) {
     if (v === null || v === undefined) {
       return '<span class="ws-preview-rows-null">NULL</span>';
     }
+
     if (typeof v === 'object') {
       try {
-        return `<span class="ws-preview-rows-nested">${this._esc(JSON.stringify(v))}</span>`;
+        const json = JSON.stringify(v);
+        const esc = this._esc(json);
+        if (json.length > 50) {
+          return `<span class="ws-rv-truncated ws-preview-rows-nested" title="${esc}">${this._esc(json.slice(0, 50))}\u2026</span>`;
+        }
+        return `<span class="ws-preview-rows-nested">${esc}</span>`;
       } catch {
         return `<span class="ws-preview-rows-nested">${this._esc(String(v))}</span>`;
       }
     }
-    return this._esc(String(v));
+
+    const str = String(v);
+
+    // Status strings → colored pill
+    const statusMap = {
+      Completed: 'ok', Succeeded: 'ok', Success: 'ok',
+      Failed: 'fail', Error: 'fail',
+      Running: 'running', InProgress: 'running',
+      Cancelled: 'warn', Canceled: 'warn',
+      Pending: 'pending', Queued: 'pending',
+    };
+    if (statusMap[str]) {
+      return `<span class="ws-rv-status ws-rv-status--${statusMap[str]}">${this._esc(str)}</span>`;
+    }
+
+    // Duration (ms) — only when column name hints at duration
+    if (
+      typeof v === 'number' &&
+      colName &&
+      /duration|elapsed|latency|time.?ms/i.test(colName)
+    ) {
+      return `<span class="ws-rv-duration">${this._esc(this._fmtDuration(v))}</span>`;
+    }
+
+    // Numbers → right-aligned mono with locale formatting
+    if (typeof v === 'number') {
+      const formatted = Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 4 });
+      return `<span class="ws-rv-number">${this._esc(formatted)}</span>`;
+    }
+
+    // ISO 8601 timestamps → formatted date + time
+    if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const datePart = `${months[d.getMonth()]} ${d.getDate()}`;
+        const timePart = d.toTimeString().slice(0, 8);
+        return `<span class="ws-rv-time" title="${this._esc(str)}">` +
+          `<span class="ws-rv-time-date">${datePart}</span>` +
+          `<span class="ws-rv-time-clock">${timePart}</span></span>`;
+      }
+    }
+
+    // GUID — 36-char UUID pattern → truncated with tooltip
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+      return `<span class="ws-rv-guid" title="${this._esc(str)}">` +
+        `<span class="ws-rv-guid-prefix">${this._esc(str.slice(0, 8))}</span>\u2026</span>`;
+    }
+
+    // Long strings → truncated with tooltip
+    if (str.length > 50) {
+      return `<span class="ws-rv-truncated" title="${this._esc(str)}">${this._esc(str.slice(0, 50))}\u2026</span>`;
+    }
+
+    return this._esc(str);
+  }
+
+  /** Format milliseconds as human-readable duration (e.g. "7m 33s", "312ms"). */
+  _fmtDuration(ms) {
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    const totalSec = Math.floor(ms / 1000);
+    if (totalSec < 60) return `${totalSec}s`;
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return rm ? `${h}h ${rm}m` : `${h}h`;
+  }
+
+  /** Map a column type string to a type group for the colored dot indicator. */
+  _typeGroup(type) {
+    if (!type) return 'string';
+    const t = type.toLowerCase();
+    if (/int|long|short|decimal|double|float|numeric|byte/.test(t)) return 'number';
+    if (/bool/.test(t)) return 'bool';
+    if (/date|time|timestamp/.test(t)) return 'date';
+    return 'string';
   }
 
   /** Regular table → render synthesized DDL + Delta properties. */
