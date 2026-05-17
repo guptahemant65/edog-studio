@@ -193,7 +193,7 @@ class DagLayout {
     return buckets;
   }
 
-  /** Two-pass barycenter crossing minimization (top-down then bottom-up). */
+  /** Multi-pass barycenter crossing minimization (alternating top-down / bottom-up). */
   _minimizeCrossings(layerBuckets, allEdges, layerOf) {
     // Build adjacency for fast lookup
     const childrenOf = new Map();
@@ -205,14 +205,17 @@ class DagLayout {
       parentsOf.get(e.to).push(e.from);
     }
 
-    // Top-down pass: order each layer based on parent positions
-    for (let i = 1; i < layerBuckets.length; i++) {
-      this._sortByBarycenter(layerBuckets, i, parentsOf, layerBuckets[i - 1]);
-    }
-
-    // Bottom-up pass: order each layer based on child positions
-    for (let i = layerBuckets.length - 2; i >= 0; i--) {
-      this._sortByBarycenter(layerBuckets, i, childrenOf, layerBuckets[i + 1]);
+    // Run multiple passes — each pass reduces crossings further.
+    // 4 iterations is standard for Sugiyama; diminishing returns beyond that.
+    for (let iter = 0; iter < 4; iter++) {
+      // Top-down pass: order each layer based on parent positions
+      for (let i = 1; i < layerBuckets.length; i++) {
+        this._sortByBarycenter(layerBuckets, i, parentsOf, layerBuckets[i - 1]);
+      }
+      // Bottom-up pass: order each layer based on child positions
+      for (let i = layerBuckets.length - 2; i >= 0; i--) {
+        this._sortByBarycenter(layerBuckets, i, childrenOf, layerBuckets[i + 1]);
+      }
     }
   }
 
