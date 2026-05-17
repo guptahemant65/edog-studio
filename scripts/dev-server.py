@@ -2340,6 +2340,17 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 self.send_response(resp.status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(resp_body)))
+                # Forward LRO-relevant headers so the browser can poll long-running ops.
+                # Without these, 202 responses are unusable client-side (no Location to
+                # extract operation/job ID from).
+                _exposed = []
+                for hdr in ("Location", "Retry-After", "x-ms-operation-id"):
+                    val = resp.headers.get(hdr)
+                    if val:
+                        self.send_header(hdr, val)
+                        _exposed.append(hdr)
+                if _exposed:
+                    self.send_header("Access-Control-Expose-Headers", ", ".join(_exposed))
                 self.end_headers()
                 self.wfile.write(resp_body)
         except urllib.error.HTTPError as e:

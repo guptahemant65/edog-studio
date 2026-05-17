@@ -235,32 +235,39 @@ class CodeGenerationEngine {
    * @returns {Object} Fabric notebook format
    */
   generateNotebookPayload(cells) {
+    var notebookJson = JSON.stringify({
+      cells: cells.map(function(c) {
+        return {
+          cell_type: 'code',
+          source: [c.content],
+          metadata: {
+            'microsoft.fabric': { language: c.language },
+            'node_id': c.nodeId,
+            'node_name': c.nodeName
+          },
+          outputs: [],
+          execution_count: null
+        };
+      }),
+      metadata: {
+        kernel_info: { name: 'synapse_pyspark' },
+        language_info: { name: 'python' }
+      },
+      nbformat: 4,
+      nbformat_minor: 5
+    });
+
+    // Fabric `payloadType: InlineBase64` requires the payload to actually be base64-encoded.
+    // btoa() only handles Latin-1 — wrap with encodeURIComponent/unescape to survive
+    // any non-ASCII chars users put in node names or SQL content.
+    var base64Payload = btoa(unescape(encodeURIComponent(notebookJson)));
+
     return {
       definition: {
         format: 'ipynb',
         parts: [{
           path: 'notebook-content.py',
-          payload: JSON.stringify({
-            cells: cells.map(function(c) {
-              return {
-                cell_type: 'code',
-                source: [c.content],
-                metadata: {
-                  'microsoft.fabric': { language: c.language },
-                  'node_id': c.nodeId,
-                  'node_name': c.nodeName
-                },
-                outputs: [],
-                execution_count: null
-              };
-            }),
-            metadata: {
-              kernel_info: { name: 'synapse_pyspark' },
-              language_info: { name: 'python' }
-            },
-            nbformat: 4,
-            nbformat_minor: 5
-          }),
+          payload: base64Payload,
           payloadType: 'InlineBase64'
         }]
       }

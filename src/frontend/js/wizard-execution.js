@@ -15,42 +15,48 @@
    STEP DEFINITIONS
    ═══════════════════════════════════════════════════════════════════ */
 
+// URL templates use the dev-server proxy path `/api/fabric/...` (NOT `/api/fabric/v1/...`)
+// The proxy at scripts/dev-server.py prepends `/v1` to the upstream Fabric path itself,
+// so adding `/v1/` here would result in `/v1/v1/...` and universal 404s.
 var PIPELINE_STEPS = [
   {
     id: 'create-workspace', index: 0, name: 'Create Workspace',
-    method: 'POST', urlTemplate: '/api/fabric/v1/workspaces',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces',
     createsResource: true, resourceType: 'workspace',
     isLRO: false, timeoutMs: 30000, autoRetries: 2, retryDelayMs: 1000
   },
   {
     id: 'assign-capacity', index: 1, name: 'Assign Capacity',
-    method: 'POST', urlTemplate: '/api/fabric/v1/workspaces/{workspaceId}/assignToCapacity',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/assignToCapacity',
     createsResource: false,
     isLRO: false, timeoutMs: 30000, autoRetries: 2, retryDelayMs: 1000
   },
   {
     id: 'create-lakehouse', index: 2, name: 'Create Lakehouse',
-    method: 'POST', urlTemplate: '/api/fabric/v1/workspaces/{workspaceId}/lakehouses',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/lakehouses',
     createsResource: true, resourceType: 'lakehouse',
     isLRO: false, timeoutMs: 30000, autoRetries: 2, retryDelayMs: 1000
   },
   {
     id: 'create-notebook', index: 3, name: 'Create Notebook',
-    method: 'POST', urlTemplate: '/api/fabric/v1/workspaces/{workspaceId}/notebooks',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/notebooks',
     createsResource: true, resourceType: 'notebook',
     isLRO: false, timeoutMs: 30000, autoRetries: 2, retryDelayMs: 1000
   },
   {
     id: 'write-cells', index: 4, name: 'Write Notebook Cells',
-    method: 'PUT', urlTemplate: '/api/fabric/v1/workspaces/{workspaceId}/notebooks/{notebookId}/content',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/items/{notebookId}/updateDefinition',
     createsResource: false,
-    isLRO: false, timeoutMs: 60000, autoRetries: 2, retryDelayMs: 2000
+    isLRO: true, lroType: 'operation',
+    timeoutMs: 60000, autoRetries: 2, retryDelayMs: 2000,
+    lroConfig: { pollIntervalMs: 2000, maxPollDurationMs: 60000 }
   },
   {
     id: 'execute-notebook', index: 5, name: 'Run Notebook',
-    method: 'POST', urlTemplate: '/api/fabric/v1/workspaces/{workspaceId}/notebooks/{notebookId}/jobs/instances?jobType=RunNotebook',
+    method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/items/{notebookId}/jobs/instances?jobType=RunNotebook',
     createsResource: false,
-    isLRO: true, timeoutMs: 300000, autoRetries: 1, retryDelayMs: 5000,
+    isLRO: true, lroType: 'jobInstance',
+    timeoutMs: 300000, autoRetries: 1, retryDelayMs: 5000,
     lroConfig: { pollIntervalMs: 3000, maxPollDurationMs: 300000 }
   }
 ];
@@ -194,17 +200,19 @@ class ExecutionPipeline {
   }
 
   _getExecutionContext(wizardState) {
+    // Reads the FLAT state shape produced by createWizardState() in infra-wizard.js.
+    // Earlier versions read nested shapes (ws.naming.*, ws.capacity.*, ws.codeGen.*) that
+    // are never written anywhere, so every request body came out empty.
     var ws = wizardState || {};
-    var naming = ws.naming || {};
-    var capacity = ws.capacity || {};
-    var codeGen = ws.codeGeneration || ws.codeGen || {};
     return {
-      workspaceName: naming.workspaceName || naming.workspace || '',
-      capacityId: capacity.capacityId || capacity.id || '',
-      lakehouseName: naming.lakehouseName || naming.lakehouse || '',
-      notebookName: naming.notebookName || naming.notebook || '',
-      notebookPayload: codeGen.notebookPayload || null,
-      cells: codeGen.cells || null
+      workspaceName: ws.workspaceName || '',
+      capacityId: ws.capacityId || null,
+      lakehouseName: ws.lakehouseName || '',
+      notebookName: ws.notebookName || '',
+      theme: ws.theme || null,
+      schemas: ws.schemas || { dbo: true, bronze: false, silver: false, gold: false },
+      nodes: Array.isArray(ws.nodes) ? ws.nodes : [],
+      connections: Array.isArray(ws.connections) ? ws.connections : []
     };
   }
 
@@ -380,16 +388,40 @@ class ExecutionPipeline {
 
   _buildRequestBody(stepDef, context, artifacts) {
     switch (stepDef.index) {
-      case 0: return { displayName: context.workspaceName };
-      case 1: return { capacityId: context.capacityId };
-      case 2: return { displayName: context.lakehouseName, enableSchemas: true };
-      case 3: return { displayName: context.notebookName };
-      case 4:
-        if (context.notebookPayload) return context.notebookPayload;
-        if (typeof window.CodeGenerationEngine !== 'undefined' && context.cells) {
-          return window.CodeGenerationEngine.generateNotebookPayload(context.cells);
+      // A Fabric workspace must be bound to a capacity at creation; without one it
+      // cannot host or execute any artifacts. We send capacityId in the same call
+      // rather than relying on Step 1's async assignToCapacity completing in time.
+      // Step 1 still runs as an idempotent safety net.
+      case 0: {
+        var ws = { displayName: context.workspaceName };
+        if (context.capacityId) {
+          ws.capacityId = context.capacityId;
         }
-        return {};
+        return ws;
+      }
+      case 1: return { capacityId: context.capacityId };
+      // Fabric Lakehouse Create requires `enableSchemas` inside `creationPayload`
+      // (top-level enableSchemas is silently ignored, leaving the lakehouse schema-less).
+      case 2: return {
+        displayName: context.lakehouseName,
+        creationPayload: { enableSchemas: true }
+      };
+      case 3: return { displayName: context.notebookName };
+      case 4: {
+        if (typeof window.CodeGenerationEngine === 'undefined') {
+          return {};
+        }
+        // Generate cells + payload at execution time. CodeGenerationEngine methods are
+        // instance methods (not statics), so we must construct an engine first.
+        var engine = new window.CodeGenerationEngine();
+        var cells = engine.generateCells(
+          context.nodes,
+          context.connections,
+          context.theme,
+          context.schemas
+        );
+        return engine.generateNotebookPayload(cells);
+      }
       case 5: return {};
       default: return null;
     }
@@ -441,6 +473,15 @@ class ExecutionPipeline {
   }
 
   async _handleLRO(stepDef, response, artifacts) {
+    // Step 4 (updateDefinition) uses the generic Operations API; Step 5 (RunNotebook)
+    // uses the job-instance pattern. They have different polling URLs and status shapes.
+    if (stepDef.lroType === 'operation') {
+      return await this._handleOperationLRO(stepDef, response);
+    }
+    return await this._handleJobInstanceLRO(stepDef, response, artifacts);
+  }
+
+  async _handleJobInstanceLRO(stepDef, response, artifacts) {
     var jobInstanceId = null;
 
     // Extract job instance ID from response or Location header
@@ -467,11 +508,117 @@ class ExecutionPipeline {
     artifacts.jobInstanceId = jobInstanceId;
     this._log(stepDef.index, 'info', 'Job instance: ' + jobInstanceId);
 
-    var pollUrl = '/api/fabric/v1/workspaces/' + encodeURIComponent(artifacts.workspaceId) +
-      '/notebooks/' + encodeURIComponent(artifacts.notebookId) +
+    // Poll URL: `/items/{notebookId}/...` (the Fabric Run-On-Demand Item Job pattern).
+    // No `/v1/` here — see PIPELINE_STEPS comment for proxy double-prefix gotcha.
+    var pollUrl = '/api/fabric/workspaces/' + encodeURIComponent(artifacts.workspaceId) +
+      '/items/' + encodeURIComponent(artifacts.notebookId) +
       '/jobs/instances/' + encodeURIComponent(jobInstanceId);
 
     return await this._pollLRO(pollUrl, stepDef);
+  }
+
+  async _handleOperationLRO(stepDef, response) {
+    // Generic Fabric LRO via the Operations API. The proxy forwards Location so we
+    // can derive the poll URL directly from the 202 response.
+    var locationHeader = response.headers.get('Location') || '';
+    if (!locationHeader) {
+      // No Location → server completed synchronously (or stripped the header). Treat
+      // as success rather than failing the whole pipeline.
+      this._log(stepDef.index, 'info', 'No Location header — treating as synchronous completion');
+      return { success: true, data: null };
+    }
+
+    var pollPath = this._locationToProxyPath(locationHeader);
+    if (!pollPath) {
+      return { success: false, error: 'Could not parse Location header: ' + locationHeader, data: null };
+    }
+
+    this._log(stepDef.index, 'info', 'Polling operation at ' + pollPath);
+    return await this._pollOperation(pollPath, stepDef);
+  }
+
+  _locationToProxyPath(absoluteOrRelativeUrl) {
+    // Map an upstream Fabric Location URL onto the dev-server proxy.
+    //   https://api.fabric.microsoft.com/v1/operations/abc → /api/fabric/operations/abc
+    //   https://biazure-…/v1/workspaces/.../jobs/instances/xyz → /api/fabric/workspaces/.../jobs/instances/xyz
+    //   /v1/operations/abc (already relative)                 → /api/fabric/operations/abc
+    // We strip the leading `/v1/` because dev-server's _map_path prepends `/v1` to
+    // anything we hand it — leaving `/v1/` here would produce `/v1/v1/...` again.
+    try {
+      var path;
+      if (absoluteOrRelativeUrl.indexOf('://') !== -1) {
+        var u = new URL(absoluteOrRelativeUrl);
+        path = u.pathname + (u.search || '');
+      } else {
+        path = absoluteOrRelativeUrl;
+      }
+      if (path.indexOf('/v1/') === 0) {
+        path = path.substring(3);
+      }
+      if (path.charAt(0) !== '/') {
+        path = '/' + path;
+      }
+      return '/api/fabric' + path;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  async _pollOperation(pollPath, stepDef) {
+    var config = stepDef.lroConfig || {};
+    var pollInterval = config.pollIntervalMs || 2000;
+    var maxDuration = config.maxPollDurationMs || 60000;
+    var startTime = Date.now();
+
+    while (true) {
+      if (this._destroyed) {
+        return { success: false, error: 'Destroyed during poll', data: null };
+      }
+
+      await this._sleep(pollInterval);
+      var elapsed = Date.now() - startTime;
+
+      if (elapsed > maxDuration) {
+        this._log(stepDef.index, 'error', 'Operation timed out after ' + this._formatElapsed(elapsed));
+        return { success: false, error: 'Operation timed out after ' + this._formatElapsed(maxDuration), data: null };
+      }
+
+      this._log(stepDef.index, 'info', 'Polling operation (' + this._formatElapsed(elapsed) + ')...');
+
+      try {
+        var response = await fetch(pollPath, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: this._abortController.signal
+        });
+
+        if (!response.ok) {
+          this._log(stepDef.index, 'warn', 'Operation poll returned HTTP ' + response.status);
+          continue;
+        }
+
+        var data = await response.json();
+        var status = (data.status || '').toLowerCase();
+
+        if (status === 'succeeded') {
+          this._log(stepDef.index, 'info', 'Operation succeeded');
+          return { success: true, data: data };
+        }
+
+        if (status === 'failed') {
+          var failMsg = (data.error && data.error.message) || data.failureReason || 'Operation failed';
+          this._log(stepDef.index, 'error', failMsg);
+          return { success: false, error: failMsg, data: data };
+        }
+
+        // Still NotStarted / Running — keep polling.
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          return { success: false, error: 'Aborted', data: null };
+        }
+        this._log(stepDef.index, 'warn', 'Operation poll error: ' + err.message);
+      }
+    }
   }
 
   async _pollLRO(pollUrl, stepDef) {

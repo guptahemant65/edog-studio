@@ -610,7 +610,14 @@ class InfraWizardDialog {
 
       // Exit current page
       pages[fromIndex].classList.remove('active');
-      pages[fromIndex].classList.add(direction === 'forward' ? 'exit-left' : '');
+      // exit-left is only meaningful when moving forward; for backward the
+      // inline transform style handles the slide-right animation. Passing an
+      // empty string to classList.add throws a DOMException and halts the
+      // entire navigation mid-flight, leaving both pages without `.active`
+      // (hence blank wizard body).
+      if (direction === 'forward') {
+        pages[fromIndex].classList.add('exit-left');
+      }
       pages[fromIndex].style.transform = direction === 'forward' ? 'translateX(-60px)' : 'translateX(60px)';
       pages[fromIndex].style.opacity = '0';
 
