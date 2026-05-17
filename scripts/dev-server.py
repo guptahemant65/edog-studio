@@ -171,7 +171,7 @@ def _load_openai_config() -> dict:
         or "2025-04-01-preview"
     )
     deployment = (
-        os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4-pro"
+        os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4"
     )
 
     if not endpoint or not api_key:

@@ -397,3 +397,75 @@ def test_hub_gates_synthetic_fallback_behind_env_var() -> None:
         "Synthetic scenarios produced in demo mode must be tagged via TagAsDemo."
     )
 
+
+# ─── F27 P9 T0 — Production-grade LLM pipeline scaffold ───────────────────
+
+
+def test_qa_feature_flags_llm_v2_kill_switch_exists() -> None:
+    """F27 P9 §8 — the LLM V2 rollout MUST be gated behind a kill switch
+    env var so the new pipeline can be flipped off in production without
+    a redeploy. Verified by source-grep so the test runs without FLT bin."""
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaFeatureFlags.cs"
+    ).read_text(encoding="utf-8")
+    assert 'EnvVarLlmV2 = "EDOG_QA_LLM_V2"' in src, (
+        "EdogQaFeatureFlags must declare EnvVarLlmV2 = \"EDOG_QA_LLM_V2\" — the "
+        "kill switch from F27 P9 §8."
+    )
+    # The three-state rollout (off | shadow | on) is non-negotiable: a
+    # boolean flag would skip the mandatory shadow phase and is forbidden
+    # by §8.
+    assert "enum LlmV2Mode" in src, "LlmV2Mode enum must exist."
+    for required in ("Off", "Shadow", "On"):
+        assert required in src, f"LlmV2Mode must declare {required}."
+
+
+def test_qa_capability_probe_declares_required_error_codes() -> None:
+    """F27 P9 §3.6 — the capability probe defines four stable error codes
+    that the orchestrator + hub key off when refusing to flip LlmV2 to
+    shadow/on. The codes are part of our wire contract and must not drift."""
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs"
+    ).read_text(encoding="utf-8")
+    required_codes = (
+        "AOAI_DEPLOYMENT_NOT_FOUND",
+        "AOAI_RESPONSES_API_UNAVAILABLE",
+        "AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED",
+        "AOAI_REASONING_UNSUPPORTED",
+    )
+    for code in required_codes:
+        assert code in src, f"EdogQaCapabilityProbe must declare {code}."
+    # IsAzureOpenAiReadyForV2 is the single gating boolean — it MUST exist
+    # so the orchestrator has one obvious branch point.
+    assert "IsAzureOpenAiReadyForV2" in src, (
+        "EdogQaCapabilityProbe must expose IsAzureOpenAiReadyForV2 — the "
+        "single gate the orchestrator consults before honouring EDOG_QA_LLM_V2."
+    )
+
+
+def test_qa_llm_provider_default_deployment_is_gpt54() -> None:
+    """The hardcoded default deployment must match the GA Azure OpenAI
+    deployment name (gpt-5.4), not the pre-GA placeholder (gpt-5.4-pro).
+    Hosts without AZURE_OPENAI_PRO_DEPLOYMENT/AZURE_OPENAI_DEPLOYMENT set
+    were resolving to a non-existent deployment, causing 404 / empty
+    content. The capability probe (F27 P9 §3.6) is the proper guard but
+    the default must still be a real model name."""
+    cs_src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs"
+    ).read_text(encoding="utf-8")
+    assert '"gpt-5.4-pro"' not in cs_src, (
+        "EdogQaLlmProvider must not default to 'gpt-5.4-pro' (a pre-GA placeholder "
+        "that does not exist as an Azure deployment name). Use 'gpt-5.4'."
+    )
+    assert '?? "gpt-5.4"' in cs_src, (
+        "EdogQaLlmProvider default deployment must be 'gpt-5.4'."
+    )
+
+    py_src = (REPO_ROOT / "scripts" / "dev-server.py").read_text(encoding="utf-8")
+    assert '"gpt-5.4-pro"' not in py_src, (
+        "dev-server.py must not default to 'gpt-5.4-pro' — same reason as above."
+    )
+    assert 'or "gpt-5.4"' in py_src, (
+        "dev-server.py default deployment must be 'gpt-5.4'."
+    )
+

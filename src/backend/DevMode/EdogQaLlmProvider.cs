@@ -86,9 +86,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION")
                 ?? "2025-03-01-preview";
 
+            // Default matches the GA deployment name on Azure OpenAI in the
+            // primary edog tenant. Operators with a different deployment must
+            // set AZURE_OPENAI_PRO_DEPLOYMENT (or AZURE_OPENAI_DEPLOYMENT). The
+            // F27 P9 capability probe verifies the deployment exists at startup.
             _deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_DEPLOYMENT")
                 ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
-                ?? "gpt-5.4-pro";
+                ?? "gpt-5.4";
 
             var hasDirectCreds = !string.IsNullOrEmpty(_endpoint) && !string.IsNullOrEmpty(_apiKey);
 
@@ -814,7 +818,7 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                     new { role = "user", content = userMessage }
                 },
                 temperature = 0.3,
-                // gpt-5.4-pro is a reasoning model — internal reasoning tokens
+                // gpt-5.4 (and its variants) is a reasoning model — internal reasoning tokens
                 // count against the same budget as visible output. The F27
                 // system prompt + per-zone context is large, so a tight
                 // ceiling (e.g. 8192) was being fully consumed by reasoning
