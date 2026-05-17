@@ -294,10 +294,74 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterTokenLifecycleInterceptor()
         {
-            TryWrap<Microsoft.LiveTable.Service.TokenManagement.ITokenManager>(
-                "TokenLifecycle",
-                inner => inner is EdogTokenLifecycleInterceptor,
-                inner => new EdogTokenLifecycleInterceptor(inner));
+            // CRITICAL — DO NOT use TryWrap here. ──────────────────────────────
+            // TokenManager : IDisposable owns a SemaphoreSlim that is disposed
+            // in Dispose(). When we call WireUp.RegisterInstance<ITokenManager>
+            // to install our wrapper, Unity replaces the existing
+            // ContainerControlledLifetimeManager and disposes the previous one
+            // — which Dispose()s the original TokenManager singleton MWC
+            // resolved during InitializeAsync. The wrapper would then delegate
+            // every call to a disposed instance, and the first RunDAG request
+            // hits `tokenSemaphore.Wait()` in CacheToken with
+            //   ObjectDisposedException: 'System.Threading.SemaphoreSlim'
+            // (the StartedAt == EndedAt failure observed for runDAG).
+            //
+            // Fix: build a FRESH TokenManager from the same DI dependencies
+            // and put it inside our wrapper. RegisterAll() runs once at
+            // startup before any RunDAG request, so the original cache is
+            // empty and no token state is lost. Unity is still free to
+            // dispose the original singleton during the RegisterInstance
+            // replacement — we just no longer depend on it.
+            const string name = "TokenLifecycle";
+            try
+            {
+                var existing = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.TokenManagement.ITokenManager>();
+                if (existing is EdogTokenLifecycleInterceptor)
+                {
+                    Console.WriteLine($"[EDOG] ✓ {name} interceptor already wrapped");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.AlreadyWrapped);
+                    return;
+                }
+
+                var authority = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadApplicationAuthorityProvider>();
+                var paramsProvider = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.MWC.Workload.Client.Library.Providers.CustomParameters.IParametersProvider>();
+                var freshInner = new Microsoft.LiveTable.Service.TokenManagement.TokenManager(
+                    authority, paramsProvider);
+                var wrapper = new EdogTokenLifecycleInterceptor(freshInner);
+
+                Exception regException = null;
+                try
+                {
+                    Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.RegisterInstance<
+                        Microsoft.LiveTable.Service.TokenManagement.ITokenManager>(wrapper);
+                }
+                catch (Exception ex)
+                {
+                    // Unity set-then-throw — instance is written even if validator throws.
+                    regException = ex;
+                }
+
+                var after = Microsoft.PowerBI.ServicePlatform.WireUp.WireUp.Resolve<
+                    Microsoft.LiveTable.Service.TokenManagement.ITokenManager>();
+                if (after is EdogTokenLifecycleInterceptor)
+                {
+                    Console.WriteLine($"[EDOG] ✓ {name} interceptor registered (fresh inner)");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
+                    return;
+                }
+
+                var msg = regException?.Message ?? "wrapper not present after RegisterInstance";
+                Console.WriteLine($"[EDOG] ✗ {name} interceptor failed: {msg}");
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, msg);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ {name} interceptor failed: {ex.Message}");
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
+            }
         }
 
         private static void RegisterCatalogInterceptor()
