@@ -920,6 +920,185 @@
 .ws-preview-rows-nested { color: var(--accent); }
 .ws-preview-rows-error { color: var(--status-failed, var(--accent)); }
 
+/* Sample-rows controls (refresh + expand in the block header, refresh + close
+ * in the modal header). Bare icon buttons — transparent, no border, just a
+ * subtle hover background. 24x24 hit target on the 4px grid.
+ */
+.ws-preview-rows-controls {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  margin-left: auto;
+}
+.ws-rows-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  padding: var(--space-1);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.ws-rows-icon-btn:hover {
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  color: var(--text);
+}
+.ws-rows-icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+.ws-rows-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ws-rows-icon {
+  display: inline-block;
+  font-family: var(--font-body);
+  line-height: 1;
+  font-weight: 600;
+}
+.ws-rows-icon--refresh { font-size: 15px; }
+.ws-rows-icon--expand  { font-size: 14px; }
+.ws-rows-icon--close   { font-size: 13px; }
+
+/* Refresh spin — mechanical (linear), not bouncy. Only the glyph rotates, so
+ * the button hit target stays still. Reduced-motion users get a static icon.
+ */
+@keyframes ws-rows-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.ws-preview-rows-block[data-refreshing="true"] .ws-rows-icon--refresh,
+.ws-sample-modal-overlay[data-refreshing="true"] .ws-rows-icon--refresh {
+  animation: ws-rows-spin 1.2s linear infinite;
+}
+
+/* Optimistic refresh: keep the existing grid mounted, just dim it. No
+ * shimmer-wipe — that feels like a blank page on every refresh.
+ */
+.ws-preview-rows-block[data-refreshing="true"] .ws-preview-rows-grid,
+.ws-sample-modal-overlay[data-refreshing="true"] .ws-preview-rows-grid {
+  opacity: 0.7;
+  transition: opacity 150ms ease-out;
+}
+
+/* Wide-mode grid — used inside the modal. Drops the 320px clamp so long
+ * timestamps / JSON blobs aren't ellipsed, and bumps to 12px for readability
+ * (the 11px inline size is fine for scanning but cramped for staring at).
+ * Sticky header still works (inherits from .ws-preview-rows-th).
+ */
+.ws-preview-rows-grid--wide { font-size: 12px; }
+.ws-preview-rows-grid--wide .ws-preview-rows-td {
+  max-width: none;
+}
+
+/* Transient toast above the grid when refresh fails. The grid below stays
+ * visible (single source of truth restored the previous result), so this is
+ * informational, not blocking.
+ */
+.ws-rows-toast {
+  margin-bottom: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--status-failed, var(--accent));
+  border: 1px solid var(--status-failed, var(--accent));
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, transparent);
+  animation: ws-rows-toast-in 150ms ease-out;
+}
+@keyframes ws-rows-toast-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ───────────────────────────────────────────────
+ * Sample-rows modal — mirrors the api-swag-modal pattern so this feels
+ * inevitable next to the existing Swagger diff modal, not bolted on.
+ * Lives at document.body so inspector re-renders don't orphan it; the
+ * `_showTableInspector` hook closes any open modal before swapping content.
+ * ───────────────────────────────────────────────
+ */
+.ws-sample-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 22, 28, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: var(--z-detail, 200);
+  padding: 4vh 4vw;
+  animation: ws-sample-modal-fade-in 120ms ease-out;
+}
+@keyframes ws-sample-modal-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.ws-sample-modal-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%; max-width: 1400px;
+  height: 100%; max-height: 92vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  animation: ws-sample-modal-pop-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes ws-sample-modal-pop-in {
+  from { opacity: 0; transform: scale(0.985) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.ws-sample-modal-header {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2, var(--surface));
+  flex: 0 0 auto;
+}
+.ws-sample-modal-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.ws-sample-modal-meta {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.ws-sample-modal-actions {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  margin-left: auto;
+}
+.ws-sample-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3);
+}
+.ws-sample-modal-body .ws-preview-rows-wrap {
+  margin-top: 0;
+  border: 1px solid var(--border);
+}
+.ws-sample-modal-warning {
+  padding: var(--space-2) var(--space-3);
+  margin-top: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  border-left-width: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-sample-modal-overlay,
+  .ws-sample-modal-dialog,
+  .ws-rows-toast { animation: none; }
+  .ws-preview-rows-block[data-refreshing="true"] .ws-rows-icon--refresh,
+  .ws-sample-modal-overlay[data-refreshing="true"] .ws-rows-icon--refresh {
+    animation: none;
+  }
+}
+
 .ws-fav-item {
   display: flex; align-items: center; gap: var(--space-2);
   padding: var(--space-1) 0; font-size: var(--text-xs);

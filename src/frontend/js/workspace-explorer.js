@@ -44,6 +44,9 @@ class WorkspaceExplorer {
     this._environmentCache = {};
     /** @type {NotebookView|null} Active notebook IDE instance */
     this._activeNotebookView = null;
+
+    /** @type {Set<HTMLElement>} Sample-rows blocks with a modal currently open. */
+    this._openSampleModals = new Set();
   }
 
   async init() {
@@ -2293,6 +2296,13 @@ class WorkspaceExplorer {
 
   _showTableInspector(table) {
     if (!this._inspectorEl) return;
+    // Switching tables must dismiss any open sample-rows modal — the inspector
+    // is about to rewrite its innerHTML, which would orphan the modal's block.
+    if (this._openSampleModals && this._openSampleModals.size) {
+      for (const blk of Array.from(this._openSampleModals)) {
+        this._closeSampleRowsModal(blk);
+      }
+    }
     this._selectedTable = table;
     let html = '<div class="ws-insp-section">';
     html += '<div class="ws-insp-title">Table Info</div>';
@@ -2610,11 +2620,21 @@ class WorkspaceExplorer {
   }
 
   /**
-   * Render the collapsed "Sample rows" affordance — a tap-to-load button.
+   * Sample-rows block — initial HTML.
+   *
+   * Renders the collapsed "Sample rows" affordance — a tap-to-load button.
    * Tap-to-load (not auto-load) is deliberate: same Preview discipline as the
    * outer block. Avoids fan-out for users who only want to read the DDL.
-   * Stores `schemaName`/`tableName` on the block for the click handler to read,
-   * so we don't have to thread them through closures when re-rendering.
+   *
+   * `schemaName`/`tableName` ride on the DOM so the click handler can read
+   * them without closure threading on re-render.
+   *
+   * Control glyphs (refresh / expand) are appended dynamically once the block
+   * reaches the `loaded` state, so the pre-load affordance stays minimal.
+   *
+   * Single source of truth: after wiring, the DOM block owns a `_rowsState`
+   * property; both inline and modal views render purely from that state, so
+   * a refresh from either surface keeps the other in sync.
    */
   _renderPreviewSampleRowsBlock(schemaName, tableName) {
     if (!tableName) return '';
@@ -2634,35 +2654,53 @@ class WorkspaceExplorer {
   }
 
   /**
-   * Wire the "Load N rows" button inside a `.ws-preview-rows-block`.
-   * On click → shimmer → fetch → render grid (or empty/error state).
-   * Guards against re-entry while loading and after a successful load.
+   * Wire the sample-rows block: initialize its `_rowsState` and attach the
+   * first-load click handler. Idempotent guards live inside the load/refresh
+   * handlers (status checks), not here.
    */
   _wirePreviewSampleRows(section) {
     const block = section.querySelector('.ws-preview-rows-block');
     if (!block) return;
+    block._rowsState = {
+      status: 'idle',
+      result: null,
+      prevResult: null,
+      error: null,
+      schemaName: block.getAttribute('data-rows-schema') || 'dbo',
+      tableName: block.getAttribute('data-rows-table') || '',
+      limit: 10,
+      modalEl: null,
+      modalBodyEl: null,
+      modalMetaEl: null,
+      prevActiveElement: null,
+      escHandler: null,
+    };
     const btn = block.querySelector('[data-rows-load]');
     if (!btn) return;
     btn.addEventListener('click', () => {
-      const schemaName = block.getAttribute('data-rows-schema') || 'dbo';
-      const tableName = block.getAttribute('data-rows-table') || '';
-      if (!tableName) return;
-      this._handlePreviewSampleLoad(block, schemaName, tableName);
+      if (!block._rowsState.tableName) return;
+      this._handlePreviewSampleFirstLoad(block);
     });
   }
 
   /**
-   * Fetch + render sample rows into the given block. Replaces the load button
-   * with a shimmer, then with the grid (or empty/error state). Idempotent —
-   * once loaded, the block keeps its rendered state until the inspector re-renders.
+   * First-load fetch path: shows shimmer in the body while the request is in
+   * flight, then transitions to `loaded` (grid + controls) or `error`.
    */
-  async _handlePreviewSampleLoad(block, schemaName, tableName) {
-    if (block.getAttribute('data-rows-loading') === 'true') return;
-    block.setAttribute('data-rows-loading', 'true');
+  async _handlePreviewSampleFirstLoad(block) {
+    const state = block._rowsState;
+    if (!state || state.status === 'loading' || !state.tableName) return;
+    state.status = 'loading';
+    state.error = null;
 
-    const head = block.querySelector('.ws-preview-block-head');
+    // Clear any leftover load button / error block / previous body.
     const oldBtn = block.querySelector('[data-rows-load]');
     if (oldBtn) oldBtn.remove();
+    const oldErr = block.querySelector('.ws-preview-rows-error');
+    if (oldErr) oldErr.remove();
+    const oldBody = block.querySelector('.ws-preview-rows-body');
+    if (oldBody) oldBody.remove();
+
     const skel = document.createElement('div');
     skel.className = 'ws-insp-skel ws-preview-rows-skel';
     skel.innerHTML =
@@ -2674,80 +2712,163 @@ class WorkspaceExplorer {
     const ws = this._selectedWorkspace;
     const lh = this._selectedItem;
     if (!ws || !lh) {
-      this._renderPreviewSampleError(block, skel, 'Missing workspace / lakehouse context.');
+      state.status = 'error';
+      state.error = 'Missing workspace / lakehouse context.';
+      skel.remove();
+      this._renderPreviewSampleError(block);
       return;
     }
 
     let result;
     try {
-      result = await this._api.getTablePreviewRows(ws.id, lh.id, schemaName, tableName, 10);
+      result = await this._api.getTablePreviewRows(
+        ws.id,
+        lh.id,
+        state.schemaName,
+        state.tableName,
+        state.limit,
+      );
     } catch (err) {
-      const detail = err?.body?.message || err?.message || 'Unknown error.';
-      this._renderPreviewSampleError(block, skel, detail);
+      state.status = 'error';
+      state.error = err?.body?.message || err?.message || 'Unknown error.';
+      skel.remove();
+      this._renderPreviewSampleError(block);
       return;
     }
 
+    state.status = 'loaded';
+    state.result = result;
     skel.remove();
-    block.removeAttribute('data-rows-loading');
-    block.setAttribute('data-rows-loaded', 'true');
+    this._renderSampleRowsLoaded(block);
+  }
 
+  /**
+   * Refresh path — optimistic: the existing grid stays mounted (dimmed via
+   * `data-refreshing="true"`) while the new fetch is in flight. We never wipe
+   * to a shimmer; that would feel like a blank page on every refresh.
+   *
+   * On success: swap the grid contents in place (inline + modal, if open).
+   * On failure: restore the previous result, show a transient toast.
+   */
+  async _handleSampleRowsRefresh(block) {
+    const state = block._rowsState;
+    if (!state || state.status === 'loading' || !state.tableName) return;
+
+    state.status = 'loading';
+    state.prevResult = state.result;
+    state.error = null;
+
+    block.setAttribute('data-refreshing', 'true');
+    if (state.modalEl) state.modalEl.setAttribute('data-refreshing', 'true');
+    this._setRefreshButtonsBusy(block, true);
+
+    const ws = this._selectedWorkspace;
+    const lh = this._selectedItem;
+    const restoreOnFailure = (message) => {
+      state.status = 'loaded';
+      state.result = state.prevResult;
+      state.prevResult = null;
+      state.error = message;
+      block.removeAttribute('data-refreshing');
+      if (state.modalEl) state.modalEl.removeAttribute('data-refreshing');
+      this._setRefreshButtonsBusy(block, false);
+      this._showRefreshErrorToast(block, message);
+    };
+
+    if (!ws || !lh) {
+      restoreOnFailure('Missing workspace / lakehouse context.');
+      return;
+    }
+
+    let result;
+    try {
+      result = await this._api.getTablePreviewRows(
+        ws.id,
+        lh.id,
+        state.schemaName,
+        state.tableName,
+        state.limit,
+      );
+    } catch (err) {
+      restoreOnFailure(err?.body?.message || err?.message || 'Unknown error.');
+      return;
+    }
+
+    state.status = 'loaded';
+    state.result = result;
+    state.prevResult = null;
+    block.removeAttribute('data-refreshing');
+    if (state.modalEl) state.modalEl.removeAttribute('data-refreshing');
+    this._setRefreshButtonsBusy(block, false);
+
+    // Re-render both surfaces from the (now updated) single source of truth.
+    this._renderSampleRowsLoaded(block);
+  }
+
+  /**
+   * Render the `loaded` state: replace the inline body, ensure the header
+   * controls exist, and mirror the result into the modal if one is open.
+   */
+  _renderSampleRowsLoaded(block) {
+    const state = block._rowsState;
+    let body = block.querySelector('.ws-preview-rows-body');
+    if (!body) {
+      body = document.createElement('div');
+      body.className = 'ws-preview-rows-body';
+      block.appendChild(body);
+    }
+    this._renderSampleRowsBody(body, state.result, { modal: false });
+    this._ensureSampleRowsControls(block);
+    if (state.modalEl && state.modalBodyEl) {
+      this._renderSampleRowsBody(state.modalBodyEl, state.result, { modal: true });
+      this._updateModalMeta(block);
+    }
+  }
+
+  /**
+   * Pure-DOM render of the grid (+ warnings + truncation note) into a
+   * container. Inline and modal both go through this, so they cannot drift.
+   * `opts.modal: true` adds the `--wide` modifier (no max-width clamp, 12px).
+   */
+  _renderSampleRowsBody(container, result, opts) {
+    container.innerHTML = '';
     if (result === null) {
       const empty = document.createElement('div');
       empty.className = 'ws-preview-empty-block';
       empty.textContent =
         'No Delta log for this table — not materialized yet, or not a Delta table.';
-      block.appendChild(empty);
-      // Re-attach a refresh affordance in the header for parity with copy buttons.
-      if (head) {
-        const retry = document.createElement('button');
-        retry.className = 'ws-preview-copy-btn';
-        retry.type = 'button';
-        retry.textContent = 'Retry';
-        retry.addEventListener('click', () => {
-          block.removeAttribute('data-rows-loaded');
-          empty.remove();
-          retry.remove();
-          const newBtn = document.createElement('button');
-          newBtn.className = 'ws-preview-rows-load-btn';
-          newBtn.type = 'button';
-          newBtn.setAttribute('data-rows-load', '');
-          newBtn.textContent = 'Load first 10 rows';
-          newBtn.addEventListener('click', () =>
-            this._handlePreviewSampleLoad(block, schemaName, tableName),
-          );
-          block.appendChild(newBtn);
-        });
-        head.appendChild(retry);
-      }
+      container.appendChild(empty);
       return;
     }
 
     if (Array.isArray(result.warnings) && result.warnings.length) {
       for (const w of result.warnings) {
         const warn = document.createElement('div');
-        warn.className = 'ws-preview-rows-warning';
+        warn.className = opts && opts.modal
+          ? 'ws-preview-rows-warning ws-sample-modal-warning'
+          : 'ws-preview-rows-warning';
         warn.textContent = w;
-        block.appendChild(warn);
+        container.appendChild(warn);
       }
     }
 
     const cols = Array.isArray(result.columns) ? result.columns : [];
     const rows = Array.isArray(result.rows) ? result.rows : [];
-
     if (!cols.length || !rows.length) {
       const empty = document.createElement('div');
       empty.className = 'ws-preview-empty-block';
       empty.textContent = rows.length
         ? 'Rows returned but column schema is empty.'
         : 'Table is empty — no rows in any active Delta file.';
-      block.appendChild(empty);
+      container.appendChild(empty);
       return;
     }
 
     const wrap = document.createElement('div');
     wrap.className = 'ws-preview-rows-wrap';
     const tbl = document.createElement('table');
-    tbl.className = 'ws-preview-rows-grid';
+    tbl.className =
+      'ws-preview-rows-grid' + (opts && opts.modal ? ' ws-preview-rows-grid--wide' : '');
     let thead = '<thead><tr>';
     for (const c of cols) {
       const pcCls = c.isPartition ? ' is-partition' : '';
@@ -2773,7 +2894,7 @@ class WorkspaceExplorer {
     tbody += '</tbody>';
     tbl.innerHTML = thead + tbody;
     wrap.appendChild(tbl);
-    block.appendChild(wrap);
+    container.appendChild(wrap);
 
     if (result.truncated || result.fileCount > 1) {
       const note = document.createElement('div');
@@ -2782,22 +2903,118 @@ class WorkspaceExplorer {
         ? `Showing first ${result.rowsReturned} rows`
         : `Showing ${result.rowsReturned} rows`;
       const fileTxt =
-        result.fileCount > 1
-          ? ` from 1 of ${result.fileCount} active files.`
-          : '.';
+        result.fileCount > 1 ? ` from 1 of ${result.fileCount} active files.` : '.';
       note.textContent = truncTxt + fileTxt;
-      block.appendChild(note);
+      container.appendChild(note);
     }
   }
 
-  /** Render an error state inside the sample-rows block; allow retry. */
-  _renderPreviewSampleError(block, skel, message) {
-    if (skel && skel.parentNode === block) skel.remove();
+  /**
+   * Append the `↻` `⤢` control cluster to the block header. No-op if already
+   * present — `_renderSampleRowsLoaded` is called on every refresh, so this
+   * must be idempotent.
+   */
+  _ensureSampleRowsControls(block) {
+    const head = block.querySelector('.ws-preview-block-head');
+    if (!head) return;
+    if (head.querySelector('.ws-preview-rows-controls')) return;
+    const controls = document.createElement('div');
+    controls.className = 'ws-preview-rows-controls';
+
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'ws-rows-icon-btn ws-rows-icon-btn--refresh';
+    refresh.title = 'Refresh';
+    refresh.setAttribute('aria-label', 'Refresh sample rows');
+    refresh.innerHTML = '<span class="ws-rows-icon ws-rows-icon--refresh">\u21BB</span>';
+    refresh.addEventListener('click', () => this._handleSampleRowsRefresh(block));
+
+    const expand = document.createElement('button');
+    expand.type = 'button';
+    expand.className = 'ws-rows-icon-btn ws-rows-icon-btn--expand';
+    expand.title = 'Expand';
+    expand.setAttribute('aria-label', 'Expand sample rows');
+    expand.innerHTML = '<span class="ws-rows-icon ws-rows-icon--expand">\u2922</span>';
+    expand.addEventListener('click', () => this._openSampleRowsModal(block));
+
+    controls.appendChild(refresh);
+    controls.appendChild(expand);
+    head.appendChild(controls);
+  }
+
+  /**
+   * Reflect the in-flight refresh on every refresh button (inline + modal).
+   * The CSS handles the spinning glyph and dimmed grid via `data-refreshing`.
+   */
+  _setRefreshButtonsBusy(block, busy) {
+    const state = block._rowsState;
+    const targets = [];
+    block.querySelectorAll('.ws-rows-icon-btn--refresh').forEach((b) => targets.push(b));
+    if (state && state.modalEl) {
+      state.modalEl
+        .querySelectorAll('.ws-rows-icon-btn--refresh')
+        .forEach((b) => targets.push(b));
+    }
+    for (const b of targets) {
+      if (busy) {
+        b.setAttribute('aria-busy', 'true');
+        b.disabled = true;
+      } else {
+        b.removeAttribute('aria-busy');
+        b.disabled = false;
+      }
+    }
+  }
+
+  /**
+   * Show a transient error toast inside the inline body (and modal body, if
+   * open) for ~4s. Used when refresh fails — we keep the existing grid.
+   */
+  _showRefreshErrorToast(block, message) {
+    const msg = 'Refresh failed: ' + (message || 'Unknown error.');
+    const targets = [];
+    const inlineBody = block.querySelector('.ws-preview-rows-body');
+    if (inlineBody) targets.push(inlineBody);
+    const state = block._rowsState;
+    if (state && state.modalBodyEl) targets.push(state.modalBodyEl);
+
+    const toasts = [];
+    for (const t of targets) {
+      const old = t.querySelector(':scope > .ws-rows-toast');
+      if (old) old.remove();
+      const toast = document.createElement('div');
+      toast.className = 'ws-rows-toast';
+      toast.setAttribute('role', 'alert');
+      toast.textContent = msg;
+      t.insertBefore(toast, t.firstChild);
+      toasts.push(toast);
+    }
+    setTimeout(() => {
+      for (const t of toasts) {
+        if (t && t.parentNode) t.parentNode.removeChild(t);
+      }
+    }, 4000);
+  }
+
+  /**
+   * Render the error state for a *first* load (no controls, Retry button).
+   * Refresh errors take a different path — `_showRefreshErrorToast` — so the
+   * grid never disappears under a developer's hands.
+   */
+  _renderPreviewSampleError(block) {
+    const state = block._rowsState;
     block.removeAttribute('data-rows-loading');
+
+    const oldErr = block.querySelector('.ws-preview-rows-error');
+    if (oldErr) oldErr.remove();
+    const oldRetry = block.querySelector('.ws-preview-rows-load-btn');
+    if (oldRetry) oldRetry.remove();
+
     const err = document.createElement('div');
     err.className = 'ws-preview-empty-block ws-preview-rows-error';
-    err.textContent = message;
+    err.textContent = (state && state.error) || 'Unknown error.';
     block.appendChild(err);
+
     const retry = document.createElement('button');
     retry.className = 'ws-preview-rows-load-btn';
     retry.type = 'button';
@@ -2806,11 +3023,148 @@ class WorkspaceExplorer {
     retry.addEventListener('click', () => {
       err.remove();
       retry.remove();
-      const schemaName = block.getAttribute('data-rows-schema') || 'dbo';
-      const tableName = block.getAttribute('data-rows-table') || '';
-      this._handlePreviewSampleLoad(block, schemaName, tableName);
+      if (state) state.status = 'idle';
+      this._handlePreviewSampleFirstLoad(block);
     });
     block.appendChild(retry);
+  }
+
+  /**
+   * Build and mount the modal. Renders content from `state.result` (cheap —
+   * no fetch). Carries over `data-refreshing` if a refresh is in flight, so
+   * the modal's refresh icon spins in sync with the inline one.
+   */
+  _openSampleRowsModal(block) {
+    const state = block._rowsState;
+    if (!state || state.modalEl) return;
+    state.prevActiveElement = document.activeElement;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'ws-sample-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute(
+      'aria-label',
+      `Sample rows: ${state.schemaName}.${state.tableName}`,
+    );
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this._closeSampleRowsModal(block);
+    });
+
+    const dialog = document.createElement('div');
+    dialog.className = 'ws-sample-modal-dialog';
+
+    const header = document.createElement('div');
+    header.className = 'ws-sample-modal-header';
+
+    const title = document.createElement('div');
+    title.className = 'ws-sample-modal-title';
+    title.textContent = `${state.schemaName}.${state.tableName}`;
+    header.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'ws-sample-modal-meta';
+    header.appendChild(meta);
+    state.modalMetaEl = meta;
+
+    const actions = document.createElement('div');
+    actions.className = 'ws-sample-modal-actions';
+
+    const refresh = document.createElement('button');
+    refresh.type = 'button';
+    refresh.className = 'ws-rows-icon-btn ws-rows-icon-btn--refresh';
+    refresh.title = 'Refresh';
+    refresh.setAttribute('aria-label', 'Refresh sample rows');
+    refresh.innerHTML = '<span class="ws-rows-icon ws-rows-icon--refresh">\u21BB</span>';
+    refresh.addEventListener('click', () => this._handleSampleRowsRefresh(block));
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'ws-rows-icon-btn ws-rows-icon-btn--close';
+    close.title = 'Close';
+    close.setAttribute('aria-label', 'Close sample rows');
+    close.innerHTML = '<span class="ws-rows-icon ws-rows-icon--close">\u2715</span>';
+    close.addEventListener('click', () => this._closeSampleRowsModal(block));
+
+    actions.appendChild(refresh);
+    actions.appendChild(close);
+    header.appendChild(actions);
+
+    const body = document.createElement('div');
+    body.className = 'ws-sample-modal-body';
+
+    dialog.appendChild(header);
+    dialog.appendChild(body);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    state.modalEl = overlay;
+    state.modalBodyEl = body;
+    this._openSampleModals.add(block);
+
+    this._renderSampleRowsBody(body, state.result, { modal: true });
+    this._updateModalMeta(block);
+
+    // Carry over a refresh-in-flight from inline → modal.
+    if (block.getAttribute('data-refreshing') === 'true') {
+      overlay.setAttribute('data-refreshing', 'true');
+      refresh.setAttribute('aria-busy', 'true');
+      refresh.disabled = true;
+    }
+
+    state.escHandler = (e) => {
+      if (e.key === 'Escape') this._closeSampleRowsModal(block);
+    };
+    document.addEventListener('keydown', state.escHandler);
+
+    // Focus close button; restore on teardown.
+    try { close.focus(); } catch (_e) { /* focus is best-effort */ }
+  }
+
+  /**
+   * Tear down the modal and restore focus to the trigger (typically the
+   * expand button). The inline grid is already correct (same state object),
+   * so no re-render is needed — just unmount the overlay.
+   */
+  _closeSampleRowsModal(block) {
+    const state = block._rowsState;
+    if (!state || !state.modalEl) return;
+    if (state.modalEl.parentNode) {
+      state.modalEl.parentNode.removeChild(state.modalEl);
+    }
+    if (state.escHandler) {
+      document.removeEventListener('keydown', state.escHandler);
+      state.escHandler = null;
+    }
+    state.modalEl = null;
+    state.modalBodyEl = null;
+    state.modalMetaEl = null;
+    this._openSampleModals.delete(block);
+    const prev = state.prevActiveElement;
+    state.prevActiveElement = null;
+    if (prev && document.body.contains(prev)) {
+      try { prev.focus(); } catch (_e) { /* focus restore is best-effort */ }
+    }
+  }
+
+  /** Compose the modal header meta line from the current result. */
+  _updateModalMeta(block) {
+    const state = block._rowsState;
+    if (!state || !state.modalMetaEl) return;
+    const r = state.result;
+    if (!r) {
+      state.modalMetaEl.textContent = 'No Delta log';
+      return;
+    }
+    const rowCount = Array.isArray(r.rows) ? r.rows.length : r.rowsReturned || 0;
+    let txt = `${rowCount} ${rowCount === 1 ? 'row' : 'rows'}`;
+    if (r.fileCount && r.fileCount > 1) {
+      txt += ` \u00b7 1 of ${r.fileCount} files`;
+    }
+    if (Array.isArray(r.warnings) && r.warnings.length) {
+      txt += ` \u00b7 ${r.warnings.length} warning${r.warnings.length === 1 ? '' : 's'}`;
+    }
+    state.modalMetaEl.textContent = txt;
   }
 
   /**
