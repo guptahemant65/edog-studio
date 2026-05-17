@@ -107,9 +107,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // Use a dedicated Register* method with a fresh inner instead.
                 if (inner is IDisposable || inner is IAsyncDisposable)
                 {
-                    var msg = $"{inner.GetType().Name} implements IDisposable — TryWrap will cause disposal trap. Use a dedicated registration method with a fresh inner instance.";
-                    Console.WriteLine($"[EDOG] ✗ {name} interceptor BLOCKED: {msg}");
-                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, msg);
+                    var disposableMsg = $"{inner.GetType().Name} implements IDisposable — TryWrap will cause disposal trap. Use a dedicated registration method with a fresh inner instance.";
+                    Console.WriteLine($"[EDOG] ✗ {name} interceptor BLOCKED: {disposableMsg}");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, disposableMsg);
                     return;
                 }
 
