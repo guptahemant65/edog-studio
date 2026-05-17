@@ -39,6 +39,43 @@ var _CODE_TY_RE = new RegExp(
   '\\b(' + _CODE_TY.join('|') + ')\\b', 'gi'
 );
 
+// O(1) lookup sets for the tokenizing highlighter — populated with both the
+// original spelling and its UPPER/lower variants so the tokenizer can do
+// case-insensitive membership checks without rebuilding regexes per line.
+var _CODE_KW_SET = (function() {
+  var s = Object.create(null);
+  for (var i = 0; i < _CODE_KW.length; i++) {
+    var w = _CODE_KW[i];
+    s[w] = true;
+    s[w.toUpperCase()] = true;
+    s[w.toLowerCase()] = true;
+  }
+  return s;
+})();
+
+var _CODE_TY_SET = (function() {
+  var s = Object.create(null);
+  for (var i = 0; i < _CODE_TY.length; i++) {
+    s[_CODE_TY[i].toUpperCase()] = true;
+  }
+  return s;
+})();
+
+function _ihIsIdStart(c) {
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c === '_';
+}
+
+function _ihIsIdPart(c) {
+  return _ihIsIdStart(c) || (c >= '0' && c <= '9');
+}
+
+function _ihEscape(s) {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    CodePreviewPanel CLASS
    ═══════════════════════════════════════════════════════════════════ */
@@ -351,51 +388,95 @@ class CodePreviewPanel {
   /* ─── Syntax Highlighting ─── */
 
   /**
-   * Regex-based single-line highlighter.
-   * Order: comments -> strings -> functions -> types -> keywords.
+   * Single-pass tokenizing highlighter.
+   *
+   * The previous regex-pipeline approach ran multiple .replace() passes over
+   * a string that already contained injected <span class="..."> markup. The
+   * later passes then matched against that markup (e.g. the keyword `class`
+   * in `<span class="...">`) and wrapped attribute names in nested spans,
+   * producing malformed HTML that the browser rendered as literal text like
+   * `class="iw-code-cm">— Create table:`. This tokenizer walks the source
+   * once, classifies every char, then emits properly-escaped HTML — so the
+   * highlighting markup can never feed back into the highlighter.
+   *
    * @param {string} raw   Source line
    * @param {string} lang  'sql' | 'python'
-   * @returns {string} HTML with <span> wrappers
+   * @returns {string}     HTML with <span> wrappers
    */
   _highlightLine(raw, lang) {
-    // 1. Escape HTML entities
-    var text = raw
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    var isPython = lang === 'python';
+    var i = 0;
+    var n = raw.length;
+    var out = '';
 
-    // 2. Comments (greedy — captures rest of line)
-    if (lang === 'python') {
-      text = text.replace(/(#.*)$/, '<span class="iw-code-cm">$1</span>');
-    }
-    text = text.replace(/(--.*$)/, '<span class="iw-code-cm">$1</span>');
+    while (i < n) {
+      var c = raw.charAt(i);
 
-    // 3. Strings (single-quoted, not inside comments already)
-    text = text.replace(
-      /('(?:[^'\\]|\\.)*')/g,
-      '<span class="iw-code-str">$1</span>'
-    );
-
-    // 4. Functions (word immediately followed by open-paren)
-    text = text.replace(
-      /\b([A-Za-z_][A-Za-z0-9_]*)\s*(?=\()/g,
-      function(match, fn) {
-        // Skip if already wrapped inside a span (comment/string)
-        return '<span class="iw-code-fn">' + fn + '</span>';
+      // ── Comment to end of line ──────────────────────────────────
+      if ((isPython && c === '#') || (c === '-' && raw.charAt(i + 1) === '-')) {
+        out += '<span class="iw-code-cm">' + _ihEscape(raw.substring(i)) + '</span>';
+        break;
       }
-    );
 
-    // 5. Types
-    text = text.replace(_CODE_TY_RE, function(m) {
-      return '<span class="iw-code-ty">' + m + '</span>';
-    });
+      // ── Single-quoted string (with backslash escapes) ───────────
+      if (c === "'") {
+        var sEnd = i + 1;
+        while (sEnd < n) {
+          var sc = raw.charAt(sEnd);
+          if (sc === '\\' && sEnd + 1 < n) { sEnd += 2; continue; }
+          if (sc === "'") { sEnd++; break; }
+          sEnd++;
+        }
+        out += '<span class="iw-code-str">' + _ihEscape(raw.substring(i, sEnd)) + '</span>';
+        i = sEnd;
+        continue;
+      }
 
-    // 6. Keywords
-    text = text.replace(_CODE_KW_RE, function(m) {
-      return '<span class="iw-code-kw">' + m + '</span>';
-    });
+      // ── Identifier / keyword / type / function ──────────────────
+      if (_ihIsIdStart(c)) {
+        var wEnd = i + 1;
+        while (wEnd < n && _ihIsIdPart(raw.charAt(wEnd))) wEnd++;
+        var word = raw.substring(i, wEnd);
 
-    return text;
+        // Look ahead past spaces for '('
+        var look = wEnd;
+        while (look < n && raw.charAt(look) === ' ') look++;
+        var isCall = raw.charAt(look) === '(';
+
+        var upper = word.toUpperCase();
+        var cls = null;
+        if (isCall) {
+          cls = 'iw-code-fn';
+        } else if (_CODE_TY_SET[upper]) {
+          cls = 'iw-code-ty';
+        } else if (_CODE_KW_SET[word] || _CODE_KW_SET[upper]) {
+          cls = 'iw-code-kw';
+        }
+
+        if (cls) {
+          out += '<span class="' + cls + '">' + _ihEscape(word) + '</span>';
+        } else {
+          out += _ihEscape(word);
+        }
+        i = wEnd;
+        continue;
+      }
+
+      // ── Plain run: numbers, punctuation, whitespace ─────────────
+      var pStart = i;
+      i++; // guarantee progress
+      while (i < n) {
+        var pc = raw.charAt(i);
+        if (_ihIsIdStart(pc)) break;
+        if (pc === "'") break;
+        if (isPython && pc === '#') break;
+        if (pc === '-' && raw.charAt(i + 1) === '-') break;
+        i++;
+      }
+      out += _ihEscape(raw.substring(pStart, i));
+    }
+
+    return out;
   }
 
   /* ─── Clipboard ─── */
