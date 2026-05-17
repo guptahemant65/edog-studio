@@ -99,6 +99,15 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             EdogTopicRouter.Publish("spark", eventData);
 
+            // Mirror to "cache" topic — Spark sessions are an expensive cached resource.
+            // <100ms duration on CreateSparkClientAsync indicates session was reused/cached.
+            EdogCacheInterceptor.RecordCacheEvent(
+                cacheName: "SparkClientFactory",
+                operation: "Get",
+                key: $"{workspaceId:N}:{artifactId:N}:{iterationId:N}",
+                hitOrMiss: sw.Elapsed.TotalMilliseconds < 100 ? "Hit" : "Miss",
+                durationMs: sw.Elapsed.TotalMilliseconds);
+
             return client;
         }
     }

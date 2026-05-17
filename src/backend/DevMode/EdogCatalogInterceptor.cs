@@ -113,6 +113,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                     extendedLineage = showExtendedLineage,
                 });
 
+                // Mirror to "cache" topic — catalog handler caches discovery results internally.
+                // Infer hit vs miss from timing: <50ms = cache hit, otherwise upstream fetch.
+                var hitOrMiss = sw.ElapsedMilliseconds < 50 ? "Hit" : "Miss";
+                EdogCacheInterceptor.RecordCacheEvent(
+                    cacheName: "CatalogHandler",
+                    operation: "Get",
+                    key: $"{workspaceId:N}:{artifactId:N}",
+                    hitOrMiss: hitOrMiss,
+                    durationMs: sw.Elapsed.TotalMilliseconds,
+                    valueSizeBytes: (tables?.Count ?? 0) * 1024L); // approx 1KB/entity
+
                 return tables;
             }
             catch (Exception ex)

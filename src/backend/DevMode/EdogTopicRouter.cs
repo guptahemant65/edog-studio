@@ -20,7 +20,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static readonly ConcurrentDictionary<string, TopicBuffer> _buffers = new();
 
         /// <summary>
-        /// Initializes all 16 topic buffers with sizes from the SignalR Protocol Spec.
+        /// Initializes all topic buffers with sizes from the SignalR Protocol Spec.
         /// Safe to call multiple times — TryAdd is idempotent.
         /// </summary>
         public static void Initialize()
@@ -36,10 +36,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             RegisterTopic("flag", 1000);
             RegisterTopic("di", 100);
             RegisterTopic("perf", 5000);
-            RegisterTopic("capacity", 500);
+            RegisterTopic("capacity", 500);  // Reserved for future capacity-tracking feature (no producer wired yet)
             RegisterTopic("catalog", 200);  // Catalog discovery events (start/complete/fail)
             RegisterTopic("dag", 500);  // DAG execution hooks + per-node lifecycle events
-            RegisterTopic("qa", 500);  // QA analysis + execution events
             RegisterTopic("flt-ops", 300);  // FLT operations: refresh triggers, MLV defs, DQ reports, maintenance
             RegisterTopic("nexus", 100);  // Nexus aggregated snapshots (low volume, high value)
             RegisterTopic("qa", 2000);  // QA testing: analysis progress, scenario events, execution results

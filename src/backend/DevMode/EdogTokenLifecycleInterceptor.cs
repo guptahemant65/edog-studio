@@ -97,6 +97,16 @@ namespace Microsoft.LiveTable.Service.DevMode
                     cacheInference,
                 });
 
+                // Mirror to "cache" topic so the Caches tab shows token cache activity
+                EdogCacheInterceptor.RecordCacheEvent(
+                    cacheName: "TokenManager",
+                    operation: "Get",
+                    key: $"{lakehouseId:N}:{iterationId:N}",
+                    hitOrMiss: cacheInference == "hit" ? "Hit"
+                        : cacheInference == "refresh" ? "Miss"
+                        : null,
+                    durationMs: sw.Elapsed.TotalMilliseconds);
+
                 return token;
             }
             catch (Exception ex)
@@ -147,6 +157,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 iterationId = iterationId.ToString(),
                 success = true,
             });
+
+            // Mirror to "cache" topic so the Caches tab shows token cache activity
+            EdogCacheInterceptor.RecordCacheEvent(
+                cacheName: "TokenManager",
+                operation: "Set",
+                key: $"{lakehouseId:N}:{iterationId:N}");
         }
 
         /// <inheritdoc/>
@@ -209,6 +225,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 iterationId = iterationId.ToString(),
                 success = true,
             });
+
+            // Mirror to "cache" topic so the Caches tab shows eviction activity
+            EdogCacheInterceptor.RecordCacheEvent(
+                cacheName: "TokenManager",
+                operation: "Evict",
+                key: $"{lakehouseId:N}:{iterationId:N}",
+                evictionReason: "DeleteCachedToken");
         }
 
         /// <inheritdoc/>
