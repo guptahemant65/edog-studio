@@ -238,7 +238,7 @@ class QaEditor {
     if (this._panel._curation) {
       this._panel._curation.updateScenario(this._scenario);
     }
-    window.edogToast && window.edogToast.show('Scenario updated', 'info');
+    window.edogToast && window.edogToast('Scenario updated', 'info');
     this.close();
   }
 }

@@ -392,7 +392,7 @@ class QaCuration {
       self._submitBtn.disabled = false;
       self._submitBtn.textContent = 'Run Approved (' + self._approved.size + ') \u25B8';
       if (window.edogToast) {
-        window.edogToast.show('Submission error: ' + (err.message || err), 'error');
+        window.edogToast('Submission error: ' + (err.message || err), 'error');
       }
     });
   }

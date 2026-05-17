@@ -186,7 +186,7 @@ class QaAnalysis {
     }
 
     // Also toast the warning
-    if (window.edogToast) window.edogToast.show(msg, 'warning');
+    if (window.edogToast) window.edogToast(msg, 'warning');
   }
 
   // ── F27 P4 — Inline LLM / scenario-generation error panel ──

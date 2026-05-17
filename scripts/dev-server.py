@@ -3136,6 +3136,16 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         if rf:
             resp_body_req["text"] = {"format": rf}
 
+        # reasoning_effort → reasoning.effort (Responses API). Reasoning
+        # models like gpt-5.x consume internal reasoning tokens against the
+        # same budget as visible output; without this hint the proxy can
+        # silently return content="" when the prompt is large and reasoning
+        # eats the whole max_output_tokens budget. Forward when present;
+        # non-reasoning deployments ignore the field.
+        reasoning_effort = chat_req.get("reasoning_effort")
+        if reasoning_effort:
+            resp_body_req["reasoning"] = {"effort": reasoning_effort}
+
         out_body = json.dumps(resp_body_req).encode()
 
         print(f"  [OpenAI] Proxying via Responses API → {cfg['endpoint']} / {cfg['deployment']}")

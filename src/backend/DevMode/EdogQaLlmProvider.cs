@@ -814,7 +814,19 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                     new { role = "user", content = userMessage }
                 },
                 temperature = 0.3,
-                max_tokens = 8192,
+                // gpt-5.4-pro is a reasoning model — internal reasoning tokens
+                // count against the same budget as visible output. The F27
+                // system prompt + per-zone context is large, so a tight
+                // ceiling (e.g. 8192) was being fully consumed by reasoning
+                // and returning content="" with finish_reason="length" or
+                // "stop", which the parser correctly rejected as empty.
+                // 32768 leaves comfortable headroom for both reasoning and
+                // the JSON output (typically 1-3K visible tokens).
+                max_tokens = 32768,
+                // Hint reasoning-capable models (gpt-5.*) to use medium
+                // reasoning effort. Cheaper non-reasoning deployments
+                // ignore this field, so it's safe to always send.
+                reasoning_effort = "medium",
                 response_format = new { type = "json_object" }
             };
 
@@ -860,6 +872,28 @@ Return ONLY valid JSON, no markdown, no explanation text.";
                 .GetProperty("message")
                 .GetProperty("content")
                 .GetString();
+
+            // Diagnostic: when the model returns no content, surface the
+            // finish_reason so empty-output investigations (e.g. reasoning
+            // models burning the entire budget on internal reasoning) are
+            // visible in the FLT console instead of just emitting a generic
+            // "content was empty" further upstream.
+            if (string.IsNullOrEmpty(content))
+            {
+                string finishReason = null;
+                try
+                {
+                    finishReason = doc.RootElement
+                        .GetProperty("choices")[0]
+                        .GetProperty("finish_reason")
+                        .GetString();
+                }
+                catch { }
+                Console.WriteLine(
+                    $"[EDOG] LLM returned empty content (finish_reason={finishReason ?? "?"}, " +
+                    $"elapsed={sw.ElapsedMilliseconds}ms). If this is a reasoning model, " +
+                    $"max_tokens may be insufficient for reasoning + output.");
+            }
 
             Console.WriteLine($"[EDOG] LLM call completed in {sw.ElapsedMilliseconds}ms");
             return content;

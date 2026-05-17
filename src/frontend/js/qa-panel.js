@@ -218,11 +218,11 @@ class QaPanel {
     const corrId = this._newCorrelationId();
     this._ws.connection.invoke('QaCancelRun', corrId, this._runId).then((result) => {
       if (result && result.success) {
-        if (window.edogToast) window.edogToast.show('Run cancelled', 'warning');
+        if (window.edogToast) window.edogToast('Run cancelled', 'warning');
       }
     }).catch((err) => {
       console.error('[QA] Kill failed:', err);
-      if (window.edogToast) window.edogToast.show('Failed to cancel run', 'error');
+      if (window.edogToast) window.edogToast('Failed to cancel run', 'error');
     });
   }
 
@@ -318,7 +318,7 @@ class QaPanel {
       return;
     }
 
-    if (window.edogToast) window.edogToast.show(msg, 'error');
+    if (window.edogToast) window.edogToast(msg, 'error');
   }
 
   // ── Keyboard Shortcuts ──
