@@ -6,6 +6,808 @@
  *
  * @author Zara Okonkwo — EDOG Studio hivemind
  */
+
+/* ═══════════════════════════════════════════════════════════════
+   Create-dialog shared validation
+   ═══════════════════════════════════════════════════════════════ */
+var WsCreateValidation = {
+  NAME_MIN: 3,
+  NAME_MAX: 256,
+  NAME_RE: /^[A-Za-z0-9][A-Za-z0-9 _-]*$/,
+
+  /** Validate a workspace/lakehouse name. Returns {valid, error}. */
+  validateName: function(name, existingNames) {
+    var trimmed = (name || '').trim();
+    if (!trimmed) return { valid: false, error: '' };
+    if (trimmed.length < this.NAME_MIN) {
+      return { valid: false, error: 'Name must be at least ' + this.NAME_MIN + ' characters' };
+    }
+    if (trimmed.length > this.NAME_MAX) {
+      return { valid: false, error: 'Name must be at most ' + this.NAME_MAX + ' characters' };
+    }
+    if (!this.NAME_RE.test(trimmed)) {
+      return { valid: false, error: 'Only letters, numbers, hyphens, underscores, spaces' };
+    }
+    var lower = trimmed.toLowerCase();
+    for (var i = 0; i < existingNames.length; i++) {
+      if ((existingNames[i] || '').toLowerCase() === lower) {
+        return { valid: false, error: 'A workspace with this name already exists' };
+      }
+    }
+    return { valid: true, error: '' };
+  },
+
+  /** Validate lakehouse name against workspace items. Returns {valid, error}. */
+  validateLakehouseName: function(name, existingItemNames) {
+    var result = this.validateName(name, []);
+    if (!result.valid) return result;
+    var trimmed = (name || '').trim().toLowerCase();
+    for (var i = 0; i < existingItemNames.length; i++) {
+      if ((existingItemNames[i] || '').toLowerCase() === trimmed) {
+        return { valid: false, error: 'An item with this name already exists in this workspace' };
+      }
+    }
+    return { valid: true, error: '' };
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   WorkspaceCreateDialog — modal for creating a Fabric workspace
+   States: empty → valid/invalid → capacity-loading → ready → creating → success/failure
+   ═══════════════════════════════════════════════════════════════ */
+class WorkspaceCreateDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._existingNames = (opts.existingWorkspaces || []).map(function(w) { return w.displayName; });
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._counterEl = null;
+    this._nameValidEl = null;
+    this._capListEl = null;
+    this._createBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._selectedCapacity = null;
+    this._capacitiesLoaded = false;
+    this._state = 'idle'; // idle | creating | success | failed
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._loadCapacities();
+    this._boundEsc = this._onEsc.bind(this);
+    document.addEventListener('keydown', this._boundEsc);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    if (this._state === 'idle' && this._nameInput && this._nameInput.value.trim()) {
+      if (!confirm('Discard workspace creation?')) return;
+    }
+    document.removeEventListener('keydown', this._boundEsc);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onEsc(e) {
+    if (e.key === 'Escape') this.close();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Create workspace');
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    header.innerHTML =
+      '<div class="ws-cd-header-icon">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+      '</div>' +
+      '<div class="ws-cd-title">Create Workspace</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner (hidden initially)
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'ws-cd-field';
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-cd-label';
+    nameLabel.textContent = 'WORKSPACE NAME';
+    nameField.appendChild(nameLabel);
+
+    var nameWrap = document.createElement('div');
+    nameWrap.className = 'ws-cd-input-wrap';
+    this._nameInput = document.createElement('input');
+    this._nameInput.className = 'ws-cd-input';
+    this._nameInput.type = 'text';
+    this._nameInput.placeholder = 'Enter workspace name';
+    this._nameInput.maxLength = WsCreateValidation.NAME_MAX;
+    this._nameInput.setAttribute('aria-label', 'Workspace name');
+    this._nameInput.addEventListener('input', function() { self._validateName(); });
+    nameWrap.appendChild(this._nameInput);
+
+    this._counterEl = document.createElement('span');
+    this._counterEl.className = 'ws-cd-counter';
+    this._counterEl.textContent = '0 / ' + WsCreateValidation.NAME_MAX;
+    nameWrap.appendChild(this._counterEl);
+
+    nameField.appendChild(nameWrap);
+    this._nameValidEl = document.createElement('div');
+    this._nameValidEl.className = 'ws-cd-error';
+    this._nameValidEl.style.display = 'none';
+    nameField.appendChild(this._nameValidEl);
+    body.appendChild(nameField);
+
+    // Capacity field
+    var capField = document.createElement('div');
+    capField.className = 'ws-cd-field';
+    var capLabel = document.createElement('div');
+    capLabel.className = 'ws-cd-label';
+    capLabel.innerHTML = 'CAPACITY <span class="ws-cd-label-opt">(optional)</span>';
+    capField.appendChild(capLabel);
+    this._capListEl = document.createElement('div');
+    this._capListEl.className = 'ws-cd-cap-list';
+    // Shimmer placeholders
+    this._capListEl.innerHTML =
+      '<div class="ws-cd-shimmer"></div>' +
+      '<div class="ws-cd-shimmer" style="animation-delay:0.15s"></div>';
+    capField.appendChild(this._capListEl);
+    body.appendChild(capField);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._createBtn = document.createElement('button');
+    this._createBtn.className = 'ws-cd-btn ws-cd-btn-primary';
+    this._createBtn.textContent = 'Create Workspace';
+    this._createBtn.disabled = true;
+    this._createBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._createBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar (hidden)
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _validateName() {
+    var name = this._nameInput.value;
+    this._counterEl.textContent = name.length + ' / ' + WsCreateValidation.NAME_MAX;
+    var result = WsCreateValidation.validateName(name, this._existingNames);
+
+    // Remove previous state classes
+    this._nameInput.classList.remove('valid', 'invalid');
+    this._nameValidEl.style.display = 'none';
+    // Remove any existing check icon
+    var existing = this._nameInput.parentNode.querySelector('.ws-cd-check');
+    if (existing) existing.remove();
+
+    if (!name.trim()) {
+      // Empty — neutral
+      this._counterEl.style.display = '';
+    } else if (result.valid) {
+      this._nameInput.classList.add('valid');
+      this._counterEl.style.display = 'none';
+      var check = document.createElement('span');
+      check.className = 'ws-cd-check';
+      check.textContent = '\u2713';
+      this._nameInput.parentNode.appendChild(check);
+    } else {
+      this._nameInput.classList.add('invalid');
+      this._nameValidEl.textContent = result.error;
+      this._nameValidEl.style.display = '';
+    }
+
+    this._updateCreateBtn();
+  }
+
+  _updateCreateBtn() {
+    var nameValid = WsCreateValidation.validateName(this._nameInput.value, this._existingNames).valid;
+    var ready = nameValid && this._capacitiesLoaded && this._state === 'idle';
+    this._createBtn.disabled = !ready;
+    if (ready) {
+      this._createBtn.classList.add('ready');
+    } else {
+      this._createBtn.classList.remove('ready');
+    }
+  }
+
+  _loadCapacities() {
+    var self = this;
+    this._api.listCapacities().then(function(resp) {
+      var caps = (resp && resp.value) ? resp.value : [];
+      self._capacitiesLoaded = true;
+      self._renderCapacities(caps);
+      self._updateCreateBtn();
+    }).catch(function(err) {
+      self._capacitiesLoaded = true;
+      self._capListEl.innerHTML = '';
+      var errCard = document.createElement('div');
+      errCard.className = 'ws-cd-cap-error';
+      errCard.innerHTML = '<span>\u2715 Could not load capacities</span>';
+      var retryBtn = document.createElement('button');
+      retryBtn.textContent = 'Retry';
+      retryBtn.addEventListener('click', function() {
+        self._capListEl.innerHTML =
+          '<div class="ws-cd-shimmer"></div><div class="ws-cd-shimmer" style="animation-delay:0.15s"></div>';
+        self._capacitiesLoaded = false;
+        self._loadCapacities();
+      });
+      errCard.appendChild(retryBtn);
+      self._capListEl.appendChild(errCard);
+      self._updateCreateBtn();
+    });
+  }
+
+  _renderCapacities(caps) {
+    var self = this;
+    this._capListEl.innerHTML = '';
+
+    // Default (no capacity) option
+    var defaultCard = this._buildCapCard({ id: '', displayName: 'Default capacity', sku: '', region: '' });
+    defaultCard.classList.add('selected');
+    this._selectedCapacity = null;
+    this._capListEl.appendChild(defaultCard);
+
+    for (var i = 0; i < caps.length; i++) {
+      var card = this._buildCapCard(caps[i]);
+      card.style.animationDelay = ((i + 1) * 60) + 'ms';
+      this._capListEl.appendChild(card);
+    }
+  }
+
+  _buildCapCard(cap) {
+    var self = this;
+    var card = document.createElement('div');
+    card.className = 'ws-cd-cap-card';
+    card.dataset.capId = cap.id || '';
+
+    var radio = document.createElement('div');
+    radio.className = 'ws-cd-cap-radio';
+    card.appendChild(radio);
+
+    var name = document.createElement('div');
+    name.className = 'ws-cd-cap-name';
+    name.textContent = cap.displayName || cap.id || 'Unknown';
+    card.appendChild(name);
+
+    if (cap.sku) {
+      var sku = document.createElement('span');
+      sku.className = 'ws-cd-cap-sku';
+      sku.textContent = cap.sku;
+      card.appendChild(sku);
+    }
+    if (cap.region) {
+      var region = document.createElement('span');
+      region.className = 'ws-cd-cap-region';
+      region.textContent = cap.region;
+      card.appendChild(region);
+    }
+
+    card.addEventListener('click', function() {
+      self._capListEl.querySelectorAll('.ws-cd-cap-card').forEach(function(c) {
+        c.classList.remove('selected');
+      });
+      card.classList.add('selected');
+      self._selectedCapacity = cap.id || null;
+      self._updateCreateBtn();
+    });
+    return card;
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var nameResult = WsCreateValidation.validateName(this._nameInput.value, this._existingNames);
+    if (!nameResult.valid) {
+      this._nameInput.classList.add('invalid');
+      return;
+    }
+
+    var self = this;
+    var name = this._nameInput.value.trim();
+    this._state = 'creating';
+    this._createBtn.disabled = true;
+    this._createBtn.classList.remove('ready');
+    this._createBtn.innerHTML = '<span class="ws-cd-spinner"></span>Creating\u2026';
+    this._nameInput.disabled = true;
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+
+    this._api.createWorkspace(name, this._selectedCapacity).then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(name, result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Create failed');
+    });
+  }
+
+  _showSuccess(name, result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-success-name">' + this._esc(name) + '</div>' +
+        '<div class="ws-cd-success-sub">Workspace created successfully</div>' +
+        '<button class="ws-cd-btn ws-cd-btn-primary">Open Workspace</button>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    body.querySelector('.ws-cd-btn-primary').addEventListener('click', function() {
+      self._finish(result);
+    });
+
+    // Auto-close after 3s
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(result);
+    }, 3000);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundEsc);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._nameInput.disabled = false;
+    this._createBtn.innerHTML = 'Create Workspace';
+    this._createBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LakehouseCreateDialog — modal for creating a lakehouse in a workspace
+   States: empty → valid/invalid → schemas → creating → success/failure
+   ═══════════════════════════════════════════════════════════════ */
+class LakehouseCreateDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._workspaceId = opts.workspaceId;
+    this._workspaceName = opts.workspaceName || '';
+    this._existingItemNames = (opts.existingItems || []).map(function(it) { return it.displayName; });
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._descInput = null;
+    this._counterEl = null;
+    this._descCounterEl = null;
+    this._nameValidEl = null;
+    this._createBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._schemasEnabled = true;
+    this._selectedSchemas = { dbo: true, bronze: false, silver: false, gold: false };
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._boundEsc = this._onEsc.bind(this);
+    document.addEventListener('keydown', this._boundEsc);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    if (this._state === 'idle' && this._nameInput && this._nameInput.value.trim()) {
+      if (!confirm('Discard lakehouse creation?')) return;
+    }
+    document.removeEventListener('keydown', this._boundEsc);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onEsc(e) {
+    if (e.key === 'Escape') this.close();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Create lakehouse');
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    header.innerHTML =
+      '<div class="ws-cd-header-icon">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
+      '</div>' +
+      '<div class="ws-cd-title">Create Lakehouse</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip
+    var ctx = document.createElement('div');
+    ctx.className = 'ws-cd-context';
+    ctx.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+      '<span>' + this._esc(this._workspaceName) + '</span>';
+    body.appendChild(ctx);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'ws-cd-field';
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-cd-label';
+    nameLabel.textContent = 'LAKEHOUSE NAME';
+    nameField.appendChild(nameLabel);
+    var nameWrap = document.createElement('div');
+    nameWrap.className = 'ws-cd-input-wrap';
+    this._nameInput = document.createElement('input');
+    this._nameInput.className = 'ws-cd-input';
+    this._nameInput.type = 'text';
+    this._nameInput.placeholder = 'Enter lakehouse name';
+    this._nameInput.maxLength = WsCreateValidation.NAME_MAX;
+    this._nameInput.addEventListener('input', function() { self._validateName(); });
+    nameWrap.appendChild(this._nameInput);
+    this._counterEl = document.createElement('span');
+    this._counterEl.className = 'ws-cd-counter';
+    this._counterEl.textContent = '0 / ' + WsCreateValidation.NAME_MAX;
+    nameWrap.appendChild(this._counterEl);
+    nameField.appendChild(nameWrap);
+    this._nameValidEl = document.createElement('div');
+    this._nameValidEl.className = 'ws-cd-error';
+    this._nameValidEl.style.display = 'none';
+    nameField.appendChild(this._nameValidEl);
+    body.appendChild(nameField);
+
+    // Description field
+    var descField = document.createElement('div');
+    descField.className = 'ws-cd-field';
+    var descLabel = document.createElement('div');
+    descLabel.className = 'ws-cd-label';
+    descLabel.innerHTML = 'DESCRIPTION <span class="ws-cd-label-opt">(optional)</span>';
+    descField.appendChild(descLabel);
+    this._descInput = document.createElement('textarea');
+    this._descInput.className = 'ws-cd-textarea';
+    this._descInput.placeholder = 'What is this lakehouse for?';
+    this._descInput.maxLength = 256;
+    this._descCounterEl = document.createElement('div');
+    this._descCounterEl.className = 'ws-cd-counter';
+    this._descCounterEl.style.position = 'static';
+    this._descCounterEl.style.textAlign = 'right';
+    this._descCounterEl.style.marginTop = '2px';
+    this._descCounterEl.textContent = '0 / 256';
+    this._descInput.addEventListener('input', function() {
+      self._descCounterEl.textContent = self._descInput.value.length + ' / 256';
+    });
+    descField.appendChild(this._descInput);
+    descField.appendChild(this._descCounterEl);
+    body.appendChild(descField);
+
+    // Enable Schemas toggle
+    var schemaField = document.createElement('div');
+    schemaField.className = 'ws-cd-field';
+    var toggleRow = document.createElement('div');
+    toggleRow.className = 'ws-cd-toggle-row';
+    var schemaLabel = document.createElement('div');
+    schemaLabel.className = 'ws-cd-label';
+    schemaLabel.style.marginBottom = '0';
+    schemaLabel.textContent = 'ENABLE SCHEMAS';
+    toggleRow.appendChild(schemaLabel);
+    this._toggleEl = document.createElement('button');
+    this._toggleEl.className = 'ws-cd-toggle on';
+    this._toggleEl.setAttribute('role', 'switch');
+    this._toggleEl.setAttribute('aria-checked', 'true');
+    this._toggleEl.addEventListener('click', function() { self._toggleSchemas(); });
+    toggleRow.appendChild(this._toggleEl);
+    schemaField.appendChild(toggleRow);
+    var hint = document.createElement('div');
+    hint.className = 'ws-cd-toggle-hint';
+    hint.textContent = 'Enables multi-schema support (dbo, bronze, silver, gold). Required for FLT.';
+    schemaField.appendChild(hint);
+
+    // Schema pills
+    this._schemasEl = document.createElement('div');
+    this._schemasEl.className = 'ws-cd-schemas expanded';
+    var SCHEMAS = [
+      { id: 'dbo', label: 'dbo', color: 'var(--accent, #6d5cff)', locked: true },
+      { id: 'bronze', label: 'bronze', color: '#cd7f32' },
+      { id: 'silver', label: 'silver', color: '#a0a0a0' },
+      { id: 'gold', label: 'gold', color: '#d4a017' }
+    ];
+    for (var i = 0; i < SCHEMAS.length; i++) {
+      var s = SCHEMAS[i];
+      var pill = document.createElement('div');
+      pill.className = 'ws-cd-pill' + (s.locked ? ' locked selected' : '');
+      pill.dataset.schema = s.id;
+      var dot = document.createElement('span');
+      dot.className = 'ws-cd-pill-dot';
+      dot.style.background = s.color;
+      pill.appendChild(dot);
+      pill.appendChild(document.createTextNode(s.label));
+      if (s.locked) {
+        var lock = document.createElement('span');
+        lock.textContent = '\uD83D\uDD12';
+        lock.style.fontSize = '10px';
+        pill.appendChild(lock);
+      }
+      if (!s.locked) {
+        pill.addEventListener('click', (function(schema, el) {
+          return function() {
+            self._selectedSchemas[schema] = !self._selectedSchemas[schema];
+            el.classList.toggle('selected', self._selectedSchemas[schema]);
+          };
+        })(s.id, pill));
+      }
+      this._schemasEl.appendChild(pill);
+    }
+    schemaField.appendChild(this._schemasEl);
+    body.appendChild(schemaField);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._createBtn = document.createElement('button');
+    this._createBtn.className = 'ws-cd-btn ws-cd-btn-primary';
+    this._createBtn.textContent = 'Create Lakehouse';
+    this._createBtn.disabled = true;
+    this._createBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._createBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _toggleSchemas() {
+    this._schemasEnabled = !this._schemasEnabled;
+    this._toggleEl.classList.toggle('on', this._schemasEnabled);
+    this._toggleEl.setAttribute('aria-checked', String(this._schemasEnabled));
+    this._schemasEl.classList.toggle('expanded', this._schemasEnabled);
+    this._schemasEl.classList.toggle('collapsed', !this._schemasEnabled);
+  }
+
+  _validateName() {
+    var name = this._nameInput.value;
+    this._counterEl.textContent = name.length + ' / ' + WsCreateValidation.NAME_MAX;
+    var result = WsCreateValidation.validateLakehouseName(name, this._existingItemNames);
+
+    this._nameInput.classList.remove('valid', 'invalid');
+    this._nameValidEl.style.display = 'none';
+    var existing = this._nameInput.parentNode.querySelector('.ws-cd-check');
+    if (existing) existing.remove();
+
+    if (!name.trim()) {
+      this._counterEl.style.display = '';
+    } else if (result.valid) {
+      this._nameInput.classList.add('valid');
+      this._counterEl.style.display = 'none';
+      var check = document.createElement('span');
+      check.className = 'ws-cd-check';
+      check.textContent = '\u2713';
+      this._nameInput.parentNode.appendChild(check);
+    } else {
+      this._nameInput.classList.add('invalid');
+      this._nameValidEl.textContent = result.error;
+      this._nameValidEl.style.display = '';
+    }
+
+    this._updateCreateBtn();
+  }
+
+  _updateCreateBtn() {
+    var nameValid = WsCreateValidation.validateLakehouseName(this._nameInput.value, this._existingItemNames).valid;
+    var ready = nameValid && this._state === 'idle';
+    this._createBtn.disabled = !ready;
+    if (ready) {
+      this._createBtn.classList.add('ready');
+    } else {
+      this._createBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var nameResult = WsCreateValidation.validateLakehouseName(this._nameInput.value, this._existingItemNames);
+    if (!nameResult.valid) {
+      this._nameInput.classList.add('invalid');
+      return;
+    }
+
+    var self = this;
+    var name = this._nameInput.value.trim();
+    var description = this._descInput.value.trim();
+    var schemas = [];
+    if (this._schemasEnabled) {
+      var keys = Object.keys(this._selectedSchemas);
+      for (var i = 0; i < keys.length; i++) {
+        if (this._selectedSchemas[keys[i]]) schemas.push(keys[i]);
+      }
+    }
+
+    this._state = 'creating';
+    this._createBtn.disabled = true;
+    this._createBtn.classList.remove('ready');
+    this._createBtn.innerHTML = '<span class="ws-cd-spinner"></span>Creating\u2026';
+    this._nameInput.disabled = true;
+    this._descInput.disabled = true;
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+
+    this._api.createLakehouse(this._workspaceId, name, {
+      description: description || undefined,
+      enableSchemas: this._schemasEnabled,
+      defaultSchemas: this._schemasEnabled ? schemas : undefined
+    }).then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(name, result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Create failed');
+    });
+  }
+
+  _showSuccess(name, result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-success-name">' + this._esc(name) + '</div>' +
+        '<div class="ws-cd-success-sub">Lakehouse created in ' + this._esc(this._workspaceName) + '</div>' +
+        '<button class="ws-cd-btn ws-cd-btn-primary">Select Lakehouse</button>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    body.querySelector('.ws-cd-btn-primary').addEventListener('click', function() {
+      self._finish(result);
+    });
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(result);
+    }, 3000);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundEsc);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._nameInput.disabled = false;
+    this._descInput.disabled = false;
+    this._createBtn.innerHTML = 'Create Lakehouse';
+    this._createBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
 class WorkspaceExplorer {
   constructor(apiClient) {
     this._api = apiClient;
