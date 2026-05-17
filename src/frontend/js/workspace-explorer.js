@@ -2511,9 +2511,25 @@ class WorkspaceExplorer {
         const ns = e.namespace || {};
         const fqn = [ns.workspaceName, ns.artifactName, ns.schemaName, e.tableName].filter(Boolean).join('.');
         const cdf = e.properties?.cdfEnabled === 'true';
-        html += '<li class="ws-source-entity">';
+        const sourceSchema = ns.schemaName || 'dbo';
+        const localMatch = Array.isArray(this._currentTables)
+          ? this._currentTables.find(t =>
+              (t.schemaName || 'dbo') === sourceSchema && t.name === e.tableName,
+            )
+          : null;
+        const isLink = !!localMatch;
+        const classes = ['ws-source-entity'];
+        if (isLink) classes.push('is-link');
+        else classes.push('is-foreign');
+
+        const attrs = isLink
+          ? ` role="button" tabindex="0" data-source-schema="${this._esc(sourceSchema)}" data-source-table="${this._esc(e.tableName)}" title="Open ${this._esc(fqn)}"`
+          : ` title="Not in the currently loaded tables view"`;
+
+        html += `<li class="${classes.join(' ')}"${attrs}>`;
         html += `<span class="ws-source-fqn">${this._esc(fqn)}</span>`;
         if (cdf) html += '<span class="ws-source-tag">CDF</span>';
+        if (isLink) html += '<span class="ws-source-arrow" aria-hidden="true">\u203A</span>';
         html += '</li>';
       }
       html += '</ul></div>';
@@ -2530,6 +2546,33 @@ class WorkspaceExplorer {
 
     section.innerHTML = html;
     this._wirePreviewCopyButtons(section);
+    this._wirePreviewSourceLinks(section);
+  }
+
+  /**
+   * Wire click + keyboard handlers on `.ws-source-entity.is-link` items.
+   * Activating a row swaps the inspector to the matching local table.
+   */
+  _wirePreviewSourceLinks(section) {
+    const items = section.querySelectorAll('.ws-source-entity.is-link[data-source-table]');
+    items.forEach((el) => {
+      const open = () => {
+        const schemaName = el.getAttribute('data-source-schema') || 'dbo';
+        const tableName = el.getAttribute('data-source-table');
+        if (!tableName || !Array.isArray(this._currentTables)) return;
+        const target = this._currentTables.find(t =>
+          (t.schemaName || 'dbo') === schemaName && t.name === tableName,
+        );
+        if (target) this._showTableInspector(target);
+      };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          open();
+        }
+      });
+    });
   }
 
   /** Regular table → render synthesized DDL + Delta properties. */
