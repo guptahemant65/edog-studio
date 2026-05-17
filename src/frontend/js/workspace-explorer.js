@@ -82,8 +82,8 @@ class WorkspaceCreateDialog {
     document.body.appendChild(this._overlayEl);
     this._nameInput.focus();
     this._loadCapacities();
-    this._boundEsc = this._onEsc.bind(this);
-    document.addEventListener('keydown', this._boundEsc);
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
   }
 
   close() {
@@ -91,14 +91,15 @@ class WorkspaceCreateDialog {
     if (this._state === 'idle' && this._nameInput && this._nameInput.value.trim()) {
       if (!confirm('Discard workspace creation?')) return;
     }
-    document.removeEventListener('keydown', this._boundEsc);
+    document.removeEventListener('keydown', this._boundKeydown);
     this._overlayEl.remove();
     this._overlayEl = null;
     if (this.onClose) this.onClose();
   }
 
-  _onEsc(e) {
+  _onKeydown(e) {
     if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && !this._createBtn.disabled) this._submit();
   }
 
   _build() {
@@ -395,7 +396,7 @@ class WorkspaceCreateDialog {
   }
 
   _finish(result) {
-    document.removeEventListener('keydown', this._boundEsc);
+    document.removeEventListener('keydown', this._boundKeydown);
     if (this._overlayEl) this._overlayEl.remove();
     this._overlayEl = null;
     if (this.onComplete) this.onComplete(result);
@@ -471,8 +472,8 @@ class LakehouseCreateDialog {
     this._build();
     document.body.appendChild(this._overlayEl);
     this._nameInput.focus();
-    this._boundEsc = this._onEsc.bind(this);
-    document.addEventListener('keydown', this._boundEsc);
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
   }
 
   close() {
@@ -480,14 +481,15 @@ class LakehouseCreateDialog {
     if (this._state === 'idle' && this._nameInput && this._nameInput.value.trim()) {
       if (!confirm('Discard lakehouse creation?')) return;
     }
-    document.removeEventListener('keydown', this._boundEsc);
+    document.removeEventListener('keydown', this._boundKeydown);
     this._overlayEl.remove();
     this._overlayEl = null;
     if (this.onClose) this.onClose();
   }
 
-  _onEsc(e) {
+  _onKeydown(e) {
     if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && !this._createBtn.disabled) this._submit();
   }
 
   _build() {
@@ -636,8 +638,7 @@ class LakehouseCreateDialog {
       pill.appendChild(document.createTextNode(s.label));
       if (s.locked) {
         var lock = document.createElement('span');
-        lock.textContent = '\uD83D\uDD12';
-        lock.style.fontSize = '10px';
+        lock.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle"><path d="M18 10h-1V6A5 5 0 0 0 7 6v4H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2m-6 6a2 2 0 1 1 0-4 2 2 0 0 1 0 4M9 10V6a3 3 0 0 1 6 0v4z"/></svg>';
         pill.appendChild(lock);
       }
       if (!s.locked) {
@@ -790,7 +791,7 @@ class LakehouseCreateDialog {
   }
 
   _finish(result) {
-    document.removeEventListener('keydown', this._boundEsc);
+    document.removeEventListener('keydown', this._boundKeydown);
     if (this._overlayEl) this._overlayEl.remove();
     this._overlayEl = null;
     if (this.onComplete) this.onComplete(result);
@@ -812,6 +813,19 @@ class LakehouseCreateDialog {
     retryBtn.textContent = 'Retry';
     retryBtn.addEventListener('click', function() { self._submit(); });
     this._errorBanner.appendChild(retryBtn);
+  }
+
+  _showNoAuth() {
+    if (!this._dialogEl) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'ws-cd-noauth';
+    overlay.innerHTML = '<div class="ws-cd-noauth-msg">Sign in to create lakehouses</div>';
+    var btn = document.createElement('button');
+    btn.className = 'ws-cd-btn ws-cd-btn-primary';
+    btn.textContent = 'Close';
+    btn.addEventListener('click', this.close.bind(this));
+    overlay.appendChild(btn);
+    this._dialogEl.appendChild(overlay);
   }
 
   _esc(str) {
@@ -1394,6 +1408,7 @@ class WorkspaceExplorer {
     var t = this._ctxTarget;
     if (!t || !t.isWorkspace) return;
     var ws = t.workspace;
+    var hasAuth = this._api.hasBearerToken();
 
     // Get existing items for duplicate name detection
     var children = this._children[ws.id] || [];
@@ -1413,6 +1428,7 @@ class WorkspaceExplorer {
       });
     };
     dialog.open();
+    if (!hasAuth) dialog._showNoAuth();
   }
 
   /** Context menu action: create notebook inside selected workspace. */
