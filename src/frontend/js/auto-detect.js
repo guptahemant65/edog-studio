@@ -27,8 +27,17 @@ class AutoDetector {
    */
   processLog = (entry) => {
     const msg = entry.message || '';
-    const iterationId = entry.iterationId || this.extractIterationId(msg);
+    var iterationId = entry.iterationId || this.extractIterationId(msg);
     
+    // FLT per-node logs (Executing/Executed node) don't carry iterationId —
+    // only [DAG STATUS] does. When no ID is present but we have an active
+    // execution being tracked, attribute the log to that execution.
+    if (!iterationId && this.detectedExecutions.size > 0) {
+      for (var _e of this.detectedExecutions) {
+        if (_e[1].status === 'Running') { iterationId = _e[0]; break; }
+      }
+    }
+
     if (iterationId) {
       this.ensureExecution(iterationId);
       const exec = this.detectedExecutions.get(iterationId);
