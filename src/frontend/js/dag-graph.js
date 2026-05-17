@@ -361,25 +361,35 @@ class DagCanvasRenderer {
         };
       });
 
-      // Draw Bezier curve through points
+      // Draw smooth curve through points.
+      // For left-to-right DAGs, we use horizontal-dominant Bézier curves:
+      // control points extend horizontally from each endpoint, keeping
+      // curves clean even when source/target are at very different Y positions.
       ctx.beginPath();
       ctx.moveTo(screenPts[0].x, screenPts[0].y);
 
       if (screenPts.length === 2) {
         var sx = screenPts[0].x, sy = screenPts[0].y;
         var ex = screenPts[1].x, ey = screenPts[1].y;
-        var midX = (sx + ex) / 2;
-        ctx.bezierCurveTo(midX, sy, midX, ey, ex, ey);
+        // Horizontal tension: control points extend 40% of the X gap outward
+        // from each endpoint, keeping the curve horizontal at both ends.
+        var dx = Math.abs(ex - sx);
+        var tension = Math.max(dx * 0.4, 30 * cam.scale);
+        ctx.bezierCurveTo(sx + tension, sy, ex - tension, ey, ex, ey);
       } else {
-        for (var i = 1; i < screenPts.length - 1; i++) {
-          var prev = screenPts[i - 1];
-          var curr = screenPts[i];
-          var next = screenPts[i + 1];
-          var midX2 = (curr.x + next.x) / 2;
-          ctx.quadraticCurveTo(curr.x, curr.y, midX2, (curr.y + next.y) / 2);
+        // Multi-point: smooth Catmull-Rom style through waypoints
+        for (var i = 1; i < screenPts.length; i++) {
+          var p0 = screenPts[Math.max(0, i - 2)];
+          var p1 = screenPts[i - 1];
+          var p2 = screenPts[i];
+          var p3 = screenPts[Math.min(screenPts.length - 1, i + 1)];
+          // Convert Catmull-Rom segment to cubic Bézier
+          var cp1x = p1.x + (p2.x - p0.x) / 6;
+          var cp1y = p1.y + (p2.y - p0.y) / 6;
+          var cp2x = p2.x - (p3.x - p1.x) / 6;
+          var cp2y = p2.y - (p3.y - p1.y) / 6;
+          ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
         }
-        var last = screenPts[screenPts.length - 1];
-        ctx.lineTo(last.x, last.y);
       }
 
       // Style based on node states and selection
@@ -417,23 +427,29 @@ class DagCanvasRenderer {
       ctx.globalAlpha = 1;
       ctx.setLineDash([]);
 
-      // Arrowhead — compute tangent direction at the curve endpoint
+      // Arrowhead — use curve tangent at endpoint for accurate direction
       var arrowLen = 7 * cam.scale;
       var endPt = screenPts[screenPts.length - 1];
-      // For Bezier curves, tangent at endpoint = direction from last control point to endpoint
-      // For 2-point edges, the last control point is (midX, ey) so tangent is horizontal
-      // Approximate: use the direction from second-to-last to last screen point
-      var prevPt = screenPts.length >= 2 ? screenPts[screenPts.length - 2] : endPt;
-      // For Bezier, override with the midpoint control direction (always horizontal for our curves)
-      var dx = endPt.x - prevPt.x;
-      var dy = endPt.y - prevPt.y;
-      var dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 0.1) { dx = 1; dy = 0; } else { dx /= dist; dy /= dist; }
+      // For our horizontal-dominant Bézier, the tangent at the endpoint
+      // points from the last control point toward the endpoint.
+      // For 2-point edges: last CP is (ex - tension, ey), so tangent ≈ horizontal.
+      // For multi-point: use Catmull-Rom tangent at last segment.
+      var tdx, tdy;
+      if (screenPts.length === 2) {
+        // Tangent is always roughly horizontal for 2-point edges
+        tdx = 1; tdy = 0;
+      } else {
+        var prevPt = screenPts[screenPts.length - 2];
+        tdx = endPt.x - prevPt.x;
+        tdy = endPt.y - prevPt.y;
+        var tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (tdist < 0.1) { tdx = 1; tdy = 0; } else { tdx /= tdist; tdy /= tdist; }
+      }
 
       // Place arrowhead slightly before the endpoint so it doesn't hide behind node card
-      var tipX = endPt.x - dx * 2 * cam.scale;
-      var tipY = endPt.y - dy * 2 * cam.scale;
-      var angle = Math.atan2(dy, dx);
+      var tipX = endPt.x - tdx * 2 * cam.scale;
+      var tipY = endPt.y - tdy * 2 * cam.scale;
+      var angle = Math.atan2(tdy, tdx);
       var halfAngle = 0.4;
 
       ctx.beginPath();
