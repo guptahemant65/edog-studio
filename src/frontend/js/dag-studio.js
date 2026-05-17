@@ -603,7 +603,9 @@ class DagStudio {
       var layoutResult = this._layout.layout(nodes, edges);
       this._renderer.setData(layoutResult.nodes, layoutResult.edges);
       this._renderer.fitToScreen();
-      // Restore canvas visibility after data is ready (hidden by _renderLoading)
+      // Remove loading overlay and restore canvas (hidden by _renderLoading)
+      var loadingEl = this._graphPanel ? this._graphPanel.querySelector('.dag-loading') : null;
+      if (loadingEl) loadingEl.remove();
       var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
       if (canvas) canvas.style.opacity = '1';
       var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
@@ -1176,13 +1178,20 @@ class DagStudio {
   }
 
   _renderLoading() {
+    // Place loading overlay in the graph panel (not nodes layer) so it stays
+    // centered regardless of camera transforms.
+    var existing = this._graphPanel ? this._graphPanel.querySelector('.dag-loading') : null;
+    if (existing) existing.remove();
     var nodesLayer = this._graphPanel ? this._graphPanel.querySelector('#dagNodesLayer') : null;
-    if (nodesLayer) {
-      nodesLayer.innerHTML = '<div class="dag-loading">' +
+    if (nodesLayer) nodesLayer.innerHTML = '';
+    if (this._graphPanel) {
+      var loading = document.createElement('div');
+      loading.className = 'dag-loading';
+      loading.innerHTML =
         '<div class="dag-loading-spinner"></div>' +
         '<div class="dag-loading-text">Loading DAG</div>' +
-        '<div class="dag-loading-sub">Fetching graph structure...</div>' +
-      '</div>';
+        '<div class="dag-loading-sub">Fetching graph structure...</div>';
+      this._graphPanel.appendChild(loading);
     }
     // Hide the canvas during loading — prevents stale edges from rendering
     // while the "Loading DAG" overlay is visible. Restored by _loadDag after setData.
