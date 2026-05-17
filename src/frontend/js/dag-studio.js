@@ -919,8 +919,52 @@ class DagStudio {
         this._esm._executionStatus = overallStatus === 'succeeded' ? 'completed' : overallStatus;
         this._esm._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : Date.now();
         this._stopExecPoller();
-        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(this._esm._executionStatus);
-        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, this._esm._executionStatus);
+        // FLT populates nodeExecutionMetrices AFTER the execution fully
+        // completes.  The poller often catches the terminal status before
+        // per-node data is written.  Wait 2 s then do ONE final fetch so
+        // the Gantt chart, bottom-bar, and strip all show correct numbers.
+        var self = this;
+        var finalIterationId = iterationId;
+        setTimeout(async function() {
+          try {
+            var finalMetrics = await self._api.getDagExecMetrics(finalIterationId);
+            if (finalMetrics) {
+              var finalRaw = finalMetrics.nodeExecutionMetrices || finalMetrics.nodeExecutionMetrics || {};
+              var finalEntries = Array.isArray(finalRaw) ? finalRaw : Object.entries(finalRaw);
+              for (var j = 0; j < finalEntries.length; j++) {
+                var fnid, fnm;
+                if (Array.isArray(finalRaw)) {
+                  fnm = finalEntries[j];
+                  fnid = fnm.nodeId || self._esm._nodeNameIndex.get((fnm.nodeName || fnm.mlvName || '').toLowerCase());
+                } else {
+                  fnid = finalEntries[j][0];
+                  fnm = finalEntries[j][1];
+                  if (fnm && !fnm.nodeId && self._esm._nodeNameIndex.has(fnid.toLowerCase())) {
+                    fnid = self._esm._nodeNameIndex.get(fnid.toLowerCase());
+                  }
+                }
+                if (!fnid || !fnm) continue;
+                var newStatus = self._esm._mapNodeStatus(fnm.status || fnm.nodeExecutionStatus);
+                var startMs = fnm.startedAt ? new Date(fnm.startedAt).getTime() : (fnm.startTime ? new Date(fnm.startTime).getTime() : null);
+                var endMs = fnm.endedAt ? new Date(fnm.endedAt).getTime() : (fnm.endTime ? new Date(fnm.endTime).getTime() : null);
+                self._esm._nodeStates.set(fnid, {
+                  status: newStatus,
+                  startedAt: startMs,
+                  endedAt: endMs,
+                  errorCode: fnm.errorCode || null,
+                  source: 'final-poll',
+                });
+                if (self._esm.onNodeStateChanged) self._esm.onNodeStateChanged(fnid, self._esm._nodeStates.get(fnid));
+              }
+              self._pushPollToAutoDetector(finalIterationId, dagMetrics, finalEntries, Array.isArray(finalRaw));
+            }
+          } catch (e) {
+            console.log('[DAG-DIAG] Final poll failed:', e.message);
+          }
+          self._updateSummary();
+          if (self._esm.onExecutionStateChanged) self._esm.onExecutionStateChanged(self._esm._executionStatus);
+          if (self._esm.onExecutionComplete) self._esm.onExecutionComplete(finalIterationId, self._esm._executionStatus);
+        }, 2000);
       } else {
         // notStarted / running / queued — keep polling, keep UI alive.
         this._updateSummary();
@@ -972,8 +1016,8 @@ class DagStudio {
       exec.completedNodes = done;
       exec.failedNodes = failed;
       if (!exec.nodeCount) exec.nodeCount = entries.length;
-    } else if (!exec.nodeCount && this._dag && this._dag.nodes) {
-      exec.nodeCount = this._dag.nodes.length;
+    } else if (!exec.nodeCount && this._esm.nodeStates.size) {
+      exec.nodeCount = this._esm.nodeStates.size;
     }
     // First detection — fire onExecutionDetected so SmartContextBar reveals
     // itself; subsequent ticks fire onExecutionUpdated.
