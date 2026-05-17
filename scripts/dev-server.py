@@ -3709,7 +3709,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             flt_path = flt_path[len("/api/flt-proxy") :]
 
         try:
-            mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id)
+            # FLT V1 authenticator validates workloadType == "LiveTable" strictly.
+            # Using default "Lakehouse" causes 401 on LiveTable controller endpoints.
+            mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
         except Exception as e:
             self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
             return
