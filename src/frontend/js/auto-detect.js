@@ -76,9 +76,10 @@ class AutoDetector {
       const refreshMatch = msg.match(/RefreshMode[=: ]+(\w+)/i);
       if (refreshMatch) exec.refreshMode = refreshMatch[1];
 
-      // Detect node execution events
+      // Detect node execution events. Real FLT node names include dots and hyphens
+      // (e.g. "silver.mlv_full_nocdf"), so we accept [\w./-]+ rather than \w+.
       if (msg.includes('Executed node') || msg.includes('executed node')) {
-        const nodeMatch = msg.match(/[Ee]xecuted node\s+['""]?(\w+)['""]?\s+.*?status\s+(\w+)/);
+        const nodeMatch = msg.match(/[Ee]xecuted node\s+['"]?([\w./-]+)['"]?\s+.*?(?:final\s+)?status\s+([A-Za-z]+)/);
         if (nodeMatch) {
           const [, nodeName, status] = nodeMatch;
           if (!exec.nodes) exec.nodes = new Map();
@@ -87,21 +88,33 @@ class AutoDetector {
         }
       }
       if (msg.includes('Executing node') && !msg.includes('Executed')) {
-        const nodeMatch = msg.match(/[Ee]xecuting node\s+['""]?(\w+)['""]?/);
+        const nodeMatch = msg.match(/[Ee]xecuting node\s+['"]?([\w./-]+)['"]?/);
         if (nodeMatch) {
           if (!exec.nodes) exec.nodes = new Map();
           exec.nodes.set(nodeMatch[1], { status: 'Running', timestamp: entry.timestamp });
         }
       }
 
-      // Detect skipped nodes
-      if (msg.includes('[DAG_FAULTED_NODES]') || msg.includes('skipped')) {
-        const skipMatch = msg.match(/['""](\w+)['""].*?skipped|skipped.*?['""](\w+)['""]|faulted.*?['""](\w+)['""]|['""](\w+)['""].*?faulted/i);
+      // [NODE_FAILURE] Node {name} failed in dag {dagName}. ErrorCode: X, ErrorMessage: ...
+      if (msg.includes('[NODE_FAILURE]')) {
+        const nodeMatch = msg.match(/\[NODE_FAILURE\]\s+Node\s+['"]?([\w./-]+)['"]?/);
+        if (nodeMatch) {
+          if (!exec.nodes) exec.nodes = new Map();
+          exec.nodes.set(nodeMatch[1], { status: 'Failed', timestamp: entry.timestamp });
+          this.recountNodes(exec);
+        }
+      }
+
+      // Detect skipped/faulted nodes. Names may contain dots/hyphens (silver.mlv_x).
+      if (msg.includes('[DAG_FAULTED_NODES]') || msg.includes('skipped') || msg.includes('Skipped')) {
+        const skipMatch = msg.match(/['"]([\w./-]+)['"][^]*?skipped|skipped[^]*?['"]([\w./-]+)['"]|[Ff]aulted[^]*?['"]?([\w./-]+)['"]?|['"]?([\w./-]+)['"]?[^]*?[Ff]aulted/);
         if (skipMatch) {
           const nodeName = skipMatch[1] || skipMatch[2] || skipMatch[3] || skipMatch[4];
-          if (!exec.nodes) exec.nodes = new Map();
-          exec.nodes.set(nodeName, { status: 'Skipped', timestamp: entry.timestamp });
-          exec.skippedNodes++;
+          if (nodeName && nodeName.length > 1) {
+            if (!exec.nodes) exec.nodes = new Map();
+            exec.nodes.set(nodeName, { status: 'Skipped', timestamp: entry.timestamp });
+            this.recountNodes(exec);
+          }
         }
       }
 
@@ -250,9 +263,9 @@ class AutoDetector {
   recountNodes = (exec) => {
     if (!exec.nodes) return;
     const statuses = [...exec.nodes.values()].map(n => n.status);
-    exec.completedNodes = statuses.filter(s => s === 'Completed' || s === 'Succeeded').length;
-    exec.failedNodes = statuses.filter(s => s === 'Failed').length;
-    exec.skippedNodes = statuses.filter(s => s === 'Skipped' || s === 'Faulted').length;
+    exec.completedNodes = statuses.filter(s => s === 'Completed' || s === 'Succeeded' || s === 'Success').length;
+    exec.failedNodes = statuses.filter(s => s === 'Failed' || s === 'Faulted').length;
+    exec.skippedNodes = statuses.filter(s => s === 'Skipped').length;
   }
 
   extractIterationId = (msg) => {

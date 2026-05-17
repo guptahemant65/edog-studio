@@ -112,10 +112,29 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var entry = new LogEntry(timestamp, level, message, component, rootActivityId, eventId, customData);
                 entry.CodeMarkerName = MonitoredScope.CurrentCodeMarkerName;
 
-                var iterMatch = IterationIdRegex.Match(message);
-                if (iterMatch.Success)
+                // Extract IterationId. FLT propagates IterationId through MonitoredScope.CustomData
+                // (see NodeExecutor.cs, DagExecutionHandlerV2.cs, controllers, hooks — they all call
+                // ms.AddCustomData(Constants.IterationIdKey, iterationId.ToString())). That custom data
+                // flows into TestLogEvent.CustomData, so it's the most reliable source — every Tracer
+                // call inside a DAG scope carries it, even when the message body doesn't mention it.
+                // Fall back to scraping the message body (covers logs from non-MonitoredScope sites).
+                string extractedIterationId = null;
+                if (customData.TryGetValue("IterationId", out var iidFromCustom) && IsValidGuid(iidFromCustom))
                 {
-                    entry.IterationId = iterMatch.Groups[1].Value;
+                    extractedIterationId = iidFromCustom;
+                }
+                else
+                {
+                    var iterMatch = IterationIdRegex.Match(message);
+                    if (iterMatch.Success)
+                    {
+                        extractedIterationId = iterMatch.Groups[1].Value;
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(extractedIterationId))
+                {
+                    entry.IterationId = extractedIterationId;
                 }
 
                 this.edogLogServer.AddLog(entry);
@@ -157,6 +176,24 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 // Ignore console output errors - don't break logging pipeline
             }
+        }
+
+        /// <summary>
+        /// Returns true if the value looks like a non-empty, non-default GUID (36 chars, hyphenated).
+        /// </summary>
+        private static bool IsValidGuid(string value)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length != 36)
+            {
+                return false;
+            }
+
+            if (value == "00000000-0000-0000-0000-000000000000")
+            {
+                return false;
+            }
+
+            return Guid.TryParse(value, out _);
         }
 
         /// <summary>

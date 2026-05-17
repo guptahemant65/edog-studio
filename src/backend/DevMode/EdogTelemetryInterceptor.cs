@@ -84,10 +84,25 @@ namespace Microsoft.LiveTable.Service.DevMode
                     attributes,
                     executingUserObjectId.ToString());
 
-                var guidMatch = GuidSuffixRegex.Match(effectiveCorrelationId);
-                if (guidMatch.Success)
+                // Prefer IterationId from activity attributes — FLT pushes it through
+                // MonitoredScope.AddCustomData("IterationId", iterationId.ToString()) for every
+                // DAG/node-scoped activity (RunDAG, NodeExecution, etc.), so attributes are the
+                // authoritative source. Fall back to scraping a trailing GUID off the correlationId
+                // for activities that don't carry it explicitly (e.g. GetLatestDAG).
+                if (attributes.TryGetValue("IterationId", out var iidFromAttrs)
+                    && !string.IsNullOrEmpty(iidFromAttrs)
+                    && iidFromAttrs != "00000000-0000-0000-0000-000000000000"
+                    && Guid.TryParse(iidFromAttrs, out _))
                 {
-                    telemetryEvent.IterationId = guidMatch.Groups[1].Value;
+                    telemetryEvent.IterationId = iidFromAttrs;
+                }
+                else
+                {
+                    var guidMatch = GuidSuffixRegex.Match(effectiveCorrelationId);
+                    if (guidMatch.Success)
+                    {
+                        telemetryEvent.IterationId = guidMatch.Groups[1].Value;
+                    }
                 }
 
                 // Forward to EdogLogServer
