@@ -374,14 +374,26 @@
 .dag-node.status-skipped .dag-node-name { color: var(--text-muted); }
 
 .dag-node-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  transition: background 200ms, box-shadow 200ms;
 }
 
 .dag-node.status-running .dag-node-status-dot {
   animation: dagDotPulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(109, 92, 255, 0.2);
+}
+.dag-node.status-completed .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.15);
+}
+.dag-node.status-failed .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(229, 69, 59, 0.15);
+}
+.dag-node.status-cancelled .dag-node-status-dot,
+.dag-node.status-skipped .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(229, 148, 12, 0.15);
 }
 
 .dag-node-meta {
