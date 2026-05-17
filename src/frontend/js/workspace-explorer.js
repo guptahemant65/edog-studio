@@ -4575,7 +4575,9 @@ class WorkspaceExplorer {
         ? `Showing first ${result.rowsReturned} rows`
         : `Showing ${result.rowsReturned} rows`;
       const fileTxt =
-        result.fileCount > 1 ? ` from 1 of ${result.fileCount} active files.` : '.';
+        result.fileCount > 1
+          ? ` across ${result.filesRead || result.fileCount} of ${result.fileCount} active files.`
+          : '.';
       note.textContent = truncTxt + fileTxt;
       container.appendChild(note);
     }

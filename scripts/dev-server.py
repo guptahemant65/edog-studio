@@ -5834,12 +5834,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        # Deterministic pick: smallest path. (Delta does not order add actions
-        # semantically; first-in-sort gives the user a stable preview.)
-        chosen_path = sorted(active.keys())[0]
-        add = active[chosen_path]
-        partition_values = add.get("partitionValues") or {}
-
+        # Read rows across ALL active parquet files (sorted by path) until we
+        # reach `limit` rows. The previous version only read the first file,
+        # which missed rows in tables split across multiple small files.
         try:
             onelake_bearer = _ensure_onelake_bearer()
         except RuntimeError as e:
@@ -5848,76 +5845,87 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        # Delta `add.path` is relative to the table directory and already
-        # URL-encoded per Delta protocol. Concatenate as-is.
-        file_url = (
-            f"{ONELAKE_HOST}/{ws_id}/{lh_id}/Tables/{schema}/{table}/{chosen_path}"
-        )
+        import io
+
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
         ctx = ssl.create_default_context()
-        try:
-            req = urllib.request.Request(
-                file_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
-            )
-            with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
-                raw_parquet = resp.read()
-        except urllib.error.HTTPError as e:
-            body = e.read().decode("utf-8", "replace")[:200]
-            self._json_response(
-                e.code, {"error": "parquet_fetch_failed", "message": body}
-            )
-            return
-        except Exception as e:
-            self._json_response(
-                502, {"error": "parquet_fetch_failed", "message": str(e)}
-            )
-            return
+        all_rows: list[dict] = []
+        arrow_schema = None
+        merged_partition_values: dict = {}
+        files_read = 0
 
-        try:
-            import io
+        for fpath in sorted(active.keys()):
+            if len(all_rows) >= limit:
+                break
+            add = active[fpath]
+            partition_values = add.get("partitionValues") or {}
+            if not merged_partition_values:
+                merged_partition_values = partition_values
 
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            file_url = (
+                f"{ONELAKE_HOST}/{ws_id}/{lh_id}/Tables/{schema}/{table}/{fpath}"
+            )
+            try:
+                req = urllib.request.Request(
+                    file_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
+                )
+                with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+                    raw_parquet = resp.read()
+            except Exception:
+                # Skip unreadable files — partial results are better than none
+                continue
 
-            pf = pq.ParquetFile(io.BytesIO(raw_parquet))
-            # Pull only the first batch capped at `limit` — avoids materializing
-            # large parquet files (a single row group is often 100K+ rows).
-            first = next(pf.iter_batches(batch_size=limit), None)
-            if first is None:
-                arrow_schema = pf.schema_arrow
-                py_rows: list[dict] = []
-            else:
+            try:
+                pf = pq.ParquetFile(io.BytesIO(raw_parquet))
+                remaining = limit - len(all_rows)
+                first = next(pf.iter_batches(batch_size=remaining), None)
+                if first is None:
+                    continue
                 tbl = pa.Table.from_batches([first])
-                if tbl.num_rows > limit:
-                    tbl = tbl.slice(0, limit)
-                arrow_schema = tbl.schema
+                if tbl.num_rows > remaining:
+                    tbl = tbl.slice(0, remaining)
+                if arrow_schema is None:
+                    arrow_schema = tbl.schema
                 py_rows = tbl.to_pylist()
-        except Exception as e:
+
+                coerced_part = {
+                    k: _coerce_partition_value(v) for k, v in partition_values.items()
+                }
+                for r in py_rows:
+                    out = {k: _coerce_parquet_value(v) for k, v in r.items()}
+                    for pcol, pval in coerced_part.items():
+                        out.setdefault(pcol, pval)
+                    all_rows.append(out)
+                files_read += 1
+            except Exception:
+                continue
+
+        if arrow_schema is None:
             self._json_response(
-                502, {"error": "parquet_parse_failed", "message": str(e)}
+                200,
+                {
+                    "schemaName": schema,
+                    "tableName": table,
+                    "columns": [],
+                    "rows": [],
+                    "rowsReturned": 0,
+                    "truncated": False,
+                    "fileCount": len(active),
+                    "warnings": [*warnings, "Could not read any parquet files."],
+                },
             )
             return
 
-        # Parquet columns first, then partition columns (Delta stores them
-        # separately; injecting them as trailing columns matches Spark behavior).
         columns: list[dict] = [
             {"name": f.name, "type": _arrow_type_label(f.type)}
             for f in arrow_schema
         ]
         existing_names = {c["name"] for c in columns}
-        for pcol in partition_values:
+        for pcol in merged_partition_values:
             if pcol not in existing_names:
                 columns.append({"name": pcol, "type": "string", "isPartition": True})
-
-        coerced_rows: list[dict] = []
-        coerced_part = {
-            k: _coerce_partition_value(v) for k, v in partition_values.items()
-        }
-        for r in py_rows:
-            out = {k: _coerce_parquet_value(v) for k, v in r.items()}
-            for pcol, pval in coerced_part.items():
-                # Don't clobber a real column that happens to share the partition name.
-                out.setdefault(pcol, pval)
-            coerced_rows.append(out)
 
         self._json_response(
             200,
@@ -5925,11 +5933,11 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 "schemaName": schema,
                 "tableName": table,
                 "columns": columns,
-                "rows": coerced_rows,
-                "rowsReturned": len(coerced_rows),
-                "truncated": len(coerced_rows) >= limit,
+                "rows": all_rows,
+                "rowsReturned": len(all_rows),
+                "truncated": len(all_rows) >= limit,
                 "fileCount": len(active),
-                "sourceFile": chosen_path,
+                "filesRead": files_read,
                 "warnings": warnings,
             },
         )
