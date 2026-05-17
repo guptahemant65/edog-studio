@@ -327,9 +327,21 @@ class FabricApiClient {
    * Create a new lakehouse inside a workspace.
    * @param {string} workspaceId - Parent workspace GUID.
    * @param {string} name - Display name for the new lakehouse.
+   * @param {object} [options] - Optional creation options.
+   * @param {string} [options.description] - Lakehouse description.
+   * @param {boolean} [options.enableSchemas] - Enable multi-schema support.
+   * @param {string[]} [options.defaultSchemas] - Default schemas to create.
    */
-  async createLakehouse(workspaceId, name) {
-    return this._fabricPost(`/workspaces/${workspaceId}/lakehouses`, { displayName: name });
+  async createLakehouse(workspaceId, name, options) {
+    var body = { displayName: name };
+    var opts = options || {};
+    if (opts.description) body.description = opts.description;
+    if (opts.enableSchemas !== undefined || opts.defaultSchemas) {
+      body.creationPayload = {};
+      if (opts.enableSchemas !== undefined) body.creationPayload.enableSchemas = opts.enableSchemas;
+      if (opts.defaultSchemas) body.creationPayload.defaultSchemas = opts.defaultSchemas;
+    }
+    return this._fabricPost('/workspaces/' + workspaceId + '/lakehouses', body);
   }
 
   /**
