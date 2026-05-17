@@ -38,21 +38,24 @@ class SmartContextBar {
   updateExecution = (exec, iterationId) => {
     if (!this.element) return;
     const statusClass = (exec.status || 'unknown').toLowerCase();
-    const completedTotal = exec.nodeCount || '?';
+    const completedTotal = exec.nodeCount || '';
     const completed = exec.completedNodes || 0;
     const failed = exec.failedNodes || 0;
-    const elapsed = this.autoDetector.getElapsedTime() || '—';
-    const shortId = iterationId.substring(0, 8) + '…' + iterationId.substring(iterationId.length - 4);
+    const elapsed = this.autoDetector.getElapsedTime() || '\u2014';
+    const shortId = iterationId.substring(0, 8) + '\u2026' + iterationId.substring(iterationId.length - 4);
+    const nodeText = completedTotal
+      ? `${completed}${failed ? '+' + failed + ' err' : ''} / ${completedTotal} nodes`
+      : '';
 
     this.element.innerHTML = `
-      <span class="ctx-type">🔄 Execution</span>
-      <span class="dag-status ${statusClass}">● ${exec.status || 'Detected'}</span>
-      <span class="dag-name">${exec.dagName || 'DAG Execution'}</span>
-      <span class="node-progress">${completed}${failed ? '+' + failed + ' err' : ''} / ${completedTotal} nodes</span>
+      <span class="ctx-type">\u25B6 Execution</span>
+      <span class="dag-status ${statusClass}">\u25CF ${exec.status || 'Detected'}</span>
+      ${exec.dagName ? '<span class="dag-name">' + exec.dagName + '</span>' : ''}
+      ${nodeText ? '<span class="node-progress">' + nodeText + '</span>' : ''}
       <span class="elapsed">${elapsed}s</span>
       ${exec.endpoint ? '<span class="endpoint">' + exec.endpoint + '</span>' : ''}
       <span class="iter-id">${shortId}</span>
-      <span class="dismiss" onclick="document.getElementById('smart-context-bar').classList.remove('active')">✕</span>
+      <span class="dismiss" onclick="document.getElementById('smart-context-bar').classList.remove('active')">\u2715</span>
     `;
     this.element.classList.add('active');
   }
