@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<title>EDOG Studio — Workspace CRUD Dialogs Showcase</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-hover: #e8ebf0;
+  --border: #e1e4e8;
+  --border-strong: #c8ccd1;
+  --text: #1c2024;
+  --text-soft: #5a6068;
+  --text-muted: #8a9099;
+  --accent: #5b6cff;
+  --accent-soft: #eef0ff;
+  --accent-strong: #4453e8;
+  --success: #1f9d55;
+  --success-soft: #e6f6ee;
+  --warning: #b87503;
+  --warning-soft: #fff5d9;
+  --danger: #d4351c;
+  --danger-soft: #fde7e2;
+  --danger-strong: #b62a13;
+  --info: #1976d2;
+  --info-soft: #e3f2fd;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(20,22,28,.06);
+  --shadow-md: 0 4px 14px rgba(20,22,28,.08), 0 1px 3px rgba(20,22,28,.05);
+  --shadow-lg: 0 18px 50px rgba(20,22,28,.18), 0 6px 16px rgba(20,22,28,.10);
+  --shadow-glow: 0 0 0 4px rgba(91,108,255,.15);
+
+  --t-fast: 120ms cubic-bezier(.4,0,.2,1);
+  --t: 200ms cubic-bezier(.4,0,.2,1);
+  --t-slow: 320ms cubic-bezier(.4,0,.2,1);
+  --t-spring: 420ms cubic-bezier(.34,1.56,.64,1);
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1115;
+  --bg-elevated: #161a21;
+  --surface: #1a1f27;
+  --surface-2: #232932;
+  --surface-hover: #2c333e;
+  --border: #2b313b;
+  --border-strong: #3a414c;
+  --text: #e6e9ef;
+  --text-soft: #a8aebb;
+  --text-muted: #6c727e;
+  --accent: #7d8bff;
+  --accent-soft: #1f2540;
+  --accent-strong: #9aa5ff;
+  --success: #4ade80;
+  --success-soft: #15301f;
+  --warning: #fbbf24;
+  --warning-soft: #3a2a08;
+  --danger: #ef4444;
+  --danger-soft: #3a1815;
+  --danger-strong: #f87171;
+  --info: #60a5fa;
+  --info-soft: #15273a;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 4px 14px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.3);
+  --shadow-lg: 0 18px 50px rgba(0,0,0,.6), 0 6px 16px rgba(0,0,0,.4);
+  --shadow-glow: 0 0 0 4px rgba(125,139,255,.25);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-6px) } to { opacity: 1; transform: translateY(0) } }
+@keyframes scaleSpring { 0% { opacity: 0; transform: scale(.92) } 60% { opacity: 1; transform: scale(1.02) } 100% { transform: scale(1) } }
+@keyframes pulseAccent { 0%,100% { box-shadow: 0 0 0 0 rgba(91,108,255,.5) } 50% { box-shadow: 0 0 0 8px rgba(91,108,255,0) } }
+@keyframes pulseDanger { 0%,100% { box-shadow: 0 0 0 0 rgba(212,53,28,.5) } 50% { box-shadow: 0 0 0 8px rgba(212,53,28,0) } }
+@keyframes checkPop { 0% { transform: scale(0) rotate(-20deg) } 60% { transform: scale(1.15) rotate(2deg) } 100% { transform: scale(1) rotate(0) } }
+@keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+@keyframes spin { to { transform: rotate(360deg) } }
+@keyframes dialogIn {
+  0% { opacity: 0; transform: translateY(14px) scale(.97) }
+  60% { opacity: 1; transform: translateY(-2px) scale(1.005) }
+  100% { opacity: 1; transform: translateY(0) scale(1) }
+}
+@keyframes overlayIn { from { opacity: 0; backdrop-filter: blur(0px) } to { opacity: 1; backdrop-filter: blur(6px) } }
+@keyframes errorSlideIn { 0% { opacity: 0; transform: translateY(-6px); max-height: 0 } 100% { opacity: 1; transform: translateY(0); max-height: 200px } }
+@keyframes progressFill { from { width: 0 } to { width: var(--target, 100%) } }
+@keyframes progressPulse { 0%,100% { opacity: 1 } 50% { opacity: .7 } }
+@keyframes successBounce { 0% { opacity: 0; transform: scale(.5) } 50% { opacity: 1; transform: scale(1.1) } 100% { transform: scale(1) } }
+@keyframes pillPop { 0% { opacity: 0; transform: scale(.7) translateY(4px) } 60% { transform: scale(1.08) translateY(-1px) } 100% { opacity: 1; transform: scale(1) translateY(0) } }
+@keyframes cascadeShake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-3px) } 75% { transform: translateX(3px) } }
+@keyframes tabSlide { from { opacity: 0; transform: translateX(8px) } to { opacity: 1; transform: translateX(0) } }
+@keyframes lockFloat { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-4px) } }
+@keyframes ringPulse { 0% { transform: scale(.8); opacity: .9 } 100% { transform: scale(1.6); opacity: 0 } }
+@keyframes shakeError { 0%,100% { transform: translateX(0) } 20%,60% { transform: translateX(-4px) } 40%,80% { transform: translateX(4px) } }
+@keyframes autoCloseProgress { from { width: 100% } to { width: 0% } }
+
+/* ===== Background context (workspace explorer shadow) ===== */
+.bg-context {
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  pointer-events: none;
+  opacity: .5;
+  filter: blur(.3px);
+}
+.bg-sidebar {
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  padding: var(--space-5) var(--space-4);
+}
+.bg-row {
+  height: 28px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
+  position: relative;
+  overflow: hidden;
+}
+.bg-row::before {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, var(--surface-hover) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 8s ease-in-out infinite;
+}
+.bg-row.indent { margin-left: var(--space-5); }
+.bg-row.short { width: 60%; }
+.bg-main { padding: var(--space-6); }
+.bg-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  height: 180px;
+  margin-bottom: var(--space-4);
+}
+
+/* ===== Top chrome ===== */
+.chrome {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-5);
+  background: rgba(255,255,255,.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+[data-theme="dark"] .chrome { background: rgba(15,17,21,.85); }
+.brand { display: flex; align-items: center; gap: var(--space-3); font-weight: 600; letter-spacing: -.01em; }
+.brand-mark {
+  width: 22px; height: 22px;
+  background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  border-radius: var(--radius-sm);
+  display: grid; place-items: center;
+  color: white; font-size: 11px; font-weight: 800;
+}
+.brand-sub { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+.chrome-right { display: flex; align-items: center; gap: var(--space-3); }
+
+.theme-toggle {
+  display: flex; align-items: center; gap: var(--space-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  cursor: pointer;
+}
+.theme-toggle button {
+  border: none; background: transparent; cursor: pointer;
+  padding: 4px 10px; font-size: 11px;
+  color: var(--text-soft); border-radius: 999px;
+  transition: all var(--t-fast);
+  font-family: var(--font);
+}
+.theme-toggle button.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ===== Tab bar ===== */
+.tabs {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  z-index: 200;
+  display: flex; gap: 2px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  box-shadow: var(--shadow-md);
+}
+.tab {
+  border: none;
+  background: transparent;
+  color: var(--text-soft);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--t);
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); background: var(--surface-hover); }
+.tab.active {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 4px 14px rgba(91,108,255,.35);
+}
+.tab .kbd-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: .7;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+}
+.tab.active .kbd-hint { border-color: rgba(255,255,255,.4); }
+
+/* ===== State toolbar (bottom) ===== */
+.state-toolbar {
+  position: fixed; bottom: var(--space-4); left: 50%; transform: translateX(-50%);
+  z-index: 49;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-lg);
+  max-width: calc(100vw - 64px);
+  animation: slideUp var(--t-slow);
+}
+.state-toolbar-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  padding: 0 var(--space-2);
+}
+.state-list {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  max-width: 920px;
+}
+.state-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--t);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.state-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.state-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+.state-btn .n {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: .7;
+}
+
+/* ===== Dialog overlay ===== */
+.dialog-overlay {
+  position: fixed; inset: 0;
+  z-index: 100;
+  background: rgba(20,22,28,.55);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  animation: overlayIn var(--t-slow);
+}
+[data-theme="dark"] .dialog-overlay { background: rgba(0,0,0,.65); }
+
+.dialog {
+  width: 520px;
+  max-width: calc(100vw - 48px);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  position: relative;
+  animation: dialogIn var(--t-spring);
+}
+.dialog.wide { width: 580px; }
+
+/* ===== Dialog header ===== */
+.dlg-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--border);
+  gap: var(--space-3);
+}
+.dlg-title-wrap { flex: 1; min-width: 0; }
+.dlg-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.dlg-eyebrow .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: pulseAccent 2s ease-in-out infinite;
+}
+.dlg-eyebrow.danger .dot { background: var(--danger); animation: pulseDanger 2s ease-in-out infinite; }
+.dlg-eyebrow.warn .dot { background: var(--warning); }
+.dlg-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 1.3;
+}
+.dlg-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+.dlg-close {
+  width: 28px; height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius);
+  display: grid; place-items: center;
+  transition: all var(--t);
+  flex-shrink: 0;
+}
+.dlg-close:hover { background: var(--surface-hover); color: var(--text); }
+
+/* ===== Dialog body ===== */
+.dlg-body { padding: var(--space-5); }
+.dlg-body.tight { padding: var(--space-4) var(--space-5); }
+.dlg-section + .dlg-section { margin-top: var(--space-5); }
+.dlg-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+}
+
+/* ===== Context chip ===== */
+.ctx-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+}
+.ctx-chip svg { width: 12px; height: 12px; opacity: .7; }
+.ctx-chip strong { color: var(--text); font-weight: 600; }
+
+/* ===== Field ===== */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.field-label .req { color: var(--danger); margin-left: 2px; }
+.field-help { font-size: 12px; color: var(--text-soft); }
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  transition: all var(--t);
+  outline: none;
+}
+.input:hover { border-color: var(--border-strong); }
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-glow);
+}
+.input.danger { border-color: var(--danger); }
+.input.danger:focus { box-shadow: 0 0 0 4px rgba(212,53,28,.15); }
+.input.mono { font-family: var(--font-mono); font-size: 13px; }
+.field-row { display: flex; align-items: center; justify-content: space-between; }
+.char-count { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.char-count.warn { color: var(--warning); }
+
+/* ===== Lakehouse cards ===== */
+.lh-grid { display: flex; flex-direction: column; gap: var(--space-2); }
+.lh-card {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--t);
+  position: relative;
+}
+.lh-card:hover { border-color: var(--border-strong); background: var(--surface-hover); }
+.lh-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: var(--shadow-glow);
+}
+.lh-radio {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+  transition: all var(--t);
+}
+.lh-card.selected .lh-radio { border-color: var(--accent); }
+.lh-card.selected .lh-radio::after {
+  content: ""; position: absolute;
+  inset: 3px; border-radius: 50%;
+  background: var(--accent);
+  animation: scaleSpring var(--t-spring);
+}
+.lh-icon {
+  width: 32px; height: 32px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  display: grid; place-items: center;
+  color: var(--text-soft);
+  flex-shrink: 0;
+}
+.lh-card.selected .lh-icon { background: var(--accent); color: white; }
+.lh-meta { flex: 1; min-width: 0; }
+.lh-name { font-weight: 600; font-size: 13px; }
+.lh-detail { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* ===== Danger / cascade block ===== */
+.danger-block {
+  background: var(--danger-soft);
+  border: 1px solid rgba(212,53,28,.3);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+.warn-block {
+  background: var(--warning-soft);
+  border: 1px solid rgba(184,117,3,.3);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+.info-block {
+  background: var(--info-soft);
+  border: 1px solid rgba(25,118,210,.25);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+.block-title {
+  display: flex; align-items: center; gap: var(--space-2);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.danger-block .block-title { color: var(--danger); }
+.warn-block .block-title { color: var(--warning); }
+.info-block .block-title { color: var(--info); }
+.block-body { font-size: 13px; color: var(--text); line-height: 1.55; }
+.block-body strong { font-family: var(--font-mono); font-weight: 600; }
+
+.affected-list {
+  margin-top: var(--space-3);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.affected-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  animation: pillPop var(--t-spring) backwards;
+}
+.affected-pill svg { width: 12px; height: 12px; flex-shrink: 0; }
+.affected-pill .tag {
+  margin-left: auto;
+  font-family: var(--font);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.affected-pill .tag.delete { background: var(--danger-soft); color: var(--danger); }
+.affected-pill .tag.detach { background: var(--warning-soft); color: var(--warning); }
+.affected-pill .tag.keep { background: var(--success-soft); color: var(--success); }
+.affected-pill:nth-child(1) { animation-delay: 60ms }
+.affected-pill:nth-child(2) { animation-delay: 120ms }
+.affected-pill:nth-child(3) { animation-delay: 180ms }
+.affected-pill:nth-child(4) { animation-delay: 240ms }
+
+/* ===== Type-to-confirm ===== */
+.confirm-block {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  border: 1px dashed var(--border-strong);
+}
+.confirm-prompt {
+  font-size: 12px;
+  color: var(--text-soft);
+  margin-bottom: var(--space-2);
+}
+.confirm-prompt code {
+  font-family: var(--font-mono);
+  background: var(--bg-elevated);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ===== Rename diff chip ===== */
+.rename-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.rename-row .from { color: var(--text-muted); text-decoration: line-through; }
+.rename-row .arrow { color: var(--text-muted); }
+.rename-row .to { color: var(--accent); font-weight: 600; }
+
+/* ===== Footer / buttons ===== */
+.dlg-footer {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+}
+.dlg-footer.between { justify-content: space-between; }
+.footer-left { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: 12px; }
+.btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--t);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn-primary.ready { animation: pulseAccent 2s ease-in-out infinite; }
+.btn-danger {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+.btn-danger.ready {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+  animation: pulseDanger 2s ease-in-out infinite;
+}
+.btn-danger.ready:hover { background: var(--danger-strong); border-color: var(--danger-strong); }
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-ghost:hover { background: var(--surface-hover); }
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+/* ===== Progress bar ===== */
+.progress-wrap {
+  margin-top: var(--space-3);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.progress-label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.progress-label .pct { font-family: var(--font-mono); color: var(--text); }
+.progress-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  border-radius: 999px;
+  width: var(--target);
+  animation: progressFill 600ms cubic-bezier(.4,0,.2,1) both;
+}
+.progress-fill.danger { background: linear-gradient(90deg, var(--danger), var(--danger-strong)); }
+.progress-fill.indet {
+  background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+  background-size: 50% 100%;
+  width: 100%;
+  animation: shimmer 1.4s linear infinite, progressPulse 2s ease-in-out infinite;
+}
+
+/* ===== Success overlay ===== */
+.success-overlay, .noauth-overlay, .err-overlay {
+  position: absolute; inset: 0;
+  background: var(--surface);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: var(--space-6);
+  text-align: center;
+  animation: fadeIn var(--t-slow);
+  z-index: 10;
+}
+.success-icon {
+  width: 64px; height: 64px;
+  background: var(--success-soft);
+  color: var(--success);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  margin-bottom: var(--space-4);
+  animation: successBounce 600ms cubic-bezier(.34,1.56,.64,1);
+}
+.success-icon svg { width: 32px; height: 32px; animation: checkPop 500ms cubic-bezier(.34,1.56,.64,1) 200ms backwards; }
+.success-title { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+.success-msg { font-size: 13px; color: var(--text-soft); margin: 0 0 var(--space-4); }
+.auto-close {
+  margin-top: var(--space-4);
+  width: 100%;
+  height: 3px;
+  background: var(--surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.auto-close-fill {
+  height: 100%;
+  background: var(--success);
+  width: 100%;
+  animation: autoCloseProgress 3s linear forwards;
+}
+
+/* ===== No-auth overlay ===== */
+.noauth-overlay {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+}
+.lock-icon {
+  width: 80px; height: 80px;
+  position: relative;
+  margin-bottom: var(--space-5);
+  animation: lockFloat 3s ease-in-out infinite;
+}
+.lock-icon::before, .lock-icon::after {
+  content: ""; position: absolute; inset: 0;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: ringPulse 2s ease-out infinite;
+}
+.lock-icon::after { animation-delay: 1s; }
+.lock-icon .lock-inner {
+  position: absolute; inset: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: white;
+}
+.lock-icon .lock-inner svg { width: 24px; height: 24px; }
+.noauth-overlay h2 { font-size: 22px; margin: 0 0 var(--space-2); letter-spacing: -.01em; }
+.noauth-overlay p { font-size: 14px; color: var(--text-soft); margin: 0 0 var(--space-5); max-width: 360px; }
+
+/* ===== Error banner ===== */
+.err-banner {
+  background: var(--danger-soft);
+  border: 1px solid rgba(212,53,28,.3);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  display: flex; gap: var(--space-2);
+  animation: errorSlideIn var(--t-slow), shakeError 400ms cubic-bezier(.36,.07,.19,.97);
+}
+.err-banner svg { color: var(--danger); flex-shrink: 0; margin-top: 1px; }
+.err-banner-body { flex: 1; font-size: 13px; }
+.err-banner-title { font-weight: 600; color: var(--danger); margin-bottom: 2px; }
+.err-banner-msg { color: var(--text); }
+
+/* ===== Drag detach (for "in use" delete) ===== */
+.detach-list {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-top: var(--space-3);
+}
+.detach-row {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+.detach-row .nb-name { font-family: var(--font-mono); font-weight: 600; flex: 1; }
+.detach-row .nb-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* ===== Kbd hint footer ===== */
+.kbd-floating {
+  position: fixed; bottom: var(--space-3); right: var(--space-4);
+  z-index: 48;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+}
+.kbd-floating kbd {
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+}
+</style>
+</head>
+<body>
+
+<!-- Background context -->
+<div class="bg-context" aria-hidden="true">
+  <div class="bg-sidebar">
+    <div class="bg-row short"></div>
+    <div class="bg-row"></div>
+    <div class="bg-row indent"></div>
+    <div class="bg-row indent short"></div>
+    <div class="bg-row indent"></div>
+    <div class="bg-row"></div>
+    <div class="bg-row indent"></div>
+    <div class="bg-row indent short"></div>
+  </div>
+  <div class="bg-main">
+    <div class="bg-card"></div>
+    <div class="bg-card"></div>
+  </div>
+</div>
+
+<!-- Chrome -->
+<header class="chrome">
+  <div class="brand">
+    <div class="brand-mark">E</div>
+    <span>EDOG Studio</span>
+    <span class="brand-sub">— Workspace CRUD Showcase</span>
+  </div>
+  <div class="chrome-right">
+    <div class="theme-toggle" role="tablist" aria-label="Theme">
+      <button data-theme-btn="light" class="active">Light</button>
+      <button data-theme-btn="dark">Dark</button>
+    </div>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="tabs" id="tabs"></nav>
+
+<!-- Dialog mount point -->
+<div class="dialog-overlay" id="overlay">
+  <div class="dialog" id="dialog"></div>
+</div>
+
+<!-- State toolbar -->
+<div class="state-toolbar">
+  <div class="state-toolbar-title" id="stateTitle">States</div>
+  <div class="state-list" id="states"></div>
+</div>
+
+<div class="kbd-floating">
+  <kbd>Alt+1-4</kbd> tabs · <kbd>1-9</kbd> states · <kbd>D</kbd> theme
+</div>
+
+<script>
+/* ===== Inline SVG library ===== */
+const SVG = {
+  close: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+  alert: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v3.5M8 10.5v.5" stroke-linecap="round"/></svg>',
+  warning: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5L14.5 13H1.5L8 1.5z"/><path d="M8 6v3.5M8 11v.5" stroke-linecap="round"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 4h11M5 4V2.5A1 1 0 016 1.5h4a1 1 0 011 1V4M3.5 4l.7 9a1 1 0 001 .9h5.6a1 1 0 001-.9l.7-9"/></svg>',
+  notebook: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="1"/><path d="M5.5 5h5M5.5 7.5h5M5.5 10h3"/></svg>',
+  lakehouse: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="8" cy="3.5" rx="5" ry="1.5"/><path d="M3 3.5v9c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5v-9"/><path d="M3 7c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5M3 10.5c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5"/></svg>',
+  workspace: '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 6h12"/></svg>',
+  plus: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>',
+  edit: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2l3 3-8.5 8.5H2.5V10.5L11 2z"/></svg>',
+  unplug: '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 7L4 12M7 5l4 4M10 2l3 3M6 14l-3-3M2 14l2-2"/></svg>',
+  signin: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4V2.5a1 1 0 00-1-1H3a1 1 0 00-1 1v11a1 1 0 001 1h6a1 1 0 001-1V12"/><path d="M6 8h8M11 5l3 3-3 3"/></svg>',
+};
+
+/* ===== Builders ===== */
+const ctx = (ws) => `
+  <span class="ctx-chip">${SVG.workspace} <strong>${ws}</strong></span>`;
+
+const header = ({eyebrow, eyebrowKind='', title, subtitle}) => `
+  <div class="dlg-header">
+    <div class="dlg-title-wrap">
+      <div class="dlg-eyebrow ${eyebrowKind}"><span class="dot"></span>${eyebrow}</div>
+      <h2 class="dlg-title">${title}</h2>
+      ${subtitle ? `<p class="dlg-subtitle">${subtitle}</p>` : ''}
+    </div>
+    <button class="dlg-close" title="Close">${SVG.close}</button>
+  </div>`;
+
+const footer = (left, right) => `
+  <div class="dlg-footer ${left?'between':''}">
+    ${left ? `<div class="footer-left">${left}</div>` : ''}
+    <div style="display:flex;gap:8px">${right}</div>
+  </div>`;
+
+const btn = (label, kind='', extra='') => `<button class="btn ${kind}" ${extra}>${label}</button>`;
+
+const errBanner = (title, msg) => `
+  <div class="err-banner">
+    ${SVG.alert}
+    <div class="err-banner-body">
+      <div class="err-banner-title">${title}</div>
+      <div class="err-banner-msg">${msg}</div>
+    </div>
+  </div>`;
+
+const progressBar = (pct, kind='', label='Working…') => `
+  <div class="progress-wrap">
+    <div class="progress-label"><span>${label}</span><span class="pct">${pct === null ? '' : pct + '%'}</span></div>
+    <div class="progress-track">
+      <div class="progress-fill ${kind} ${pct === null ? 'indet' : ''}" style="--target:${pct === null ? '100%' : pct + '%'}"></div>
+    </div>
+  </div>`;
+
+const successOverlay = (title, msg) => `
+  <div class="success-overlay">
+    <div class="success-icon">${SVG.check}</div>
+    <h3 class="success-title">${title}</h3>
+    <p class="success-msg">${msg}</p>
+    <div class="auto-close"><div class="auto-close-fill"></div></div>
+  </div>`;
+
+const lhCard = (name, schema, tables, selected=false) => `
+  <div class="lh-card ${selected?'selected':''}" data-lh="${name}">
+    <div class="lh-radio"></div>
+    <div class="lh-icon">${SVG.lakehouse}</div>
+    <div class="lh-meta">
+      <div class="lh-name">${name}</div>
+      <div class="lh-detail">${schema} · ${tables} tables</div>
+    </div>
+  </div>`;
+
+const affected = (icon, name, tagClass, tagLabel) => `
+  <div class="affected-pill">${icon}<span>${name}</span><span class="tag ${tagClass}">${tagLabel}</span></div>`;
+
+/* ===== TAB DEFINITIONS ===== */
+const TABS = {
+  notebook: {
+    label: 'Create Notebook',
+    icon: SVG.notebook,
+    title: 'Create Notebook States',
+    states: [
+      { id: 'idle', label: 'Empty', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', title:'Create notebook', subtitle:'Notebooks must attach to a lakehouse for compute and storage.'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Name <span class="req">*</span></label>
+              <input class="input mono" id="nbName" placeholder="my-notebook" autofocus>
+              <div class="field-row">
+                <span class="field-help">Lowercase, hyphens allowed. Must be unique in workspace.</span>
+                <span class="char-count" id="cc">0 / 64</span>
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Attach to lakehouse</div>
+            <div class="lh-grid">
+              ${lhCard('bronze-lh', 'raw_ingest', 12)}
+              ${lhCard('silver-lh', 'curated', 8)}
+              ${lhCard('gold-lh', 'analytics', 4)}
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Create notebook', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'typing', label: 'Typing', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', title:'Create notebook', subtitle:'Notebooks must attach to a lakehouse for compute and storage.'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Name <span class="req">*</span></label>
+              <input class="input mono" value="analytics-et" id="nbName">
+              <div class="field-row">
+                <span class="field-help">Lowercase, hyphens allowed.</span>
+                <span class="char-count">12 / 64</span>
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Attach to lakehouse</div>
+            <div class="lh-grid">
+              ${lhCard('bronze-lh', 'raw_ingest', 12)}
+              ${lhCard('silver-lh', 'curated', 8)}
+              ${lhCard('gold-lh', 'analytics', 4)}
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Create notebook', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'valid', label: 'Valid + selected', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', title:'Create notebook', subtitle:'Ready to create.'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Name <span class="req">*</span></label>
+              <input class="input mono" value="analytics-etl">
+              <div class="field-row">
+                <span class="field-help" style="color:var(--success)">✓ Available in this workspace</span>
+                <span class="char-count">13 / 64</span>
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Attach to lakehouse</div>
+            <div class="lh-grid">
+              ${lhCard('bronze-lh', 'raw_ingest', 12, true)}
+              ${lhCard('silver-lh', 'curated', 8)}
+              ${lhCard('gold-lh', 'analytics', 4)}
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Create notebook', 'btn-primary ready'))}`
+      })},
+      { id: 'dupe', label: 'Duplicate name', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', title:'Create notebook'})}
+        <div class="dlg-body">
+          ${errBanner('Name already in use', 'A notebook named <strong>analytics-etl</strong> already exists in this workspace. Rename it or choose a different name.')}
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Name <span class="req">*</span></label>
+              <input class="input mono danger" value="analytics-etl">
+              <div class="field-row">
+                <span class="field-help" style="color:var(--danger)">Name conflicts with an existing notebook.</span>
+                <span class="char-count">13 / 64</span>
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Attach to lakehouse</div>
+            <div class="lh-grid">${lhCard('bronze-lh', 'raw_ingest', 12, true)}${lhCard('silver-lh', 'curated', 8)}</div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Create notebook', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'invalid', label: 'Invalid chars', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', title:'Create notebook'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Name <span class="req">*</span></label>
+              <input class="input mono danger" value="My Notebook!">
+              <div class="field-row">
+                <span class="field-help" style="color:var(--danger)">Only lowercase letters, digits, and hyphens. No spaces or special characters.</span>
+                <span class="char-count">12 / 64</span>
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Attach to lakehouse</div>
+            <div class="lh-grid">${lhCard('bronze-lh', 'raw_ingest', 12)}${lhCard('silver-lh', 'curated', 8)}</div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Create notebook', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'nolh', label: 'No lakehouses', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', title:'Create notebook'})}
+        <div class="dlg-body">
+          <div class="warn-block">
+            <div class="block-title">${SVG.warning} No lakehouses in this workspace</div>
+            <div class="block-body">Notebooks need a lakehouse for compute and storage. Create a lakehouse first, then create your notebook.</div>
+          </div>
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px;margin-top:16px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn(SVG.plus + ' Create lakehouse first', 'btn-primary'))}`
+      })},
+      { id: 'submit', label: 'Submitting', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Creating…', title:'Creating notebook', subtitle:'This usually takes 5-10 seconds.'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Name</label>
+              <input class="input mono" value="analytics-etl" disabled>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Attach to lakehouse</div>
+            <div class="lh-grid">${lhCard('bronze-lh', 'raw_ingest', 12, true)}</div>
+            ${progressBar(null, '', 'Registering notebook with Fabric…')}
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost', 'disabled') + btn('<span class="spinner"></span> Creating…', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'apierr', label: 'API error', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'New notebook', eyebrowKind:'danger', title:'Create notebook'})}
+        <div class="dlg-body">
+          ${errBanner('Couldn\'t create notebook', 'Fabric returned <strong>403 Forbidden</strong>. Your token may have expired. <a href="#" style="color:var(--accent)">Re-authenticate</a> and try again.')}
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section"><div class="field"><label class="field-label">Name</label><input class="input mono" value="analytics-etl"></div></div>
+          <div class="dlg-section"><div class="dlg-section-label">Attach to lakehouse</div><div class="lh-grid">${lhCard('bronze-lh', 'raw_ingest', 12, true)}</div></div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Retry', 'btn-primary'))}`
+      })},
+      { id: 'success', label: 'Success', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Created', title:'Create notebook'})}
+        <div class="dlg-body" style="min-height:380px"></div>
+        ${footer('', btn('Done', 'btn-primary'))}
+        ${successOverlay('Notebook created', 'analytics-etl is now attached to bronze-lh. Opening editor…')}`
+      })},
+    ]
+  },
+  delete: {
+    label: 'Delete',
+    icon: SVG.trash,
+    title: 'Delete States',
+    states: [
+      { id: 'notebook', label: 'Notebook', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Delete', eyebrowKind:'danger', title:'Delete notebook?', subtitle:'This permanently removes the notebook from Fabric.'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">
+              ${SVG.notebook}
+              <span class="to" style="color:var(--text)">analytics-etl</span>
+              <span style="margin-left:auto;font-family:var(--font);color:var(--text-muted);font-size:11px">in</span>
+              ${ctx('analytics-prod')}
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="danger-block">
+              <div class="block-title">${SVG.warning} This cannot be undone</div>
+              <div class="block-body">The notebook will be detached from <strong>bronze-lh</strong> and removed from Fabric. The lakehouse and its tables are not affected.</div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="confirm-block">
+              <div class="confirm-prompt">Type <code>analytics-etl</code> to confirm</div>
+              <input class="input mono" placeholder="analytics-etl" data-confirm="analytics-etl">
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn(SVG.trash + ' Delete notebook', 'btn-danger', 'data-danger disabled'))}`
+      })},
+      { id: 'lh-empty', label: 'Lakehouse (empty)', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Delete', eyebrowKind:'danger', title:'Delete lakehouse?', subtitle:'No notebooks depend on this lakehouse.'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.lakehouse}<span class="to" style="color:var(--text)">gold-lh</span><span style="margin-left:auto;font-family:var(--font);color:var(--text-muted);font-size:11px">in</span>${ctx('analytics-prod')}</div>
+          </div>
+          <div class="dlg-section">
+            <div class="danger-block">
+              <div class="block-title">${SVG.warning} Permanent deletion</div>
+              <div class="block-body">All <strong>4 tables</strong> in <strong>gold-lh.analytics</strong> will be permanently deleted along with the lakehouse. Underlying OneLake files will be removed.</div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="confirm-block">
+              <div class="confirm-prompt">Type <code>gold-lh</code> to confirm</div>
+              <input class="input mono" placeholder="gold-lh" data-confirm="gold-lh">
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn(SVG.trash + ' Delete lakehouse', 'btn-danger', 'data-danger disabled'))}`
+      })},
+      { id: 'lh-cascade', label: 'LH cascade', render: () => ({
+        cls: 'wide', html: `
+        ${header({eyebrow:'Delete', eyebrowKind:'danger', title:'Delete lakehouse and dependent notebooks?', subtitle:'Some notebooks have no other lakehouse to fall back to.'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.lakehouse}<span class="to" style="color:var(--text)">bronze-lh</span><span style="margin-left:auto;font-family:var(--font);color:var(--text-muted);font-size:11px">in</span>${ctx('analytics-prod')}</div>
+          </div>
+          <div class="dlg-section">
+            <div class="danger-block">
+              <div class="block-title">${SVG.warning} Cascade delete — 3 notebooks affected</div>
+              <div class="block-body">Deleting <strong>bronze-lh</strong> removes the only lakehouse for these notebooks. They will be deleted with the lakehouse.</div>
+              <div class="affected-list">
+                ${affected(SVG.notebook, 'raw-ingestion', 'delete', 'Delete')}
+                ${affected(SVG.notebook, 'analytics-etl', 'detach', 'Detach')}
+                ${affected(SVG.notebook, 'transform-daily', 'delete', 'Delete')}
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="info-block" style="padding:12px">
+              <div class="block-body" style="font-size:12px;display:flex;gap:8px;align-items:flex-start">
+                ${SVG.alert}
+                <div><strong>analytics-etl</strong> is also attached to <strong>silver-lh</strong> — it will be detached, not deleted.</div>
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="confirm-block">
+              <div class="confirm-prompt">Type <code>delete bronze-lh and 2 notebooks</code> to confirm</div>
+              <input class="input mono" placeholder="delete bronze-lh and 2 notebooks" data-confirm="delete bronze-lh and 2 notebooks">
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn(SVG.trash + ' Delete lakehouse + 2 notebooks', 'btn-danger', 'data-danger disabled'))}`
+      })},
+      { id: 'lh-detach', label: 'LH detach-only', render: () => ({
+        cls: 'wide', html: `
+        ${header({eyebrow:'Delete', eyebrowKind:'warn', title:'Delete lakehouse — notebooks will be detached', subtitle:'All affected notebooks have at least one other lakehouse.'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.lakehouse}<span class="to" style="color:var(--text)">silver-lh</span><span style="margin-left:auto;font-family:var(--font);color:var(--text-muted);font-size:11px">in</span>${ctx('analytics-prod')}</div>
+          </div>
+          <div class="dlg-section">
+            <div class="warn-block">
+              <div class="block-title">${SVG.unplug} 2 notebooks will be detached</div>
+              <div class="block-body">These notebooks remain in the workspace and stay attached to their other lakehouse(s). No notebook data is lost.</div>
+              <div class="affected-list">
+                ${affected(SVG.notebook, 'analytics-etl', 'detach', 'Detach → bronze-lh')}
+                ${affected(SVG.notebook, 'reporting-daily', 'detach', 'Detach → gold-lh')}
+              </div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="danger-block" style="padding:12px">
+              <div class="block-body" style="font-size:12px">All <strong>8 tables</strong> in <strong>silver-lh.curated</strong> will be permanently deleted.</div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="confirm-block">
+              <div class="confirm-prompt">Type <code>silver-lh</code> to confirm</div>
+              <input class="input mono" placeholder="silver-lh" data-confirm="silver-lh">
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn(SVG.trash + ' Delete lakehouse', 'btn-danger', 'data-danger disabled'))}`
+      })},
+      { id: 'inuse', label: 'Notebook in use', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Cannot delete', eyebrowKind:'warn', title:'Notebook is currently running'})}
+        <div class="dlg-body">
+          ${errBanner('Notebook is executing', 'A session is active on <strong>analytics-etl</strong>. Stop the session before deleting.')}
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.notebook}<span class="to" style="color:var(--text)">analytics-etl</span><span style="margin-left:auto;font-family:var(--font);color:var(--text-muted);font-size:11px">in</span>${ctx('analytics-prod')}</div>
+          </div>
+          <div class="dlg-section">
+            <div class="dlg-section-label">Active session</div>
+            <div class="detach-list">
+              <div class="detach-row">${SVG.notebook}<span class="nb-name">analytics-etl</span><span class="nb-status">Running · 3m 12s</span></div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Stop session and delete', 'btn-primary'))}`
+      })},
+      { id: 'confirmed', label: 'Confirmed (ready)', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Delete', eyebrowKind:'danger', title:'Delete notebook?'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.notebook}<span class="to" style="color:var(--text)">analytics-etl</span><span style="margin-left:auto;font-family:var(--font);color:var(--text-muted);font-size:11px">in</span>${ctx('analytics-prod')}</div>
+          </div>
+          <div class="dlg-section">
+            <div class="danger-block">
+              <div class="block-title">${SVG.warning} This cannot be undone</div>
+              <div class="block-body">The notebook will be permanently removed.</div>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="confirm-block">
+              <div class="confirm-prompt">Type <code>analytics-etl</code> to confirm</div>
+              <input class="input mono" value="analytics-etl" data-confirm="analytics-etl">
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn(SVG.trash + ' Delete notebook', 'btn-danger ready'))}`
+      })},
+      { id: 'deleting', label: 'Deleting', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Deleting', eyebrowKind:'danger', title:'Deleting notebook…', subtitle:'Removing from Fabric and cleaning up references.'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.notebook}<span class="to" style="color:var(--text)">analytics-etl</span></div>
+            ${progressBar(67, 'danger', 'Removing notebook…')}
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost', 'disabled') + btn('<span class="spinner"></span> Deleting…', 'btn-danger ready', 'disabled'))}`
+      })},
+      { id: 'deleted', label: 'Success', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Deleted', title:'Delete'})}
+        <div class="dlg-body" style="min-height:340px"></div>
+        ${footer('', btn('Close', 'btn-primary'))}
+        ${successOverlay('Notebook deleted', 'analytics-etl has been removed from analytics-prod.')}`
+      })},
+    ]
+  },
+  rename: {
+    label: 'Rename',
+    icon: SVG.edit,
+    title: 'Rename States',
+    states: [
+      { id: 'open', label: 'Open', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', title:'Rename notebook', subtitle:'References in code are not automatically updated.'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">Current name</label>
+              <input class="input mono" value="analytics-etl" disabled>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">New name <span class="req">*</span></label>
+              <input class="input mono" value="analytics-etl" autofocus>
+              <div class="field-row">
+                <span class="field-help">Lowercase letters, digits, and hyphens.</span>
+                <span class="char-count">13 / 64</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Rename', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'typing', label: 'Typing (valid)', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', title:'Rename notebook'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="rename-row">
+              ${SVG.notebook}
+              <span class="from">analytics-etl</span>
+              <span class="arrow">→</span>
+              <span class="to">analytics-pipeline</span>
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">New name <span class="req">*</span></label>
+              <input class="input mono" value="analytics-pipeline">
+              <div class="field-row">
+                <span class="field-help" style="color:var(--success)">✓ Available in this workspace</span>
+                <span class="char-count">18 / 64</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Rename', 'btn-primary ready'))}`
+      })},
+      { id: 'same', label: 'Same name', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', title:'Rename notebook'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">New name <span class="req">*</span></label>
+              <input class="input mono" value="analytics-etl">
+              <div class="field-row">
+                <span class="field-help">No change. Enter a different name to rename.</span>
+                <span class="char-count">13 / 64</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Rename', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'dupe', label: 'Duplicate', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', title:'Rename notebook'})}
+        <div class="dlg-body">
+          ${errBanner('Name already in use', 'A notebook named <strong>raw-ingestion</strong> already exists in this workspace.')}
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">New name <span class="req">*</span></label>
+              <input class="input mono danger" value="raw-ingestion">
+              <div class="field-row">
+                <span class="field-help" style="color:var(--danger)">Name conflicts with an existing notebook.</span>
+                <span class="char-count">13 / 64</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Rename', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'invalid', label: 'Invalid', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', title:'Rename notebook'})}
+        <div class="dlg-body">
+          <div class="dlg-section" style="display:flex;align-items:center;gap:8px"><span class="dlg-section-label" style="margin:0">In</span>${ctx('analytics-prod')}</div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">New name <span class="req">*</span></label>
+              <input class="input mono danger" value="ETL_Pipeline!">
+              <div class="field-row">
+                <span class="field-help" style="color:var(--danger)">Use lowercase letters, digits, and hyphens only.</span>
+                <span class="char-count">13 / 64</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Rename', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'lh-warn', label: 'Lakehouse warn', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', eyebrowKind:'warn', title:'Rename lakehouse?', subtitle:'Renaming a lakehouse can break notebook references.'})}
+        <div class="dlg-body">
+          <div class="warn-block">
+            <div class="block-title">${SVG.warning} 3 notebooks reference this lakehouse</div>
+            <div class="block-body">SQL/Spark code that uses <strong>bronze-lh</strong> by name will need to be updated manually.</div>
+            <div class="affected-list">
+              ${affected(SVG.notebook, 'analytics-etl', 'keep', 'Reattach')}
+              ${affected(SVG.notebook, 'raw-ingestion', 'keep', 'Reattach')}
+              ${affected(SVG.notebook, 'transform-daily', 'keep', 'Reattach')}
+            </div>
+          </div>
+          <div class="dlg-section">
+            <div class="field">
+              <label class="field-label">New name <span class="req">*</span></label>
+              <input class="input mono" value="bronze-raw" autofocus>
+              <div class="field-row">
+                <span class="field-help" style="color:var(--success)">✓ Available</span>
+                <span class="char-count">10 / 64</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Rename anyway', 'btn-primary ready'))}`
+      })},
+      { id: 'renaming', label: 'Renaming', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Renaming', title:'Renaming notebook…'})}
+        <div class="dlg-body">
+          <div class="dlg-section">
+            <div class="rename-row">${SVG.notebook}<span class="from">analytics-etl</span><span class="arrow">→</span><span class="to">analytics-pipeline</span></div>
+            ${progressBar(null, '', 'Updating Fabric metadata…')}
+          </div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost', 'disabled') + btn('<span class="spinner"></span> Renaming…', 'btn-primary', 'disabled'))}`
+      })},
+      { id: 'apierr', label: 'API error', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Rename', eyebrowKind:'danger', title:'Rename notebook'})}
+        <div class="dlg-body">
+          ${errBanner('Rename failed', 'Fabric returned <strong>409 Conflict</strong>. Another user may have just created a notebook with this name. Refresh and try again.')}
+          <div class="dlg-section"><div class="rename-row">${SVG.notebook}<span class="from">analytics-etl</span><span class="arrow">→</span><span class="to">analytics-pipeline</span></div></div>
+        </div>
+        ${footer('', btn('Cancel', 'btn-ghost') + btn('Retry', 'btn-primary'))}`
+      })},
+      { id: 'success', label: 'Success', render: () => ({
+        cls: '', html: `
+        ${header({eyebrow:'Renamed', title:'Rename'})}
+        <div class="dlg-body" style="min-height:340px"></div>
+        ${footer('', btn('Done', 'btn-primary'))}
+        ${successOverlay('Notebook renamed', 'analytics-etl → analytics-pipeline')}`
+      })},
+    ]
+  },
+  auth: {
+    label: 'Auth Required',
+    icon: SVG.lock,
+    title: 'Auth Required States',
+    states: [
+      { id: 'gate', label: 'Sign-in gate', render: () => ({
+        cls: '', html: `
+        <div class="dlg-body" style="padding:0;min-height:480px;position:relative">
+          <div class="noauth-overlay">
+            <div class="lock-icon"><div class="lock-inner">${SVG.lock}</div></div>
+            <h2>Sign in to Fabric</h2>
+            <p>EDOG Studio needs to authenticate with Microsoft Fabric to load your workspaces, lakehouses, and notebooks. We'll open a browser window for the sign-in flow.</p>
+            <div style="display:flex;gap:8px">
+              ${btn('Cancel', 'btn-ghost')}
+              ${btn(SVG.signin + ' Sign in with Microsoft', 'btn-primary ready')}
+            </div>
+            <div style="margin-top:24px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">Tenant: contoso.onmicrosoft.com · OAuth 2.0 device flow</div>
+          </div>
+        </div>`
+      })},
+      { id: 'signing', label: 'Signing in', render: () => ({
+        cls: '', html: `
+        <div class="dlg-body" style="padding:0;min-height:480px;position:relative">
+          <div class="noauth-overlay">
+            <div class="lock-icon"><div class="lock-inner"><span class="spinner" style="width:22px;height:22px;border-width:2.5px"></span></div></div>
+            <h2>Waiting for browser…</h2>
+            <p>Complete the sign-in in the browser window that just opened. This page will continue automatically once authentication succeeds.</p>
+            ${progressBar(null, '', 'Listening for callback on localhost:7321…')}
+            <div style="display:flex;gap:8px;margin-top:24px">
+              ${btn('Cancel sign-in', 'btn-ghost')}
+              ${btn('Open browser again', 'btn')}
+            </div>
+          </div>
+        </div>`
+      })},
+    ]
+  }
+};
+
+/* ===== State ===== */
+const state = { tab: 'notebook', stateIdx: 0 };
+
+function renderTabs() {
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = Object.entries(TABS).map(([k, v], i) => `
+    <button class="tab ${k===state.tab?'active':''}" data-tab="${k}">
+      ${v.icon}<span>${v.label}</span><span class="kbd-hint">${i+1}</span>
+    </button>`).join('');
+  tabs.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
+}
+
+function renderStates() {
+  const wrap = document.getElementById('states');
+  const title = document.getElementById('stateTitle');
+  const tab = TABS[state.tab];
+  title.textContent = tab.title;
+  wrap.innerHTML = tab.states.map((s, i) => `
+    <button class="state-btn ${i===state.stateIdx?'active':''}" data-idx="${i}">
+      <span class="n">${i+1}</span>${s.label}
+    </button>`).join('');
+  wrap.querySelectorAll('.state-btn').forEach(b => b.addEventListener('click', () => switchState(parseInt(b.dataset.idx, 10))));
+}
+
+function renderDialog() {
+  const tab = TABS[state.tab];
+  const st = tab.states[state.stateIdx];
+  const out = st.render();
+  const dlg = document.getElementById('dialog');
+  dlg.className = 'dialog ' + (out.cls || '');
+  dlg.innerHTML = out.html;
+  dlg.style.animation = 'none';
+  // force reflow
+  void dlg.offsetWidth;
+  dlg.style.animation = '';
+  wireDialog();
+}
+
+function wireDialog() {
+  // Lakehouse radio cards
+  document.querySelectorAll('.lh-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.lh-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      // enable primary button if a name exists
+      const primary = document.querySelector('.dlg-footer .btn-primary');
+      const nameInput = document.querySelector('.input.mono:not([disabled])');
+      if (primary && nameInput && nameInput.value.trim().length > 0 && !primary.dataset.danger) {
+        primary.removeAttribute('disabled');
+        primary.classList.add('ready');
+      }
+    });
+  });
+  // Type-to-confirm
+  document.querySelectorAll('input[data-confirm]').forEach(inp => {
+    const target = inp.getAttribute('data-confirm');
+    inp.addEventListener('input', () => {
+      const btn = document.querySelector('.btn-danger');
+      if (!btn) return;
+      if (inp.value === target) {
+        btn.classList.add('ready');
+        btn.removeAttribute('disabled');
+      } else {
+        btn.classList.remove('ready');
+        btn.setAttribute('disabled', 'true');
+      }
+    });
+    // honor pre-filled value (e.g., 'confirmed' state)
+    if (inp.value === target) {
+      const btn = document.querySelector('.btn-danger');
+      if (btn) { btn.classList.add('ready'); btn.removeAttribute('disabled'); }
+    }
+  });
+  // Close button cycles back to first state (demo)
+  document.querySelectorAll('.dlg-close').forEach(b => b.addEventListener('click', () => switchState(0)));
+}
+
+function switchTab(t) {
+  state.tab = t;
+  state.stateIdx = 0;
+  renderTabs();
+  renderStates();
+  renderDialog();
+}
+function switchState(i) {
+  const tab = TABS[state.tab];
+  if (i < 0 || i >= tab.states.length) return;
+  state.stateIdx = i;
+  renderStates();
+  renderDialog();
+}
+
+/* ===== Theme ===== */
+document.querySelectorAll('[data-theme-btn]').forEach(b => {
+  b.addEventListener('click', () => {
+    const t = b.dataset.themeBtn;
+    document.documentElement.dataset.theme = t;
+    document.querySelectorAll('[data-theme-btn]').forEach(x => x.classList.toggle('active', x === b));
+  });
+});
+
+/* ===== Keyboard ===== */
+const tabKeys = Object.keys(TABS);
+document.addEventListener('keydown', (e) => {
+  const isInput = e.target.matches('input, textarea, [contenteditable]');
+  // Alt+1-4 switches tab (works even in inputs)
+  if (e.altKey && e.key >= '1' && e.key <= '9') {
+    const i = parseInt(e.key, 10) - 1;
+    if (tabKeys[i]) { e.preventDefault(); switchTab(tabKeys[i]); }
+    return;
+  }
+  if (isInput) return;
+  if (e.key >= '1' && e.key <= '9') {
+    switchState(parseInt(e.key, 10) - 1);
+  } else if (e.key.toLowerCase() === 'd') {
+    const cur = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+    document.querySelectorAll('[data-theme-btn]').forEach(x => x.classList.toggle('active', x.dataset.themeBtn === document.documentElement.dataset.theme));
+  }
+});
+
+/* ===== Boot ===== */
+renderTabs();
+renderStates();
+renderDialog();
+</script>
+</body>
+</html>
