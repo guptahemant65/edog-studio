@@ -3902,7 +3902,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             ws_id,
             art_id,
             cap_id,
-            token_provider=_get_mwc_token,
+            token_provider=lambda b, w, a, c: _get_mwc_token(b, w, a, c, workload_type="LiveTable"),
         )
         if err is not None:
             status = err.pop("status", 502)
@@ -4408,7 +4408,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             ws_id,
             art_id,
             cap_id,
-            token_provider=_get_mwc_token,
+            token_provider=lambda b, w, a, c: _get_mwc_token(b, w, a, c, workload_type="LiveTable"),
         )
         if err is not None:
             status = err.pop("status", 502)
@@ -4520,7 +4520,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             ws_id,
             art_id,
             cap_id,
-            token_provider=_get_mwc_token,
+            token_provider=lambda b, w, a, c: _get_mwc_token(b, w, a, c, workload_type="LiveTable"),
         )
         if err is not None:
             status = err.pop("status", 502)
@@ -4636,7 +4636,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                 )
                 return
             try:
-                mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id)
+                mwc_token, host = _get_mwc_token(bearer, ws_id, art_id, cap_id, workload_type="LiveTable")
             except Exception as e:
                 self._json_response(502, {"error": "mwc_token_error", "message": str(e)})
                 return
