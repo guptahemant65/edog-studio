@@ -1,0 +1,32 @@
+{
+  "Title": "Insights v2.0.6 strict date contract",
+  "Author": "edog-tester@microsoft.com",
+  "Description": "Reject Insights date ranges > 60 days with HTTP 400 instead of silently returning partial data. Closes WI 123456.",
+  "WorkItems": [
+    {
+      "Id": 123456,
+      "Title": "Enforce 60-day strict date contract on Insights range endpoint",
+      "State": "Active",
+      "AcceptanceCriteria": "GET /api/insights/range must return HTTP 400 with a clear message when (endTime - startTime) > 60 days. Inside the limit, return HTTP 200 with insights data.",
+      "DescriptionSnippet": "Users report stale data when query ranges exceed 60 days; enforce a hard cap with a 400 instead."
+    }
+  ],
+  "LinkedSpecExcerpts": [],
+  "ApiCatalog": {
+    "Controllers": ["LiveTableInsightsController"],
+    "Endpoints": [
+      { "method": "GET", "route": "/api/insights/range", "controller": "LiveTableInsightsController" }
+    ],
+    "Truncated": false
+  },
+  "PriorTests": [
+    {
+      "File": "test/Microsoft.LiveTable.Service.UnitTests/Controllers/LiveTableInsightsControllerTests.cs",
+      "Controller": "LiveTableInsightsController",
+      "Methods": ["GetRange_ReturnsOk_WhenServiceSucceeds", "GetRange_PropagatesCancellation"],
+      "TotalMethods": 2
+    }
+  ],
+  "Invariants": [],
+  "Warnings": []
+}

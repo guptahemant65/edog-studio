@@ -1,0 +1,142 @@
+{
+  "Scenarios": [
+    {
+      "Id": "scn-insights-range-within-60d-pass",
+      "Title": "GET /range with 30-day window returns 200",
+      "Description": "Within the 60-day strict contract, the endpoint must succeed and return insights payload.",
+      "Category": "HappyPath",
+      "Priority": 2,
+      "ImpactZone": "zone-001",
+      "Lifecycle": "Generated",
+      "TimeoutMs": 30000,
+      "Setup": [],
+      "Stimulus": {
+        "Type": "HttpRequest",
+        "Http": {
+          "Method": "GET",
+          "Route": "/api/insights/range",
+          "QueryString": "startTime=2025-04-01T00:00:00Z&endTime=2025-05-01T00:00:00Z",
+          "ExpectedStatus": 200
+        }
+      },
+      "Expectations": [
+        {
+          "Id": "exp-001",
+          "Description": "HTTP 200 returned",
+          "Topic": "http",
+          "Matcher": { "Type": "Eq", "Field": "statusCode", "Value": 200 }
+        }
+      ],
+      "Teardown": [],
+      "Metadata": {
+        "GeneratedBy": "ai",
+        "Confidence": 0.92,
+        "RelatedPRFiles": ["Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs"],
+        "Tags": ["happy-path", "insights"],
+        "SchemaVersion": 2
+      },
+      "Technique": "BoundaryValueAnalysis",
+      "InvariantsAddressed": ["inv-numeric-7a8b9c"],
+      "GroundingEvidence": [
+        {
+          "File": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "LineStart": 21,
+          "LineEnd": 27,
+          "Reason": "Validates the new MaxStrictDateRangeDays=60 guard does not trigger for in-range requests."
+        }
+      ]
+    },
+    {
+      "Id": "scn-insights-range-exceed-60d-reject",
+      "Title": "GET /range with 61-day window returns 400",
+      "Description": "Just over the 60-day cap must return HTTP 400 with a clear message.",
+      "Category": "BoundaryNegative",
+      "Priority": 1,
+      "ImpactZone": "zone-001",
+      "Lifecycle": "Generated",
+      "TimeoutMs": 30000,
+      "Setup": [],
+      "Stimulus": {
+        "Type": "HttpRequest",
+        "Http": {
+          "Method": "GET",
+          "Route": "/api/insights/range",
+          "QueryString": "startTime=2025-03-01T00:00:00Z&endTime=2025-05-01T00:00:01Z",
+          "ExpectedStatus": 400
+        }
+      },
+      "Expectations": [
+        {
+          "Id": "exp-002",
+          "Description": "HTTP 400 returned with cap message",
+          "Topic": "http",
+          "Matcher": { "Type": "Eq", "Field": "statusCode", "Value": 400 }
+        }
+      ],
+      "Teardown": [],
+      "Metadata": {
+        "GeneratedBy": "ai",
+        "Confidence": 0.94,
+        "RelatedPRFiles": ["Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs"],
+        "Tags": ["boundary", "negative", "insights"],
+        "SchemaVersion": 2
+      },
+      "Technique": "BoundaryValueAnalysis",
+      "InvariantsAddressed": ["inv-numeric-7a8b9c"],
+      "GroundingEvidence": [
+        {
+          "File": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "LineStart": 21,
+          "LineEnd": 27,
+          "Reason": "Validates the new MaxStrictDateRangeDays=60 boundary rejects (endTime - startTime) > 60 days."
+        }
+      ]
+    },
+    {
+      "Id": "scn-insights-range-exactly-60d-pass",
+      "Title": "GET /range at exactly 60 days returns 200 (boundary inclusive)",
+      "Description": "Exactly 60-day window must be accepted (strictly greater than).",
+      "Category": "BoundaryPositive",
+      "Priority": 2,
+      "ImpactZone": "zone-001",
+      "Lifecycle": "Generated",
+      "TimeoutMs": 30000,
+      "Setup": [],
+      "Stimulus": {
+        "Type": "HttpRequest",
+        "Http": {
+          "Method": "GET",
+          "Route": "/api/insights/range",
+          "QueryString": "startTime=2025-03-02T00:00:00Z&endTime=2025-05-01T00:00:00Z",
+          "ExpectedStatus": 200
+        }
+      },
+      "Expectations": [
+        {
+          "Id": "exp-003",
+          "Description": "HTTP 200 returned at exact boundary",
+          "Topic": "http",
+          "Matcher": { "Type": "Eq", "Field": "statusCode", "Value": 200 }
+        }
+      ],
+      "Teardown": [],
+      "Metadata": {
+        "GeneratedBy": "ai",
+        "Confidence": 0.88,
+        "RelatedPRFiles": ["Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs"],
+        "Tags": ["boundary", "edge", "insights"],
+        "SchemaVersion": 2
+      },
+      "Technique": "BoundaryValueAnalysis",
+      "InvariantsAddressed": ["inv-numeric-7a8b9c"],
+      "GroundingEvidence": [
+        {
+          "File": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "LineStart": 21,
+          "LineEnd": 27,
+          "Reason": "Boundary edge case: exactly 60 days must remain in-range."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    F27 P3 - End-to-End Integration Test Harness
+
+    Builds an EXE console runner that exercises the QA analyzer / aggregator
+    pipeline against canned fixtures, emitting result JSON on stdout. The
+    Python wrapper (tests/test_qa_e2e.py) invokes it and asserts on the
+    parsed JSON, the same way the P2 build gate operates.
+
+    KEY: AssemblyName = "Microsoft.LiveTable.Service.UnitTests" matches the
+    InternalsVisibleTo grant in FLT's FriendlyAssemblies.cs - this gives us
+    access to FLT internal types AND keeps a clean test-only name (no
+    collision with the production assembly).
+
+    Like the P2 csproj, FLT DLLs are referenced via an MSBuild target so
+    metadata batching resolves correctly. Requires -p:FltBin=<path>.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Microsoft.LiveTable.Service.UnitTests</AssemblyName>
+    <RootNamespace>Microsoft.LiveTable.Service.DevMode.E2ETests</RootNamespace>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <NoWarn>CS1591;CS8625;CS8618;CS0168;CS0219;CS0414;CS8632;CS0436;CA1416</NoWarn>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+
+    <!-- Disable telemetry / restore noise -->
+    <SuppressNETCoreSdkPreviewMessage>true</SuppressNETCoreSdkPreviewMessage>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <RollForward>LatestMajor</RollForward>
+
+    <!-- Required for runtime: copy referenced DLLs to bin so the exe can load them -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- ASP.NET Core shared framework gives us SignalR Hub etc. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Compile every DevMode file (so we link the same surface area the deployment uses) -->
+  <ItemGroup>
+    <Compile Include="..\..\..\src\backend\DevMode\*.cs" />
+    <Compile Include="Fakes.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="AnalyzerHarness.cs" />
+    <Compile Include="AggregatorHarness.cs" />
+    <Compile Include="ComposeHarness.cs" />
+  </ItemGroup>
+
+  <!-- Bundle fixture files into the output so the harness can read them at runtime -->
+  <ItemGroup>
+    <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!--
+    FLT DLL referencing: wire up <Reference> items inside a Target so that
+    %(_FltAssembly.Filename) metadata batching resolves correctly. This is
+    the same pattern proven by the P2 build gate.
+  -->
+  <Target Name="AddFltReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="'$(FltBin)' == ''" Text="FltBin MSBuild property must be set (e.g. -p:FltBin=C:\path\to\flt\bin)." />
+    <ItemGroup>
+      <_FltAssembly Include="$(FltBin)\Microsoft.LiveTable.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.MWC.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Fabric.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.ServicePlatform*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Identity.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Azure.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Azure.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Microsoft.Data.*.dll" />
+      <_FltAssembly Include="$(FltBin)\Newtonsoft.Json.dll" />
+      <_FltAssembly Include="$(FltBin)\MessagePack*.dll" />
+
+      <Reference Include="%(_FltAssembly.Filename)">
+        <HintPath>%(_FltAssembly.Identity)</HintPath>
+        <Private>true</Private>
+      </Reference>
+    </ItemGroup>
+  </Target>
+
+</Project>

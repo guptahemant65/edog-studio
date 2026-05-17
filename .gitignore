@@ -61,3 +61,7 @@ scripts/vendor/
 # F27 P2 ? C# build gate artifacts
 tests/_csbuild/obj/
 tests/_csbuild/bin/
+
+# F27 P3 - E2E harness build artifacts
+tests/dotnet/EdogQaE2E.Tests/bin/
+tests/dotnet/EdogQaE2E.Tests/obj/

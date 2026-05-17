@@ -1,0 +1,23 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
+index abc1234..def5678 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
+@@ -18,11 +18,18 @@ namespace Microsoft.LiveTable.Service.Controllers
+     public sealed class LiveTableInsightsController : ControllerBase
+     {
+         private const int MaxLookbackDays = 30;
++        private const int MaxStrictDateRangeDays = 60;
+
+         [HttpGet("range")]
+         public async Task<IActionResult> GetRange(DateTime startTime, DateTime endTime)
+         {
++            if ((endTime - startTime) > TimeSpan.FromDays(MaxStrictDateRangeDays))
++            {
++                return BadRequest($"Date range exceeds {MaxStrictDateRangeDays} day maximum.");
++            }
++
+             var data = await _service.GetRangeAsync(startTime, endTime);
+             return Ok(data);
+         }
+     }
+ }
