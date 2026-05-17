@@ -2762,6 +2762,8 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_playground_dispatch()
         elif self.path == "/api/playground/swagger/baseline":
             self._serve_swagger_baseline_post()
+        elif self.path == "/api/ado-proxy/pr-comment":
+            self._serve_ado_pr_comment()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for POST {self.path}"})
 
@@ -2924,6 +2926,158 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             print(f"  [ADO] Error: {e}")
             self._json_response(500, {"error": "internal_error", "message": str(e)})
+
+    def _serve_ado_pr_comment(self):
+        """POST /api/ado-proxy/pr-comment — post a markdown comment to an ADO PR.
+
+        F27 P6 — closes step 7 of the QA Testing user journey (Results → Post
+        to PR). Reuses the same Azure CLI token cache as ``_serve_ado_pr_diff``
+        so it Just Works on a workstation that's already signed in to ADO.
+
+        Request body: ``{"prUrl": "...", "markdown": "..."}``.
+        Response: ``{"threadId": int, "commentId": int, "threadUrl": str}`` on
+        success; standard ``{error, message}`` envelope otherwise.
+
+        ADO has a ~150KB hard limit on thread content; the C# aggregator
+        already truncates above 130KB, but we add a defensive guard here so a
+        non-aggregator caller (e.g. JS-formatted comment) can't accidentally
+        hit the API with an oversize payload.
+        """
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self._json_response(400, {"error": "invalid_content_length", "message": "Content-Length must be an integer"})
+            return
+
+        if content_length <= 0:
+            self._json_response(400, {"error": "empty_body", "message": "Request body required"})
+            return
+        if content_length > 200_000:
+            self._json_response(413, {"error": "payload_too_large", "message": "Comment exceeds 200KB"})
+            return
+
+        try:
+            raw = self.rfile.read(content_length)
+            payload = json.loads(raw)
+        except json.JSONDecodeError as e:
+            self._json_response(400, {"error": "invalid_json", "message": str(e)})
+            return
+
+        pr_url = (payload.get("prUrl") or "").strip()
+        markdown = payload.get("markdown") or ""
+
+        if not pr_url:
+            self._json_response(400, {"error": "missing_param", "message": "prUrl required in body"})
+            return
+        if not markdown.strip():
+            self._json_response(400, {"error": "missing_param", "message": "markdown required in body"})
+            return
+        if len(markdown) > 150_000:
+            self._json_response(
+                413,
+                {
+                    "error": "comment_too_large",
+                    "message": "ADO PR comments are limited to ~150KB; truncate before posting",
+                },
+            )
+            return
+
+        try:
+            parsed = _parse_ado_pr_url(pr_url)
+        except ValueError as e:
+            self._json_response(400, {"error": "invalid_pr_url", "message": str(e)})
+            return
+
+        org = parsed["org"]
+        project = parsed["project"]
+        repo = parsed["repo"]
+        pr_id = parsed["prId"]
+
+        print(f"  [ADO] Posting QA comment to PR #{pr_id} ({len(markdown)} chars)")
+
+        try:
+            token = _get_ado_token()
+        except subprocess.TimeoutExpired:
+            self._json_response(504, {"error": "az_cli_timeout", "message": "Azure CLI timed out acquiring ADO token"})
+            return
+        except RuntimeError as e:
+            self._json_response(502, {"error": "ado_auth_failed", "message": str(e)})
+            return
+
+        # ADO Threads API: POST /git/repositories/{repo}/pullRequests/{prId}/threads
+        # status=1 (active), commentType=1 (text), threadContext omitted → general thread.
+        threads_url = (
+            f"https://dev.azure.com/{org}/{project}/_apis/git/repositories/"
+            f"{repo}/pullRequests/{pr_id}/threads?api-version=7.1"
+        )
+        body = json.dumps(
+            {
+                "comments": [
+                    {
+                        "parentCommentId": 0,
+                        "content": markdown,
+                        "commentType": 1,
+                    }
+                ],
+                "status": 1,
+            }
+        ).encode("utf-8")
+
+        req = urllib.request.Request(
+            threads_url,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        try:
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+                resp_body = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode("utf-8")
+            except Exception:
+                err_body = ""
+            status = 502 if e.code >= 500 else (401 if e.code in (401, 403) else 502)
+            self._json_response(
+                status,
+                {
+                    "error": f"ado_http_{e.code}",
+                    "message": f"ADO returned {e.code}: {e.reason}",
+                    "detail": err_body[:500],
+                },
+            )
+            return
+        except urllib.error.URLError as e:
+            self._json_response(502, {"error": "ado_unreachable", "message": f"Cannot reach ADO: {e.reason}"})
+            return
+        except TimeoutError:
+            self._json_response(504, {"error": "ado_timeout", "message": "ADO API request timed out"})
+            return
+
+        thread_id = resp_body.get("id")
+        comments = resp_body.get("comments") or []
+        comment_id = comments[0].get("id") if comments else None
+        thread_url = (
+            f"https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{pr_id}?discussionId={thread_id}"
+            if thread_id
+            else None
+        )
+
+        print(f"  [ADO] PR #{pr_id} comment posted: thread {thread_id}")
+        self._json_response(
+            200,
+            {
+                "threadId": thread_id,
+                "commentId": comment_id,
+                "threadUrl": thread_url,
+                "prId": pr_id,
+            },
+        )
 
     def _serve_openai_proxy(self):
         """POST /api/openai-proxy/chat — proxy to Azure OpenAI Responses API.

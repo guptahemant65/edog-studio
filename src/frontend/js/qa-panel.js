@@ -391,6 +391,14 @@ class QaPanel {
   setRunId(id) { this._runId = id; this._saveState(); }
   getRunId() { return this._runId; }
 
+  // F27 P6 — qa-input.js captures the PR URL when the user kicks off an
+  // analysis; the results stage reads it back when "Post to PR" fires so
+  // the dev-server can route the comment to the right repo + PR id. We
+  // intentionally keep this client-side because the hub's QaRunResult
+  // doesn't persist PrUrl on the analysis path today.
+  setPrUrl(url) { this._prUrl = url || null; }
+  getPrUrl() { return this._prUrl || null; }
+
   /** Get the SignalR connection for hub invocations. */
   getConnection() { return this._ws.connection; }
 

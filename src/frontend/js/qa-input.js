@@ -114,6 +114,11 @@ class QaInput {
 
       if (result && result.success) {
         self._panel.setAnalysisId(result.analysisId);
+        // F27 P6 — remember the PR URL so the Results stage can POST a
+        // comment back to ADO via /api/ado-proxy/pr-comment.
+        if (typeof self._panel.setPrUrl === 'function') {
+          self._panel.setPrUrl(parsed.prUrl || null);
+        }
         self._addToHistory(parsed.prId, val);
         self._panel.goToStage('analysis');
       } else {
