@@ -297,7 +297,8 @@
 
 /* ── Matrix table ─────────────────────────────────────────────────── */
 .ff-table-wrap {
-  max-height: calc(100vh - 320px);
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background: var(--surface);
 }
