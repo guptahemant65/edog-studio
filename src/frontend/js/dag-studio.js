@@ -128,8 +128,8 @@ class ExecutionStateManager {
       if (newStatus !== current.status) {
         this._updateNodeState(nodeId, {
           status: newStatus,
-          startedAt: ns.timestamp || current.startedAt,
-          endedAt: this._isTerminal(newStatus) ? (ns.timestamp || Date.now()) : null,
+          startedAt: this._toMs(ns.timestamp) || current.startedAt,
+          endedAt: this._isTerminal(newStatus) ? (this._toMs(ns.timestamp) || Date.now()) : null,
           errorCode: ns.errorCode || null,
           source: 'autodetector',
         });

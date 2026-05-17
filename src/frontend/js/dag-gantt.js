@@ -112,10 +112,10 @@ var DagGantt = (function() {
     if (entry.timeEl) {
       if (state.startedAt && state.endedAt) {
         var dur = (state.endedAt - state.startedAt) / 1000;
-        entry.timeEl.textContent = dur.toFixed(1) + 's';
+        entry.timeEl.textContent = isNaN(dur) ? '--' : dur.toFixed(1) + 's';
       } else if (state.startedAt && state.status === 'running') {
         var elapsed = (Date.now() - state.startedAt) / 1000;
-        entry.timeEl.textContent = elapsed.toFixed(1) + 's';
+        entry.timeEl.textContent = isNaN(elapsed) ? '--' : elapsed.toFixed(1) + 's';
       } else {
         entry.timeEl.textContent = '--';
       }
