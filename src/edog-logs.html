@@ -63839,7 +63839,12 @@ class DagCanvasPage {
 
     // Root container
     this._rootEl = document.createElement('div');
-    this._rootEl.className = 'iw-page iw-dag-page';
+    // NOTE: Do NOT use the `iw-page` class here. The outer page-2 wrapper
+    // already has `.iw-page.active`, and `.iw-page` (without `.active`) sets
+    // opacity:0, pointer-events:none, position:absolute, transform:translateX(60px).
+    // Stamping `iw-page` on this nested root made the entire DAG page invisible
+    // and shifted off-screen, even though the DOM was built correctly.
+    this._rootEl.className = 'iw-dag-page';
 
     // Sub-component containers
     this._paletteContainer = document.createElement('div');
