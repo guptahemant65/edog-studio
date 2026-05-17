@@ -447,6 +447,12 @@ class DagStudio {
     this._refreshBtn.addEventListener('click', this._onRefreshClick);
     this._unlockBtn.addEventListener('click', this._onUnlockClick);
 
+    // History refresh button
+    var histRefresh = document.getElementById('dagHistoryRefresh');
+    if (histRefresh) {
+      histRefresh.addEventListener('click', function() { self._loadHistory(); });
+    }
+
     // Exec mode dropdown
     if (this._execModeBtn && this._execModeDropdown) {
       this._execModeBtn.addEventListener('click', function(e) {
@@ -610,7 +616,8 @@ class DagStudio {
       if (canvas) canvas.style.opacity = '1';
       var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
       if (minimap) minimap.style.opacity = '1';
-      if (this._ganttCount) this._ganttCount.textContent = String(nodes.length);
+      var executableCount = nodes.filter(function(n) { return n.executable !== false; }).length;
+      if (this._ganttCount) this._ganttCount.textContent = String(executableCount);
       this._renderControls('idle');
       this._renderStatus('idle');
       this._updateSummary();
@@ -668,7 +675,7 @@ class DagStudio {
         if (execBoot) {
           execBoot.status = 'Running';
           execBoot.startTime = Date.now();
-          if (this._dag && this._dag.nodes) execBoot.nodeCount = this._dag.nodes.length;
+          execBoot.nodeCount = this._esm.nodeStates.size;
           this._autoDetector.activeExecutionId = iterationId;
           if (this._autoDetector.onExecutionDetected) {
             this._autoDetector.onExecutionDetected(execBoot, iterationId);
@@ -676,7 +683,8 @@ class DagStudio {
         }
       }
       if (this._gantt && this._dag && this._dag.nodes) {
-        this._gantt.renderExecution(this._dag.nodes, Date.now());
+        var executableNodes = this._dag.nodes.filter(function(n) { return n.executable !== false; });
+        this._gantt.renderExecution(executableNodes, Date.now());
       }
       this._renderControls('running');
       this._renderStatus('running');
@@ -1409,7 +1417,7 @@ class DagStudio {
   }
 
   _updateSummary() {
-    var total = this._dag && this._dag.nodes ? this._dag.nodes.length : 0;
+    var total = this._esm.nodeStates.size;
     var ok = 0;
     var fail = 0;
     var run = 0;
