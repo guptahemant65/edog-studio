@@ -296,8 +296,9 @@ window.onerror = function(msg, src, line, col, err) {
           <div class="dag-toolbar" id="dagToolbar">
             <button class="dag-btn primary" id="dagRunBtn" title="Run DAG">&#9654; Run DAG</button>
             <button class="dag-btn danger" id="dagCancelBtn" title="Cancel" style="display:none">&#10005; Cancel</button>
-            <div class="dag-toolbar-sep"></div>
-            <div class="exec-mode-wrap">
+            <!-- Exec mode selector hidden — no use case currently -->
+            <div class="dag-toolbar-sep" style="display:none"></div>
+            <div class="exec-mode-wrap" style="display:none">
               <button class="exec-mode-btn" id="dagExecModeBtn">
                 <span id="dagExecModeLabel">Full DAG</span> <span>&#9662;</span>
               </button>
