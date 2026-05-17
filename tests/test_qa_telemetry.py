@@ -67,6 +67,14 @@ REQUIRED_COUNTERS = [
     "AnalysisCompleted",
     "RunStarted",
     "RunCompleted",
+    # F27 P5 — capability counters (added when chaos/flag wiring stopped
+    # silently passing scenarios that needed unavailable primitives).
+    "FlagOverrideApplied",
+    "FlagOverrideRestored",
+    "FlagOverrideUnavailable",
+    "ChaosApplied",
+    "ChaosUnavailable",
+    "ScenariosSkippedForCapability",
 ]
 
 
@@ -186,12 +194,18 @@ def exec_engine_src() -> str:
 
 
 def test_chaos_stub_increments(exec_engine_src: str) -> None:
-    """ChaosIntegration.ApplyChaosRuleAsync is currently a no-op — every call
-    must be counted so users see the real behaviour."""
+    """ChaosIntegration.ApplyChaosRuleAsync refuses unsupported chaos rules
+    via ChaosUnavailableException (P5). The legacy NoOp counter still fires
+    on the refusal path so users see "the request was a no-op" — but the
+    engine no longer silently proceeds: the scenario is marked Skipped."""
     assert "EdogQaTelemetry.IncrementChaosNoOp()" in exec_engine_src
 
 
 def test_flag_override_stub_increments(exec_engine_src: str) -> None:
+    """FlagOverrideStore.ApplyOverrideAsync still fires the legacy NoOp
+    counter on the refusal path (force-OFF in V1). The accepted path now
+    pushes through EdogFeatureOverrideStore.MergeOverrides — verified by
+    test_qa_capabilities.test_flag_override_pushes_to_real_store."""
     assert "EdogQaTelemetry.IncrementFlagOverrideNoOp()" in exec_engine_src
 
 

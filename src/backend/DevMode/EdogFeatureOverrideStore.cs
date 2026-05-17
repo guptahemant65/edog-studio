@@ -145,6 +145,116 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
+        /// Atomically merges <paramref name="additions"/> into the current
+        /// override snapshot. Conflicts: additions win. Force-OFF entries
+        /// are rejected with <see cref="ArgumentException"/> (same invariant
+        /// as <see cref="ReplaceAll"/>).
+        ///
+        /// Used by the QA execution engine to apply per-scenario flag
+        /// overrides without clobbering pre-existing overrides set via the
+        /// dev-server HTTP control plane (<see cref="EdogLogServer"/>).
+        /// </summary>
+        /// <param name="additions">Flags to add or update. Null/empty is a no-op.</param>
+        /// <returns>Tuple of (revision, hash, count) after the merge.</returns>
+        public static (long revision, string hash, int count) MergeOverrides(
+            IReadOnlyDictionary<string, bool> additions)
+        {
+            if (additions == null || additions.Count == 0)
+            {
+                var current = _snapshot;
+                return (Interlocked.Read(ref _revision), _hash, current.Count);
+            }
+
+            lock (_writeLock)
+            {
+                foreach (var kvp in additions)
+                {
+                    if (kvp.Value != true)
+                    {
+                        throw new ArgumentException(
+                            $"Force-OFF is not supported in V1. Flag '{kvp.Key}' was set to {kvp.Value}.",
+                            nameof(additions));
+                    }
+                }
+
+                var current = _snapshot;
+                var merged = new Dictionary<string, bool>(
+                    current.Count + additions.Count, StringComparer.Ordinal);
+                foreach (var kv in current) merged[kv.Key] = kv.Value;
+                foreach (var kv in additions) merged[kv.Key] = kv.Value;
+
+                var next = merged.ToFrozenDictionary(
+                    kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+                var nextHash = ComputeHash(next);
+
+                Volatile.Write(ref _snapshot, next);
+                _hash = nextHash;
+                var newRev = Interlocked.Increment(ref _revision);
+                return (newRev, nextHash, next.Count);
+            }
+        }
+
+        /// <summary>
+        /// Atomically removes the named keys from the override snapshot.
+        /// Keys not present in the snapshot are ignored. Used by the QA
+        /// execution engine to revert per-scenario overrides at teardown
+        /// without clobbering other entries.
+        /// </summary>
+        /// <param name="keys">Flag names to remove. Null/empty is a no-op.</param>
+        /// <returns>Tuple of (revision, hash, count) after the removal.
+        /// Revision does not bump when nothing was removed.</returns>
+        public static (long revision, string hash, int count) RemoveOverrides(
+            IEnumerable<string> keys)
+        {
+            if (keys == null)
+            {
+                var current = _snapshot;
+                return (Interlocked.Read(ref _revision), _hash, current.Count);
+            }
+
+            lock (_writeLock)
+            {
+                var current = _snapshot;
+                var working = new Dictionary<string, bool>(
+                    current.Count, StringComparer.Ordinal);
+                foreach (var kv in current) working[kv.Key] = kv.Value;
+
+                bool changed = false;
+                foreach (var key in keys)
+                {
+                    if (!string.IsNullOrEmpty(key) && working.Remove(key))
+                    {
+                        changed = true;
+                    }
+                }
+
+                if (!changed)
+                {
+                    return (Interlocked.Read(ref _revision), _hash, current.Count);
+                }
+
+                FrozenDictionary<string, bool> next;
+                string nextHash;
+                if (working.Count == 0)
+                {
+                    next = FrozenDictionary<string, bool>.Empty;
+                    nextHash = EmptyHash();
+                }
+                else
+                {
+                    next = working.ToFrozenDictionary(
+                        kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+                    nextHash = ComputeHash(next);
+                }
+
+                Volatile.Write(ref _snapshot, next);
+                _hash = nextHash;
+                var newRev = Interlocked.Increment(ref _revision);
+                return (newRev, nextHash, next.Count);
+            }
+        }
+
+        /// <summary>
         /// Returns a stable, materialized copy of the current snapshot for
         /// serialization. Reads <see cref="_snapshot"/> once; safe under
         /// concurrent writes.

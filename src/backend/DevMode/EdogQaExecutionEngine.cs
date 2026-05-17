@@ -381,6 +381,34 @@ namespace Microsoft.LiveTable.Service.DevMode
                             await ExecuteSetupStepAsync(step, scenario.Id, ct).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException) { throw; }
+                        catch (ChaosUnavailableException ex)
+                        {
+                            // P5: a chaos rule was refused because the host
+                            // does not support the requested fault. Mark the
+                            // scenario skipped with the capability error code
+                            // so the studio UI can render an explicit badge.
+                            _logger.LogWarning(
+                                "[QA] {Id} Setup chaos refused: {Reason}", scenario.Id, ex.Message);
+                            EdogQaTelemetry.IncrementScenariosSkippedForCapability();
+                            result.Verdict = ScenarioVerdict.Skipped;
+                            result.ErrorMessage =
+                                $"{EdogQaCapabilityRegistry.ErrorCodeChaosUnavailable}: {ex.Message}";
+                            result.FailedAtPhase = ExecutionPhase.Setup;
+                            return result;
+                        }
+                        catch (FlagOverrideUnavailableException ex)
+                        {
+                            // P5: a flag override was refused because the
+                            // requested value is not supported (e.g. force-OFF).
+                            _logger.LogWarning(
+                                "[QA] {Id} Setup flag override refused: {Reason}", scenario.Id, ex.Message);
+                            EdogQaTelemetry.IncrementScenariosSkippedForCapability();
+                            result.Verdict = ScenarioVerdict.Skipped;
+                            result.ErrorMessage =
+                                $"{EdogQaCapabilityRegistry.ErrorCodeFlagOverrideUnavailable}: {ex.Message}";
+                            result.FailedAtPhase = ExecutionPhase.Setup;
+                            return result;
+                        }
                         catch (Exception ex)
                         {
                             _logger.LogWarning(ex, "[QA] {Id} Setup step {Type} failed", scenario.Id, step.Type);
@@ -1100,20 +1128,33 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // ChaosIntegration — F24 chaos fault injection bridge
+    // ChaosIntegration — fault-injection bridge (F27 P5)
     //
-    // Functional stub: logs all operations and tracks active rules per scenario.
-    // Actual integration with F24's chaos system happens in Layer 1 when
-    // the hub wiring connects to the real ChaosManager service.
+    // Before P5 this class was a functional stub: it logged the request,
+    // incremented a "NoOp" counter, and returned. A scenario that depended
+    // on chaos to expose a failure path would therefore pass its assertions
+    // silently. That is a lie. P5 fixes it.
+    //
+    // Stage 1 behaviour (this file): every chaos request is REFUSED via
+    // <see cref="ChaosUnavailableException"/>. The execution engine catches
+    // the exception, marks the scenario <see cref="ScenarioVerdict.Skipped"/>,
+    // and surfaces the capability reason in the result. The legacy
+    // ChaosNoOp counter still fires so existing telemetry test source-grep
+    // assertions remain green — it now records refusals rather than lies.
+    //
+    // Stage 2 behaviour (follow-on commit): when the HTTP-chaos backend is
+    // enabled (EDOG_QA_CHAOS_HTTP=1 + EdogHttpFaultStore wired), supported
+    // fault types ("http_error", "latency", "timeout") flow into the store
+    // and the HTTP pipeline synthesizes the configured fault. Unsupported
+    // fault types (e.g. "partial_response") continue to throw.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Bridges F24 chaos fault injection into QA scenario setup/teardown.
+    /// Bridges chaos fault injection into QA scenario setup/teardown.
     /// Tracks active rules per scenario for cleanup and orphan detection.
-    ///
-    /// Current implementation is a functional stub: it records what rules are
-    /// active but does not inject real faults. Wire to the actual F24 ChaosManager
-    /// in Layer 1 hub integration.
+    /// Consults <see cref="EdogQaCapabilityRegistry"/> before applying each
+    /// rule — unsupported faults raise <see cref="ChaosUnavailableException"/>
+    /// rather than silently succeeding.
     /// </summary>
     internal sealed class ChaosIntegration
     {
@@ -1132,7 +1173,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>
         /// Apply a chaos fault injection rule for a scenario.
-        /// Logs the rule and tracks it for cleanup.
+        /// Refuses the rule with <see cref="ChaosUnavailableException"/> when
+        /// the capability registry reports the fault as unsupported.
         /// </summary>
         /// <param name="rule">Chaos rule specification.</param>
         /// <param name="scenarioId">Owning scenario ID for cleanup tracking.</param>
@@ -1141,6 +1183,28 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             if (rule == null) return Task.CompletedTask;
 
+            if (!EdogQaCapabilityRegistry.IsChaosFaultSupported(rule))
+            {
+                // Telemetry: record both legacy NoOp (the path is still a
+                // no-op from the caller's POV — no fault is injected) and
+                // the new Unavailable counter so the studio UI can show
+                // "scenario skipped due to missing capability".
+                EdogQaTelemetry.IncrementChaosNoOp();
+                EdogQaTelemetry.IncrementChaosUnavailable();
+
+                var reason = EdogQaCapabilityRegistry.GetChaosUnavailableReason(rule);
+                _logger.LogWarning(
+                    "[QA/Chaos] Refused chaos rule for {Scenario}: target={Target} fault={Fault} reason={Reason}",
+                    scenarioId, rule.Target, rule.Fault, reason);
+
+                throw new ChaosUnavailableException(
+                    $"Chaos fault '{rule.Fault}' on target '{rule.Target}' is unavailable: {reason}");
+            }
+
+            // Stage 1 invariant: IsChaosFaultSupported returns false unless
+            // EDOG_QA_CHAOS_HTTP=1 AND EdogHttpFaultStore is wired. Stage 2
+            // will satisfy both. Reaching this branch implies the backend
+            // accepted the rule, which is the truthful behaviour.
             lock (_lock)
             {
                 if (!_activeRules.TryGetValue(scenarioId, out var rules))
@@ -1151,16 +1215,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 rules.Add(rule);
             }
 
+            // Stage 2 wires this to EdogHttpFaultStore.AddRule. Until then,
+            // this branch is unreachable by construction.
+            EdogHttpFaultStore.AddRule(scenarioId, rule);
+            EdogQaTelemetry.IncrementChaosApplied();
             _logger.LogInformation(
                 "[QA/Chaos] Applied rule for {Scenario}: target={Target} fault={Fault}",
                 scenarioId, rule.Target, rule.Fault);
 
-            // Telemetry: this is a no-op until F24 ChaosManager is wired in
-            // Layer 1. Counter lets the UI surface a warning so users don't
-            // believe a chaos scenario actually injected a fault.
-            EdogQaTelemetry.IncrementChaosNoOp();
-
-            // TODO: Wire to actual F24 ChaosManager.InjectFault() in Layer 1
             return Task.CompletedTask;
         }
 
@@ -1179,12 +1241,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             if (removed != null && removed.Count > 0)
             {
+                EdogHttpFaultStore.RemoveRulesForScenario(scenarioId);
                 _logger.LogInformation(
                     "[QA/Chaos] Removed {Count} rules for {Scenario}",
                     removed.Count, scenarioId);
             }
 
-            // TODO: Wire to actual F24 ChaosManager.RemoveFaults() in Layer 1
             return Task.CompletedTask;
         }
 
@@ -1218,19 +1280,31 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // FlagOverrideStore — feature flag override management
+    // FlagOverrideStore — feature flag override management (F27 P5)
     //
-    // Functional stub: logs all operations and tracks overrides per scenario.
-    // Actual integration with FLT's feature flag system happens in Layer 1.
+    // Before P5 this class was a functional stub: it logged the request,
+    // incremented a "NoOp" counter, and proceeded. Scenarios that depended
+    // on a flag being on/off would PASS silently because the flag was
+    // never actually overridden. P5 fixes it.
+    //
+    // P5 wires this directly to <see cref="EdogFeatureOverrideStore"/>:
+    //   - Apply: validate via capability registry, MergeOverrides into the
+    //     process-wide snapshot, track per-scenario keys for revert.
+    //   - Clear: RemoveOverrides for this scenario's tracked keys only.
+    //     Pre-existing overrides set via the dev-server HTTP control plane
+    //     survive intact.
+    //
+    // Force-OFF (Value=false) is refused with
+    // <see cref="FlagOverrideUnavailableException"/> because the override
+    // store is force-ON only in V1. The legacy FlagOverrideNoOp counter
+    // still fires on this refusal path so existing telemetry source-grep
+    // tests stay green — it now records refusals rather than lies.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Manages feature flag overrides for QA scenario isolation.
-    /// Tracks original values for restoration during teardown.
-    ///
-    /// Current implementation is a functional stub: it records what flags are
-    /// overridden but does not modify real flag values. Wire to the actual
-    /// FLT feature flag system in Layer 1 hub integration.
+    /// Per-scenario tracker for feature-flag overrides. Pushes accepted
+    /// overrides into the process-wide <see cref="EdogFeatureOverrideStore"/>
+    /// at apply time and removes them at teardown.
     /// </summary>
     internal sealed class FlagOverrideStore
     {
@@ -1248,8 +1322,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Apply a feature flag override for a scenario.
-        /// Logs the override and tracks it for restoration.
+        /// Apply a feature flag override for a scenario. Refuses with
+        /// <see cref="FlagOverrideUnavailableException"/> when the capability
+        /// registry cannot satisfy the request (e.g. force-OFF in V1).
         /// </summary>
         /// <param name="spec">Flag override specification.</param>
         /// <param name="scenarioId">Owning scenario ID for cleanup tracking.</param>
@@ -1257,6 +1332,59 @@ namespace Microsoft.LiveTable.Service.DevMode
         public Task ApplyOverrideAsync(FlagOverrideSpec spec, string scenarioId, CancellationToken ct)
         {
             if (spec == null) return Task.CompletedTask;
+
+            if (!EdogQaCapabilityRegistry.IsFlagOverrideSupported(spec))
+            {
+                // Telemetry: legacy counter still fires (the call was a no-op
+                // from the caller's POV); new counter records the refusal so
+                // the studio UI can surface "scenario skipped due to missing
+                // capability".
+                EdogQaTelemetry.IncrementFlagOverrideNoOp();
+                EdogQaTelemetry.IncrementFlagOverrideUnavailable();
+
+                var reason = EdogQaCapabilityRegistry.GetFlagOverrideUnavailableReason(spec);
+                _logger.LogWarning(
+                    "[QA/Flags] Refused override for {Scenario}: {Flag}={Value} reason={Reason}",
+                    scenarioId, spec?.FlagName, spec?.Value, reason);
+
+                throw new FlagOverrideUnavailableException(
+                    $"Flag override for '{spec?.FlagName}' is unavailable: {reason}");
+            }
+
+            // Snapshot any pre-existing override for this key BEFORE we
+            // merge our own. If the dev-server HTTP control plane (or a
+            // prior scenario) already set this flag, we record that fact
+            // so teardown can leave the key intact instead of clobbering
+            // an externally-owned override. Force-ON only ⇒ the prior
+            // value (if any) can only be true.
+            var hadPriorOverride = EdogFeatureOverrideStore.TryGet(spec.FlagName, out var priorValue);
+
+            // Push into the process-wide override store. MergeOverrides is
+            // atomic (write lock); readers in EdogFeatureFlighterWrapper see
+            // either the pre- or post-merge snapshot, never a partial one.
+            var additions = new Dictionary<string, bool>(StringComparer.Ordinal)
+            {
+                { spec.FlagName, spec.Value },
+            };
+
+            try
+            {
+                EdogFeatureOverrideStore.MergeOverrides(additions);
+            }
+            catch (ArgumentException ex)
+            {
+                // Defense in depth: should never trip because the capability
+                // probe above already rejected force-OFF. Surface as the
+                // same unavailable exception so the engine path is uniform.
+                EdogQaTelemetry.IncrementFlagOverrideNoOp();
+                EdogQaTelemetry.IncrementFlagOverrideUnavailable();
+                _logger.LogWarning(ex,
+                    "[QA/Flags] EdogFeatureOverrideStore rejected merge for {Scenario}: {Flag}",
+                    scenarioId, spec.FlagName);
+                throw new FlagOverrideUnavailableException(
+                    $"Flag override for '{spec.FlagName}' was rejected by EdogFeatureOverrideStore: {ex.Message}",
+                    ex);
+            }
 
             lock (_lock)
             {
@@ -1270,25 +1398,23 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     FlagName = spec.FlagName,
                     OverrideValue = spec.Value,
-                    OriginalValue = null, // TODO: read from actual flag store in Layer 1
+                    OriginalValue = hadPriorOverride ? priorValue : (bool?)null,
                 });
             }
 
+            EdogQaTelemetry.IncrementFlagOverrideApplied();
             _logger.LogInformation(
-                "[QA/Flags] Override for {Scenario}: {Flag}={Value}",
+                "[QA/Flags] Applied override for {Scenario}: {Flag}={Value}",
                 scenarioId, spec.FlagName, spec.Value);
 
-            // Telemetry: feature-flag overrides are no-ops until Layer 1 wires
-            // up the real FLT flag service. Counter lets the UI surface this.
-            EdogQaTelemetry.IncrementFlagOverrideNoOp();
-
-            // TODO: Wire to actual FLT feature flag service in Layer 1
             return Task.CompletedTask;
         }
 
         /// <summary>
-        /// Clear all flag overrides for a scenario, restoring original values.
-        /// Called during teardown.
+        /// Clear all flag overrides for a scenario by removing only this
+        /// scenario's keys from the process-wide override store. Other
+        /// overrides (from other scenarios or the dev-server control plane)
+        /// are preserved.
         /// </summary>
         /// <param name="scenarioId">Scenario ID whose overrides should be cleared.</param>
         public Task ClearOverridesForScenarioAsync(string scenarioId)
@@ -1302,17 +1428,34 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             if (removed != null && removed.Count > 0)
             {
-                _logger.LogInformation(
-                    "[QA/Flags] Cleared {Count} overrides for {Scenario}",
-                    removed.Count, scenarioId);
-
-                // TODO: Restore original flag values in Layer 1
+                // Only remove keys that this scenario INTRODUCED. Keys that
+                // already had an override before the scenario ran are owned
+                // by someone else (dev-server control plane or a prior
+                // scenario in the same run) — leaving them intact preserves
+                // external intent and avoids the "QA teardown wipes a
+                // developer-set flag" footgun.
+                var keys = new List<string>(removed.Count);
+                var preserved = 0;
                 foreach (var entry in removed)
                 {
-                    _logger.LogDebug(
-                        "[QA/Flags] Restored {Flag} (was overridden to {Value})",
-                        entry.FlagName, entry.OverrideValue);
+                    if (string.IsNullOrEmpty(entry.FlagName)) continue;
+                    if (entry.OriginalValue.HasValue)
+                    {
+                        preserved++;
+                        continue;
+                    }
+                    keys.Add(entry.FlagName);
                 }
+
+                if (keys.Count > 0)
+                {
+                    EdogFeatureOverrideStore.RemoveOverrides(keys);
+                    EdogQaTelemetry.IncrementFlagOverrideRestored();
+                }
+
+                _logger.LogInformation(
+                    "[QA/Flags] Cleared {Removed} overrides for {Scenario} (preserved {Preserved} pre-existing)",
+                    keys.Count, scenarioId, preserved);
             }
 
             return Task.CompletedTask;

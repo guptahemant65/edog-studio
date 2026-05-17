@@ -40,6 +40,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static long _runStartedCount;
         private static long _runCompletedCount;
 
+        // ── F27 P5 capability counters ─────────────────────────────────
+        // ChaosNoOp/FlagOverrideNoOp count refusals (P5+). The new
+        // counters below count the truthful side of the same fork so the
+        // studio UI can show "scenarios requested chaos X times, of which
+        // Y were applied and Z were skipped".
+        private static long _flagOverrideAppliedCount;
+        private static long _flagOverrideRestoredCount;
+        private static long _flagOverrideUnavailableCount;
+        private static long _chaosAppliedCount;
+        private static long _chaosUnavailableCount;
+        private static long _scenariosSkippedForCapabilityCount;
+
         private static readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
 
         // ── Increment helpers (thread-safe) ────────────────────────────
@@ -70,6 +82,20 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         public static void IncrementRunCompleted() => Interlocked.Increment(ref _runCompletedCount);
 
+        // ── F27 P5 capability increments ───────────────────────────────
+
+        public static void IncrementFlagOverrideApplied() => Interlocked.Increment(ref _flagOverrideAppliedCount);
+
+        public static void IncrementFlagOverrideRestored() => Interlocked.Increment(ref _flagOverrideRestoredCount);
+
+        public static void IncrementFlagOverrideUnavailable() => Interlocked.Increment(ref _flagOverrideUnavailableCount);
+
+        public static void IncrementChaosApplied() => Interlocked.Increment(ref _chaosAppliedCount);
+
+        public static void IncrementChaosUnavailable() => Interlocked.Increment(ref _chaosUnavailableCount);
+
+        public static void IncrementScenariosSkippedForCapability() => Interlocked.Increment(ref _scenariosSkippedForCapabilityCount);
+
         // ── Snapshot ───────────────────────────────────────────────────
 
         /// <summary>
@@ -95,6 +121,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 AnalysisCompletedCount = Interlocked.Read(ref _analysisCompletedCount),
                 RunStartedCount = Interlocked.Read(ref _runStartedCount),
                 RunCompletedCount = Interlocked.Read(ref _runCompletedCount),
+                FlagOverrideAppliedCount = Interlocked.Read(ref _flagOverrideAppliedCount),
+                FlagOverrideRestoredCount = Interlocked.Read(ref _flagOverrideRestoredCount),
+                FlagOverrideUnavailableCount = Interlocked.Read(ref _flagOverrideUnavailableCount),
+                ChaosAppliedCount = Interlocked.Read(ref _chaosAppliedCount),
+                ChaosUnavailableCount = Interlocked.Read(ref _chaosUnavailableCount),
+                ScenariosSkippedForCapabilityCount = Interlocked.Read(ref _scenariosSkippedForCapabilityCount),
             };
         }
 
@@ -116,6 +148,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             Interlocked.Exchange(ref _analysisCompletedCount, 0);
             Interlocked.Exchange(ref _runStartedCount, 0);
             Interlocked.Exchange(ref _runCompletedCount, 0);
+            Interlocked.Exchange(ref _flagOverrideAppliedCount, 0);
+            Interlocked.Exchange(ref _flagOverrideRestoredCount, 0);
+            Interlocked.Exchange(ref _flagOverrideUnavailableCount, 0);
+            Interlocked.Exchange(ref _chaosAppliedCount, 0);
+            Interlocked.Exchange(ref _chaosUnavailableCount, 0);
+            Interlocked.Exchange(ref _scenariosSkippedForCapabilityCount, 0);
         }
     }
 }

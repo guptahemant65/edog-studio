@@ -440,6 +440,56 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>QA runs that completed (regardless of verdict).</summary>
         public long RunCompletedCount { get; set; }
+
+        // ── F27 P5 capability counters ─────────────────────────────────
+
+        /// <summary>Real feature-flag overrides successfully merged into <c>EdogFeatureOverrideStore</c>.</summary>
+        public long FlagOverrideAppliedCount { get; set; }
+
+        /// <summary>Per-scenario teardowns that removed at least one override key.</summary>
+        public long FlagOverrideRestoredCount { get; set; }
+
+        /// <summary>Flag override requests refused (e.g. force-OFF in V1).</summary>
+        public long FlagOverrideUnavailableCount { get; set; }
+
+        /// <summary>Chaos rules successfully applied via <c>EdogHttpFaultStore</c>.</summary>
+        public long ChaosAppliedCount { get; set; }
+
+        /// <summary>Chaos rule requests refused due to unsupported fault type or disabled backend.</summary>
+        public long ChaosUnavailableCount { get; set; }
+
+        /// <summary>Scenarios that exited the engine with <c>Skipped</c> verdict due to a missing capability.</summary>
+        public long ScenariosSkippedForCapabilityCount { get; set; }
+    }
+
+    /// <summary>
+    /// Capability snapshot returned by <c>QaGetCapabilities</c>. Surfaces
+    /// which scenario-setup primitives the host can actually satisfy so
+    /// the curation UI can render capability badges before submission and
+    /// users are never surprised by silent runtime skips.
+    /// </summary>
+    public sealed class QaCapabilityReport
+    {
+        /// <summary>UTC timestamp this snapshot was built.</summary>
+        public DateTimeOffset CapturedAt { get; set; }
+
+        /// <summary>True when feature-flag overrides can be applied (force-ON).</summary>
+        public bool FlagOverrideSupported { get; set; }
+
+        /// <summary>True when force-OFF overrides are also supported. Always false in V1.</summary>
+        public bool FlagOverrideForceOffSupported { get; set; }
+
+        /// <summary>Human-readable description of the flag-override surface.</summary>
+        public string FlagOverrideReason { get; set; }
+
+        /// <summary>True when HTTP fault injection is available (Stage 2 + env var).</summary>
+        public bool HttpChaosSupported { get; set; }
+
+        /// <summary>Human-readable reason for the HTTP-chaos state, including how to enable when disabled.</summary>
+        public string HttpChaosReason { get; set; }
+
+        /// <summary>Catalog of chaos fault types currently supported. Empty when HttpChaosSupported is false.</summary>
+        public List<string> SupportedChaosFaults { get; set; } = new();
     }
 
     /// <summary>

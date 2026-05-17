@@ -885,6 +885,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             return Task.FromResult(EdogQaTelemetry.Snapshot());
         }
 
+        /// <summary>
+        /// Returns the current capability snapshot — which scenario-setup
+        /// primitives (feature-flag overrides, HTTP chaos, …) the host
+        /// can actually satisfy. Used by the curation UI to render
+        /// per-scenario capability badges before submission so users are
+        /// not surprised by silent <c>Skipped</c> verdicts at runtime.
+        /// </summary>
+        /// <returns>Immutable capability report.</returns>
+        public Task<QaCapabilityReport> QaGetCapabilities()
+        {
+            return Task.FromResult(EdogQaCapabilityRegistry.BuildReport());
+        }
+
         // ─── 1.5 Execution Streaming ───────────────────────────────────
 
         /// <summary>
