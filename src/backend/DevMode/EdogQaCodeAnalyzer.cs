@@ -537,8 +537,26 @@ namespace Microsoft.LiveTable.Service.DevMode
             PrContext prContext,
             CancellationToken cancellationToken)
         {
+            EdogQaTelemetry.IncrementAnalysisStarted();
             var sw = System.Diagnostics.Stopwatch.StartNew();
             var result = new AnalysisResult();
+
+            // Surface stub-provider usage as degradation flags up-front so the
+            // studio UI shows a visible warning banner even before downstream
+            // phases run. The flags flow through the existing QaAnalysisWarning
+            // emitter in EdogPlaygroundHub (see "DegradationFlags" handling).
+            if (_graphProvider is StubGraphProvider)
+            {
+                result.DegradationFlags.Add("stub_graph_provider_active");
+            }
+            if (_omniSharpProvider is StubOmniSharpProvider)
+            {
+                result.DegradationFlags.Add("stub_omnisharp_provider_active");
+            }
+            if (_llmProvider is StubLlmProvider)
+            {
+                result.DegradationFlags.Add("stub_llm_provider_active");
+            }
 
             // Phase 1: Parse diff into changed symbols
             ReportProgress("diff_parsing", 5, "Parsing PR diff...");
@@ -547,6 +565,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 ReportProgress("complete", 100, "No code changes detected in diff.");
                 result.TotalDurationMs = sw.ElapsedMilliseconds;
+                EdogQaTelemetry.IncrementAnalysisCompleted();
                 return result;
             }
 
@@ -632,6 +651,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             sw.Stop();
             result.TotalDurationMs = sw.ElapsedMilliseconds;
             ReportProgress("complete", 100, $"Analysis complete: {result.Scenarios.Count} scenarios in {result.ImpactZones.Count} zones ({sw.ElapsedMilliseconds}ms).");
+            EdogQaTelemetry.IncrementAnalysisCompleted();
 
             return result;
         }
@@ -1297,20 +1317,24 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
+                EdogQaTelemetry.IncrementLlmCall();
                 return await _llmProvider.GenerateScenariosAsync(request, cancellationToken);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                EdogQaTelemetry.IncrementLlmError();
                 // Retry once with no additional context changes
                 try
                 {
                     PublishWarning($"LLM retry for zone {zone.ZoneId}: {ex.Message}");
+                    EdogQaTelemetry.IncrementLlmCall();
                     return await _llmProvider.GenerateScenariosAsync(request, cancellationToken);
                 }
                 catch (OperationCanceledException) { throw; }
                 catch
                 {
+                    EdogQaTelemetry.IncrementLlmError();
                     degradationFlags.Add($"llm_failed_zone_{zone.ZoneId}");
                     PublishWarning($"LLM failed for zone {zone.ZoneId} — no scenarios generated for this zone.");
                     return new List<Scenario>();
@@ -1442,6 +1466,10 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <summary>
     /// Stub L1+L2 graph provider. Returns a minimal graph from changed symbols.
     /// Replace with real code-review-graph + Graphify MCP tool integration.
+    ///
+    /// Increments <see cref="EdogQaTelemetry"/> on every call so the studio
+    /// banner and integration tests can detect when the engine is running on
+    /// stub graph data instead of the real provider.
     /// </summary>
     public sealed class StubGraphProvider : IGraphProvider
     {
@@ -1451,6 +1479,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             int maxDepth = 4,
             CancellationToken cancellationToken = default)
         {
+            EdogQaTelemetry.IncrementStubGraphProviderCall();
             var graph = new CodeGraph();
             GraphNode prevNode = null;
 
@@ -1469,7 +1498,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 graph.AddNode(node);
                 graph.Communities[nodeId] = node.Community;
 
-                // Create edges between sequential symbols (stub connectivity)
+                // Create edges between sequential symbols (stub connectivity).
+                // Each fake edge increments telemetry so the UI can warn that
+                // the graph is fabricated rather than derived from real call flow.
                 if (prevNode != null)
                 {
                     graph.AddEdge(new GraphEdge
@@ -1479,6 +1510,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         EdgeType = "direct_call",
                         Source_ = "l1",
                     });
+                    EdogQaTelemetry.IncrementGraphStubConnectivityEdge();
                 }
                 prevNode = node;
             }
@@ -1490,6 +1522,10 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <summary>
     /// Stub L3 OmniSharp provider. Returns no semantic enrichment.
     /// Replace with real OmniSharp LSP integration.
+    ///
+    /// Increments <see cref="EdogQaTelemetry"/> on each call so the studio
+    /// banner and integration tests can detect when semantic enrichment was
+    /// skipped entirely.
     /// </summary>
     public sealed class StubOmniSharpProvider : IOmniSharpProvider
     {
@@ -1498,7 +1534,10 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <inheritdoc />
         public Task WarmUpAsync(string solutionPath, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+        {
+            EdogQaTelemetry.IncrementStubOmniSharpProviderCall();
+            return Task.CompletedTask;
+        }
 
         /// <inheritdoc />
         public Task EnrichGraphAsync(
@@ -1506,13 +1545,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<ChangedSymbol> changedSymbols,
             int maxConcurrentQueries = 4,
             CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+        {
+            EdogQaTelemetry.IncrementStubOmniSharpProviderCall();
+            return Task.CompletedTask;
+        }
 
         /// <inheritdoc />
         public Task<List<string>> FindImplementationsAsync(
             string interfaceType,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new List<string>());
+        {
+            EdogQaTelemetry.IncrementStubOmniSharpProviderCall();
+            return Task.FromResult(new List<string>());
+        }
 
         /// <inheritdoc />
         public Task<List<CallerInfo>> GetIncomingCallsAsync(
@@ -1520,12 +1565,19 @@ namespace Microsoft.LiveTable.Service.DevMode
             string methodName,
             int maxDepth = 4,
             CancellationToken cancellationToken = default)
-            => Task.FromResult(new List<CallerInfo>());
+        {
+            EdogQaTelemetry.IncrementStubOmniSharpProviderCall();
+            return Task.FromResult(new List<CallerInfo>());
+        }
     }
 
     /// <summary>
     /// Stub L4 LLM provider. Returns empty scenario list.
     /// Replace with real GPT-5.4-pro integration.
+    ///
+    /// Each call increments <see cref="EdogQaTelemetry"/> and tags scenarios
+    /// with <c>GeneratedBy = "stub_llm"</c> so the curation UI can render a
+    /// PLACEHOLDER badge — users must never see these as real AI output.
     /// </summary>
     public sealed class StubLlmProvider : ILlmProvider
     {
@@ -1534,6 +1586,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             LlmPromptRequest request,
             CancellationToken cancellationToken = default)
         {
+            EdogQaTelemetry.IncrementStubLlmProviderCall();
+
             // Return a placeholder scenario for each entry point in the zone
             var scenarios = new List<Scenario>();
             if (request.Zone?.EntryPoints == null) return Task.FromResult(scenarios);
@@ -1561,7 +1615,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     },
                     Metadata = new ScenarioMetadata
                     {
-                        GeneratedBy = "ai",
+                        GeneratedBy = "stub_llm",
                         Confidence = 0.5,
                         GeneratedAt = DateTimeOffset.UtcNow,
                         RelatedPRFiles = request.Zone.PrimaryChange != null

@@ -712,6 +712,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }).ConfigureAwait(false);
 
+                // Telemetry: this run is now active.
+                EdogQaTelemetry.IncrementRunStarted();
+
                 // Fire-and-forget: run execution in background
                 _ = Task.Run(async () =>
                 {
@@ -729,6 +732,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     finally
                     {
                         QaHubState.CompleteRun();
+                        EdogQaTelemetry.IncrementRunCompleted();
                     }
                 }, CancellationToken.None);
 
@@ -864,6 +868,21 @@ namespace Microsoft.LiveTable.Service.DevMode
                 System.Diagnostics.Debug.WriteLine($"[QA] QaGetRunDetail error: {ex.Message}");
                 return Task.FromResult<QaRunResult>(null);
             }
+        }
+
+        /// <summary>
+        /// Returns a snapshot of the QA telemetry counters tracked by
+        /// <see cref="EdogQaTelemetry"/>. Used by the studio UI to render a
+        /// fallback-usage banner and by integration tests to assert that no
+        /// stubbed/fallback path fired during a successful run.
+        ///
+        /// Cheap and safe to call at any time; counters are in-process and
+        /// reset only on FLT restart.
+        /// </summary>
+        /// <returns>Telemetry snapshot.</returns>
+        public Task<QaTelemetrySnapshot> QaGetTelemetry()
+        {
+            return Task.FromResult(EdogQaTelemetry.Snapshot());
         }
 
         // ─── 1.5 Execution Streaming ───────────────────────────────────
@@ -1153,9 +1172,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                 await Task.Delay(400, ct).ConfigureAwait(false);
             }
 
-            // Fall back to synthetic scenarios when real pipeline produces none
+            // Fall back to synthetic scenarios when real pipeline produces none.
+            // Visible warning + telemetry counter so the studio shows a banner
+            // and operators can detect silent degradation in QaGetTelemetry.
             if (scenarios == null || scenarios.Count == 0)
             {
+                EdogQaTelemetry.IncrementSyntheticScenariosFallback();
+                await BroadcastQaEventAsync("QaAnalysisWarning", new
+                {
+                    eventType = "QaAnalysisWarning",
+                    correlationId,
+                    analysisId,
+                    timestamp = DateTimeOffset.UtcNow,
+                    warning = "synthetic_scenarios_used",
+                    message = "Real analyzer produced no scenarios — using 5 hand-coded placeholder scenarios. These are NOT AI-generated.",
+                    fallback = "synthetic_scenarios",
+                }).ConfigureAwait(false);
                 scenarios = GenerateSyntheticScenarios(request.PrId ?? 0);
             }
 

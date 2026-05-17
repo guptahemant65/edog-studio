@@ -390,6 +390,59 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
+    /// Immutable telemetry snapshot returned by QaGetTelemetry hub method.
+    /// Surfaces every fallback path the engine has taken since startup so
+    /// the studio UI and integration tests can detect silent degradation.
+    /// </summary>
+    public sealed class QaTelemetrySnapshot
+    {
+        /// <summary>UTC timestamp when the engine started.</summary>
+        public DateTimeOffset StartedAt { get; set; }
+
+        /// <summary>UTC timestamp when this snapshot was captured.</summary>
+        public DateTimeOffset CapturedAt { get; set; }
+
+        /// <summary>Times the synthetic-scenarios fallback in EdogPlaygroundHub fired.</summary>
+        public long SyntheticScenariosFallbackCount { get; set; }
+
+        /// <summary>Times the StubLlmProvider was invoked (placeholder LLM output).</summary>
+        public long StubLlmProviderCallCount { get; set; }
+
+        /// <summary>Times the StubOmniSharpProvider was invoked (no semantic enrichment).</summary>
+        public long StubOmniSharpProviderCallCount { get; set; }
+
+        /// <summary>Times the StubGraphProvider built a minimal graph (no real BFS).</summary>
+        public long StubGraphProviderCallCount { get; set; }
+
+        /// <summary>Fake "stub connectivity" edges emitted by StubGraphProvider.</summary>
+        public long GraphStubConnectivityEdgeCount { get; set; }
+
+        /// <summary>Times ChaosIntegration.ApplyChaosRuleAsync no-op'd (Layer-1 unwired).</summary>
+        public long ChaosNoOpCount { get; set; }
+
+        /// <summary>Times FlagOverrideStore.ApplyOverrideAsync no-op'd (Layer-1 unwired).</summary>
+        public long FlagOverrideNoOpCount { get; set; }
+
+        /// <summary>Real LLM call attempts (includes retries).</summary>
+        public long LlmCallCount { get; set; }
+
+        /// <summary>Real LLM calls that threw or returned empty/unconfigured.</summary>
+        public long LlmErrorCount { get; set; }
+
+        /// <summary>Code-analysis runs started.</summary>
+        public long AnalysisStartedCount { get; set; }
+
+        /// <summary>Code-analysis runs that reached the complete phase.</summary>
+        public long AnalysisCompletedCount { get; set; }
+
+        /// <summary>QA runs started.</summary>
+        public long RunStartedCount { get; set; }
+
+        /// <summary>QA runs that completed (regardless of verdict).</summary>
+        public long RunCompletedCount { get; set; }
+    }
+
+    /// <summary>
     /// Performance metrics for a completed run.
     /// </summary>
     public sealed class QaPerformanceReport

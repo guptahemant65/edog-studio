@@ -1155,6 +1155,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "[QA/Chaos] Applied rule for {Scenario}: target={Target} fault={Fault}",
                 scenarioId, rule.Target, rule.Fault);
 
+            // Telemetry: this is a no-op until F24 ChaosManager is wired in
+            // Layer 1. Counter lets the UI surface a warning so users don't
+            // believe a chaos scenario actually injected a fault.
+            EdogQaTelemetry.IncrementChaosNoOp();
+
             // TODO: Wire to actual F24 ChaosManager.InjectFault() in Layer 1
             return Task.CompletedTask;
         }
@@ -1272,6 +1277,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             _logger.LogInformation(
                 "[QA/Flags] Override for {Scenario}: {Flag}={Value}",
                 scenarioId, spec.FlagName, spec.Value);
+
+            // Telemetry: feature-flag overrides are no-ops until Layer 1 wires
+            // up the real FLT flag service. Counter lets the UI surface this.
+            EdogQaTelemetry.IncrementFlagOverrideNoOp();
 
             // TODO: Wire to actual FLT feature flag service in Layer 1
             return Task.CompletedTask;

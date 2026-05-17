@@ -108,6 +108,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             if (!_isConfigured)
             {
+                EdogQaTelemetry.IncrementLlmError();
                 return new List<Scenario>();
             }
 
@@ -128,6 +129,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             catch (Exception ex)
             {
+                EdogQaTelemetry.IncrementLlmError();
                 Console.WriteLine($"[EDOG] LLM generation failed for zone {request.Zone.ZoneId}: {ex.Message}");
                 return new List<Scenario>();
             }

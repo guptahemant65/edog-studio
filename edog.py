@@ -117,6 +117,7 @@ DEVMODE_FILES = {
     "EdogQaResultAggregator": SERVICE_PATH / "DevMode/EdogQaResultAggregator.cs",
     "EdogQaScenarioLinter": SERVICE_PATH / "DevMode/EdogQaScenarioLinter.cs",
     "EdogQaStimulusDispatcher": SERVICE_PATH / "DevMode/EdogQaStimulusDispatcher.cs",
+    "EdogQaTelemetry": SERVICE_PATH / "DevMode/EdogQaTelemetry.cs",
     "QaSignalRModels": SERVICE_PATH / "DevMode/QaSignalRModels.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
