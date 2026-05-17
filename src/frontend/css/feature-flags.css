@@ -44,7 +44,22 @@
 }
 
 /* ── Environment info cards (Config, Token, Build, Interceptors) ───── */
+
+/* 2×2 dashboard grid for the 4 environment cards */
+.ecard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+@media (max-width: 820px) { .ecard-grid { grid-template-columns: 1fr; } }
+
 .ecard-collapsible .env-card-header { user-select: none; }
+.ecard-collapsible .env-card-body {
+  transition: opacity var(--transition-fast);
+}
+.ecard-collapsible.is-collapsed .env-card-body {
+  display: none;
+}
 .ecard-chevron {
   font-size: 11px;
   width: 14px;
@@ -62,7 +77,8 @@
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-dim);
-  margin-left: var(--space-2);
+  margin-left: auto;
+  white-space: nowrap;
 }
 .ecard-header-badge.ok { color: var(--status-succeeded); border-color: rgba(24,160,88,0.25); background: rgba(24,160,88,0.06); }
 .ecard-header-badge.warn { color: var(--level-warning); border-color: rgba(229,148,12,0.25); background: rgba(229,148,12,0.06); }
@@ -71,30 +87,38 @@
 /* Key-value grid */
 .ecard-kv-grid {
   display: grid;
-  grid-template-columns: minmax(120px, auto) 1fr;
+  grid-template-columns: minmax(100px, auto) 1fr;
   gap: 0;
 }
 .ecard-kv-row {
   display: contents;
 }
+.ecard-kv-row > span {
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition-fast);
+}
+.ecard-kv-row:last-child > span { border-bottom: none; }
 .ecard-kv-row:hover > span { background: var(--surface-2); }
 .ecard-kv-label {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--text-dim);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   font-weight: 500;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .ecard-kv-value {
   font-size: var(--text-sm);
   color: var(--text);
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   display: flex;
   align-items: center;
   gap: var(--space-2);
   word-break: break-all;
+  min-height: 28px;
 }
-.ecard-kv-value.mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+.ecard-kv-value.mono { font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: -0.01em; }
 
 /* Status pill */
 .ecard-pill {
@@ -119,48 +143,185 @@
 .ecard-pill.warn { color: var(--level-warning); border-color: rgba(229,148,12,0.25); background: rgba(229,148,12,0.06); }
 .ecard-pill.error { color: var(--status-failed); border-color: rgba(229,69,59,0.25); background: rgba(229,69,59,0.06); }
 
-/* Copy button */
+/* Phase status dot — accent-colored inline indicator */
+.ecard-phase-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+.ecard-phase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ecard-phase-dot.connected { background: var(--status-succeeded); box-shadow: 0 0 6px rgba(24,160,88,0.4); }
+.ecard-phase-dot.disconnected { background: var(--level-warning); box-shadow: 0 0 6px rgba(229,148,12,0.4); }
+.ecard-phase-dot.running { background: var(--status-succeeded); box-shadow: 0 0 6px rgba(24,160,88,0.4); }
+
+/* Bearer expiry progress bar */
+.ecard-bearer-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+.ecard-bearer-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  max-width: 120px;
+}
+.ecard-bearer-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease, background 0.3s ease;
+}
+.ecard-bearer-fill.ok { background: var(--status-succeeded); }
+.ecard-bearer-fill.warn { background: var(--level-warning); }
+.ecard-bearer-fill.error { background: var(--status-failed); }
+.ecard-bearer-text {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* Username emphasis */
+.ecard-username {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--text);
+}
+
+/* Git branch pill */
+.ecard-branch-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(45,127,249,0.08);
+  border: 1px solid rgba(45,127,249,0.2);
+  color: var(--level-message);
+}
+.ecard-branch-icon {
+  font-size: 11px;
+}
+
+/* Dirty files warning */
+.ecard-dirty-warn {
+  color: var(--level-warning);
+  font-weight: 600;
+}
+.ecard-dirty-clean {
+  color: var(--status-succeeded);
+}
+
+/* FLT repo path truncation */
+.ecard-repo-path {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Copy button — subtle inline icon */
 .ecard-copy {
   background: transparent;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius-sm);
-  padding: 2px 4px;
+  padding: 2px;
   cursor: pointer;
   color: var(--text-muted);
   line-height: 1;
   display: inline-flex;
   align-items: center;
+  opacity: 0.4;
   transition: all var(--transition-fast);
 }
-.ecard-copy:hover { color: var(--accent); border-color: var(--accent); }
-.ecard-copy.copied { color: var(--status-succeeded); border-color: var(--status-succeeded); }
+.ecard-kv-row:hover .ecard-copy { opacity: 1; }
+.ecard-copy:hover { color: var(--accent); opacity: 1; }
+.ecard-copy.copied { color: var(--status-succeeded); opacity: 1; }
 .ecard-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* Interceptor list */
-.ecard-ix-list {
-  display: flex;
-  flex-direction: column;
+/* Copy toast */
+.ecard-copy-toast {
+  position: fixed;
+  bottom: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--surface-3, var(--surface-2));
+  color: var(--text);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.15));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 9999;
 }
-.ecard-ix-row {
+.ecard-copy-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Interceptor grid — compact 2-column layout */
+.ecard-ix-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.ecard-ix-cell {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 3px var(--space-3);
-  font-size: var(--text-sm);
-  border-bottom: 1px solid var(--border);
-}
-.ecard-ix-row:last-child { border-bottom: none; }
-.ecard-ix-row:hover { background: var(--surface-2); }
-.ix-glyph {
-  width: 18px;
-  text-align: center;
-  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--text-xs);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition-fast);
+}
+.ecard-ix-cell:nth-last-child(-n+2) { border-bottom: none; }
+.ecard-ix-cell:hover { background: var(--surface-2); }
+/* Odd-count: last cell spans full width */
+.ecard-ix-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.ix-glyph {
+  width: 16px;
+  text-align: center;
+  font-weight: 700;
+  font-size: var(--text-xs);
+  flex-shrink: 0;
 }
 .ix-glyph.ix-ok { color: var(--status-succeeded); }
 .ix-glyph.ix-fail { color: var(--status-failed); }
-.ix-name { color: var(--text); font-family: var(--font-mono); font-size: var(--text-xs); }
-.ix-err { color: var(--text-muted); font-size: var(--text-xs); }
+.ix-name {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ix-err {
+  color: var(--text-muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
 
 /* Loading shimmer */
 .ecard-shimmer {
@@ -191,13 +352,22 @@
   padding: var(--space-3) var(--space-4);
   color: var(--text-muted);
   font-size: var(--text-sm);
+  font-style: italic;
 }
 
-/* Refresh button in header */
+/* Refresh button in card header */
 .ecard-refresh-btn {
-  font-size: var(--text-sm);
-  padding: 2px var(--space-2);
+  font-size: 14px;
+  padding: 2px 4px;
+  line-height: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
+.ecard-refresh-btn:hover { color: var(--accent); background: var(--accent-hover, rgba(45,127,249,0.08)); }
 
 /* ── Generic card ─────────────────────────────────────────────────── */
 .env-card {
@@ -247,12 +417,7 @@
   padding: var(--space-3) var(--space-4);
 }
 
-.env-card-placeholder {
-  padding: var(--space-6) var(--space-4);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  text-align: center;
-}
+/* placeholder card removed — real cards now exist */
 
 /* ── FM cache status pill ─────────────────────────────────────────── */
 .fm-status {

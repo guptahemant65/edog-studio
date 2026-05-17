@@ -112,11 +112,9 @@ class FeatureFlagsMatrix {
     const row = (this._catalog.rows || []).find(r => r.wireKey === wireKey);
     if (!row) return;
     const matrixCard = this._mount.querySelector('#card-feature-flags');
-    const placeholder = this._mount.querySelector('#ffPlaceholderCard');
     const inspectorMount = this._mount.querySelector('#ffInspectorMount');
     if (!inspectorMount) return;
     if (matrixCard) matrixCard.hidden = true;
-    if (placeholder) placeholder.hidden = true;
     inspectorMount.hidden = false;
     if (!this._inspector) {
       this._inspector = new FlagInspector(inspectorMount, {
@@ -135,12 +133,10 @@ class FeatureFlagsMatrix {
 
   closeInspector() {
     const matrixCard = this._mount.querySelector('#card-feature-flags');
-    const placeholder = this._mount.querySelector('#ffPlaceholderCard');
     const inspectorMount = this._mount.querySelector('#ffInspectorMount');
     if (this._inspector) this._inspector.hide();
     if (inspectorMount) inspectorMount.hidden = true;
     if (matrixCard) matrixCard.hidden = false;
-    if (placeholder) placeholder.hidden = false;
   }
 
   _refreshInspector() {
@@ -412,36 +408,42 @@ class FeatureFlagsMatrix {
           </div>
         </div>
 
-        <div class="env-card ecard-collapsible" id="card-config-snapshot">
-          <div class="env-card-header">
-            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Config Snapshot <span class="ecard-header-badge">loading</span></div>
-            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh config">\u21BB</button></div>
+        <div class="ecard-grid">
+          <div class="env-card ecard-collapsible" id="card-config-snapshot">
+            <div class="env-card-header">
+              <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Config Snapshot</div>
+              <span class="ecard-header-badge">loading</span>
+              <div class="env-card-actions"><button class="ecard-refresh-btn" title="Refresh config">\u21BB</button></div>
+            </div>
+            <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div></div>
           </div>
-          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
-        </div>
 
-        <div class="env-card ecard-collapsible" id="card-token-state">
-          <div class="env-card-header">
-            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Token State <span class="ecard-header-badge">loading</span></div>
-            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh tokens">\u21BB</button></div>
+          <div class="env-card ecard-collapsible" id="card-token-state">
+            <div class="env-card-header">
+              <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Token State</div>
+              <span class="ecard-header-badge">loading</span>
+              <div class="env-card-actions"><button class="ecard-refresh-btn" title="Refresh tokens">\u21BB</button></div>
+            </div>
+            <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div></div>
           </div>
-          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
-        </div>
 
-        <div class="env-card ecard-collapsible" id="card-build-patch">
-          <div class="env-card-header">
-            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Build & Patch <span class="ecard-header-badge">loading</span></div>
-            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh build info">\u21BB</button></div>
+          <div class="env-card ecard-collapsible" id="card-build-patch">
+            <div class="env-card-header">
+              <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Build & Patch</div>
+              <span class="ecard-header-badge">loading</span>
+              <div class="env-card-actions"><button class="ecard-refresh-btn" title="Refresh build info">\u21BB</button></div>
+            </div>
+            <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div></div>
           </div>
-          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
-        </div>
 
-        <div class="env-card ecard-collapsible" id="card-interceptors">
-          <div class="env-card-header">
-            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Interceptors <span class="ecard-header-badge">loading</span></div>
-            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh interceptors">\u21BB</button></div>
+          <div class="env-card ecard-collapsible" id="card-interceptors">
+            <div class="env-card-header">
+              <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Interceptors</div>
+              <span class="ecard-header-badge">loading</span>
+              <div class="env-card-actions"><button class="ecard-refresh-btn" title="Refresh interceptors">\u21BB</button></div>
+            </div>
+            <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div></div>
           </div>
-          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
         </div>
 
         <div class="env-card" id="card-feature-flags">
@@ -503,13 +505,6 @@ class FeatureFlagsMatrix {
         </div>
 
         <div class="flag-inspector-mount" id="ffInspectorMount" hidden></div>
-
-        <div class="env-card" id="ffPlaceholderCard">
-          <div class="env-card-header">
-            <div class="env-card-title"><span>Configuration · Auth · Deploy</span><span class="card-badge">coming soon</span></div>
-          </div>
-          <div class="env-card-placeholder">Auth status, FLT deploy state, runtime config, and EDOG diagnostics cards are landing next. Card 3 (Feature Flags) is fully wired today.</div>
-        </div>
       </div>
     `;
 
