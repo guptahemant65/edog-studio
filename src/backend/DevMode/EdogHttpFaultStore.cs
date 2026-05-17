@@ -33,18 +33,17 @@ namespace Microsoft.LiveTable.Service.DevMode
     // Rule lookup contract: TryMatchFault(absoluteUri) returns the FIRST
     // rule whose Target appears as a case-insensitive substring of the
     // request URL. The fault payload is interpreted by the HTTP pipeline
-    // handler (Stage 2).
+    // handler:
+    //   - "http_error" → synthesize HttpResponseMessage with the configured
+    //                    StatusCode + ResponseBody; never call base.
+    //   - "latency"    → await Task.Delay(LatencyMs) THEN call base.
+    //   - "timeout"    → throw TaskCanceledException (no base call).
     //
-    // Stage 1 (this commit): store is a structural placeholder. AddRule /
-    // RemoveRulesForScenario do nothing; TryMatchFault always returns false.
-    // The QA capability registry reports HTTP chaos as unsupported so the
-    // engine never actually invokes these write methods. The empty store
-    // is observable evidence that Stage 1 ships no behavior change for
-    // chaos scenarios — they are skipped, not lied about.
-    //
-    // Stage 2 (follow-on commit): store becomes a real lock-free snapshot
-    // and EdogHttpPipelineHandler consults TryMatchFault before
-    // base.SendAsync to synthesize the configured fault.
+    // The store is empty in production builds: no rule enters until the
+    // QA execution engine's ChaosIntegration calls AddRule(scenarioId,...)
+    // and that path is gated by EdogQaCapabilityRegistry.IsChaosFaultSupported,
+    // which requires both the build-time HttpChaosPipelineWired constant
+    // and the runtime EDOG_QA_CHAOS_HTTP env var.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
@@ -211,19 +210,27 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             if (rule == null || string.IsNullOrEmpty(rule.Fault)) return null;
 
+            // Defaults survive any malformed input. Parse-then-validate
+            // pattern: only override the default when both the parse and
+            // range check succeed, so a junk "statusCode": "abc" doesn't
+            // produce HttpStatusCode 0 / negative delays at Stage 2.
             int statusCode = 500;
             int latencyMs = 0;
             string body = null;
 
             if (rule.Parameters != null)
             {
-                if (rule.Parameters.TryGetValue("statusCode", out var sc) && sc != null)
+                if (rule.Parameters.TryGetValue("statusCode", out var sc) && sc != null
+                    && int.TryParse(sc.ToString(), out var parsedSc)
+                    && parsedSc >= 100 && parsedSc <= 599)
                 {
-                    int.TryParse(sc.ToString(), out statusCode);
+                    statusCode = parsedSc;
                 }
-                if (rule.Parameters.TryGetValue("delayMs", out var dm) && dm != null)
+                if (rule.Parameters.TryGetValue("delayMs", out var dm) && dm != null
+                    && int.TryParse(dm.ToString(), out var parsedDm)
+                    && parsedDm >= 0 && parsedDm <= 600_000)
                 {
-                    int.TryParse(dm.ToString(), out latencyMs);
+                    latencyMs = parsedDm;
                 }
                 if (rule.Parameters.TryGetValue("body", out var b) && b != null)
                 {

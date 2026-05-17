@@ -52,9 +52,59 @@ namespace Microsoft.LiveTable.Service.DevMode
             var requestHeaders = RedactRequestHeaders(request.Headers, request.Content?.Headers);
             var correlationId = ExtractCorrelationId(request.Headers);
 
-            // STEP 2: Call original with timing
+            // F27 P5 Stage 2: consult the QA HTTP fault store. When a chaos
+            // rule matches the outbound URI we either synthesize a fake
+            // error response, inject a delay before forwarding, or throw a
+            // cancellation. The store is empty in production (no scenario
+            // pushed a rule) so the lookup short-circuits on _flatRules
+            // length zero.
+            HttpFaultEntry chaosFault = null;
+            if (request.RequestUri != null)
+            {
+                EdogHttpFaultStore.TryMatchFault(request.RequestUri.AbsoluteUri, out chaosFault);
+            }
+
+            // Timeout fault: publish a synthetic event so the studio UI
+            // can show the cancelled request, then throw without ever
+            // calling base.SendAsync.
+            if (chaosFault != null
+                && string.Equals(chaosFault.Fault, "timeout", StringComparison.OrdinalIgnoreCase))
+            {
+                PublishHttpEvent(
+                    method, url, statusCode: 0, durationMs: 0,
+                    requestHeaders: requestHeaders, responseHeaders: null,
+                    responseBodyPreview: null, correlationId: correlationId,
+                    chaosFault: chaosFault, synthesized: true);
+
+                throw new TaskCanceledException(
+                    $"[QA chaos] Simulated timeout for '{chaosFault.TargetSubstring}' " +
+                    $"(scenario {chaosFault.ScenarioId}).");
+            }
+
+            // STEP 2: Call original with timing — or synthesize / delay
             var sw = Stopwatch.StartNew();
-            var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            HttpResponseMessage response;
+            var synthesized = false;
+
+            if (chaosFault != null
+                && string.Equals(chaosFault.Fault, "http_error", StringComparison.OrdinalIgnoreCase))
+            {
+                response = SynthesizeErrorResponse(request, chaosFault);
+                synthesized = true;
+            }
+            else if (chaosFault != null
+                && string.Equals(chaosFault.Fault, "latency", StringComparison.OrdinalIgnoreCase))
+            {
+                if (chaosFault.LatencyMs > 0)
+                {
+                    await Task.Delay(chaosFault.LatencyMs, cancellationToken).ConfigureAwait(false);
+                }
+                response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            }
             sw.Stop();
 
             // STEP 3: Capture response and publish
@@ -64,26 +114,105 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var responseHeaders = CaptureHeaders(response.Headers, response.Content?.Headers);
                 var bodyPreview = await CaptureBodyPreview(response.Content).ConfigureAwait(false);
 
-                EdogTopicRouter.Publish("http", new
-                {
-                    method,
-                    url,
-                    statusCode,
-                    durationMs = Math.Round(sw.Elapsed.TotalMilliseconds, 2),
-                    requestHeaders,
-                    responseHeaders,
-                    responseBodyPreview = bodyPreview,
-                    httpClientName = _httpClientName,
-                    correlationId,
-                });
+                PublishHttpEvent(
+                    method, url, statusCode,
+                    Math.Round(sw.Elapsed.TotalMilliseconds, 2),
+                    requestHeaders, responseHeaders, bodyPreview, correlationId,
+                    chaosFault: chaosFault, synthesized: synthesized);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[EDOG] HttpPipelineHandler error: {ex.Message}");
             }
 
-            // STEP 4: Return original response UNMODIFIED
+            // STEP 4: Return original response (real or synthesized)
             return response;
+        }
+
+        /// <summary>
+        /// Builds a fake <see cref="HttpResponseMessage"/> from a QA
+        /// chaos rule. Used by Stage 2 HTTP fault injection so a scenario's
+        /// failure-path assertion can fire without an actual broken upstream.
+        /// </summary>
+        private static HttpResponseMessage SynthesizeErrorResponse(
+            HttpRequestMessage request, HttpFaultEntry fault)
+        {
+            var statusCode = fault.StatusCode >= 100 && fault.StatusCode <= 599
+                ? fault.StatusCode
+                : 500;
+            var body = fault.ResponseBody ?? string.Empty;
+            return new HttpResponseMessage((System.Net.HttpStatusCode)statusCode)
+            {
+                RequestMessage = request,
+                ReasonPhrase = $"QA chaos: {fault.Fault}",
+                Content = new StringContent(body),
+            };
+        }
+
+        /// <summary>
+        /// Publishes an http topic event, optionally tagged with chaos
+        /// metadata when the request was intercepted by the QA fault store.
+        /// On the no-fault path the wire shape is identical to the
+        /// pre-Stage-2 baseline — the <c>chaos</c> property is omitted
+        /// entirely rather than emitted as <c>null</c> so existing topic
+        /// consumers see no change.
+        /// </summary>
+        private void PublishHttpEvent(
+            string method,
+            string url,
+            int statusCode,
+            double durationMs,
+            Dictionary<string, string> requestHeaders,
+            Dictionary<string, string> responseHeaders,
+            string responseBodyPreview,
+            string correlationId,
+            HttpFaultEntry chaosFault,
+            bool synthesized)
+        {
+            try
+            {
+                if (chaosFault != null)
+                {
+                    EdogTopicRouter.Publish("http", new
+                    {
+                        method,
+                        url,
+                        statusCode,
+                        durationMs,
+                        requestHeaders,
+                        responseHeaders,
+                        responseBodyPreview,
+                        httpClientName = _httpClientName,
+                        correlationId,
+                        chaos = new
+                        {
+                            fault = chaosFault.Fault,
+                            scenarioId = chaosFault.ScenarioId,
+                            target = chaosFault.TargetSubstring,
+                            synthesized,
+                        },
+                    });
+                }
+                else
+                {
+                    EdogTopicRouter.Publish("http", new
+                    {
+                        method,
+                        url,
+                        statusCode,
+                        durationMs,
+                        requestHeaders,
+                        responseHeaders,
+                        responseBodyPreview,
+                        httpClientName = _httpClientName,
+                        correlationId,
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[EDOG] HttpPipelineHandler publish error: {ex.Message}");
+            }
         }
 
         /// <summary>

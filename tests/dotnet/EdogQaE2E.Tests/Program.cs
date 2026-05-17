@@ -28,7 +28,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos}");
                 return 2;
             }
 
@@ -42,6 +42,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "compose" => await ComposeHarness.RunAsync(cts.Token),
                     "classify-llm" => await LlmClassifyHarness.RunAsync(),
                     "fallback-policy" => await FallbackPolicyHarness.RunAsync(),
+                    "pipeline-chaos" => await PipelineChaosHarness.RunAsync(cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }

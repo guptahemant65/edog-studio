@@ -305,16 +305,19 @@ def test_capability_report_field(models_src: str, field: str) -> None:
 
 
 def test_chaos_pipeline_wire_gate_constant(registry_src: str) -> None:
-    """Stage 1 ships the registry + fault store + engine wiring but NOT the
-    pipeline interceptor that materializes a fault. Until Stage 2 flips the
-    flag, IsChaosFaultSupported MUST return false even when the env var is
-    set — otherwise a developer could enable chaos, the engine would
-    'apply' a rule into an inert store, and the scenario would silently
-    pass. The whole point of P5.
+    """Stage 2 has shipped: EdogHttpPipelineHandler now consults
+    EdogHttpFaultStore.TryMatchFault. The wire-gate constant must be
+    true so IsChaosFaultSupported can authorise chaos rules when the
+    runtime env var (EDOG_QA_CHAOS_HTTP=1) is set.
+
+    Stage 1 set this to false to prevent silent-pass while the pipeline
+    was un-wired. Flipping back to false in a future build would
+    automatically reactivate the honesty refusal — that property is
+    pinned by ``test_chaos_support_short_circuits_on_pipeline_wire``.
     """
-    assert "private const bool HttpChaosPipelineWired = false;" in registry_src, (
-        "Stage 1 must hard-gate chaos on HttpChaosPipelineWired=false. "
-        "Stage 2 flips this to true after wiring EdogHttpPipelineHandler."
+    assert "private const bool HttpChaosPipelineWired = true;" in registry_src, (
+        "Stage 2 must set HttpChaosPipelineWired=true so chaos rules can "
+        "be honoured when EDOG_QA_CHAOS_HTTP=1."
     )
 
 
@@ -383,4 +386,82 @@ def test_flag_teardown_preserves_external_overrides(exec_engine_src: str) -> Non
     )
     assert "HasValue" in body, (
         "Teardown should branch on OriginalValue.HasValue (pre-existing ⇒ preserve)."
+    )
+
+
+# ─── 10. Stage 2 — EdogHttpPipelineHandler wires chaos fault store ────────
+
+
+PIPELINE_HANDLER = DEVMODE / "EdogHttpPipelineHandler.cs"
+
+
+@pytest.fixture(scope="module")
+def pipeline_src() -> str:
+    return _read(PIPELINE_HANDLER)
+
+
+def test_pipeline_consults_fault_store(pipeline_src: str) -> None:
+    """SendAsync must consult EdogHttpFaultStore.TryMatchFault BEFORE
+    forwarding to base.SendAsync. This is the contract that converts a
+    QA chaos rule into observable behaviour."""
+    assert "EdogHttpFaultStore.TryMatchFault" in pipeline_src, (
+        "EdogHttpPipelineHandler.SendAsync must consult the QA fault store."
+    )
+    # Wire check must precede the base call so the synthesise/delay/throw
+    # branches can pre-empt or wrap the upstream invocation.
+    tm_idx = pipeline_src.find("EdogHttpFaultStore.TryMatchFault")
+    base_idx = pipeline_src.find("base.SendAsync")
+    assert 0 <= tm_idx < base_idx, (
+        "TryMatchFault must come BEFORE base.SendAsync in SendAsync"
+    )
+
+
+def test_pipeline_synthesises_http_error(pipeline_src: str) -> None:
+    """The handler must own a SynthesizeErrorResponse helper that builds
+    an HttpResponseMessage from the fault entry — never calling base."""
+    assert "SynthesizeErrorResponse" in pipeline_src
+    assert "new HttpResponseMessage(" in pipeline_src
+
+
+def test_pipeline_latency_uses_task_delay(pipeline_src: str) -> None:
+    """Latency fault delays via Task.Delay before forwarding."""
+    assert "Task.Delay(chaosFault.LatencyMs" in pipeline_src or \
+           "Task.Delay(fault.LatencyMs" in pipeline_src, (
+        "Latency fault must use Task.Delay with the configured LatencyMs"
+    )
+
+
+def test_pipeline_timeout_throws_task_cancelled(pipeline_src: str) -> None:
+    """Timeout fault throws TaskCanceledException so HttpClient surfaces
+    the cancellation the same way a real timeout would."""
+    assert "throw new TaskCanceledException(" in pipeline_src
+
+
+def test_pipeline_publishes_chaos_metadata(pipeline_src: str) -> None:
+    """The http topic event carries a chaos object so the studio UI can
+    highlight synthesised events with their fault family + scenario id.
+    The no-fault publish path must NOT include the chaos property so
+    existing topic consumers see the same wire shape as before Stage 2."""
+    publish_helper_idx = pipeline_src.find("private void PublishHttpEvent")
+    assert publish_helper_idx > 0, "PublishHttpEvent helper missing"
+    # Narrow to the helper body: closing brace of method comes before the next
+    # method definition (CaptureBodyPreview, CaptureHeaders, etc.).
+    next_method_idx = pipeline_src.find("\n        private", publish_helper_idx + 50)
+    if next_method_idx < 0:
+        next_method_idx = pipeline_src.find("\n    }\n}", publish_helper_idx)
+    body = pipeline_src[publish_helper_idx:next_method_idx]
+
+    assert "chaos = new" in body, (
+        "Fault-matched publish path must attach a chaos metadata object."
+    )
+
+    # Locate the else branch of the if (chaosFault != null) dispatch and
+    # ensure it does NOT assemble a `chaos = ...` property. This pins the
+    # zero-wire-shape-regression guarantee on the no-fault path.
+    else_idx = body.find("else")
+    assert else_idx > 0, "PublishHttpEvent must dispatch on chaosFault != null"
+    else_block = body[else_idx:]
+    assert "chaos = " not in else_block, (
+        "No-fault publish path must NOT include a `chaos = ...` property — "
+        "keep the wire shape identical to the pre-Stage-2 baseline."
     )

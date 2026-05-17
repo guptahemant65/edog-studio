@@ -60,15 +60,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Env var that opts in to HTTP chaos fault injection (Stage 2).</summary>
         internal const string EnvVarHttpChaos = "EDOG_QA_CHAOS_HTTP";
 
-        // Stage-1 ⇄ Stage-2 wire-gate. Stage 1 ships the registry, fault
-        // store, and engine call sites but NOT the pipeline interceptor that
-        // materializes the fault — so even if EDOG_QA_CHAOS_HTTP=1 is set,
-        // a chaos rule "applied" via EdogHttpFaultStore would not actually
-        // mutate any outbound HTTP, and the scenario could silently pass.
-        // Stage 2 flips this to true once EdogHttpPipelineHandler.SendAsync
-        // consults EdogHttpFaultStore.TryMatchFault. Until then, chaos is
-        // refused universally — env var or not.
-        private const bool HttpChaosPipelineWired = false;
+        // Stage-1 ⇄ Stage-2 wire-gate. Stage 2 has shipped: the pipeline
+        // interceptor (EdogHttpPipelineHandler.SendAsync) now consults
+        // EdogHttpFaultStore.TryMatchFault before base.SendAsync and
+        // materializes the configured fault. Set to true to authorize
+        // IsChaosFaultSupported to return true when the env var is set.
+        private const bool HttpChaosPipelineWired = true;
 
         // HTTP-chaos fault families that Stage 2 will support. Listed here
         // so the linter / hub / engine all agree on the catalog. Stage 1
