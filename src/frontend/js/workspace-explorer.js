@@ -2248,82 +2248,45 @@ class WorkspaceExplorer {
     if (!t) return;
 
     const oldName = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
+    const isWs = t.isWorkspace;
+    const isLH = !isWs && this._isLakehouse(t.item);
+    const type = isWs ? 'workspace' : (isLH ? 'lakehouse' : 'notebook');
 
-    // Find the tree row for this item and start inline editing
-    const treeRow = this._findTreeRow(t);
-    if (!treeRow) {
-      this._toast('Could not locate tree node', 'error');
-      return;
+    // Collect sibling names for duplicate detection
+    var existingNames = [];
+    if (isWs) {
+      existingNames = this._workspaces.map(function(w) { return w.displayName; });
+    } else {
+      var children = this._children[t.workspace.id] || [];
+      existingNames = children.map(function(c) { return c.displayName; });
     }
 
-    treeRow.classList.add('editing');
-    const input = document.createElement('input');
-    input.className = 'ws-inline-rename';
-    input.type = 'text';
-    input.value = oldName;
-    treeRow.appendChild(input);
-    input.focus();
-    input.select();
-
-    const commit = async () => {
-      const newName = input.value.trim();
-      cleanup();
-      if (!newName || newName === oldName) return;
-
-      try {
-        if (t.isWorkspace) {
-          await this._api.renameWorkspace(t.workspace.id, newName);
-          t.workspace.displayName = newName;
-          this._toast(`Renamed workspace to "${newName}"`, 'success');
+    var self = this;
+    var dialog = new RenameDialog(this._api, {
+      type: type,
+      name: oldName,
+      id: isWs ? t.workspace.id : t.item.id,
+      workspaceId: isWs ? t.workspace.id : t.workspace.id,
+      workspaceName: t.workspace.displayName,
+      existingNames: existingNames
+    });
+    dialog.onComplete = function(result) {
+      var newName = result && result.newName ? result.newName : oldName;
+      if (isWs) {
+        t.workspace.displayName = newName;
+      } else {
+        t.item.displayName = newName;
+      }
+      self._renderTree();
+      if (self._selectedItem && self._selectedItem.id === (t.item ? t.item.id : t.workspace.id)) {
+        if (isWs) {
+          self._selectWorkspace(t.workspace);
         } else {
-          const isLH = this._isLakehouse(t.item);
-          if (isLH) {
-            await this._api.renameLakehouse(t.workspace.id, t.item.id, newName);
-          } else {
-            await this._api.renameItem(t.workspace.id, t.item.id, newName);
-          }
-          t.item.displayName = newName;
-          this._toast(`Renamed to "${newName}"`, 'success');
+          self._selectItem(t.item, t.workspace);
         }
-        this._renderTree();
-        if (this._selectedItem && this._selectedItem.id === (t.item?.id || t.workspace?.id)) {
-          if (t.isWorkspace) {
-            this._selectWorkspace(t.workspace);
-          } else {
-            this._selectItem(t.item, t.workspace);
-          }
-        }
-      } catch (err) {
-        this._toast(`Rename failed: ${err.message}`, 'error');
-        this._renderTree();
       }
     };
-
-    const cleanup = () => {
-      treeRow.classList.remove('editing');
-      if (input.parentNode) input.remove();
-      input.removeEventListener('keydown', onKey);
-      input.removeEventListener('blur', onBlur);
-    };
-
-    let committed = false;
-    const onKey = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        committed = true;
-        commit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        committed = true;
-        cleanup();
-      }
-    };
-    const onBlur = () => {
-      if (!committed) commit();
-    };
-
-    input.addEventListener('keydown', onKey);
-    input.addEventListener('blur', onBlur);
+    dialog.open();
   }
 
   /**
@@ -2347,37 +2310,74 @@ class WorkspaceExplorer {
     if (!t) return;
 
     const name = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
-    const kind = t.isWorkspace ? 'workspace' : (this._isLakehouse(t.item) ? 'lakehouse' : 'item');
-    const ok = await this._toastConfirm(`Delete ${kind} "${name}"?`);
-    if (!ok) return;
+    const isWs = t.isWorkspace;
+    const isLH = !isWs && this._isLakehouse(t.item);
+    const type = isWs ? 'workspace' : (isLH ? 'lakehouse' : 'notebook');
 
-    try {
-      if (t.isWorkspace) {
-        await this._api.deleteWorkspace(t.workspace.id);
-        this._workspaces = this._workspaces.filter(w => w.id !== t.workspace.id);
-        delete this._children[t.workspace.id];
-        this._expanded.delete(t.workspace.id);
-        this._toast(`Deleted workspace "${name}"`, 'success');
-      } else {
-        if (this._isLakehouse(t.item)) {
-          await this._api.deleteLakehouse(t.workspace.id, t.item.id);
-        } else {
-          await this._api.deleteItem(t.workspace.id, t.item.id);
-        }
-        const children = this._children[t.workspace.id];
-        if (children) {
-          this._children[t.workspace.id] = children.filter(c => c.id !== t.item.id);
-        }
-        this._toast(`Deleted "${name}"`, 'success');
+    var opts = {
+      type: type,
+      name: name,
+      id: isWs ? t.workspace.id : t.item.id,
+      workspaceId: isWs ? t.workspace.id : t.workspace.id,
+      workspaceName: t.workspace.displayName
+    };
+
+    if (isWs) {
+      // Count children for workspace delete
+      var wsChildren = this._children[t.workspace.id] || [];
+      var lhCount = 0;
+      var nbCount = 0;
+      for (var ci = 0; ci < wsChildren.length; ci++) {
+        if (this._isLakehouse(wsChildren[ci])) lhCount++;
+        else nbCount++;
       }
-      this._renderTree();
-      this._showEmptyContent();
-      this._clearInspector();
-      this._selectedItem = null;
-      this._selectedWorkspace = null;
-    } catch (err) {
-      this._toast(`Delete failed: ${err.message}`, 'error');
+      opts.childCounts = { lakehouses: lhCount, notebooks: nbCount };
+    } else if (isLH) {
+      // Compute cascade info for lakehouse delete
+      var children = this._children[t.workspace.id] || [];
+      var notebooks = children.filter(function(c) {
+        return !(c.type || '').toLowerCase().includes('lakehouse');
+      });
+      opts.tableCount = t.item._tableCount || 0;
+      opts.exclusiveNotebooks = [];
+      opts.detachNotebooks = [];
+      // For notebooks: if they only reference this lakehouse, they are exclusive
+      // Since we don't have full lakehouse-attachment data in the tree,
+      // we approximate: notebooks with no known multi-lakehouse info are exclusive
+      for (var ni = 0; ni < notebooks.length; ni++) {
+        var nb = notebooks[ni];
+        var lhIds = nb._lakehouseIds || [];
+        if (lhIds.length === 0) {
+          // No attachment data — treat as potentially exclusive
+          opts.exclusiveNotebooks.push(nb.displayName);
+        } else if (lhIds.length === 1 && lhIds[0] === t.item.id) {
+          opts.exclusiveNotebooks.push(nb.displayName);
+        } else if (lhIds.indexOf(t.item.id) !== -1) {
+          opts.detachNotebooks.push(nb.displayName);
+        }
+      }
     }
+
+    var self = this;
+    var dialog = new DeleteConfirmDialog(this._api, opts);
+    dialog.onComplete = function() {
+      if (isWs) {
+        self._workspaces = self._workspaces.filter(function(w) { return w.id !== t.workspace.id; });
+        delete self._children[t.workspace.id];
+        self._expanded.delete(t.workspace.id);
+      } else {
+        var ch = self._children[t.workspace.id];
+        if (ch) {
+          self._children[t.workspace.id] = ch.filter(function(c) { return c.id !== t.item.id; });
+        }
+      }
+      self._renderTree();
+      self._showEmptyContent();
+      self._clearInspector();
+      self._selectedItem = null;
+      self._selectedWorkspace = null;
+    };
+    dialog.open();
   }
 
   _ctxOpenInFabric() {
@@ -2554,107 +2554,26 @@ class WorkspaceExplorer {
   async _ctxCreateNotebook() {
     var t = this._ctxTarget;
     if (!t || !t.isWorkspace) return;
+    var ws = t.workspace;
+    var hasAuth = this._api.hasBearerToken();
 
-    // Expand workspace so children are visible
-    if (!this._expanded.has(t.workspace.id)) {
-      await this._toggleWorkspace(t.workspace);
-    }
-
-    if (!this._treeEl) return;
-    // Find insertion point: after workspace's last child in tree
-    var allRows = Array.from(this._treeEl.querySelectorAll('.ws-tree-item'));
-    var insertAfter = null;
-    var foundWs = false;
-    for (var i = 0; i < allRows.length; i++) {
-      var row = allRows[i];
-      var nameEl = row.querySelector('.ws-tree-name');
-      if (nameEl && nameEl.textContent === t.workspace.displayName && !foundWs) {
-        foundWs = true;
-        insertAfter = row;
-        continue;
-      }
-      if (foundWs) {
-        var pl = parseInt(row.style.paddingLeft, 10) || 0;
-        if (pl > 12) {
-          insertAfter = row;
-        } else {
-          break;
-        }
-      }
-    }
-
-    // Avoid duplicates
-    if (this._treeEl.querySelector('.ws-create-row')) return;
-
-    var createRow = document.createElement('div');
-    createRow.className = 'ws-create-row';
-    createRow.style.paddingLeft = '28px';
-
-    var dot = document.createElement('span');
-    dot.className = 'ws-tree-dot notebook';
-    createRow.appendChild(dot);
-
-    var input = document.createElement('input');
-    input.className = 'ws-create-input';
-    input.type = 'text';
-    input.placeholder = 'New notebook name';
-    input.setAttribute('aria-label', 'New notebook name');
-    createRow.appendChild(input);
-
-    if (insertAfter && insertAfter.nextSibling) {
-      this._treeEl.insertBefore(createRow, insertAfter.nextSibling);
-    } else {
-      this._treeEl.appendChild(createRow);
-    }
-    input.focus();
-
+    var children = this._children[ws.id] || [];
     var self = this;
-    var committed = false;
-    var commit = function() {
-      var name = input.value.trim();
-      cleanup();
-      if (!name) return;
-      self._api.createNotebook(t.workspace.id, name).then(function() {
-        self._toast('Created notebook "' + name + '"', 'success');
-        // Refresh children
-        delete self._children[t.workspace.id];
-        self._expanded.add(t.workspace.id);
-        return self._toggleWorkspace(t.workspace).then(function() {
-          if (!self._expanded.has(t.workspace.id)) {
-            return self._toggleWorkspace(t.workspace);
-          }
-        });
-      }).catch(function(err) {
-        self._toast('Create failed: ' + err.message, 'error');
+
+    var dialog = new NotebookCreateDialog(this._api, {
+      workspaceId: ws.id,
+      workspaceName: ws.displayName,
+      existingItems: children
+    });
+    dialog.onComplete = function() {
+      delete self._children[ws.id];
+      self._expanded.add(ws.id);
+      self.loadWorkspaces().then(function() {
+        self._renderTree();
       });
     };
-
-    var cleanup = function() {
-      if (createRow.parentNode) createRow.remove();
-      input.removeEventListener('keydown', onKey);
-      input.removeEventListener('blur', onBlur);
-    };
-
-    var onKey = function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        committed = true;
-        commit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        committed = true;
-        cleanup();
-      }
-    };
-    var onBlur = function() {
-      if (!committed) {
-        committed = true;
-        commit();
-      }
-    };
-
-    input.addEventListener('keydown', onKey);
-    input.addEventListener('blur', onBlur);
+    dialog.open();
+    if (!hasAuth) dialog._showNoAuth();
   }
 
   _bindGlobalKeys() {
