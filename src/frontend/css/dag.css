@@ -396,6 +396,16 @@
   box-shadow: 0 0 0 3px rgba(229, 148, 12, 0.15);
 }
 
+/* Non-executable nodes (source tables) — distinct from pending MLVs */
+.dag-node.non-executable .dag-node-status-dot {
+  background: var(--border-bright, rgba(0,0,0,0.12)) !important;
+  box-shadow: none;
+  animation: none;
+}
+.dag-node.non-executable {
+  opacity: 0.85;
+}
+
 .dag-node-meta {
   display: flex;
   align-items: center;

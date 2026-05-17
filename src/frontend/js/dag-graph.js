@@ -203,7 +203,7 @@ class DagCanvasRenderer {
     for (const n of this._nodes) {
       var color = this._statusColor(n.status);
       var el = document.createElement('div');
-      el.className = 'dag-node status-' + n.status;
+      el.className = 'dag-node status-' + n.status + (n.executable === false ? ' non-executable' : '');
       el.dataset.id = n.id;
       el.dataset.layer = this._layerName(n.layer || 0, this._totalLayers || 1);
       el.style.cssText = 'left:' + (n.x - n.w / 2) + 'px;top:' + (n.y - n.h / 2) + 'px;width:' + n.w + 'px;height:' + n.h + 'px;';
