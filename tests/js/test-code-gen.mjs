@@ -147,7 +147,7 @@ describe('CodeGenerationEngine', function () {
       assert.equal(cells[0].language, 'sql');
     });
 
-    test('sql-mlv node generates CREATE OR ALTER VIEW SQL', function () {
+    test('sql-mlv node generates CREATE MATERIALIZED LAKE VIEW DDL', function () {
       var eng = new CodeGenerationEngine();
       var src = makeNode(1, 'sql-table', 'Orders');
       var mlv = makeNode(2, 'sql-mlv', 'OrderSummary');
@@ -155,7 +155,7 @@ describe('CodeGenerationEngine', function () {
       var cells = eng.generateCells([src, mlv], conns, 'ecommerce', {});
       var mlvCell = cells.find(function (c) { return c.nodeId === 2; });
       assert.ok(mlvCell);
-      assert.ok(mlvCell.content.includes('CREATE OR ALTER VIEW'));
+      assert.ok(mlvCell.content.includes('CREATE MATERIALIZED LAKE VIEW'));
       assert.equal(mlvCell.type, 'sql-mlv');
       assert.equal(mlvCell.language, 'sql');
     });
@@ -168,7 +168,7 @@ describe('CodeGenerationEngine', function () {
       var cells = eng.generateCells([src, pys], conns, 'ecommerce', {});
       var pyCell = cells.find(function (c) { return c.nodeId === 2; });
       assert.ok(pyCell);
-      assert.ok(pyCell.content.includes('SparkSession'));
+      assert.ok(pyCell.content.includes('spark.sql'));
       assert.equal(pyCell.type, 'pyspark-mlv');
       assert.equal(pyCell.language, 'python');
     });
@@ -186,7 +186,7 @@ describe('CodeGenerationEngine', function () {
       var eng = new CodeGenerationEngine();
       var nodes = [makeNode(1, 'sql-table', 'Orders', 'dbo')];
       var cells = eng.generateCells(nodes, [], 'ecommerce', {});
-      assert.ok(cells[0].content.includes('[dbo].[Orders]'));
+      assert.ok(cells[0].content.includes('dbo.Orders'));
     });
 
     test('dependsOn: sql-mlv cell references parent in content', function () {

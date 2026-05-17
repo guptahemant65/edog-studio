@@ -357,7 +357,48 @@ class CodeGenerationEngine {
   /* ─── Cell Generators ─── */
 
   /**
-   * Generate a SQL CREATE TABLE + INSERT cell.
+   * Map a T-SQL type string to its Spark SQL equivalent.
+   *  - VARCHAR(N), CHAR(N), NVARCHAR(N), TEXT  -> STRING
+   *  - DATETIME, DATETIME2, SMALLDATETIME      -> TIMESTAMP
+   *  - BIT                                     -> BOOLEAN
+   *  - TINYINT, SMALLINT                       -> kept as-is (Spark supports)
+   *  - INT, BIGINT, DECIMAL(p,s), DATE         -> kept as-is
+   * @param {string} sqlType
+   * @returns {string} Spark SQL type
+   */
+  _sparkType(sqlType) {
+    var s = String(sqlType || '').trim();
+    var u = s.toUpperCase();
+    if (u === 'BIT') return 'BOOLEAN';
+    if (u === 'DATETIME' || u === 'DATETIME2' || u === 'SMALLDATETIME') return 'TIMESTAMP';
+    if (u.indexOf('VARCHAR') === 0 || u.indexOf('NVARCHAR') === 0 ||
+        u.indexOf('CHAR') === 0 || u.indexOf('NCHAR') === 0 || u === 'TEXT') {
+      return 'STRING';
+    }
+    return u;
+  }
+
+  /**
+   * Coerce a sample-data value for a column to a Spark-valid literal.
+   * Currently only BIT(0/1) -> BOOLEAN(FALSE/TRUE) needs translation;
+   * everything else passes through unchanged (the sample data is already
+   * encoded as SQL literals — quoted strings, raw numerics, etc.).
+   * @param {*}      value     Sample value from THEME_SAMPLE_DATA
+   * @param {Object} column    Column definition with sqlType
+   * @returns {string|number}  Literal as it should appear in VALUES(...)
+   */
+  _sparkLiteral(value, column) {
+    var u = String(column.sqlType || '').toUpperCase();
+    if (u === 'BIT') {
+      return value ? 'TRUE' : 'FALSE';
+    }
+    return value;
+  }
+
+  /**
+   * Generate a Spark SQL CREATE TABLE + INSERT cell for a "bronze"-style
+   * source table. Emits Spark SQL syntax with USING DELTA storage and an
+   * IF NOT EXISTS guard so re-runs are idempotent.
    * @param {Object} node   DagNodeData
    * @param {string} theme  Theme ID
    * @returns {Object} Cell object
@@ -365,23 +406,29 @@ class CodeGenerationEngine {
   _generateTableCell(node, theme) {
     var columns = this._getThemeColumns(theme);
     var rows = this._generateSampleRows(theme, 10);
-    var schema = node.schema || 'dbo';
+    var schema = node.schema || 'bronze';
 
     var lines = [];
-    lines.push('-- Create table: [' + schema + '].[' + node.name + ']');
-    lines.push('CREATE TABLE [' + schema + '].[' + node.name + '] (');
+    lines.push('-- Seed table: ' + schema + '.' + node.name);
+    lines.push('CREATE SCHEMA IF NOT EXISTS ' + schema + ';');
+    lines.push('');
+    lines.push('CREATE TABLE IF NOT EXISTS ' + schema + '.' + node.name + ' (');
 
     for (var i = 0; i < columns.length; i++) {
       var sep = (i < columns.length - 1) ? ',' : '';
-      lines.push('  ' + columns[i].name + ' ' + columns[i].sqlType + sep);
+      lines.push('  ' + columns[i].name + ' ' + this._sparkType(columns[i].sqlType) + sep);
     }
-    lines.push(');');
+    lines.push(') USING DELTA;');
     lines.push('');
-    lines.push('-- Insert sample data');
-    lines.push('INSERT INTO [' + schema + '].[' + node.name + '] VALUES');
+    lines.push('-- Sample rows');
+    lines.push('INSERT INTO ' + schema + '.' + node.name + ' VALUES');
 
     for (var r = 0; r < rows.length; r++) {
-      var rowStr = '  (' + rows[r].join(', ') + ')';
+      var coerced = [];
+      for (var c = 0; c < rows[r].length && c < columns.length; c++) {
+        coerced.push(this._sparkLiteral(rows[r][c], columns[c]));
+      }
+      var rowStr = '  (' + coerced.join(', ') + ')';
       rowStr += (r < rows.length - 1) ? ',' : ';';
       lines.push(rowStr);
     }
@@ -396,51 +443,54 @@ class CodeGenerationEngine {
   }
 
   /**
-   * Generate a SQL MLV (materialized lakehouse view) cell.
+   * Generate a Spark SQL Materialized Lake View cell.
+   * Uses Fabric's ``CREATE MATERIALIZED LAKE VIEW IF NOT EXISTS`` DDL
+   * with unquoted ``schema.name`` identifiers.
    * @param {Object} node        DagNodeData
    * @param {Array}  parentNodes DagNodeData[] of parent/source nodes
    * @returns {Object} Cell object
    */
   _generateSqlMlvCell(node, parentNodes) {
-    var schema = node.schema || 'dbo';
+    var schema = node.schema || 'silver';
     var lines = [];
 
     var parentNames = [];
     for (var p = 0; p < parentNodes.length; p++) {
-      parentNames.push(parentNodes[p].name);
+      parentNames.push(
+        (parentNodes[p].schema || 'bronze') + '.' + parentNodes[p].name
+      );
     }
 
-    lines.push('-- Create materialized lakehouse view: [' + schema + '].[' + node.name + ']');
-    lines.push('-- Sources: ' + (parentNames.length > 0 ? parentNames.join(', ') : 'none'));
-    lines.push('CREATE OR ALTER VIEW [' + schema + '].[' + node.name + '] AS');
-    lines.push('SELECT');
+    lines.push('-- Materialized Lake View: ' + schema + '.' + node.name);
+    if (parentNames.length > 0) {
+      lines.push('-- Sources: ' + parentNames.join(', '));
+    }
+    lines.push('CREATE SCHEMA IF NOT EXISTS ' + schema + ';');
+    lines.push('');
+    lines.push('CREATE MATERIALIZED LAKE VIEW IF NOT EXISTS ' + schema + '.' + node.name + ' AS');
 
     if (parentNodes.length === 0) {
-      lines.push('  1 AS placeholder');
-      lines.push('FROM (SELECT 1) AS empty;');
+      lines.push('SELECT 1 AS placeholder;');
     } else if (parentNodes.length === 1) {
       var p1 = parentNodes[0];
-      var p1Schema = p1.schema || 'dbo';
-      lines.push('  t1.*');
-      lines.push('FROM [' + p1Schema + '].[' + p1.name + '] t1;');
+      var p1Schema = p1.schema || 'bronze';
+      lines.push('SELECT *');
+      lines.push('FROM ' + p1Schema + '.' + p1.name + ';');
     } else {
-      // Multiple parents — join them
-      var firstParent = parentNodes[0];
-      var firstSchema = firstParent.schema || 'dbo';
-
-      lines.push('  t1.*,');
-      for (var m = 1; m < parentNodes.length; m++) {
+      // Multi-parent: SELECT every parent's columns aliased, join on id.
+      lines.push('SELECT');
+      for (var m = 0; m < parentNodes.length; m++) {
         var suffix = (m < parentNodes.length - 1) ? ',' : '';
         lines.push('  t' + (m + 1) + '.*' + suffix);
       }
-      lines.push('FROM [' + firstSchema + '].[' + firstParent.name + '] t1');
-
+      var first = parentNodes[0];
+      lines.push('FROM ' + (first.schema || 'bronze') + '.' + first.name + ' t1');
       for (var k = 1; k < parentNodes.length; k++) {
-        var joinParent = parentNodes[k];
-        var joinSchema = joinParent.schema || 'dbo';
+        var jp = parentNodes[k];
         var alias = 't' + (k + 1);
-        lines.push('INNER JOIN [' + joinSchema + '].[' + joinParent.name + '] ' + alias);
-        lines.push('  ON t1.id = ' + alias + '.id;');
+        var term = (k === parentNodes.length - 1) ? ';' : '';
+        lines.push('LEFT JOIN ' + (jp.schema || 'bronze') + '.' + jp.name + ' ' + alias +
+                   ' ON t1.id = ' + alias + '.id' + term);
       }
     }
 
@@ -454,56 +504,59 @@ class CodeGenerationEngine {
   }
 
   /**
-   * Generate a PySpark MLV cell.
+   * Generate a PySpark Materialized Lake View cell.
+   * Wraps Fabric's ``CREATE MATERIALIZED LAKE VIEW`` DDL inside a
+   * ``spark.sql()`` call so the same MLV semantics are reachable from a
+   * PySpark notebook.
    * @param {Object} node        DagNodeData
    * @param {Array}  parentNodes DagNodeData[] of parent/source nodes
    * @returns {Object} Cell object
    */
   _generatePysparkMlvCell(node, parentNodes) {
-    var schema = node.schema || 'dbo';
+    var schema = node.schema || 'silver';
     var lines = [];
 
     var parentNames = [];
     for (var p = 0; p < parentNodes.length; p++) {
-      parentNames.push(parentNodes[p].name);
+      parentNames.push(
+        (parentNodes[p].schema || 'bronze') + '.' + parentNodes[p].name
+      );
     }
 
-    lines.push('# PySpark materialized view: ' + schema + '.' + node.name);
-    lines.push('# Sources: ' + (parentNames.length > 0 ? parentNames.join(', ') : 'none'));
-    lines.push('from pyspark.sql import SparkSession');
+    lines.push('# Materialized Lake View (PySpark): ' + schema + '.' + node.name);
+    if (parentNames.length > 0) {
+      lines.push('# Sources: ' + parentNames.join(', '));
+    }
     lines.push('');
-    lines.push('spark = SparkSession.builder.getOrCreate()');
+    lines.push('spark.sql("CREATE SCHEMA IF NOT EXISTS ' + schema + '")');
     lines.push('');
+    lines.push('spark.sql("""');
+    lines.push('CREATE MATERIALIZED LAKE VIEW IF NOT EXISTS ' + schema + '.' + node.name + ' AS');
 
     if (parentNodes.length === 0) {
-      lines.push('df_result = spark.sql("SELECT 1 AS placeholder")');
+      lines.push('SELECT 1 AS placeholder');
+    } else if (parentNodes.length === 1) {
+      var p1 = parentNodes[0];
+      var p1Schema = p1.schema || 'bronze';
+      lines.push('SELECT *');
+      lines.push('FROM ' + p1Schema + '.' + p1.name);
     } else {
-      // Read each parent
-      for (var i = 0; i < parentNodes.length; i++) {
-        var pNode = parentNodes[i];
-        var pSchema = pNode.schema || 'dbo';
-        var dfName = 'df_' + pNode.name.replace(/[^a-zA-Z0-9_]/g, '_');
-        lines.push(dfName + ' = spark.sql("SELECT * FROM ' + pSchema + '.' + pNode.name + '")');
+      lines.push('SELECT');
+      for (var m = 0; m < parentNodes.length; m++) {
+        var suffix = (m < parentNodes.length - 1) ? ',' : '';
+        lines.push('  t' + (m + 1) + '.*' + suffix);
       }
-      lines.push('');
-
-      if (parentNodes.length === 1) {
-        var singleDf = 'df_' + parentNodes[0].name.replace(/[^a-zA-Z0-9_]/g, '_');
-        lines.push('df_result = ' + singleDf);
-      } else {
-        // Chain joins
-        var baseDf = 'df_' + parentNodes[0].name.replace(/[^a-zA-Z0-9_]/g, '_');
-        var joinExpr = 'df_result = ' + baseDf;
-        for (var j = 1; j < parentNodes.length; j++) {
-          var nextDf = 'df_' + parentNodes[j].name.replace(/[^a-zA-Z0-9_]/g, '_');
-          joinExpr += '.join(' + nextDf + ', ' + baseDf + '["id"] == ' + nextDf + '["id"])';
-        }
-        lines.push(joinExpr);
+      var first = parentNodes[0];
+      lines.push('FROM ' + (first.schema || 'bronze') + '.' + first.name + ' t1');
+      for (var k = 1; k < parentNodes.length; k++) {
+        var jp = parentNodes[k];
+        var alias = 't' + (k + 1);
+        lines.push('LEFT JOIN ' + (jp.schema || 'bronze') + '.' + jp.name + ' ' + alias +
+                   ' ON t1.id = ' + alias + '.id');
       }
     }
 
-    lines.push('');
-    lines.push('df_result.write.format("delta").mode("overwrite").saveAsTable("' + schema + '.' + node.name + '")');
+    lines.push('""")');
 
     return {
       type: 'pyspark-mlv',
