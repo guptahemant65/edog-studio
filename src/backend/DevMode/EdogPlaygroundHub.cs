@@ -63,6 +63,12 @@ namespace Microsoft.LiveTable.Service.DevMode
         private static readonly List<QaRunSummary> _history = new();
         private const int MaxHistoryEntries = 100;
 
+        // F27 P7: tracks whether disk-backed history has been merged in.
+        // First caller of GetHistory triggers a one-shot hydration via
+        // EdogQaRunStore.ListAllSummaries(). Reads happen outside the lock
+        // and the merge happens under it — see HydrateHistoryFromStore.
+        private static volatile bool _historyHydrated;
+
         // Execution state
         private static CancellationTokenSource _runCts;
         private static string _currentRunId;
@@ -210,12 +216,65 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Gets run history with optional PR filter and pagination.</summary>
         internal static List<QaRunSummary> GetHistory(int? prId, int limit, int offset)
         {
+            HydrateHistoryFromStore();
             lock (_lock)
             {
                 IEnumerable<QaRunSummary> query = _history;
                 if (prId.HasValue)
                     query = query.Where(h => h.PrId == prId.Value);
                 return query.Skip(offset).Take(limit).ToList();
+            }
+        }
+
+        /// <summary>
+        /// F27 P7: merges disk-backed run summaries into <c>_history</c> on
+        /// first access. Idempotent — repeat calls short-circuit on the
+        /// <c>_historyHydrated</c> flag. Disk I/O happens BEFORE the state
+        /// lock is taken so SignalR read paths don't stall behind file
+        /// reads. Merge strategy: newest-completed wins per <c>RunId</c>,
+        /// final list re-sorted descending by <c>StartedAt</c> and capped
+        /// at <see cref="MaxHistoryEntries"/>.
+        /// </summary>
+        private static void HydrateHistoryFromStore()
+        {
+            if (_historyHydrated) return;
+            List<QaRunSummary> diskRuns;
+            try
+            {
+                diskRuns = EdogQaRunStore.ListAllSummaries();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[QA] History hydration failed (non-fatal): {ex.Message}");
+                // F27 P7 fix: do NOT flip the hydrated flag here. A
+                // concurrent caller may still produce a successful load.
+                // Setting the flag outside the lock would race-strand
+                // persisted history for the lifetime of the process.
+                return;
+            }
+
+            lock (_lock)
+            {
+                if (_historyHydrated) return;
+                if (diskRuns != null && diskRuns.Count > 0)
+                {
+                    var byRunId = new Dictionary<string, QaRunSummary>();
+                    foreach (var entry in _history.Concat(diskRuns))
+                    {
+                        if (entry == null || string.IsNullOrEmpty(entry.RunId)) continue;
+                        if (!byRunId.TryGetValue(entry.RunId, out var existing)
+                            || entry.CompletedAt > existing.CompletedAt)
+                        {
+                            byRunId[entry.RunId] = entry;
+                        }
+                    }
+                    _history.Clear();
+                    _history.AddRange(byRunId.Values.OrderByDescending(r => r.StartedAt));
+                    while (_history.Count > MaxHistoryEntries)
+                        _history.RemoveAt(_history.Count - 1);
+                }
+                _historyHydrated = true;
             }
         }
 
@@ -229,7 +288,47 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Gets a completed run result.</summary>
         internal static QaRunResult GetRunResult(string runId)
         {
-            return _runs.TryGetValue(runId, out var entry) ? entry.Result : null;
+            if (_runs.TryGetValue(runId, out var entry) && entry.Result != null)
+                return entry.Result;
+
+            // F27 P7: fall back to disk-backed history for runs from a
+            // prior FLT process. We reconstruct a lossy QaRunResult shape
+            // — scenarios are summary rows, not full ScenarioResult — so
+            // detail views can still surface verdict + error summary
+            // across restarts.
+            try
+            {
+                var record = EdogQaRunStore.Get(runId);
+                if (record == null) return null;
+                return new QaRunResult
+                {
+                    RunId = record.RunId,
+                    PrId = record.PrId,
+                    PrTitle = record.PrTitle ?? string.Empty,
+                    StartedAt = record.StartedAt,
+                    CompletedAt = record.CompletedAt,
+                    TotalDurationMs = record.TotalDurationMs,
+                    CancelledByUser = record.CancelledByUser,
+                    Summary = record.Summary,
+                    Scenarios = (record.Scenarios ?? new List<QaScenarioRecord>())
+                        .Select(s => (object)new
+                        {
+                            scenarioId = s.ScenarioId,
+                            scenarioHash = s.ScenarioHash,
+                            title = s.Title,
+                            category = s.Category,
+                            verdict = s.Status,
+                            failureMessage = s.ErrorSummary,
+                        })
+                        .ToList(),
+                };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[QA] GetRunResult disk fallback failed (non-fatal): {ex.Message}");
+                return null;
+            }
         }
     }
 
@@ -896,6 +995,42 @@ namespace Microsoft.LiveTable.Service.DevMode
         public Task<QaCapabilityReport> QaGetCapabilities()
         {
             return Task.FromResult(EdogQaCapabilityRegistry.BuildReport());
+        }
+
+        /// <summary>
+        /// F27 P7: diffs two persisted runs and returns the set of
+        /// scenarios added, removed, and flipped between them. The
+        /// frontend conventionally passes the currently-viewed run as
+        /// <c>TargetRunId</c> and a prior run as <c>BaseRunId</c> so
+        /// diff badges read naturally ("NEW", "GONE", "→ PASS", "→ FAIL").
+        /// Matching is content-aware via <c>ScenarioHash</c> with
+        /// scenarioId fallback when hashes are absent (a warning is
+        /// surfaced so the UI can render a degraded-confidence banner).
+        /// </summary>
+        public Task<QaRunComparison> QaCompareRuns(QaComparisonRequest request)
+        {
+            try
+            {
+                if (request == null)
+                {
+                    return Task.FromResult(new QaRunComparison
+                    {
+                        Error = "QaCompareRuns request was null.",
+                    });
+                }
+                var comparison = EdogQaRunStore.Compare(request.BaseRunId, request.TargetRunId);
+                return Task.FromResult(comparison);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[QA] QaCompareRuns error: {ex.Message}");
+                return Task.FromResult(new QaRunComparison
+                {
+                    BaseRunId = request?.BaseRunId,
+                    TargetRunId = request?.TargetRunId,
+                    Error = "QaCompareRuns encountered an internal error.",
+                });
+            }
         }
 
         // ─── 1.5 Execution Streaming ───────────────────────────────────
@@ -1766,6 +1901,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             var passedCount = 0;
             var failedCount = 0;
             var scenarioResults = new List<object>();
+            // F27 P7: parallel typed list for persistence. We can't reflect on
+            // the anonymous-typed `scenarioResults` entries above, so we
+            // populate a typed mirror in the same loop and hand it off to
+            // EdogQaRunStore at run completion.
+            var persistedScenarios = new List<QaScenarioRecord>();
 
             try
             {
@@ -1825,9 +1965,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var verdict = "passed";
                     passedCount++;
 
+                    var scenarioHash = EdogQaRunStore.ComputeScenarioHash(
+                        scenario.Id, scenario.Title, scenario.Category);
+
                     var scenarioResult = new
                     {
                         scenarioId = scenario.Id,
+                        scenarioHash,
                         title = scenario.Title ?? "",
                         category = scenario.Category ?? "happy_path",
                         verdict,
@@ -1839,6 +1983,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                         errorMessage = (string)null
                     };
                     scenarioResults.Add(scenarioResult);
+                    persistedScenarios.Add(new QaScenarioRecord
+                    {
+                        ScenarioId = scenario.Id,
+                        ScenarioHash = scenarioHash,
+                        Title = scenario.Title ?? string.Empty,
+                        Category = scenario.Category ?? "happy_path",
+                        Status = verdict,
+                        ErrorSummary = null,
+                    });
 
                     // Broadcast QaScenarioCompleted
                     await BroadcastQaEventAsync("QaScenarioCompleted", new
@@ -1917,6 +2070,32 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Summary = summary,
                 OverallPass = summary.OverallPass
             });
+
+            // F27 P7: persist the full record so history survives FLT
+            // process restarts. The store catches its own I/O failures
+            // and never throws; we only catch here as a final safety net
+            // because run-completion must never fail the surrounding flow.
+            try
+            {
+                EdogQaRunStore.Add(new QaRunRecord
+                {
+                    RunId = runId,
+                    PrId = runEntry.PrId,
+                    PrTitle = runEntry.PrTitle ?? string.Empty,
+                    StartedAt = startedAt,
+                    CompletedAt = completedAt,
+                    TotalDurationMs = totalDurationMs,
+                    CancelledByUser = cancelledByUser,
+                    Summary = summary,
+                    OverallPass = summary.OverallPass,
+                    Scenarios = persistedScenarios,
+                });
+            }
+            catch (Exception persistEx)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[QA] EdogQaRunStore.Add failed (non-fatal): {persistEx.Message}");
+            }
 
             // Broadcast QaRunCompleted
             await BroadcastQaEventAsync("QaRunCompleted", new

@@ -4094,6 +4094,310 @@ mark {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
 }
+@keyframes ws-cd-pulseDanger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229,69,59,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(229,69,59,0); }
+}
+@keyframes ws-cd-autoClose {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* ─── Danger button variant ─── */
+.ws-cd-btn-danger {
+  background: var(--surface-hover, rgba(0,0,0,0.03));
+  border: 1px solid var(--border, #e1e4e8);
+  color: var(--text-muted, #8a9099);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.ws-cd-btn-danger.ready {
+  background: var(--status-fail, #e5453b);
+  border-color: var(--status-fail, #e5453b);
+  color: #fff;
+  cursor: pointer;
+  opacity: 1;
+  animation: ws-cd-pulseDanger 2s ease-in-out infinite;
+}
+.ws-cd-btn-danger.ready:hover {
+  filter: brightness(0.9);
+}
+
+/* ─── Lakehouse card grid (notebook creation) ─── */
+.ws-cd-lh-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ws-cd-lh-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-elevated, #ffffff);
+  border: 1.5px solid var(--border, #e1e4e8);
+  border-radius: var(--radius, 8px);
+  cursor: pointer;
+  transition: all 200ms ease;
+  animation: ws-cd-scaleSpring 200ms ease backwards;
+}
+.ws-cd-lh-card:hover {
+  border-color: var(--border-strong, #c8ccd1);
+  background: var(--surface-hover, #e8ebf0);
+}
+.ws-cd-lh-card.selected {
+  border-color: var(--accent, #6d5cff);
+  background: var(--accent-dim, rgba(109,92,255,0.08));
+  box-shadow: 0 0 0 3px rgba(109,92,255,0.12);
+}
+.ws-cd-lh-card .ws-cd-lh-radio {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-strong, #c8ccd1);
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+  transition: all 200ms ease;
+}
+.ws-cd-lh-card.selected .ws-cd-lh-radio {
+  border-color: var(--accent, #6d5cff);
+}
+.ws-cd-lh-card.selected .ws-cd-lh-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--accent, #6d5cff);
+  animation: ws-cd-scaleSpring 300ms ease;
+}
+.ws-cd-lh-card .ws-cd-lh-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--surface-2, #f0f2f5);
+  border-radius: var(--radius-sm, 4px);
+  display: grid;
+  place-items: center;
+  color: var(--text-muted, #8a9099);
+  flex-shrink: 0;
+}
+.ws-cd-lh-card.selected .ws-cd-lh-icon {
+  background: var(--accent, #6d5cff);
+  color: #fff;
+}
+.ws-cd-lh-card .ws-cd-lh-meta {
+  flex: 1;
+  min-width: 0;
+}
+.ws-cd-lh-card .ws-cd-lh-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text, #1c2024);
+}
+.ws-cd-lh-card .ws-cd-lh-detail {
+  font-size: 11px;
+  color: var(--text-muted, #8a9099);
+  font-family: var(--font-mono, monospace);
+}
+.ws-cd-lh-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--text-muted, #8a9099);
+  font-size: 13px;
+}
+.ws-cd-lh-empty svg {
+  display: block;
+  margin: 0 auto 8px;
+  width: 32px;
+  height: 32px;
+  opacity: 0.4;
+}
+
+/* ─── Cascade delete sections ─── */
+.ws-cd-cascade-section {
+  background: var(--status-fail-dim, rgba(229,69,59,0.08));
+  border: 1px solid rgba(229,69,59,0.3);
+  border-radius: var(--radius, 8px);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.ws-cd-cascade-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--status-fail, #e5453b);
+  margin-bottom: 6px;
+}
+.ws-cd-cascade-body {
+  font-size: 13px;
+  color: var(--text, #1c2024);
+  line-height: 1.5;
+}
+.ws-cd-cascade-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin: 4px 4px 0 0;
+  background: var(--surface, #ffffff);
+  border: 1px solid rgba(229,69,59,0.3);
+  border-radius: var(--radius, 8px);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--status-fail, #e5453b);
+  font-weight: 500;
+  animation: ws-cd-pillPop 400ms ease backwards;
+}
+.ws-cd-cascade-pill:nth-child(1) { animation-delay: 60ms; }
+.ws-cd-cascade-pill:nth-child(2) { animation-delay: 120ms; }
+.ws-cd-cascade-pill:nth-child(3) { animation-delay: 180ms; }
+.ws-cd-cascade-pill:nth-child(4) { animation-delay: 240ms; }
+
+/* ─── Detach section (amber/warning) ─── */
+.ws-cd-detach-section {
+  background: var(--status-warn-dim, rgba(255,171,0,0.08));
+  border: 1px solid rgba(255,171,0,0.3);
+  border-radius: var(--radius, 8px);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.ws-cd-detach-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--status-warn, #ffab00);
+  margin-bottom: 6px;
+}
+.ws-cd-detach-body {
+  font-size: 13px;
+  color: var(--text, #1c2024);
+  line-height: 1.5;
+}
+.ws-cd-detach-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin: 4px 4px 0 0;
+  background: var(--surface, #ffffff);
+  border: 1px solid rgba(255,171,0,0.3);
+  border-radius: var(--radius, 8px);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--status-warn, #ffab00);
+  font-weight: 500;
+}
+
+/* ─── Type-to-confirm input ─── */
+.ws-cd-confirm-block {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--surface-2, #f0f2f5);
+  border-radius: var(--radius, 8px);
+  border: 1px dashed var(--border-strong, #c8ccd1);
+}
+.ws-cd-confirm-prompt {
+  font-size: 12px;
+  color: var(--text-muted, #8a9099);
+  margin-bottom: 8px;
+}
+.ws-cd-confirm-target {
+  display: inline;
+  font-family: var(--font-mono, monospace);
+  background: var(--bg-elevated, #ffffff);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border, #e1e4e8);
+  color: var(--status-fail, #e5453b);
+  font-weight: 600;
+  font-size: 13px;
+}
+.ws-cd-confirm-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg-elevated, #ffffff);
+  border: 1px solid var(--border, #e1e4e8);
+  border-radius: var(--radius-sm, 4px);
+  color: var(--text, #1c2024);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.ws-cd-confirm-input:focus {
+  border-color: var(--status-fail, #e5453b);
+  box-shadow: 0 0 0 3px rgba(229,69,59,0.12);
+}
+
+/* ─── Rename diff row ─── */
+.ws-cd-rename-diff {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface-2, #f0f2f5);
+  border-radius: var(--radius, 8px);
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.ws-cd-rename-from {
+  color: var(--text-muted, #8a9099);
+  text-decoration: line-through;
+}
+.ws-cd-rename-arrow {
+  color: var(--text-muted, #8a9099);
+}
+.ws-cd-rename-to {
+  color: var(--accent, #6d5cff);
+  font-weight: 600;
+}
+
+/* ─── Delete dialog: child counts summary ─── */
+.ws-cd-child-counts {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ws-cd-child-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface-2, #f0f2f5);
+  border: 1px solid var(--border, #e1e4e8);
+  border-radius: var(--radius, 8px);
+  font-size: 13px;
+  font-weight: 500;
+}
+.ws-cd-child-count svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted, #8a9099);
+}
+
+/* ─── Auto-close progress bar ─── */
+.ws-cd-auto-close {
+  width: 100%;
+  height: 3px;
+  background: var(--surface-2, #f0f2f5);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.ws-cd-auto-close-fill {
+  height: 100%;
+  background: var(--status-pass, #1f9d55);
+  width: 100%;
+  animation: ws-cd-autoClose 3s linear forwards;
+}
 
     /* === css/deploy.css === */
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -30464,6 +30768,80 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   .qa-editor-panel {
     width: 100%;
   }
+}
+
+/* ── F27 P7: Run-to-run comparison UI ──────────────────────────────── */
+.qa-compare-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px 0;
+  padding: 10px 14px;
+  background: var(--qa-card-bg, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--qa-border, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+}
+.qa-compare-label {
+  font-size: 13px;
+  color: var(--qa-text-muted, #9aa3b2);
+  font-weight: 500;
+}
+.qa-compare-select {
+  flex: 1;
+  min-width: 240px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: var(--qa-text, #e8eaed);
+  font-size: 13px;
+}
+.qa-compare-warnings {
+  margin: 8px 0;
+}
+.qa-compare-warnings strong { display: block; margin-bottom: 6px; }
+.qa-compare-warnings-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.qa-compare-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.qa-compare-new {
+  background: rgba(54, 162, 235, 0.18);
+  color: #6cb6ff;
+  border: 1px solid rgba(108, 182, 255, 0.35);
+}
+.qa-compare-gone {
+  background: rgba(150, 150, 150, 0.15);
+  color: #9aa3b2;
+  border: 1px solid rgba(154, 163, 178, 0.35);
+}
+.qa-compare-flip-pass {
+  background: rgba(76, 175, 80, 0.18);
+  color: #7ad58a;
+  border: 1px solid rgba(122, 213, 138, 0.4);
+}
+.qa-compare-flip-fail {
+  background: rgba(244, 67, 54, 0.18);
+  color: #f08983;
+  border: 1px solid rgba(240, 137, 131, 0.45);
+}
+.qa-compare-removed { margin: 8px 0 16px 0; }
+.qa-result-card.qa-removed {
+  opacity: 0.7;
+  border-style: dashed;
 }
 
   </style>
@@ -70362,6 +70740,1125 @@ class LakehouseCreateDialog {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   NotebookCreateDialog — modal for creating a notebook in a workspace
+   States: empty → valid/invalid → lakehouse-loading → ready → creating → success/failure
+   ═══════════════════════════════════════════════════════════════ */
+class NotebookCreateDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._workspaceId = opts.workspaceId;
+    this._workspaceName = opts.workspaceName || '';
+    this._existingItemNames = (opts.existingItems || []).map(function(it) { return it.displayName; });
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._descInput = null;
+    this._counterEl = null;
+    this._descCounterEl = null;
+    this._nameValidEl = null;
+    this._createBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._lhGridEl = null;
+    this._selectedLakehouse = null;
+    this._lakehousesLoaded = false;
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._loadLakehouses();
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    if (this._state === 'idle' && this._nameInput && this._nameInput.value.trim()) {
+      if (!confirm('Discard notebook creation?')) return;
+    }
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && !this._createBtn.disabled) this._submit();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Create notebook');
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    header.innerHTML =
+      '<div class="ws-cd-header-icon">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>' +
+      '</div>' +
+      '<div class="ws-cd-title">Create Notebook</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip
+    var ctx = document.createElement('div');
+    ctx.className = 'ws-cd-context';
+    ctx.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+      '<span>' + this._esc(this._workspaceName) + '</span>';
+    body.appendChild(ctx);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'ws-cd-field';
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-cd-label';
+    nameLabel.textContent = 'NOTEBOOK NAME';
+    nameField.appendChild(nameLabel);
+    var nameWrap = document.createElement('div');
+    nameWrap.className = 'ws-cd-input-wrap';
+    this._nameInput = document.createElement('input');
+    this._nameInput.className = 'ws-cd-input';
+    this._nameInput.type = 'text';
+    this._nameInput.placeholder = 'Enter notebook name';
+    this._nameInput.maxLength = WsCreateValidation.NAME_MAX;
+    this._nameInput.addEventListener('input', function() { self._validateName(); });
+    nameWrap.appendChild(this._nameInput);
+    this._counterEl = document.createElement('span');
+    this._counterEl.className = 'ws-cd-counter';
+    this._counterEl.textContent = '0 / ' + WsCreateValidation.NAME_MAX;
+    nameWrap.appendChild(this._counterEl);
+    nameField.appendChild(nameWrap);
+    this._nameValidEl = document.createElement('div');
+    this._nameValidEl.className = 'ws-cd-error';
+    this._nameValidEl.style.display = 'none';
+    nameField.appendChild(this._nameValidEl);
+    body.appendChild(nameField);
+
+    // Description field
+    var descField = document.createElement('div');
+    descField.className = 'ws-cd-field';
+    var descLabel = document.createElement('div');
+    descLabel.className = 'ws-cd-label';
+    descLabel.innerHTML = 'DESCRIPTION <span class="ws-cd-label-opt">(optional)</span>';
+    descField.appendChild(descLabel);
+    this._descInput = document.createElement('textarea');
+    this._descInput.className = 'ws-cd-textarea';
+    this._descInput.placeholder = 'What is this notebook for?';
+    this._descInput.maxLength = 256;
+    this._descCounterEl = document.createElement('div');
+    this._descCounterEl.className = 'ws-cd-counter';
+    this._descCounterEl.style.position = 'static';
+    this._descCounterEl.style.textAlign = 'right';
+    this._descCounterEl.style.marginTop = '2px';
+    this._descCounterEl.textContent = '0 / 256';
+    this._descInput.addEventListener('input', function() {
+      self._descCounterEl.textContent = self._descInput.value.length + ' / 256';
+    });
+    descField.appendChild(this._descInput);
+    descField.appendChild(this._descCounterEl);
+    body.appendChild(descField);
+
+    // Default lakehouse field
+    var lhField = document.createElement('div');
+    lhField.className = 'ws-cd-field';
+    var lhLabel = document.createElement('div');
+    lhLabel.className = 'ws-cd-label';
+    lhLabel.textContent = 'DEFAULT LAKEHOUSE';
+    lhField.appendChild(lhLabel);
+    this._lhGridEl = document.createElement('div');
+    this._lhGridEl.className = 'ws-cd-lh-grid';
+    this._lhGridEl.innerHTML =
+      '<div class="ws-cd-shimmer"></div>' +
+      '<div class="ws-cd-shimmer" style="animation-delay:0.15s"></div>';
+    lhField.appendChild(this._lhGridEl);
+    body.appendChild(lhField);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._createBtn = document.createElement('button');
+    this._createBtn.className = 'ws-cd-btn ws-cd-btn-primary';
+    this._createBtn.textContent = 'Create Notebook';
+    this._createBtn.disabled = true;
+    this._createBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._createBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _loadLakehouses() {
+    var self = this;
+    this._api.listWorkspaceItems(this._workspaceId).then(function(resp) {
+      var items = (resp && resp.value) ? resp.value : [];
+      var lakehouses = items.filter(function(it) {
+        return (it.type || '').toLowerCase().includes('lakehouse');
+      });
+      self._lakehousesLoaded = true;
+      self._renderLakehouses(lakehouses);
+      self._updateCreateBtn();
+    }).catch(function() {
+      self._lakehousesLoaded = true;
+      self._lhGridEl.innerHTML = '';
+      var errCard = document.createElement('div');
+      errCard.className = 'ws-cd-cap-error';
+      errCard.innerHTML = '<span>\u2715 Could not load lakehouses</span>';
+      var retryBtn = document.createElement('button');
+      retryBtn.textContent = 'Retry';
+      retryBtn.addEventListener('click', function() {
+        self._lhGridEl.innerHTML =
+          '<div class="ws-cd-shimmer"></div><div class="ws-cd-shimmer" style="animation-delay:0.15s"></div>';
+        self._lakehousesLoaded = false;
+        self._loadLakehouses();
+      });
+      errCard.appendChild(retryBtn);
+      self._lhGridEl.appendChild(errCard);
+      self._updateCreateBtn();
+    });
+  }
+
+  _renderLakehouses(lakehouses) {
+    var self = this;
+    this._lhGridEl.innerHTML = '';
+
+    if (lakehouses.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'ws-cd-lh-empty';
+      empty.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
+        'No lakehouses \u2014 create one first';
+      this._lhGridEl.appendChild(empty);
+      return;
+    }
+
+    for (var i = 0; i < lakehouses.length; i++) {
+      var lh = lakehouses[i];
+      var card = this._buildLhCard(lh);
+      card.style.animationDelay = (i * 60) + 'ms';
+      this._lhGridEl.appendChild(card);
+    }
+  }
+
+  _buildLhCard(lh) {
+    var self = this;
+    var card = document.createElement('div');
+    card.className = 'ws-cd-lh-card';
+    card.dataset.lhId = lh.id || '';
+
+    var radio = document.createElement('div');
+    radio.className = 'ws-cd-lh-radio';
+    card.appendChild(radio);
+
+    var icon = document.createElement('div');
+    icon.className = 'ws-cd-lh-icon';
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+    card.appendChild(icon);
+
+    var meta = document.createElement('div');
+    meta.className = 'ws-cd-lh-meta';
+    var nameEl = document.createElement('div');
+    nameEl.className = 'ws-cd-lh-name';
+    nameEl.textContent = lh.displayName || lh.id;
+    meta.appendChild(nameEl);
+    if (lh._tableCount !== undefined) {
+      var detail = document.createElement('div');
+      detail.className = 'ws-cd-lh-detail';
+      detail.textContent = lh._tableCount + ' tables';
+      meta.appendChild(detail);
+    }
+    card.appendChild(meta);
+
+    card.addEventListener('click', function() {
+      self._lhGridEl.querySelectorAll('.ws-cd-lh-card').forEach(function(c) {
+        c.classList.remove('selected');
+      });
+      card.classList.add('selected');
+      self._selectedLakehouse = lh.id || null;
+      self._updateCreateBtn();
+    });
+    return card;
+  }
+
+  _validateName() {
+    var name = this._nameInput.value;
+    this._counterEl.textContent = name.length + ' / ' + WsCreateValidation.NAME_MAX;
+    var result = WsCreateValidation.validateLakehouseName(name, this._existingItemNames);
+
+    this._nameInput.classList.remove('valid', 'invalid');
+    this._nameValidEl.style.display = 'none';
+    var existing = this._nameInput.parentNode.querySelector('.ws-cd-check');
+    if (existing) existing.remove();
+
+    if (!name.trim()) {
+      this._counterEl.style.display = '';
+    } else if (result.valid) {
+      this._nameInput.classList.add('valid');
+      this._counterEl.style.display = 'none';
+      var check = document.createElement('span');
+      check.className = 'ws-cd-check';
+      check.textContent = '\u2713';
+      this._nameInput.parentNode.appendChild(check);
+    } else {
+      this._nameInput.classList.add('invalid');
+      this._nameValidEl.textContent = result.error;
+      this._nameValidEl.style.display = '';
+    }
+
+    this._updateCreateBtn();
+  }
+
+  _updateCreateBtn() {
+    var nameValid = WsCreateValidation.validateLakehouseName(this._nameInput.value, this._existingItemNames).valid;
+    var ready = nameValid && this._lakehousesLoaded && this._selectedLakehouse && this._state === 'idle';
+    this._createBtn.disabled = !ready;
+    if (ready) {
+      this._createBtn.classList.add('ready');
+    } else {
+      this._createBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var nameResult = WsCreateValidation.validateLakehouseName(this._nameInput.value, this._existingItemNames);
+    if (!nameResult.valid || !this._selectedLakehouse) return;
+
+    var self = this;
+    var name = this._nameInput.value.trim();
+    this._state = 'creating';
+    this._createBtn.disabled = true;
+    this._createBtn.classList.remove('ready');
+    this._createBtn.innerHTML = '<span class="ws-cd-spinner"></span>Creating\u2026';
+    this._nameInput.disabled = true;
+    this._descInput.disabled = true;
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+
+    this._api.createNotebook(this._workspaceId, name).then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(name, result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Create failed');
+    });
+  }
+
+  _showSuccess(name, result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-success-name">' + this._esc(name) + '</div>' +
+        '<div class="ws-cd-success-sub">Notebook created in ' + this._esc(this._workspaceName) + '</div>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(result);
+    }, 3000);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundKeydown);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._nameInput.disabled = false;
+    this._descInput.disabled = false;
+    this._createBtn.innerHTML = 'Create Notebook';
+    this._createBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _showNoAuth() {
+    if (!this._dialogEl) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'ws-cd-noauth';
+    overlay.innerHTML = '<div class="ws-cd-noauth-msg">Sign in to create notebooks</div>';
+    var btn = document.createElement('button');
+    btn.className = 'ws-cd-btn ws-cd-btn-primary';
+    btn.textContent = 'Close';
+    btn.addEventListener('click', this.close.bind(this));
+    overlay.appendChild(btn);
+    this._dialogEl.appendChild(overlay);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DeleteConfirmDialog — cascade-aware delete confirmation
+   Handles: notebook, lakehouse (simple/cascade), workspace
+   ═══════════════════════════════════════════════════════════════ */
+class DeleteConfirmDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._type = opts.type || 'notebook'; // 'notebook' | 'lakehouse' | 'workspace'
+    this._name = opts.name || '';
+    this._id = opts.id || '';
+    this._workspaceId = opts.workspaceId || '';
+    this._workspaceName = opts.workspaceName || '';
+    this._tableCount = opts.tableCount || 0;
+    this._exclusiveNotebooks = opts.exclusiveNotebooks || [];
+    this._detachNotebooks = opts.detachNotebooks || [];
+    this._childCounts = opts.childCounts || { lakehouses: 0, notebooks: 0 };
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._confirmInput = null;
+    this._deleteBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  /** Whether this scenario requires type-to-confirm. */
+  _needsConfirm() {
+    if (this._type === 'workspace') return true;
+    if (this._type === 'lakehouse' && this._exclusiveNotebooks.length > 0) return true;
+    return false;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    if (this._confirmInput) {
+      this._confirmInput.focus();
+    }
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && this._deleteBtn && !this._deleteBtn.disabled) this._submit();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'alertdialog');
+    this._dialogEl.setAttribute('aria-label', 'Delete ' + this._type);
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    header.innerHTML =
+      '<div class="ws-cd-header-icon" style="color:var(--status-fail,#e5453b)">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M5 6l1 14a2 2 0 002 2h8a2 2 0 002-2l1-14"/></svg>' +
+      '</div>' +
+      '<div class="ws-cd-title">Delete ' + this._esc(this._type) + '</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip
+    if (this._workspaceName && this._type !== 'workspace') {
+      var ctx = document.createElement('div');
+      ctx.className = 'ws-cd-context';
+      ctx.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+        '<span>' + this._esc(this._workspaceName) + '</span>';
+      body.appendChild(ctx);
+    }
+
+    // Item name being deleted
+    var nameBox = document.createElement('div');
+    nameBox.className = 'ws-cd-field';
+    nameBox.innerHTML =
+      '<div style="font-size:15px;font-weight:600;margin-bottom:4px">' + this._esc(this._name) + '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted,#8a9099)">This action cannot be undone.</div>';
+    body.appendChild(nameBox);
+
+    // Scenario-specific content
+    this._buildScenario(body);
+
+    // Type-to-confirm
+    if (this._needsConfirm()) {
+      var confirmBlock = document.createElement('div');
+      confirmBlock.className = 'ws-cd-confirm-block';
+      var prompt = document.createElement('div');
+      prompt.className = 'ws-cd-confirm-prompt';
+      prompt.innerHTML = 'Type <span class="ws-cd-confirm-target">' + this._esc(this._name) + '</span> to confirm';
+      confirmBlock.appendChild(prompt);
+      this._confirmInput = document.createElement('input');
+      this._confirmInput.className = 'ws-cd-confirm-input';
+      this._confirmInput.type = 'text';
+      this._confirmInput.placeholder = this._name;
+      this._confirmInput.addEventListener('input', function() { self._updateDeleteBtn(); });
+      confirmBlock.appendChild(this._confirmInput);
+      body.appendChild(confirmBlock);
+    }
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._deleteBtn = document.createElement('button');
+    this._deleteBtn.className = 'ws-cd-btn ws-cd-btn-danger';
+    this._deleteBtn.textContent = 'Delete';
+    if (!this._needsConfirm()) {
+      this._deleteBtn.classList.add('ready');
+    }
+    this._deleteBtn.disabled = this._needsConfirm();
+    this._deleteBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._deleteBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _buildScenario(body) {
+    if (this._type === 'notebook') {
+      // Scenario A: simple notebook delete — no extra content
+      return;
+    }
+
+    if (this._type === 'lakehouse') {
+      // Show table count
+      if (this._tableCount > 0) {
+        var tableInfo = document.createElement('div');
+        tableInfo.className = 'ws-cd-child-counts';
+        tableInfo.innerHTML =
+          '<div class="ws-cd-child-count">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>' +
+            this._tableCount + ' table' + (this._tableCount !== 1 ? 's' : '') +
+          '</div>';
+        body.appendChild(tableInfo);
+      }
+
+      // Scenario C: cascade — exclusive notebooks will be deleted
+      if (this._exclusiveNotebooks.length > 0) {
+        var cascadeSection = document.createElement('div');
+        cascadeSection.className = 'ws-cd-cascade-section';
+        cascadeSection.innerHTML =
+          '<div class="ws-cd-cascade-title">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
+            'Notebooks will also be deleted' +
+          '</div>' +
+          '<div class="ws-cd-cascade-body">These notebooks have no other lakehouse and will be permanently removed:</div>';
+        var pillContainer = document.createElement('div');
+        pillContainer.style.marginTop = '8px';
+        for (var i = 0; i < this._exclusiveNotebooks.length; i++) {
+          var pill = document.createElement('span');
+          pill.className = 'ws-cd-cascade-pill';
+          pill.textContent = this._exclusiveNotebooks[i];
+          pillContainer.appendChild(pill);
+        }
+        cascadeSection.appendChild(pillContainer);
+        body.appendChild(cascadeSection);
+      }
+
+      // Scenario B/C: detach notebooks
+      if (this._detachNotebooks.length > 0) {
+        var detachSection = document.createElement('div');
+        detachSection.className = 'ws-cd-detach-section';
+        detachSection.innerHTML =
+          '<div class="ws-cd-detach-title">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
+            'Notebooks will be detached' +
+          '</div>' +
+          '<div class="ws-cd-detach-body">' + this._detachNotebooks.length + ' notebook' + (this._detachNotebooks.length !== 1 ? 's' : '') + ' will be detached but not deleted:</div>';
+        var detachPills = document.createElement('div');
+        detachPills.style.marginTop = '8px';
+        for (var j = 0; j < this._detachNotebooks.length; j++) {
+          var dp = document.createElement('span');
+          dp.className = 'ws-cd-detach-pill';
+          dp.textContent = this._detachNotebooks[j];
+          detachPills.appendChild(dp);
+        }
+        detachSection.appendChild(detachPills);
+        body.appendChild(detachSection);
+      }
+      return;
+    }
+
+    if (this._type === 'workspace') {
+      // Scenario D: workspace delete — show child counts
+      var counts = this._childCounts;
+      var countsEl = document.createElement('div');
+      countsEl.className = 'ws-cd-child-counts';
+      if (counts.lakehouses) {
+        countsEl.innerHTML +=
+          '<div class="ws-cd-child-count">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
+            counts.lakehouses + ' lakehouse' + (counts.lakehouses !== 1 ? 's' : '') +
+          '</div>';
+      }
+      if (counts.notebooks) {
+        countsEl.innerHTML +=
+          '<div class="ws-cd-child-count">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>' +
+            counts.notebooks + ' notebook' + (counts.notebooks !== 1 ? 's' : '') +
+          '</div>';
+      }
+      body.appendChild(countsEl);
+
+      var warnSection = document.createElement('div');
+      warnSection.className = 'ws-cd-cascade-section';
+      warnSection.innerHTML =
+        '<div class="ws-cd-cascade-title">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
+          'Everything inside will be deleted' +
+        '</div>' +
+        '<div class="ws-cd-cascade-body">All lakehouses, notebooks, and other items in this workspace will be permanently removed.</div>';
+      body.appendChild(warnSection);
+    }
+  }
+
+  _updateDeleteBtn() {
+    if (!this._needsConfirm()) {
+      this._deleteBtn.disabled = false;
+      this._deleteBtn.classList.add('ready');
+      return;
+    }
+    var match = this._confirmInput && this._confirmInput.value === this._name;
+    this._deleteBtn.disabled = !match;
+    if (match) {
+      this._deleteBtn.classList.add('ready');
+    } else {
+      this._deleteBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+
+    var self = this;
+    this._state = 'creating';
+    this._deleteBtn.disabled = true;
+    this._deleteBtn.classList.remove('ready');
+    this._deleteBtn.innerHTML = '<span class="ws-cd-spinner"></span>Deleting\u2026';
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+    if (this._confirmInput) this._confirmInput.disabled = true;
+
+    var deletePromise;
+    if (this._type === 'workspace') {
+      deletePromise = this._api.deleteWorkspace(this._id);
+    } else if (this._type === 'lakehouse') {
+      deletePromise = this._api.deleteLakehouse(this._workspaceId, this._id);
+    } else {
+      deletePromise = this._api.deleteItem(this._workspaceId, this._id);
+    }
+
+    deletePromise.then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Delete failed');
+    });
+  }
+
+  _showSuccess(result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-success-name">' + this._esc(this._name) + '</div>' +
+        '<div class="ws-cd-success-sub">' + this._esc(this._type.charAt(0).toUpperCase() + this._type.slice(1)) + ' deleted</div>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(result);
+    }, 1500);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundKeydown);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._deleteBtn.innerHTML = 'Delete';
+    this._deleteBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+    if (this._confirmInput) this._confirmInput.disabled = false;
+    this._updateDeleteBtn();
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RenameDialog — modal for renaming workspace items
+   ═══════════════════════════════════════════════════════════════ */
+class RenameDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._type = opts.type || 'notebook'; // 'workspace' | 'lakehouse' | 'notebook'
+    this._name = opts.name || '';
+    this._id = opts.id || '';
+    this._workspaceId = opts.workspaceId || '';
+    this._workspaceName = opts.workspaceName || '';
+    this._existingNames = opts.existingNames || [];
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._counterEl = null;
+    this._nameValidEl = null;
+    this._renameBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._diffEl = null;
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._nameInput.select();
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && this._renameBtn && !this._renameBtn.disabled) this._submit();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Rename ' + this._type);
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header with type icon
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    var iconSvg = this._getTypeIcon();
+    header.innerHTML =
+      '<div class="ws-cd-header-icon">' + iconSvg + '</div>' +
+      '<div class="ws-cd-title">Rename ' + this._esc(this._type) + '</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip (for non-workspace items)
+    if (this._workspaceName && this._type !== 'workspace') {
+      var ctx = document.createElement('div');
+      ctx.className = 'ws-cd-context';
+      ctx.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+        '<span>' + this._esc(this._workspaceName) + '</span>';
+      body.appendChild(ctx);
+    }
+
+    // Rename diff (shows old → new as user types)
+    this._diffEl = document.createElement('div');
+    this._diffEl.className = 'ws-cd-rename-diff';
+    this._diffEl.style.display = 'none';
+    this._diffEl.innerHTML =
+      '<span class="ws-cd-rename-from">' + this._esc(this._name) + '</span>' +
+      '<span class="ws-cd-rename-arrow">\u2192</span>' +
+      '<span class="ws-cd-rename-to"></span>';
+    body.appendChild(this._diffEl);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'ws-cd-field';
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-cd-label';
+    nameLabel.textContent = 'NEW NAME';
+    nameField.appendChild(nameLabel);
+    var nameWrap = document.createElement('div');
+    nameWrap.className = 'ws-cd-input-wrap';
+    this._nameInput = document.createElement('input');
+    this._nameInput.className = 'ws-cd-input';
+    this._nameInput.type = 'text';
+    this._nameInput.value = this._name;
+    this._nameInput.maxLength = WsCreateValidation.NAME_MAX;
+    this._nameInput.addEventListener('input', function() { self._validateName(); });
+    nameWrap.appendChild(this._nameInput);
+    this._counterEl = document.createElement('span');
+    this._counterEl.className = 'ws-cd-counter';
+    this._counterEl.textContent = this._name.length + ' / ' + WsCreateValidation.NAME_MAX;
+    nameWrap.appendChild(this._counterEl);
+    nameField.appendChild(nameWrap);
+    this._nameValidEl = document.createElement('div');
+    this._nameValidEl.className = 'ws-cd-error';
+    this._nameValidEl.style.display = 'none';
+    nameField.appendChild(this._nameValidEl);
+    body.appendChild(nameField);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._renameBtn = document.createElement('button');
+    this._renameBtn.className = 'ws-cd-btn ws-cd-btn-primary';
+    this._renameBtn.textContent = 'Rename';
+    this._renameBtn.disabled = true;
+    this._renameBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._renameBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _getTypeIcon() {
+    if (this._type === 'workspace') {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+    }
+    if (this._type === 'lakehouse') {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>';
+  }
+
+  _validateName() {
+    var name = this._nameInput.value;
+    this._counterEl.textContent = name.length + ' / ' + WsCreateValidation.NAME_MAX;
+
+    // Filter out the current name from existing names (allow keeping same casing)
+    var filteredNames = this._existingNames.filter(function(n) {
+      return (n || '').toLowerCase() !== (this._name || '').toLowerCase();
+    }.bind(this));
+
+    var result;
+    if (this._type === 'workspace') {
+      result = WsCreateValidation.validateName(name, filteredNames);
+    } else {
+      result = WsCreateValidation.validateLakehouseName(name, filteredNames);
+    }
+
+    this._nameInput.classList.remove('valid', 'invalid');
+    this._nameValidEl.style.display = 'none';
+    var existing = this._nameInput.parentNode.querySelector('.ws-cd-check');
+    if (existing) existing.remove();
+
+    var trimmed = (name || '').trim();
+    var unchanged = trimmed === this._name;
+
+    if (!trimmed) {
+      this._counterEl.style.display = '';
+    } else if (result.valid && !unchanged) {
+      this._nameInput.classList.add('valid');
+      this._counterEl.style.display = 'none';
+      var check = document.createElement('span');
+      check.className = 'ws-cd-check';
+      check.textContent = '\u2713';
+      this._nameInput.parentNode.appendChild(check);
+    } else if (!result.valid) {
+      this._nameInput.classList.add('invalid');
+      this._nameValidEl.textContent = result.error;
+      this._nameValidEl.style.display = '';
+    }
+
+    // Update diff row
+    if (trimmed && trimmed !== this._name) {
+      this._diffEl.style.display = '';
+      this._diffEl.querySelector('.ws-cd-rename-to').textContent = trimmed;
+    } else {
+      this._diffEl.style.display = 'none';
+    }
+
+    this._updateRenameBtn();
+  }
+
+  _updateRenameBtn() {
+    var name = (this._nameInput.value || '').trim();
+    var unchanged = name === this._name;
+    var filteredNames = this._existingNames.filter(function(n) {
+      return (n || '').toLowerCase() !== (this._name || '').toLowerCase();
+    }.bind(this));
+
+    var result;
+    if (this._type === 'workspace') {
+      result = WsCreateValidation.validateName(name, filteredNames);
+    } else {
+      result = WsCreateValidation.validateLakehouseName(name, filteredNames);
+    }
+
+    var ready = result.valid && !unchanged && this._state === 'idle';
+    this._renameBtn.disabled = !ready;
+    if (ready) {
+      this._renameBtn.classList.add('ready');
+    } else {
+      this._renameBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var newName = this._nameInput.value.trim();
+    if (newName === this._name) return;
+
+    var self = this;
+    this._state = 'creating';
+    this._renameBtn.disabled = true;
+    this._renameBtn.classList.remove('ready');
+    this._renameBtn.innerHTML = '<span class="ws-cd-spinner"></span>Renaming\u2026';
+    this._nameInput.disabled = true;
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+
+    var renamePromise;
+    if (this._type === 'workspace') {
+      renamePromise = this._api.renameWorkspace(this._id, newName);
+    } else if (this._type === 'lakehouse') {
+      renamePromise = this._api.renameLakehouse(this._workspaceId, this._id, newName);
+    } else {
+      renamePromise = this._api.renameItem(this._workspaceId, this._id, newName);
+    }
+
+    renamePromise.then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(newName, result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Rename failed');
+    });
+  }
+
+  _showSuccess(newName, result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-rename-diff" style="justify-content:center">' +
+          '<span class="ws-cd-rename-from">' + this._esc(this._name) + '</span>' +
+          '<span class="ws-cd-rename-arrow">\u2192</span>' +
+          '<span class="ws-cd-rename-to">' + this._esc(newName) + '</span>' +
+        '</div>' +
+        '<div class="ws-cd-success-sub">Renamed successfully</div>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    var finishResult = result || {};
+    finishResult.newName = newName;
+
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(finishResult);
+    }, 1500);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundKeydown);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._nameInput.disabled = false;
+    this._renameBtn.innerHTML = 'Rename';
+    this._renameBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+    this._updateRenameBtn();
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
 class WorkspaceExplorer {
   constructor(apiClient) {
     this._api = apiClient;
@@ -70656,82 +72153,45 @@ class WorkspaceExplorer {
     if (!t) return;
 
     const oldName = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
+    const isWs = t.isWorkspace;
+    const isLH = !isWs && this._isLakehouse(t.item);
+    const type = isWs ? 'workspace' : (isLH ? 'lakehouse' : 'notebook');
 
-    // Find the tree row for this item and start inline editing
-    const treeRow = this._findTreeRow(t);
-    if (!treeRow) {
-      this._toast('Could not locate tree node', 'error');
-      return;
+    // Collect sibling names for duplicate detection
+    var existingNames = [];
+    if (isWs) {
+      existingNames = this._workspaces.map(function(w) { return w.displayName; });
+    } else {
+      var children = this._children[t.workspace.id] || [];
+      existingNames = children.map(function(c) { return c.displayName; });
     }
 
-    treeRow.classList.add('editing');
-    const input = document.createElement('input');
-    input.className = 'ws-inline-rename';
-    input.type = 'text';
-    input.value = oldName;
-    treeRow.appendChild(input);
-    input.focus();
-    input.select();
-
-    const commit = async () => {
-      const newName = input.value.trim();
-      cleanup();
-      if (!newName || newName === oldName) return;
-
-      try {
-        if (t.isWorkspace) {
-          await this._api.renameWorkspace(t.workspace.id, newName);
-          t.workspace.displayName = newName;
-          this._toast(`Renamed workspace to "${newName}"`, 'success');
+    var self = this;
+    var dialog = new RenameDialog(this._api, {
+      type: type,
+      name: oldName,
+      id: isWs ? t.workspace.id : t.item.id,
+      workspaceId: isWs ? t.workspace.id : t.workspace.id,
+      workspaceName: t.workspace.displayName,
+      existingNames: existingNames
+    });
+    dialog.onComplete = function(result) {
+      var newName = result && result.newName ? result.newName : oldName;
+      if (isWs) {
+        t.workspace.displayName = newName;
+      } else {
+        t.item.displayName = newName;
+      }
+      self._renderTree();
+      if (self._selectedItem && self._selectedItem.id === (t.item ? t.item.id : t.workspace.id)) {
+        if (isWs) {
+          self._selectWorkspace(t.workspace);
         } else {
-          const isLH = this._isLakehouse(t.item);
-          if (isLH) {
-            await this._api.renameLakehouse(t.workspace.id, t.item.id, newName);
-          } else {
-            await this._api.renameItem(t.workspace.id, t.item.id, newName);
-          }
-          t.item.displayName = newName;
-          this._toast(`Renamed to "${newName}"`, 'success');
+          self._selectItem(t.item, t.workspace);
         }
-        this._renderTree();
-        if (this._selectedItem && this._selectedItem.id === (t.item?.id || t.workspace?.id)) {
-          if (t.isWorkspace) {
-            this._selectWorkspace(t.workspace);
-          } else {
-            this._selectItem(t.item, t.workspace);
-          }
-        }
-      } catch (err) {
-        this._toast(`Rename failed: ${err.message}`, 'error');
-        this._renderTree();
       }
     };
-
-    const cleanup = () => {
-      treeRow.classList.remove('editing');
-      if (input.parentNode) input.remove();
-      input.removeEventListener('keydown', onKey);
-      input.removeEventListener('blur', onBlur);
-    };
-
-    let committed = false;
-    const onKey = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        committed = true;
-        commit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        committed = true;
-        cleanup();
-      }
-    };
-    const onBlur = () => {
-      if (!committed) commit();
-    };
-
-    input.addEventListener('keydown', onKey);
-    input.addEventListener('blur', onBlur);
+    dialog.open();
   }
 
   /**
@@ -70755,37 +72215,74 @@ class WorkspaceExplorer {
     if (!t) return;
 
     const name = t.isWorkspace ? t.workspace.displayName : t.item.displayName;
-    const kind = t.isWorkspace ? 'workspace' : (this._isLakehouse(t.item) ? 'lakehouse' : 'item');
-    const ok = await this._toastConfirm(`Delete ${kind} "${name}"?`);
-    if (!ok) return;
+    const isWs = t.isWorkspace;
+    const isLH = !isWs && this._isLakehouse(t.item);
+    const type = isWs ? 'workspace' : (isLH ? 'lakehouse' : 'notebook');
 
-    try {
-      if (t.isWorkspace) {
-        await this._api.deleteWorkspace(t.workspace.id);
-        this._workspaces = this._workspaces.filter(w => w.id !== t.workspace.id);
-        delete this._children[t.workspace.id];
-        this._expanded.delete(t.workspace.id);
-        this._toast(`Deleted workspace "${name}"`, 'success');
-      } else {
-        if (this._isLakehouse(t.item)) {
-          await this._api.deleteLakehouse(t.workspace.id, t.item.id);
-        } else {
-          await this._api.deleteItem(t.workspace.id, t.item.id);
-        }
-        const children = this._children[t.workspace.id];
-        if (children) {
-          this._children[t.workspace.id] = children.filter(c => c.id !== t.item.id);
-        }
-        this._toast(`Deleted "${name}"`, 'success');
+    var opts = {
+      type: type,
+      name: name,
+      id: isWs ? t.workspace.id : t.item.id,
+      workspaceId: isWs ? t.workspace.id : t.workspace.id,
+      workspaceName: t.workspace.displayName
+    };
+
+    if (isWs) {
+      // Count children for workspace delete
+      var wsChildren = this._children[t.workspace.id] || [];
+      var lhCount = 0;
+      var nbCount = 0;
+      for (var ci = 0; ci < wsChildren.length; ci++) {
+        if (this._isLakehouse(wsChildren[ci])) lhCount++;
+        else nbCount++;
       }
-      this._renderTree();
-      this._showEmptyContent();
-      this._clearInspector();
-      this._selectedItem = null;
-      this._selectedWorkspace = null;
-    } catch (err) {
-      this._toast(`Delete failed: ${err.message}`, 'error');
+      opts.childCounts = { lakehouses: lhCount, notebooks: nbCount };
+    } else if (isLH) {
+      // Compute cascade info for lakehouse delete
+      var children = this._children[t.workspace.id] || [];
+      var notebooks = children.filter(function(c) {
+        return !(c.type || '').toLowerCase().includes('lakehouse');
+      });
+      opts.tableCount = t.item._tableCount || 0;
+      opts.exclusiveNotebooks = [];
+      opts.detachNotebooks = [];
+      // For notebooks: if they only reference this lakehouse, they are exclusive
+      // Since we don't have full lakehouse-attachment data in the tree,
+      // we approximate: notebooks with no known multi-lakehouse info are exclusive
+      for (var ni = 0; ni < notebooks.length; ni++) {
+        var nb = notebooks[ni];
+        var lhIds = nb._lakehouseIds || [];
+        if (lhIds.length === 0) {
+          // No attachment data — treat as potentially exclusive
+          opts.exclusiveNotebooks.push(nb.displayName);
+        } else if (lhIds.length === 1 && lhIds[0] === t.item.id) {
+          opts.exclusiveNotebooks.push(nb.displayName);
+        } else if (lhIds.indexOf(t.item.id) !== -1) {
+          opts.detachNotebooks.push(nb.displayName);
+        }
+      }
     }
+
+    var self = this;
+    var dialog = new DeleteConfirmDialog(this._api, opts);
+    dialog.onComplete = function() {
+      if (isWs) {
+        self._workspaces = self._workspaces.filter(function(w) { return w.id !== t.workspace.id; });
+        delete self._children[t.workspace.id];
+        self._expanded.delete(t.workspace.id);
+      } else {
+        var ch = self._children[t.workspace.id];
+        if (ch) {
+          self._children[t.workspace.id] = ch.filter(function(c) { return c.id !== t.item.id; });
+        }
+      }
+      self._renderTree();
+      self._showEmptyContent();
+      self._clearInspector();
+      self._selectedItem = null;
+      self._selectedWorkspace = null;
+    };
+    dialog.open();
   }
 
   _ctxOpenInFabric() {
@@ -70962,107 +72459,26 @@ class WorkspaceExplorer {
   async _ctxCreateNotebook() {
     var t = this._ctxTarget;
     if (!t || !t.isWorkspace) return;
+    var ws = t.workspace;
+    var hasAuth = this._api.hasBearerToken();
 
-    // Expand workspace so children are visible
-    if (!this._expanded.has(t.workspace.id)) {
-      await this._toggleWorkspace(t.workspace);
-    }
-
-    if (!this._treeEl) return;
-    // Find insertion point: after workspace's last child in tree
-    var allRows = Array.from(this._treeEl.querySelectorAll('.ws-tree-item'));
-    var insertAfter = null;
-    var foundWs = false;
-    for (var i = 0; i < allRows.length; i++) {
-      var row = allRows[i];
-      var nameEl = row.querySelector('.ws-tree-name');
-      if (nameEl && nameEl.textContent === t.workspace.displayName && !foundWs) {
-        foundWs = true;
-        insertAfter = row;
-        continue;
-      }
-      if (foundWs) {
-        var pl = parseInt(row.style.paddingLeft, 10) || 0;
-        if (pl > 12) {
-          insertAfter = row;
-        } else {
-          break;
-        }
-      }
-    }
-
-    // Avoid duplicates
-    if (this._treeEl.querySelector('.ws-create-row')) return;
-
-    var createRow = document.createElement('div');
-    createRow.className = 'ws-create-row';
-    createRow.style.paddingLeft = '28px';
-
-    var dot = document.createElement('span');
-    dot.className = 'ws-tree-dot notebook';
-    createRow.appendChild(dot);
-
-    var input = document.createElement('input');
-    input.className = 'ws-create-input';
-    input.type = 'text';
-    input.placeholder = 'New notebook name';
-    input.setAttribute('aria-label', 'New notebook name');
-    createRow.appendChild(input);
-
-    if (insertAfter && insertAfter.nextSibling) {
-      this._treeEl.insertBefore(createRow, insertAfter.nextSibling);
-    } else {
-      this._treeEl.appendChild(createRow);
-    }
-    input.focus();
-
+    var children = this._children[ws.id] || [];
     var self = this;
-    var committed = false;
-    var commit = function() {
-      var name = input.value.trim();
-      cleanup();
-      if (!name) return;
-      self._api.createNotebook(t.workspace.id, name).then(function() {
-        self._toast('Created notebook "' + name + '"', 'success');
-        // Refresh children
-        delete self._children[t.workspace.id];
-        self._expanded.add(t.workspace.id);
-        return self._toggleWorkspace(t.workspace).then(function() {
-          if (!self._expanded.has(t.workspace.id)) {
-            return self._toggleWorkspace(t.workspace);
-          }
-        });
-      }).catch(function(err) {
-        self._toast('Create failed: ' + err.message, 'error');
+
+    var dialog = new NotebookCreateDialog(this._api, {
+      workspaceId: ws.id,
+      workspaceName: ws.displayName,
+      existingItems: children
+    });
+    dialog.onComplete = function() {
+      delete self._children[ws.id];
+      self._expanded.add(ws.id);
+      self.loadWorkspaces().then(function() {
+        self._renderTree();
       });
     };
-
-    var cleanup = function() {
-      if (createRow.parentNode) createRow.remove();
-      input.removeEventListener('keydown', onKey);
-      input.removeEventListener('blur', onBlur);
-    };
-
-    var onKey = function(e) {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        committed = true;
-        commit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        committed = true;
-        cleanup();
-      }
-    };
-    var onBlur = function() {
-      if (!committed) {
-        committed = true;
-        commit();
-      }
-    };
-
-    input.addEventListener('keydown', onKey);
-    input.addEventListener('blur', onBlur);
+    dialog.open();
+    if (!hasAuth) dialog._showNoAuth();
   }
 
   _bindGlobalKeys() {
@@ -82756,6 +84172,9 @@ class QaResults {
     this._container = null;
     this._runResult = null;
     this._history = [];
+    // F27 P7 — run comparison state.
+    this._compareBaseRunId = null;
+    this._compareData = null;
   }
 
   init() {
@@ -82776,10 +84195,18 @@ class QaResults {
       return;
     }
 
+    // Reset comparison state on every fresh load — the diff is only
+    // meaningful against the run currently being viewed.
+    this._compareBaseRunId = null;
+    this._compareData = null;
+
     var corrId = this._panel.getCorrelationId();
     conn.invoke('QaGetRunDetail', corrId, runId).then(result => {
       this._runResult = result;
       this._render();
+      // Fire-and-forget — populates the compare-against dropdown once
+      // history arrives. Re-renders to wire up the dropdown in place.
+      this.loadHistory();
     }).catch(err => {
       this._showError('Failed to load results: ' + (err.message || err));
     });
@@ -82853,6 +84280,14 @@ class QaResults {
 
     this._container.appendChild(summary);
 
+    // ── F27 P7: Compare toolbar + warnings + removed-from-target ghost rows ──
+    this._renderCompareToolbar();
+    this._renderCompareWarnings();
+    this._renderRemovedScenarios();
+
+    // Build a diff lookup so each scenario card can self-badge.
+    var diffLookup = this._buildDiffLookup();
+
     // ── Scenario Detail Cards ──
     var scenarios = run.scenarios || run.scenarioResults || [];
     if (scenarios.length) {
@@ -82865,7 +84300,7 @@ class QaResults {
       list.className = 'qa-results-list';
 
       for (var j = 0; j < scenarios.length; j++) {
-        list.appendChild(this._createResultCard(scenarios[j], j));
+        list.appendChild(this._createResultCard(scenarios[j], j, diffLookup));
       }
       this._container.appendChild(list);
     }
@@ -83052,7 +84487,7 @@ class QaResults {
     }
   }
 
-  _createResultCard(scn, index) {
+  _createResultCard(scn, index, diffLookup) {
     var card = document.createElement('div');
     card.className = 'qa-card qa-result-card';
     card.tabIndex = 0;
@@ -83070,6 +84505,12 @@ class QaResults {
     titleEl.className = 'qa-result-title';
     titleEl.textContent = scn.title || scn.scenarioId || 'Scenario';
     header.appendChild(titleEl);
+
+    // F27 P7: comparison badge (NEW or → PASS/→ FAIL).
+    if (diffLookup) {
+      var badge = this._diffBadgeForScenario(scn, diffLookup);
+      if (badge) header.appendChild(badge);
+    }
 
     var verdict = scn.verdict || scn.overallVerdict || 'unknown';
     var verdictEl = document.createElement('span');
@@ -83155,24 +84596,232 @@ class QaResults {
     return card;
   }
 
-  /** Load run history */
+  /** Load run history for the current PR (or unscoped if none). */
   loadHistory() {
     var conn = this._panel.getConnection();
     if (!conn) return;
     var corrId = this._panel.getCorrelationId();
+    // F27 P7: support unscoped (prId=0) runs — null only when truly missing.
+    var prId = (this._runResult && this._runResult.prId != null) ? this._runResult.prId : null;
     conn.invoke('QaGetRunHistory', {
       correlationId: corrId,
-      prId: null,
+      prId: prId,
       limit: 20,
       offset: 0
     }).then(results => {
       this._history = results || [];
+      // Re-render so the compare dropdown picks up the new options.
+      // We re-render the entire results view because the toolbar is
+      // structurally tied to summary + scenario list ordering.
+      if (this._runResult) this._render();
     }).catch(function() { /* ignore */ });
   }
 
   reset() {
     this._runResult = null;
+    this._history = [];
+    this._compareBaseRunId = null;
+    this._compareData = null;
     if (this._container) this._container.innerHTML = '';
+  }
+
+  // ── F27 P7: Run comparison UI ────────────────────────────────────────
+
+  /** Render the "Compare against" dropdown above the scenario list. */
+  _renderCompareToolbar() {
+    if (!this._runResult || !this._container) return;
+    var history = this._history || [];
+    // Exclude the run currently being viewed — comparing a run to
+    // itself has no diff value.
+    var currentId = this._runResult.runId;
+    var candidates = history.filter(function (h) { return h && h.runId && h.runId !== currentId; });
+    if (!candidates.length) return;
+
+    var toolbar = document.createElement('div');
+    toolbar.className = 'qa-compare-toolbar';
+
+    var label = document.createElement('label');
+    label.className = 'qa-compare-label';
+    label.textContent = 'Compare against:';
+    label.setAttribute('for', 'qa-compare-select');
+    toolbar.appendChild(label);
+
+    var select = document.createElement('select');
+    select.id = 'qa-compare-select';
+    select.className = 'qa-compare-select';
+
+    var noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = '(none)';
+    select.appendChild(noneOpt);
+
+    for (var i = 0; i < candidates.length; i++) {
+      var h = candidates[i];
+      var opt = document.createElement('option');
+      opt.value = h.runId;
+      var when = h.startedAt ? new Date(h.startedAt).toLocaleString() : h.runId;
+      var verdict = h.overallPass === true ? 'pass' : (h.overallPass === false ? 'fail' : '?');
+      opt.textContent = when + '  \u2014  ' + verdict + '  \u2014  ' + h.runId.substring(0, 8);
+      if (h.runId === this._compareBaseRunId) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    select.addEventListener('change', () => {
+      var v = select.value || null;
+      this._compareBaseRunId = v;
+      if (!v) {
+        this._compareData = null;
+        this._render();
+      } else {
+        this._fetchComparison(v);
+      }
+    });
+    toolbar.appendChild(select);
+
+    if (this._compareBaseRunId) {
+      var clearBtn = document.createElement('button');
+      clearBtn.className = 'qa-btn qa-compare-clear';
+      clearBtn.textContent = 'Clear';
+      clearBtn.addEventListener('click', () => {
+        this._compareBaseRunId = null;
+        this._compareData = null;
+        this._render();
+      });
+      toolbar.appendChild(clearBtn);
+    }
+
+    this._container.appendChild(toolbar);
+  }
+
+  /** Invoke QaCompareRuns and re-render with the diff overlaid. */
+  _fetchComparison(baseRunId) {
+    var conn = this._panel.getConnection();
+    if (!conn || !this._runResult) return;
+    var targetRunId = this._runResult.runId;
+    conn.invoke('QaCompareRuns', {
+      baseRunId: baseRunId,
+      targetRunId: targetRunId
+    }).then(result => {
+      // Stale-result guard: if the user cleared or switched base while
+      // the request was in flight, drop this response on the floor.
+      if (this._compareBaseRunId !== baseRunId) return;
+      if (!this._runResult || this._runResult.runId !== targetRunId) return;
+      this._compareData = result || null;
+      if (result && result.success === false && result.error) {
+        if (window.edogToast) window.edogToast.show('Compare failed: ' + result.error, 'error');
+      }
+      this._render();
+    }).catch(err => {
+      if (this._compareBaseRunId !== baseRunId) return;
+      this._compareData = null;
+      if (window.edogToast) window.edogToast.show('Compare failed: ' + (err.message || err), 'error');
+      this._render();
+    });
+  }
+
+  /** Yellow banner above the scenario list when comparison emits warnings. */
+  _renderCompareWarnings() {
+    var c = this._compareData;
+    if (!c || !c.warnings || !c.warnings.length) return;
+    var banner = document.createElement('div');
+    banner.className = 'qa-warning qa-compare-warnings';
+    var title = document.createElement('strong');
+    title.textContent = 'Degraded comparison';
+    banner.appendChild(title);
+    var list = document.createElement('ul');
+    list.className = 'qa-compare-warnings-list';
+    for (var i = 0; i < c.warnings.length; i++) {
+      var li = document.createElement('li');
+      li.textContent = String(c.warnings[i]);
+      list.appendChild(li);
+    }
+    banner.appendChild(list);
+    this._container.appendChild(banner);
+  }
+
+  /** Ghost rows for scenarios present in base but missing from target. */
+  _renderRemovedScenarios() {
+    var c = this._compareData;
+    if (!c || !c.removedFromTarget || !c.removedFromTarget.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-compare-removed';
+    var header = document.createElement('h4');
+    header.className = 'qa-results-list-header';
+    header.textContent = 'Removed since base (' + c.removedFromTarget.length + ')';
+    wrap.appendChild(header);
+    for (var i = 0; i < c.removedFromTarget.length; i++) {
+      var s = c.removedFromTarget[i];
+      var row = document.createElement('div');
+      row.className = 'qa-card qa-result-card qa-removed';
+      var hdr = document.createElement('div');
+      hdr.className = 'qa-result-header';
+      var titleEl = document.createElement('span');
+      titleEl.className = 'qa-result-title';
+      titleEl.textContent = s.title || s.scenarioId || 'Scenario';
+      hdr.appendChild(titleEl);
+      var badge = document.createElement('span');
+      badge.className = 'qa-compare-badge qa-compare-gone';
+      badge.textContent = 'GONE';
+      hdr.appendChild(badge);
+      row.appendChild(hdr);
+      wrap.appendChild(row);
+    }
+    this._container.appendChild(wrap);
+  }
+
+  /** Build {keyOfScenario → diff entry} for fast per-card badge lookup. */
+  _buildDiffLookup() {
+    var c = this._compareData;
+    if (!c || c.success === false) return null;
+    var lookup = { added: {}, flips: {} };
+    var added = c.addedInTarget || [];
+    for (var i = 0; i < added.length; i++) {
+      var k = this._scenarioKey(added[i]);
+      if (k) lookup.added[k] = true;
+    }
+    var flips = c.statusFlips || [];
+    for (var j = 0; j < flips.length; j++) {
+      var f = flips[j];
+      var fk = this._scenarioKey(f);
+      if (fk) lookup.flips[fk] = f;
+    }
+    return lookup;
+  }
+
+  /** Match key — hash if present, scenarioId otherwise. Mirrors the C# matcher. */
+  _scenarioKey(s) {
+    if (!s) return null;
+    if (s.scenarioHash) return 'h:' + s.scenarioHash;
+    var id = s.scenarioId || s.id;
+    return id ? 'i:' + id : null;
+  }
+
+  _diffBadgeForScenario(scn, lookup) {
+    if (!lookup) return null;
+    var key = this._scenarioKey(scn);
+    if (!key) return null;
+    var badge;
+    if (lookup.added[key]) {
+      badge = document.createElement('span');
+      badge.className = 'qa-compare-badge qa-compare-new';
+      badge.textContent = 'NEW';
+      return badge;
+    }
+    var flip = lookup.flips[key];
+    if (flip) {
+      badge = document.createElement('span');
+      var base = (flip.baseStatus || '').toLowerCase();
+      var target = (flip.targetStatus || '').toLowerCase();
+      // Arrow direction: base → target. Color by target outcome.
+      var cls = 'qa-compare-flip';
+      if (target === 'passed') cls += ' qa-compare-flip-pass';
+      else if (target === 'failed' || target === 'timeout' || target === 'timed_out') cls += ' qa-compare-flip-fail';
+      badge.className = 'qa-compare-badge ' + cls;
+      badge.textContent = (base ? base.toUpperCase() : '?') + ' \u2192 ' + (target ? target.toUpperCase() : '?');
+      badge.title = 'Status changed since base run';
+      return badge;
+    }
+    return null;
   }
 }
 

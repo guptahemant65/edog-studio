@@ -512,4 +512,146 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Overhead time in ms.</summary>
         public long OverheadMs { get; set; }
     }
+
+    // ──────────────────────────────────────────────
+    // F27 P7 — Persistent History + Run-to-Run Comparison
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Full persisted record of a completed QA run. Written to disk by
+    /// <see cref="EdogQaRunStore"/> at the end of <c>RunExecutionLoopAsync</c>
+    /// so history survives FLT process restarts. Scenarios carry summary
+    /// fields only — captured events and expectation details stay
+    /// in-process to keep file size bounded.
+    /// </summary>
+    public sealed class QaRunRecord
+    {
+        /// <summary>Run identifier.</summary>
+        public string RunId { get; set; }
+
+        /// <summary>Associated PR id; <c>0</c> means "no PR scope" (ad-hoc run).</summary>
+        public int PrId { get; set; }
+
+        /// <summary>PR title at submission time. Captured for history rendering.</summary>
+        public string PrTitle { get; set; }
+
+        /// <summary>UTC start time.</summary>
+        public DateTimeOffset StartedAt { get; set; }
+
+        /// <summary>UTC completion time.</summary>
+        public DateTimeOffset CompletedAt { get; set; }
+
+        /// <summary>Total duration in ms.</summary>
+        public long TotalDurationMs { get; set; }
+
+        /// <summary>Whether the run was cancelled by the user before all scenarios ran.</summary>
+        public bool CancelledByUser { get; set; }
+
+        /// <summary>Aggregated counts ("passed", "failed", "crashed", …).</summary>
+        public QaRunSummaryData Summary { get; set; }
+
+        /// <summary>True if no scenario failed and none crashed.</summary>
+        public bool OverallPass { get; set; }
+
+        /// <summary>Per-scenario summary rows. Sufficient for comparison + dropdown rendering.</summary>
+        public List<QaScenarioRecord> Scenarios { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Per-scenario summary row stored inside a <see cref="QaRunRecord"/>.
+    /// Carries enough identity to support content-aware run-to-run
+    /// comparison: <see cref="ScenarioHash"/> is the primary match key,
+    /// <see cref="ScenarioId"/> is the back-compat fallback.
+    /// </summary>
+    public sealed class QaScenarioRecord
+    {
+        /// <summary>Original scenario id (display + back-compat fallback for matching).</summary>
+        public string ScenarioId { get; set; }
+
+        /// <summary>Stable content fingerprint synthesised at persist time from
+        /// title + category + id. Authoritative match key during comparison.</summary>
+        public string ScenarioHash { get; set; }
+
+        /// <summary>Scenario title for display.</summary>
+        public string Title { get; set; }
+
+        /// <summary>Scenario category as string.</summary>
+        public string Category { get; set; }
+
+        /// <summary>Final verdict serialised as a string (e.g. "Passed", "Failed").</summary>
+        public string Status { get; set; }
+
+        /// <summary>Short failure summary. Null/empty when the scenario passed.</summary>
+        public string ErrorSummary { get; set; }
+    }
+
+    /// <summary>
+    /// Comparison request: diff <c>BaseRunId</c> vs <c>TargetRunId</c>.
+    /// Convention: target is the newer run, base is the older one — the UI
+    /// passes the currently-viewed run as target so diff badges read
+    /// naturally ("NEW", "GONE", "→ PASS", "→ FAIL").
+    /// </summary>
+    public sealed class QaComparisonRequest
+    {
+        /// <summary>Older run id.</summary>
+        public string BaseRunId { get; set; }
+
+        /// <summary>Newer run id (the one currently viewed).</summary>
+        public string TargetRunId { get; set; }
+    }
+
+    /// <summary>
+    /// Result of comparing two runs via <c>QaCompareRuns</c>. Scenarios are
+    /// matched primarily by <see cref="QaScenarioRecord.ScenarioHash"/>;
+    /// when either side lacks a hash the matcher falls back to
+    /// <see cref="QaScenarioRecord.ScenarioId"/> and surfaces a warning so
+    /// the UI can render a degraded-confidence banner.
+    /// </summary>
+    public sealed class QaRunComparison
+    {
+        /// <summary>Older run id (echoed from the request).</summary>
+        public string BaseRunId { get; set; }
+
+        /// <summary>Newer run id (echoed from the request).</summary>
+        public string TargetRunId { get; set; }
+
+        /// <summary>True when both runs were loaded successfully.</summary>
+        public bool Success { get; set; }
+
+        /// <summary>Scenarios present in target but not in base. Render as "NEW" badge.</summary>
+        public List<QaScenarioRecord> AddedInTarget { get; set; } = new();
+
+        /// <summary>Scenarios present in base but not in target. Render as "GONE" badge.</summary>
+        public List<QaScenarioRecord> RemovedFromTarget { get; set; } = new();
+
+        /// <summary>Scenarios present in both whose status differs. Render as "→ PASS" / "→ FAIL".</summary>
+        public List<QaScenarioFlip> StatusFlips { get; set; } = new();
+
+        /// <summary>Non-fatal observations the UI should surface (matching strategy, unscoped PRs, …).</summary>
+        public List<string> Warnings { get; set; } = new();
+
+        /// <summary>Reason a comparison could not be produced (e.g. "Base run not found").</summary>
+        public string Error { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a scenario that appeared in both runs but switched verdict.
+    /// </summary>
+    public sealed class QaScenarioFlip
+    {
+        /// <summary>Match key used (echoed for UI keying).</summary>
+        public string ScenarioId { get; set; }
+
+        /// <summary>Content hash used to match the scenario when available.</summary>
+        public string ScenarioHash { get; set; }
+
+        /// <summary>Display title from the target run.</summary>
+        public string Title { get; set; }
+
+        /// <summary>Status in the base (older) run.</summary>
+        public string BaseStatus { get; set; }
+
+        /// <summary>Status in the target (newer) run.</summary>
+        public string TargetStatus { get; set; }
+    }
 }

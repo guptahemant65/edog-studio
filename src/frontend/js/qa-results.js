@@ -10,6 +10,9 @@ class QaResults {
     this._container = null;
     this._runResult = null;
     this._history = [];
+    // F27 P7 — run comparison state.
+    this._compareBaseRunId = null;
+    this._compareData = null;
   }
 
   init() {
@@ -30,10 +33,18 @@ class QaResults {
       return;
     }
 
+    // Reset comparison state on every fresh load — the diff is only
+    // meaningful against the run currently being viewed.
+    this._compareBaseRunId = null;
+    this._compareData = null;
+
     var corrId = this._panel.getCorrelationId();
     conn.invoke('QaGetRunDetail', corrId, runId).then(result => {
       this._runResult = result;
       this._render();
+      // Fire-and-forget — populates the compare-against dropdown once
+      // history arrives. Re-renders to wire up the dropdown in place.
+      this.loadHistory();
     }).catch(err => {
       this._showError('Failed to load results: ' + (err.message || err));
     });
@@ -107,6 +118,14 @@ class QaResults {
 
     this._container.appendChild(summary);
 
+    // ── F27 P7: Compare toolbar + warnings + removed-from-target ghost rows ──
+    this._renderCompareToolbar();
+    this._renderCompareWarnings();
+    this._renderRemovedScenarios();
+
+    // Build a diff lookup so each scenario card can self-badge.
+    var diffLookup = this._buildDiffLookup();
+
     // ── Scenario Detail Cards ──
     var scenarios = run.scenarios || run.scenarioResults || [];
     if (scenarios.length) {
@@ -119,7 +138,7 @@ class QaResults {
       list.className = 'qa-results-list';
 
       for (var j = 0; j < scenarios.length; j++) {
-        list.appendChild(this._createResultCard(scenarios[j], j));
+        list.appendChild(this._createResultCard(scenarios[j], j, diffLookup));
       }
       this._container.appendChild(list);
     }
@@ -306,7 +325,7 @@ class QaResults {
     }
   }
 
-  _createResultCard(scn, index) {
+  _createResultCard(scn, index, diffLookup) {
     var card = document.createElement('div');
     card.className = 'qa-card qa-result-card';
     card.tabIndex = 0;
@@ -324,6 +343,12 @@ class QaResults {
     titleEl.className = 'qa-result-title';
     titleEl.textContent = scn.title || scn.scenarioId || 'Scenario';
     header.appendChild(titleEl);
+
+    // F27 P7: comparison badge (NEW or → PASS/→ FAIL).
+    if (diffLookup) {
+      var badge = this._diffBadgeForScenario(scn, diffLookup);
+      if (badge) header.appendChild(badge);
+    }
 
     var verdict = scn.verdict || scn.overallVerdict || 'unknown';
     var verdictEl = document.createElement('span');
@@ -409,23 +434,231 @@ class QaResults {
     return card;
   }
 
-  /** Load run history */
+  /** Load run history for the current PR (or unscoped if none). */
   loadHistory() {
     var conn = this._panel.getConnection();
     if (!conn) return;
     var corrId = this._panel.getCorrelationId();
+    // F27 P7: support unscoped (prId=0) runs — null only when truly missing.
+    var prId = (this._runResult && this._runResult.prId != null) ? this._runResult.prId : null;
     conn.invoke('QaGetRunHistory', {
       correlationId: corrId,
-      prId: null,
+      prId: prId,
       limit: 20,
       offset: 0
     }).then(results => {
       this._history = results || [];
+      // Re-render so the compare dropdown picks up the new options.
+      // We re-render the entire results view because the toolbar is
+      // structurally tied to summary + scenario list ordering.
+      if (this._runResult) this._render();
     }).catch(function() { /* ignore */ });
   }
 
   reset() {
     this._runResult = null;
+    this._history = [];
+    this._compareBaseRunId = null;
+    this._compareData = null;
     if (this._container) this._container.innerHTML = '';
+  }
+
+  // ── F27 P7: Run comparison UI ────────────────────────────────────────
+
+  /** Render the "Compare against" dropdown above the scenario list. */
+  _renderCompareToolbar() {
+    if (!this._runResult || !this._container) return;
+    var history = this._history || [];
+    // Exclude the run currently being viewed — comparing a run to
+    // itself has no diff value.
+    var currentId = this._runResult.runId;
+    var candidates = history.filter(function (h) { return h && h.runId && h.runId !== currentId; });
+    if (!candidates.length) return;
+
+    var toolbar = document.createElement('div');
+    toolbar.className = 'qa-compare-toolbar';
+
+    var label = document.createElement('label');
+    label.className = 'qa-compare-label';
+    label.textContent = 'Compare against:';
+    label.setAttribute('for', 'qa-compare-select');
+    toolbar.appendChild(label);
+
+    var select = document.createElement('select');
+    select.id = 'qa-compare-select';
+    select.className = 'qa-compare-select';
+
+    var noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = '(none)';
+    select.appendChild(noneOpt);
+
+    for (var i = 0; i < candidates.length; i++) {
+      var h = candidates[i];
+      var opt = document.createElement('option');
+      opt.value = h.runId;
+      var when = h.startedAt ? new Date(h.startedAt).toLocaleString() : h.runId;
+      var verdict = h.overallPass === true ? 'pass' : (h.overallPass === false ? 'fail' : '?');
+      opt.textContent = when + '  \u2014  ' + verdict + '  \u2014  ' + h.runId.substring(0, 8);
+      if (h.runId === this._compareBaseRunId) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    select.addEventListener('change', () => {
+      var v = select.value || null;
+      this._compareBaseRunId = v;
+      if (!v) {
+        this._compareData = null;
+        this._render();
+      } else {
+        this._fetchComparison(v);
+      }
+    });
+    toolbar.appendChild(select);
+
+    if (this._compareBaseRunId) {
+      var clearBtn = document.createElement('button');
+      clearBtn.className = 'qa-btn qa-compare-clear';
+      clearBtn.textContent = 'Clear';
+      clearBtn.addEventListener('click', () => {
+        this._compareBaseRunId = null;
+        this._compareData = null;
+        this._render();
+      });
+      toolbar.appendChild(clearBtn);
+    }
+
+    this._container.appendChild(toolbar);
+  }
+
+  /** Invoke QaCompareRuns and re-render with the diff overlaid. */
+  _fetchComparison(baseRunId) {
+    var conn = this._panel.getConnection();
+    if (!conn || !this._runResult) return;
+    var targetRunId = this._runResult.runId;
+    conn.invoke('QaCompareRuns', {
+      baseRunId: baseRunId,
+      targetRunId: targetRunId
+    }).then(result => {
+      // Stale-result guard: if the user cleared or switched base while
+      // the request was in flight, drop this response on the floor.
+      if (this._compareBaseRunId !== baseRunId) return;
+      if (!this._runResult || this._runResult.runId !== targetRunId) return;
+      this._compareData = result || null;
+      if (result && result.success === false && result.error) {
+        if (window.edogToast) window.edogToast.show('Compare failed: ' + result.error, 'error');
+      }
+      this._render();
+    }).catch(err => {
+      if (this._compareBaseRunId !== baseRunId) return;
+      this._compareData = null;
+      if (window.edogToast) window.edogToast.show('Compare failed: ' + (err.message || err), 'error');
+      this._render();
+    });
+  }
+
+  /** Yellow banner above the scenario list when comparison emits warnings. */
+  _renderCompareWarnings() {
+    var c = this._compareData;
+    if (!c || !c.warnings || !c.warnings.length) return;
+    var banner = document.createElement('div');
+    banner.className = 'qa-warning qa-compare-warnings';
+    var title = document.createElement('strong');
+    title.textContent = 'Degraded comparison';
+    banner.appendChild(title);
+    var list = document.createElement('ul');
+    list.className = 'qa-compare-warnings-list';
+    for (var i = 0; i < c.warnings.length; i++) {
+      var li = document.createElement('li');
+      li.textContent = String(c.warnings[i]);
+      list.appendChild(li);
+    }
+    banner.appendChild(list);
+    this._container.appendChild(banner);
+  }
+
+  /** Ghost rows for scenarios present in base but missing from target. */
+  _renderRemovedScenarios() {
+    var c = this._compareData;
+    if (!c || !c.removedFromTarget || !c.removedFromTarget.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-compare-removed';
+    var header = document.createElement('h4');
+    header.className = 'qa-results-list-header';
+    header.textContent = 'Removed since base (' + c.removedFromTarget.length + ')';
+    wrap.appendChild(header);
+    for (var i = 0; i < c.removedFromTarget.length; i++) {
+      var s = c.removedFromTarget[i];
+      var row = document.createElement('div');
+      row.className = 'qa-card qa-result-card qa-removed';
+      var hdr = document.createElement('div');
+      hdr.className = 'qa-result-header';
+      var titleEl = document.createElement('span');
+      titleEl.className = 'qa-result-title';
+      titleEl.textContent = s.title || s.scenarioId || 'Scenario';
+      hdr.appendChild(titleEl);
+      var badge = document.createElement('span');
+      badge.className = 'qa-compare-badge qa-compare-gone';
+      badge.textContent = 'GONE';
+      hdr.appendChild(badge);
+      row.appendChild(hdr);
+      wrap.appendChild(row);
+    }
+    this._container.appendChild(wrap);
+  }
+
+  /** Build {keyOfScenario → diff entry} for fast per-card badge lookup. */
+  _buildDiffLookup() {
+    var c = this._compareData;
+    if (!c || c.success === false) return null;
+    var lookup = { added: {}, flips: {} };
+    var added = c.addedInTarget || [];
+    for (var i = 0; i < added.length; i++) {
+      var k = this._scenarioKey(added[i]);
+      if (k) lookup.added[k] = true;
+    }
+    var flips = c.statusFlips || [];
+    for (var j = 0; j < flips.length; j++) {
+      var f = flips[j];
+      var fk = this._scenarioKey(f);
+      if (fk) lookup.flips[fk] = f;
+    }
+    return lookup;
+  }
+
+  /** Match key — hash if present, scenarioId otherwise. Mirrors the C# matcher. */
+  _scenarioKey(s) {
+    if (!s) return null;
+    if (s.scenarioHash) return 'h:' + s.scenarioHash;
+    var id = s.scenarioId || s.id;
+    return id ? 'i:' + id : null;
+  }
+
+  _diffBadgeForScenario(scn, lookup) {
+    if (!lookup) return null;
+    var key = this._scenarioKey(scn);
+    if (!key) return null;
+    var badge;
+    if (lookup.added[key]) {
+      badge = document.createElement('span');
+      badge.className = 'qa-compare-badge qa-compare-new';
+      badge.textContent = 'NEW';
+      return badge;
+    }
+    var flip = lookup.flips[key];
+    if (flip) {
+      badge = document.createElement('span');
+      var base = (flip.baseStatus || '').toLowerCase();
+      var target = (flip.targetStatus || '').toLowerCase();
+      // Arrow direction: base → target. Color by target outcome.
+      var cls = 'qa-compare-flip';
+      if (target === 'passed') cls += ' qa-compare-flip-pass';
+      else if (target === 'failed' || target === 'timeout' || target === 'timed_out') cls += ' qa-compare-flip-fail';
+      badge.className = 'qa-compare-badge ' + cls;
+      badge.textContent = (base ? base.toUpperCase() : '?') + ' \u2192 ' + (target ? target.toUpperCase() : '?');
+      badge.title = 'Status changed since base run';
+      return badge;
+    }
+    return null;
   }
 }

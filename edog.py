@@ -118,6 +118,7 @@ DEVMODE_FILES = {
     "EdogQaOmniSharpProvider": SERVICE_PATH / "DevMode/EdogQaOmniSharpProvider.cs",
     "EdogQaRecordingSession": SERVICE_PATH / "DevMode/EdogQaRecordingSession.cs",
     "EdogQaResultAggregator": SERVICE_PATH / "DevMode/EdogQaResultAggregator.cs",
+    "EdogQaRunStore": SERVICE_PATH / "DevMode/EdogQaRunStore.cs",
     "EdogQaScenarioLinter": SERVICE_PATH / "DevMode/EdogQaScenarioLinter.cs",
     "EdogQaStimulusDispatcher": SERVICE_PATH / "DevMode/EdogQaStimulusDispatcher.cs",
     "EdogQaTelemetry": SERVICE_PATH / "DevMode/EdogQaTelemetry.cs",

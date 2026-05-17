@@ -52,6 +52,7 @@
     <Compile Include="LlmClassifyHarness.cs" />
     <Compile Include="FallbackPolicyHarness.cs" />
     <Compile Include="PipelineChaosHarness.cs" />
+    <Compile Include="QaHistoryStoreHarness.cs" />
   </ItemGroup>
 
   <!-- Bundle fixture files into the output so the harness can read them at runtime -->

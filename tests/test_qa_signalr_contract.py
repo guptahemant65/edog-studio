@@ -117,6 +117,7 @@ EXPECTED_HUB_METHODS: set[str] = {
     "QaGetRunDetail",
     "QaGetTelemetry",
     "QaGetCapabilities",
+    "QaCompareRuns",
 }
 
 EXPECTED_BROADCAST_EVENTS: set[str] = {
@@ -140,6 +141,7 @@ EXPECTED_JS_INVOKES: set[str] = {
     "QaStartRun",
     "QaGetRunDetail",
     "QaGetRunHistory",
+    "QaCompareRuns",  # F27 P7 — wired by qa-results.js compare dropdown
 }
 
 EXPECTED_JS_EVENT_CASES: set[str] = {
