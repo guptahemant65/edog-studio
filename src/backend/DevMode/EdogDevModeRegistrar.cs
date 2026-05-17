@@ -101,6 +101,18 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return;
                 }
 
+                // Guard: Unity disposes the original singleton when RegisterInstance
+                // replaces it. If the inner implements IDisposable, the wrapper will
+                // hold a dead reference → ObjectDisposedException at runtime.
+                // Use a dedicated Register* method with a fresh inner instead.
+                if (inner is IDisposable || inner is IAsyncDisposable)
+                {
+                    var msg = $"{inner.GetType().Name} implements IDisposable — TryWrap will cause disposal trap. Use a dedicated registration method with a fresh inner instance.";
+                    Console.WriteLine($"[EDOG] ✗ {name} interceptor BLOCKED: {msg}");
+                    EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, msg);
+                    return;
+                }
+
                 try
                 {
                     var wrapper = wrap(inner);
