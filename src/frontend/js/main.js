@@ -854,6 +854,10 @@ class EdogLogViewer {
         );
       }
       this.featureFlagsMatrix.activate();
+      if (!this.environmentCards) {
+        this.environmentCards = new EnvironmentCards();
+      }
+      this.environmentCards.activate();
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
@@ -870,12 +874,14 @@ class EdogLogViewer {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
       if (this.featureFlagsMatrix) this.featureFlagsMatrix.deactivate();
+      if (this.environmentCards) this.environmentCards.deactivate();
     } else {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
       if (this.qaPanel) this.qaPanel.deactivate();
       if (this.featureFlagsMatrix) this.featureFlagsMatrix.deactivate();
+      if (this.environmentCards) this.environmentCards.deactivate();
     }
   }
 

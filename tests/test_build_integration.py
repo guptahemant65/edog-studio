@@ -20,7 +20,7 @@ OUTPUT_FILE = os.path.join(PROJECT_DIR, "src", "edog-logs.html")
 
 # Expected module counts (update when adding new modules)
 EXPECTED_CSS_MODULES = 46
-EXPECTED_JS_MODULES = 77
+EXPECTED_JS_MODULES = 78
 EXPECTED_LIB_MODULES = 1
 
 # F16 Phase 2 wizard modules that MUST be present

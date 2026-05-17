@@ -119,6 +119,7 @@ JS_MODULES = [
     "js/tab-http.js",
     "js/tab-retries.js",
     "js/tab-flags.js",
+    "js/environment-cards.js",
     "js/feature-flags-matrix.js",
     "js/flag-inspector.js",
     "js/tab-di.js",

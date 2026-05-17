@@ -9640,14 +9640,36 @@ mark {
 .dag-node.status-skipped .dag-node-name { color: var(--text-muted); }
 
 .dag-node-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  transition: background 200ms, box-shadow 200ms;
 }
 
 .dag-node.status-running .dag-node-status-dot {
   animation: dagDotPulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(109, 92, 255, 0.2);
+}
+.dag-node.status-completed .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(24, 160, 88, 0.15);
+}
+.dag-node.status-failed .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(229, 69, 59, 0.15);
+}
+.dag-node.status-cancelled .dag-node-status-dot,
+.dag-node.status-skipped .dag-node-status-dot {
+  box-shadow: 0 0 0 3px rgba(229, 148, 12, 0.15);
+}
+
+/* Non-executable nodes (source tables) — distinct from pending MLVs */
+.dag-node.non-executable .dag-node-status-dot {
+  background: var(--border-bright, rgba(0,0,0,0.12)) !important;
+  box-shadow: none;
+  animation: none;
+}
+.dag-node.non-executable {
+  opacity: 0.85;
 }
 
 .dag-node-meta {
@@ -9728,6 +9750,20 @@ mark {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.dag-btn-inline {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm, 4px);
+  transition: color 150ms, background 150ms;
+}
+.dag-btn-inline:hover {
+  color: var(--accent);
+  background: var(--accent-dim, rgba(109,92,255,0.07));
 }
 
 .section-count {
@@ -12353,6 +12389,162 @@ mark {
   color: var(--text-dim);
 }
 
+/* ── Environment info cards (Config, Token, Build, Interceptors) ───── */
+.ecard-collapsible .env-card-header { user-select: none; }
+.ecard-chevron {
+  font-size: 11px;
+  width: 14px;
+  display: inline-block;
+  text-align: center;
+  color: var(--text-dim);
+  transition: transform var(--transition-fast);
+}
+
+.ecard-header-badge {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  margin-left: var(--space-2);
+}
+.ecard-header-badge.ok { color: var(--status-succeeded); border-color: rgba(24,160,88,0.25); background: rgba(24,160,88,0.06); }
+.ecard-header-badge.warn { color: var(--level-warning); border-color: rgba(229,148,12,0.25); background: rgba(229,148,12,0.06); }
+.ecard-header-badge.error { color: var(--status-failed); border-color: rgba(229,69,59,0.25); background: rgba(229,69,59,0.06); }
+
+/* Key-value grid */
+.ecard-kv-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 0;
+}
+.ecard-kv-row {
+  display: contents;
+}
+.ecard-kv-row:hover > span { background: var(--surface-2); }
+.ecard-kv-label {
+  font-size: var(--text-sm);
+  color: var(--text-dim);
+  padding: var(--space-1) var(--space-3);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ecard-kv-value {
+  font-size: var(--text-sm);
+  color: var(--text);
+  padding: var(--space-1) var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  word-break: break-all;
+}
+.ecard-kv-value.mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+
+/* Status pill */
+.ecard-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+}
+.ecard-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.ecard-pill.ok { color: var(--status-succeeded); border-color: rgba(24,160,88,0.25); background: rgba(24,160,88,0.06); }
+.ecard-pill.warn { color: var(--level-warning); border-color: rgba(229,148,12,0.25); background: rgba(229,148,12,0.06); }
+.ecard-pill.error { color: var(--status-failed); border-color: rgba(229,69,59,0.25); background: rgba(229,69,59,0.06); }
+
+/* Copy button */
+.ecard-copy {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+.ecard-copy:hover { color: var(--accent); border-color: var(--accent); }
+.ecard-copy.copied { color: var(--status-succeeded); border-color: var(--status-succeeded); }
+.ecard-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Interceptor list */
+.ecard-ix-list {
+  display: flex;
+  flex-direction: column;
+}
+.ecard-ix-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--border);
+}
+.ecard-ix-row:last-child { border-bottom: none; }
+.ecard-ix-row:hover { background: var(--surface-2); }
+.ix-glyph {
+  width: 18px;
+  text-align: center;
+  font-weight: 600;
+  font-size: var(--text-xs);
+}
+.ix-glyph.ix-ok { color: var(--status-succeeded); }
+.ix-glyph.ix-fail { color: var(--status-failed); }
+.ix-name { color: var(--text); font-family: var(--font-mono); font-size: var(--text-xs); }
+.ix-err { color: var(--text-muted); font-size: var(--text-xs); }
+
+/* Loading shimmer */
+.ecard-shimmer {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ecard-shimmer .sk-bar.sk-kv {
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3, var(--border)) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: ecard-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes ecard-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Error / empty states */
+.ecard-error {
+  padding: var(--space-3) var(--space-4);
+  color: var(--status-failed);
+  font-size: var(--text-sm);
+}
+.ecard-empty {
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Refresh button in header */
+.ecard-refresh-btn {
+  font-size: var(--text-sm);
+  padding: 2px var(--space-2);
+}
+
 /* ── Generic card ─────────────────────────────────────────────────── */
 .env-card {
   background: var(--surface);
@@ -12607,7 +12799,8 @@ mark {
 
 /* ── Matrix table ─────────────────────────────────────────────────── */
 .ff-table-wrap {
-  max-height: calc(100vh - 320px);
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background: var(--surface);
 }
@@ -31410,7 +31603,7 @@ window.onerror = function(msg, src, line, col, err) {
                 </div>
               </div>
               <div class="dag-history-section">
-                <div class="dag-section-title">Execution History</div>
+                <div class="dag-section-title">Execution History <button class="dag-btn-inline" id="dagHistoryRefresh" title="Refresh history">&#8635;</button></div>
                 <div id="dagHistoryContainer">
                   <div class="dag-empty-hint">No execution history</div>
                 </div>
@@ -41473,7 +41666,7 @@ class SmartContextBar {
       ${nodeText ? '<span class="node-progress">' + nodeText + '</span>' : ''}
       <span class="elapsed">${elapsed}s</span>
       ${exec.endpoint ? '<span class="endpoint">' + exec.endpoint + '</span>' : ''}
-      <span class="iter-id">${shortId}</span>
+      <span class="iter-id">${iterationId}</span>
       <span class="dismiss" onclick="document.getElementById('smart-context-bar').classList.remove('active')">\u2715</span>
     `;
     this.element.classList.add('active');
@@ -43236,7 +43429,7 @@ class DagCanvasRenderer {
     for (const n of this._nodes) {
       var color = this._statusColor(n.status);
       var el = document.createElement('div');
-      el.className = 'dag-node status-' + n.status;
+      el.className = 'dag-node status-' + n.status + (n.executable === false ? ' non-executable' : '');
       el.dataset.id = n.id;
       el.dataset.layer = this._layerName(n.layer || 0, this._totalLayers || 1);
       el.style.cssText = 'left:' + (n.x - n.w / 2) + 'px;top:' + (n.y - n.h / 2) + 'px;width:' + n.w + 'px;height:' + n.h + 'px;';
@@ -44389,6 +44582,12 @@ class DagStudio {
     this._refreshBtn.addEventListener('click', this._onRefreshClick);
     this._unlockBtn.addEventListener('click', this._onUnlockClick);
 
+    // History refresh button
+    var histRefresh = document.getElementById('dagHistoryRefresh');
+    if (histRefresh) {
+      histRefresh.addEventListener('click', function() { self._loadHistory(); });
+    }
+
     // Exec mode dropdown
     if (this._execModeBtn && this._execModeDropdown) {
       this._execModeBtn.addEventListener('click', function(e) {
@@ -44545,12 +44744,15 @@ class DagStudio {
       var layoutResult = this._layout.layout(nodes, edges);
       this._renderer.setData(layoutResult.nodes, layoutResult.edges);
       this._renderer.fitToScreen();
-      // Restore canvas visibility after data is ready (hidden by _renderLoading)
+      // Remove loading overlay and restore canvas (hidden by _renderLoading)
+      var loadingEl = this._graphPanel ? this._graphPanel.querySelector('.dag-loading') : null;
+      if (loadingEl) loadingEl.remove();
       var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
       if (canvas) canvas.style.opacity = '1';
       var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
       if (minimap) minimap.style.opacity = '1';
-      if (this._ganttCount) this._ganttCount.textContent = String(nodes.length);
+      var executableCount = nodes.filter(function(n) { return n.executable !== false; }).length;
+      if (this._ganttCount) this._ganttCount.textContent = String(executableCount);
       this._renderControls('idle');
       this._renderStatus('idle');
       this._updateSummary();
@@ -44608,7 +44810,7 @@ class DagStudio {
         if (execBoot) {
           execBoot.status = 'Running';
           execBoot.startTime = Date.now();
-          if (this._dag && this._dag.nodes) execBoot.nodeCount = this._dag.nodes.length;
+          execBoot.nodeCount = this._esm.nodeStates.size;
           this._autoDetector.activeExecutionId = iterationId;
           if (this._autoDetector.onExecutionDetected) {
             this._autoDetector.onExecutionDetected(execBoot, iterationId);
@@ -44616,7 +44818,8 @@ class DagStudio {
         }
       }
       if (this._gantt && this._dag && this._dag.nodes) {
-        this._gantt.renderExecution(this._dag.nodes, Date.now());
+        var executableNodes = this._dag.nodes.filter(function(n) { return n.executable !== false; });
+        this._gantt.renderExecution(executableNodes, Date.now());
       }
       this._renderControls('running');
       this._renderStatus('running');
@@ -44851,8 +45054,52 @@ class DagStudio {
         this._esm._executionStatus = overallStatus === 'succeeded' ? 'completed' : overallStatus;
         this._esm._endedAt = dagMetrics.endedAt ? new Date(dagMetrics.endedAt).getTime() : Date.now();
         this._stopExecPoller();
-        if (this._esm.onExecutionStateChanged) this._esm.onExecutionStateChanged(this._esm._executionStatus);
-        if (this._esm.onExecutionComplete) this._esm.onExecutionComplete(iterationId, this._esm._executionStatus);
+        // FLT populates nodeExecutionMetrices AFTER the execution fully
+        // completes.  The poller often catches the terminal status before
+        // per-node data is written.  Wait 2 s then do ONE final fetch so
+        // the Gantt chart, bottom-bar, and strip all show correct numbers.
+        var self = this;
+        var finalIterationId = iterationId;
+        setTimeout(async function() {
+          try {
+            var finalMetrics = await self._api.getDagExecMetrics(finalIterationId);
+            if (finalMetrics) {
+              var finalRaw = finalMetrics.nodeExecutionMetrices || finalMetrics.nodeExecutionMetrics || {};
+              var finalEntries = Array.isArray(finalRaw) ? finalRaw : Object.entries(finalRaw);
+              for (var j = 0; j < finalEntries.length; j++) {
+                var fnid, fnm;
+                if (Array.isArray(finalRaw)) {
+                  fnm = finalEntries[j];
+                  fnid = fnm.nodeId || self._esm._nodeNameIndex.get((fnm.nodeName || fnm.mlvName || '').toLowerCase());
+                } else {
+                  fnid = finalEntries[j][0];
+                  fnm = finalEntries[j][1];
+                  if (fnm && !fnm.nodeId && self._esm._nodeNameIndex.has(fnid.toLowerCase())) {
+                    fnid = self._esm._nodeNameIndex.get(fnid.toLowerCase());
+                  }
+                }
+                if (!fnid || !fnm) continue;
+                var newStatus = self._esm._mapNodeStatus(fnm.status || fnm.nodeExecutionStatus);
+                var startMs = fnm.startedAt ? new Date(fnm.startedAt).getTime() : (fnm.startTime ? new Date(fnm.startTime).getTime() : null);
+                var endMs = fnm.endedAt ? new Date(fnm.endedAt).getTime() : (fnm.endTime ? new Date(fnm.endTime).getTime() : null);
+                self._esm._nodeStates.set(fnid, {
+                  status: newStatus,
+                  startedAt: startMs,
+                  endedAt: endMs,
+                  errorCode: fnm.errorCode || null,
+                  source: 'final-poll',
+                });
+                if (self._esm.onNodeStateChanged) self._esm.onNodeStateChanged(fnid, self._esm._nodeStates.get(fnid));
+              }
+              self._pushPollToAutoDetector(finalIterationId, dagMetrics, finalEntries, Array.isArray(finalRaw));
+            }
+          } catch (e) {
+            console.log('[DAG-DIAG] Final poll failed:', e.message);
+          }
+          self._updateSummary();
+          if (self._esm.onExecutionStateChanged) self._esm.onExecutionStateChanged(self._esm._executionStatus);
+          if (self._esm.onExecutionComplete) self._esm.onExecutionComplete(finalIterationId, self._esm._executionStatus);
+        }, 2000);
       } else {
         // notStarted / running / queued — keep polling, keep UI alive.
         this._updateSummary();
@@ -44904,8 +45151,8 @@ class DagStudio {
       exec.completedNodes = done;
       exec.failedNodes = failed;
       if (!exec.nodeCount) exec.nodeCount = entries.length;
-    } else if (!exec.nodeCount && this._dag && this._dag.nodes) {
-      exec.nodeCount = this._dag.nodes.length;
+    } else if (!exec.nodeCount && this._esm.nodeStates.size) {
+      exec.nodeCount = this._esm.nodeStates.size;
     }
     // First detection — fire onExecutionDetected so SmartContextBar reveals
     // itself; subsequent ticks fire onExecutionUpdated.
@@ -45118,13 +45365,20 @@ class DagStudio {
   }
 
   _renderLoading() {
+    // Place loading overlay in the graph panel (not nodes layer) so it stays
+    // centered regardless of camera transforms.
+    var existing = this._graphPanel ? this._graphPanel.querySelector('.dag-loading') : null;
+    if (existing) existing.remove();
     var nodesLayer = this._graphPanel ? this._graphPanel.querySelector('#dagNodesLayer') : null;
-    if (nodesLayer) {
-      nodesLayer.innerHTML = '<div class="dag-loading">' +
+    if (nodesLayer) nodesLayer.innerHTML = '';
+    if (this._graphPanel) {
+      var loading = document.createElement('div');
+      loading.className = 'dag-loading';
+      loading.innerHTML =
         '<div class="dag-loading-spinner"></div>' +
         '<div class="dag-loading-text">Loading DAG</div>' +
-        '<div class="dag-loading-sub">Fetching graph structure...</div>' +
-      '</div>';
+        '<div class="dag-loading-sub">Fetching graph structure...</div>';
+      this._graphPanel.appendChild(loading);
     }
     // Hide the canvas during loading — prevents stale edges from rendering
     // while the "Loading DAG" overlay is visible. Restored by _loadDag after setData.
@@ -45342,7 +45596,7 @@ class DagStudio {
   }
 
   _updateSummary() {
-    var total = this._dag && this._dag.nodes ? this._dag.nodes.length : 0;
+    var total = this._esm.nodeStates.size;
     var ok = 0;
     var fail = 0;
     var run = 0;
@@ -59444,6 +59698,327 @@ class FeatureFlagsTab {
   }
 }
 
+// === js/environment-cards.js ===
+/* ──────────────────────────────────────────────────────────────────────
+ * Environment Panel — Cards 1-4: Config · Token · Build · Interceptors
+ * F11 spec. Fetches live APIs and renders collapsible key-value cards
+ * above the Feature Flags matrix.
+ *
+ * APIs:
+ *   GET /api/flt/config            → Config Snapshot
+ *   GET /api/edog/health           → Token State + Build & Patch
+ *   GET /api/edog/patch-warnings   → Patch warning count
+ *   GET /api/edog/interceptors-status → Interceptor wrap status
+ *
+ * @author Pixel — EDOG Studio hivemind
+ * ────────────────────────────────────────────────────────────────────── */
+class EnvironmentCards {
+  constructor() {
+    this._active = false;
+    this._collapsed = { config: false, token: false, build: false, interceptors: false };
+  }
+
+  /* ── Lifecycle ────────────────────────────────────────────────────── */
+
+  activate() {
+    if (this._active) return;
+    this._active = true;
+    this._bindCollapse();
+    this._bindRefresh();
+    this.loadAll();
+  }
+
+  deactivate() {
+    this._active = false;
+  }
+
+  /* ── Data loading ─────────────────────────────────────────────────── */
+
+  loadAll() {
+    this._loadConfig();
+    this._loadHealth();
+    this._loadInterceptors();
+  }
+
+  async _loadConfig() {
+    var card = document.getElementById('card-config-snapshot');
+    if (!card) return;
+    var body = card.querySelector('.env-card-body');
+    body.innerHTML = '<div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div>';
+    try {
+      var resp = await fetch('/api/flt/config');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      this._renderConfig(body, data);
+      this._setBadge(card, 'ok', data.phase === 'connected' ? 'connected' : 'disconnected');
+    } catch (err) {
+      body.innerHTML = '<div class="ecard-error">Failed to load config: ' + _ecEsc(err.message) + '</div>';
+      this._setBadge(card, 'error', 'error');
+    }
+  }
+
+  async _loadHealth() {
+    var tokenCard = document.getElementById('card-token-state');
+    var buildCard = document.getElementById('card-build-patch');
+    if (!tokenCard && !buildCard) return;
+    var tokenBody = tokenCard ? tokenCard.querySelector('.env-card-body') : null;
+    var buildBody = buildCard ? buildCard.querySelector('.env-card-body') : null;
+    if (tokenBody) tokenBody.innerHTML = '<div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div>';
+    if (buildBody) buildBody.innerHTML = '<div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div>';
+
+    var health = null;
+    var config = null;
+    var patchWarnings = [];
+    try {
+      var results = await Promise.all([
+        fetch('/api/edog/health').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+        fetch('/api/flt/config').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
+        fetch('/api/edog/patch-warnings').then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; })
+      ]);
+      health = results[0];
+      config = results[1];
+      patchWarnings = results[2];
+    } catch (_) { /* handled below */ }
+
+    if (tokenBody) {
+      if (health) {
+        this._renderToken(tokenBody, health, config);
+        var tokenOk = health.hasBearerToken && health.bearerExpiresIn > 300;
+        this._setBadge(tokenCard, tokenOk ? 'ok' : 'error', tokenOk ? 'valid' : 'expired');
+      } else {
+        tokenBody.innerHTML = '<div class="ecard-error">Health endpoint unreachable</div>';
+        this._setBadge(tokenCard, 'error', 'error');
+      }
+    }
+
+    if (buildBody) {
+      if (health) {
+        this._renderBuild(buildBody, health, patchWarnings);
+        var warnCount = Array.isArray(patchWarnings) ? patchWarnings.length : 0;
+        this._setBadge(buildCard, warnCount > 0 ? 'warn' : 'ok', warnCount > 0 ? warnCount + ' warnings' : 'clean');
+      } else {
+        buildBody.innerHTML = '<div class="ecard-error">Health endpoint unreachable</div>';
+        this._setBadge(buildCard, 'error', 'error');
+      }
+    }
+  }
+
+  async _loadInterceptors() {
+    var card = document.getElementById('card-interceptors');
+    if (!card) return;
+    var body = card.querySelector('.env-card-body');
+    body.innerHTML = '<div class="ecard-shimmer"><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span><span class="sk-bar sk-kv"></span></div>';
+    try {
+      var resp = await fetch('/api/edog/interceptors-status');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var data = await resp.json();
+      this._renderInterceptors(body, data);
+      var summary = data.summary || { wrapped: 0, total: 0 };
+      this._setBadge(card, summary.wrapped === summary.total ? 'ok' : 'warn',
+        summary.wrapped + '/' + summary.total + ' wrapped');
+    } catch (err) {
+      body.innerHTML = '<div class="ecard-error">Interceptors unavailable: ' + _ecEsc(err.message) + '</div>';
+      this._setBadge(card, 'error', 'unavailable');
+    }
+  }
+
+  /* ── Renderers ────────────────────────────────────────────────────── */
+
+  _renderConfig(body, data) {
+    var rows = [
+      { label: 'Workspace ID', value: data.workspaceId || '—', copy: true, mono: true },
+      { label: 'Artifact / Lakehouse ID', value: data.artifactId || '—', copy: true, mono: true },
+      { label: 'Capacity ID', value: data.capacityId || '—', copy: true, mono: true },
+      { label: 'Phase', value: data.phase || '—', pill: data.phase === 'connected' ? 'ok' : 'warn' },
+      { label: 'FLT Port', value: data.fltPort != null ? String(data.fltPort) : '—' },
+      { label: 'Studio Phase', value: data.studioPhase || '—', pill: data.studioPhase === 'running' ? 'ok' : 'warn' }
+    ];
+    body.innerHTML = this._kvGrid(rows);
+    this._bindCopyButtons(body);
+  }
+
+  _renderToken(body, health, config) {
+    var bearerOk = health.hasBearerToken && health.bearerExpiresIn > 0;
+    var expiresText = bearerOk ? _ecFmtDuration(health.bearerExpiresIn) : '';
+    var bearerLabel = bearerOk
+      ? 'valid \u00B7 expires in ' + expiresText
+      : 'expired';
+
+    var mwcText = (config && config.mwcToken) ? 'proxy-managed' : 'unavailable';
+    var mwcStatus = (config && config.mwcToken) ? 'ok' : 'warn';
+
+    var rows = [
+      { label: 'Bearer', value: bearerLabel, pill: bearerOk ? 'ok' : 'error' },
+      { label: 'MWC', value: mwcText, pill: mwcStatus },
+      { label: 'Username', value: health.lastUsername || '—', mono: true },
+      { label: 'Token Helper', value: health.tokenHelperBuilt ? 'built' : 'not built', pill: health.tokenHelperBuilt ? 'ok' : 'warn' }
+    ];
+    body.innerHTML = this._kvGrid(rows);
+  }
+
+  _renderBuild(body, health, patchWarnings) {
+    var dirtyLabel = String(health.gitDirtyFiles || 0);
+    if (health.gitDirtyEdogFiles) {
+      dirtyLabel += ' (edog: ' + health.gitDirtyEdogFiles + ')';
+    }
+
+    var repo = health.fltRepo || {};
+    var repoLabel = repo.path ? _ecEsc(repo.path) : '—';
+    var repoValid = repo.configured && repo.valid;
+
+    var warnCount = Array.isArray(patchWarnings) ? patchWarnings.length : 0;
+
+    var rows = [
+      { label: 'Git Branch', value: health.gitBranch || '—', mono: true },
+      { label: 'Dirty Files', value: dirtyLabel },
+      { label: 'FLT Repo', value: repoLabel, pill: repoValid ? 'ok' : 'error', mono: true },
+      { label: 'Patch Warnings', value: warnCount > 0 ? String(warnCount) : 'none', pill: warnCount > 0 ? 'warn' : 'ok' }
+    ];
+    body.innerHTML = this._kvGrid(rows);
+  }
+
+  _renderInterceptors(body, data) {
+    var list = data.interceptors || [];
+    if (list.length === 0) {
+      body.innerHTML = '<div class="ecard-empty">No interceptors registered</div>';
+      return;
+    }
+    var html = '<div class="ecard-ix-list">';
+    for (var i = 0; i < list.length; i++) {
+      var ix = list[i];
+      var ok = ix.wrapped;
+      var dotClass = ok ? 'ix-ok' : 'ix-fail';
+      var glyph = ok ? '\u2713' : '\u2717';
+      var errPart = '';
+      if (ix.recordedError) {
+        errPart = ' <span class="ix-err" title="' + _ecEsc(ix.recordedError) + '">\u2014 ' + _ecEsc(ix.recordedError).substring(0, 60) + '</span>';
+      }
+      html += '<div class="ecard-ix-row">'
+        + '<span class="ix-glyph ' + dotClass + '">' + glyph + '</span>'
+        + '<span class="ix-name">' + _ecEsc(ix.name) + '</span>'
+        + errPart
+        + '</div>';
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  /* ── Helpers ──────────────────────────────────────────────────────── */
+
+  _kvGrid(rows) {
+    var html = '<div class="ecard-kv-grid">';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      html += '<div class="ecard-kv-row">';
+      html += '<span class="ecard-kv-label">' + _ecEsc(r.label) + '</span>';
+      html += '<span class="ecard-kv-value'
+        + (r.mono ? ' mono' : '') + '">';
+      if (r.pill) {
+        html += '<span class="ecard-pill ' + r.pill + '">'
+          + '<span class="ecard-pill-dot"></span>'
+          + _ecEsc(r.value) + '</span>';
+      } else {
+        html += _ecEsc(r.value);
+      }
+      if (r.copy && r.value && r.value !== '\u2014') {
+        html += ' <button class="ecard-copy" data-copy="' + _ecEsc(r.value) + '" title="Copy to clipboard">'
+          + '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">'
+          + '<rect x="5" y="5" width="9" height="9" rx="1.5"/>'
+          + '<path d="M11 5V3.5A1.5 1.5 0 009.5 2h-6A1.5 1.5 0 002 3.5v6A1.5 1.5 0 003.5 11H5"/>'
+          + '</svg></button>';
+      }
+      html += '</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  _setBadge(card, status, text) {
+    var badge = card.querySelector('.ecard-header-badge');
+    if (!badge) return;
+    badge.className = 'ecard-header-badge ' + status;
+    badge.textContent = text;
+  }
+
+  _bindCopyButtons(container) {
+    container.addEventListener('click', function (e) {
+      var btn = e.target.closest('.ecard-copy');
+      if (!btn) return;
+      var val = btn.getAttribute('data-copy');
+      if (!val) return;
+      navigator.clipboard.writeText(val).then(function () {
+        btn.classList.add('copied');
+        setTimeout(function () { btn.classList.remove('copied'); }, 1200);
+      });
+    });
+  }
+
+  _bindCollapse() {
+    var self = this;
+    var ids = ['card-config-snapshot', 'card-token-state', 'card-build-patch', 'card-interceptors'];
+    var keys = ['config', 'token', 'build', 'interceptors'];
+    for (var i = 0; i < ids.length; i++) {
+      (function (cardId, key) {
+        var card = document.getElementById(cardId);
+        if (!card) return;
+        var header = card.querySelector('.env-card-header');
+        if (!header) return;
+        header.style.cursor = 'pointer';
+        header.addEventListener('click', function (e) {
+          if (e.target.closest('.env-btn') || e.target.closest('.ecard-copy')) return;
+          self._collapsed[key] = !self._collapsed[key];
+          var body = card.querySelector('.env-card-body');
+          if (body) body.style.display = self._collapsed[key] ? 'none' : '';
+          var chevron = header.querySelector('.ecard-chevron');
+          if (chevron) chevron.textContent = self._collapsed[key] ? '\u25B8' : '\u25BE';
+        });
+      })(ids[i], keys[i]);
+    }
+  }
+
+  _bindRefresh() {
+    var self = this;
+    var map = {
+      'card-config-snapshot': function () { self._loadConfig(); },
+      'card-token-state': function () { self._loadHealth(); },
+      'card-build-patch': function () { self._loadHealth(); },
+      'card-interceptors': function () { self._loadInterceptors(); }
+    };
+    Object.keys(map).forEach(function (id) {
+      var card = document.getElementById(id);
+      if (!card) return;
+      var btn = card.querySelector('.ecard-refresh-btn');
+      if (!btn) return;
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        map[id]();
+      });
+    });
+  }
+}
+
+/* ── Module-level helpers (no collision with other modules) ─────────── */
+
+function _ecEsc(s) {
+  if (typeof s !== 'string') return String(s || '');
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function _ecFmtDuration(seconds) {
+  if (seconds >= 3600) {
+    var h = Math.floor(seconds / 3600);
+    var m = Math.floor((seconds % 3600) / 60);
+    return h + 'h ' + m + 'm';
+  }
+  if (seconds >= 60) {
+    return Math.floor(seconds / 60) + 'm';
+  }
+  return seconds + 's';
+}
+
 // === js/feature-flags-matrix.js ===
 /* ──────────────────────────────────────────────────────────────────────
  * Environment Panel — Card 3: Feature Flags Matrix
@@ -59857,6 +60432,38 @@ class FeatureFlagsMatrix {
             <div class="panel-title">Environment</div>
             <div class="panel-subtitle">Auth, deploy state, feature flags, and runtime config for this session.</div>
           </div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-config-snapshot">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Config Snapshot <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh config">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-token-state">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Token State <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh tokens">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-build-patch">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Build & Patch <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh build info">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-interceptors">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Interceptors <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh interceptors">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
         </div>
 
         <div class="env-card" id="card-feature-flags">
@@ -90019,6 +90626,10 @@ class EdogLogViewer {
         );
       }
       this.featureFlagsMatrix.activate();
+      if (!this.environmentCards) {
+        this.environmentCards = new EnvironmentCards();
+      }
+      this.environmentCards.activate();
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
@@ -90035,12 +90646,14 @@ class EdogLogViewer {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
       if (this.featureFlagsMatrix) this.featureFlagsMatrix.deactivate();
+      if (this.environmentCards) this.environmentCards.deactivate();
     } else {
       if (this.dagStudio) this.dagStudio.deactivate();
       if (this.apiPlayground) this.apiPlayground.deactivate();
       if (this.controlPanel) this.controlPanel.deactivate();
       if (this.qaPanel) this.qaPanel.deactivate();
       if (this.featureFlagsMatrix) this.featureFlagsMatrix.deactivate();
+      if (this.environmentCards) this.environmentCards.deactivate();
     }
   }
 

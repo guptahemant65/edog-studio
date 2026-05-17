@@ -412,6 +412,38 @@ class FeatureFlagsMatrix {
           </div>
         </div>
 
+        <div class="env-card ecard-collapsible" id="card-config-snapshot">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Config Snapshot <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh config">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-token-state">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Token State <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh tokens">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-build-patch">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Build & Patch <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh build info">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
+        <div class="env-card ecard-collapsible" id="card-interceptors">
+          <div class="env-card-header">
+            <div class="env-card-title"><span class="ecard-chevron">\u25BE</span> Interceptors <span class="ecard-header-badge">loading</span></div>
+            <div class="env-card-actions"><button class="env-btn ecard-refresh-btn" title="Refresh interceptors">\u21BB</button></div>
+          </div>
+          <div class="env-card-body"><div class="ecard-shimmer"><span class="sk-bar sk-kv"></span></div></div>
+        </div>
+
         <div class="env-card" id="card-feature-flags">
           <div class="env-card-header">
             <div class="env-card-title">
