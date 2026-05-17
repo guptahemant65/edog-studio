@@ -796,8 +796,14 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Number of skipped scenarios.</summary>
         public int Skipped { get; set; }
 
-        /// <summary>True if no failures or crashes occurred.</summary>
-        public bool OverallPass => Failed == 0 && Crashed == 0;
+        /// <summary>
+        /// True only if every submitted scenario passed cleanly. A run with
+        /// any Failed/Partial/Crashed/TimedOut/Skipped scenarios — or a zero-
+        /// scenario "did nothing" run — is NOT a pass. F27 P8 tightened this
+        /// from the old "Failed==0 && Crashed==0" definition that made the
+        /// honesty-gate skip path falsely report green.
+        /// </summary>
+        public bool OverallPass => Total > 0 && Passed == Total;
     }
 
     /// <summary>

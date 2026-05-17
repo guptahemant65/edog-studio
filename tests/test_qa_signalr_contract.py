@@ -128,7 +128,6 @@ EXPECTED_BROADCAST_EVENTS: set[str] = {
     "QaLintFindings",
     "QaRunStarted",
     "QaScenarioStarted",
-    "QaScenarioPhaseChanged",
     "QaScenarioCompleted",
     "QaRunCompleted",
     "QaError",
@@ -152,7 +151,7 @@ EXPECTED_JS_EVENT_CASES: set[str] = {
     "QaLintFindings",
     "QaRunStarted",
     "QaScenarioStarted",
-    "QaScenarioPhaseChanged",
+    "QaScenarioPhaseChanged",  # planned — see PLANNED_FUTURE_EVENTS below
     "QaExpectationMatched",  # planned — see PLANNED_FUTURE_EVENTS below
     "QaScenarioCompleted",
     "QaRunCompleted",
@@ -178,6 +177,12 @@ PLANNED_FUTURE_EVENTS: set[str] = {
     # (end-to-end integration) once we wire the assertion engine to stream
     # incremental results instead of returning a batch.
     "QaExpectationMatched",
+    # Per-phase transitions inside the 8-phase execution loop. The stub run
+    # loop used to emit these from a fake Task.Delay(10) loop; F27 P8 wired
+    # the real EdogQaExecutionEngine which does NOT yet surface per-phase
+    # hooks. JS handlers stay on the client so the UI can light up phase
+    # progress the moment the engine starts publishing them.
+    "QaScenarioPhaseChanged",
 }
 
 
@@ -343,7 +348,7 @@ def test_hub_method_parser_found_something() -> None:
 
 
 def test_broadcast_parser_found_something() -> None:
-    assert len(parse_broadcast_events()) >= 11, (
+    assert len(parse_broadcast_events()) >= 10, (
         "BroadcastQaEventAsync regex returned fewer events than expected — "
         "the broadcast site format may have changed. Update _BROADCAST_EVENT_RE."
     )

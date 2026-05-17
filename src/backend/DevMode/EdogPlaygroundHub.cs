@@ -1888,9 +1888,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             CancellationTokenSource cts)
         {
             var startedAt = DateTimeOffset.UtcNow;
-            var interDelay = options?.InterScenarioDelayMs ?? 500;
             var globalTimeout = options?.GlobalTimeoutMs ?? 1800000;
-            var stopOnFirst = options?.StopOnFirstFailure ?? false;
+            // NB: InterScenarioDelayMs and StopOnFirstFailure are owned by the
+            // execution engine now. The engine inserts its own inter-scenario
+            // safety gap and runs every submitted scenario; stop-on-first
+            // semantics are deferred until the engine surfaces a hook.
             var cancelledByUser = false;
 
             // Apply global timeout
@@ -1906,103 +1908,176 @@ namespace Microsoft.LiveTable.Service.DevMode
             // populate a typed mirror in the same loop and hand it off to
             // EdogQaRunStore at run completion.
             var persistedScenarios = new List<QaScenarioRecord>();
+            RunResult engineRunResult = null;
 
+            // ── F27 P8: Honesty gate. The run loop used to fake-pass every
+            // scenario via Task.Delay(10) + hardcoded verdict="passed". If the
+            // execution engine is not registered (e.g. DevMode init failed or
+            // a host is running without DI wiring), refuse to silently produce
+            // green verdicts — broadcast a QaError and finish the run as
+            // failed with zero scenarios executed.
+            var engine = EdogQaServiceLocator.ExecutionEngine;
+            if (engine == null)
+            {
+                await PublishQaErrorAsync(
+                    correlationId, runId,
+                    errorCode: "ENGINE_NOT_REGISTERED",
+                    message: "QA execution engine is not registered. DevMode initialization is incomplete; no scenarios were executed.",
+                    scenarioId: null, phase: "initialize",
+                    severity: "fatal", recoverable: false).ConfigureAwait(false);
+
+                await BuildAndFinalizeRunAsync(
+                    correlationId, runId, runEntry, startedAt,
+                    cancelledByUser: false,
+                    scenarios.Count,
+                    scenarioResults, persistedScenarios,
+                    passedCount: 0, failedCount: 0,
+                    completedCount: 0,
+                    engineRunResult: null).ConfigureAwait(false);
+                return;
+            }
+
+            // ── Convert wire-format scenarios into engine-format Scenarios.
+            // Failures here are caller-data problems, not engine bugs; surface
+            // them loudly rather than dropping silently.
+            List<Scenario> engineScenarios;
             try
             {
-                for (var i = 0; i < scenarios.Count; i++)
+                engineScenarios = scenarios.Select(ConvertSubmittedToEngineScenario).ToList();
+            }
+            catch (Exception convEx)
+            {
+                await PublishQaErrorAsync(
+                    correlationId, runId,
+                    errorCode: "SCENARIO_CONVERSION_FAILED",
+                    message: $"Failed to convert submitted scenarios to engine format: {convEx.Message}",
+                    scenarioId: null, phase: "initialize",
+                    severity: "fatal", recoverable: false).ConfigureAwait(false);
+
+                await BuildAndFinalizeRunAsync(
+                    correlationId, runId, runEntry, startedAt,
+                    cancelledByUser: false,
+                    scenarios.Count,
+                    scenarioResults, persistedScenarios,
+                    passedCount: 0, failedCount: 0,
+                    completedCount: 0,
+                    engineRunResult: null).ConfigureAwait(false);
+                return;
+            }
+
+            // Lookup tables for enrichment of engine progress events with the
+            // submitted-scenario context (title/category/expectation count).
+            var submittedById = new Dictionary<string, QaSubmittedScenario>(scenarios.Count);
+            var indexById = new Dictionary<string, int>(scenarios.Count);
+            for (var i = 0; i < scenarios.Count; i++)
+            {
+                submittedById[scenarios[i].Id] = scenarios[i];
+                indexById[scenarios[i].Id] = i;
+            }
+
+            // The engine fires onProgress synchronously; bridge it to SignalR
+            // via fire-and-forget tasks. A SemaphoreSlim(1) serializes the
+            // bridges so QaScenarioCompleted can never overtake the
+            // QaScenarioStarted for the same scenario (and broadcasts stay
+            // in engine-order), and as a side effect mutual exclusion
+            // protects the shared scenarioResults / persistedScenarios /
+            // counters without needing a separate lock.
+            var bridgeTasks = new ConcurrentBag<Task>();
+            var bridgeMutex = new SemaphoreSlim(1, 1);
+
+            void EnqueueBridge(QaExecutionProgress p)
+            {
+                bridgeTasks.Add(BridgeProgressAsync(p));
+            }
+
+            async Task BridgeProgressAsync(QaExecutionProgress p)
+            {
+                await bridgeMutex.WaitAsync().ConfigureAwait(false);
+                try
                 {
-                    ct.ThrowIfCancellationRequested();
+                    var idx = indexById.TryGetValue(p.ScenarioId, out var ix) ? ix : -1;
+                    var submitted = submittedById.TryGetValue(p.ScenarioId, out var sb) ? sb : null;
 
-                    var scenario = scenarios[i];
-
-                    // Broadcast QaScenarioStarted
-                    await BroadcastQaEventAsync("QaScenarioStarted", new
+                    if (p.Phase == ExecutionPhase.Isolate)
                     {
-                        eventType = "QaScenarioStarted",
-                        correlationId,
-                        runId,
-                        timestamp = DateTimeOffset.UtcNow,
-                        scenarioId = scenario.Id,
-                        scenarioIndex = i,
-                        totalScenarios = scenarios.Count,
-                        title = scenario.Title ?? "",
-                        category = scenario.Category ?? "happy_path",
-                        phase = "isolate",
-                        expectationCount = scenario.Expectations?.Count ?? 0
-                    }).ConfigureAwait(false);
-
-                    // Execute 8-phase loop per scenario
-                    var scenarioStart = DateTimeOffset.UtcNow;
-                    var phases = new[] { "isolate", "setup", "mark", "stimulate", "capture", "evaluate", "teardown", "report" };
-                    var previousPhase = "isolate";
-
-                    for (var p = 1; p < phases.Length; p++)
-                    {
-                        ct.ThrowIfCancellationRequested();
-
-                        await BroadcastQaEventAsync("QaScenarioPhaseChanged", new
+                        await BroadcastQaEventAsync("QaScenarioStarted", new
                         {
-                            eventType = "QaScenarioPhaseChanged",
+                            eventType = "QaScenarioStarted",
                             correlationId,
                             runId,
                             timestamp = DateTimeOffset.UtcNow,
-                            scenarioId = scenario.Id,
-                            phase = phases[p],
-                            previousPhase = phases[p - 1],
-                            phaseDurationMs = 0L,
-                            detail = $"Entering phase: {phases[p]}"
+                            scenarioId = p.ScenarioId,
+                            scenarioIndex = idx,
+                            totalScenarios = p.TotalCount,
+                            title = submitted?.Title ?? "",
+                            category = submitted?.Category ?? "happy_path",
+                            phase = "isolate",
+                            expectationCount = submitted?.Expectations?.Count ?? 0
                         }).ConfigureAwait(false);
-
-                        // Simulate phase execution (real impl delegates to ExecutionEngine)
-                        await Task.Delay(10, ct).ConfigureAwait(false);
+                        return;
                     }
 
-                    var scenarioEnd = DateTimeOffset.UtcNow;
-                    var durationMs = (long)(scenarioEnd - scenarioStart).TotalMilliseconds;
-                    completedCount++;
+                    if (p.Phase != ExecutionPhase.Report || p.Result == null)
+                        return;
 
-                    // Determine verdict (placeholder — real impl uses assertion engine)
-                    var verdict = "passed";
-                    passedCount++;
-
+                    var sr = p.Result;
+                    var verdictStr = sr.Verdict.ToString().ToLowerInvariant();
+                    var category = sr.Category ?? submitted?.Category ?? "happy_path";
+                    var title = sr.Title ?? submitted?.Title ?? "";
                     var scenarioHash = EdogQaRunStore.ComputeScenarioHash(
-                        scenario.Id, scenario.Title, scenario.Category);
+                        sr.ScenarioId, title, category);
+
+                    // Per design decision A (production-bar honest): Partial
+                    // and Crashed both count toward the headline "failed"
+                    // rollup. Skipped stays separate (capability gap, not a
+                    // failure of the SUT). The atomic per-verdict counts
+                    // remain available in the typed QaRunSummaryData fields.
+                    var bumpPassed = sr.Verdict == ScenarioVerdict.Passed;
+                    var bumpFailed = sr.Verdict == ScenarioVerdict.Failed
+                                     || sr.Verdict == ScenarioVerdict.Partial
+                                     || sr.Verdict == ScenarioVerdict.TimedOut
+                                     || sr.Verdict == ScenarioVerdict.Crashed;
+
+                    completedCount++;
+                    if (bumpPassed) passedCount++;
+                    else if (bumpFailed) failedCount++;
 
                     var scenarioResult = new
                     {
-                        scenarioId = scenario.Id,
+                        scenarioId = sr.ScenarioId,
                         scenarioHash,
-                        title = scenario.Title ?? "",
-                        category = scenario.Category ?? "happy_path",
-                        verdict,
-                        durationMs,
-                        startedAt = scenarioStart,
-                        completedAt = scenarioEnd,
-                        expectations = new List<object>(),
-                        eventsCaptured = 0,
-                        errorMessage = (string)null
+                        title,
+                        category,
+                        verdict = verdictStr,
+                        durationMs = sr.DurationMs,
+                        startedAt = sr.StartedAt,
+                        completedAt = sr.CompletedAt,
+                        expectations = sr.Expectations ?? new List<ExpectationResult>(),
+                        eventsCaptured = sr.EventsCaptured,
+                        errorMessage = sr.ErrorMessage,
+                        failedAtPhase = sr.FailedAtPhase.ToString().ToLowerInvariant()
                     };
+
                     scenarioResults.Add(scenarioResult);
                     persistedScenarios.Add(new QaScenarioRecord
                     {
-                        ScenarioId = scenario.Id,
+                        ScenarioId = sr.ScenarioId,
                         ScenarioHash = scenarioHash,
-                        Title = scenario.Title ?? string.Empty,
-                        Category = scenario.Category ?? "happy_path",
-                        Status = verdict,
-                        ErrorSummary = null,
+                        Title = title,
+                        Category = category,
+                        Status = verdictStr,
+                        ErrorSummary = sr.ErrorMessage,
                     });
 
-                    // Broadcast QaScenarioCompleted
                     await BroadcastQaEventAsync("QaScenarioCompleted", new
                     {
                         eventType = "QaScenarioCompleted",
                         correlationId,
                         runId,
                         timestamp = DateTimeOffset.UtcNow,
-                        scenarioId = scenario.Id,
-                        scenarioIndex = i,
-                        totalScenarios = scenarios.Count,
+                        scenarioId = sr.ScenarioId,
+                        scenarioIndex = idx,
+                        totalScenarios = p.TotalCount,
                         result = scenarioResult,
                         runProgress = new
                         {
@@ -2012,33 +2087,110 @@ namespace Microsoft.LiveTable.Service.DevMode
                             remaining = scenarios.Count - completedCount
                         }
                     }).ConfigureAwait(false);
-
-                    if (stopOnFirst && verdict != "passed")
-                        break;
-
-                    // Inter-scenario delay
-                    if (i < scenarios.Count - 1 && interDelay > 0)
-                        await Task.Delay(interDelay, ct).ConfigureAwait(false);
                 }
+                catch (Exception bridgeEx)
+                {
+                    // Don't fail the run for a broadcast hiccup, but make
+                    // sure the failure isn't completely invisible.
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[QA] Progress bridge failed for {p?.ScenarioId} phase={p?.Phase}: {bridgeEx}");
+                }
+                finally
+                {
+                    bridgeMutex.Release();
+                }
+            }
+
+            try
+            {
+                engineRunResult = await engine
+                    .ExecuteRunAsync(runId, engineScenarios, EnqueueBridge, ct)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 cancelledByUser = true;
             }
+            catch (Exception engineEx)
+            {
+                await PublishQaErrorAsync(
+                    correlationId, runId,
+                    errorCode: "ENGINE_EXECUTION_FAILED",
+                    message: engineEx.Message,
+                    scenarioId: null, phase: "execute",
+                    severity: "fatal", recoverable: false).ConfigureAwait(false);
+            }
 
+            // Drain any in-flight bridge broadcasts so SignalR clients see
+            // every QaScenarioCompleted before QaRunCompleted lands.
+            try
+            {
+                await Task.WhenAll(bridgeTasks.ToArray()).ConfigureAwait(false);
+            }
+            catch
+            {
+                // per-task errors already swallowed in BridgeProgressAsync
+            }
+
+            await BuildAndFinalizeRunAsync(
+                correlationId, runId, runEntry, startedAt,
+                cancelledByUser,
+                scenarios.Count,
+                scenarioResults, persistedScenarios,
+                passedCount, failedCount,
+                completedCount, engineRunResult).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Builds the final QaRunResult, persists history, and broadcasts
+        /// <c>QaRunCompleted</c>. Pulled out of <see cref="RunExecutionLoopAsync"/>
+        /// so both the happy path and the honesty-gate / engine-failure paths
+        /// emit a consistent terminal event.
+        /// </summary>
+        private async Task BuildAndFinalizeRunAsync(
+            string correlationId,
+            string runId,
+            QaRunEntry runEntry,
+            DateTimeOffset startedAt,
+            bool cancelledByUser,
+            int totalScenarioCount,
+            List<object> scenarioResults,
+            List<QaScenarioRecord> persistedScenarios,
+            int passedCount,
+            int failedCount,
+            int completedCount,
+            RunResult engineRunResult)
+        {
             var completedAt = DateTimeOffset.UtcNow;
             var totalDurationMs = (long)(completedAt - startedAt).TotalMilliseconds;
-            var skippedCount = scenarios.Count - completedCount;
+
+            int partialCount = 0, crashedCount = 0, timedOutCount = 0;
+            if (engineRunResult?.Summary != null)
+            {
+                partialCount = engineRunResult.Summary.Partial;
+                crashedCount = engineRunResult.Summary.Crashed;
+                timedOutCount = engineRunResult.Summary.TimedOut;
+            }
+            var skippedCount = totalScenarioCount - completedCount;
+            if (skippedCount < 0) skippedCount = 0;
+
+            // Strict per-verdict count for the Failed field on the wire/disk.
+            // The "failed" rollup that the headline UI shows is computed
+            // separately below to honor the Partial->Failed design choice.
+            var strictFailed = failedCount - partialCount - crashedCount - timedOutCount;
+            if (strictFailed < 0) strictFailed = failedCount;
 
             var summary = new QaRunSummaryData
             {
-                Total = scenarios.Count,
+                Total = totalScenarioCount,
                 Passed = passedCount,
-                Failed = failedCount,
-                Skipped = skippedCount
+                Failed = strictFailed,
+                Partial = partialCount,
+                Crashed = crashedCount,
+                TimedOut = timedOutCount,
+                Skipped = skippedCount,
             };
 
-            // Build and store result
             var runResult = new QaRunResult
             {
                 RunId = runId,
@@ -2052,13 +2204,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Scenarios = scenarioResults,
                 Performance = new QaPerformanceReport
                 {
-                    TotalExecutionMs = totalDurationMs,
+                    TotalExecutionMs = engineRunResult?.TotalDurationMs ?? totalDurationMs,
                     AverageScenarioMs = completedCount > 0 ? totalDurationMs / completedCount : 0
                 }
             };
             QaHubState.StoreRunResult(runId, runResult);
 
-            // Add to history
             QaHubState.AddToHistory(new QaRunSummary
             {
                 RunId = runId,
@@ -2071,10 +2222,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                 OverallPass = summary.OverallPass
             });
 
-            // F27 P7: persist the full record so history survives FLT
-            // process restarts. The store catches its own I/O failures
-            // and never throws; we only catch here as a final safety net
-            // because run-completion must never fail the surrounding flow.
             try
             {
                 EdogQaRunStore.Add(new QaRunRecord
@@ -2097,7 +2244,6 @@ namespace Microsoft.LiveTable.Service.DevMode
                     $"[QA] EdogQaRunStore.Add failed (non-fatal): {persistEx.Message}");
             }
 
-            // Broadcast QaRunCompleted
             await BroadcastQaEventAsync("QaRunCompleted", new
             {
                 eventType = "QaRunCompleted",
@@ -2115,16 +2261,155 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     total = summary.Total,
                     passed = summary.Passed,
-                    failed = summary.Failed,
-                    timedOut = summary.TimedOut,
-                    partial = summary.Partial,
-                    crashed = summary.Crashed,
+                    // Wire-level "failed" honors the design decision: Partial,
+                    // Crashed, and TimedOut all roll up into the headline
+                    // failure metric the UI displays. Atomic counts (partial,
+                    // crashed, timedOut) remain available alongside.
+                    failed = strictFailed + partialCount + crashedCount + timedOutCount,
+                    timedOut = timedOutCount,
+                    partial = partialCount,
+                    crashed = crashedCount,
                     skipped = summary.Skipped,
+                    // OverallPass is strict at the model layer (Total > 0 &&
+                    // Passed == Total). Skipped/Partial/Crashed/TimedOut all
+                    // force this to false, including the honesty-gate path
+                    // where the engine didn't run at all.
                     overallPass = summary.OverallPass
                 },
                 performance = runResult.Performance,
-                unobservablePaths = new List<string>()
+                unobservablePaths = engineRunResult?.UnobservablePaths ?? new List<string>()
             }).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Converts a wire-format <see cref="QaSubmittedScenario"/> (string-
+        /// typed fields, boxed Stimulus/Metadata via SignalR JSON) into the
+        /// engine-format <see cref="Scenario"/> with proper enums and typed
+        /// sub-records. Throws on malformed input; the run loop turns that
+        /// into a fatal QaError rather than swallowing it.
+        /// </summary>
+        private static Scenario ConvertSubmittedToEngineScenario(QaSubmittedScenario s)
+        {
+            if (s == null) throw new ArgumentNullException(nameof(s));
+
+            return new Scenario
+            {
+                Id = s.Id ?? string.Empty,
+                Title = s.Title ?? string.Empty,
+                Description = s.Description ?? string.Empty,
+                Category = ParseScenarioCategory(s.Category),
+                Priority = s.Priority,
+                ImpactZone = s.ImpactZone ?? string.Empty,
+                Lifecycle = ScenarioLifecycle.Queued,
+                TimeoutMs = s.TimeoutMs > 0 ? s.TimeoutMs : 30_000,
+                Stimulus = DeserializeAs<Stimulus>(s.Stimulus),
+                Expectations = (s.Expectations ?? new List<QaSubmittedExpectation>())
+                    .Select(e => new Expectation
+                    {
+                        Id = e.Id ?? string.Empty,
+                        Type = ParseExpectationType(e.Type),
+                        Topic = e.Topic ?? string.Empty,
+                        Description = e.Description ?? string.Empty,
+                        // F27 P8: pass the full match semantics through.
+                        // Engine assertion runs against these — dropping
+                        // them would make every matcher match anything.
+                        Matcher = e.Matcher,
+                        TimeWindow = e.TimeWindow,
+                        Count = e.Count,
+                        Order = e.Order,
+                    })
+                    .ToList(),
+                Setup = (s.Setup ?? new List<object>())
+                    .Select(DeserializeAs<SetupStep>)
+                    .Where(x => x != null)
+                    .ToList(),
+                Teardown = (s.Teardown ?? new List<object>())
+                    .Select(DeserializeAs<TeardownStep>)
+                    .Where(x => x != null)
+                    .ToList(),
+                Metadata = DeserializeAs<ScenarioMetadata>(s.Metadata) ?? new ScenarioMetadata(),
+            };
+        }
+
+        private static ScenarioCategory ParseScenarioCategory(string raw)
+        {
+            // ValidateScenarios already enforces snake_case via a case-
+            // insensitive HashSet, so anything that reaches conversion is
+            // one of the known values (or empty). Unknown input is a
+            // contract bug — fail loud rather than silently mapping to
+            // HappyPath, which would mask a wire-format change.
+            if (string.IsNullOrEmpty(raw))
+                return ScenarioCategory.HappyPath;
+            return raw.ToLowerInvariant() switch
+            {
+                "happy_path" => ScenarioCategory.HappyPath,
+                "error_path" => ScenarioCategory.ErrorPath,
+                "edge_case" => ScenarioCategory.EdgeCase,
+                "regression" => ScenarioCategory.Regression,
+                "performance" => ScenarioCategory.Performance,
+                _ => throw new ArgumentException(
+                    $"Unknown scenario category: '{raw}'. Expected one of " +
+                    "happy_path, error_path, edge_case, regression, performance.")
+            };
+        }
+
+        private static ExpectationType ParseExpectationType(string raw)
+        {
+            // Strict mapping: silently defaulting an unknown type to
+            // EventPresent would invert assertion semantics — e.g. a
+            // misspelled "event_absnt" becomes a presence check, the
+            // opposite of what the LLM/curator intended.
+            if (string.IsNullOrEmpty(raw))
+                return ExpectationType.EventPresent;
+            return raw.ToLowerInvariant() switch
+            {
+                "event_present" => ExpectationType.EventPresent,
+                "event_absent" => ExpectationType.EventAbsent,
+                "event_count" => ExpectationType.EventCount,
+                "event_order" => ExpectationType.EventOrder,
+                "timing" => ExpectationType.Timing,
+                "field_match" => ExpectationType.FieldMatch,
+                _ => throw new ArgumentException(
+                    $"Unknown expectation type: '{raw}'. Expected one of " +
+                    "event_present, event_absent, event_count, event_order, timing, field_match.")
+            };
+        }
+
+        private static readonly System.Text.Json.JsonSerializerOptions _engineConvertOpts =
+            new System.Text.Json.JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                Converters =
+                {
+                    new System.Text.Json.Serialization.JsonStringEnumConverter(
+                        System.Text.Json.JsonNamingPolicy.SnakeCaseLower,
+                        allowIntegerValues: false),
+                },
+            };
+
+        /// <summary>
+        /// Coerces a boxed JSON value (typically a <see cref="System.Text.Json.JsonElement"/>
+        /// from SignalR deserialization) into a typed engine record via a
+        /// JSON round-trip. Returns null on null input.
+        /// </summary>
+        private static T DeserializeAs<T>(object raw) where T : class
+        {
+            if (raw == null) return null;
+            if (raw is T already) return already;
+            try
+            {
+                if (raw is System.Text.Json.JsonElement je)
+                {
+                    return System.Text.Json.JsonSerializer
+                        .Deserialize<T>(je.GetRawText(), _engineConvertOpts);
+                }
+                var json = System.Text.Json.JsonSerializer.Serialize(raw, _engineConvertOpts);
+                return System.Text.Json.JsonSerializer.Deserialize<T>(json, _engineConvertOpts);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>

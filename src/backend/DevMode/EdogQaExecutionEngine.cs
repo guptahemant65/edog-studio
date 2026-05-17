@@ -186,6 +186,27 @@ namespace Microsoft.LiveTable.Service.DevMode
                             .ToList(),
                     }).ConfigureAwait(false);
 
+                    // Notify subscribers that the scenario is starting. Carries
+                    // Phase=Isolate and Result=null so the hub can broadcast
+                    // QaScenarioStarted without inventing data. The completion
+                    // callback below runs with Phase=Report once the scenario
+                    // finishes through all 8 phases.
+                    try
+                    {
+                        onProgress?.Invoke(new QaExecutionProgress
+                        {
+                            ScenarioId = scenario.Id,
+                            CompletedCount = _completedCount,
+                            TotalCount = _totalCount,
+                            Phase = ExecutionPhase.Isolate,
+                            Result = null,
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "[QA] Start-callback threw for {Id}", scenario.Id);
+                    }
+
                     // Execute the scenario through 8 phases
                     ScenarioResult result;
                     try
@@ -226,6 +247,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                             CompletedCount = _completedCount,
                             TotalCount = _totalCount,
                             Phase = ExecutionPhase.Report,
+                            Result = result,
                         });
                     }
                     catch (Exception ex)
@@ -960,10 +982,11 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     public sealed class QaExecutionProgress
     {
-        /// <summary>ID of the scenario that just completed.</summary>
+        /// <summary>ID of the scenario this progress event describes.</summary>
         public string ScenarioId { get; set; }
 
-        /// <summary>Verdict of the completed scenario.</summary>
+        /// <summary>Verdict of the completed scenario (Passed/Failed/etc).
+        /// Meaningful only when <see cref="Phase"/> is <see cref="ExecutionPhase.Report"/>.</summary>
         public ScenarioVerdict Verdict { get; set; }
 
         /// <summary>Number of scenarios completed so far.</summary>
@@ -972,8 +995,24 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Total number of scenarios in the run.</summary>
         public int TotalCount { get; set; }
 
-        /// <summary>Current execution phase.</summary>
+        /// <summary>
+        /// Lifecycle marker for the callback:
+        /// <list type="bullet">
+        ///   <item><see cref="ExecutionPhase.Isolate"/> — engine is about to start this scenario
+        ///     (subscribers should emit a "scenario started" event).</item>
+        ///   <item><see cref="ExecutionPhase.Report"/> — scenario has finished and
+        ///     <see cref="Result"/> is populated.</item>
+        /// </list>
+        /// </summary>
         public ExecutionPhase Phase { get; set; }
+
+        /// <summary>
+        /// Full per-scenario result. Populated only when <see cref="Phase"/> is
+        /// <see cref="ExecutionPhase.Report"/>; <c>null</c> on the Isolate (started)
+        /// notification. Subscribers use this to emit <c>QaScenarioCompleted</c> with
+        /// real verdicts, durations, and expectation outcomes.
+        /// </summary>
+        public ScenarioResult Result { get; set; }
     }
 
     // ═══════════════════════════════════════════════════════════════════

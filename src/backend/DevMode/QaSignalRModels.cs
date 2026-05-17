@@ -151,6 +151,24 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Human-readable description.</summary>
         public string Description { get; set; }
+
+        // F27 P8: the real EdogQaExecutionEngine consumes these via
+        // EdogQaAssertionEngine. Pre-P8 the run was stubbed, so the wire
+        // model dropped them; SignalR silently truncated the LLM-supplied
+        // matcher data, which is fine for a fake loop but devastating for
+        // real verdicts. Carrying them through verbatim restores fidelity.
+
+        /// <summary>Field-level matching predicates (AND logic).</summary>
+        public Matcher Matcher { get; set; }
+
+        /// <summary>Optional time window constraints relative to T0.</summary>
+        public TimeWindowSpec TimeWindow { get; set; }
+
+        /// <summary>Optional event-count constraints.</summary>
+        public CountSpec Count { get; set; }
+
+        /// <summary>Optional ordering constraints relative to other expectations.</summary>
+        public OrderSpec Order { get; set; }
     }
 
     /// <summary>
@@ -343,8 +361,14 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Skipped count.</summary>
         public int Skipped { get; set; }
 
-        /// <summary>True if no failures or crashes.</summary>
-        public bool OverallPass => Failed == 0 && Crashed == 0;
+        /// <summary>
+        /// True only if every submitted scenario passed cleanly. A run with
+        /// any Failed/Partial/Crashed/TimedOut/Skipped scenarios — or a zero-
+        /// scenario "did nothing" run — is NOT a pass. F27 P8 tightened this
+        /// from the old "Failed==0 && Crashed==0" definition so the honesty-
+        /// gate skip path can't quietly report green.
+        /// </summary>
+        public bool OverallPass => Total > 0 && Passed == Total;
     }
 
     /// <summary>
