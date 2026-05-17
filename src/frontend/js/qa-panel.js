@@ -301,7 +301,23 @@ class QaPanel {
 
   _handleError(data) {
     const msg = (data && data.message) || 'Unknown QA error';
-    console.error('[QA] Server error:', msg);
+    const code = (data && (data.errorCode || data.ErrorCode)) || '';
+    console.error('[QA] Server error:', code, msg);
+
+    // F27 P4 — analysis-phase errors (LLM transport, parse, or empty
+    // scenario set) are routed to the analysis component's inline panel
+    // so the failure is persistent, actionable, and tied to the failed
+    // phase tracker — instead of a fire-and-forget toast.
+    const isAnalysisError =
+      code === 'NO_SCENARIOS_GENERATED' ||
+      (typeof code === 'string' && code.indexOf('LLM_PROVIDER_') === 0);
+
+    if (isAnalysisError && this._analysis && typeof this._analysis.onAnalysisPhaseError === 'function') {
+      this._analysis.onAnalysisPhaseError(data);
+      this._setStage('analysis');
+      return;
+    }
+
     if (window.edogToast) window.edogToast.show(msg, 'error');
   }
 

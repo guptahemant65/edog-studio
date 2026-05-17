@@ -632,6 +632,84 @@
   color: var(--warning, #e2a727);
 }
 
+/* ── F27 P4 — Analysis-phase error states ── */
+.qa-analysis-phase.failed {
+  border-left: 2px solid var(--danger, #e0524d);
+}
+
+.qa-analysis-phase.failed .qa-phase-icon,
+.qa-analysis-phase.failed .qa-phase-detail {
+  color: var(--danger, #e0524d);
+}
+
+.qa-analysis-error {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin: var(--space-3) 0;
+  background: rgba(224, 82, 77, 0.06);
+  border: 1px solid var(--danger, #e0524d);
+  border-radius: 4px;
+}
+
+.qa-analysis-error-icon {
+  font-size: var(--text-lg);
+  color: var(--danger, #e0524d);
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.qa-analysis-error-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.qa-analysis-error-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--danger, #e0524d);
+}
+
+.qa-analysis-error-message {
+  font-size: var(--text-sm);
+  color: var(--text);
+  word-break: break-word;
+}
+
+.qa-analysis-error-actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-1);
+}
+
+.qa-analysis-error-actions a {
+  font-size: var(--text-sm);
+  color: var(--accent, #4a9eff);
+  text-decoration: none;
+}
+
+.qa-analysis-error-actions a:hover {
+  text-decoration: underline;
+}
+
+.qa-analysis-error-retry {
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface, #1c1c1c);
+  color: var(--text);
+  border: 1px solid var(--border, #333);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.qa-analysis-error-retry:hover {
+  border-color: var(--accent, #4a9eff);
+}
+
 .qa-phase-icon {
   width: 20px;
   height: 20px;

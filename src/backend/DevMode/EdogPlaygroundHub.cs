@@ -1054,7 +1054,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     timestamp = DateTimeOffset.UtcNow,
                     warning = "pr_diff_fetch_failed",
                     message = diffError,
-                    fallback = "synthetic_scenarios",
+                    fallback = "placeholder_diff",
                 }).ConfigureAwait(false);
             }
 
@@ -1142,9 +1142,34 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
                 catch (OperationCanceledException) { throw; }
+                catch (LlmProviderException llmEx)
+                {
+                    // F27 P4: typed LLM provider failure. Emit a QaError
+                    // with the wire-stable errorCode so the studio can
+                    // render an actionable inline panel + optional Retry
+                    // CTA (when llmEx.Retryable). Do NOT silently fall to
+                    // synthetic scenarios — that masquerade is exactly
+                    // what P4 kills.
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[QA] LLM provider failure ({llmEx.KindCode}): {llmEx.Message}");
+                    await PublishQaErrorAsync(
+                        correlationId,
+                        runId: null,
+                        errorCode: llmEx.ErrorCode,
+                        message: llmEx.Message,
+                        scenarioId: null,
+                        phase: "scenario_generation",
+                        severity: "error",
+                        recoverable: llmEx.Retryable).ConfigureAwait(false);
+
+                    // Leave `scenarios` null so the fallback gate below
+                    // takes over: in demo mode it emits tagged synthetic
+                    // scenarios; in normal mode it emits a second QaError
+                    // and aborts.
+                }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[QA] CodeAnalyzer failed, falling back to synthetic: {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[QA] CodeAnalyzer failed: {ex.Message}");
                     await BroadcastQaEventAsync("QaAnalysisWarning", new
                     {
                         eventType = "QaAnalysisWarning",
@@ -1152,7 +1177,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         analysisId,
                         timestamp = DateTimeOffset.UtcNow,
                         warning = "analyzer_failed",
-                        message = $"Code analyzer failed: {ex.Message}. Using synthetic scenarios.",
+                        message = $"Code analyzer failed: {ex.Message}.",
                     }).ConfigureAwait(false);
                 }
             }
@@ -1172,23 +1197,47 @@ namespace Microsoft.LiveTable.Service.DevMode
                 await Task.Delay(400, ct).ConfigureAwait(false);
             }
 
-            // Fall back to synthetic scenarios when real pipeline produces none.
-            // Visible warning + telemetry counter so the studio shows a banner
-            // and operators can detect silent degradation in QaGetTelemetry.
+            // F27 P4: synthetic-scenarios fallback is now opt-in via
+            // EDOG_QA_DEMO_FALLBACK=1. Without that env var, an empty
+            // scenario list emits a typed NO_SCENARIOS_GENERATED QaError
+            // and aborts the scenario-generation phase. The graph / DI /
+            // lint broadcasts already sent above remain visible so the
+            // studio still shows the analysis work that completed.
             if (scenarios == null || scenarios.Count == 0)
             {
-                EdogQaTelemetry.IncrementSyntheticScenariosFallback();
-                await BroadcastQaEventAsync("QaAnalysisWarning", new
+                if (QaAnalysisFallbackPolicy.IsDemoFallbackEnabled())
                 {
-                    eventType = "QaAnalysisWarning",
-                    correlationId,
-                    analysisId,
-                    timestamp = DateTimeOffset.UtcNow,
-                    warning = "synthetic_scenarios_used",
-                    message = "Real analyzer produced no scenarios — using 5 hand-coded placeholder scenarios. These are NOT AI-generated.",
-                    fallback = "synthetic_scenarios",
-                }).ConfigureAwait(false);
-                scenarios = GenerateSyntheticScenarios(request.PrId ?? 0);
+                    EdogQaTelemetry.IncrementSyntheticScenariosFallback();
+                    await BroadcastQaEventAsync("QaAnalysisWarning", new
+                    {
+                        eventType = "QaAnalysisWarning",
+                        correlationId,
+                        analysisId,
+                        timestamp = DateTimeOffset.UtcNow,
+                        warning = "synthetic_scenarios_used",
+                        message = "EDOG_QA_DEMO_FALLBACK=1 active — emitting 5 hand-coded demo scenarios. " +
+                                  "Each title is prefixed with [DEMO] and metadata.generatedBy = 'demo_synthetic'.",
+                        fallback = "demo_synthetic",
+                    }).ConfigureAwait(false);
+                    scenarios = GenerateSyntheticScenarios(request.PrId ?? 0);
+                    QaAnalysisFallbackPolicy.TagAsDemo(scenarios);
+                }
+                else
+                {
+                    await PublishQaErrorAsync(
+                        correlationId,
+                        runId: null,
+                        errorCode: "NO_SCENARIOS_GENERATED",
+                        message: "No scenarios produced. Configure the LLM provider " +
+                                 "(AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY or run the dev-server proxy " +
+                                 "with a populated donna-app/.env) or set EDOG_QA_DEMO_FALLBACK=1 to use " +
+                                 "the hand-coded demo scenarios for screenshots / walkthroughs.",
+                        scenarioId: null,
+                        phase: "scenario_generation",
+                        severity: "error",
+                        recoverable: false).ConfigureAwait(false);
+                    scenarios = new List<Scenario>();
+                }
             }
 
             // Phase 5: Scenario generation — broadcast each scenario as it's "generated"

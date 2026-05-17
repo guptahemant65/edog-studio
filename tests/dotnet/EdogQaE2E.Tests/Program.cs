@@ -5,9 +5,11 @@
 // F27 P3 - Entry point for the E2E harness binary.
 //
 // Usage: dotnet run -- <subcommand>
-//   analyze    - Run the analyzer pipeline against the pr-baseline fixture.
-//   aggregate  - Run the aggregator against canned mixed-verdict results.
-//   compose    - Run analyzer to aggregator, asserting no scenario IDs drift.
+//   analyze         - Run the analyzer pipeline against the pr-baseline fixture.
+//   aggregate       - Run the aggregator against canned mixed-verdict results.
+//   compose         - Run analyzer to aggregator, asserting no scenario IDs drift.
+//   classify-llm    - F27 P4: pin LlmProviderExceptionClassifier matrix.
+//   fallback-policy - F27 P4: pin QaAnalysisFallbackPolicy env-gate + tagging.
 //
 // Each subcommand emits a single JSON block delimited by HARNESS-JSON-BEGIN
 // / HARNESS-JSON-END markers on stdout. The pytest wrapper parses those.
@@ -26,7 +28,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy}");
                 return 2;
             }
 
@@ -38,6 +40,8 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "analyze" => await AnalyzerHarness.RunAsync(cts.Token),
                     "aggregate" => await AggregatorHarness.RunAsync(),
                     "compose" => await ComposeHarness.RunAsync(cts.Token),
+                    "classify-llm" => await LlmClassifyHarness.RunAsync(),
+                    "fallback-policy" => await FallbackPolicyHarness.RunAsync(),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }

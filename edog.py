@@ -108,6 +108,7 @@ DEVMODE_FILES = {
     "EdogQaCodeAnalyzer": SERVICE_PATH / "DevMode/EdogQaCodeAnalyzer.cs",
     "EdogQaDiRegistryProvider": SERVICE_PATH / "DevMode/EdogQaDiRegistryProvider.cs",
     "EdogQaExecutionEngine": SERVICE_PATH / "DevMode/EdogQaExecutionEngine.cs",
+    "EdogQaFallbackPolicy": SERVICE_PATH / "DevMode/EdogQaFallbackPolicy.cs",
     "EdogQaGraphProvider": SERVICE_PATH / "DevMode/EdogQaGraphProvider.cs",
     "EdogQaInvariantExtractor": SERVICE_PATH / "DevMode/EdogQaInvariantExtractor.cs",
     "EdogQaLlmProvider": SERVICE_PATH / "DevMode/EdogQaLlmProvider.cs",

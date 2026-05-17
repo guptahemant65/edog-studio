@@ -427,64 +427,12 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
         }
 
-        // ─── Stub providers for QA CodeAnalyzer (pre-Connected phase) ───
-
-        private sealed class NullGraphProvider : IGraphProvider
-        {
-            public System.Threading.Tasks.Task<CodeGraph> BuildStructuralGraphAsync(
-                System.Collections.Generic.List<ChangedSymbol> changedSymbols,
-                int maxDepth = 4,
-                System.Threading.CancellationToken cancellationToken = default)
-                => System.Threading.Tasks.Task.FromResult(new CodeGraph());
-        }
-
-        private sealed class NullOmniSharpProvider : IOmniSharpProvider
-        {
-            public bool IsReady => false;
-
-            public System.Threading.Tasks.Task WarmUpAsync(
-                string solutionPath,
-                System.Threading.CancellationToken cancellationToken = default)
-                => System.Threading.Tasks.Task.CompletedTask;
-
-            public System.Threading.Tasks.Task EnrichGraphAsync(
-                CodeGraph graph,
-                System.Collections.Generic.List<ChangedSymbol> changedSymbols,
-                int maxConcurrentQueries = 4,
-                System.Threading.CancellationToken cancellationToken = default)
-                => System.Threading.Tasks.Task.CompletedTask;
-
-            public System.Threading.Tasks.Task<System.Collections.Generic.List<string>> FindImplementationsAsync(
-                string interfaceType,
-                System.Threading.CancellationToken cancellationToken = default)
-                => System.Threading.Tasks.Task.FromResult(new System.Collections.Generic.List<string>());
-
-            public System.Threading.Tasks.Task<System.Collections.Generic.List<CallerInfo>> GetIncomingCallsAsync(
-                string filePath,
-                string methodName,
-                int maxDepth = 4,
-                System.Threading.CancellationToken cancellationToken = default)
-                => System.Threading.Tasks.Task.FromResult(new System.Collections.Generic.List<CallerInfo>());
-        }
-
-        private sealed class NullLlmProvider : ILlmProvider
-        {
-            public System.Threading.Tasks.Task<System.Collections.Generic.List<Scenario>> GenerateScenariosAsync(
-                LlmPromptRequest request,
-                System.Threading.CancellationToken cancellationToken = default)
-                => System.Threading.Tasks.Task.FromResult(new System.Collections.Generic.List<Scenario>());
-        }
-
-        private sealed class NullDiRegistryProvider : IDiRegistryProvider
-        {
-            public bool IsAvailable => false;
-            public void LoadSnapshot() { }
-            public DiRegistration Resolve(string interfaceType) => null;
-            public System.Collections.Generic.List<DiRegistration> GetAll()
-                => new System.Collections.Generic.List<DiRegistration>();
-            public InterfaceValidation ValidateMapping(string interfaceType, string inferredImpl)
-                => new InterfaceValidation { Status = "unregistered", ConfidenceDelta = 0.0 };
-        }
+        // ─── (F27 P4) Null* providers were here and never wired ───
+        // The pre-Connected codepath now uses the real providers (which
+        // throw a typed LlmProviderException when LLM isn't configured),
+        // so the Null* stubs are dead weight. Removed in P4 along with
+        // the silent synthetic fallback. The Stub* providers in
+        // EdogQaCodeAnalyzer.cs remain as test-only utilities.
     }
 
     // EdogQaServiceLocator is defined in EdogPlaygroundHub.cs

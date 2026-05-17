@@ -49,6 +49,26 @@ namespace Microsoft.LiveTable.Service.DevMode
         private readonly bool _useProxy;
 
         /// <summary>
+        /// Test-only seam used by the F27 P4 E2E classification harness.
+        /// Allows the harness to swap in an <see cref="HttpClient"/> backed
+        /// by a fake <see cref="HttpMessageHandler"/> so the timeout / 4xx
+        /// / 5xx / parse classification matrix can be exercised without
+        /// binding to a real port or hitting Azure OpenAI.
+        ///
+        /// Production code must use the parameterless constructor.
+        /// </summary>
+        internal EdogQaLlmProvider(HttpClient httpClient, bool useProxy = false, string endpoint = null, string apiKey = null)
+        {
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            _useProxy = useProxy;
+            _endpoint = endpoint ?? "https://test.invalid/";
+            _apiKey = apiKey ?? "test";
+            _apiVersion = "test-version";
+            _deployment = "test-deployment";
+            _isConfigured = true;
+        }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="EdogQaLlmProvider"/> class.
         /// Reads Azure OpenAI configuration from environment variables.
         /// Falls back to dev-server proxy when env vars are missing.
@@ -109,7 +129,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (!_isConfigured)
             {
                 EdogQaTelemetry.IncrementLlmError();
-                return new List<Scenario>();
+                throw new LlmProviderException(
+                    LlmProviderErrorKind.Auth,
+                    "LLM provider not configured. Set AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_API_KEY (or PRO equivalents) " +
+                    "or run the dev-server proxy that proxies to a configured donna-app/.env.",
+                    retryable: false);
             }
 
             try
@@ -123,15 +147,24 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Console.WriteLine($"[EDOG] Generated {scenarios.Count} scenarios for zone {request.Zone.ZoneId}");
                 return scenarios;
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // User-initiated cancellation — let it bubble untouched.
+                throw;
+            }
+            catch (LlmProviderException)
+            {
+                // Already classified by ParseResponse / classifier — rethrow without re-wrapping.
+                EdogQaTelemetry.IncrementLlmError();
                 throw;
             }
             catch (Exception ex)
             {
                 EdogQaTelemetry.IncrementLlmError();
-                Console.WriteLine($"[EDOG] LLM generation failed for zone {request.Zone.ZoneId}: {ex.Message}");
-                return new List<Scenario>();
+                var classified = LlmProviderExceptionClassifier.Classify(ex, cancellationToken);
+                Console.WriteLine($"[EDOG] LLM generation failed for zone {request.Zone.ZoneId} " +
+                                  $"({classified.KindCode}): {classified.Message}");
+                throw classified;
             }
         }
 
@@ -804,8 +837,15 @@ Return ONLY valid JSON, no markdown, no explanation text.";
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync();
+                // Pass the actual status code to HttpRequestException so
+                // LlmProviderExceptionClassifier can map 401/403→auth,
+                // 429→rate_limit, 5xx→network-retryable. Before P4 the
+                // status code was only in the message string, so the
+                // classifier had no structured signal.
                 throw new HttpRequestException(
-                    $"Azure OpenAI API error {response.StatusCode}: {errorBody}");
+                    $"Azure OpenAI API error {(int)response.StatusCode}: {errorBody}",
+                    inner: null,
+                    statusCode: response.StatusCode);
             }
 
             var responseJson = await response.Content.ReadAsStringAsync();
@@ -853,28 +893,60 @@ Return ONLY valid JSON, no markdown, no explanation text.";
 
         /// <summary>
         /// Parse LLM JSON response into Scenario objects.
-        /// Returns empty list on malformed JSON (logs warning).
+        ///
+        /// F27 P4: throws <see cref="LlmProviderException"/> with kind
+        /// <c>Parse</c> when the contract is violated (invalid JSON,
+        /// missing <c>scenarios</c> array, empty array, all entries
+        /// fail to map). The hub maps this into a typed QaError so the
+        /// studio surfaces an actionable message rather than silently
+        /// triggering the synthetic fallback.
         /// </summary>
         private static List<Scenario> ParseResponse(string responseContent, string zoneId)
         {
+            if (string.IsNullOrWhiteSpace(responseContent))
+            {
+                throw LlmProviderExceptionClassifier.Parse(
+                    $"LLM response content was empty for zone {zoneId}.");
+            }
+
+            JsonDocument doc;
             try
             {
+                doc = JsonDocument.Parse(responseContent);
+            }
+            catch (JsonException jex)
+            {
+                throw LlmProviderExceptionClassifier.Parse(
+                    $"LLM response was not valid JSON for zone {zoneId}: {jex.Message}");
+            }
+
+            using (doc)
+            {
+                if (!doc.RootElement.TryGetProperty("scenarios", out var scenariosArray))
+                {
+                    throw LlmProviderExceptionClassifier.Parse(
+                        $"LLM response for zone {zoneId} is missing the required 'scenarios' array.");
+                }
+
+                if (scenariosArray.ValueKind != JsonValueKind.Array)
+                {
+                    throw LlmProviderExceptionClassifier.Parse(
+                        $"LLM response 'scenarios' field for zone {zoneId} must be a JSON array, " +
+                        $"got {scenariosArray.ValueKind}.");
+                }
+
                 var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
                     Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
                 };
 
-                using var doc = JsonDocument.Parse(responseContent);
-                if (!doc.RootElement.TryGetProperty("scenarios", out var scenariosArray))
-                {
-                    Console.WriteLine("[EDOG] LLM response missing 'scenarios' array");
-                    return new List<Scenario>();
-                }
-
                 var scenarios = new List<Scenario>();
+                var entryCount = 0;
+                var mapErrors = new List<string>();
                 foreach (var scenarioElement in scenariosArray.EnumerateArray())
                 {
+                    entryCount++;
                     try
                     {
                         var scenario = JsonSerializer.Deserialize<LlmScenarioResponse>(
@@ -882,22 +954,25 @@ Return ONLY valid JSON, no markdown, no explanation text.";
 
                         if (scenario == null) continue;
 
-                        // Map to domain Scenario model
                         var domainScenario = MapToDomainScenario(scenario, zoneId);
                         scenarios.Add(domainScenario);
                     }
                     catch (Exception ex)
                     {
+                        mapErrors.Add(ex.Message);
                         Console.WriteLine($"[EDOG] Failed to parse scenario: {ex.Message}");
                     }
                 }
 
+                if (entryCount > 0 && scenarios.Count == 0)
+                {
+                    var detail = mapErrors.Count > 0 ? mapErrors[0] : "unknown mapping failure";
+                    throw LlmProviderExceptionClassifier.Parse(
+                        $"LLM returned {entryCount} scenario entries for zone {zoneId} but " +
+                        $"none could be mapped to the domain model. First error: {detail}.");
+                }
+
                 return scenarios;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[EDOG] Failed to parse LLM response: {ex.Message}");
-                return new List<Scenario>();
             }
         }
 

@@ -189,6 +189,118 @@ class QaAnalysis {
     if (window.edogToast) window.edogToast.show(msg, 'warning');
   }
 
+  // ── F27 P4 — Inline LLM / scenario-generation error panel ──
+  //
+  // Routes QaError events that originate from the scenario_generation
+  // phase (errorCode === "NO_SCENARIOS_GENERATED" or "LLM_PROVIDER_*")
+  // away from the toast-only top-level handler in qa-panel.js and into
+  // an inline panel under the analysis tracker so the user sees an
+  // actionable, persistent message + an optional Retry CTA.
+  //
+  // Called by QaPanel._handleError when the error payload looks like
+  // an analysis-phase failure.
+  onAnalysisPhaseError(data) {
+    var msg = (data && data.message) || 'Unknown analysis error';
+    var code = (data && (data.errorCode || data.ErrorCode)) || 'UNKNOWN';
+    var recoverable = !!(data && (data.recoverable || data.Recoverable));
+    console.error('[QA] Analysis-phase error', code, msg);
+
+    // Mark the scenario_generation phase as failed (red ✕).
+    for (var i = 0; i < this._phases.length; i++) {
+      var p = this._phases[i];
+      if (p.el.dataset.phase === 'scenario_generation') {
+        p.el.classList.remove('active');
+        p.el.classList.add('failed');
+        p.iconEl.textContent = '\u2715';
+        p.detailEl.textContent = code;
+        break;
+      }
+    }
+
+    // Render (or replace) the inline error panel above the scenario list.
+    if (!this._container) return;
+    var panel = this._container.querySelector('.qa-analysis-error');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'qa-analysis-error';
+      panel.setAttribute('role', 'alert');
+      var anchor = this._container.querySelector('.qa-scenario-preview-list') || this._container.firstChild;
+      if (anchor && anchor.parentNode === this._container) {
+        this._container.insertBefore(panel, anchor);
+      } else {
+        this._container.appendChild(panel);
+      }
+    }
+    panel.innerHTML = '';
+
+    var icon = document.createElement('span');
+    icon.className = 'qa-analysis-error-icon';
+    icon.textContent = '\u26A0';
+    panel.appendChild(icon);
+
+    var body = document.createElement('div');
+    body.className = 'qa-analysis-error-body';
+
+    var title = document.createElement('div');
+    title.className = 'qa-analysis-error-title';
+    title.textContent = this._titleForErrorCode(code);
+    body.appendChild(title);
+
+    var message = document.createElement('div');
+    message.className = 'qa-analysis-error-message';
+    message.textContent = msg;
+    body.appendChild(message);
+
+    var actions = document.createElement('div');
+    actions.className = 'qa-analysis-error-actions';
+
+    if (code === 'NO_SCENARIOS_GENERATED' || code.indexOf('LLM_PROVIDER_') === 0) {
+      var configLink = document.createElement('a');
+      configLink.href = 'https://aka.ms/edog-studio-llm-setup';
+      configLink.target = '_blank';
+      configLink.rel = 'noopener noreferrer';
+      configLink.textContent = 'Configure LLM provider \u2192';
+      actions.appendChild(configLink);
+    }
+
+    if (recoverable) {
+      var retryBtn = document.createElement('button');
+      retryBtn.type = 'button';
+      retryBtn.className = 'qa-analysis-error-retry';
+      retryBtn.textContent = 'Retry analysis';
+      retryBtn.onclick = () => {
+        if (this._panel && typeof this._panel.goToStage === 'function') {
+          this._panel.goToStage('input');
+        }
+      };
+      actions.appendChild(retryBtn);
+    }
+
+    if (actions.children.length > 0) {
+      body.appendChild(actions);
+    }
+    panel.appendChild(body);
+  }
+
+  _titleForErrorCode(code) {
+    switch (code) {
+      case 'LLM_PROVIDER_AUTH':
+        return 'LLM credentials rejected';
+      case 'LLM_PROVIDER_RATE_LIMIT':
+        return 'LLM provider rate-limited';
+      case 'LLM_PROVIDER_TIMEOUT':
+        return 'LLM request timed out';
+      case 'LLM_PROVIDER_PARSE':
+        return 'LLM returned malformed response';
+      case 'LLM_PROVIDER_NETWORK':
+        return 'LLM transport failure';
+      case 'NO_SCENARIOS_GENERATED':
+        return 'No scenarios were generated';
+      default:
+        return 'Analysis error (' + code + ')';
+    }
+  }
+
   onScenarioGenerated(data) {
     // data: { scenarioIndex, totalExpected, scenario: { id, title, category, priority, technique, invariantsAddressed, groundingEvidence, ... } }
     var scn = data.scenario;

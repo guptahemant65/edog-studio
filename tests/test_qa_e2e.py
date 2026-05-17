@@ -260,3 +260,140 @@ def test_harness_project_is_well_formed() -> None:
         in content
     ), "AssemblyName must match FLT's InternalsVisibleTo grant."
     assert "Microsoft.AspNetCore.App" in content
+
+
+# ─── F27 P4 — Kill Silent Fallbacks ───────────────────────────────────────
+
+
+def test_llm_provider_classifier_matrix(harness_environment, built_harness) -> None:
+    """LlmProviderExceptionClassifier must map each transport / parse
+    failure to the correct typed kind + wire-stable error code. The
+    classification matrix here is the SignalR contract — the studio UI
+    keys off these errorCode strings to render actionable inline panels."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "classify-llm")
+    assert data["ok"] is True, data
+    cases = {c["caseId"]: c for c in data["cases"]}
+
+    # Auth (401/403) → non-retryable.
+    for case_id in ("auth_401", "auth_403"):
+        c = cases[case_id]
+        assert c["kindCode"] == "auth", c
+        assert c["errorCode"] == "LLM_PROVIDER_AUTH", c
+        assert c["retryable"] is False, c
+
+    # Rate limit (429) → retryable.
+    c = cases["rate_limit_429"]
+    assert c["kindCode"] == "rate_limit"
+    assert c["errorCode"] == "LLM_PROVIDER_RATE_LIMIT"
+    assert c["retryable"] is True
+
+    # 5xx → retryable network failure.
+    for case_id in ("network_500", "network_503"):
+        c = cases[case_id]
+        assert c["kindCode"] == "network", c
+        assert c["errorCode"] == "LLM_PROVIDER_NETWORK", c
+        assert c["retryable"] is True, c
+
+    # Non-429 4xx → non-retryable network/protocol failure.
+    c = cases["client_400"]
+    assert c["kindCode"] == "network"
+    assert c["retryable"] is False
+
+    # Transport (no status code) → retryable.
+    c = cases["transport_no_status"]
+    assert c["kindCode"] == "network"
+    assert c["retryable"] is True
+    assert c["hasStatusCode"] is False
+
+    # Timeout (TaskCanceled w/ token not cancelled) → retryable.
+    c = cases["timeout_taskcancel"]
+    assert c["kindCode"] == "timeout"
+    assert c["errorCode"] == "LLM_PROVIDER_TIMEOUT"
+    assert c["retryable"] is True
+
+    # Parse (JsonException) → non-retryable.
+    c = cases["parse_jsonexception"]
+    assert c["kindCode"] == "parse"
+    assert c["errorCode"] == "LLM_PROVIDER_PARSE"
+    assert c["retryable"] is False
+
+    # Unknown fallback.
+    c = cases["unknown_invalidop"]
+    assert c["kindCode"] == "unknown"
+    assert c["errorCode"] == "LLM_PROVIDER_UNKNOWN"
+
+
+def test_fallback_policy_env_gate(harness_environment, built_harness) -> None:
+    """QaAnalysisFallbackPolicy must enable demo mode if and only if the
+    env var equals "1" exactly. Loose truthiness ("true", "yes", "1 ")
+    must NOT enable demo mode — preventing accidental re-enable of the
+    silent synthetic fallback through environment drift."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "fallback-policy")
+    assert data["ok"] is True, data
+    assert data["envVarName"] == "EDOG_QA_DEMO_FALLBACK", data
+    assert data["expectedGeneratedBy"] == "demo_synthetic", data
+    assert data["expectedTitlePrefix"] == "[DEMO] ", data
+
+    env = {c["label"]: c["enabled"] for c in data["envCases"]}
+    assert env["unset"] is False
+    assert env["empty"] is False
+    assert env["zero"] is False
+    assert env["one"] is True, "EDOG_QA_DEMO_FALLBACK=1 must enable demo mode"
+    assert env["true_string"] is False, "'true' must NOT enable demo mode (strict match)"
+    assert env["yes_string"] is False
+    assert env["uppercase_one"] is False, "'1 ' (trailing space) must NOT enable"
+
+
+def test_fallback_policy_tag_as_demo(harness_environment, built_harness) -> None:
+    """TagAsDemo() must prefix every title with '[DEMO] ' and rewrite
+    metadata.generatedBy to 'demo_synthetic' so the curation UI badges
+    show through. Must be idempotent (no double-prefix) and null-safe."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "fallback-policy")
+    tagged = data["tagged"]
+    assert tagged["titles"] == ["[DEMO] Happy path", "[DEMO] Error path"], tagged
+    assert tagged["generatedBy"] == ["demo_synthetic", "demo_synthetic"], tagged
+    assert tagged["doublePrefixed"] is False, "TagAsDemo must be idempotent"
+
+    mixed = data["mixedTagged"]
+    assert mixed["skippedNullEntry"] is True
+    assert mixed["titles"][1] == "[DEMO] Edge case"
+
+
+# ─── F27 P4 — Static contract guards (no harness needed) ──────────────────
+
+
+def test_llm_provider_rethrows_typed_exception() -> None:
+    """EdogQaLlmProvider.GenerateScenariosAsync must surface failures as
+    typed LlmProviderException (P4) instead of swallowing into an empty
+    list (pre-P4). Verified by source-grep so the test runs without FLT
+    bin being available."""
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs").read_text(
+        encoding="utf-8"
+    )
+    assert "throw new LlmProviderException(" in src or "throw LlmProviderExceptionClassifier" in src, (
+        "EdogQaLlmProvider must throw typed LlmProviderException — the silent "
+        "fallback to an empty scenario list was the P4 target."
+    )
+    # The pre-P4 silent return must be gone.
+    assert "return new List<Scenario>();" not in src.split("GenerateScenariosAsync")[1].split("private")[0], (
+        "GenerateScenariosAsync still returns empty list on exception — P4 must rethrow."
+    )
+
+
+def test_hub_gates_synthetic_fallback_behind_env_var() -> None:
+    """RunAnalysisPipelineAsync must consult QaAnalysisFallbackPolicy
+    before emitting synthetic scenarios, and emit a NO_SCENARIOS_GENERATED
+    QaError when the env var is off."""
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogPlaygroundHub.cs").read_text(
+        encoding="utf-8"
+    )
+    assert "QaAnalysisFallbackPolicy.IsDemoFallbackEnabled()" in src, (
+        "Hub must call IsDemoFallbackEnabled() to gate synthetic generation."
+    )
+    assert "NO_SCENARIOS_GENERATED" in src, (
+        "Hub must emit NO_SCENARIOS_GENERATED QaError when demo fallback is disabled."
+    )
+    assert "QaAnalysisFallbackPolicy.TagAsDemo(scenarios)" in src, (
+        "Synthetic scenarios produced in demo mode must be tagged via TagAsDemo."
+    )
+

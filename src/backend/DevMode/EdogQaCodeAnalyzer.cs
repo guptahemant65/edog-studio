@@ -1281,6 +1281,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
             catch (OperationCanceledException) { throw; }
+            catch (LlmProviderException)
+            {
+                // F27 P4: typed LLM failures must reach the hub so it can
+                // emit a typed QaError instead of silently dropping to
+                // synthetic. Task.WhenAll surfaces the first exception
+                // when awaited — that's the one we want to propagate.
+                throw;
+            }
             catch (Exception ex)
             {
                 degradationFlags.Add("llm_failed");
@@ -1321,24 +1329,51 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return await _llmProvider.GenerateScenariosAsync(request, cancellationToken);
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
+            catch (LlmProviderException llmEx)
             {
                 EdogQaTelemetry.IncrementLlmError();
-                // Retry once with no additional context changes
+
+                // F27 P4: only retry transient kinds (timeout, rate-limit,
+                // 5xx-network). Auth/parse/4xx-client failures will not
+                // succeed on retry — bubble immediately so the hub can
+                // emit a typed QaError and the studio can render an
+                // actionable message instead of pretending the work was
+                // done with synthetic placeholders.
+                if (!llmEx.Retryable)
+                {
+                    PublishWarning($"LLM failed for zone {zone.ZoneId} ({llmEx.KindCode}, non-retryable): {llmEx.Message}");
+                    throw;
+                }
+
+                PublishWarning($"LLM retry for zone {zone.ZoneId} ({llmEx.KindCode}): {llmEx.Message}");
+
                 try
                 {
-                    PublishWarning($"LLM retry for zone {zone.ZoneId}: {ex.Message}");
                     EdogQaTelemetry.IncrementLlmCall();
                     return await _llmProvider.GenerateScenariosAsync(request, cancellationToken);
                 }
                 catch (OperationCanceledException) { throw; }
-                catch
+                catch (LlmProviderException retryEx)
                 {
                     EdogQaTelemetry.IncrementLlmError();
-                    degradationFlags.Add($"llm_failed_zone_{zone.ZoneId}");
-                    PublishWarning($"LLM failed for zone {zone.ZoneId} — no scenarios generated for this zone.");
-                    return new List<Scenario>();
+                    PublishWarning($"LLM retry exhausted for zone {zone.ZoneId} ({retryEx.KindCode}): {retryEx.Message}");
+                    throw;
                 }
+                catch (Exception unexpected)
+                {
+                    EdogQaTelemetry.IncrementLlmError();
+                    throw LlmProviderExceptionClassifier.Classify(unexpected, cancellationToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Defensive: any non-LlmProviderException reaching here is
+                // a programming error in EdogQaLlmProvider (it should now
+                // only ever throw typed). Classify on the way out so the
+                // hub never sees a raw transport exception.
+                EdogQaTelemetry.IncrementLlmError();
+                PublishWarning($"LLM unexpected error for zone {zone.ZoneId}: {ex.Message}");
+                throw LlmProviderExceptionClassifier.Classify(ex, cancellationToken);
             }
         }
 

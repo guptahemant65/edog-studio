@@ -49,6 +49,8 @@
     <Compile Include="AnalyzerHarness.cs" />
     <Compile Include="AggregatorHarness.cs" />
     <Compile Include="ComposeHarness.cs" />
+    <Compile Include="LlmClassifyHarness.cs" />
+    <Compile Include="FallbackPolicyHarness.cs" />
   </ItemGroup>
 
   <!-- Bundle fixture files into the output so the harness can read them at runtime -->
