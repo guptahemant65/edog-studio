@@ -603,6 +603,11 @@ class DagStudio {
       var layoutResult = this._layout.layout(nodes, edges);
       this._renderer.setData(layoutResult.nodes, layoutResult.edges);
       this._renderer.fitToScreen();
+      // Restore canvas visibility after data is ready (hidden by _renderLoading)
+      var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
+      if (canvas) canvas.style.opacity = '1';
+      var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
+      if (minimap) minimap.style.opacity = '1';
       if (this._ganttCount) this._ganttCount.textContent = String(nodes.length);
       this._renderControls('idle');
       this._renderStatus('idle');
@@ -1102,6 +1107,12 @@ class DagStudio {
         '<div class="dag-loading-sub">Fetching graph structure...</div>' +
       '</div>';
     }
+    // Hide the canvas during loading — prevents stale edges from rendering
+    // while the "Loading DAG" overlay is visible. Restored by _loadDag after setData.
+    var canvas = this._graphPanel ? this._graphPanel.querySelector('canvas') : null;
+    if (canvas) canvas.style.opacity = '0';
+    var minimap = this._graphPanel ? this._graphPanel.querySelector('.dag-minimap') : null;
+    if (minimap) minimap.style.opacity = '0';
   }
 
   _renderEmpty(message) {
