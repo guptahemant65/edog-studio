@@ -835,6 +835,1125 @@ class LakehouseCreateDialog {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   NotebookCreateDialog — modal for creating a notebook in a workspace
+   States: empty → valid/invalid → lakehouse-loading → ready → creating → success/failure
+   ═══════════════════════════════════════════════════════════════ */
+class NotebookCreateDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._workspaceId = opts.workspaceId;
+    this._workspaceName = opts.workspaceName || '';
+    this._existingItemNames = (opts.existingItems || []).map(function(it) { return it.displayName; });
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._descInput = null;
+    this._counterEl = null;
+    this._descCounterEl = null;
+    this._nameValidEl = null;
+    this._createBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._lhGridEl = null;
+    this._selectedLakehouse = null;
+    this._lakehousesLoaded = false;
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._loadLakehouses();
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    if (this._state === 'idle' && this._nameInput && this._nameInput.value.trim()) {
+      if (!confirm('Discard notebook creation?')) return;
+    }
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && !this._createBtn.disabled) this._submit();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Create notebook');
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    header.innerHTML =
+      '<div class="ws-cd-header-icon">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>' +
+      '</div>' +
+      '<div class="ws-cd-title">Create Notebook</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip
+    var ctx = document.createElement('div');
+    ctx.className = 'ws-cd-context';
+    ctx.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+      '<span>' + this._esc(this._workspaceName) + '</span>';
+    body.appendChild(ctx);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'ws-cd-field';
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-cd-label';
+    nameLabel.textContent = 'NOTEBOOK NAME';
+    nameField.appendChild(nameLabel);
+    var nameWrap = document.createElement('div');
+    nameWrap.className = 'ws-cd-input-wrap';
+    this._nameInput = document.createElement('input');
+    this._nameInput.className = 'ws-cd-input';
+    this._nameInput.type = 'text';
+    this._nameInput.placeholder = 'Enter notebook name';
+    this._nameInput.maxLength = WsCreateValidation.NAME_MAX;
+    this._nameInput.addEventListener('input', function() { self._validateName(); });
+    nameWrap.appendChild(this._nameInput);
+    this._counterEl = document.createElement('span');
+    this._counterEl.className = 'ws-cd-counter';
+    this._counterEl.textContent = '0 / ' + WsCreateValidation.NAME_MAX;
+    nameWrap.appendChild(this._counterEl);
+    nameField.appendChild(nameWrap);
+    this._nameValidEl = document.createElement('div');
+    this._nameValidEl.className = 'ws-cd-error';
+    this._nameValidEl.style.display = 'none';
+    nameField.appendChild(this._nameValidEl);
+    body.appendChild(nameField);
+
+    // Description field
+    var descField = document.createElement('div');
+    descField.className = 'ws-cd-field';
+    var descLabel = document.createElement('div');
+    descLabel.className = 'ws-cd-label';
+    descLabel.innerHTML = 'DESCRIPTION <span class="ws-cd-label-opt">(optional)</span>';
+    descField.appendChild(descLabel);
+    this._descInput = document.createElement('textarea');
+    this._descInput.className = 'ws-cd-textarea';
+    this._descInput.placeholder = 'What is this notebook for?';
+    this._descInput.maxLength = 256;
+    this._descCounterEl = document.createElement('div');
+    this._descCounterEl.className = 'ws-cd-counter';
+    this._descCounterEl.style.position = 'static';
+    this._descCounterEl.style.textAlign = 'right';
+    this._descCounterEl.style.marginTop = '2px';
+    this._descCounterEl.textContent = '0 / 256';
+    this._descInput.addEventListener('input', function() {
+      self._descCounterEl.textContent = self._descInput.value.length + ' / 256';
+    });
+    descField.appendChild(this._descInput);
+    descField.appendChild(this._descCounterEl);
+    body.appendChild(descField);
+
+    // Default lakehouse field
+    var lhField = document.createElement('div');
+    lhField.className = 'ws-cd-field';
+    var lhLabel = document.createElement('div');
+    lhLabel.className = 'ws-cd-label';
+    lhLabel.textContent = 'DEFAULT LAKEHOUSE';
+    lhField.appendChild(lhLabel);
+    this._lhGridEl = document.createElement('div');
+    this._lhGridEl.className = 'ws-cd-lh-grid';
+    this._lhGridEl.innerHTML =
+      '<div class="ws-cd-shimmer"></div>' +
+      '<div class="ws-cd-shimmer" style="animation-delay:0.15s"></div>';
+    lhField.appendChild(this._lhGridEl);
+    body.appendChild(lhField);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._createBtn = document.createElement('button');
+    this._createBtn.className = 'ws-cd-btn ws-cd-btn-primary';
+    this._createBtn.textContent = 'Create Notebook';
+    this._createBtn.disabled = true;
+    this._createBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._createBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _loadLakehouses() {
+    var self = this;
+    this._api.listWorkspaceItems(this._workspaceId).then(function(resp) {
+      var items = (resp && resp.value) ? resp.value : [];
+      var lakehouses = items.filter(function(it) {
+        return (it.type || '').toLowerCase().includes('lakehouse');
+      });
+      self._lakehousesLoaded = true;
+      self._renderLakehouses(lakehouses);
+      self._updateCreateBtn();
+    }).catch(function() {
+      self._lakehousesLoaded = true;
+      self._lhGridEl.innerHTML = '';
+      var errCard = document.createElement('div');
+      errCard.className = 'ws-cd-cap-error';
+      errCard.innerHTML = '<span>\u2715 Could not load lakehouses</span>';
+      var retryBtn = document.createElement('button');
+      retryBtn.textContent = 'Retry';
+      retryBtn.addEventListener('click', function() {
+        self._lhGridEl.innerHTML =
+          '<div class="ws-cd-shimmer"></div><div class="ws-cd-shimmer" style="animation-delay:0.15s"></div>';
+        self._lakehousesLoaded = false;
+        self._loadLakehouses();
+      });
+      errCard.appendChild(retryBtn);
+      self._lhGridEl.appendChild(errCard);
+      self._updateCreateBtn();
+    });
+  }
+
+  _renderLakehouses(lakehouses) {
+    var self = this;
+    this._lhGridEl.innerHTML = '';
+
+    if (lakehouses.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'ws-cd-lh-empty';
+      empty.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
+        'No lakehouses \u2014 create one first';
+      this._lhGridEl.appendChild(empty);
+      return;
+    }
+
+    for (var i = 0; i < lakehouses.length; i++) {
+      var lh = lakehouses[i];
+      var card = this._buildLhCard(lh);
+      card.style.animationDelay = (i * 60) + 'ms';
+      this._lhGridEl.appendChild(card);
+    }
+  }
+
+  _buildLhCard(lh) {
+    var self = this;
+    var card = document.createElement('div');
+    card.className = 'ws-cd-lh-card';
+    card.dataset.lhId = lh.id || '';
+
+    var radio = document.createElement('div');
+    radio.className = 'ws-cd-lh-radio';
+    card.appendChild(radio);
+
+    var icon = document.createElement('div');
+    icon.className = 'ws-cd-lh-icon';
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+    card.appendChild(icon);
+
+    var meta = document.createElement('div');
+    meta.className = 'ws-cd-lh-meta';
+    var nameEl = document.createElement('div');
+    nameEl.className = 'ws-cd-lh-name';
+    nameEl.textContent = lh.displayName || lh.id;
+    meta.appendChild(nameEl);
+    if (lh._tableCount !== undefined) {
+      var detail = document.createElement('div');
+      detail.className = 'ws-cd-lh-detail';
+      detail.textContent = lh._tableCount + ' tables';
+      meta.appendChild(detail);
+    }
+    card.appendChild(meta);
+
+    card.addEventListener('click', function() {
+      self._lhGridEl.querySelectorAll('.ws-cd-lh-card').forEach(function(c) {
+        c.classList.remove('selected');
+      });
+      card.classList.add('selected');
+      self._selectedLakehouse = lh.id || null;
+      self._updateCreateBtn();
+    });
+    return card;
+  }
+
+  _validateName() {
+    var name = this._nameInput.value;
+    this._counterEl.textContent = name.length + ' / ' + WsCreateValidation.NAME_MAX;
+    var result = WsCreateValidation.validateLakehouseName(name, this._existingItemNames);
+
+    this._nameInput.classList.remove('valid', 'invalid');
+    this._nameValidEl.style.display = 'none';
+    var existing = this._nameInput.parentNode.querySelector('.ws-cd-check');
+    if (existing) existing.remove();
+
+    if (!name.trim()) {
+      this._counterEl.style.display = '';
+    } else if (result.valid) {
+      this._nameInput.classList.add('valid');
+      this._counterEl.style.display = 'none';
+      var check = document.createElement('span');
+      check.className = 'ws-cd-check';
+      check.textContent = '\u2713';
+      this._nameInput.parentNode.appendChild(check);
+    } else {
+      this._nameInput.classList.add('invalid');
+      this._nameValidEl.textContent = result.error;
+      this._nameValidEl.style.display = '';
+    }
+
+    this._updateCreateBtn();
+  }
+
+  _updateCreateBtn() {
+    var nameValid = WsCreateValidation.validateLakehouseName(this._nameInput.value, this._existingItemNames).valid;
+    var ready = nameValid && this._lakehousesLoaded && this._selectedLakehouse && this._state === 'idle';
+    this._createBtn.disabled = !ready;
+    if (ready) {
+      this._createBtn.classList.add('ready');
+    } else {
+      this._createBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var nameResult = WsCreateValidation.validateLakehouseName(this._nameInput.value, this._existingItemNames);
+    if (!nameResult.valid || !this._selectedLakehouse) return;
+
+    var self = this;
+    var name = this._nameInput.value.trim();
+    this._state = 'creating';
+    this._createBtn.disabled = true;
+    this._createBtn.classList.remove('ready');
+    this._createBtn.innerHTML = '<span class="ws-cd-spinner"></span>Creating\u2026';
+    this._nameInput.disabled = true;
+    this._descInput.disabled = true;
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+
+    this._api.createNotebook(this._workspaceId, name).then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(name, result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Create failed');
+    });
+  }
+
+  _showSuccess(name, result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-success-name">' + this._esc(name) + '</div>' +
+        '<div class="ws-cd-success-sub">Notebook created in ' + this._esc(this._workspaceName) + '</div>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(result);
+    }, 3000);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundKeydown);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._nameInput.disabled = false;
+    this._descInput.disabled = false;
+    this._createBtn.innerHTML = 'Create Notebook';
+    this._createBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _showNoAuth() {
+    if (!this._dialogEl) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'ws-cd-noauth';
+    overlay.innerHTML = '<div class="ws-cd-noauth-msg">Sign in to create notebooks</div>';
+    var btn = document.createElement('button');
+    btn.className = 'ws-cd-btn ws-cd-btn-primary';
+    btn.textContent = 'Close';
+    btn.addEventListener('click', this.close.bind(this));
+    overlay.appendChild(btn);
+    this._dialogEl.appendChild(overlay);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DeleteConfirmDialog — cascade-aware delete confirmation
+   Handles: notebook, lakehouse (simple/cascade), workspace
+   ═══════════════════════════════════════════════════════════════ */
+class DeleteConfirmDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._type = opts.type || 'notebook'; // 'notebook' | 'lakehouse' | 'workspace'
+    this._name = opts.name || '';
+    this._id = opts.id || '';
+    this._workspaceId = opts.workspaceId || '';
+    this._workspaceName = opts.workspaceName || '';
+    this._tableCount = opts.tableCount || 0;
+    this._exclusiveNotebooks = opts.exclusiveNotebooks || [];
+    this._detachNotebooks = opts.detachNotebooks || [];
+    this._childCounts = opts.childCounts || { lakehouses: 0, notebooks: 0 };
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._confirmInput = null;
+    this._deleteBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  /** Whether this scenario requires type-to-confirm. */
+  _needsConfirm() {
+    if (this._type === 'workspace') return true;
+    if (this._type === 'lakehouse' && this._exclusiveNotebooks.length > 0) return true;
+    return false;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    if (this._confirmInput) {
+      this._confirmInput.focus();
+    }
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && this._deleteBtn && !this._deleteBtn.disabled) this._submit();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'alertdialog');
+    this._dialogEl.setAttribute('aria-label', 'Delete ' + this._type);
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    header.innerHTML =
+      '<div class="ws-cd-header-icon" style="color:var(--status-fail,#e5453b)">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M5 6l1 14a2 2 0 002 2h8a2 2 0 002-2l1-14"/></svg>' +
+      '</div>' +
+      '<div class="ws-cd-title">Delete ' + this._esc(this._type) + '</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip
+    if (this._workspaceName && this._type !== 'workspace') {
+      var ctx = document.createElement('div');
+      ctx.className = 'ws-cd-context';
+      ctx.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+        '<span>' + this._esc(this._workspaceName) + '</span>';
+      body.appendChild(ctx);
+    }
+
+    // Item name being deleted
+    var nameBox = document.createElement('div');
+    nameBox.className = 'ws-cd-field';
+    nameBox.innerHTML =
+      '<div style="font-size:15px;font-weight:600;margin-bottom:4px">' + this._esc(this._name) + '</div>' +
+      '<div style="font-size:13px;color:var(--text-muted,#8a9099)">This action cannot be undone.</div>';
+    body.appendChild(nameBox);
+
+    // Scenario-specific content
+    this._buildScenario(body);
+
+    // Type-to-confirm
+    if (this._needsConfirm()) {
+      var confirmBlock = document.createElement('div');
+      confirmBlock.className = 'ws-cd-confirm-block';
+      var prompt = document.createElement('div');
+      prompt.className = 'ws-cd-confirm-prompt';
+      prompt.innerHTML = 'Type <span class="ws-cd-confirm-target">' + this._esc(this._name) + '</span> to confirm';
+      confirmBlock.appendChild(prompt);
+      this._confirmInput = document.createElement('input');
+      this._confirmInput.className = 'ws-cd-confirm-input';
+      this._confirmInput.type = 'text';
+      this._confirmInput.placeholder = this._name;
+      this._confirmInput.addEventListener('input', function() { self._updateDeleteBtn(); });
+      confirmBlock.appendChild(this._confirmInput);
+      body.appendChild(confirmBlock);
+    }
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._deleteBtn = document.createElement('button');
+    this._deleteBtn.className = 'ws-cd-btn ws-cd-btn-danger';
+    this._deleteBtn.textContent = 'Delete';
+    if (!this._needsConfirm()) {
+      this._deleteBtn.classList.add('ready');
+    }
+    this._deleteBtn.disabled = this._needsConfirm();
+    this._deleteBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._deleteBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _buildScenario(body) {
+    if (this._type === 'notebook') {
+      // Scenario A: simple notebook delete — no extra content
+      return;
+    }
+
+    if (this._type === 'lakehouse') {
+      // Show table count
+      if (this._tableCount > 0) {
+        var tableInfo = document.createElement('div');
+        tableInfo.className = 'ws-cd-child-counts';
+        tableInfo.innerHTML =
+          '<div class="ws-cd-child-count">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>' +
+            this._tableCount + ' table' + (this._tableCount !== 1 ? 's' : '') +
+          '</div>';
+        body.appendChild(tableInfo);
+      }
+
+      // Scenario C: cascade — exclusive notebooks will be deleted
+      if (this._exclusiveNotebooks.length > 0) {
+        var cascadeSection = document.createElement('div');
+        cascadeSection.className = 'ws-cd-cascade-section';
+        cascadeSection.innerHTML =
+          '<div class="ws-cd-cascade-title">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
+            'Notebooks will also be deleted' +
+          '</div>' +
+          '<div class="ws-cd-cascade-body">These notebooks have no other lakehouse and will be permanently removed:</div>';
+        var pillContainer = document.createElement('div');
+        pillContainer.style.marginTop = '8px';
+        for (var i = 0; i < this._exclusiveNotebooks.length; i++) {
+          var pill = document.createElement('span');
+          pill.className = 'ws-cd-cascade-pill';
+          pill.textContent = this._exclusiveNotebooks[i];
+          pillContainer.appendChild(pill);
+        }
+        cascadeSection.appendChild(pillContainer);
+        body.appendChild(cascadeSection);
+      }
+
+      // Scenario B/C: detach notebooks
+      if (this._detachNotebooks.length > 0) {
+        var detachSection = document.createElement('div');
+        detachSection.className = 'ws-cd-detach-section';
+        detachSection.innerHTML =
+          '<div class="ws-cd-detach-title">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
+            'Notebooks will be detached' +
+          '</div>' +
+          '<div class="ws-cd-detach-body">' + this._detachNotebooks.length + ' notebook' + (this._detachNotebooks.length !== 1 ? 's' : '') + ' will be detached but not deleted:</div>';
+        var detachPills = document.createElement('div');
+        detachPills.style.marginTop = '8px';
+        for (var j = 0; j < this._detachNotebooks.length; j++) {
+          var dp = document.createElement('span');
+          dp.className = 'ws-cd-detach-pill';
+          dp.textContent = this._detachNotebooks[j];
+          detachPills.appendChild(dp);
+        }
+        detachSection.appendChild(detachPills);
+        body.appendChild(detachSection);
+      }
+      return;
+    }
+
+    if (this._type === 'workspace') {
+      // Scenario D: workspace delete — show child counts
+      var counts = this._childCounts;
+      var countsEl = document.createElement('div');
+      countsEl.className = 'ws-cd-child-counts';
+      if (counts.lakehouses) {
+        countsEl.innerHTML +=
+          '<div class="ws-cd-child-count">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
+            counts.lakehouses + ' lakehouse' + (counts.lakehouses !== 1 ? 's' : '') +
+          '</div>';
+      }
+      if (counts.notebooks) {
+        countsEl.innerHTML +=
+          '<div class="ws-cd-child-count">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>' +
+            counts.notebooks + ' notebook' + (counts.notebooks !== 1 ? 's' : '') +
+          '</div>';
+      }
+      body.appendChild(countsEl);
+
+      var warnSection = document.createElement('div');
+      warnSection.className = 'ws-cd-cascade-section';
+      warnSection.innerHTML =
+        '<div class="ws-cd-cascade-title">' +
+          '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>' +
+          'Everything inside will be deleted' +
+        '</div>' +
+        '<div class="ws-cd-cascade-body">All lakehouses, notebooks, and other items in this workspace will be permanently removed.</div>';
+      body.appendChild(warnSection);
+    }
+  }
+
+  _updateDeleteBtn() {
+    if (!this._needsConfirm()) {
+      this._deleteBtn.disabled = false;
+      this._deleteBtn.classList.add('ready');
+      return;
+    }
+    var match = this._confirmInput && this._confirmInput.value === this._name;
+    this._deleteBtn.disabled = !match;
+    if (match) {
+      this._deleteBtn.classList.add('ready');
+    } else {
+      this._deleteBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+
+    var self = this;
+    this._state = 'creating';
+    this._deleteBtn.disabled = true;
+    this._deleteBtn.classList.remove('ready');
+    this._deleteBtn.innerHTML = '<span class="ws-cd-spinner"></span>Deleting\u2026';
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+    if (this._confirmInput) this._confirmInput.disabled = true;
+
+    var deletePromise;
+    if (this._type === 'workspace') {
+      deletePromise = this._api.deleteWorkspace(this._id);
+    } else if (this._type === 'lakehouse') {
+      deletePromise = this._api.deleteLakehouse(this._workspaceId, this._id);
+    } else {
+      deletePromise = this._api.deleteItem(this._workspaceId, this._id);
+    }
+
+    deletePromise.then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Delete failed');
+    });
+  }
+
+  _showSuccess(result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-success-name">' + this._esc(this._name) + '</div>' +
+        '<div class="ws-cd-success-sub">' + this._esc(this._type.charAt(0).toUpperCase() + this._type.slice(1)) + ' deleted</div>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(result);
+    }, 1500);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundKeydown);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._deleteBtn.innerHTML = 'Delete';
+    this._deleteBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+    if (this._confirmInput) this._confirmInput.disabled = false;
+    this._updateDeleteBtn();
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RenameDialog — modal for renaming workspace items
+   ═══════════════════════════════════════════════════════════════ */
+class RenameDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._type = opts.type || 'notebook'; // 'workspace' | 'lakehouse' | 'notebook'
+    this._name = opts.name || '';
+    this._id = opts.id || '';
+    this._workspaceId = opts.workspaceId || '';
+    this._workspaceName = opts.workspaceName || '';
+    this._existingNames = opts.existingNames || [];
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._counterEl = null;
+    this._nameValidEl = null;
+    this._renameBtn = null;
+    this._errorBanner = null;
+    this._progressEl = null;
+    this._diffEl = null;
+    this._state = 'idle';
+    this.onComplete = null;
+    this.onClose = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._nameInput.select();
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && this._renameBtn && !this._renameBtn.disabled) this._submit();
+  }
+
+  _build() {
+    var self = this;
+
+    // Overlay
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'ws-cd-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    // Dialog
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'ws-cd-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Rename ' + this._type);
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header with type icon
+    var header = document.createElement('div');
+    header.className = 'ws-cd-header';
+    var iconSvg = this._getTypeIcon();
+    header.innerHTML =
+      '<div class="ws-cd-header-icon">' + iconSvg + '</div>' +
+      '<div class="ws-cd-title">Rename ' + this._esc(this._type) + '</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ws-cd-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'ws-cd-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'ws-cd-body';
+    this._dialogEl.appendChild(body);
+
+    // Context chip (for non-workspace items)
+    if (this._workspaceName && this._type !== 'workspace') {
+      var ctx = document.createElement('div');
+      ctx.className = 'ws-cd-context';
+      ctx.innerHTML =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>' +
+        '<span>' + this._esc(this._workspaceName) + '</span>';
+      body.appendChild(ctx);
+    }
+
+    // Rename diff (shows old → new as user types)
+    this._diffEl = document.createElement('div');
+    this._diffEl.className = 'ws-cd-rename-diff';
+    this._diffEl.style.display = 'none';
+    this._diffEl.innerHTML =
+      '<span class="ws-cd-rename-from">' + this._esc(this._name) + '</span>' +
+      '<span class="ws-cd-rename-arrow">\u2192</span>' +
+      '<span class="ws-cd-rename-to"></span>';
+    body.appendChild(this._diffEl);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'ws-cd-field';
+    var nameLabel = document.createElement('div');
+    nameLabel.className = 'ws-cd-label';
+    nameLabel.textContent = 'NEW NAME';
+    nameField.appendChild(nameLabel);
+    var nameWrap = document.createElement('div');
+    nameWrap.className = 'ws-cd-input-wrap';
+    this._nameInput = document.createElement('input');
+    this._nameInput.className = 'ws-cd-input';
+    this._nameInput.type = 'text';
+    this._nameInput.value = this._name;
+    this._nameInput.maxLength = WsCreateValidation.NAME_MAX;
+    this._nameInput.addEventListener('input', function() { self._validateName(); });
+    nameWrap.appendChild(this._nameInput);
+    this._counterEl = document.createElement('span');
+    this._counterEl.className = 'ws-cd-counter';
+    this._counterEl.textContent = this._name.length + ' / ' + WsCreateValidation.NAME_MAX;
+    nameWrap.appendChild(this._counterEl);
+    nameField.appendChild(nameWrap);
+    this._nameValidEl = document.createElement('div');
+    this._nameValidEl.className = 'ws-cd-error';
+    this._nameValidEl.style.display = 'none';
+    nameField.appendChild(this._nameValidEl);
+    body.appendChild(nameField);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'ws-cd-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'ws-cd-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._renameBtn = document.createElement('button');
+    this._renameBtn.className = 'ws-cd-btn ws-cd-btn-primary';
+    this._renameBtn.textContent = 'Rename';
+    this._renameBtn.disabled = true;
+    this._renameBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._renameBtn);
+    this._dialogEl.appendChild(footer);
+
+    // Progress bar
+    this._progressEl = document.createElement('div');
+    this._progressEl.className = 'ws-cd-progress';
+    this._progressEl.style.display = 'none';
+    this._progressEl.innerHTML = '<div class="ws-cd-progress-bar"></div>';
+    this._dialogEl.appendChild(this._progressEl);
+  }
+
+  _getTypeIcon() {
+    if (this._type === 'workspace') {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+    }
+    if (this._type === 'lakehouse') {
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>';
+  }
+
+  _validateName() {
+    var name = this._nameInput.value;
+    this._counterEl.textContent = name.length + ' / ' + WsCreateValidation.NAME_MAX;
+
+    // Filter out the current name from existing names (allow keeping same casing)
+    var filteredNames = this._existingNames.filter(function(n) {
+      return (n || '').toLowerCase() !== (this._name || '').toLowerCase();
+    }.bind(this));
+
+    var result;
+    if (this._type === 'workspace') {
+      result = WsCreateValidation.validateName(name, filteredNames);
+    } else {
+      result = WsCreateValidation.validateLakehouseName(name, filteredNames);
+    }
+
+    this._nameInput.classList.remove('valid', 'invalid');
+    this._nameValidEl.style.display = 'none';
+    var existing = this._nameInput.parentNode.querySelector('.ws-cd-check');
+    if (existing) existing.remove();
+
+    var trimmed = (name || '').trim();
+    var unchanged = trimmed === this._name;
+
+    if (!trimmed) {
+      this._counterEl.style.display = '';
+    } else if (result.valid && !unchanged) {
+      this._nameInput.classList.add('valid');
+      this._counterEl.style.display = 'none';
+      var check = document.createElement('span');
+      check.className = 'ws-cd-check';
+      check.textContent = '\u2713';
+      this._nameInput.parentNode.appendChild(check);
+    } else if (!result.valid) {
+      this._nameInput.classList.add('invalid');
+      this._nameValidEl.textContent = result.error;
+      this._nameValidEl.style.display = '';
+    }
+
+    // Update diff row
+    if (trimmed && trimmed !== this._name) {
+      this._diffEl.style.display = '';
+      this._diffEl.querySelector('.ws-cd-rename-to').textContent = trimmed;
+    } else {
+      this._diffEl.style.display = 'none';
+    }
+
+    this._updateRenameBtn();
+  }
+
+  _updateRenameBtn() {
+    var name = (this._nameInput.value || '').trim();
+    var unchanged = name === this._name;
+    var filteredNames = this._existingNames.filter(function(n) {
+      return (n || '').toLowerCase() !== (this._name || '').toLowerCase();
+    }.bind(this));
+
+    var result;
+    if (this._type === 'workspace') {
+      result = WsCreateValidation.validateName(name, filteredNames);
+    } else {
+      result = WsCreateValidation.validateLakehouseName(name, filteredNames);
+    }
+
+    var ready = result.valid && !unchanged && this._state === 'idle';
+    this._renameBtn.disabled = !ready;
+    if (ready) {
+      this._renameBtn.classList.add('ready');
+    } else {
+      this._renameBtn.classList.remove('ready');
+    }
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var newName = this._nameInput.value.trim();
+    if (newName === this._name) return;
+
+    var self = this;
+    this._state = 'creating';
+    this._renameBtn.disabled = true;
+    this._renameBtn.classList.remove('ready');
+    this._renameBtn.innerHTML = '<span class="ws-cd-spinner"></span>Renaming\u2026';
+    this._nameInput.disabled = true;
+    this._progressEl.style.display = '';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '60%';
+    this._errorBanner.style.display = 'none';
+
+    var renamePromise;
+    if (this._type === 'workspace') {
+      renamePromise = this._api.renameWorkspace(this._id, newName);
+    } else if (this._type === 'lakehouse') {
+      renamePromise = this._api.renameLakehouse(this._workspaceId, this._id, newName);
+    } else {
+      renamePromise = this._api.renameItem(this._workspaceId, this._id, newName);
+    }
+
+    renamePromise.then(function(result) {
+      self._progressEl.querySelector('.ws-cd-progress-bar').style.width = '100%';
+      self._state = 'success';
+      self._showSuccess(newName, result);
+    }).catch(function(err) {
+      self._state = 'failed';
+      self._showError(err.message || 'Rename failed');
+    });
+  }
+
+  _showSuccess(newName, result) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.ws-cd-body');
+    var footer = this._dialogEl.querySelector('.ws-cd-footer');
+    body.innerHTML =
+      '<div class="ws-cd-success">' +
+        '<div class="ws-cd-success-icon">\u2713</div>' +
+        '<div class="ws-cd-rename-diff" style="justify-content:center">' +
+          '<span class="ws-cd-rename-from">' + this._esc(this._name) + '</span>' +
+          '<span class="ws-cd-rename-arrow">\u2192</span>' +
+          '<span class="ws-cd-rename-to">' + this._esc(newName) + '</span>' +
+        '</div>' +
+        '<div class="ws-cd-success-sub">Renamed successfully</div>' +
+      '</div>';
+    footer.style.display = 'none';
+    this._progressEl.style.display = 'none';
+
+    var finishResult = result || {};
+    finishResult.newName = newName;
+
+    setTimeout(function() {
+      if (self._overlayEl && self._state === 'success') self._finish(finishResult);
+    }, 1500);
+  }
+
+  _finish(result) {
+    document.removeEventListener('keydown', this._boundKeydown);
+    if (this._overlayEl) this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onComplete) this.onComplete(result);
+  }
+
+  _showError(msg) {
+    this._nameInput.disabled = false;
+    this._renameBtn.innerHTML = 'Rename';
+    this._renameBtn.disabled = false;
+    this._state = 'idle';
+    this._progressEl.style.display = 'none';
+    this._progressEl.querySelector('.ws-cd-progress-bar').style.width = '0%';
+    this._updateRenameBtn();
+
+    this._errorBanner.style.display = '';
+    var self = this;
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+}
+
 class WorkspaceExplorer {
   constructor(apiClient) {
     this._api = apiClient;
