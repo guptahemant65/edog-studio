@@ -1,19 +1,19 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-18T10:15:15.6129037\u002B00:00",
+  "captured_at": "2026-05-18T11:16:28.2018240\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "977882",
   "counts": {
     "emitted": 8,
-    "validated": 8,
-    "projected": 8
+    "validated": 7,
+    "projected": 7
   },
   "scenarios": [
     {
       "id": "sk-1",
-      "topic": "PR-977882-full-diff",
-      "category": "HappyPath",
-      "verb": "FieldMatch",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "category": "Regression",
+      "verb": "EventAbsent",
       "stage": "projected",
       "grounding_changed_lines": [
         {
@@ -27,7 +27,7 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            136
+            111
           ]
         },
         {
@@ -35,6 +35,43 @@
           "side": "right",
           "lines": [
             311
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            312
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            401
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            402
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-2",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            136
           ]
         },
         {
@@ -48,13 +85,6 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            401
-          ]
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
-          "side": "right",
-          "lines": [
             428
           ]
         },
@@ -62,37 +92,21 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            619
-          ]
-        }
-      ]
-    },
-    {
-      "id": "sk-2",
-      "topic": "PR-977882-full-diff",
-      "category": "HappyPath",
-      "verb": "FieldMatch",
-      "stage": "projected",
-      "grounding_changed_lines": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
-          "side": "right",
-          "lines": [
-            596
+            594
           ]
         },
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            619
+            595
           ]
         }
       ]
     },
     {
       "id": "sk-3",
-      "topic": "PR-977882-full-diff",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "category": "EdgeCase",
       "verb": "FieldMatch",
       "stage": "projected",
@@ -101,29 +115,36 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            609
+            65
           ]
         },
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            590
+            591
           ]
         },
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            619
+            597
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            599
           ]
         }
       ]
     },
     {
       "id": "sk-4",
-      "topic": "PR-977882-full-diff",
-      "category": "ErrorPath",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "category": "EdgeCase",
       "verb": "FieldMatch",
       "stage": "projected",
       "grounding_changed_lines": [
@@ -131,22 +152,29 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            65
+            591
           ]
         },
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            599
+            602
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            604
           ]
         }
       ]
     },
     {
       "id": "sk-5",
-      "topic": "PR-977882-full-diff",
-      "category": "ErrorPath",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "category": "EdgeCase",
       "verb": "FieldMatch",
       "stage": "projected",
       "grounding_changed_lines": [
@@ -154,7 +182,7 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            604
+            607
           ]
         },
         {
@@ -163,13 +191,27 @@
           "lines": [
             609
           ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            617
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            618
+          ]
         }
       ]
     },
     {
       "id": "sk-6",
-      "topic": "PR-977882-full-diff",
-      "category": "ErrorPath",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "category": "EdgeCase",
       "verb": "FieldMatch",
       "stage": "projected",
       "grounding_changed_lines": [
@@ -184,7 +226,7 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            599
+            612
           ]
         },
         {
@@ -198,7 +240,7 @@
     },
     {
       "id": "sk-7",
-      "topic": "PR-977882-full-diff",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "category": "Regression",
       "verb": "FieldMatch",
       "stage": "projected",
@@ -207,37 +249,51 @@
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            110
+            136
           ]
         },
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            311
+            338
           ]
         },
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            401
+            428
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            617
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            618
           ]
         }
       ]
     },
     {
       "id": "sk-8",
-      "topic": "PR-977882-full-diff",
+      "topic": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "category": "Regression",
       "verb": "FieldMatch",
-      "stage": "projected",
+      "stage": "emitted",
       "grounding_changed_lines": [
         {
           "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
           "side": "right",
           "lines": [
-            619
+            144
           ]
         },
         {
@@ -245,6 +301,13 @@
           "side": "right",
           "lines": [
             145
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            147
           ]
         }
       ]

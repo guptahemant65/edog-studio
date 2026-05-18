@@ -6,17 +6,17 @@
   "aggregate": {
     "pr_count": 3,
     "macro": {
-      "recall": 0.2194,
+      "recall": 0.5417,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.25,
+      "precision_highest_stage": 0.6131,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.2328,
-      "p0_p1_recall": 0.2194
+      "f1_highest_stage": 0.5741,
+      "p0_p1_recall": 0.5417
     },
     "micro": {
-      "recall": 0.2083,
+      "recall": 0.5417,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.25
+      "precision_highest_stage": 0.619
     }
   },
   "prs_scored": [
@@ -24,107 +24,92 @@
       "pr_number": "975848",
       "expected_total": 8,
       "actual_total": {
-        "projected": 6,
-        "emitted": 0,
-        "validated": 0
+        "emitted": 4,
+        "validated": 0,
+        "projected": 3
       },
-      "matched_count": 1,
+      "matched_count": 5,
       "missed_expected_ids": [
         "975848-s01",
-        "975848-s02",
-        "975848-s03",
         "975848-s04",
-        "975848-s05",
-        "975848-s06",
-        "975848-s07"
+        "975848-s05"
       ],
       "unmatched_actual_ids": [
         "sk-1",
-        "sk-2",
-        "sk-3",
-        "sk-4",
-        "sk-5"
+        "sk-4"
       ],
-      "recall": 0.125,
+      "recall": 0.625,
       "precision": {
-        "projected": 0.1667,
-        "emitted": 0.0,
-        "validated": 0.0
+        "emitted": 0.5,
+        "validated": 0.0,
+        "projected": 1.0
       },
-      "precision_highest_stage": 0.1667,
+      "precision_highest_stage": 0.7143,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.1429,
-      "p0_p1_recall": 0.125
+      "f1_highest_stage": 0.6667,
+      "p0_p1_recall": 0.625
     },
     {
       "pr_number": "976609",
       "expected_total": 6,
       "actual_total": {
-        "projected": 6,
-        "emitted": 0,
-        "validated": 0
+        "emitted": 2,
+        "validated": 0,
+        "projected": 4
       },
-      "matched_count": 2,
+      "matched_count": 3,
       "missed_expected_ids": [
-        "976609-s02",
+        "976609-s01",
         "976609-s03",
-        "976609-s05",
         "976609-s06"
       ],
       "unmatched_actual_ids": [
-        "sk-1",
-        "sk-2",
-        "sk-5",
-        "sk-6"
+        "sk-4",
+        "sk-6",
+        "sk-2"
       ],
-      "recall": 0.3333,
+      "recall": 0.5,
       "precision": {
-        "projected": 0.3333,
-        "emitted": 0.0,
-        "validated": 0.0
+        "emitted": 0.5,
+        "validated": 0.0,
+        "projected": 0.5
       },
-      "precision_highest_stage": 0.3333,
+      "precision_highest_stage": 0.5,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.3333,
-      "p0_p1_recall": 0.3333
+      "f1_highest_stage": 0.5,
+      "p0_p1_recall": 0.5
     },
     {
       "pr_number": "977882",
       "expected_total": 10,
       "actual_total": {
-        "projected": 8,
-        "emitted": 0,
-        "validated": 0
+        "emitted": 1,
+        "validated": 0,
+        "projected": 7
       },
-      "matched_count": 2,
+      "matched_count": 5,
       "missed_expected_ids": [
-        "977882-s02",
-        "977882-s03",
+        "977882-s01",
         "977882-s04",
-        "977882-s05",
         "977882-s07",
         "977882-s08",
-        "977882-s09",
         "977882-s10"
       ],
       "unmatched_actual_ids": [
+        "sk-1",
         "sk-2",
-        "sk-3",
-        "sk-4",
-        "sk-5",
-        "sk-6",
         "sk-8"
       ],
-      "recall": 0.2,
+      "recall": 0.5,
       "precision": {
-        "projected": 0.25,
         "emitted": 0.0,
-        "validated": 0.0
+        "validated": 0.0,
+        "projected": 0.7143
       },
-      "precision_highest_stage": 0.25,
+      "precision_highest_stage": 0.625,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.2222,
-      "p0_p1_recall": 0.2
+      "f1_highest_stage": 0.5556,
+      "p0_p1_recall": 0.5
     }
   ],
   "prs_pending_grading": [],

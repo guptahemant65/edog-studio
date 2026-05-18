@@ -657,10 +657,11 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     with baseline.open(encoding="utf-8") as fh:
         data = _json.load(fh)
     # Schema_version may be 1.0 (T1a scaffold pre-capture), 1.1 (T1c-c
-    # captured) or 1.2 (T1f-b scored). Pre-T1c-c statuses are tolerated
-    # to let a checkout-with-stale-baseline still pass this scaffold-level
-    # test.
-    assert data.get("schema_version") in {"1.0", "1.1", "1.2"}, data
+    # captured), 1.2 (T1f-b scored) or 1.3 (T1g re-calibrated against
+    # the matcher-tied verb / category disambiguation prompts). Pre-T1c-c
+    # statuses are tolerated to let a checkout-with-stale-baseline still
+    # pass this scaffold-level test.
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3"}, data
     assert data.get("status") in (
         "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
         "DRY_RUN", "SCORED",
@@ -1661,8 +1662,8 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.2", (
-        f"expected schema_version=1.2, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.3", (
+        f"expected schema_version=1.3 after T1g floor recalibration, got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
     assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
@@ -1715,10 +1716,11 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
                 f"PR {pr.get('pr_number')!r} precision missing stage {stage!r}: {precision!r}"
             )
 
-    # T1f-b: top-level scores block links the immutable score_report.json
-    # sibling and pins the macro-average headline numbers + verdict.
+    # T1g re-calibrated: top-level scores block links the immutable
+    # score_report.json sibling and pins the macro-average headline
+    # numbers + verdict. Schema version bumped to 1.3.
     scores = baseline.get("scores")
-    assert isinstance(scores, dict), f"baseline must carry a `scores` block at v1.2, got {scores!r}"
+    assert isinstance(scores, dict), f"baseline must carry a `scores` block at v1.3, got {scores!r}"
     assert scores.get("report_path") == "score_report.json"
     assert scores.get("verdict") in {"PASS", "FAIL"}
     for k in ("macro_recall", "macro_precision_validated", "macro_p0_p1_recall", "micro_recall"):
@@ -1780,6 +1782,135 @@ def test_qa_editor_prompt_declares_stimulus_spec_format() -> None:
     # Pin the five matcher branches.
     for matcher in ("exact", "contains", "regex", "range", "exists"):
         assert matcher in text, f"Editor prompt must describe {matcher!r} matcher branch"
+
+
+def test_qa_editor_prompt_declares_verb_selection_guide() -> None:
+    """The Editor system prompt MUST explain WHEN to use each of the
+    six verb values (EventPresent / EventAbsent / EventCount / EventOrder
+    / Timing / FieldMatch) — without this guidance the Editor defaults to
+    FieldMatch for every scenario, which produces a false-negative match
+    against any expected scenario whose curator chose a different verb.
+    Discovered during T1g gold-corpus triage: 24/24 actuals emitted
+    verb=FieldMatch even when the curator-graded expected verb was
+    EventPresent (e.g. PR-977882 s08/s10 schema-presence assertions).
+
+    The match key (category, verb, line-overlap) is strict; a verb
+    mismatch alone produces 0 matches regardless of correct grounding.
+    Pin the section header + the six verbs + the schema-additions bias
+    rule so the prompt can't silently regress to the old monoculture.
+    """
+    src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    text = src.read_text(encoding="utf-8")
+    assert "VERB SELECTION GUIDE" in text, (
+        "Editor prompt must contain a VERB SELECTION GUIDE section "
+        "explaining when to pick each closed-set verb"
+    )
+    # The six closed-set verbs must each have a semantic gloss
+    # (the section appears AFTER the schema enum which also lists them,
+    # so we anchor on the prompt copy by searching for the assertion
+    # framing every gloss uses).
+    for verb in (
+        "EventPresent = assert",
+        "EventAbsent = assert",
+        "EventCount = assert",
+        "EventOrder = assert",
+        "Timing = assert",
+        "FieldMatch = assert",
+    ):
+        assert verb in text, f"Editor prompt must contain verb gloss starting {verb!r}"
+    # The DEFAULT BIAS rule is the highest-leverage line — it ties the
+    # verb directly to the matcherSpec branch the scenario uses, which
+    # the validator and scorer can disambiguate cleanly. Without the
+    # matcher-tied rule the Editor flip-flops between EventPresent and
+    # FieldMatch for the same code shape and produces a verb mismatch
+    # against the curator's grading. The earlier T1g iteration shipped
+    # a "prefer EventPresent for new schema columns" rule that over-
+    # corrected (the curator uses FieldMatch in 21/24 expected scenarios
+    # = 88%). The matcher-tied rule replaced it.
+    assert "DEFAULT BIAS" in text, "Editor prompt must contain a DEFAULT BIAS rule for verb selection"
+    assert "matcher-tied" in text, (
+        "Editor prompt's DEFAULT BIAS must tie the verb selection to "
+        "the matcherSpec branch (exists -> EventPresent, exact/range/regex/contains -> FieldMatch)"
+    )
+
+
+def test_qa_editor_prompt_declares_category_selection_guide() -> None:
+    """The Editor system prompt MUST explain WHEN to use each of the
+    five category values (HappyPath / ErrorPath / EdgeCase / Regression /
+    Performance) — without this guidance the Editor labels defensive
+    code (null-coalescing, IsDBNullAsync, COALESCE, divide-by-zero
+    guards) as HappyPath or Regression or ErrorPath, none of which
+    match the curator's EdgeCase grading.
+
+    Discovered during T1g gold-corpus triage: sk-1/sk-2 on PR-976609
+    labeled defensive null-handling as Regression; sk-4/sk-5/sk-6 on
+    PR-977882 labeled validation guards as ErrorPath; the curator
+    grades all of these EdgeCase. Pin the section + the five categories
+    + the EdgeCase-not-ErrorPath rule that's the most common confusion.
+    """
+    src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    text = src.read_text(encoding="utf-8")
+    assert "CATEGORY SELECTION GUIDE" in text, (
+        "Editor prompt must contain a CATEGORY SELECTION GUIDE section "
+        "explaining when to pick each closed-set category"
+    )
+    for category in (
+        "HappyPath = the nominal",
+        "ErrorPath = the explicit error",
+        "EdgeCase = defensive code",
+        "Regression = the diff fixes",
+        "Performance = latency",
+    ):
+        assert category in text, f"Editor prompt must contain category gloss starting {category!r}"
+    # The most-confused boundary: ErrorPath is for 4xx/5xx, not for
+    # null-checks. The prompt must explicitly disambiguate.
+    assert "NOT for defensive null-checks" in text, (
+        "Editor prompt must disambiguate ErrorPath (4xx/5xx) from EdgeCase (defensive guards)"
+    )
+    # Common defensive-guard idioms must appear by name so the Editor
+    # recognises them as EdgeCase fingerprints in the diff.
+    for idiom in ("IsDBNullAsync", "COALESCE", "divide-by-zero"):
+        assert idiom in text, f"Editor prompt must name {idiom!r} as an EdgeCase fingerprint"
+
+
+def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
+    """The Architect system prompt MUST declare two things shipped in T1g:
+
+    1. COVERAGE BREADTH — enumerate distinct behavioural classes
+       (schema additions, defensive guards, validation paths, etc.)
+       so the Architect emits one sketch per behaviour, not one per file.
+       Discovered during T1g triage: PR-975848 lines 178-198 (the
+       fraction-computation core, 3 P0 scenarios) had zero coverage
+       because the Architect emitted only one sketch per impacted file.
+
+    2. EVIDENCE LINE PRECISION — anchor grounding evidence to the line
+       where the BEHAVIOUR LIVES, not the function signature or hunk
+       header. Discovered during T1g triage: sk-2/sk-3 on PR-975848
+       grounded at line 172 (the hunk header) when the actual fraction
+       computation lives at 178-198, leaving 20 lines of P0 code uncovered.
+    """
+    src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    text = src.read_text(encoding="utf-8")
+    assert "COVERAGE BREADTH" in text, (
+        "Architect prompt must contain a COVERAGE BREADTH directive "
+        "enumerating distinct behavioural classes"
+    )
+    assert "EVIDENCE LINE PRECISION" in text, (
+        "Architect prompt must contain an EVIDENCE LINE PRECISION directive "
+        "telling the model to anchor evidence at behaviour lines, not function signatures"
+    )
+    # The defensive-code prioritisation rule pairs with the Editor's
+    # CATEGORY guide — if the Architect doesn't sketch them, no amount
+    # of Editor category-tuning can recover the recall.
+    assert "DEFENSIVE CODE BIAS" in text, (
+        "Architect prompt must contain a DEFENSIVE CODE BIAS directive "
+        "prioritising guard-sketches"
+    )
+    # NOT the function signature / hunk header — the most common
+    # off-by-N-lines failure mode.
+    assert "NOT the function signature" in text, (
+        "Architect prompt must explicitly tell the model NOT to anchor evidence at function signatures"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -2162,46 +2293,59 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t1fc() -> None:
-    """T1f-c added the highest-stage precision floor to score_floors.json
-    and bumped the schema 1.1 → 1.2. Pin the schema bump + the new
-    `corpus_precision_highest_stage_min` and per-PR variant so a revert
-    cannot silently land. Highest-stage precision is the GATE-MEANINGFUL
-    precision number under our highest-stage tagging — the `validated`
-    bucket is structurally empty, but `precision_highest_stage` measures
-    "of every scenario the pipeline produced, what fraction matched
-    expected", which is what the corpus precision floor actually wants
-    to gate against.
+def test_qa_score_floors_calibrated_for_t1g() -> None:
+    """T1g lifted the acceptance floors after a 148%-relative macro
+    recall lift (0.219 → 0.542) and 145%-relative precision lift
+    (0.250 → 0.613) from the matcher-tied verb rule + category
+    disambiguation + Architect coverage breadth prompt edits. Pin the
+    schema bump 1.2 → 1.3 and the new floor ceilings (each must stay
+    BELOW the new measured baseline so a regression after the next
+    capture surfaces — but ABOVE the old T1f-c floors so a revert to
+    the verb-monoculture/category-collapse prompts trips the gate).
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.2", (
-        f"score_floors.json must be at schema_version 1.2 after T1f-c, "
+    assert floors.get("schema_version") == "1.3", (
+        f"score_floors.json must be at schema_version 1.3 after T1g, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
-    # T1f-b recall floors still apply.
-    assert absolute.get("corpus_recall_min") <= 0.219, (
-        f"corpus_recall_min must stay <= measured 0.219; got {absolute.get('corpus_recall_min')!r}"
+    # T1g floors must stay <= measured baselines so a future LLM
+    # nondeterminism flap or prompt regression actually trips the gate.
+    assert absolute.get("corpus_recall_min") <= 0.542, (
+        f"corpus_recall_min must stay <= measured T1g 0.542; got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") <= 0.219, (
-        f"p0_p1_recall_min must stay <= measured 0.219; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") <= 0.542, (
+        f"p0_p1_recall_min must stay <= measured T1g 0.542; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    assert absolute.get("per_pr_recall_min") <= 0.125, (
-        f"per_pr_recall_min must stay <= measured min 0.125; got {absolute.get('per_pr_recall_min')!r}"
+    assert absolute.get("per_pr_recall_min") <= 0.500, (
+        f"per_pr_recall_min must stay <= measured T1g min 0.500; got {absolute.get('per_pr_recall_min')!r}"
+    )
+    # T1g floors must stay STRICTLY ABOVE the old T1f-c values so a
+    # silent revert to the verb-monoculture / category-collapse prompts
+    # (which produced macro recall 0.219 / per-PR min 0.125) trips the
+    # gate. This is the prompt-regression detector.
+    assert absolute.get("corpus_recall_min") > 0.219, (
+        f"corpus_recall_min must lift ABOVE the T1f-c-era 0.219 to detect a prompt revert; "
+        f"got {absolute.get('corpus_recall_min')!r}"
+    )
+    assert absolute.get("per_pr_recall_min") > 0.125, (
+        f"per_pr_recall_min must lift ABOVE the T1f-c-era 0.125; got {absolute.get('per_pr_recall_min')!r}"
     )
     # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
     assert absolute.get("corpus_precision_min") == 0.0
-    # T1f-c new floors — must stay <= measured macro 0.25 (corpus) and
-    # <= measured per-PR min 0.167 (per_pr) so future regressions fire.
-    assert absolute.get("corpus_precision_highest_stage_min") <= 0.25, (
-        "corpus_precision_highest_stage_min must stay <= measured macro 0.25; "
+    # T1g precision floors lift above T1f-c (corpus 0.250 / per-PR 0.167)
+    # but stay below the new measured macro 0.613 / per-PR min 0.500.
+    assert 0.250 < absolute.get("corpus_precision_highest_stage_min") <= 0.613, (
+        "corpus_precision_highest_stage_min must lift above T1f-c 0.250 "
+        "and stay <= measured T1g macro 0.613; "
         f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
     )
-    assert absolute.get("per_pr_precision_highest_stage_min") <= 0.167, (
-        "per_pr_precision_highest_stage_min must stay <= measured per-PR min 0.167; "
+    assert 0.167 < absolute.get("per_pr_precision_highest_stage_min") <= 0.500, (
+        "per_pr_precision_highest_stage_min must lift above T1f-c 0.167 "
+        "and stay <= measured T1g per-PR min 0.500; "
         f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"

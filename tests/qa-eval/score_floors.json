@@ -1,13 +1,13 @@
 {
-  "schema_version": "1.2",
-  "comment": "F27 P9 T1f-c — acceptance floors gain HIGHEST-STAGE precision (the gate-meaningful metric under our highest-stage tagging). Measured 2026-05-18: macro precision_highest_stage 0.25, per-PR min 0.167. `corpus_precision_min` (validated-bucket) stays at 0.0 because that bucket is structurally empty when every Validator-accepted scenario also survives the Projector — kept for diagnostic surface but does not gate. The spec's nominal 80% recall / 90% precision is the destination; T2 prompt-tuning is the path. `enforcement: report_only` until T2 lifts the corpus above defensible thresholds.",
+  "schema_version": "1.3",
+  "comment": "F27 P9 T1g — acceptance floors lifted after the Editor + Architect prompt-tuning lift. Measured 2026-05-18 (T1g v2, matcher-tied verb rule + category disambiguation + Architect coverage breadth): macro recall 0.542 (was 0.219), macro precision_highest_stage 0.613 (was 0.250), F1_highest 0.574, per-PR recall min 0.500 (was 0.125), per-PR precision_highest min 0.500 (was 0.167). New floors sit at ~70-80% of measured so LLM nondeterminism flap stays below the gate. `corpus_precision_min` (validated-bucket) stays at 0.0 because that bucket is structurally empty under highest-stage tagging (kept for diagnostic surface but does not gate). Spec's nominal 80% recall / 90% precision is still the destination; the remaining headroom lives in Architect zone-coverage (T1h) — PR-975848 lines 178-198 fraction-computation core is still partially uncovered. `enforcement: report_only` until the corpus crosses 0.70 macro recall.",
   "absolute": {
-    "corpus_recall_min": 0.15,
+    "corpus_recall_min": 0.40,
     "corpus_precision_min": 0.0,
-    "corpus_precision_highest_stage_min": 0.20,
-    "per_pr_recall_min": 0.10,
-    "per_pr_precision_highest_stage_min": 0.10,
-    "p0_p1_recall_min": 0.15
+    "corpus_precision_highest_stage_min": 0.45,
+    "per_pr_recall_min": 0.35,
+    "per_pr_precision_highest_stage_min": 0.30,
+    "p0_p1_recall_min": 0.40
   },
   "regression": {
     "max_recall_drop": 0.05,
