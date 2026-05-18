@@ -158,13 +158,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// <summary>Test override for the Architect stage. When non-null, the orchestrator does not call <see cref="EdogQaLlmClient.ArchitectOnceAsync"/>.</summary>
             public ArchitectStageDelegate ArchitectOverride { get; set; }
 
-            /// <summary>Test override for the Editor stage. When non-null, the orchestrator does not call <see cref="EdogQaLlmClient.EditorOnceAsync"/>.</summary>
+            /// <summary>Test override for the Editor stage. When non-null, the orchestrator does not call EditorOnceAsync.</summary>
             public EditorStageDelegate EditorOverride { get; set; }
 
             /// <summary>
             /// Test override for the Editor REPAIR stage (T1e). When non-null
             /// the orchestrator does not call the repair-aware overload of
-            /// <see cref="EdogQaLlmClient.EditorOnceAsync"/>. When this and
+            /// EditorOnceAsync. When this and
             /// <see cref="EditorOverride"/> are both null but
             /// <see cref="EnableRepairLoop"/> is true, the orchestrator uses
             /// the live LLM client for both passes.
@@ -1210,7 +1210,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// T1e: dispatch the Editor repair call via the test override
         /// if present, else the live LLM client. Returns
-        /// <paramref name="dispatched"/>=false ONLY when neither path is
+        /// dispatched=false ONLY when neither path is
         /// available — in that case the caller skips repair entirely
         /// without incrementing the attempts counter.
         /// </summary>
