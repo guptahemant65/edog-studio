@@ -17,6 +17,7 @@
 //   validator          - F27 P9 T1c-a: scenario validator behavioural matrix.
 //   projector          - F27 P9 T1c-a-2: V2-to-engine scenario projector matrix.
 //   orchestrator       - F27 P9 T1c-b: end-to-end orchestrator (Architect→Editor→Validator→Projector + dedup + budget).
+//   gold-corpus-baseline - F27 P9 T1c-c: drive the real V2 pipeline against a single fixture; emit per-PR metrics for baseline.json.
 //
 // Each subcommand emits a single JSON block delimited by HARNESS-JSON-BEGIN
 // / HARNESS-JSON-END markers on stdout. The pytest wrapper parses those.
@@ -35,11 +36,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator|projector|orchestrator}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator|projector|orchestrator|gold-corpus-baseline}");
                 return 2;
             }
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
             try
             {
                 return args[0] switch
@@ -56,6 +57,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "validator" => await ValidatorHarness.RunAsync(cts.Token),
                     "projector" => await ProjectorHarness.RunAsync(cts.Token),
                     "orchestrator" => await OrchestratorHarness.RunAsync(cts.Token),
+                    "gold-corpus-baseline" => await GoldCorpusBaselineHarness.RunAsync(args, cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }

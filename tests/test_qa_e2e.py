@@ -639,20 +639,30 @@ def test_gold_corpus_fixtures_present() -> None:
 
 
 def test_gold_corpus_baseline_scaffold_exists() -> None:
-    """T1a creates ``tests/qa-eval/baseline.json`` as a placeholder
-    leaderboard. T1b will populate it with the legacy pipeline's score
-    against this corpus — the floor the V2 pipeline must beat."""
+    """T1a created ``tests/qa-eval/baseline.json`` as a placeholder
+    scaffold; T1c-c populates it via the live ``capture_baseline.py``
+    pass against the gold corpus. This test guards the scaffold-level
+    invariants (file present, JSON-parseable, prs is a list); the
+    deeper shape assertions live in
+    ``test_qa_baseline_json_captured_with_v2_pipeline``.
+    """
     import json as _json
 
     baseline = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
     assert baseline.exists(), (
-        "tests/qa-eval/baseline.json must exist as the T1a scaffold. "
-        "Run `python tests/qa-eval/run_eval.py` to create it."
+        "tests/qa-eval/baseline.json must exist. "
+        "Run `python tests/qa-eval/capture_baseline.py` to capture or "
+        "`python tests/qa-eval/capture_baseline.py --dry-run` for a scaffold."
     )
     with baseline.open(encoding="utf-8") as fh:
         data = _json.load(fh)
-    assert data.get("schema_version") == "1.0", data
-    assert data.get("status") in ("PENDING_T1B", "PENDING"), data
+    # Schema_version may be 1.0 (T1a scaffold pre-capture) or 1.1
+    # (T1c-c captured). Pre-T1c-c statuses are tolerated to let a
+    # checkout-with-stale-baseline still pass this scaffold-level test.
+    assert data.get("schema_version") in {"1.0", "1.1"}, data
+    assert data.get("status") in (
+        "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN",
+    ), data
     assert isinstance(data.get("prs"), list), data
 
 
@@ -1534,3 +1544,211 @@ def test_codeanalyzer_v2_wirein_uses_orchestrator_and_validator() -> None:
     assert "EdogQaScenarioValidator.ValidationContext" in src
     assert "EdogQaLlmClient.ReadArchitectConfigFromEnv" in src
     assert "EdogQaLlmClient.ReadEditorConfigFromEnv" in src
+
+# ── F27 P9 T1c-c — SECURITY.md threat model presence ────────────────────
+
+
+def test_qa_security_doc_exists_with_required_sections() -> None:
+    """SECURITY.md is the canonical threat model the spec §14.3 promised
+    to create in T0 but never actually shipped on disk. T1c-c lands it.
+
+    The doc MUST cover trust boundaries, the five named attack vectors,
+    a clearly identified owner of record (Sentinel), and a status row
+    for every shipped mitigation so a quarterly review can be performed
+    against the live commit log.
+    """
+    sec = (
+        REPO_ROOT
+        / "docs"
+        / "specs"
+        / "features"
+        / "F27-qa-testing"
+        / "SECURITY.md"
+    )
+    assert sec.exists(), f"SECURITY.md missing: {sec}"
+    text = sec.read_text(encoding="utf-8")
+
+    # Owner + cadence
+    assert "Owner of record" in text or "Owner of record:" in text
+    assert "Sentinel" in text, "Sentinel must be the named owner of record"
+    assert "Quarterly" in text or "quarterly" in text, "review cadence must be stated"
+
+    # Trust boundaries (§2)
+    assert "Trust boundaries" in text
+    for required_party in (
+        "ADO PR diff",
+        "EdogQaLlmClient",
+        "Validator",
+        "Projector",
+        "Curation UI",
+        "execution engine",
+        "Telemetry",
+    ):
+        assert required_party in text, f"trust boundary table must mention {required_party!r}"
+
+    # Attack vectors (§3) — five named families plus scenario-execution
+    for vector in (
+        "Prompt injection",
+        "Secret",
+        "Denial-of-wallet",
+        "Provider exfiltration",
+        "Judge corruption",
+        "Scenario-execution",
+    ):
+        assert vector in text, f"attack vector {vector!r} must be enumerated"
+
+    # Untrusted-diff envelope (M1.1) is the highest-leverage mitigation;
+    # the doc must reference the wire shape so a reviewer can verify it.
+    assert "UntrustedRedactedDiff" in text
+    assert "BEGIN UNTRUSTED DIFF" in text or "---BEGIN UNTRUSTED DIFF---" in text
+
+    # Capability-probe + Azure-OpenAI-only posture
+    assert "Azure OpenAI ONLY" in text
+    assert "EdogQaCapabilityProbe" in text
+
+    # Budget/concurrency caps mentioned by their wire-stable surfaces
+    assert "BUDGET_EXCEEDED_COST" in text
+    assert "BUDGET_EXCEEDED_TIME" in text
+    assert "MaxConcurrentZones" in text or "SemaphoreSlim" in text
+
+
+def test_qa_security_doc_status_summary_present() -> None:
+    """The §6 status summary is what makes the doc actionable for the
+    quarterly review — it forces every mitigation row to be marked as
+    shipped, partial, or pending, with a commit hash where it shipped.
+    Without this, the doc rots into prose.
+    """
+    sec = (
+        REPO_ROOT
+        / "docs"
+        / "specs"
+        / "features"
+        / "F27-qa-testing"
+        / "SECURITY.md"
+    )
+    text = sec.read_text(encoding="utf-8")
+    assert "Status summary" in text
+    assert "Shipped:" in text
+    assert "Pending" in text
+    # At least one commit hash from the P9 series must be cited so the
+    # status column is grounded in real code, not aspiration.
+    import re
+    commits = re.findall(r"`[0-9a-f]{7}`", text)
+    assert len(commits) >= 3, f"status summary must cite shipped commits; saw {commits}"
+
+
+# ── F27 P9 T1c-c — gold-corpus baseline.json shape pin ──────────────
+
+
+def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
+    """baseline.json is the floor V2 must beat. T1c-c populates it by
+    driving the real V2 pipeline (Architect → Editor → Validator →
+    Projector) against the 3-PR gold corpus and recording per-PR
+    token / latency / scenario-count / violation-count metrics.
+
+    Schema version 1.1 was introduced for T1c-c; v1.0 was a PENDING
+    placeholder. Any future schema change must bump the version and
+    update this test.
+    """
+    baseline_path = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
+    assert baseline_path.exists(), f"baseline.json missing: {baseline_path}"
+
+    import json
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+
+    assert baseline.get("schema_version") == "1.1", (
+        f"expected schema_version=1.1, got {baseline.get('schema_version')!r}"
+    )
+    assert baseline.get("pipeline") == "v2_architect_editor"
+    assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN"}, (
+        f"unexpected status: {baseline.get('status')!r}"
+    )
+
+    components = baseline.get("pipeline_components") or {}
+    for required_component in ("architect", "editor", "validator", "projector"):
+        assert required_component in components, (
+            f"pipeline_components missing {required_component!r}: {components}"
+        )
+
+    prs = baseline.get("prs") or []
+    assert len(prs) == 3, f"baseline must cover all 3 gold-corpus PRs; got {len(prs)}"
+
+    expected_pr_numbers = {"975848", "976609", "977882"}
+    captured_pr_numbers = {str(p.get("pr_number")) for p in prs}
+    assert captured_pr_numbers == expected_pr_numbers, (
+        f"unexpected PRs in baseline: {captured_pr_numbers}"
+    )
+
+    required_per_pr_keys = {
+        "pr_number", "status",
+        "architect_elapsed_ms", "architect_input_tokens", "architect_output_tokens",
+        "architect_reasoning_tokens", "architect_plan_outcome",
+        "editor_elapsed_ms", "editor_input_tokens", "editor_output_tokens",
+        "scenarios_emitted", "scenarios_after_validation", "scenarios_after_projection",
+        "grounding_violations", "schema_violations",
+        "recall", "precision",
+    }
+    for pr in prs:
+        missing = required_per_pr_keys - set(pr.keys())
+        assert not missing, f"PR {pr.get('pr_number')!r} missing keys: {missing}"
+        # recall/precision are intentionally null at T1c-c — they require
+        # human-graded expected.json files. Confirm they were not silently
+        # populated with fake numbers (which would lie to the regression
+        # detector). T2 lifts this once expected.json grading completes.
+        assert pr["recall"] is None, "recall must be null at T1c-c (expected.json PENDING_HUMAN_GRADING)"
+        assert pr["precision"] is None, "precision must be null at T1c-c (expected.json PENDING_HUMAN_GRADING)"
+
+
+def test_qa_baseline_capture_script_present() -> None:
+    """The capture script is what an authorised operator runs to refresh
+    the baseline. Keep its path stable so SECURITY.md §6 + the runbook
+    in p9-production-grade-llm.md stay accurate.
+    """
+    script = REPO_ROOT / "tests" / "qa-eval" / "capture_baseline.py"
+    assert script.exists(), f"capture_baseline.py missing: {script}"
+    text = script.read_text(encoding="utf-8")
+    # Pin the harness subcommand the script invokes — drift here means
+    # the script silently fails to capture and writes empty records.
+    assert "gold-corpus-baseline" in text, "capture script must invoke the gold-corpus-baseline harness"
+    # Pin the dry-run gate — operators sanity-check the schema without
+    # burning AOAI tokens via `python capture_baseline.py --dry-run`.
+    assert "--dry-run" in text
+
+
+def test_qa_editor_prompt_declares_topic_vocabulary() -> None:
+    """The Editor system prompt MUST enumerate the closed 16-topic
+    interceptor vocabulary (T1c-c bug fix). Without it, the Editor
+    invents arbitrary topics and the validator quarantines every
+    scenario as TOPIC_UNKNOWN — discovered during gold-corpus baseline
+    capture and the reason 0/17 scenarios passed before this fix.
+    """
+    src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    text = src.read_text(encoding="utf-8")
+    # Spot-check a few topics that span the vocabulary. The validator's
+    # ValidTopics list lives in EdogQaCodeAnalyzer.cs — drift between
+    # the two surfaces is what this test exists to catch.
+    for topic in ("http", "telemetry", "retry", "flt-ops", "capacity", "spark"):
+        assert topic in text, f"Editor prompt must mention topic {topic!r}"
+    assert "CLOSED SET" in text, "Editor prompt must declare topic vocabulary as closed set"
+
+
+def test_qa_editor_prompt_declares_stimulus_spec_format() -> None:
+    """The Editor system prompt MUST explain that stimulusSpec and
+    matcherSpec are JSON-encoded STRINGS, with the per-StimulusType
+    required fields enumerated. Without this guidance the Editor emits
+    invalid JSON inside the spec field and 100% of scenarios are
+    PROJECTION_STIMULUS_SPEC_MALFORMED — discovered during gold-corpus
+    baseline capture.
+    """
+    src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    text = src.read_text(encoding="utf-8")
+    assert "STIMULUS_SPEC FORMAT" in text
+    assert "MATCHER_SPEC FORMAT" in text
+    # Pin the six StimulusType branches the prompt must describe — drift
+    # here means the LLM no longer gets schema instructions for that
+    # branch and the projector starts rejecting it.
+    for stim in ("HttpRequest", "SignalrInvoke", "DagTrigger", "FileEvent", "TimerTick", "DirectInvoke"):
+        assert stim in text, f"Editor prompt must describe {stim} stimulusSpec shape"
+    # Pin the five matcher branches.
+    for matcher in ("exact", "contains", "regex", "range", "exists"):
+        assert matcher in text, f"Editor prompt must describe {matcher!r} matcher branch"
