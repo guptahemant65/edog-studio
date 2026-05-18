@@ -1119,3 +1119,196 @@ def test_validator_enum_vocabularies_are_published(
     assert len(enum_vocab["stimulusTypes"]) == 6, enum_vocab["stimulusTypes"]
     assert len(enum_vocab["expectationTypes"]) >= 6, enum_vocab["expectationTypes"]
     assert "HappyPath" in enum_vocab["categories"], enum_vocab["categories"]
+
+# ── F27 P9 T1c-a-2 — Scenario Projector ─────────────────────────────────
+
+PROJECTOR_REQUIRED_CODES = [
+    "PROJECTION_STIMULUS_SPEC_MALFORMED",
+    "PROJECTION_STIMULUS_SPEC_MISSING_FIELD",
+    "PROJECTION_STIMULUS_SPEC_FIELD_TYPE",
+    "PROJECTION_MATCHER_SPEC_MALFORMED",
+    "PROJECTION_MATCHER_SPEC_EMPTY",
+    "PROJECTION_ENUM_PARSE_FAILED",
+    "PROJECTION_GROUNDING_REF_UNRESOLVED",
+]
+
+
+def test_qa_scenario_projector_class_present() -> None:
+    """T1c-a-2 — the V2-to-engine Projector (spec section 3.3 inputs) ships
+    as a pure static class with one entry point: Project(plan, accepted)
+    -> ProjectionResult, reusing Validator's QuarantineReason shape so
+    the orchestrator can merge both lists.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioProjector.cs"
+    ).read_text(encoding="utf-8")
+    assert "internal static class EdogQaScenarioProjector" in src
+    assert "public static ProjectionResult Project(" in src
+    assert "public sealed class ProjectionResult" in src
+    assert "EdogQaScenarioValidator.QuarantinedScenario" in src
+    assert "EdogQaScenarioValidator.AcceptedScenario" in src
+
+
+def test_qa_scenario_projector_declares_required_codes() -> None:
+    """All seven wire-stable projection codes must exist as string
+    constants. Wire-stable means renaming them is a breaking change.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioProjector.cs"
+    ).read_text(encoding="utf-8")
+    for code in PROJECTOR_REQUIRED_CODES:
+        assert f'"{code}"' in src, f"Projector missing stable code: {code}"
+
+
+def test_projector_happy_paths_cover_all_six_stimulus_types(
+    harness_environment, built_harness
+) -> None:
+    """Every StimulusType discriminator (HttpRequest, SignalrInvoke,
+    DagTrigger, FileEvent, TimerTick, DirectInvoke) must round-trip
+    through the Projector to engine shape with exactly one typed payload
+    record non-null. The harness drives one happy-path case per type.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    assert data["ok"] is True, data
+    cases = {c["caseId"]: c for c in data["cases"]}
+
+    expected = {
+        "happy_http_request": ("HttpRequest", "projectedHasHttpPayload"),
+        "happy_signalr_invoke": ("SignalrInvoke", "projectedHasSignalrPayload"),
+        "happy_dag_trigger": ("DagTrigger", "projectedHasDagPayload"),
+        "happy_file_event": ("FileEvent", "projectedHasFileEventPayload"),
+        "happy_timer_tick": ("TimerTick", "projectedHasTimerTickPayload"),
+        "happy_direct_invoke": ("DirectInvoke", "projectedHasDirectInvokePayload"),
+    }
+    for case_id, (stimulus_type, payload_flag) in expected.items():
+        c = cases[case_id]
+        assert c["acceptedCount"] == 1, (case_id, c)
+        assert c["rejectedCount"] == 0, (case_id, c)
+        assert c["projectedStimulusType"] == stimulus_type, (case_id, c)
+        assert c[payload_flag] is True, (case_id, c)
+        # Exactly one payload non-null: the others must all be false.
+        for other_flag in (
+            "projectedHasHttpPayload",
+            "projectedHasSignalrPayload",
+            "projectedHasDagPayload",
+            "projectedHasFileEventPayload",
+            "projectedHasTimerTickPayload",
+            "projectedHasDirectInvokePayload",
+        ):
+            if other_flag != payload_flag:
+                assert c[other_flag] is False, (case_id, other_flag, c)
+
+
+def test_projector_matcher_dispatches_all_five_branches(
+    harness_environment, built_harness
+) -> None:
+    """Each happy-path case uses a different matcher branch: Exact,
+    Exists, Contains, Regex, Range, Exact. Across the six happy paths
+    every Matcher discriminator must be exercised at least once. This
+    pins the dictionary-based parser against silent dropping of a
+    branch.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    seen_branches = set()
+    for case_id in (
+        "happy_http_request", "happy_signalr_invoke", "happy_dag_trigger",
+        "happy_file_event", "happy_timer_tick", "happy_direct_invoke",
+    ):
+        c = cases[case_id]
+        for branch in ("Exact", "Contains", "Regex", "Range", "Exists"):
+            if c[f"projectedFirstMatcherHas{branch}"]:
+                seen_branches.add(branch)
+    assert seen_branches == {"Exact", "Contains", "Regex", "Range", "Exists"}, (
+        f"Matcher branches not exhaustively exercised; saw {seen_branches}"
+    )
+
+
+def test_projector_rejects_malformed_stimulus_spec(
+    harness_environment, built_harness
+) -> None:
+    """A StimulusSpec that is not valid JSON must produce a single
+    quarantined record with code PROJECTION_STIMULUS_SPEC_MALFORMED
+    bound to fieldPath 'stimulusSpec'. No engine scenario is emitted.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    c = cases["stimulus_spec_malformed"]
+    assert c["acceptedCount"] == 0, c
+    assert c["rejectedCount"] == 1, c
+    assert "PROJECTION_STIMULUS_SPEC_MALFORMED" in c["rejectedCodes"], c
+    assert "stimulusSpec" in c["rejectedFieldPaths"], c
+
+
+def test_projector_rejects_missing_required_stimulus_field(
+    harness_environment, built_harness
+) -> None:
+    """A typed-shape requirement that the LLM client schema cannot
+    enforce (e.g. HttpRequest needs 'path') surfaces as
+    PROJECTION_STIMULUS_SPEC_MISSING_FIELD bound to the dotted
+    field path 'stimulusSpec.path'.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    c = cases["stimulus_spec_missing_field"]
+    assert c["acceptedCount"] == 0, c
+    assert "PROJECTION_STIMULUS_SPEC_MISSING_FIELD" in c["rejectedCodes"], c
+    assert "stimulusSpec.path" in c["rejectedFieldPaths"], c
+
+
+def test_projector_rejects_malformed_or_empty_matcher(
+    harness_environment, built_harness
+) -> None:
+    """Both modes of broken matcher specification must be rejected:
+    invalid JSON (PROJECTION_MATCHER_SPEC_MALFORMED) and a JSON
+    object with none of exact/contains/regex/range/exists
+    (PROJECTION_MATCHER_SPEC_EMPTY). FieldPath in both cases is
+    scoped to the expectation index.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    malformed = cases["matcher_spec_malformed"]
+    assert "PROJECTION_MATCHER_SPEC_MALFORMED" in malformed["rejectedCodes"], malformed
+    assert "expectations[0].matcherSpec" in malformed["rejectedFieldPaths"], malformed
+
+    empty = cases["matcher_spec_empty"]
+    assert "PROJECTION_MATCHER_SPEC_EMPTY" in empty["rejectedCodes"], empty
+    assert "expectations[0].matcherSpec" in empty["rejectedFieldPaths"], empty
+
+
+def test_projector_forwards_source_evidence_id_to_engine_grounding(
+    harness_environment, built_harness
+) -> None:
+    """The audit trail forward-carry: an Architect plan's evidenceId
+    must surface on the projected scenario's GroundingEvidence as
+    SourceEvidenceId. This is the bridge between the LLM client's
+    opaque ref-by-id and the engine's typed evidence record.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    c = cases["source_evidence_id_forwarded"]
+    assert c["acceptedCount"] == 1, c
+    assert c["rejectedCount"] == 0, c
+    assert c["groundingSourceEvidenceId"] == "ev-trail-1", c
+    assert c["groundingFile"] == "src/Foo.cs", c
+    assert c["groundingStartLine"] == 12, c
+    assert c["projectedGeneratedBy"] == "ai", c
+    assert c["projectedLifecycle"] == "Generated", c
+
+
+def test_projector_processes_mixed_outcomes_per_scenario(
+    harness_environment, built_harness
+) -> None:
+    """A batch with one well-formed scenario and one broken one must
+    yield exactly one projected + one rejected, with each scenario's
+    id surfacing on its own side of the result. No cross-contamination
+    of error reasons from the bad scenario into the good one.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "projector")
+    cases = {c["caseId"]: c for c in data["cases"]}
+    c = cases["multiple_scenarios_mixed_outcome"]
+    assert c["acceptedCount"] == 1, c
+    assert c["rejectedCount"] == 1, c
+    assert c["projectedIds"] == ["sk-ok"], c
+    assert c["rejectedIds"] == ["sk-bad"], c
+    assert "PROJECTION_STIMULUS_SPEC_MISSING_FIELD" in c["rejectedCodes"], c

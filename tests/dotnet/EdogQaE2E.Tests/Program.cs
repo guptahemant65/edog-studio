@@ -15,6 +15,7 @@
 //   capability-probe   - F27 P9 T1a: real Azure OpenAI capability probe.
 //   llm-client         - F27 P9 T1b: Architect/Editor LLM client behavioural matrix.
 //   validator          - F27 P9 T1c-a: scenario validator behavioural matrix.
+//   projector          - F27 P9 T1c-a-2: V2-to-engine scenario projector matrix.
 //
 // Each subcommand emits a single JSON block delimited by HARNESS-JSON-BEGIN
 // / HARNESS-JSON-END markers on stdout. The pytest wrapper parses those.
@@ -33,7 +34,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             if (args.Length == 0)
             {
-                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator}");
+                Console.Error.WriteLine("usage: <harness-exe> {analyze|aggregate|compose|classify-llm|fallback-policy|pipeline-chaos|history-store|capability-probe|llm-client|validator|projector}");
                 return 2;
             }
 
@@ -52,6 +53,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     "capability-probe" => await CapabilityProbeHarness.RunAsync(cts.Token),
                     "llm-client" => await LlmClientHarness.RunAsync(cts.Token),
                     "validator" => await ValidatorHarness.RunAsync(cts.Token),
+                    "projector" => await ProjectorHarness.RunAsync(cts.Token),
                     _ => Fail($"unknown subcommand: {args[0]}"),
                 };
             }
