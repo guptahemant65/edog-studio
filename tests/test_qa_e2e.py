@@ -1312,3 +1312,225 @@ def test_projector_processes_mixed_outcomes_per_scenario(
     assert c["projectedIds"] == ["sk-ok"], c
     assert c["rejectedIds"] == ["sk-bad"], c
     assert "PROJECTION_STIMULUS_SPEC_MISSING_FIELD" in c["rejectedCodes"], c
+
+# ── F27 P9 T1c-b — Scenario Orchestrator + LlmV2 wire-in ────────────────
+
+ORCHESTRATOR_REQUIRED_CODES = [
+    "BUDGET_EXCEEDED_COST",
+    "BUDGET_EXCEEDED_TIME",
+    "ORCH_DELEGATE_RETURNED_NULL",
+    "ORCH_UNEXPECTED_EXCEPTION",
+]
+
+
+def test_qa_scenario_orchestrator_class_present() -> None:
+    """T1c-b: orchestrator must exist as an internal class with the
+    public RunAsync entry point and the cancellation-safe contract
+    documented in its summary.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs"
+    ).read_text(encoding="utf-8")
+    assert "internal sealed class EdogQaScenarioOrchestrator" in src
+    assert "public async Task<OrchestratorResult> RunAsync(" in src
+    assert "SemaphoreSlim" in src, "bounded concurrency must use SemaphoreSlim"
+    assert "Interlocked.CompareExchange" in src, "first-tripped budget claim must use CompareExchange"
+    assert "Stopwatch" in src, "deadline must use monotonic Stopwatch"
+
+
+def test_qa_scenario_orchestrator_declares_required_codes() -> None:
+    """All four wire-stable codes must be present as string literals
+    so SignalR consumers can pattern-match without re-parsing.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs"
+    ).read_text(encoding="utf-8")
+    for code in ORCHESTRATOR_REQUIRED_CODES:
+        assert code in src, f"orchestrator must declare {code}"
+
+
+def test_orchestrator_happy_single_zone(harness_environment, built_harness) -> None:
+    """Single zone, valid stubs ⇒ 1 merged scenario, 0 duplicates,
+    0 projection rejects, no budget trip.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["happy_single_zone"]
+    assert c["mergedScenarioCount"] == 1, c
+    assert c["duplicateCount"] == 0, c
+    assert c["projectionRejectedCount"] == 0, c
+    assert c["budgetGateTripped"] is False, c
+
+
+def test_orchestrator_happy_multi_zone_no_dedup(harness_environment, built_harness) -> None:
+    """Three zones with semantically distinct scenarios ⇒ 3 merged,
+    0 duplicates. Proves the orchestrator only dedupes on actual
+    SemanticHash collisions, not zone count.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["happy_multi_zone"]
+    assert c["mergedScenarioCount"] == 3, c
+    assert c["duplicateCount"] == 0, c
+
+
+def test_orchestrator_cross_zone_dedup_keeps_one_winner(
+    harness_environment, built_harness
+) -> None:
+    """Two zones producing the same SemanticHash ⇒ 1 winner +
+    1 duplicate after the deterministic cross-zone reducer.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["cross_zone_dedup"]
+    assert c["mergedScenarioCount"] == 1, c
+    assert c["duplicateCount"] == 1, c
+
+
+def test_orchestrator_dedup_winner_is_first_zone_index(
+    harness_environment, built_harness
+) -> None:
+    """When two zones collide on hash, the winner must be the zone
+    with the lower ZoneInputIndex regardless of completion time.
+    Determinism guarantee for the curation UI.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["dedup_winner_is_first_zone"]
+    assert c["duplicateWinnerZoneId"] == "z-0", c
+    assert c["duplicateLoserZoneId"] == "z-1", c
+
+
+def test_orchestrator_no_testable_changes_emits_zero(
+    harness_environment, built_harness
+) -> None:
+    """planOutcome=no_testable_changes ⇒ editor skipped, 0 merged."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["architect_no_testable_changes"]
+    assert c["mergedScenarioCount"] == 0, c
+
+
+def test_orchestrator_architect_failure_isolated(
+    harness_environment, built_harness
+) -> None:
+    """One zone's architect throwing must not poison sibling zones."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["architect_failure_isolation"]
+    assert c["mergedScenarioCount"] == 1, c
+
+
+def test_orchestrator_editor_failure_isolated(
+    harness_environment, built_harness
+) -> None:
+    """One zone's editor throwing must not poison sibling zones."""
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["editor_failure_isolation"]
+    assert c["mergedScenarioCount"] == 1, c
+
+
+def test_orchestrator_projector_rejects_winner_surfaces_reject(
+    harness_environment, built_harness
+) -> None:
+    """When a winner has a stimulus the projector cannot decode,
+    it must surface as ProjectionRejected rather than silently
+    appearing in MergedScenarios with garbage fields.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["projector_rejects_winner"]
+    assert c["mergedScenarioCount"] == 0, c
+    assert c["projectionRejectedCount"] == 1, c
+
+
+def test_orchestrator_bounded_concurrency_le_3(
+    harness_environment, built_harness
+) -> None:
+    """6 zones with MaxConcurrentZones=3 ⇒ observed peak parallelism
+    must be ≤ 3. SemaphoreSlim is the only thing standing between
+    a 100-zone PR and a 100-RPS LLM flood.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["bounded_concurrency_le_3"]
+    assert c["observedMaxConcurrent"] <= 3, c
+
+
+def test_orchestrator_budget_cost_exceeded_emits_canonical_reason(
+    harness_environment, built_harness
+) -> None:
+    """Aggressive pricing + tiny budget ⇒ BudgetGateTripped=true,
+    reason=BUDGET_EXCEEDED_COST, at least one zone skipped.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["budget_cost_exceeded"]
+    assert c["budgetGateTripped"] is True, c
+    assert c["budgetGateReason"] == "BUDGET_EXCEEDED_COST", c
+    assert c["skippedCount"] >= 1, c
+
+
+def test_orchestrator_budget_time_exceeded_emits_canonical_reason(
+    harness_environment, built_harness
+) -> None:
+    """Sub-second deadline + slow architect ⇒ BudgetGateTripped=true,
+    reason=BUDGET_EXCEEDED_TIME, at least one zone skipped.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["budget_time_exceeded"]
+    assert c["budgetGateTripped"] is True, c
+    assert c["budgetGateReason"] == "BUDGET_EXCEEDED_TIME", c
+    assert c["skippedCount"] >= 1, c
+
+
+def test_orchestrator_emits_required_progress_event_kinds(
+    harness_environment, built_harness
+) -> None:
+    """ZoneStarted, ZoneCompleted, and BatchCompleted are non-negotiable
+    for live SignalR progress. Other event kinds (Validated, etc.) are
+    additive but the three above must always fire on a happy run.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["progress_events_emitted"]
+    assert c["hasZoneStarted"] is True, c
+    assert c["hasZoneCompleted"] is True, c
+    assert c["hasBatchCompleted"] is True, c
+    assert c["lastKind"] == "BatchCompleted", c
+
+
+def test_orchestrator_external_cancellation_throws_oce(
+    harness_environment, built_harness
+) -> None:
+    """External CancellationToken.Cancel() ⇒ OperationCanceledException
+    propagates to the caller. Per-zone failures DO NOT throw — they
+    become ZoneOutcome=Failed. Only the external CT throws OCE.
+    """
+    data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
+    c = {x["caseId"]: x for x in data["cases"]}["cancellation_throws_oce"]
+    assert c["threwOce"] is True, c
+
+
+def test_codeanalyzer_wirein_branches_on_llmv2_flag() -> None:
+    """T1c-b wire-in: the analyzer must read EdogQaFeatureFlags.LlmV2,
+    consult EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2 as a hard
+    gate, and branch on LlmV2Mode.On / Shadow / (else=Off). Shadow
+    must use a linked CTS so its fire-and-forget cannot outlive the
+    caller's cancellation.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs"
+    ).read_text(encoding="utf-8")
+    assert "EdogQaFeatureFlags.LlmV2" in src, "must read the V2 flag"
+    assert "EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2" in src, "capability probe must hard-gate"
+    assert "LlmV2Mode.On" in src
+    assert "LlmV2Mode.Shadow" in src
+    assert "LlmV2Mode.Off" in src
+    assert "RunV2OrchestratorAsync" in src, "On / Shadow must delegate to V2"
+    assert "CreateLinkedTokenSource" in src, "shadow must use a linked CTS"
+
+
+def test_codeanalyzer_v2_wirein_uses_orchestrator_and_validator() -> None:
+    """V2 wire-in must instantiate the orchestrator with the validator's
+    ValidationContext + ValidTopics, not invent a new validation
+    surface. Reuse keeps the validation gates uniform between unit
+    tests and production paths.
+    """
+    src = (
+        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs"
+    ).read_text(encoding="utf-8")
+    assert "new EdogQaScenarioOrchestrator(" in src
+    assert "EdogQaScenarioValidator.ValidationContext" in src
+    assert "EdogQaLlmClient.ReadArchitectConfigFromEnv" in src
+    assert "EdogQaLlmClient.ReadEditorConfigFromEnv" in src

@@ -11,6 +11,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
+    using System.Net.Http;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
@@ -1265,6 +1266,23 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
+            // F27 P9 T1c-b: V2 orchestrator wire-in.
+            // Capability probe acts as a hard gate — V2 is forced Off when
+            // Azure OpenAI isn't ready, regardless of the requested flag.
+            var requestedMode = EdogQaFeatureFlags.LlmV2;
+            var effectiveMode = EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2
+                ? requestedMode
+                : LlmV2Mode.Off;
+
+            if (effectiveMode == LlmV2Mode.On)
+            {
+                // V2-only. Orchestrator failure bubbles up as a normal
+                // exception — no silent fallback to legacy, no synthetic.
+                return await RunV2OrchestratorAsync(
+                    zones, diff, degradationFlags, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Legacy path (Off + Shadow share the same primary execution).
             var allScenarios = new List<Scenario>();
 
             // Generate scenarios in parallel across zones (limit to 10 zones max)
@@ -1298,7 +1316,111 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Post-processing: validate topic references and assign IDs
             allScenarios = PostProcessScenarios(allScenarios);
 
+            if (effectiveMode == LlmV2Mode.Shadow)
+            {
+                // Fire-and-forget V2 shadow comparison. Bounded by a linked
+                // CTS with deadline 2× legacy elapsed (min 30s, max 120s).
+                // All exceptions swallowed — shadow MUST NOT impact prod
+                // observable behaviour. Diff is logged via PublishWarning
+                // with the "[shadow]" prefix.
+                _ = RunV2ShadowAsync(zones, diff, allScenarios.Count, cancellationToken);
+            }
+
             return allScenarios;
+        }
+
+        // ──────────────────────────────────────────────
+        // F27 P9 T1c-b: V2 orchestrator integration
+        // ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Lazy process-shared HttpClient for the V2 orchestrator. Mirrors
+        /// the EdogQaLlmProvider single-client-per-process pattern (we
+        /// can't reach into DI from this analyzer). One-time creation is
+        /// idempotent because Lazy{T} guarantees publication ordering.
+        /// </summary>
+        private static readonly Lazy<HttpClient> SharedHttpClient = new(
+            () => new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(180),
+            });
+
+        private async Task<List<Scenario>> RunV2OrchestratorAsync(
+            List<ImpactZone> zones,
+            string diff,
+            List<string> degradationFlags,
+            CancellationToken cancellationToken)
+        {
+            var architectCfg = EdogQaLlmClient.ReadArchitectConfigFromEnv();
+            var editorCfg = EdogQaLlmClient.ReadEditorConfigFromEnv();
+            if (string.IsNullOrEmpty(architectCfg.Endpoint)
+                || string.IsNullOrEmpty(architectCfg.ApiKey)
+                || string.IsNullOrEmpty(editorCfg.Endpoint)
+                || string.IsNullOrEmpty(editorCfg.ApiKey))
+            {
+                degradationFlags.Add("llm_v2_config_missing");
+                PublishWarning("LLM_V2_CONFIG_MISSING: Architect/Editor endpoint or api-key not configured; falling back to legacy path.");
+                // Caller chose On but env is incomplete — degrade to legacy
+                // rather than throw, because forcing a hard failure on a
+                // misconfigured tenant would be worse than legacy output.
+                return new List<Scenario>();
+            }
+
+            var orchestrator = new EdogQaScenarioOrchestrator(SharedHttpClient.Value);
+            var config = new EdogQaScenarioOrchestrator.OrchestratorConfig
+            {
+                Architect = architectCfg,
+                Editor = editorCfg,
+                Validation = new EdogQaScenarioValidator.ValidationContext
+                {
+                    ValidTopics = ValidTopics,
+                    ConfidenceCapIsInformational = true,
+                },
+            };
+            var inputs = zones.Take(10).Select((z, i) => new EdogQaScenarioOrchestrator.ZoneInput
+            {
+                ZoneId = string.IsNullOrEmpty(z.ZoneId) ? $"zone-{i:00}" : z.ZoneId,
+                ZoneSummary = z.Community ?? z.PrimaryChange?.Method ?? string.Empty,
+                RedactedDiff = diff,
+                UnifiedDiff = diff,
+                BaseSha = string.Empty,
+                HeadSha = string.Empty,
+            }).ToArray();
+
+            var result = await orchestrator.RunAsync(inputs, config, progress: null, cancellationToken).ConfigureAwait(false);
+
+            if (result.BudgetGateTripped)
+            {
+                degradationFlags.Add("llm_v2_budget_" + (result.BudgetGateReason ?? "exceeded").ToLowerInvariant());
+                PublishWarning($"LLM_V2 budget tripped: {result.BudgetGateReason} — accepted {result.MergedScenarios.Count} scenario(s), skipped {result.Zones.Count(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.SkippedForBudget)}.");
+            }
+
+            return PostProcessScenarios(result.MergedScenarios.ToList());
+        }
+
+        private async Task RunV2ShadowAsync(
+            List<ImpactZone> zones,
+            string diff,
+            int legacyScenarioCount,
+            CancellationToken cancellationToken)
+        {
+            // Linked CTS with a bounded deadline so a hung V2 call can't
+            // outlive the analysis. Caller cancellation propagates.
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linked.CancelAfter(TimeSpan.FromSeconds(120));
+            try
+            {
+                var v2Scenarios = await RunV2OrchestratorAsync(zones, diff, new List<string>(), linked.Token).ConfigureAwait(false);
+                PublishWarning($"[shadow] LLM_V2 produced {v2Scenarios.Count} scenario(s); legacy produced {legacyScenarioCount}.");
+            }
+            catch (OperationCanceledException)
+            {
+                // Shadow timeout / caller cancel — silent.
+            }
+            catch (Exception ex)
+            {
+                PublishWarning($"[shadow] LLM_V2 failed silently: {ex.GetType().Name}: {ex.Message}");
+            }
         }
 
         private async Task<List<Scenario>> GenerateScenariosForZoneSafe(

@@ -57,6 +57,7 @@
     <Compile Include="LlmClientHarness.cs" />
     <Compile Include="ValidatorHarness.cs" />
     <Compile Include="ProjectorHarness.cs" />
+    <Compile Include="OrchestratorHarness.cs" />
   </ItemGroup>
 
   <!-- Bundle fixture files into the output so the harness can read them at runtime -->
