@@ -2,7 +2,7 @@
 // F27 P9 T1c-b — behavioural harness for EdogQaScenarioOrchestrator.
 //
 // Drives the orchestrator via the ArchitectOverride/EditorOverride
-// delegate seams so no HTTP traffic happens. The 13 cases cover:
+// delegate seams so no HTTP traffic happens. The 19 cases cover:
 //   1.  happy_single_zone                — one zone → one merged scenario
 //   2.  happy_multi_zone                 — three zones → three merged
 //   3.  cross_zone_dedup                 — two zones same hash → 1 win + 1 dup
@@ -16,6 +16,12 @@
 //   11. budget_time_exceeded             — deadline trips, later zones skipped
 //   12. progress_events_emitted          — Started + Completed + Batch
 //   13. cancellation_throws_oce          — external CT → OperationCanceledException
+//   14. repair_skipped_when_no_quarantine — happy path, RepairAttempts=0
+//   15. repair_replaces_quarantined      — Branch B fixes 1 quarantined → final 2
+//   16. repair_parse_fail_then_succeeds  — Branch A recovers Editor parse failure
+//   17. repair_parse_fail_then_also_fails — Branch A repair fails → zone Failed
+//   18. repair_skipped_when_budget_tripped — sibling tripped budget → no repair
+//   19. repair_throws_fallback_to_initial — Branch B repair throws → initial preserved
 //
 // Determinism: every case uses a fixed configuration; outputs are
 // JSON-serialised under HARNESS-JSON-BEGIN/END so pytest can assert
@@ -75,6 +81,12 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 await RunBudgetTimeExceeded(ct).ConfigureAwait(false),
                 await RunProgressEventsEmitted(ct).ConfigureAwait(false),
                 await RunCancellationThrowsOce(ct).ConfigureAwait(false),
+                await RunRepairSkippedWhenNoQuarantine(ct).ConfigureAwait(false),
+                await RunRepairReplacesQuarantined(ct).ConfigureAwait(false),
+                await RunRepairParseFailThenSucceeds(ct).ConfigureAwait(false),
+                await RunRepairParseFailThenAlsoFails(ct).ConfigureAwait(false),
+                await RunRepairSkippedWhenBudgetTripped(ct).ConfigureAwait(false),
+                await RunRepairThrowsFallbackToInitial(ct).ConfigureAwait(false),
             };
 
             EmitJson(new
@@ -543,6 +555,367 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             };
         }
 
+        // ─── T1e: Editor repair-loop cases ────────────────────────────
+
+        private static async Task<object> RunRepairSkippedWhenNoQuarantine(CancellationToken ct)
+        {
+            var zone = ZoneInput("z-0");
+            var (architect, editor) = StubStages(zone, scenarioId: "sk-1");
+
+            // Repair delegate must not be invoked when nothing is quarantined.
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+                throw new InvalidOperationException("Repair must not fire when there is no quarantine.");
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { zone },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                ct: ct).ConfigureAwait(false);
+
+            var z = result.Zones[0];
+            return new
+            {
+                caseId = "repair_skipped_when_no_quarantine",
+                outcome = z.Outcome.ToString(),
+                repairAttempts = z.RepairAttempts,
+                repairBranch = z.RepairBranch,
+                acceptedCount = z.Accepted.Count,
+                quarantinedCount = z.Quarantined.Count,
+                mergedScenarioCount = result.MergedScenarios.Count,
+            };
+        }
+
+        private static async Task<object> RunRepairReplacesQuarantined(CancellationToken ct)
+        {
+            // Initial Editor: 1 valid scenario (ev-1) + 1 quarantined (ev-unknown).
+            // Repair Editor: 1 replacement scenario (ev-2) with a distinct stimulus
+            // (different method name) so its SemanticHash differs from the initial.
+            var zone = ZoneInput("z-0");
+
+            EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = (zctx, c) =>
+                Task.FromResult(BuildPlanResult(zctx, new[] { "ev-1", "ev-2" }));
+
+            EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario>
+                    {
+                        BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-good", methodName: "Baz"),
+                        BuildValidScenario(refs: new List<string> { "ev-unknown" }, sketchId: "sk-bad", methodName: "BazBad"),
+                    },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 80,
+                });
+
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario>
+                    {
+                        BuildValidScenario(refs: new List<string> { "ev-2" }, sketchId: "sk-repair", methodName: "BazRepaired"),
+                    },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 60,
+                    EditorOutputTokens = 40,
+                });
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { zone },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                ct: ct).ConfigureAwait(false);
+
+            var z = result.Zones[0];
+            return new
+            {
+                caseId = "repair_replaces_quarantined",
+                outcome = z.Outcome.ToString(),
+                repairAttempts = z.RepairAttempts,
+                repairBranch = z.RepairBranch,
+                initialAccepted = z.InitialAcceptedCount,
+                initialQuarantined = z.InitialQuarantinedCount,
+                repairAccepted = z.RepairAcceptedCount,
+                repairQuarantined = z.RepairQuarantinedCount,
+                repairInputTokens = z.RepairInputTokens,
+                repairOutputTokens = z.RepairOutputTokens,
+                finalAccepted = z.Accepted.Count,
+                finalQuarantined = z.Quarantined.Count,
+                mergedScenarioCount = result.MergedScenarios.Count,
+                mergedIdsSorted = result.MergedScenarios.Select(s => s.Id).OrderBy(s => s, StringComparer.Ordinal).ToList(),
+                repairFailureCode = z.RepairFailureCode,
+            };
+        }
+
+        private static async Task<object> RunRepairParseFailThenSucceeds(CancellationToken ct)
+        {
+            var zone = ZoneInput("z-0");
+            EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = (zctx, c) =>
+                Task.FromResult(BuildPlanResult(zctx, new[] { "ev-1" }));
+
+            // Initial Editor pass fails (parse / schema / binding).
+            EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Failed,
+                    Plan = plan,
+                    Errors = new List<string> { "EDITOR_RESPONSE_UNPARSEABLE — invalid JSON envelope" },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 0,
+                });
+
+            // Repair recovers with a valid scenario.
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario>
+                    {
+                        BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-recovered", methodName: "Baz"),
+                    },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 50,
+                    EditorOutputTokens = 40,
+                });
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { zone },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                ct: ct).ConfigureAwait(false);
+
+            var z = result.Zones[0];
+            return new
+            {
+                caseId = "repair_parse_fail_then_succeeds",
+                outcome = z.Outcome.ToString(),
+                repairAttempts = z.RepairAttempts,
+                repairBranch = z.RepairBranch,
+                repairFailureCode = z.RepairFailureCode,
+                finalAccepted = z.Accepted.Count,
+                mergedScenarioCount = result.MergedScenarios.Count,
+            };
+        }
+
+        private static async Task<object> RunRepairParseFailThenAlsoFails(CancellationToken ct)
+        {
+            var zone = ZoneInput("z-0");
+            EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = (zctx, c) =>
+                Task.FromResult(BuildPlanResult(zctx, new[] { "ev-1" }));
+
+            EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Failed,
+                    Plan = plan,
+                    Errors = new List<string> { "EDITOR_RESPONSE_UNPARSEABLE — initial pass broke" },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 0,
+                });
+
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Failed,
+                    Plan = plan,
+                    Errors = new List<string> { "EDITOR_SCHEMA_VIOLATION — repair also broke" },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 50,
+                    EditorOutputTokens = 0,
+                });
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { zone },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                ct: ct).ConfigureAwait(false);
+
+            var z = result.Zones[0];
+            return new
+            {
+                caseId = "repair_parse_fail_then_also_fails",
+                outcome = z.Outcome.ToString(),
+                outcomeReason = z.OutcomeReason,
+                repairAttempts = z.RepairAttempts,
+                repairBranch = z.RepairBranch,
+                repairFailureCode = z.RepairFailureCode,
+                finalAccepted = z.Accepted.Count,
+            };
+        }
+
+        private static async Task<object> RunRepairSkippedWhenBudgetTripped(CancellationToken ct)
+        {
+            // Two zones. Zone-0 finishes fast and trips the cost budget at
+            // its Completed AccumulateDelta call (no quarantine → no repair
+            // attempt of its own). Zone-1 is delayed so by the time it
+            // reaches its Branch B check the budget is already tripped →
+            // repair must be skipped; zone-1 still completes with the
+            // initial Accepted set preserved.
+            var z0 = ZoneInput("z-0");
+            var z1 = ZoneInput("z-1");
+
+            EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = async (zctx, c) =>
+            {
+                if (zctx.ZoneId == "z-1")
+                {
+                    // Delay long enough that z-0 completes first.
+                    await Task.Delay(120, c).ConfigureAwait(false);
+                }
+                return BuildPlanResult(zctx, new[] { "ev-1", "ev-2" }, archInputTokens: zctx.ZoneId == "z-0" ? 5_000_000 : 200);
+            };
+
+            EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
+            {
+                if (zctx.ZoneId == "z-0")
+                {
+                    // Single accepted scenario, no quarantine → no Branch B.
+                    return Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                    {
+                        Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                        Plan = plan,
+                        Scenarios = new List<EdogQaLlmClient.GeneratedScenario>
+                        {
+                            BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-z0", methodName: "BazZ0"),
+                        },
+                        EditorElapsedMs = 5,
+                        EditorInputTokens = 100,
+                        EditorOutputTokens = 80,
+                    });
+                }
+                // z-1: 1 accepted + 1 quarantined → would normally trigger
+                // Branch B, but the budget will be tripped by z-0 first.
+                return Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario>
+                    {
+                        BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-z1-good", methodName: "BazZ1"),
+                        BuildValidScenario(refs: new List<string> { "ev-unknown" }, sketchId: "sk-z1-bad", methodName: "BazZ1Bad"),
+                    },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 80,
+                });
+            };
+
+            int repairCallCount = 0;
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+            {
+                System.Threading.Interlocked.Increment(ref repairCallCount);
+                return Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario>(),
+                });
+            };
+
+            // Use Architect rate ≈ $0.01 per 1K input tokens so 5M tokens ≈ $50 cost,
+            // well above the 0.01 cap below.
+            var pricing = new EdogQaScenarioOrchestrator.PricingTable
+            {
+                Architect = new EdogQaScenarioOrchestrator.DeploymentPricing
+                {
+                    InputPerThousand = 0.01,
+                    OutputPerThousand = 0.01,
+                    ReasoningPerThousand = 0.01,
+                },
+                Editor = new EdogQaScenarioOrchestrator.DeploymentPricing
+                {
+                    InputPerThousand = 0.001,
+                    OutputPerThousand = 0.001,
+                    ReasoningPerThousand = 0.001,
+                },
+                Source = "test_repair_budget_skip",
+            };
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { z0, z1 },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                maxConcurrent: 2,
+                pricing: pricing,
+                maxBudgetUsd: 0.01,
+                ct: ct).ConfigureAwait(false);
+
+            var zResults = result.Zones.OrderBy(z => z.ZoneInputIndex).ToList();
+            var z1Result = zResults.FirstOrDefault(z => z.ZoneId == "z-1");
+            return new
+            {
+                caseId = "repair_skipped_when_budget_tripped",
+                budgetGateTripped = result.BudgetGateTripped,
+                budgetGateReason = result.BudgetGateReason,
+                z1Outcome = z1Result?.Outcome.ToString(),
+                z1RepairAttempts = z1Result?.RepairAttempts ?? -1,
+                z1RepairBranch = z1Result?.RepairBranch,
+                z1InitialAccepted = z1Result?.InitialAcceptedCount ?? -1,
+                z1FinalAccepted = z1Result?.Accepted.Count ?? -1,
+                repairCallCount,
+            };
+        }
+
+        private static async Task<object> RunRepairThrowsFallbackToInitial(CancellationToken ct)
+        {
+            var zone = ZoneInput("z-0");
+            EdogQaScenarioOrchestrator.ArchitectStageDelegate architect = (zctx, c) =>
+                Task.FromResult(BuildPlanResult(zctx, new[] { "ev-1" }));
+
+            EdogQaScenarioOrchestrator.EditorStageDelegate editor = (plan, zctx, c) =>
+                Task.FromResult(new EdogQaLlmClient.LlmClientResult
+                {
+                    Status = EdogQaLlmClient.LlmClientStatus.Ok,
+                    Plan = plan,
+                    Scenarios = new List<EdogQaLlmClient.GeneratedScenario>
+                    {
+                        BuildValidScenario(refs: new List<string> { "ev-1" }, sketchId: "sk-keep", methodName: "Baz"),
+                        BuildValidScenario(refs: new List<string> { "ev-unknown" }, sketchId: "sk-drop", methodName: "BazDrop"),
+                    },
+                    EditorElapsedMs = 5,
+                    EditorInputTokens = 100,
+                    EditorOutputTokens = 80,
+                });
+
+            // Repair delegate throws — orchestrator must absorb, preserve
+            // initial Accepted, complete the zone, and surface the failure
+            // code on the ZoneResult.
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate repair = (plan, zctx, fb, c) =>
+                throw new InvalidOperationException("simulated repair failure");
+
+            var result = await RunOrchestratorAsync(
+                zones: new[] { zone },
+                architectOverride: architect,
+                editorOverride: editor,
+                editorRepairOverride: repair,
+                ct: ct).ConfigureAwait(false);
+
+            var z = result.Zones[0];
+            return new
+            {
+                caseId = "repair_throws_fallback_to_initial",
+                outcome = z.Outcome.ToString(),
+                repairAttempts = z.RepairAttempts,
+                repairBranch = z.RepairBranch,
+                repairFailureCode = z.RepairFailureCode,
+                initialAccepted = z.InitialAcceptedCount,
+                initialQuarantined = z.InitialQuarantinedCount,
+                finalAccepted = z.Accepted.Count,
+                mergedScenarioCount = result.MergedScenarios.Count,
+            };
+        }
+
         // ─── Runner ───────────────────────────────────────────────────
 
         private static async Task<EdogQaScenarioOrchestrator.OrchestratorResult> RunOrchestratorAsync(
@@ -554,6 +927,8 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             double maxBudgetUsd = 1000.0,
             int maxBudgetSeconds = 600,
             IProgress<EdogQaScenarioOrchestrator.OrchestratorEvent> progress = null,
+            EdogQaScenarioOrchestrator.EditorRepairStageDelegate editorRepairOverride = null,
+            bool enableRepairLoop = true,
             CancellationToken ct = default)
         {
             var orch = new EdogQaScenarioOrchestrator(new HttpClient());
@@ -566,6 +941,8 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 Pricing = pricing ?? EdogQaScenarioOrchestrator.PricingTable.DefaultPlaceholder(),
                 ArchitectOverride = architectOverride,
                 EditorOverride = editorOverride,
+                EditorRepairOverride = editorRepairOverride,
+                EnableRepairLoop = enableRepairLoop,
             };
             return await orch.RunAsync(zones, config, progress, ct).ConfigureAwait(false);
         }
@@ -594,37 +971,55 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
 
         private static Task<EdogQaLlmClient.LlmClientResult> StubArchitectFor(EdogQaLlmClient.ZoneContext zctx)
         {
+            return Task.FromResult(BuildPlanResult(zctx, new[] { "ev-1" }));
+        }
+
+        /// <summary>
+        /// T1e helper: build an Architect <see cref="EdogQaLlmClient.LlmClientResult"/>
+        /// for the canonical diff with the supplied evidence IDs. All
+        /// evidence points at line 13 on the right side so the validator's
+        /// grounding-line gate is satisfied for refs in this set.
+        /// </summary>
+        private static EdogQaLlmClient.LlmClientResult BuildPlanResult(
+            EdogQaLlmClient.ZoneContext zctx,
+            IEnumerable<string> evidenceIds,
+            int archInputTokens = 200,
+            int archOutputTokens = 100,
+            int archReasoningTokens = 50)
+        {
+            var evidence = new List<EdogQaLlmClient.ArchitectGroundingEvidence>();
+            foreach (var id in evidenceIds ?? Array.Empty<string>())
+            {
+                evidence.Add(new EdogQaLlmClient.ArchitectGroundingEvidence
+                {
+                    EvidenceId = id,
+                    RepoRelativePath = SamplePath,
+                    Side = "right",
+                    BaseSha = "abc",
+                    HunkId = "h-1",
+                    NewLine = RightLine13,
+                    Excerpt = "Baz() => 3",
+                    Reason = "added behaviour (" + id + ")",
+                });
+            }
             var plan = new EdogQaLlmClient.ArchitectPlan
             {
                 ZoneId = zctx.ZoneId,
                 ZoneSummary = "stub plan",
                 PlanOutcome = EdogQaLlmClient.PlanOutcomeTestable,
-                GroundingEvidence = new List<EdogQaLlmClient.ArchitectGroundingEvidence>
-                {
-                    new EdogQaLlmClient.ArchitectGroundingEvidence
-                    {
-                        EvidenceId = "ev-1",
-                        RepoRelativePath = SamplePath,
-                        Side = "right",
-                        BaseSha = "abc",
-                        HunkId = "h-1",
-                        NewLine = RightLine13,
-                        Excerpt = "Baz() => 3",
-                        Reason = "added behaviour",
-                    },
-                },
+                GroundingEvidence = evidence,
                 BehavioralChanges = new List<EdogQaLlmClient.BehavioralChange>(),
                 ScenarioSketches = new List<EdogQaLlmClient.ScenarioSketch>(),
             };
-            return Task.FromResult(new EdogQaLlmClient.LlmClientResult
+            return new EdogQaLlmClient.LlmClientResult
             {
                 Status = EdogQaLlmClient.LlmClientStatus.Ok,
                 Plan = plan,
                 ArchitectElapsedMs = 5,
-                ArchitectInputTokens = 200,
-                ArchitectOutputTokens = 100,
-                ArchitectReasoningTokens = 50,
-            });
+                ArchitectInputTokens = archInputTokens,
+                ArchitectOutputTokens = archOutputTokens,
+                ArchitectReasoningTokens = archReasoningTokens,
+            };
         }
 
         private static Task<EdogQaLlmClient.LlmClientResult> StubEditorFor(

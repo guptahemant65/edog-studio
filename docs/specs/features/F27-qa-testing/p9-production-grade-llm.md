@@ -496,7 +496,7 @@ What every P9 PR reviewer checks:
 - [ ] System prompt ≤ 400 tokens (`tests/qa-eval/prompt-budget.py` enforces).
 - [ ] All field documentation is in JSON Schema `description` fields, not the prompt.
 - [ ] `prompt_cache_key` / `cache_control` on system block (NOT user content); cache hit rate telemetry alert at <50%. Caching is OBSERVED, never assumed in cost gates.
-- [ ] Failed-attempt errors AND rejected scenarios are passed to repair calls.
+- [x] Failed-attempt errors AND rejected scenarios are passed to repair calls. *(Shipped T1e: both Branch A parse-fail recovery and Branch B post-validator quarantine replacement, with replacement-only semantics. See `SECURITY.md` §3.1 M1.7 + `EdogQaScenarioOrchestrator.ProcessZoneAsync` Branch A/B.)*
 - [ ] Context reset (fresh call) between tier escalations.
 - [ ] Architect/Editor split: reasoning model never emits final JSON; Editor cannot introduce new grounding citations.
 - [ ] Validator runs: schema re-validation + grounding existence (sha+side+hunkId+newLine) + symbol existence + dedup + confidence clamp + control-char/RTL strip.

@@ -115,6 +115,21 @@ namespace Microsoft.LiveTable.Service.DevMode
             EdogQaLlmClient.ZoneContext zone,
             CancellationToken ct);
 
+        /// <summary>
+        /// Repair-aware Editor stage delegate. T1e introduced a second
+        /// Editor pass driven by <see cref="EdogQaLlmClient.EditorRepairContext"/>
+        /// — either to recover from a parse/schema/binding failure
+        /// (Branch A) or to re-emit replacements for validator-quarantined
+        /// scenarios (Branch B). The delegate is split from
+        /// <see cref="EditorStageDelegate"/> deliberately so existing
+        /// 3-parameter test lambdas keep compiling unchanged.
+        /// </summary>
+        public delegate Task<EdogQaLlmClient.LlmClientResult> EditorRepairStageDelegate(
+            EdogQaLlmClient.ArchitectPlan plan,
+            EdogQaLlmClient.ZoneContext zone,
+            EdogQaLlmClient.EditorRepairContext repair,
+            CancellationToken ct);
+
         // ── Config ─────────────────────────────────────────────────────
 
         public sealed class OrchestratorConfig
@@ -145,6 +160,27 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Test override for the Editor stage. When non-null, the orchestrator does not call <see cref="EdogQaLlmClient.EditorOnceAsync"/>.</summary>
             public EditorStageDelegate EditorOverride { get; set; }
+
+            /// <summary>
+            /// Test override for the Editor REPAIR stage (T1e). When non-null
+            /// the orchestrator does not call the repair-aware overload of
+            /// <see cref="EdogQaLlmClient.EditorOnceAsync"/>. When this and
+            /// <see cref="EditorOverride"/> are both null but
+            /// <see cref="EnableRepairLoop"/> is true, the orchestrator uses
+            /// the live LLM client for both passes.
+            /// </summary>
+            public EditorRepairStageDelegate EditorRepairOverride { get; set; }
+
+            /// <summary>
+            /// F27 P9 T1e: enable the one-shot Editor repair loop. When
+            /// <c>true</c> (default), the orchestrator (a) retries Editor
+            /// once if the initial call failed parse/schema/binding gates,
+            /// and (b) re-emits replacements for validator-quarantined
+            /// scenarios after a successful initial call. Default
+            /// <c>true</c>; the analyzer wire-in flips it off only for
+            /// tests that need to assert the un-repaired baseline.
+            /// </summary>
+            public bool EnableRepairLoop { get; set; } = true;
         }
 
         // ── Input ──────────────────────────────────────────────────────
@@ -213,6 +249,40 @@ namespace Microsoft.LiveTable.Service.DevMode
             public int ReasoningTokens { get; set; }
 
             public double CostUsd { get; set; }
+
+            // ── T1e: Editor repair-pass telemetry ────────────────────────
+
+            /// <summary>0 or 1. The orchestrator runs at most one repair pass per zone.</summary>
+            public int RepairAttempts { get; set; }
+
+            /// <summary>Wire-stable tag identifying the repair branch that fired. Empty when <see cref="RepairAttempts"/> = 0.</summary>
+            /// <remarks>
+            /// Values: <c>"editor_failed"</c> (Branch A — initial Editor returned <see cref="EdogQaLlmClient.LlmClientStatus.Failed"/>),
+            /// <c>"validator_quarantine"</c> (Branch B — initial validator quarantined ≥ 1 scenario),
+            /// <c>"skipped_budget"</c> (repair would have fired but the budget was already tripped).
+            /// </remarks>
+            public string RepairBranch { get; set; } = string.Empty;
+
+            /// <summary>How many scenarios the validator accepted from the initial Editor pass (Branch B only; 0 if the initial pass failed entirely or no repair fired).</summary>
+            public int InitialAcceptedCount { get; set; }
+
+            /// <summary>How many scenarios the validator quarantined from the initial Editor pass (Branch B only).</summary>
+            public int InitialQuarantinedCount { get; set; }
+
+            /// <summary>How many replacement scenarios the validator accepted from the repair pass (Branch A: this is the total accepted; Branch B: only the repair-pass replacements).</summary>
+            public int RepairAcceptedCount { get; set; }
+
+            /// <summary>How many replacement scenarios the validator quarantined from the repair pass.</summary>
+            public int RepairQuarantinedCount { get; set; }
+
+            /// <summary>Editor repair-pass input tokens (additive to <see cref="InputTokens"/>).</summary>
+            public int RepairInputTokens { get; set; }
+
+            /// <summary>Editor repair-pass output tokens (additive to <see cref="OutputTokens"/>).</summary>
+            public int RepairOutputTokens { get; set; }
+
+            /// <summary>Wire-stable failure code if the repair pass itself failed (parse, schema, binding, or stage exception). Empty on success.</summary>
+            public string RepairFailureCode { get; set; } = string.Empty;
         }
 
         public sealed class DedupDuplicate
@@ -274,6 +344,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             BudgetExceeded = 8,
             CrossZoneDedupCompleted = 9,
             BatchCompleted = 10,
+
+            /// <summary>F27 P9 T1e: one repair pass fired for this zone. <see cref="OrchestratorEvent.ErrorCode"/> carries the branch tag.</summary>
+            ZoneRepairAttempted = 11,
         }
 
         public sealed class OrchestratorEvent
@@ -606,6 +679,14 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ZoneId = zoneInput?.ZoneId ?? string.Empty,
             };
             var zoneStopwatch = Stopwatch.StartNew();
+            // T1e: per-zone running tally of how much we've BOOKED into
+            // the shared budget accumulator. Each AccumulateDeltaAndMaybeTrip
+            // call books (zr.CostUsd - bookedCostUsd) and refreshes the
+            // tally. This eliminates the pre-existing double-count where
+            // a multi-stage zone billed the cumulative cost on every
+            // call (Architect cost was billed twice on the editor path,
+            // three times if a repair pass fired).
+            double bookedCostUsd = 0;
 
             await semaphore.WaitAsync(ct).ConfigureAwait(false);
             try
@@ -746,7 +827,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     zr.OutcomeReason = StableCodePrefix(firstError);
                     zr.Errors.AddRange(architectResult.Errors ?? new());
                     zr.CostUsd = ComputeCost(zr, config.Pricing);
-                    AccumulateAndMaybeTrip(zr, config, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
+                    AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
                     zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
                     SafeReport(progress, new OrchestratorEvent
                     {
@@ -765,7 +846,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     zr.Outcome = ZoneOutcome.NoTestableChanges;
                     zr.OutcomeReason = EdogQaLlmClient.PlanOutcomeNoTestableChanges;
                     zr.CostUsd = ComputeCost(zr, config.Pricing);
-                    AccumulateAndMaybeTrip(zr, config, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
+                    AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
                     zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
                     SafeReport(progress, new OrchestratorEvent
                     {
@@ -798,7 +879,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     zr.OutcomeReason = CodeUnexpectedException;
                     zr.Errors.Add(CodeUnexpectedException + " — editor stage: " + ex.GetType().Name);
                     zr.CostUsd = ComputeCost(zr, config.Pricing);
-                    AccumulateAndMaybeTrip(zr, config, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
+                    AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
                     zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
                     SafeReport(progress, new OrchestratorEvent
                     {
@@ -817,7 +898,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     zr.OutcomeReason = CodeDelegateReturnedNull;
                     zr.Errors.Add(CodeDelegateReturnedNull + " — editor");
                     zr.CostUsd = ComputeCost(zr, config.Pricing);
-                    AccumulateAndMaybeTrip(zr, config, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
+                    AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
                     zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
                     SafeReport(progress, new OrchestratorEvent
                     {
@@ -845,23 +926,100 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 if (editorResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
                 {
-                    zr.Outcome = ZoneOutcome.Failed;
-                    var firstError = editorResult.Errors != null && editorResult.Errors.Count > 0 ? editorResult.Errors[0] : "EDITOR_UNKNOWN_ERROR";
-                    zr.OutcomeReason = StableCodePrefix(firstError);
-                    zr.Errors.AddRange(editorResult.Errors ?? new());
-                    zr.CostUsd = ComputeCost(zr, config.Pricing);
-                    AccumulateAndMaybeTrip(zr, config, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
-                    zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
-                    SafeReport(progress, new OrchestratorEvent
+                    // ── T1e Branch A: one-shot Editor repair ──────────
+                    EdogQaLlmClient.LlmClientResult repairResult = null;
+                    bool repairDispatched = false;
+                    string repairExceptionCode = string.Empty;
+
+                    if (config.EnableRepairLoop
+                        && !isBudgetTripped()
+                        && (config.EditorRepairOverride != null || config.Editor != null))
                     {
-                        Kind = OrchestratorEventKind.ZoneFailed,
-                        ZoneId = zr.ZoneId,
-                        ZoneInputIndex = zoneInputIndex,
-                        ErrorCode = zr.OutcomeReason,
-                        CostUsd = zr.CostUsd,
-                    });
-                    storeResult(zr);
-                    return;
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.ZoneRepairAttempted,
+                            ZoneId = zr.ZoneId,
+                            ZoneInputIndex = zoneInputIndex,
+                            ErrorCode = "editor_failed",
+                        });
+
+                        var feedback = new EdogQaLlmClient.EditorRepairContext
+                        {
+                            EditorErrors = editorResult.Errors != null
+                                ? new List<string>(editorResult.Errors)
+                                : new List<string>(),
+                        };
+
+                        try
+                        {
+                            (repairResult, repairDispatched) = await TryCallEditorRepairAsync(
+                                config, architectResult.Plan, zoneCtx, feedback, ct).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                        catch (Exception ex)
+                        {
+                            repairDispatched = true;
+                            repairExceptionCode = CodeUnexpectedException;
+                            zr.Errors.Add(CodeUnexpectedException + " — editor repair stage: " + ex.GetType().Name);
+                        }
+
+                        if (repairDispatched)
+                        {
+                            zr.RepairAttempts = 1;
+                            zr.RepairBranch = "editor_failed";
+                        }
+
+                        if (repairResult != null)
+                        {
+                            zr.RepairInputTokens += repairResult.EditorInputTokens;
+                            zr.RepairOutputTokens += repairResult.EditorOutputTokens;
+                            zr.InputTokens += repairResult.EditorInputTokens;
+                            zr.OutputTokens += repairResult.EditorOutputTokens;
+                        }
+                    }
+
+                    if (repairResult != null
+                        && repairResult.Status != EdogQaLlmClient.LlmClientStatus.Failed)
+                    {
+                        // Repair recovered — adopt the repair output and
+                        // fall through to the validator below as if the
+                        // initial Editor pass had succeeded.
+                        editorResult = repairResult;
+                    }
+                    else
+                    {
+                        if (repairResult != null
+                            && repairResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
+                        {
+                            var firstRepairError = repairResult.Errors != null && repairResult.Errors.Count > 0
+                                ? StableCodePrefix(repairResult.Errors[0])
+                                : "EDITOR_REPAIR_UNKNOWN_ERROR";
+                            zr.RepairFailureCode = firstRepairError;
+                            zr.Errors.AddRange(repairResult.Errors ?? new());
+                        }
+                        else if (!string.IsNullOrEmpty(repairExceptionCode))
+                        {
+                            zr.RepairFailureCode = repairExceptionCode;
+                        }
+
+                        zr.Outcome = ZoneOutcome.Failed;
+                        var firstError = editorResult.Errors != null && editorResult.Errors.Count > 0 ? editorResult.Errors[0] : "EDITOR_UNKNOWN_ERROR";
+                        zr.OutcomeReason = StableCodePrefix(firstError);
+                        zr.Errors.AddRange(editorResult.Errors ?? new());
+                        zr.CostUsd = ComputeCost(zr, config.Pricing);
+                        AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
+                        zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
+                        SafeReport(progress, new OrchestratorEvent
+                        {
+                            Kind = OrchestratorEventKind.ZoneFailed,
+                            ZoneId = zr.ZoneId,
+                            ZoneInputIndex = zoneInputIndex,
+                            ErrorCode = zr.OutcomeReason,
+                            CostUsd = zr.CostUsd,
+                        });
+                        storeResult(zr);
+                        return;
+                    }
                 }
 
                 // ── Validator ────────────────────────────────────────
@@ -890,9 +1048,130 @@ namespace Microsoft.LiveTable.Service.DevMode
                     QuarantinedCount = zr.Quarantined.Count,
                 });
 
+                // ── T1e Branch B: validator-quarantine repair pass ───
+                //
+                // Replacement-only semantics: the orchestrator preserves
+                // the initial Accepted set as an invariant; the repair
+                // pass can only ADD scenarios. Repair input is the
+                // quarantined list as JSON-encoded diagnostic data
+                // (not free-text instructions — see SECURITY.md §3 A1).
+                if (config.EnableRepairLoop
+                    && zr.RepairAttempts == 0
+                    && zr.Quarantined.Count > 0
+                    && !isBudgetTripped()
+                    && (config.EditorRepairOverride != null || config.Editor != null))
+                {
+                    zr.InitialAcceptedCount = zr.Accepted.Count;
+                    zr.InitialQuarantinedCount = zr.Quarantined.Count;
+
+                    SafeReport(progress, new OrchestratorEvent
+                    {
+                        Kind = OrchestratorEventKind.ZoneRepairAttempted,
+                        ZoneId = zr.ZoneId,
+                        ZoneInputIndex = zoneInputIndex,
+                        ErrorCode = "validator_quarantine",
+                    });
+
+                    var feedback = new EdogQaLlmClient.EditorRepairContext
+                    {
+                        QuarantinedScenarios = BuildRepairItemsFromQuarantined(zr.Quarantined),
+                    };
+
+                    EdogQaLlmClient.LlmClientResult repairResult = null;
+                    bool repairDispatched = false;
+                    try
+                    {
+                        (repairResult, repairDispatched) = await TryCallEditorRepairAsync(
+                            config, architectResult.Plan, zoneCtx, feedback, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                    catch (Exception ex)
+                    {
+                        repairDispatched = true;
+                        zr.RepairFailureCode = CodeUnexpectedException;
+                        zr.Errors.Add(CodeUnexpectedException + " — editor repair stage: " + ex.GetType().Name);
+                    }
+
+                    if (repairDispatched)
+                    {
+                        zr.RepairAttempts = 1;
+                        zr.RepairBranch = "validator_quarantine";
+                    }
+
+                    if (repairResult != null)
+                    {
+                        zr.RepairInputTokens += repairResult.EditorInputTokens;
+                        zr.RepairOutputTokens += repairResult.EditorOutputTokens;
+                        zr.InputTokens += repairResult.EditorInputTokens;
+                        zr.OutputTokens += repairResult.EditorOutputTokens;
+
+                        if (repairResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
+                        {
+                            var firstRepairError = repairResult.Errors != null && repairResult.Errors.Count > 0
+                                ? StableCodePrefix(repairResult.Errors[0])
+                                : "EDITOR_REPAIR_UNKNOWN_ERROR";
+                            zr.RepairFailureCode = firstRepairError;
+                            zr.Errors.AddRange(repairResult.Errors ?? new());
+                        }
+                        else
+                        {
+                            var repairValidation = EdogQaScenarioValidator.Validate(
+                                architectResult.Plan,
+                                repairResult.Scenarios ?? new List<EdogQaLlmClient.GeneratedScenario>(),
+                                zoneInput.UnifiedDiff ?? zoneInput.RedactedDiff ?? string.Empty,
+                                config.Validation);
+
+                            zr.RepairAcceptedCount = repairValidation.Accepted?.Count ?? 0;
+                            zr.RepairQuarantinedCount = repairValidation.Quarantined?.Count ?? 0;
+
+                            if (repairValidation.BatchErrors != null && repairValidation.BatchErrors.Count > 0)
+                            {
+                                foreach (var be in repairValidation.BatchErrors) zr.Errors.Add(be.Code ?? "VALIDATOR_BATCH_ERROR");
+                            }
+
+                            // Replacement-only merge: initial Accepted
+                            // is preserved; repair-Accepted scenarios
+                            // are appended unless their SemanticHash
+                            // collides with an existing entry. Empty/
+                            // null hashes bypass dedup (unique per
+                            // occurrence) so the validator's empty-hash
+                            // contract failure never silently swallows
+                            // distinct work.
+                            if (repairValidation.Accepted != null && repairValidation.Accepted.Count > 0)
+                            {
+                                var seenHashes = new HashSet<string>(StringComparer.Ordinal);
+                                foreach (var existing in zr.Accepted)
+                                {
+                                    if (!string.IsNullOrEmpty(existing?.SemanticHash))
+                                        seenHashes.Add(existing.SemanticHash);
+                                }
+                                foreach (var ra in repairValidation.Accepted)
+                                {
+                                    if (ra == null) continue;
+                                    if (!string.IsNullOrEmpty(ra.SemanticHash) && !seenHashes.Add(ra.SemanticHash))
+                                    {
+                                        continue;
+                                    }
+                                    zr.Accepted.Add(ra);
+                                }
+                            }
+
+                            // Repair-quarantined entries are APPENDED to
+                            // the existing quarantined list so the
+                            // caller sees both passes' failures; they
+                            // never overwrite the initial set that
+                            // triggered Branch B.
+                            if (repairValidation.Quarantined != null && repairValidation.Quarantined.Count > 0)
+                            {
+                                zr.Quarantined.AddRange(repairValidation.Quarantined);
+                            }
+                        }
+                    }
+                }
+
                 zr.Outcome = ZoneOutcome.Completed;
                 zr.CostUsd = ComputeCost(zr, config.Pricing);
-                AccumulateAndMaybeTrip(zr, config, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
+                AccumulateDeltaAndMaybeTrip(zr, ref bookedCostUsd, addAccumulate, refAccumulate, maxBudgetMicroUsd, tripBudget);
                 zr.ElapsedMs = zoneStopwatch.ElapsedMilliseconds;
 
                 SafeReport(progress, new OrchestratorEvent
@@ -928,30 +1207,95 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch { /* I7: progress callbacks must never bubble. */ }
         }
 
+        /// <summary>
+        /// T1e: dispatch the Editor repair call via the test override
+        /// if present, else the live LLM client. Returns
+        /// <paramref name="dispatched"/>=false ONLY when neither path is
+        /// available — in that case the caller skips repair entirely
+        /// without incrementing the attempts counter.
+        /// </summary>
+        private async Task<(EdogQaLlmClient.LlmClientResult result, bool dispatched)> TryCallEditorRepairAsync(
+            OrchestratorConfig config,
+            EdogQaLlmClient.ArchitectPlan plan,
+            EdogQaLlmClient.ZoneContext zoneCtx,
+            EdogQaLlmClient.EditorRepairContext repair,
+            CancellationToken ct)
+        {
+            if (config.EditorRepairOverride != null)
+            {
+                var r = await config.EditorRepairOverride(plan, zoneCtx, repair, ct).ConfigureAwait(false);
+                return (r, true);
+            }
+            if (config.Editor != null)
+            {
+                var r = await EdogQaLlmClient.EditorOnceAsync(_httpClient, config.Editor, plan, zoneCtx, repair, ct).ConfigureAwait(false);
+                return (r, true);
+            }
+            return (null, false);
+        }
+
+        /// <summary>
+        /// T1e: project the validator's quarantined records into the
+        /// Editor repair feedback shape. Reasons are preserved
+        /// (Code/Message/EvidenceId/FieldPath) so the model sees
+        /// structured diagnostic data, not prose instructions.
+        /// </summary>
+        private static List<EdogQaLlmClient.RepairFeedbackItem> BuildRepairItemsFromQuarantined(
+            List<EdogQaScenarioValidator.QuarantinedScenario> quarantined)
+        {
+            var items = new List<EdogQaLlmClient.RepairFeedbackItem>();
+            if (quarantined == null) return items;
+            foreach (var q in quarantined)
+            {
+                if (q == null) continue;
+                var reasons = new List<EdogQaLlmClient.RepairFeedbackReason>();
+                if (q.Reasons != null)
+                {
+                    foreach (var r in q.Reasons)
+                    {
+                        if (r == null) continue;
+                        reasons.Add(new EdogQaLlmClient.RepairFeedbackReason
+                        {
+                            Code = r.Code ?? string.Empty,
+                            Message = r.Message ?? string.Empty,
+                            EvidenceId = r.EvidenceId ?? string.Empty,
+                            FieldPath = r.FieldPath ?? string.Empty,
+                        });
+                    }
+                }
+                items.Add(new EdogQaLlmClient.RepairFeedbackItem
+                {
+                    ScenarioId = q.Scenario?.Id ?? string.Empty,
+                    Title = q.Scenario?.Title ?? string.Empty,
+                    Reasons = reasons,
+                });
+            }
+            return items;
+        }
+
         private static double ComputeCost(ZoneResult zr, PricingTable pricing)
         {
+            if (pricing == null) return 0;
             // Architect tokens were added to zr.InputTokens / OutputTokens /
-            // ReasoningTokens before editor tokens. We approximate by
-            // pricing all tokens at the average rate — but for accuracy,
-            // we track per-stage tokens separately. Since we already
-            // accumulated tokens in a single bag, we re-route per stage
-            // below by inspecting the zr's split. Simpler: this method is
-            // called twice (after architect, after editor) with deltas
-            // accumulated by the caller. To keep the contract simple, we
-            // expose a single roll-up: assume all architect tokens are
-            // priced by pricing.Architect and all editor tokens by
-            // pricing.Editor. The caller currently adds architect tokens
-            // first and editor tokens second, but we don't preserve the
-            // split on zr. We DO preserve it in the per-stage progress
-            // events, so cost-accuracy is tracked via stage events; the
-            // zone-level zr.CostUsd is the sum of both stages.
+            // ReasoningTokens by the Architect stage. The Editor stage
+            // accumulated its own tokens into the SAME cumulative bag.
+            // The repair pass (T1e) is split out into RepairInputTokens /
+            // RepairOutputTokens so it can be priced at Editor rates
+            // separately.
             //
-            // Because we don't split on zr, we expose a precise helper
-            // called from per-stage paths instead. Keep this method as a
-            // fallback that prices everything by architect rates — it is
-            // only used if a stage failed before we could split. The
-            // happy-path uses ComputeStageCost.
-            return ComputeStageCost(zr.InputTokens, zr.OutputTokens, zr.ReasoningTokens, pricing.Architect);
+            // Because we don't preserve the architect/editor token split
+            // on the cumulative bag itself, this single helper still
+            // approximates the non-repair portion at Architect rates.
+            // The PER-STAGE accuracy is captured in the per-stage progress
+            // events (which carry the live token counts at each step) —
+            // that is the canonical source for cost analysis. zr.CostUsd
+            // is the wire-stable rollup the budget gate uses.
+            double cost = ComputeStageCost(zr.InputTokens, zr.OutputTokens, zr.ReasoningTokens, pricing.Architect);
+            if (zr.RepairInputTokens > 0 || zr.RepairOutputTokens > 0)
+            {
+                cost += ComputeStageCost(zr.RepairInputTokens, zr.RepairOutputTokens, 0, pricing.Editor);
+            }
+            return cost;
         }
 
         private static double ComputeStageCost(int inputTokens, int outputTokens, int reasoningTokens, DeploymentPricing pricing)
@@ -998,6 +1342,37 @@ namespace Microsoft.LiveTable.Service.DevMode
             var costMicroUsd = (long)Math.Round(zr.CostUsd * 1_000_000.0);
             if (costMicroUsd < 0) costMicroUsd = 0;
             addAccumulate(costMicroUsd);
+            if (refAccumulate() >= maxBudgetMicroUsd)
+            {
+                tripBudget(CodeBudgetExceededCost, 1);
+            }
+        }
+
+        /// <summary>
+        /// T1e: book only the DELTA between the zone's current cumulative
+        /// <see cref="ZoneResult.CostUsd"/> and the running
+        /// <paramref name="bookedCostUsd"/> tally. This fixes a
+        /// pre-existing double-count: <see cref="AccumulateAndMaybeTrip"/>
+        /// adds the full <c>zr.CostUsd</c> on every call, so a zone that
+        /// crossed two stages (Architect + Editor) was double-billed
+        /// against the cost budget. The repair-aware orchestrator
+        /// flow always uses this helper; the legacy non-delta helper
+        /// remains for any caller that bookkeeps elsewhere.
+        /// </summary>
+        private static void AccumulateDeltaAndMaybeTrip(
+            ZoneResult zr,
+            ref double bookedCostUsd,
+            Func<long, long> addAccumulate,
+            Func<long> refAccumulate,
+            long maxBudgetMicroUsd,
+            Action<string, int> tripBudget)
+        {
+            var deltaUsd = zr.CostUsd - bookedCostUsd;
+            if (deltaUsd < 0) deltaUsd = 0;
+            var deltaMicroUsd = (long)Math.Round(deltaUsd * 1_000_000.0);
+            if (deltaMicroUsd < 0) deltaMicroUsd = 0;
+            bookedCostUsd = zr.CostUsd;
+            addAccumulate(deltaMicroUsd);
             if (refAccumulate() >= maxBudgetMicroUsd)
             {
                 tripBudget(CodeBudgetExceededCost, 1);

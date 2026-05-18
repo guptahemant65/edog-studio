@@ -28,7 +28,18 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AssemblyName>Microsoft.LiveTable.Service</AssemblyName>
     <RootNamespace>Microsoft.LiveTable.Service.DevMode</RootNamespace>
-    <NoWarn>$(NoWarn);CS1591;CS0162;CS0168;CS0219;CS8632;CS8618;CS8601;CS8602;CS8603;CS8604;CS8625</NoWarn>
+    <!--
+      CS0436 = "type defined in this assembly conflicts with the imported type X
+      from referenced assembly Y." This csbuild deliberately compiles every
+      DevMode source file in src/backend/DevMode/*.cs while ALSO referencing
+      $(FltBin)\Microsoft.LiveTable.Service.dll — and FLT bundles those same
+      DevMode files into that DLL during its own build. So every DevMode type
+      legitimately has both a source-level and a DLL-level definition; the
+      compiler correctly resolves "Using the type defined in {source}". This
+      warning is structural to the dual-input design of this gate, not a
+      regression. CS0436 stays suppressed here permanently.
+    -->
+    <NoWarn>$(NoWarn);CS0436;CS1591;CS0162;CS0168;CS0219;CS8632;CS8618;CS8601;CS8602;CS8603;CS8604;CS8625</NoWarn>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <SignAssembly>false</SignAssembly>
   </PropertyGroup>
