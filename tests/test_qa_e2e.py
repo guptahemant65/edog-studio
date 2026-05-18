@@ -657,11 +657,12 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     with baseline.open(encoding="utf-8") as fh:
         data = _json.load(fh)
     # Schema_version may be 1.0 (T1a scaffold pre-capture), 1.1 (T1c-c
-    # captured), 1.2 (T1f-b scored) or 1.3 (T1g re-calibrated against
-    # the matcher-tied verb / category disambiguation prompts). Pre-T1c-c
-    # statuses are tolerated to let a checkout-with-stale-baseline still
-    # pass this scaffold-level test.
-    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3"}, data
+    # captured), 1.2 (T1f-b scored), 1.3 (T1g re-calibrated against
+    # the matcher-tied verb / category disambiguation prompts), or 1.4
+    # (T1i scorer-side span expansion). Pre-T1c-c statuses are tolerated
+    # to let a checkout-with-stale-baseline still pass this scaffold-level
+    # test.
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4"}, data
     assert data.get("status") in (
         "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
         "DRY_RUN", "SCORED",
@@ -1662,8 +1663,8 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.3", (
-        f"expected schema_version=1.3 after T1g floor recalibration, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.4", (
+        f"expected schema_version=1.4 after T1i scorer-side span expansion, got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
     assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
@@ -2339,37 +2340,39 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t1g() -> None:
-    """T1g lifted the acceptance floors after a 148%-relative macro
-    recall lift (0.219 → 0.542) and 145%-relative precision lift
-    (0.250 → 0.613) from the matcher-tied verb rule + category
-    disambiguation + Architect coverage breadth prompt edits. Pin the
-    schema bump 1.2 → 1.3 and the new floor ceilings (each must stay
-    BELOW the new measured baseline so a regression after the next
-    capture surfaces — but ABOVE the old T1f-c floors so a revert to
-    the verb-monoculture/category-collapse prompts trips the gate).
+def test_qa_score_floors_calibrated_for_t1i() -> None:
+    """T1i lifted the acceptance floors again after a scorer-side
+    span-expansion lift (macro recall 0.542 → 0.583, +7.7% relative;
+    macro precision_highest 0.613 → 0.661, +7.8% relative). The lift
+    came entirely from hunk-bounded forward expansion of actual-side
+    grounding anchors (EdogQaLlmClient.cs is byte-identical to T1g
+    commit 0cf3903). Pin the schema bump 1.3 → 1.4 and the new floor
+    ceilings (each must stay BELOW the new measured baseline so a
+    regression after the next capture surfaces — and ABOVE the old
+    T1f-c floors so a revert to the verb-monoculture / category-collapse
+    prompts still trips the gate).
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.3", (
-        f"score_floors.json must be at schema_version 1.3 after T1g, "
+    assert floors.get("schema_version") == "1.4", (
+        f"score_floors.json must be at schema_version 1.4 after T1i, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
-    # T1g floors must stay <= measured baselines so a future LLM
+    # T1i floors must stay <= measured baselines so a future LLM
     # nondeterminism flap or prompt regression actually trips the gate.
-    assert absolute.get("corpus_recall_min") <= 0.542, (
-        f"corpus_recall_min must stay <= measured T1g 0.542; got {absolute.get('corpus_recall_min')!r}"
+    assert absolute.get("corpus_recall_min") <= 0.583, (
+        f"corpus_recall_min must stay <= measured T1i 0.583; got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") <= 0.542, (
-        f"p0_p1_recall_min must stay <= measured T1g 0.542; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") <= 0.583, (
+        f"p0_p1_recall_min must stay <= measured T1i 0.583; got {absolute.get('p0_p1_recall_min')!r}"
     )
     assert absolute.get("per_pr_recall_min") <= 0.500, (
-        f"per_pr_recall_min must stay <= measured T1g min 0.500; got {absolute.get('per_pr_recall_min')!r}"
+        f"per_pr_recall_min must stay <= measured T1i per-PR min 0.500; got {absolute.get('per_pr_recall_min')!r}"
     )
-    # T1g floors must stay STRICTLY ABOVE the old T1f-c values so a
+    # T1i floors must stay STRICTLY ABOVE the old T1f-c values so a
     # silent revert to the verb-monoculture / category-collapse prompts
     # (which produced macro recall 0.219 / per-PR min 0.125) trips the
     # gate. This is the prompt-regression detector.
@@ -2382,25 +2385,25 @@ def test_qa_score_floors_calibrated_for_t1g() -> None:
     )
     # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
     assert absolute.get("corpus_precision_min") == 0.0
-    # T1g precision floors lift above T1f-c (corpus 0.250 / per-PR 0.167)
-    # but stay below the new measured macro 0.613 / per-PR min 0.500.
-    assert 0.250 < absolute.get("corpus_precision_highest_stage_min") <= 0.613, (
+    # T1i precision floors lift above T1f-c (corpus 0.250 / per-PR 0.167)
+    # but stay below the new measured macro 0.661 / per-PR min 0.500.
+    assert 0.250 < absolute.get("corpus_precision_highest_stage_min") <= 0.661, (
         "corpus_precision_highest_stage_min must lift above T1f-c 0.250 "
-        "and stay <= measured T1g macro 0.613; "
+        "and stay <= measured T1i macro 0.661; "
         f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
     )
     assert 0.167 < absolute.get("per_pr_precision_highest_stage_min") <= 0.500, (
         "per_pr_precision_highest_stage_min must lift above T1f-c 0.167 "
-        "and stay <= measured T1g per-PR min 0.500; "
+        "and stay <= measured T1i per-PR min 0.500; "
         f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"
 
 
-def test_qa_score_report_json_present_at_t1fc() -> None:
-    """T1f-c bumped the score_report.json schema 1.0 → 1.1 by adding
-    `precision_highest_stage` + `f1_highest_stage` to per-PR + macro +
-    micro blocks. Pin the new shape so downstream tooling (CI gate,
+def test_qa_score_report_json_present_at_t1i() -> None:
+    """T1i bumped the score_report.json schema 1.1 → 1.2 by adding the
+    top-level `span_expansion` block (recording forward_lines / boundary /
+    tiebreaker). Pin the new shape so downstream tooling (CI gate,
     dashboard) can rely on the fields existing.
     """
     import json
@@ -2410,12 +2413,24 @@ def test_qa_score_report_json_present_at_t1fc() -> None:
         "--output tests/qa-eval/score_report.json` after a capture pass."
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report.get("schema_version") == "1.1", (
-        f"expected score_report schema_version=1.1 after T1f-c, "
+    assert report.get("schema_version") == "1.2", (
+        f"expected score_report schema_version=1.2 after T1i, "
         f"got {report.get('schema_version')!r}"
     )
     assert report.get("verdict") in {"PASS", "FAIL"}
     assert report.get("enforcement") == "report_only"
+    # T1i span_expansion metadata is mandatory at schema 1.2 — pin its
+    # presence + that the default forward_lines matches the source
+    # constant SPAN_EXPANSION_DEFAULT_N=5 so a silent disable surfaces.
+    span = report.get("span_expansion") or {}
+    assert isinstance(span, dict) and span, (
+        "score_report.json must carry a `span_expansion` block at schema 1.2"
+    )
+    assert span.get("forward_lines") == 5, (
+        f"span_expansion.forward_lines must default to 5; got {span.get('forward_lines')!r}"
+    )
+    assert span.get("boundary") == "hunk_end"
+    assert span.get("tiebreaker") == "original_overlap_first"
     aggregate = report.get("aggregate") or {}
     macro = aggregate.get("macro") or {}
     # T1f-b headline numbers still required.
@@ -2474,3 +2489,257 @@ def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
         assert 0.0 <= float(scores[k]) <= 1.0, (
             f"scores.{k} must be in [0,1], got {scores[k]!r}"
         )
+
+
+# ── F27 P9 T1i — scorer-side span expansion + 2-tier overlap tiebreaker ──
+
+
+def test_qa_score_eval_declares_span_expansion_default_5() -> None:
+    """T1i defaults the forward span expansion to N=5 — selected from
+    the shadow-eval N-sweep as the largest value that lifts recall
+    (0.542 → 0.583) on the 3-PR corpus WITHOUT triggering greedy-
+    reallocation pair theft. N=7 starts stealing PR-977882 sk-3 from
+    s09 (only fixable by global bipartite matching, deferred to T1j).
+    Pin the constant in the source so a silent bump past the theft
+    threshold can't ship.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    assert "SPAN_EXPANSION_DEFAULT_N = 5" in src, (
+        "score_eval.py must declare SPAN_EXPANSION_DEFAULT_N = 5 (T1i shadow-eval knee). "
+        "Bumping past 5 without shipping bipartite matching introduces silent pair theft."
+    )
+
+
+def test_qa_score_eval_declares_hunk_parser_and_expander() -> None:
+    """T1i adds three deterministic post-processor primitives that the
+    scorer applies at load time: a unified-diff hunk-header regex, a
+    hunk loader, and a per-grounding forward-expansion helper. Pin
+    their names so the orchestrator (T1j bipartite reducer) and any
+    future tooling can import them by stable symbol.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    for symbol in ("_HUNK_HEADER_RE", "_load_diff_hunks", "_expand_grounding"):
+        assert symbol in src, (
+            f"score_eval.py must declare {symbol} (T1i hunk-bounded expansion primitive)"
+        )
+
+
+def test_qa_score_eval_declares_two_tier_overlap_machinery() -> None:
+    """T1i prevents expansion-induced pair theft (an expansion-only
+    overlap stealing a paired actual from a baseline-overlap pair)
+    via a 2-tier overlap tiebreaker on (original_overlap, expanded_overlap)
+    tuples. Original-line matches always outrank expansion-only matches.
+    Pin the field + method + tuple-helper names so the invariant
+    (preserve N=0 baseline pairs at all N ≤ knee) is locked in source.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    for symbol in (
+        "original_lines",
+        "overlap_tiered",
+        "_max_overlap_tiered",
+        "original_overlap_count",
+    ):
+        assert symbol in src, (
+            f"score_eval.py must declare {symbol} (T1i 2-tier overlap tiebreaker primitive)"
+        )
+
+
+def test_qa_score_eval_cli_exposes_span_expansion_flag() -> None:
+    """T1i wires a `--span-expansion N` CLI flag through `main` →
+    `build_report` → `load_actual`. Pin the flag + the parameter so a
+    silent default change (e.g. 5 → 0) can't slip past code review.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    assert "--span-expansion" in src, (
+        "score_eval.py main() must expose --span-expansion CLI flag"
+    )
+    assert "span_expansion_n" in src, (
+        "build_report / load_actual must thread span_expansion_n parameter"
+    )
+    # Pin the threading: build_report MUST accept and load_actual MUST
+    # be called with the same name to keep override behaviour honest.
+    assert "build_report(pr_dirs, span_expansion_n=" in src or "span_expansion_n=span_expansion_n" in src, (
+        "main → build_report → load_actual threading must use the span_expansion_n keyword"
+    )
+
+
+def test_qa_score_report_span_expansion_block_matches_default() -> None:
+    """The immutable score_report.json snapshot is regenerated after every
+    capture; if the operator runs the scorer with a non-default span
+    expansion (debug / experiment) and forgets to revert before
+    committing, the regression detector silently moves. Pin the
+    forward_lines in the checked-in snapshot to the source default.
+    """
+    import json
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    # Extract the literal default from source (single source of truth).
+    import re as _re
+    match = _re.search(r"SPAN_EXPANSION_DEFAULT_N\s*=\s*(\d+)", src)
+    assert match, "could not find SPAN_EXPANSION_DEFAULT_N literal in score_eval.py"
+    default_n = int(match.group(1))
+    report = json.loads(
+        (REPO_ROOT / "tests" / "qa-eval" / "score_report.json").read_text(encoding="utf-8")
+    )
+    span = report.get("span_expansion") or {}
+    assert span.get("forward_lines") == default_n, (
+        f"score_report.json span_expansion.forward_lines ({span.get('forward_lines')!r}) "
+        f"must match source default SPAN_EXPANSION_DEFAULT_N ({default_n}). "
+        "Regenerate via `python tests/qa-eval/score_eval.py --output tests/qa-eval/score_report.json`."
+    )
+
+
+def test_qa_t1i_load_diff_hunks_parses_unified_diff() -> None:
+    """Behavioural test for `_load_diff_hunks`: must parse a canonical
+    unified-diff fixture, key by lowercased right-side path, skip
+    /dev/null adds, skip zero-length hunks, and default new_len to 1
+    when omitted. Returned ranges are ``(new_start, new_len)`` tuples
+    in unified-diff convention (NOT (start, end)).
+    """
+    import importlib
+    import sys
+    qa_eval = REPO_ROOT / "tests" / "qa-eval"
+    sys.path.insert(0, str(qa_eval))
+    try:
+        score_eval = importlib.import_module("score_eval")
+        # Use one of the real corpus diffs as the canonical fixture.
+        pr_dir = qa_eval / "ground-truth" / "PR-975848"
+        hunks = score_eval._load_diff_hunks(pr_dir)
+        assert isinstance(hunks, dict) and hunks, "must return a non-empty dict for a real corpus PR"
+        # All keys are lowercased and at least one known FLT path is present.
+        for k in hunks:
+            assert k == k.lower(), f"hunk path keys must be lowercased; got {k!r}"
+        # Each hunk value is a list of (new_start, new_len) tuples with
+        # both > 0 (zero-length hunks must have been skipped).
+        for path, ranges in hunks.items():
+            assert isinstance(ranges, list) and ranges, f"path {path!r} has empty hunk list"
+            for r in ranges:
+                assert isinstance(r, tuple) and len(r) == 2
+                start, length = r
+                assert isinstance(start, int) and isinstance(length, int)
+                assert start >= 1, f"hunk start must be 1-based: {r}"
+                assert length >= 1, f"zero-length hunk leaked through filter: {r}"
+    finally:
+        sys.path.remove(str(qa_eval))
+
+
+def test_qa_t1i_expand_grounding_is_hunk_bounded_and_forward_only() -> None:
+    """Behavioural test for `_expand_grounding`: an actual-side
+    grounding line is expanded forward by up to N additional lines,
+    capped at the hunk end, never crossing into a sibling hunk.
+    Anchor + N → expanded set has up to N+1 elements (anchor included).
+    """
+    import importlib
+    import sys
+    qa_eval = REPO_ROOT / "tests" / "qa-eval"
+    sys.path.insert(0, str(qa_eval))
+    try:
+        score_eval = importlib.import_module("score_eval")
+        # Synthetic hunks (new_start, new_len) convention:
+        #   x.cs hunk A starts at line 10, length 6  → covers [10..15]
+        #   x.cs hunk B starts at line 100, length 11 → covers [100..110]
+        hunks = {"x.cs": [(10, 6), (100, 11)]}
+        # Anchor at line 11 with N=5 → expansion bounded at hunk end 15
+        # → expanded set is {11..15} (5 lines including anchor).
+        g = [score_eval.ChangedLineSet(path="x.cs", side="right", lines=frozenset({11}))]
+        expanded = score_eval._expand_grounding(g, hunks, n=5)
+        assert len(expanded) == 1
+        exp_lines = expanded[0].lines
+        assert 11 in exp_lines, "anchor must survive expansion"
+        assert 15 in exp_lines, "expansion must reach hunk end"
+        assert 16 not in exp_lines, "expansion must NOT cross hunk boundary"
+        assert 100 not in exp_lines, "expansion must NOT bleed into sibling hunk"
+        # original_lines preserved for the 2-tier tiebreaker.
+        assert expanded[0].original_lines == frozenset({11})
+        # left-side passthrough — no semantic forward direction in the
+        # new file.
+        g_left = [score_eval.ChangedLineSet(path="x.cs", side="left", lines=frozenset({11}))]
+        ex_left = score_eval._expand_grounding(g_left, hunks, n=5)
+        assert ex_left[0].lines == frozenset({11}), "side='left' must pass through unchanged"
+        # N=0 → identity transform (preserves the disable knob).
+        ex_zero = score_eval._expand_grounding(g, hunks, n=0)
+        assert ex_zero[0].lines == frozenset({11})
+    finally:
+        sys.path.remove(str(qa_eval))
+
+
+def test_qa_t1i_overlap_tiered_prefers_original_match() -> None:
+    """The 2-tier tiebreaker is the property that makes T1i safe at
+    N ≤ knee: any original-line overlap (even just 1 line) outranks
+    any expansion-only overlap (even hundreds of lines). Tuple-compare
+    is critical to preserving baseline pairs.
+    """
+    import importlib
+    import sys
+    qa_eval = REPO_ROOT / "tests" / "qa-eval"
+    sys.path.insert(0, str(qa_eval))
+    try:
+        score_eval = importlib.import_module("score_eval")
+        # Two candidates against an expected set:
+        # A: 1 original-line match, 3 total lines after expansion
+        # B: 0 original-line matches, 8 total lines after expansion
+        # A must win (1, 3) > (0, 8) under tuple compare.
+        # NOTE: empty `original_lines` is back-compat-defaulted to `lines`
+        # by ChangedLineSet.__post_init__, so to genuinely exercise the
+        # tier-1=0 case, B's original_lines must be a non-empty set that
+        # is disjoint from the expected's original_lines.
+        expected = score_eval.ChangedLineSet(
+            path="x.cs", side="right",
+            lines=frozenset({10, 100, 101, 102}),
+            original_lines=frozenset({10, 100, 101, 102}),
+        )
+        actual_a = score_eval.ChangedLineSet(
+            path="x.cs", side="right",
+            lines=frozenset({10, 11, 12}),
+            original_lines=frozenset({10}),
+        )
+        actual_b = score_eval.ChangedLineSet(
+            path="x.cs", side="right",
+            lines=frozenset({100, 101, 102, 103, 104, 105, 106, 107}),
+            original_lines=frozenset({999}),  # disjoint from expected.original_lines
+        )
+        ta = expected.overlap_tiered(actual_a)
+        tb = expected.overlap_tiered(actual_b)
+        assert ta == (1, 1), f"unexpected tier for actual_a: {ta!r}"
+        assert tb == (0, 3), f"unexpected tier for actual_b: {tb!r}"
+        assert ta > tb, "original-line match must outrank expansion-only match"
+        # Path mismatch → (0, 0).
+        other_path = score_eval.ChangedLineSet(
+            path="y.cs", side="right",
+            lines=frozenset({10}),
+            original_lines=frozenset({10}),
+        )
+        assert expected.overlap_tiered(other_path) == (0, 0)
+        # Side mismatch → (0, 0).
+        other_side = score_eval.ChangedLineSet(
+            path="x.cs", side="left",
+            lines=frozenset({10}),
+            original_lines=frozenset({10}),
+        )
+        assert expected.overlap_tiered(other_side) == (0, 0)
+    finally:
+        sys.path.remove(str(qa_eval))
+
+
+def test_qa_t1i_baseline_records_span_expansion_provenance() -> None:
+    """baseline.json schema 1.4 must record the scorer pipeline
+    component + span_expansion_n in the `scores` block. This is the
+    audit trail proving the lift came from scorer-side normalization
+    (not a covert LLM prompt revision).
+    """
+    import json
+    baseline = json.loads(
+        (REPO_ROOT / "tests" / "qa-eval" / "baseline.json").read_text(encoding="utf-8")
+    )
+    components = baseline.get("pipeline_components") or {}
+    assert "scorer" in components, (
+        "baseline.json pipeline_components must record the scorer at T1i"
+    )
+    assert "span_expansion" in components["scorer"].lower() or "T1i" in components["scorer"], (
+        f"scorer provenance must mention T1i / span_expansion; got {components['scorer']!r}"
+    )
+    scores = baseline.get("scores") or {}
+    assert scores.get("span_expansion_n") == 5, (
+        f"baseline scores.span_expansion_n must be 5 at T1i; got {scores.get('span_expansion_n')!r}"
+    )
+
+

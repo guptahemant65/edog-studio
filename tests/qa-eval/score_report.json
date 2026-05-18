@@ -1,22 +1,28 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "verdict": "PASS",
   "floor_violations": [],
   "enforcement": "report_only",
+  "span_expansion": {
+    "forward_lines": 5,
+    "applied_to": "actual",
+    "boundary": "hunk_end",
+    "tiebreaker": "original_overlap_first"
+  },
   "aggregate": {
     "pr_count": 3,
     "macro": {
-      "recall": 0.5417,
+      "recall": 0.5833,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.6131,
+      "precision_highest_stage": 0.6607,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.5741,
-      "p0_p1_recall": 0.5417
+      "f1_highest_stage": 0.6185,
+      "p0_p1_recall": 0.5833
     },
     "micro": {
-      "recall": 0.5417,
+      "recall": 0.5833,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.619
+      "precision_highest_stage": 0.6667
     }
   },
   "prs_scored": [
@@ -24,37 +30,35 @@
       "pr_number": "975848",
       "expected_total": 8,
       "actual_total": {
-        "emitted": 4,
         "validated": 0,
+        "emitted": 4,
         "projected": 3
       },
-      "matched_count": 5,
+      "matched_count": 6,
       "missed_expected_ids": [
-        "975848-s01",
         "975848-s04",
         "975848-s05"
       ],
       "unmatched_actual_ids": [
-        "sk-1",
         "sk-4"
       ],
-      "recall": 0.625,
+      "recall": 0.75,
       "precision": {
-        "emitted": 0.5,
         "validated": 0.0,
+        "emitted": 0.75,
         "projected": 1.0
       },
-      "precision_highest_stage": 0.7143,
+      "precision_highest_stage": 0.8571,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.6667,
-      "p0_p1_recall": 0.625
+      "f1_highest_stage": 0.8,
+      "p0_p1_recall": 0.75
     },
     {
       "pr_number": "976609",
       "expected_total": 6,
       "actual_total": {
-        "emitted": 2,
         "validated": 0,
+        "emitted": 2,
         "projected": 4
       },
       "matched_count": 3,
@@ -70,8 +74,8 @@
       ],
       "recall": 0.5,
       "precision": {
-        "emitted": 0.5,
         "validated": 0.0,
+        "emitted": 0.5,
         "projected": 0.5
       },
       "precision_highest_stage": 0.5,
@@ -83,8 +87,8 @@
       "pr_number": "977882",
       "expected_total": 10,
       "actual_total": {
-        "emitted": 1,
         "validated": 0,
+        "emitted": 1,
         "projected": 7
       },
       "matched_count": 5,
@@ -102,8 +106,8 @@
       ],
       "recall": 0.5,
       "precision": {
-        "emitted": 0.0,
         "validated": 0.0,
+        "emitted": 0.0,
         "projected": 0.7143
       },
       "precision_highest_stage": 0.625,

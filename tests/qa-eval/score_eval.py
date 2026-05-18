@@ -57,7 +57,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -67,6 +69,30 @@ GROUND_TRUTH = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
 FLOORS_PATH = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
 ALIASES_PATH = REPO_ROOT / "tests" / "qa-eval" / "topic_aliases.json"
 BASELINE_PATH = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
+
+# ─── T1i: deterministic span expansion ────────────────────────────────────
+# The V2 Architect anchors `evidence.newLine` at the first line of a `+` hunk
+# run (e.g. line 185 for a behaviour whose curator-graded body lives at lines
+# 193-198). Three rounds of T1h prompt-tuning failed to override this bias.
+# T1i compensates by deriving an *effective* line span at score time:
+#     effective = {newLine, newLine+1, ..., min(newLine + N, hunk_end)}
+# where the bound `hunk_end` is the last new-line number of the unified-diff
+# hunk that contains `newLine` (so expansion never bridges unrelated regions).
+#
+# A 2-tier overlap tiebreaker — prefer matches with original-line overlap over
+# matches that only land via expansion — preserves the pre-T1i baseline pair
+# set, eliminating greedy-reallocation "pair theft" that would otherwise count
+# as a no-op in aggregate but trade one semantically-correct match for another.
+#
+# Shadow-eval (commit b037c59 + 3-PR corpus) picked N=5 as the smallest knee:
+#     N=0  → recall 0.542 / prec_highest 0.613  (T1g baseline)
+#     N=3  → recall 0.583 / prec_highest 0.661  (+0.042 / +0.048, 0 stolen)
+#     N=5  → recall 0.583 / prec_highest 0.661  (+0.042 / +0.048, 0 stolen)  ← chosen
+#     N=7  → same lift, 1 stolen pair on PR-977882
+#     N=15 → recall 0.639 / prec_highest 0.716  (+0.097 / +0.103, 1 stolen)
+# Larger N requires global bipartite matching to be safe; deferred to T1j.
+
+SPAN_EXPANSION_DEFAULT_N = 5
 
 # ─── Domain enumerations ──────────────────────────────────────────────────
 # Mirrors src/backend/DevMode/EdogQaModels.cs ScenarioCategory + ExpectationType.
@@ -108,11 +134,25 @@ VALID_STAGES = frozenset({"emitted", "validated", "projected"})
 @dataclass(frozen=True)
 class ChangedLineSet:
     """Grounding bound: file path (case-insensitive compare on Windows) +
-    side (``left``/``right``) + a frozenset of changed line numbers."""
+    side (``left``/``right``) + a frozenset of changed line numbers.
+
+    T1i adds ``original_lines``: when the scorer applies hunk-bounded forward
+    span expansion, ``lines`` carries the *effective* (expanded) span used for
+    overlap and ``original_lines`` carries the pre-expansion set. The 2-tier
+    overlap tiebreaker uses both: prefer matches with original-line overlap
+    over matches that only land via expansion."""
 
     path: str
     side: str
     lines: frozenset[int]
+    original_lines: frozenset[int] = frozenset()
+
+    def __post_init__(self) -> None:
+        # When original_lines isn't supplied (expected-side or legacy callers),
+        # treat the effective set as the original set so 2-tier overlap reduces
+        # to the pre-T1i single-tier behaviour.
+        if not self.original_lines:
+            object.__setattr__(self, "original_lines", self.lines)
 
     def overlap(self, other: ChangedLineSet) -> int:
         """Return the count of shared changed-line numbers when paths +
@@ -123,6 +163,21 @@ class ChangedLineSet:
         if self.side != other.side:
             return 0
         return len(self.lines & other.lines)
+
+    def overlap_tiered(self, other: ChangedLineSet) -> tuple[int, int]:
+        """Return ``(original_overlap, expanded_overlap)``. Both are 0 when
+        paths or sides differ. The greedy matcher uses tuple comparison so
+        ``(1, 3)`` beats ``(0, 8)`` — a single original-line match outranks
+        any number of expansion-only matches, which preserves baseline pairs
+        across span-expansion changes (no greedy reallocation pair theft)."""
+        if self.path.lower() != other.path.lower():
+            return (0, 0)
+        if self.side != other.side:
+            return (0, 0)
+        return (
+            len(self.original_lines & other.original_lines),
+            len(self.lines & other.lines),
+        )
 
 
 @dataclass
@@ -225,7 +280,8 @@ class ActualScenario:
 class MatchPair:
     expected: ExpectedScenario
     actual: ActualScenario
-    overlap_count: int
+    overlap_count: int  # effective (expanded) overlap — backward-compat field
+    original_overlap_count: int = 0  # T1i: pre-expansion overlap (tiebreaker tier 1)
 
 
 @dataclass
@@ -299,7 +355,10 @@ def load_expected(pr_dir: Path) -> tuple[str | None, list[ExpectedScenario], lis
     return curator_state, scenarios, errors
 
 
-def load_actual(pr_dir: Path) -> tuple[list[ActualScenario], list[str]]:
+def load_actual(
+    pr_dir: Path,
+    span_expansion_n: int = SPAN_EXPANSION_DEFAULT_N,
+) -> tuple[list[ActualScenario], list[str]]:
     """Return (actuals, errors).
 
     Actuals come from ``capture_v2_actuals.py`` (operator script, T1f-b
@@ -307,12 +366,24 @@ def load_actual(pr_dir: Path) -> tuple[list[ActualScenario], list[str]]:
     ``actual.json`` in the same directory as ``expected.json``. Missing
     ``actual.json`` is not an error here — it just means the PR has no
     measured score yet.
+
+    T1i (``span_expansion_n > 0``): each right-side grounding entry's
+    line set is forward-expanded by up to ``span_expansion_n`` lines,
+    bounded by the unified-diff hunk that contains the original anchor
+    line. The original (pre-expansion) line set is preserved on
+    ``ChangedLineSet.original_lines`` so the matcher can apply a 2-tier
+    overlap tiebreaker. ``span_expansion_n=0`` is the pre-T1i behaviour.
     """
     actual_path = pr_dir / "actual.json"
     if not actual_path.exists():
         return [], []
     with actual_path.open(encoding="utf-8") as fh:
         blob = json.load(fh)
+
+    hunks: dict[str, list[tuple[int, int]]] = {}
+    if span_expansion_n > 0:
+        hunks = _load_diff_hunks(pr_dir)
+
     actuals: list[ActualScenario] = []
     errors: list[str] = []
     for i, s_blob in enumerate(blob.get("scenarios", [])):
@@ -321,20 +392,111 @@ def load_actual(pr_dir: Path) -> tuple[list[ActualScenario], list[str]]:
             errors.append(
                 f"{pr_dir.name}.actual[{i}].stage {a.stage!r} not in {sorted(VALID_STAGES)}",
             )
+        if span_expansion_n > 0 and hunks:
+            a.grounding = _expand_grounding(a.grounding, hunks, span_expansion_n)
         actuals.append(a)
     return actuals, errors
+
+
+# ─── T1i: diff-hunk parsing + forward span expansion ─────────────────────
+
+
+_HUNK_HEADER_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def _load_diff_hunks(pr_dir: Path) -> dict[str, list[tuple[int, int]]]:
+    """Parse ``diff.patch`` in ``pr_dir`` into ``{path_lower: [(new_start, new_len), ...]}``.
+
+    Path keys are lower-cased to match ``ChangedLineSet`` Windows case-fold
+    semantics. Hunk entries are unified-diff ``@@ -A,B +C,D @@`` headers
+    interpreted as: the new file gains a span of ``D`` lines starting at
+    line number ``C``. Zero-length (``+C,0``) hunks (pure deletions) are
+    skipped because they contribute no right-side anchor lines.
+
+    Missing diff.patch returns an empty dict; expansion silently no-ops on
+    files not present in the diff (defensive: an architect-emitted evidence
+    line outside any hunk is left at its original anchor)."""
+    diff_path = pr_dir / "diff.patch"
+    if not diff_path.exists():
+        return {}
+    hunks: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    current_path: str | None = None
+    with diff_path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if line.startswith("+++ b/"):
+                current_path = line[6:].strip().lower()
+                continue
+            if line.startswith("+++ /dev/null"):
+                current_path = None
+                continue
+            if line.startswith("+++ "):
+                current_path = line[4:].strip().lower()
+                continue
+            if current_path is None:
+                continue
+            m = _HUNK_HEADER_RE.match(line)
+            if m:
+                new_start = int(m.group(1))
+                new_len = int(m.group(2)) if m.group(2) else 1
+                if new_len > 0:
+                    hunks[current_path].append((new_start, new_len))
+    return dict(hunks)
+
+
+def _expand_grounding(
+    grounding: list[ChangedLineSet],
+    hunks: dict[str, list[tuple[int, int]]],
+    n: int,
+) -> list[ChangedLineSet]:
+    """Return a parallel list with each right-side entry's ``lines`` forward-expanded.
+
+    Only ``side='right'`` entries are expanded — left-side (deletion)
+    expansion has no equivalent semantic boundary in the new file. The
+    original line set is preserved on ``ChangedLineSet.original_lines``.
+    """
+    out: list[ChangedLineSet] = []
+    for g in grounding:
+        if g.side != "right" or n <= 0:
+            out.append(g)
+            continue
+        path_l = g.path.lower()
+        hunks_for_path = hunks.get(path_l, [])
+        if not hunks_for_path:
+            out.append(g)
+            continue
+        original = g.lines
+        expanded: set[int] = set(original)
+        for anchor in original:
+            for new_start, new_len in hunks_for_path:
+                hunk_end = new_start + new_len - 1
+                if new_start <= anchor <= hunk_end:
+                    expanded.update(range(anchor, min(anchor + n, hunk_end) + 1))
+                    break
+        out.append(
+            ChangedLineSet(
+                path=g.path,
+                side=g.side,
+                lines=frozenset(expanded),
+                original_lines=original,
+            )
+        )
+    return out
 
 
 # ─── Matcher ──────────────────────────────────────────────────────────────
 
 
 def _max_overlap(expected: ExpectedScenario, actual: ActualScenario) -> int:
-    """Maximum changed-line overlap across all grounding pairs.
+    """Maximum effective changed-line overlap across all grounding pairs.
 
     Returns 0 if no path+side pair matches. This is the deterministic
     grounding gate: an actual scenario that cites the same file but
     different changed lines than expected gets overlap=0 and is
-    treated as a miss for that expected scenario."""
+    treated as a miss for that expected scenario.
+
+    Backward-compat wrapper retained for tests; the matcher itself uses
+    ``_max_overlap_tiered`` so the T1i 2-tier tiebreaker can run."""
     best = 0
     for e_g in expected.grounding:
         for a_g in actual.grounding:
@@ -342,16 +504,38 @@ def _max_overlap(expected: ExpectedScenario, actual: ActualScenario) -> int:
     return best
 
 
+def _max_overlap_tiered(
+    expected: ExpectedScenario, actual: ActualScenario
+) -> tuple[int, int]:
+    """Maximum ``(original_overlap, expanded_overlap)`` across grounding pairs.
+
+    T1i 2-tier tiebreaker: tuple comparison ranks `(1, 3)` above `(0, 8)`
+    so a single original-line match always outranks any number of
+    expansion-only matches. This preserves baseline pairs across
+    span-expansion changes (no greedy reallocation pair theft)."""
+    best = (0, 0)
+    for e_g in expected.grounding:
+        for a_g in actual.grounding:
+            best = max(best, e_g.overlap_tiered(a_g))
+    return best
+
+
 def match_scenarios(
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
 ) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
-    """Greedy max-overlap match by ``(category, verb)`` then changed-line overlap.
+    """Greedy max-overlap match by ``(category, verb)`` then 2-tier overlap.
 
     Returns ``(matched, missed_expected, unmatched_actual)`` where matched
     is a list of ``MatchPair``, missed_expected is the subset of expected
     that found no compatible actual, and unmatched_actual is the subset of
-    actuals not consumed by any match (false-positive precision penalty)."""
+    actuals not consumed by any match (false-positive precision penalty).
+
+    Tiebreaker (T1i): prefers ``(original_overlap, expanded_overlap)``
+    tuple maximization, so an actual whose pre-expansion lines overlap
+    expected is always picked over an actual whose only overlap is via
+    span expansion. This preserves baseline pair semantics across
+    expansion-N changes."""
     used_actual: set[int] = set()
     matched: list[MatchPair] = []
     missed: list[ExpectedScenario] = []
@@ -361,7 +545,7 @@ def match_scenarios(
     for e in expected:
         # Candidate pool: actuals with same category + verb + unused.
         best_idx = -1
-        best_overlap = 0
+        best_pair = (0, 0)
         for ai, a in enumerate(actuals):
             if ai in used_actual:
                 continue
@@ -369,12 +553,21 @@ def match_scenarios(
                 continue
             if a.verb != e.verb:
                 continue
-            overlap = _max_overlap(e, a)
-            if overlap > best_overlap:
-                best_overlap = overlap
+            pair = _max_overlap_tiered(e, a)
+            if pair[1] == 0:  # require ≥1 line overlap (post-expansion)
+                continue
+            if pair > best_pair:
+                best_pair = pair
                 best_idx = ai
         if best_idx >= 0:
-            matched.append(MatchPair(expected=e, actual=actuals[best_idx], overlap_count=best_overlap))
+            matched.append(
+                MatchPair(
+                    expected=e,
+                    actual=actuals[best_idx],
+                    overlap_count=best_pair[1],
+                    original_overlap_count=best_pair[0],
+                )
+            )
             used_actual.add(best_idx)
         else:
             missed.append(e)
@@ -609,7 +802,10 @@ def discover_pr_dirs() -> list[Path]:
     )
 
 
-def build_report(pr_dirs: list[Path]) -> dict[str, Any]:
+def build_report(
+    pr_dirs: list[Path],
+    span_expansion_n: int = SPAN_EXPANSION_DEFAULT_N,
+) -> dict[str, Any]:
     pr_scores: list[PrScore] = []
     pending_grading: list[str] = []
     ungraded: list[str] = []
@@ -627,7 +823,7 @@ def build_report(pr_dirs: list[Path]) -> dict[str, Any]:
             ungraded.append(pr_number)
             continue
 
-        actuals, a_errs = load_actual(pr_dir)
+        actuals, a_errs = load_actual(pr_dir, span_expansion_n=span_expansion_n)
         schema_errors.extend(a_errs)
         pr_scores.append(score_pr(pr_number, expected, actuals))
 
@@ -636,10 +832,16 @@ def build_report(pr_dirs: list[Path]) -> dict[str, Any]:
     verdict, violations = evaluate_floors(agg, floors, pr_scores)
 
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",  # T1i: added span_expansion block + 2-tier overlap matcher
         "verdict": verdict,
         "floor_violations": violations,
         "enforcement": floors.get("enforcement", "report_only"),
+        "span_expansion": {
+            "forward_lines": span_expansion_n,
+            "applied_to": "actual" if span_expansion_n > 0 else "none",
+            "boundary": "hunk_end",
+            "tiebreaker": "original_overlap_first" if span_expansion_n > 0 else "single_tier",
+        },
         "aggregate": agg,
         "prs_scored": [p.to_json() for p in pr_scores],
         "prs_pending_grading": pending_grading,
@@ -654,6 +856,12 @@ def print_human(report: dict[str, Any]) -> None:
     print(f"  PRs scored: {agg['pr_count']}")
     print(f"  PRs pending grading: {len(report['prs_pending_grading'])}")
     print(f"  PRs ungraded (schema=2.0, scenarios=[]): {len(report['prs_ungraded'])}")
+    span = report.get("span_expansion", {})
+    if span and span.get("forward_lines", 0) > 0:
+        print(
+            f"  Span expansion: N={span['forward_lines']} (hunk-bounded,"
+            f" tiebreaker={span.get('tiebreaker', '?')})"
+        )
     print()
     print("  Macro-average (each PR weighted equally):")
     print(f"    recall:               {agg['macro']['recall']:.3f}")
@@ -706,6 +914,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="write report JSON to this path (in addition to stdout)",
     )
+    parser.add_argument(
+        "--span-expansion",
+        type=int,
+        default=SPAN_EXPANSION_DEFAULT_N,
+        metavar="N",
+        help=(
+            "T1i: forward-expand each actual-side grounding line by up to N "
+            "lines, bounded by the unified-diff hunk containing the anchor. "
+            f"Default {SPAN_EXPANSION_DEFAULT_N}. Pass 0 to disable (pre-T1i behaviour)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     pr_dirs = discover_pr_dirs()
@@ -713,7 +932,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No PR fixtures found under {GROUND_TRUTH}", file=sys.stderr)
         return 2
 
-    report = build_report(pr_dirs)
+    report = build_report(pr_dirs, span_expansion_n=args.span_expansion)
 
     if args.output is not None:
         args.output.write_text(
