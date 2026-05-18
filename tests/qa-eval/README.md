@@ -20,12 +20,13 @@ tests/qa-eval/
 │   └── ...
 ├── adversarial/               # T1d injection corpus (separate scoring path)
 ├── score_eval.py              # T1f-a: deterministic gold-corpus scorer
-├── score_floors.json          # T1f-a: absolute + regression floors (enforcement: report_only)
+├── score_floors.json          # v1.1 — calibrated below T1f-b measured baseline (enforcement: report_only)
+├── score_report.json          # T1f-b: immutable scored snapshot (verdict + macro/micro aggregates)
 ├── topic_aliases.json         # T1f-a: future canonical-behaviour-key taxonomy (empty scaffold)
-├── capture_v2_actuals.py      # T1f-b operator script (spends real money on AOAI)
+├── capture_v2_actuals.py      # T1f-b operator script — invokes harness `--write-actual` per fixture
 ├── capture_baseline.py        # T1c-c operator script (used for current baseline.json)
 ├── run_eval.py                # legacy corpus loader (no scoring, sibling of score_eval.py)
-└── baseline.json              # v1.1 — V2 pipeline aggregates from T1c-c; recall/precision NULL until T1f-b
+└── baseline.json              # v1.2 — V2 pipeline aggregates + T1f-b recall/precision + scores block
 ```
 
 ## Expected.json schema versions
@@ -122,10 +123,13 @@ baseline is recorded.
   no recall/precision).
 - **T1d (✓):** adversarial corpus.
 - **T1e (✓):** repair loop.
-- **T1f-a (this slice):** deterministic gold-corpus scorer +
+- **T1f-a (✓):** deterministic gold-corpus scorer +
   hand-graded `expected.json` v2.0 across all 3 PRs.
-- **T1f-b (next):** `capture_v2_actuals.py` operator run produces
-  per-PR `actual.json`; baseline.json gains real recall/precision.
+- **T1f-b (✓):** `capture_v2_actuals.py` operator pass produced
+  per-PR `actual.json` (highest-stage tagging); baseline.json bumped to
+  v1.2 with real recall + precision + `scores` block; score_floors.json
+  calibrated to v1.1 below measured baseline (corpus recall 0.219,
+  P0+P1 recall 0.219); `score_report.json` sibling pins the verdict.
 - **T2:** Inspect AI multi-turn tasks; Helicone observability wired;
   weak corpus bootstrapped from production keep-rate data.
 - **T3:** mutation testing over every changed file; full corpus on

@@ -61,10 +61,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
 
         public static async Task<int> RunAsync(string[] args, CancellationToken ct)
         {
-            string fixturePath = ExtractFixturePath(args);
+            string fixturePath = ExtractArg(args, "--fixture");
+            string writeActualPath = ExtractArg(args, "--write-actual");
             if (fixturePath == null)
             {
-                EmitFailure("ARG_MISSING_FIXTURE", "usage: gold-corpus-baseline --fixture <fixture-dir>");
+                EmitFailure("ARG_MISSING_FIXTURE", "usage: gold-corpus-baseline --fixture <fixture-dir> [--write-actual <path>]");
                 return 2;
             }
 
@@ -185,21 +186,222 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 archResult.Plan,
                 validation.Accepted);
 
+            // T1f-b: optionally emit actuals payload for score_eval.py.
+            if (!string.IsNullOrWhiteSpace(writeActualPath))
+            {
+                try
+                {
+                    WriteActualJson(
+                        writeActualPath,
+                        prMeta,
+                        archResult.Plan,
+                        editorResult.Scenarios,
+                        validation.Accepted,
+                        projection.Projected);
+                }
+                catch (Exception ex)
+                {
+                    EmitFailure("ACTUAL_WRITE_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+                    return 2;
+                }
+            }
+
             EmitPartial(prMeta, "OK", archResult, editorResult, validation, projection, diffContent);
             return 0;
         }
 
-        private static string ExtractFixturePath(string[] args)
+        private static string ExtractArg(string[] args, string name)
         {
             for (int i = 0; i < args.Length - 1; i++)
             {
-                if (args[i] == "--fixture")
+                if (args[i] == name)
                 {
                     return args[i + 1];
                 }
             }
 
             return null;
+        }
+
+        // ── T1f-b: actuals shape that score_eval.py consumes ──────────
+        // We emit each scenario at its highest-reached pipeline stage:
+        //   emitted   = Editor returned it (raw Editor output)
+        //   validated = passed EdogQaScenarioValidator (subset of emitted)
+        //   projected = passed EdogQaScenarioProjector (subset of validated)
+        // The scorer uses (category, verb, changed-line-overlap) as the
+        // match key and reports precision per stage independently.
+        private static void WriteActualJson(
+            string outPath,
+            PrMetadata prMeta,
+            EdogQaLlmClient.ArchitectPlan plan,
+            List<EdogQaLlmClient.GeneratedScenario> emittedScenarios,
+            List<EdogQaScenarioValidator.AcceptedScenario> validatedScenarios,
+            List<Scenario> projectedScenarios)
+        {
+            var evidenceById = new Dictionary<string, EdogQaLlmClient.ArchitectGroundingEvidence>(StringComparer.Ordinal);
+            if (plan?.GroundingEvidence != null)
+            {
+                foreach (var ev in plan.GroundingEvidence)
+                {
+                    if (!string.IsNullOrWhiteSpace(ev?.EvidenceId))
+                    {
+                        evidenceById[ev.EvidenceId] = ev;
+                    }
+                }
+            }
+
+            var actuals = new List<Dictionary<string, object>>();
+            var emittedIds = new HashSet<string>(StringComparer.Ordinal);
+            var validatedIds = new HashSet<string>(StringComparer.Ordinal);
+            var projectedIds = new HashSet<string>(StringComparer.Ordinal);
+
+            if (projectedScenarios != null)
+            {
+                foreach (var s in projectedScenarios)
+                {
+                    if (s == null) continue;
+                    projectedIds.Add(s.Id ?? string.Empty);
+                    actuals.Add(BuildProjectedActual(s));
+                }
+            }
+
+            if (validatedScenarios != null)
+            {
+                foreach (var accepted in validatedScenarios)
+                {
+                    var s = accepted?.Scenario;
+                    if (s == null) continue;
+                    validatedIds.Add(s.Id ?? string.Empty);
+                    if (projectedIds.Contains(s.Id ?? string.Empty)) continue;
+                    actuals.Add(BuildGeneratedActual(s, evidenceById, stage: "validated"));
+                }
+            }
+
+            if (emittedScenarios != null)
+            {
+                foreach (var s in emittedScenarios)
+                {
+                    if (s == null) continue;
+                    emittedIds.Add(s.Id ?? string.Empty);
+                    var sid = s.Id ?? string.Empty;
+                    if (projectedIds.Contains(sid) || validatedIds.Contains(sid)) continue;
+                    actuals.Add(BuildGeneratedActual(s, evidenceById, stage: "emitted"));
+                }
+            }
+
+            var payload = new
+            {
+                schema_version = "1.0",
+                captured_at = DateTimeOffset.UtcNow.ToString("o"),
+                pipeline = "v2_architect_editor",
+                pr_number = prMeta?.PrNumber,
+                counts = new
+                {
+                    emitted = emittedIds.Count,
+                    validated = validatedIds.Count,
+                    projected = projectedIds.Count,
+                },
+                scenarios = actuals,
+            };
+
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+            });
+
+            string dir = Path.GetDirectoryName(outPath);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(outPath, json);
+        }
+
+        private static Dictionary<string, object> BuildProjectedActual(Scenario s)
+        {
+            var grounding = new List<Dictionary<string, object>>();
+            if (s.GroundingEvidence != null)
+            {
+                foreach (var ev in s.GroundingEvidence)
+                {
+                    if (ev == null || string.IsNullOrWhiteSpace(ev.File)) continue;
+                    var lines = new List<int>();
+                    int start = ev.StartLine > 0 ? ev.StartLine : 0;
+                    int end = ev.EndLine >= start ? ev.EndLine : start;
+                    for (int n = start; n <= end; n++)
+                    {
+                        if (n > 0) lines.Add(n);
+                    }
+                    if (lines.Count == 0) continue;
+                    grounding.Add(new Dictionary<string, object>
+                    {
+                        ["path"] = ev.File,
+                        ["side"] = "right",
+                        ["lines"] = lines,
+                    });
+                }
+            }
+
+            return new Dictionary<string, object>
+            {
+                ["id"] = s.Id,
+                ["topic"] = s.ImpactZone,
+                ["category"] = s.Category.ToString(),
+                ["verb"] = PrimaryExpectationType(s.Expectations),
+                ["stage"] = "projected",
+                ["grounding_changed_lines"] = grounding,
+            };
+        }
+
+        private static Dictionary<string, object> BuildGeneratedActual(
+            EdogQaLlmClient.GeneratedScenario s,
+            IReadOnlyDictionary<string, EdogQaLlmClient.ArchitectGroundingEvidence> evidenceById,
+            string stage)
+        {
+            var grounding = new List<Dictionary<string, object>>();
+            if (s.GroundingEvidenceRefs != null)
+            {
+                foreach (var refId in s.GroundingEvidenceRefs)
+                {
+                    if (string.IsNullOrWhiteSpace(refId)) continue;
+                    if (!evidenceById.TryGetValue(refId, out var ev) || ev == null) continue;
+                    if (string.IsNullOrWhiteSpace(ev.RepoRelativePath) || ev.NewLine <= 0) continue;
+                    grounding.Add(new Dictionary<string, object>
+                    {
+                        ["path"] = ev.RepoRelativePath,
+                        ["side"] = string.Equals(ev.Side, "left", StringComparison.OrdinalIgnoreCase) ? "left" : "right",
+                        ["lines"] = new List<int> { ev.NewLine },
+                    });
+                }
+            }
+
+            string verb = "EventPresent";
+            if (s.Expectations != null && s.Expectations.Count > 0 && !string.IsNullOrWhiteSpace(s.Expectations[0].Type))
+            {
+                verb = s.Expectations[0].Type;
+            }
+
+            return new Dictionary<string, object>
+            {
+                ["id"] = s.Id,
+                ["topic"] = s.ImpactZone,
+                ["category"] = s.Category,
+                ["verb"] = verb,
+                ["stage"] = stage,
+                ["grounding_changed_lines"] = grounding,
+            };
+        }
+
+        private static string PrimaryExpectationType(List<Expectation> expectations)
+        {
+            if (expectations == null || expectations.Count == 0)
+            {
+                return "EventPresent";
+            }
+
+            return expectations[0].Type.ToString();
         }
 
         private static void EmitFailure(string status, string message)

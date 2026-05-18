@@ -1,162 +1,126 @@
+#!/usr/bin/env python3
 """F27 P9 T1f-b — capture V2 pipeline actuals for the gold-corpus PRs.
 
-This is the operator script that lights up the recall/precision numbers
-in ``baseline.json``. It does NOT run in pytest because each invocation
-hits real Azure OpenAI deployments (Architect ``gpt-5.4`` high-reasoning
-+ Editor ``gpt-5.4-mini`` low-reasoning) for every fixture in
-``tests/qa-eval/ground-truth/``. Per-fixture cost ~$0.30; full 3-PR pass
-~$1.00.
+Drives the EdogQaE2E ``gold-corpus-baseline`` harness once per fixture
+under ``tests/qa-eval/ground-truth/`` with ``--write-actual``, producing
+the per-PR ``actual.json`` files that ``score_eval.py`` consumes to
+compute recall / precision against the hand-graded ``expected.json``.
 
-The script drives the same EdogQaE2E harness subcommand
-(``gold-corpus-baseline``) that was used to capture the v2 pipeline
-aggregates in T1c-c, but here we ask the harness to also emit per-PR
-``actual.json`` files with the full scenario payloads the deterministic
-scorer needs:
+This script makes **real outbound HTTPS calls** to Azure OpenAI and
+**spends real money**. It is NOT part of the pytest gauntlet — it is a
+manual operator turn invoked on demand to refresh the corpus scores.
 
-    {
-      "captured_at": "2026-05-18T00:00:00Z",
-      "pipeline": "v2_architect_editor",
-      "scenarios": [
-        {
-          "id": "<projector-assigned id>",
-          "topic": "<canonical interceptor topic>",
-          "category": "<ScenarioCategory enum value>",
-          "verb": "<primary ExpectationType enum value>",
-          "stage": "emitted|validated|projected",
-          "grounding_changed_lines": [
-            {"path": "...", "side": "right", "lines": [n, n+1, ...]}
-          ]
-        },
-        ...
-      ]
-    }
+Required env (read once at start; harness emits CONFIG_MISSING if absent):
 
-T1f-b OPERATOR FLOW (run this script, not pytest):
+    set AZURE_OPENAI_ENDPOINT=https://...cognitiveservices.azure.com
+    set AZURE_OPENAI_API_KEY=...
+    set EDOG_FLT_BIN=...\\Service\\Microsoft.LiveTable.Service.EntryPoint\\bin\\Debug\\net8.0\\win-x64
 
-    1. set EDOG_QA_LLM_V2=on
-    2. set DONNA_AOAI_ENDPOINT=https://donna.cognitiveservices.azure.com
-    3. set DONNA_AOAI_API_KEY=<key>
-    4. set EDOG_FLT_BIN=C:\\Users\\<you>\\newrepo\\workload-fabriclivetable\\Service\\Microsoft.LiveTable.Service.EntryPoint\\bin\\Debug\\net8.0\\win-x64
-    5. python tests\\qa-eval\\capture_v2_actuals.py --fixture PR-977882
-    6. python tests\\qa-eval\\score_eval.py --json --output tests/qa-eval/score_report.json
+Usage::
 
-The harness subcommand ``gold-corpus-baseline`` is wired in T1c-c
-(``tests/dotnet/EdogQaE2E.Tests/Program.cs``) and shells the V2
-pipeline; extending it to emit ``actual.json`` is part of the T1f-b
-slice. THIS script is the operator entry point that wraps the harness.
+    # Default — capture all 3 fixtures.
+    python tests/qa-eval/capture_v2_actuals.py
 
-This file is intentionally executable but the embedded fixture-runner
-is a stub until T1f-b lands the actual.json emitter. Running it today
-prints the planned invocation rather than spending money.
+    # Single fixture.
+    python tests/qa-eval/capture_v2_actuals.py --fixture PR-977882
+
+    # Dry-run: print intended invocations without spending money.
+    python tests/qa-eval/capture_v2_actuals.py --dry-run
+
+After capture, run::
+
+    python tests/qa-eval/score_eval.py --output tests/qa-eval/score_report.json
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-GROUND_TRUTH = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
-HARNESS_PROJECT = REPO_ROOT / "tests" / "dotnet" / "EdogQaE2E.Tests"
+GROUND_TRUTH_DIR = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
+DEFAULT_HARNESS_DLL = (
+    REPO_ROOT
+    / "tests"
+    / "dotnet"
+    / "EdogQaE2E.Tests"
+    / "bin"
+    / "Debug"
+    / "net8.0"
+    / "Microsoft.LiveTable.Service.UnitTests.dll"
+)
+
+HARNESS_JSON_BEGIN = "---HARNESS-JSON-BEGIN---"
+HARNESS_JSON_END = "---HARNESS-JSON-END---"
 
 
-def _flt_bin() -> Path | None:
-    raw = os.environ.get("EDOG_FLT_BIN")
-    if raw:
-        return Path(raw)
-    fallback = REPO_ROOT.parent / "workload-fabriclivetable" / "Service" / "Microsoft.LiveTable.Service.EntryPoint" / "bin" / "Debug" / "net8.0" / "win-x64"
-    return fallback if fallback.exists() else None
-
-
-def _fixtures() -> list[Path]:
-    return sorted(p for p in GROUND_TRUTH.iterdir() if p.is_dir() and p.name.startswith("PR-"))
-
-
-def _build_harness() -> int:
-    """Build the EdogQaE2E test harness (no-op if cached)."""
-    proc = subprocess.run(
-        ["dotnet", "build", str(HARNESS_PROJECT / "EdogQaE2E.Tests.csproj"), "-c", "Debug", "-v", "quiet", "--nologo"],
-        cwd=REPO_ROOT,
-        check=False,
+def _find_fixtures(only: list[str] | None = None) -> list[Path]:
+    if not GROUND_TRUTH_DIR.exists():
+        return []
+    out = sorted(
+        p for p in GROUND_TRUTH_DIR.iterdir()
+        if p.is_dir() and (p / "pr.json").is_file() and (p / "diff.patch").is_file()
     )
-    return proc.returncode
+    if only:
+        out = [p for p in out if p.name in only]
+    return out
 
 
-def _invoke_harness(fixture: Path, timeout_s: int = 900) -> dict:
-    """Invoke the gold-corpus-baseline subcommand for one fixture.
+def _parse_envelope(stdout: str) -> dict | None:
+    begin = stdout.find(HARNESS_JSON_BEGIN)
+    end = stdout.find(HARNESS_JSON_END)
+    if begin < 0 or end < 0 or end <= begin:
+        return None
+    body = stdout[begin + len(HARNESS_JSON_BEGIN):end].strip()
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return None
 
-    T1f-b will extend the harness to write actual.json alongside
-    expected.json. Until then this prints the planned command.
-    """
+
+def _invoke_harness(harness_dll: Path, fixture_dir: Path, actual_path: Path, timeout_s: int) -> dict:
     cmd = [
         "dotnet",
-        "run",
-        "--project",
-        str(HARNESS_PROJECT / "EdogQaE2E.Tests.csproj"),
-        "--no-build",
-        "-c",
-        "Debug",
-        "--",
+        str(harness_dll),
         "gold-corpus-baseline",
         "--fixture",
-        fixture.name,
+        str(fixture_dir),
         "--write-actual",
+        str(actual_path),
     ]
-    print(f"[capture_v2_actuals] would invoke: {' '.join(cmd)}", flush=True)
-    return {
-        "captured_at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
-        "pipeline": "v2_architect_editor",
-        "fixture": fixture.name,
-        "scenarios": [],
-        "_t1f_a_stub": True,
-        "_t1f_b_will_populate": "actual.json with full scenario payloads",
-    }
-
-
-def run(fixture_names: list[str] | None = None, *, dry_run: bool = True) -> int:
-    flt_bin = _flt_bin()
-    if not dry_run and flt_bin is None:
-        print(
-            "[capture_v2_actuals] EDOG_FLT_BIN not set and default path missing — set it or pass --dry-run",
-            file=sys.stderr,
-        )
-        return 2
-
-    if not os.environ.get("DONNA_AOAI_API_KEY") and not dry_run:
-        print(
-            "[capture_v2_actuals] DONNA_AOAI_API_KEY not set — V2 pipeline cannot run; set it or pass --dry-run",
-            file=sys.stderr,
-        )
-        return 2
-
-    targets = _fixtures()
-    if fixture_names:
-        targets = [f for f in targets if f.name in fixture_names]
-    if not targets:
-        print("[capture_v2_actuals] no matching fixtures found")
-        return 1
-
-    if not dry_run:
-        rc = _build_harness()
-        if rc != 0:
-            print(f"[capture_v2_actuals] harness build failed rc={rc}", file=sys.stderr)
-            return rc
-
-    for fixture in targets:
-        result = _invoke_harness(fixture)
-        out = fixture / "actual.json"
-        out.write_text(json.dumps(result, indent=2), encoding="utf-8")
-        print(f"[capture_v2_actuals] wrote {out}")
-    return 0
+    proc = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=timeout_s,
+        check=False,
+    )
+    envelope = _parse_envelope(proc.stdout or "")
+    if envelope is None:
+        return {
+            "ok": False,
+            "status": "HARNESS_OUTPUT_UNPARSEABLE",
+            "exit_code": proc.returncode,
+            "stderr_tail": (proc.stderr or "")[-2000:],
+            "stdout_tail": (proc.stdout or "")[-2000:],
+        }
+    envelope.setdefault("exit_code", proc.returncode)
+    return envelope
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="F27 P9 T1f-b actuals capture")
+    parser.add_argument(
+        "--harness-dll",
+        type=Path,
+        default=DEFAULT_HARNESS_DLL,
+        help="Path to the EdogQaE2E test harness DLL.",
+    )
     parser.add_argument(
         "--fixture",
         action="append",
@@ -164,19 +128,68 @@ def main(argv: list[str] | None = None) -> int:
         help="Limit capture to one or more fixture names (e.g., PR-977882). Repeatable.",
     )
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        default=True,
-        help="Print intended invocations without spending money (default; T1f-a behaviour).",
+        "--timeout-s",
+        type=int,
+        default=900,
+        help="Per-fixture timeout in seconds (default 900 = 15 min).",
     )
     parser.add_argument(
-        "--no-dry-run",
-        dest="dry_run",
-        action="store_false",
-        help="Actually invoke the harness against Azure OpenAI (T1f-b operator turn).",
+        "--dry-run",
+        action="store_true",
+        help="Print intended invocations without spending money.",
     )
     args = parser.parse_args(argv)
-    return run(args.fixtures, dry_run=args.dry_run)
+
+    fixtures = _find_fixtures(args.fixtures)
+    if not fixtures:
+        print(f"[capture_v2_actuals] no matching fixtures under {GROUND_TRUTH_DIR}", file=sys.stderr)
+        return 2
+
+    if args.dry_run:
+        for fx in fixtures:
+            actual_path = fx / "actual.json"
+            print(f"[capture_v2_actuals] (dry-run) would run harness against {fx.name} -> {actual_path}")
+        return 0
+
+    if not args.harness_dll.exists():
+        print(
+            f"[capture_v2_actuals] harness DLL not found: {args.harness_dll}\n"
+            "Build first: dotnet build tests/_csbuild/EdogDevModeBuild.csproj -p:FltBin=$EDOG_FLT_BIN",
+            file=sys.stderr,
+        )
+        return 2
+
+    if not (os.environ.get("AZURE_OPENAI_API_KEY") or os.environ.get("AZURE_OPENAI_ARCHITECT_API_KEY")):
+        print(
+            "[capture_v2_actuals] AZURE_OPENAI_API_KEY (or AZURE_OPENAI_ARCHITECT_API_KEY) not set",
+            file=sys.stderr,
+        )
+        return 2
+
+    overall_status = "CAPTURED"
+    for fx in fixtures:
+        actual_path = fx / "actual.json"
+        t0 = _dt.datetime.now(_dt.timezone.utc)
+        print(f"[capture_v2_actuals] {t0.strftime('%H:%M:%SZ')} running harness against {fx.name}…", file=sys.stderr)
+        result = _invoke_harness(args.harness_dll, fx, actual_path, args.timeout_s)
+        status = result.get("status", "UNKNOWN")
+        elapsed = (_dt.datetime.now(_dt.timezone.utc) - t0).total_seconds()
+        print(f"[capture_v2_actuals]   {fx.name} status={status} elapsed={elapsed:.1f}s", file=sys.stderr)
+        if status != "OK":
+            overall_status = "CAPTURED_WITH_ERRORS"
+            print(
+                f"[capture_v2_actuals]   harness envelope: {json.dumps(result, indent=2)[:1500]}",
+                file=sys.stderr,
+            )
+        elif not actual_path.exists():
+            overall_status = "CAPTURED_WITH_ERRORS"
+            print(
+                f"[capture_v2_actuals]   WARNING: harness OK but {actual_path} missing",
+                file=sys.stderr,
+            )
+
+    print(f"[capture_v2_actuals] overall_status={overall_status}", file=sys.stderr)
+    return 0 if overall_status == "CAPTURED" else 1
 
 
 if __name__ == "__main__":

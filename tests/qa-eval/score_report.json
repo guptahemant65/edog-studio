@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "verdict": "PASS",
+  "floor_violations": [],
+  "enforcement": "report_only",
+  "aggregate": {
+    "pr_count": 3,
+    "macro": {
+      "recall": 0.2194,
+      "precision_validated": 0.0,
+      "f1_validated": 0.0,
+      "p0_p1_recall": 0.2194
+    },
+    "micro": {
+      "recall": 0.2083,
+      "precision_validated": 0.0
+    }
+  },
+  "prs_scored": [
+    {
+      "pr_number": "975848",
+      "expected_total": 8,
+      "actual_total": {
+        "emitted": 0,
+        "validated": 0,
+        "projected": 6
+      },
+      "matched_count": 1,
+      "missed_expected_ids": [
+        "975848-s01",
+        "975848-s02",
+        "975848-s03",
+        "975848-s04",
+        "975848-s05",
+        "975848-s06",
+        "975848-s07"
+      ],
+      "unmatched_actual_ids": [
+        "sk-1",
+        "sk-2",
+        "sk-3",
+        "sk-4",
+        "sk-5"
+      ],
+      "recall": 0.125,
+      "precision": {
+        "emitted": 0.0,
+        "validated": 0.0,
+        "projected": 0.1667
+      },
+      "f1_validated": 0.0,
+      "p0_p1_recall": 0.125
+    },
+    {
+      "pr_number": "976609",
+      "expected_total": 6,
+      "actual_total": {
+        "emitted": 0,
+        "validated": 0,
+        "projected": 6
+      },
+      "matched_count": 2,
+      "missed_expected_ids": [
+        "976609-s02",
+        "976609-s03",
+        "976609-s05",
+        "976609-s06"
+      ],
+      "unmatched_actual_ids": [
+        "sk-1",
+        "sk-2",
+        "sk-5",
+        "sk-6"
+      ],
+      "recall": 0.3333,
+      "precision": {
+        "emitted": 0.0,
+        "validated": 0.0,
+        "projected": 0.3333
+      },
+      "f1_validated": 0.0,
+      "p0_p1_recall": 0.3333
+    },
+    {
+      "pr_number": "977882",
+      "expected_total": 10,
+      "actual_total": {
+        "emitted": 0,
+        "validated": 0,
+        "projected": 8
+      },
+      "matched_count": 2,
+      "missed_expected_ids": [
+        "977882-s02",
+        "977882-s03",
+        "977882-s04",
+        "977882-s05",
+        "977882-s07",
+        "977882-s08",
+        "977882-s09",
+        "977882-s10"
+      ],
+      "unmatched_actual_ids": [
+        "sk-2",
+        "sk-3",
+        "sk-4",
+        "sk-5",
+        "sk-6",
+        "sk-8"
+      ],
+      "recall": 0.2,
+      "precision": {
+        "emitted": 0.0,
+        "validated": 0.0,
+        "projected": 0.25
+      },
+      "f1_validated": 0.0,
+      "p0_p1_recall": 0.2
+    }
+  ],
+  "prs_pending_grading": [],
+  "prs_ungraded": [],
+  "schema_errors": []
+}

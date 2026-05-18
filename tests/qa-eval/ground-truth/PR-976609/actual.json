@@ -1,0 +1,130 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T10:11:51.6369610\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "976609",
+  "counts": {
+    "emitted": 6,
+    "validated": 6,
+    "projected": 6
+  },
+  "scenarios": [
+    {
+      "id": "sk-1",
+      "topic": "PR-976609-full-diff",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-2",
+      "topic": "PR-976609-full-diff",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "PR-976609-full-diff",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs",
+          "side": "right",
+          "lines": [
+            41
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            505
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            689
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "PR-976609-full-diff",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            689
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "PR-976609-full-diff",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            673
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-6",
+      "topic": "PR-976609-full-diff",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            689
+          ]
+        }
+      ]
+    }
+  ]
+}

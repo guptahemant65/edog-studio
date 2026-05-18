@@ -656,12 +656,14 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     )
     with baseline.open(encoding="utf-8") as fh:
         data = _json.load(fh)
-    # Schema_version may be 1.0 (T1a scaffold pre-capture) or 1.1
-    # (T1c-c captured). Pre-T1c-c statuses are tolerated to let a
-    # checkout-with-stale-baseline still pass this scaffold-level test.
-    assert data.get("schema_version") in {"1.0", "1.1"}, data
+    # Schema_version may be 1.0 (T1a scaffold pre-capture), 1.1 (T1c-c
+    # captured) or 1.2 (T1f-b scored). Pre-T1c-c statuses are tolerated
+    # to let a checkout-with-stale-baseline still pass this scaffold-level
+    # test.
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2"}, data
     assert data.get("status") in (
-        "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN",
+        "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
+        "DRY_RUN", "SCORED",
     ), data
     assert isinstance(data.get("prs"), list), data
 
@@ -1641,14 +1643,17 @@ def test_qa_security_doc_status_summary_present() -> None:
 
 
 def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
-    """baseline.json is the floor V2 must beat. T1c-c populates it by
+    """baseline.json is the floor V2 must beat. T1c-c populated it by
     driving the real V2 pipeline (Architect → Editor → Validator →
     Projector) against the 3-PR gold corpus and recording per-PR
-    token / latency / scenario-count / violation-count metrics.
+    token / latency / scenario-count / violation-count metrics. T1f-b
+    bumped the schema to 1.2 by populating recall + precision from
+    score_eval.py + adding a top-level ``scores`` block linking
+    score_report.json.
 
-    Schema version 1.1 was introduced for T1c-c; v1.0 was a PENDING
-    placeholder. Any future schema change must bump the version and
-    update this test.
+    Schema version: 1.1 (T1c-c, recall/precision null) → 1.2 (T1f-b,
+    recall/precision real). Any future schema change must bump the
+    version and update this test.
     """
     baseline_path = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
     assert baseline_path.exists(), f"baseline.json missing: {baseline_path}"
@@ -1656,11 +1661,11 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.1", (
-        f"expected schema_version=1.1, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.2", (
+        f"expected schema_version=1.2, got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
-    assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN"}, (
+    assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
         f"unexpected status: {baseline.get('status')!r}"
     )
 
@@ -1691,12 +1696,35 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     for pr in prs:
         missing = required_per_pr_keys - set(pr.keys())
         assert not missing, f"PR {pr.get('pr_number')!r} missing keys: {missing}"
-        # recall/precision are intentionally null at T1c-c — they require
-        # human-graded expected.json files. Confirm they were not silently
-        # populated with fake numbers (which would lie to the regression
-        # detector). T2 lifts this once expected.json grading completes.
-        assert pr["recall"] is None, "recall must be null at T1c-c (expected.json PENDING_HUMAN_GRADING)"
-        assert pr["precision"] is None, "precision must be null at T1c-c (expected.json PENDING_HUMAN_GRADING)"
+        # T1f-b: recall + precision are now real numbers (corpus is human-
+        # graded). Confirm they are non-null floats in [0, 1] so the
+        # regression detector has something honest to compare against.
+        recall = pr["recall"]
+        assert isinstance(recall, (int, float)), (
+            f"PR {pr.get('pr_number')!r} recall must be numeric at T1f-b, got {recall!r}"
+        )
+        assert 0.0 <= float(recall) <= 1.0, (
+            f"PR {pr.get('pr_number')!r} recall out of [0,1]: {recall!r}"
+        )
+        precision = pr["precision"]
+        assert isinstance(precision, dict), (
+            f"PR {pr.get('pr_number')!r} precision must be a dict at T1f-b, got {precision!r}"
+        )
+        for stage in ("emitted", "projected", "validated"):
+            assert stage in precision, (
+                f"PR {pr.get('pr_number')!r} precision missing stage {stage!r}: {precision!r}"
+            )
+
+    # T1f-b: top-level scores block links the immutable score_report.json
+    # sibling and pins the macro-average headline numbers + verdict.
+    scores = baseline.get("scores")
+    assert isinstance(scores, dict), f"baseline must carry a `scores` block at v1.2, got {scores!r}"
+    assert scores.get("report_path") == "score_report.json"
+    assert scores.get("verdict") in {"PASS", "FAIL"}
+    for k in ("macro_recall", "macro_precision_validated", "macro_p0_p1_recall", "micro_recall"):
+        assert isinstance(scores.get(k), (int, float)), (
+            f"scores.{k} must be numeric, got {scores.get(k)!r}"
+        )
 
 
 def test_qa_baseline_capture_script_present() -> None:
@@ -2049,3 +2077,146 @@ def test_orchestrator_repair_throws_fallback_to_initial(harness_environment, bui
     assert c["initialQuarantined"] == 1, c
     assert c["finalAccepted"] == 1, c
     assert c["mergedScenarioCount"] == 1, c
+
+
+# ──────────────────────────────────────────────────────────────────────
+# F27 P9 T1f-b — Live V2-pipeline capture against the gold corpus.
+#
+# T1f-a shipped the deterministic scorer + score_floors. T1f-b extends
+# the EdogQaE2E `gold-corpus-baseline` harness with a `--write-actual`
+# flag that emits per-PR `actual.json` files in the shape `score_eval.py`
+# consumes, then captures the first honest recall/precision numbers
+# against the 3-PR gold corpus. The tests below pin the capture
+# pipeline shape so a future refactor cannot silently break it.
+# ──────────────────────────────────────────────────────────────────────
+
+
+def test_qa_capture_v2_actuals_is_real_harness_invoker() -> None:
+    """T1f-a shipped capture_v2_actuals.py as a stub; T1f-b promoted it
+    to a real harness-invoking operator script. Pin the contract so a
+    revert to the stub form is caught at lint time, not at the next
+    capture.
+    """
+    script = REPO_ROOT / "tests" / "qa-eval" / "capture_v2_actuals.py"
+    assert script.exists(), f"capture_v2_actuals.py missing: {script}"
+    text = script.read_text(encoding="utf-8")
+    assert "subprocess" in text, "capture_v2_actuals.py must shell out to the dotnet harness"
+    assert "--write-actual" in text
+    assert "gold-corpus-baseline" in text
+    assert "actual.json" in text
+
+
+def test_qa_baseline_harness_emits_write_actual() -> None:
+    """GoldCorpusBaselineHarness must accept `--write-actual` and call
+    WriteActualJson after the projector stage. Source-grep so the build
+    gate (P2) catches regressions even when the DLL is stale.
+    """
+    harness = (
+        REPO_ROOT / "tests" / "dotnet" / "EdogQaE2E.Tests"
+        / "GoldCorpusBaselineHarness.cs"
+    )
+    text = harness.read_text(encoding="utf-8")
+    assert "--write-actual" in text, "harness must parse the --write-actual flag"
+    assert "WriteActualJson" in text, "harness must declare WriteActualJson"
+    assert "BuildProjectedActual" in text, (
+        "harness must declare BuildProjectedActual (projected-stage emitter)"
+    )
+    assert "BuildGeneratedActual" in text, (
+        "harness must declare BuildGeneratedActual (emitted/validated emitter)"
+    )
+    assert '"v2_architect_editor"' in text
+
+
+def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
+    """After T1f-b's capture pass, each gold-corpus fixture carries an
+    actual.json with schema_version 1.0, pipeline tag, counts block,
+    and a scenarios list where every scenario lands at its highest
+    pipeline stage (emitted / validated / projected). This is the shape
+    score_eval.py consumes — a drift here invalidates every score.
+    """
+    import json
+    ground_truth = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
+    expected_prs = ("PR-975848", "PR-976609", "PR-977882")
+    for pr in expected_prs:
+        actual_path = ground_truth / pr / "actual.json"
+        assert actual_path.exists(), f"{pr}/actual.json missing — run capture_v2_actuals.py"
+        data = json.loads(actual_path.read_text(encoding="utf-8"))
+        assert data.get("schema_version") == "1.0", (
+            f"{pr}/actual.json schema_version must be 1.0, got {data.get('schema_version')!r}"
+        )
+        assert data.get("pipeline") == "v2_architect_editor"
+        counts = data.get("counts") or {}
+        for k in ("emitted", "validated", "projected"):
+            assert isinstance(counts.get(k), int), (
+                f"{pr}/actual.json counts.{k} must be int, got {counts.get(k)!r}"
+            )
+        scenarios = data.get("scenarios") or []
+        assert isinstance(scenarios, list), f"{pr} scenarios must be a list"
+        valid_stages = {"emitted", "validated", "projected"}
+        for s in scenarios:
+            stage = s.get("stage")
+            assert stage in valid_stages, (
+                f"{pr} scenario {s.get('id')!r} has invalid stage {stage!r}"
+            )
+            for k in ("id", "category", "verb", "grounding_changed_lines"):
+                assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
+
+
+def test_qa_score_floors_calibrated_for_t1fb() -> None:
+    """T1f-b calibrated score_floors.json down to honest values BELOW
+    the first measured baseline so future regressions trip the gate.
+    Pin the schema bump (1.0 → 1.1) + the marginal-below-measured
+    structure so a well-meaning revert to the spec's nominal 0.80
+    targets cannot land silently.
+    """
+    import json
+    floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
+    assert floors_path.exists()
+    floors = json.loads(floors_path.read_text(encoding="utf-8"))
+    assert floors.get("schema_version") == "1.1", (
+        f"score_floors.json must be at schema_version 1.1 after T1f-b, "
+        f"got {floors.get('schema_version')!r}"
+    )
+    absolute = floors.get("absolute") or {}
+    assert absolute.get("corpus_recall_min") <= 0.219, (
+        f"corpus_recall_min must stay <= measured 0.219; got {absolute.get('corpus_recall_min')!r}"
+    )
+    assert absolute.get("p0_p1_recall_min") <= 0.219, (
+        f"p0_p1_recall_min must stay <= measured 0.219; got {absolute.get('p0_p1_recall_min')!r}"
+    )
+    assert absolute.get("per_pr_recall_min") <= 0.125, (
+        f"per_pr_recall_min must stay <= measured min 0.125; got {absolute.get('per_pr_recall_min')!r}"
+    )
+    assert absolute.get("corpus_precision_min") == 0.0, (
+        "corpus_precision_min must be 0.0 — validated-stage bucket is structurally "
+        "empty under highest-stage tagging; T1f-c re-enables this floor"
+    )
+    assert floors.get("enforcement") == "report_only"
+
+
+def test_qa_score_report_json_present_at_t1fb() -> None:
+    """T1f-b committed the first immutable score_report.json sibling.
+    Pin its top-level shape so downstream tooling (CI gate, dashboard)
+    can rely on the fields existing.
+    """
+    import json
+    report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
+    assert report_path.exists(), (
+        "score_report.json missing — run `python tests/qa-eval/score_eval.py "
+        "--output tests/qa-eval/score_report.json` after a capture pass."
+    )
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report.get("schema_version") == "1.0"
+    assert report.get("verdict") in {"PASS", "FAIL"}
+    assert report.get("enforcement") == "report_only"
+    aggregate = report.get("aggregate") or {}
+    macro = aggregate.get("macro") or {}
+    for k in ("recall", "precision_validated", "f1_validated", "p0_p1_recall"):
+        assert isinstance(macro.get(k), (int, float)), (
+            f"aggregate.macro.{k} must be numeric, got {macro.get(k)!r}"
+        )
+    prs_scored = report.get("prs_scored") or []
+    assert len(prs_scored) == 3, f"expected 3 scored PRs, got {len(prs_scored)}"
+    expected = {"975848", "976609", "977882"}
+    actual = {str(p.get("pr_number")) for p in prs_scored}
+    assert actual == expected, f"prs_scored set mismatch: {actual}"
