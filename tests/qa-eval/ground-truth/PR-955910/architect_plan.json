@@ -1,19 +1,19 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-18T15:10:33.8606631\u002B00:00",
+  "captured_at": "2026-05-18T18:46:30.6058908\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "955910",
   "zone_id": "PR-955910-full-diff",
   "zone_summary": "[RefreshTriggers] Enable Multi-schedule support",
   "plan_outcome": "testable",
   "counts": {
-    "behavioral_changes": 9,
-    "grounding_evidence": 22,
-    "scenario_sketches": 9
+    "behavioral_changes": 6,
+    "grounding_evidence": 13,
+    "scenario_sketches": 12
   },
   "behavioral_changes": [
     {
-      "summary": "Refresh-trigger template data now carries an \u0060mlvExecDefnId\u0060 value, and the generated trigger-definition JSON writes that value into the Fabric invocation parameter instead of reusing \u0060triggerId\u0060.",
+      "summary": "Refresh-trigger template rendering now carries \u0060request.MlvExecutionDefinitionId\u0060 through the renderer model as \u0060mlv_exec_defn_id\u0060 and emits that value into the generated trigger-definition parameter payload.",
       "evidence_refs": [
         "ev-1",
         "ev-2",
@@ -23,65 +23,37 @@
       ]
     },
     {
-      "summary": "FMLV activator parsing now extracts \u0060fmlvExecutionDefinitionId\u0060 from FabricItemInvocation parameter groups and stores it on the action when the extracted value parses as a GUID.",
-      "evidence_refs": [
-        "ev-6",
-        "ev-7",
-        "ev-8",
-        "ev-11"
-      ]
-    },
-    {
-      "summary": "FMLV activator parsing now tolerates malformed trigger-definition structures by returning null or skipping groups when the parameters collection or group arguments are missing.",
-      "evidence_refs": [
-        "ev-8",
-        "ev-9",
-        "ev-10"
-      ]
-    },
-    {
-      "summary": "FMLV activator parsing now ignores extracted execution-definition values that are not valid GUIDs.",
+      "summary": "\u0060FMLVActivatorParser\u0060 now extracts \u0060fmlvExecutionDefinitionId\u0060 from nested \u0060FabricItemInvocation\u0060 parameters and populates \u0060action.FmlvExecutionDefinitionId\u0060 when the extracted value is a valid GUID.",
       "evidence_refs": [
         "ev-6",
         "ev-7"
       ]
     },
     {
-      "summary": "The refresh notebook now computes the Fabric API host differently for prod vs. non-prod environments and targets the \u0060/jobs/RefreshMaterializedLakeViews/instances\u0060 endpoint.",
+      "summary": "\u0060FindFmlvExecutionDefinitionId\u0060 now defends against missing trigger-definition structure and malformed parameter groups by returning null or skipping bad groups instead of dereferencing absent tokens.",
       "evidence_refs": [
-        "ev-13",
-        "ev-14"
+        "ev-7"
       ]
     },
     {
-      "summary": "The refresh notebook now posts a JSON \u0060executionData.mlvExecutionDefinitionId\u0060 payload with \u0060Content-Type: application/json\u0060 when a nonblank execution-definition id is present.",
+      "summary": "The refresh notebook now special-cases the production API host and calls the path-based \u0060RefreshMaterializedLakeViews\u0060 job-instances endpoint.",
       "evidence_refs": [
-        "ev-15",
-        "ev-16",
-        "ev-17",
-        "ev-18"
+        "ev-9",
+        "ev-10"
       ]
     },
     {
-      "summary": "The refresh notebook now falls back to a header-only POST when the execution-definition id is null, empty, or whitespace after normalization.",
+      "summary": "The refresh notebook now sends \u0060executionData.mlvExecutionDefinitionId\u0060 as JSON only when a non-empty execution-definition id is present, while preserving a bodyless POST when the id is blank.",
       "evidence_refs": [
-        "ev-1",
-        "ev-15",
-        "ev-19"
+        "ev-8",
+        "ev-11"
       ]
     },
     {
-      "summary": "The refresh notebook now raises on HTTP failure responses before continuing.",
+      "summary": "The refresh notebook now fails fast on unsuccessful HTTP responses and no longer assumes a \u0060Location\u0060 response header is always present.",
       "evidence_refs": [
-        "ev-20"
-      ]
-    },
-    {
-      "summary": "The refresh notebook now guards \u0060Location\u0060 header access and only logs the status URL when that header exists.",
-      "evidence_refs": [
-        "ev-21",
-        "ev-22",
-        "ev-23"
+        "ev-12",
+        "ev-13"
       ]
     }
   ],
@@ -91,229 +63,139 @@
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-rt-adapter-201",
+      "hunk_id": "RefreshTriggerAdapter.cs@@201",
       "new_line": 204,
       "excerpt": "mlvExecDefnId: request.MlvExecutionDefinitionId?.ToString() ?? string.Empty,",
-      "reason": "Passes the request execution-definition id into template rendering and defensively normalizes null to an empty string."
+      "reason": "The adapter now threads an optional MLV execution-definition id into the template-rendering request, defaulting missing values to an empty string."
     },
     {
       "evidence_id": "ev-2",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-renderer-174",
-      "new_line": 177,
-      "excerpt": "string mlvExecDefnId,",
-      "reason": "Adds the new rendering input so templates can receive an MLV execution-definition id."
+      "hunk_id": "RefreshTriggersTemplateRenderer.cs@@153",
+      "new_line": 156,
+      "excerpt": "/// \u003Cparam name=\u0022mlvExecDefnId\u0022\u003EMlv Execution Definition id.\u003C/param\u003E",
+      "reason": "The XML-doc contract adds a new supported renderer input for template generation."
     },
     {
       "evidence_id": "ev-3",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-renderer-195",
-      "new_line": 198,
-      "excerpt": "this.MlvExecDefnId = mlvExecDefnId;",
-      "reason": "Stores the new constructor argument on the template-data object that Scriban will serialize."
+      "hunk_id": "RefreshTriggersTemplateRenderer.cs@@174",
+      "new_line": 177,
+      "excerpt": "string triggerId,\nstring mlvExecDefnId,\n...\nthis.TriggerId = triggerId;\nthis.MlvExecDefnId = mlvExecDefnId;",
+      "reason": "The renderer constructor now accepts and stores the new execution-definition value on the template model."
     },
     {
       "evidence_id": "ev-4",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-renderer-262",
-      "new_line": 267,
-      "excerpt": "[JsonProperty(\u0022mlv_exec_defn_id\u0022)]\npublic string MlvExecDefnId { get; }",
-      "reason": "Exposes the new field to templates under the snake_case name \u0060mlv_exec_defn_id\u0060."
+      "hunk_id": "RefreshTriggersTemplateRenderer.cs@@262",
+      "new_line": 264,
+      "excerpt": "/// \u003Csummary\u003E\n/// Gets the mlv execution definition id value for Scriban templates.\n/// \u003C/summary\u003E\n[JsonProperty(\u0022mlv_exec_defn_id\u0022)]\npublic string MlvExecDefnId { get; }",
+      "reason": "The template model now exposes a new Scriban-visible property named \u0060mlv_exec_defn_id\u0060."
     },
     {
       "evidence_id": "ev-5",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-trigger-def-123",
-      "new_line": 125,
+      "hunk_id": "trigger_definition.json.scriban@@123",
+      "new_line": 126,
       "excerpt": "\u0022value\u0022: \u0022{{ mlv_exec_defn_id }}\u0022",
-      "reason": "Changes the generated trigger-definition payload to emit the execution-definition id instead of the trigger id."
+      "reason": "Generated trigger definitions now serialize the execution-definition id into the parameter value slot that previously emitted \u0060trigger_id\u0060."
     },
     {
       "evidence_id": "ev-6",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-parser-141",
-      "new_line": 144,
-      "excerpt": "var fmlvExecDefId = FindFmlvExecutionDefinitionId(triggerDefinition);",
-      "reason": "Introduces lookup of the new execution-definition id during action parsing."
+      "hunk_id": "FMLVActivatorParser.cs@@141",
+      "new_line": 145,
+      "excerpt": "var fmlvExecDefId = FindFmlvExecutionDefinitionId(triggerDefinition);\nif (Guid.TryParse(fmlvExecDefId, out var parsedExecDefId))\n{\n    action.FmlvExecutionDefinitionId = parsedExecDefId;\n}",
+      "reason": "Parsing now hydrates the action with a valid execution-definition GUID and explicitly guards assignment behind \u0060Guid.TryParse\u0060."
     },
     {
       "evidence_id": "ev-7",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-parser-141",
-      "new_line": 145,
-      "excerpt": "if (Guid.TryParse(fmlvExecDefId, out var parsedExecDefId))\n{\n    action.FmlvExecutionDefinitionId = parsedExecDefId;\n}",
-      "reason": "Adds the valid-GUID branch that populates the action and the defensive guard that rejects invalid values."
+      "hunk_id": "FMLVActivatorParser.cs@@321",
+      "new_line": 321,
+      "excerpt": "internal static string FindFmlvExecutionDefinitionId(JObject triggerDefinition)\n{\n    var parameterGroups = triggerDefinition\n        .SelectToken(\u0022steps\u0022)\n        ?.Children\u003CJObject\u003E()\n        .SelectMany(s =\u003E s.SelectToken(\u0022rows\u0022)?.Children\u003CJObject\u003E() ?? Enumerable.Empty\u003CJObject\u003E())\n        .Where(r =\u003E string.Equals((string)r[\u0022kind\u0022], \u0022FabricItemInvocation\u0022, StringComparison.OrdinalIgnoreCase))\n        .SelectMany(r =\u003E r.SelectToken(\u0022arguments\u0022)?.Children\u003CJObject\u003E() ?? Enumerable.Empty\u003CJObject\u003E())\n        .FirstOrDefault(a =\u003E string.Equals((string)a[\u0022name\u0022], \u0022parameters\u0022, StringComparison.OrdinalIgnoreCase))\n        ?.SelectToken(\u0022values\u0022)?.Children\u003CJObject\u003E();\n\n    if (parameterGroups == null)\n    {\n        return null;\n    }\n\n    foreach (var group in parameterGroups)\n    {\n        var args = group.SelectToken(\u0022arguments\u0022)?.Children\u003CJObject\u003E().ToList();\n        if (args == null)\n        {\n            continue;\n        }\n        ...\n        return args\n            .FirstOrDefault(a =\u003E string.Equals((string)a[\u0022name\u0022], \u0022parameterValue\u0022, StringComparison.OrdinalIgnoreCase))\n            ?.SelectToken(\u0022values[0].value\u0022)?.ToString();\n    }\n\n    return null;\n}",
+      "reason": "New helper logic walks the nested trigger-definition structure to find \u0060fmlvExecutionDefinitionId\u0060, while short-circuiting or skipping malformed nodes."
     },
     {
       "evidence_id": "ev-8",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-parser-321",
-      "new_line": 327,
-      "excerpt": "var parameterGroups = triggerDefinition\n    .SelectToken(\u0022steps\u0022)\n    ?.Children\u003CJObject\u003E()\n    .SelectMany(s =\u003E s.SelectToken(\u0022rows\u0022)?.Children\u003CJObject\u003E() ?? Enumerable.Empty\u003CJObject\u003E())\n    .Where(r =\u003E string.Equals((string)r[\u0022kind\u0022], \u0022FabricItemInvocation\u0022, StringComparison.OrdinalIgnoreCase))\n    .SelectMany(r =\u003E r.SelectToken(\u0022arguments\u0022)?.Children\u003CJObject\u003E() ?? Enumerable.Empty\u003CJObject\u003E())\n    .FirstOrDefault(a =\u003E string.Equals((string)a[\u0022name\u0022], \u0022parameters\u0022, StringComparison.OrdinalIgnoreCase))\n    ?.SelectToken(\u0022values\u0022)?.Children\u003CJObject\u003E();",
-      "reason": "Implements the traversal that finds FabricItemInvocation parameter groups containing the execution-definition id."
+      "hunk_id": "fmlv_refresh_notebook.ipynb.scriban@@24",
+      "new_line": 27,
+      "excerpt": "\u0022fmlvExecutionDefinitionId = None\u0022",
+      "reason": "The notebook template now declares an optional runtime input for an execution-definition id."
     },
     {
       "evidence_id": "ev-9",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-parser-321",
-      "new_line": 336,
-      "excerpt": "if (parameterGroups == null)\n{\n    return null;\n}",
-      "reason": "Short-circuits safely when the trigger definition does not contain a parameters collection."
+      "hunk_id": "fmlv_refresh_notebook.ipynb.scriban@@51-host",
+      "new_line": 53,
+      "excerpt": "\u0022API_HOST = \\\u0022api.fabric.microsoft.com\\\u0022 if ENV == \\\u0022prod\\\u0022 else f\\\u0022{ENV}api.fabric.microsoft.com\\\u0022\\n\u0022,",
+      "reason": "The notebook now chooses a bare production host for \u0060prod\u0060 and keeps env-prefixed hosts for other environments."
     },
     {
       "evidence_id": "ev-10",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-parser-321",
-      "new_line": 343,
-      "excerpt": "var args = group.SelectToken(\u0022arguments\u0022)?.Children\u003CJObject\u003E().ToList();\nif (args == null)\n{\n    continue;\n}",
-      "reason": "Skips malformed parameter groups that lack an \u0060arguments\u0060 collection instead of dereferencing null."
+      "hunk_id": "fmlv_refresh_notebook.ipynb.scriban@@51-uri",
+      "new_line": 59,
+      "excerpt": "\u0022publicuri = f\\\u0022https://{API_HOST}/v1/workspaces/{WSID}/lakehouses/{LHID}/jobs/RefreshMaterializedLakeViews/instances\\\u0022\\n\u0022,",
+      "reason": "The refresh submission URI now uses the path-based jobs endpoint instead of the previous query-string form."
     },
     {
       "evidence_id": "ev-11",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-parser-321",
-      "new_line": 349,
-      "excerpt": "var paramName = args\n    .FirstOrDefault(a =\u003E string.Equals((string)a[\u0022name\u0022], \u0022parameterName\u0022, StringComparison.OrdinalIgnoreCase))\n    ?[\u0022value\u0022]?.ToString();\n\nif (string.Equals(paramName, \u0022fmlvExecutionDefinitionId\u0022, StringComparison.OrdinalIgnoreCase))\n{\n    return args\n        .FirstOrDefault(a =\u003E string.Equals((string)a[\u0022name\u0022], \u0022parameterValue\u0022, StringComparison.OrdinalIgnoreCase))\n        ?.SelectToken(\u0022values[0].value\u0022)?.ToString();\n}",
-      "reason": "Defines the exact match-and-read logic for extracting \u0060fmlvExecutionDefinitionId\u0060 from a parameter group."
+      "hunk_id": "fmlv_refresh_notebook.ipynb.scriban@@51-post",
+      "new_line": 66,
+      "excerpt": "\u0022exec_def_id = str(fmlvExecutionDefinitionId).strip() if fmlvExecutionDefinitionId else \u0027\u0027\\n\u0022,\n\u0022if exec_def_id:\\n\u0022,\n\u0022    headers[\\\u0022Content-Type\\\u0022] = \\\u0022application/json\\\u0022\\n\u0022,\n\u0022    body = {\\\u0022executionData\\\u0022: {\\\u0022mlvExecutionDefinitionId\\\u0022: exec_def_id}}\\n\u0022,\n\u0022    resp = requests.post(publicuri, headers=headers, data=json.dumps(body))\\n\u0022,\n\u0022else:\\n\u0022,\n\u0022    resp = requests.post(publicuri, headers=headers)\\n\u0022,",
+      "reason": "The notebook now branches on a non-empty execution-definition id to send a JSON body; blank or whitespace input keeps the old bodyless POST behavior."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+      "side": "right",
+      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
+      "hunk_id": "fmlv_refresh_notebook.ipynb.scriban@@51-raise",
+      "new_line": 74,
+      "excerpt": "\u0022resp.raise_for_status()\\n\u0022,",
+      "reason": "Failed refresh-submission responses now surface as errors instead of proceeding as though submission succeeded."
     },
     {
       "evidence_id": "ev-13",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
       "side": "right",
       "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 54,
-      "excerpt": "API_HOST = \u0022api.fabric.microsoft.com\u0022 if ENV == \u0022prod\u0022 else f\u0022{ENV}api.fabric.microsoft.com\u0022",
-      "reason": "Adds a branch so prod uses the unprefixed Fabric API host while other environments keep the prefixed host."
-    },
-    {
-      "evidence_id": "ev-14",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 60,
-      "excerpt": "publicuri = f\u0022https://{API_HOST}/v1/workspaces/{WSID}/lakehouses/{LHID}/jobs/RefreshMaterializedLakeViews/instances\u0022",
-      "reason": "Changes the notebook to call the new RefreshMaterializedLakeViews instances endpoint."
-    },
-    {
-      "evidence_id": "ev-15",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 67,
-      "excerpt": "exec_def_id = str(fmlvExecutionDefinitionId).strip() if fmlvExecutionDefinitionId else \u0027\u0027\nif exec_def_id:",
-      "reason": "Normalizes the execution-definition id and branches request construction on whether a nonblank value is present."
-    },
-    {
-      "evidence_id": "ev-16",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 69,
-      "excerpt": "headers[\u0022Content-Type\u0022] = \u0022application/json\u0022",
-      "reason": "Adds the JSON content-type header only for the request-body branch."
-    },
-    {
-      "evidence_id": "ev-17",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 70,
-      "excerpt": "body = {\u0022executionData\u0022: {\u0022mlvExecutionDefinitionId\u0022: exec_def_id}}",
-      "reason": "Builds the new JSON payload shape carrying the execution-definition id."
-    },
-    {
-      "evidence_id": "ev-18",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 71,
-      "excerpt": "resp = requests.post(publicuri, headers=headers, data=json.dumps(body))",
-      "reason": "Uses the new payload-bearing POST when an execution-definition id is available."
-    },
-    {
-      "evidence_id": "ev-19",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 72,
-      "excerpt": "else:\n    resp = requests.post(publicuri, headers=headers)",
-      "reason": "Preserves a no-body POST path when there is no usable execution-definition id."
-    },
-    {
-      "evidence_id": "ev-20",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 75,
-      "excerpt": "resp.raise_for_status()",
-      "reason": "Introduces explicit failure propagation for unsuccessful HTTP responses."
-    },
-    {
-      "evidence_id": "ev-21",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 77,
-      "excerpt": "if \u0027Location\u0027 in resp.headers:",
-      "reason": "Guards the status-url logic so missing Location headers no longer cause direct indexed access."
-    },
-    {
-      "evidence_id": "ev-22",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 78,
-      "excerpt": "mlvRefreshStatusUrl = resp.headers[\u0027Location\u0027]",
-      "reason": "Reads the Location header only inside the new presence check."
-    },
-    {
-      "evidence_id": "ev-23",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
-      "side": "right",
-      "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
-      "hunk_id": "hunk-notebook-51",
-      "new_line": 79,
-      "excerpt": "print(f\u0022FMLV refresh successfully submitted. Status url: {mlvRefreshStatusUrl}\u0022)",
-      "reason": "Limits success logging to responses that actually provide a status URL."
+      "hunk_id": "fmlv_refresh_notebook.ipynb.scriban@@51-location",
+      "new_line": 76,
+      "excerpt": "\u0022if \u0027Location\u0027 in resp.headers:\\n\u0022,\n\u0022    mlvRefreshStatusUrl = resp.headers[\u0027Location\u0027]\\n\u0022,\n\u0022    print(f\\\u0022FMLV refresh successfully submitted. Status url: {mlvRefreshStatusUrl}\\\u0022)\\n\u0022,",
+      "reason": "Status-url logging is now conditional, avoiding a hard dependency on the response including a \u0060Location\u0060 header."
     }
   ],
   "scenario_sketches": [
     {
       "sketch_id": "sk-1",
-      "title": "Render trigger definition with \u0060mlv_exec_defn_id\u0060 instead of \u0060trigger_id\u0060",
-      "category": "Regression",
-      "technique": "RegressionGuard",
-      "rationale": "Use distinct \u0060triggerId\u0060 and \u0060mlvExecDefnId\u0060 values and assert the rendered trigger-definition JSON emits the execution-definition id in the Fabric parameter payload, proving the template no longer reuses \u0060triggerId\u0060.",
+      "title": "Render \u0060mlv_exec_defn_id\u0060 into generated trigger-definition parameters",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Verify that a request carrying \u0060MlvExecutionDefinitionId\u0060 flows through the renderer model and appears in the generated trigger definition where the FabricItemParameter value is emitted.",
       "evidence_refs": [
         "ev-1",
         "ev-2",
@@ -324,96 +206,114 @@
     },
     {
       "sketch_id": "sk-2",
-      "title": "Parse a valid \u0060fmlvExecutionDefinitionId\u0060 into the action",
+      "title": "Populate \u0060action.FmlvExecutionDefinitionId\u0060 from a valid nested parameter value",
       "category": "HappyPath",
       "technique": "HappyPath",
-      "rationale": "Build a trigger definition with a FabricItemInvocation \u0060parameters\u0060 group whose \u0060parameterName\u0060 is \u0060fmlvExecutionDefinitionId\u0060 and whose \u0060parameterValue\u0060 is a GUID; parsing should populate \u0060Action.FmlvExecutionDefinitionId\u0060 with that GUID.",
-      "evidence_refs": [
-        "ev-6",
-        "ev-7",
-        "ev-8",
-        "ev-11"
-      ]
-    },
-    {
-      "sketch_id": "sk-3",
-      "title": "Gracefully ignore malformed parameter collections while extracting the execution-definition id",
-      "category": "EdgeCase",
-      "technique": "EquivalencePartition",
-      "rationale": "Cover missing \u0060steps/rows/parameters.values\u0060 and groups missing \u0060arguments\u0060; the helper should return null / skip the group without throwing, exercising both new null-guard paths.",
-      "evidence_refs": [
-        "ev-8",
-        "ev-9",
-        "ev-10"
-      ]
-    },
-    {
-      "sketch_id": "sk-4",
-      "title": "Reject non-GUID execution-definition values during parsing",
-      "category": "EdgeCase",
-      "technique": "Counterfactual",
-      "rationale": "Provide a matching \u0060fmlvExecutionDefinitionId\u0060 parameter whose value is not a valid GUID; the new \u0060Guid.TryParse\u0060 guard should leave \u0060Action.FmlvExecutionDefinitionId\u0060 unset.",
+      "rationale": "A trigger definition containing a valid \u0060fmlvExecutionDefinitionId\u0060 in a \u0060FabricItemInvocation\u0060 parameter group should round-trip into the parsed action model as a GUID.",
       "evidence_refs": [
         "ev-6",
         "ev-7"
       ]
     },
     {
-      "sketch_id": "sk-5",
-      "title": "Compute correct Fabric host and refresh endpoint across prod and non-prod environments",
-      "category": "Regression",
-      "technique": "TruthTable",
-      "rationale": "Validate at least \u0060ENV=prod\u0060 and one non-prod prefix to ensure host selection uses the new prod special case and that both paths target \u0060/jobs/RefreshMaterializedLakeViews/instances\u0060.",
+      "sketch_id": "sk-3",
+      "title": "Ignore extracted execution-definition strings that are not valid GUIDs",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "The new \u0060Guid.TryParse\u0060 gate is a separate guard: malformed execution-definition strings should not populate \u0060action.FmlvExecutionDefinitionId\u0060.",
       "evidence_refs": [
-        "ev-13",
-        "ev-14"
+        "ev-6"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Return null when the execution-definition parameter path is absent",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Missing \u0060steps\u0060 / \u0060rows\u0060 / \u0060parameters.values\u0060 structure should short-circuit to null rather than throwing while searching for \u0060fmlvExecutionDefinitionId\u0060.",
+      "evidence_refs": [
+        "ev-7"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Skip malformed parameter groups that lack usable arguments or parameter names",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "The helper now continues past parameter groups whose \u0060arguments\u0060 collection is missing or whose \u0060parameterName\u0060 cannot be read, so malformed groups should not crash parsing.",
+      "evidence_refs": [
+        "ev-7"
       ]
     },
     {
       "sketch_id": "sk-6",
-      "title": "Send JSON executionData payload when an execution-definition id is present",
-      "category": "HappyPath",
-      "technique": "HappyPath",
-      "rationale": "With a nonblank \u0060fmlvExecutionDefinitionId\u0060, assert the notebook adds \u0060Content-Type: application/json\u0060 and posts a JSON body containing \u0060executionData.mlvExecutionDefinitionId\u0060.",
+      "title": "Return null when the matching execution-definition group has no parameterValue payload",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Even after a matching \u0060parameterName\u0060, missing \u0060parameterValue.values[0].value\u0060 should resolve to null instead of dereferencing absent JSON tokens.",
       "evidence_refs": [
-        "ev-15",
-        "ev-16",
-        "ev-17",
-        "ev-18"
+        "ev-7"
       ]
     },
     {
       "sketch_id": "sk-7",
-      "title": "Skip JSON payload when the execution-definition id is null, empty, or whitespace",
+      "title": "Resolve \u0060API_HOST\u0060 to the bare production host only when \u0060ENV == \u0022prod\u0022\u0060",
       "category": "EdgeCase",
       "technique": "BoundaryTriplet",
-      "rationale": "Exercise null, empty-string, and whitespace-only inputs; after normalization, the notebook should take the no-body POST branch rather than sending \u0060executionData\u0060.",
+      "rationale": "The new host-selection branch introduces a boundary case for production versus non-production environments that should be locked down explicitly.",
       "evidence_refs": [
-        "ev-1",
-        "ev-15",
-        "ev-19"
+        "ev-9"
       ]
     },
     {
       "sketch_id": "sk-8",
-      "title": "Raise immediately on failed refresh submission responses",
-      "category": "ErrorPath",
-      "technique": "ErrorPath",
-      "rationale": "Mock a 4xx/5xx response and verify the notebook raises via \u0060resp.raise_for_status()\u0060 before attempting success-path header access or logging.",
+      "title": "Call the path-based \u0060RefreshMaterializedLakeViews\u0060 instances endpoint",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "The refresh notebook now targets a different public URI shape, so submission should be validated against the new path-based endpoint contract.",
       "evidence_refs": [
-        "ev-20"
+        "ev-10"
       ]
     },
     {
       "sketch_id": "sk-9",
-      "title": "Do not crash when a successful response omits the \u0060Location\u0060 header",
-      "category": "EdgeCase",
-      "technique": "RegressionGuard",
-      "rationale": "Mock a successful POST without \u0060Location\u0060; the notebook should skip status-url extraction and success logging instead of throwing a header lookup error.",
+      "title": "POST \u0060executionData.mlvExecutionDefinitionId\u0060 JSON when an execution-definition id is provided",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Multi-schedule support depends on the notebook converting a non-empty execution-definition id into a JSON request body with the expected content type and field name.",
       "evidence_refs": [
-        "ev-21",
-        "ev-22",
-        "ev-23"
+        "ev-8",
+        "ev-11"
+      ]
+    },
+    {
+      "sketch_id": "sk-10",
+      "title": "Keep the refresh POST body empty when the execution-definition id is blank or whitespace",
+      "category": "EdgeCase",
+      "technique": "EquivalencePartition",
+      "rationale": "Blank or whitespace execution-definition values follow a distinct branch that should preserve the previous bodyless POST behavior.",
+      "evidence_refs": [
+        "ev-11"
+      ]
+    },
+    {
+      "sketch_id": "sk-11",
+      "title": "Raise on failed refresh-submission HTTP responses",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "\u0060resp.raise_for_status()\u0060 adds a new observable failure mode for non-success responses and should be exercised directly.",
+      "evidence_refs": [
+        "ev-12"
+      ]
+    },
+    {
+      "sketch_id": "sk-12",
+      "title": "Do not require a \u0060Location\u0060 response header before logging the status URL",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "The notebook now treats \u0060Location\u0060 as optional, so a successful response without that header should not fail during status logging.",
+      "evidence_refs": [
+        "ev-13"
       ]
     }
   ]

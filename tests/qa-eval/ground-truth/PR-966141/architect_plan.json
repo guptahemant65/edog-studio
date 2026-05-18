@@ -1,23 +1,41 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-18T15:15:10.2966947\u002B00:00",
+  "captured_at": "2026-05-18T18:52:09.6015746\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "966141",
   "zone_id": "PR-966141-full-diff",
-  "zone_summary": "Classify HttpStatusCode.BadRequest as user error in IsUserError()",
+  "zone_summary": "\u0060IsUserError\u0060 now classifies HTTP 400 as a user error, explicitly documents that the helper is only for user-facing controller/domain-exception classification (not OneLake/storage 400s), and flips the test matrix expectation for 400 from false to true.",
   "plan_outcome": "testable",
   "counts": {
-    "behavioral_changes": 1,
-    "grounding_evidence": 3,
-    "scenario_sketches": 1
+    "behavioral_changes": 4,
+    "grounding_evidence": 6,
+    "scenario_sketches": 4
   },
   "behavioral_changes": [
     {
-      "summary": "NodeExecutionUtils.IsUserError now classifies HTTP 400 / HttpStatusCode.BadRequest as a user error for the shared user-facing API error classifier.",
+      "summary": "\u0060IsUserError\u0060 now treats the named enum value \u0060HttpStatusCode.BadRequest\u0060 as a user error in the controller-facing allowlist.",
       "evidence_refs": [
-        "ev-1",
         "ev-2",
         "ev-3"
+      ]
+    },
+    {
+      "summary": "\u0060IsUserError\u0060 also separately allowlists numeric/casted \u0060400\u0060 via \u0060(int)statusCode == 400\u0060, preserving the same classification for raw underlying-value caller shapes.",
+      "evidence_refs": [
+        "ev-4"
+      ]
+    },
+    {
+      "summary": "The method contract is explicitly scoped to user-facing controller/domain-exception classification and explicitly excludes OneLake/storage 400s, which must use \u0060OnelakeBasedFileSystem\u0060 classification instead.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "summary": "The unit-test matrix now locks in HTTP 400 as a user error by flipping the DataRow expectation from \u0060false\u0060 to \u0060true\u0060.",
+      "evidence_refs": [
+        "ev-5",
+        "ev-6"
       ]
     }
   ],
@@ -27,43 +45,103 @@
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
       "side": "right",
       "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
-      "hunk_id": "@@ -219,16 \u002B224,18 @@",
-      "new_line": 229,
-      "excerpt": "return statusCode == HttpStatusCode.BadRequest ||",
-      "reason": "Adds BadRequest to the explicit HttpStatusCode user-error allowlist in IsUserError()."
+      "hunk_id": "NodeExecutionUtils.cs@@-205,\u002B205",
+      "new_line": 208,
+      "excerpt": "/// Determines if the given HTTP status code represents a user error for user-facing API classification.\n/// Used by controllers to classify domain exceptions (e.g., MLVExecutionDefinitionException,\n/// NotebookException) for SSR telemetry. Do NOT use for OneLake/storage errors \u2014 OneLake can\n/// return 400 for system-side issues and has its own classification in OnelakeBasedFileSystem.",
+      "reason": "Contract-bearing XML docs narrow the helper\u0027s intended callers and explicitly carve out OneLake/storage-originated 400s from this classifier\u0027s domain."
     },
     {
       "evidence_id": "ev-2",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
       "side": "right",
       "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
-      "hunk_id": "@@ -219,16 \u002B224,18 @@",
-      "new_line": 235,
-      "excerpt": "(int)statusCode == 400 ||",
-      "reason": "Adds numeric 400 to the same allowlist, ensuring raw/cast enum values for 400 are also treated as user errors."
+      "hunk_id": "NodeExecutionUtils.cs@@-205,\u002B205",
+      "new_line": 213,
+      "excerpt": "/// - 400 (BadRequest): Invalid user input/validation errors (e.g., missing displayName)",
+      "reason": "The XML docs add 400/BadRequest to the documented user-error set."
     },
     {
       "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+      "hunk_id": "NodeExecutionUtils.cs@@-205,\u002B205",
+      "new_line": 227,
+      "excerpt": "return statusCode == HttpStatusCode.BadRequest ||",
+      "reason": "Implementation add: the named \u0060HttpStatusCode.BadRequest\u0060 enum value now returns \u0060true\u0060 from \u0060IsUserError\u0060."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+      "hunk_id": "NodeExecutionUtils.cs@@-205,\u002B205",
+      "new_line": 233,
+      "excerpt": "(int)statusCode == 400 ||",
+      "reason": "Implementation add: numeric/casted 400 is explicitly allowlisted as a separate belt-and-suspenders branch."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs",
+      "side": "left",
+      "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+      "hunk_id": "NodeExecutionUtilsTests.cs@@-864,\u002B864",
+      "new_line": 883,
+      "excerpt": "[DataRow(400, false)] // BadRequest - Not classified as user error",
+      "reason": "Previous test expectation classified 400 as non-user-error; this is the old side of the assertion flip."
+    },
+    {
+      "evidence_id": "ev-6",
       "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs",
       "side": "right",
       "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
-      "hunk_id": "@@ -864,23 \u002B864,24 @@",
+      "hunk_id": "NodeExecutionUtilsTests.cs@@-864,\u002B864",
       "new_line": 875,
       "excerpt": "[DataRow(400, true)] // BadRequest - User error (invalid input, e.g. missing displayName)",
-      "reason": "Updates the unit-test matrix to expect HTTP 400 to return true from IsUserError()."
+      "reason": "New test expectation locks 400 into the user-error set; this is the new side of the assertion flip."
     }
   ],
   "scenario_sketches": [
     {
-      "sketch_id": "sc-1",
-      "title": "IsUserError returns true for BadRequest without widening classification to other non-allowlisted 4xx codes",
-      "category": "Regression",
-      "technique": "RegressionGuard",
-      "rationale": "Guard the newly added 400 classification in the shared utility and verify the allowlist remains narrow by contrasting it with a nearby non-user 4xx such as 429 and a 5xx code that should still return false.",
+      "sketch_id": "sk-1",
+      "title": "\u0060IsUserError\u0060 returns true for \u0060HttpStatusCode.BadRequest\u0060",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "The allowlist now explicitly includes the named \u0060BadRequest\u0060 enum value, so a nominal controller-facing 400 classification should succeed just like the existing 401/403/404/409/422 cases.",
       "evidence_refs": [
-        "ev-1",
         "ev-2",
         "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "Casted/raw \u0060400\u0060 values still classify as user errors",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "The added \u0060(int)statusCode == 400\u0060 arm is independently revertable from the enum arm and should be exercised as a separate caller-shape contract for numeric/casted 400 inputs.",
+      "evidence_refs": [
+        "ev-4"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "OneLake/storage-originated 400s remain out of scope for \u0060IsUserError\u0060 classification",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "The new XML docs add a forbidden-caller/domain boundary: controller/domain exceptions may use this helper, but OneLake/storage 400s must be classified elsewhere, so tests should guard against applying the new 400 rule to the wrong error source.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Regression guard: the IsUserError DataRow matrix expects 400 to be true",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "The data-driven test row flipped from \u0060400 -\u003E false\u0060 to \u0060400 -\u003E true\u0060; preserving that assertion is a distinct CI contract from the implementation change itself.",
+      "evidence_refs": [
+        "ev-5",
+        "ev-6"
       ]
     }
   ]

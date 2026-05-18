@@ -1,91 +1,75 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-18T13:46:03.1763323\u002B00:00",
+  "captured_at": "2026-05-18T19:36:13.0840805\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "977882",
   "zone_id": "PR-977882-full-diff",
-  "zone_summary": "Insights date contract v2.0.6",
+  "zone_summary": "Insights v2.0.6 replaces dateRange with a strict DateTimeOffset start/end contract on /summary, /trends, and /errors/top; centralizes 60-day/future/order validation and UTC day bucketing; and makes summary previous-period math culture-invariant.",
   "plan_outcome": "testable",
   "counts": {
-    "behavioral_changes": 9,
-    "grounding_evidence": 21,
-    "scenario_sketches": 9
+    "behavioral_changes": 7,
+    "grounding_evidence": 19,
+    "scenario_sketches": 8
   },
   "behavioral_changes": [
     {
-      "summary": "The /summary, /trends, and /errors/top actions now expose only startTime/endTime DateTimeOffset query inputs and route date handling through the new strict resolver instead of the old dateRange flow.",
+      "summary": "The /summary, /trends, and /errors/top actions no longer expose a dateRange query parameter; they now accept nullable DateTimeOffset startTime/endTime inputs, and the XML contract text was updated to describe the stricter v2.0.6 caller rules.",
       "evidence_refs": [
         "ev-2",
         "ev-3",
-        "ev-4",
-        "ev-8",
+        "ev-6",
+        "ev-7",
         "ev-9",
         "ev-10",
-        "ev-11",
-        "ev-12",
-        "ev-13"
-      ]
-    },
-    {
-      "summary": "When a bound is omitted, strict date resolution fills it independently: startTime defaults to now minus 7 days and endTime defaults to now.",
-      "evidence_refs": [
-        "ev-14",
-        "ev-15"
-      ]
-    },
-    {
-      "summary": "Requests are rejected when startTime is older than the last 60 days.",
-      "evidence_refs": [
-        "ev-1",
-        "ev-16"
-      ]
-    },
-    {
-      "summary": "Requests are rejected when endTime is in the future.",
-      "evidence_refs": [
-        "ev-17"
-      ]
-    },
-    {
-      "summary": "Requests are rejected unless endTime is strictly after startTime, so equal instants and reversed ranges both fail.",
-      "evidence_refs": [
-        "ev-18"
-      ]
-    },
-    {
-      "summary": "Requests are rejected when the requested interval is longer than 60 days.",
-      "evidence_refs": [
-        "ev-1",
         "ev-19"
       ]
     },
     {
-      "summary": "Same-day timestamp windows are allowed as long as endTime is later than startTime, even though both bounds are later reduced to day strings for SQL.",
+      "summary": "All three v2.0.6 insights endpoints now route through ResolveStrictDateRange, which applies missing-bound defaults independently and emits UTC yyyy-MM-dd strings for downstream queries.",
       "evidence_refs": [
-        "ev-18",
-        "ev-20",
-        "ev-21"
-      ]
-    },
-    {
-      "summary": "Summary previous-period calculation now parses and formats ISO date strings with InvariantCulture, removing dependence on ambient culture.",
-      "evidence_refs": [
-        "ev-5",
-        "ev-6",
-        "ev-7"
-      ]
-    },
-    {
-      "summary": "Resolved DateTimeOffset bounds are normalized to UTC yyyy-MM-dd strings before query-service calls, so offsets affect the forwarded day boundary.",
-      "evidence_refs": [
-        "ev-2",
-        "ev-3",
+        "ev-4",
         "ev-8",
-        "ev-9",
         "ev-11",
         "ev-12",
-        "ev-20",
-        "ev-21"
+        "ev-13",
+        "ev-18"
+      ]
+    },
+    {
+      "summary": "Strict date comparison now happens at full DateTimeOffset instant precision before day bucketing, so same-day windows remain valid when endTime is later than startTime.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-16",
+        "ev-18"
+      ]
+    },
+    {
+      "summary": "The shared strict resolver enforces the new 60-day envelope by rejecting starts older than 60 days and also carrying an explicit \u003E60-day span guard.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-12",
+        "ev-14",
+        "ev-17"
+      ]
+    },
+    {
+      "summary": "The shared strict resolver now rejects endTime values that are in the future.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-15"
+      ]
+    },
+    {
+      "summary": "The shared strict resolver now requires endTime to be strictly greater than startTime; equal or earlier end values are rejected.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-16"
+      ]
+    },
+    {
+      "summary": "GetSummaryAsync now parses and formats its previous-period boundary with InvariantCulture so prevStartDate is locale-independent.",
+      "evidence_refs": [
+        "ev-5"
       ]
     }
   ],
@@ -95,323 +79,296 @@
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "constants-strict-date-range",
+      "hunk_id": "controller-62",
       "new_line": 65,
       "excerpt": "private const int MaxStrictDateRangeDays = 60;",
-      "reason": "Introduces the 60-day cap used by the strict start floor and max-window validation."
+      "reason": "Introduces the new 60-day bound used by the strict v2.0.6 date contract."
     },
     {
       "evidence_id": "ev-2",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "summary-action-signature",
-      "new_line": 110,
-      "excerpt": "[FromQuery] DateTimeOffset? startTime = null,",
-      "reason": "Summary now binds startTime as a DateTimeOffset query parameter."
+      "hunk_id": "controller-92",
+      "new_line": 95,
+      "excerpt": "/// \u003Cparam name=\u0022startTime\u0022\u003EOptional start time (ISO-8601 date-time). Must be within the last 60 days and \u2264 endTime. Defaults to now \u2212 7 days.\u003C/param\u003E\n/// \u003Cparam name=\u0022endTime\u0022\u003EOptional end time (ISO-8601 date-time). Must be \u0026gt; startTime and \u2264 now. Window must not exceed 60 days. Defaults to now.\u003C/param\u003E",
+      "reason": "Contract-bearing XML comments redefine the /summary query contract around startTime/endTime and remove the old dateRange description."
     },
     {
       "evidence_id": "ev-3",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "summary-action-signature",
-      "new_line": 111,
-      "excerpt": "[FromQuery] DateTimeOffset? endTime = null,",
-      "reason": "Summary now binds endTime as a DateTimeOffset query parameter."
+      "hunk_id": "controller-107",
+      "new_line": 110,
+      "excerpt": "[FromQuery] DateTimeOffset? startTime = null,\n[FromQuery] DateTimeOffset? endTime = null,",
+      "reason": "The /summary action signature now exposes only nullable DateTimeOffset bounds and no dateRange parameter."
     },
     {
       "evidence_id": "ev-4",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "summary-action-date-resolution",
-      "new_line": 133,
+      "hunk_id": "controller-133",
+      "new_line": 136,
       "excerpt": "var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);",
-      "reason": "Summary switches to the new strict date-contract resolver."
+      "reason": "The /summary request pipeline now uses the shared strict resolver instead of the old dateRange-aware path."
     },
     {
       "evidence_id": "ev-5",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "summary-action-prev-period-culture",
-      "new_line": 142,
-      "excerpt": "var start = DateTime.Parse(startDate, System.Globalization.CultureInfo.InvariantCulture);",
-      "reason": "Previous-period computation now parses the start date with InvariantCulture."
+      "hunk_id": "controller-142",
+      "new_line": 144,
+      "excerpt": "var start = DateTime.Parse(startDate, System.Globalization.CultureInfo.InvariantCulture);\nvar end = DateTime.Parse(endDate, System.Globalization.CultureInfo.InvariantCulture);\nvar periodDays = (end - start).Days \u002B 1;\nvar prevStartDate = start.AddDays(-periodDays).ToString(\u0022yyyy-MM-dd\u0022, System.Globalization.CultureInfo.InvariantCulture);",
+      "reason": "Summary previous-period math now parses and formats with InvariantCulture, changing locale-sensitive behavior."
     },
     {
       "evidence_id": "ev-6",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "summary-action-prev-period-culture",
-      "new_line": 143,
-      "excerpt": "var end = DateTime.Parse(endDate, System.Globalization.CultureInfo.InvariantCulture);",
-      "reason": "Previous-period computation now parses the end date with InvariantCulture."
+      "hunk_id": "controller-292",
+      "new_line": 295,
+      "excerpt": "/// \u003Cparam name=\u0022startTime\u0022\u003EOptional start time (ISO-8601 date-time). Must be within the last 60 days and \u2264 endTime. Defaults to now \u2212 7 days.\u003C/param\u003E\n/// \u003Cparam name=\u0022endTime\u0022\u003EOptional end time (ISO-8601 date-time). Must be \u0026gt; startTime and \u2264 now. Window must not exceed 60 days. Defaults to now.\u003C/param\u003E",
+      "reason": "Contract-bearing XML comments apply the same stricter caller contract to /trends."
     },
     {
       "evidence_id": "ev-7",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "summary-action-prev-period-culture",
-      "new_line": 145,
-      "excerpt": "var prevStartDate = start.AddDays(-periodDays).ToString(\u0022yyyy-MM-dd\u0022, System.Globalization.CultureInfo.InvariantCulture);",
-      "reason": "Previous-period start date is now formatted culture-invariantly before the query call."
+      "hunk_id": "controller-308",
+      "new_line": 311,
+      "excerpt": "[FromQuery] DateTimeOffset? startTime = null,\n[FromQuery] DateTimeOffset? endTime = null,",
+      "reason": "The /trends action signature now exposes only nullable DateTimeOffset bounds and no dateRange parameter."
     },
     {
       "evidence_id": "ev-8",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "trends-action-signature",
-      "new_line": 308,
-      "excerpt": "[FromQuery] DateTimeOffset? startTime = null,",
-      "reason": "Trends now binds startTime as a DateTimeOffset query parameter."
+      "hunk_id": "controller-335",
+      "new_line": 338,
+      "excerpt": "var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);",
+      "reason": "The /trends request pipeline now uses the shared strict resolver."
     },
     {
       "evidence_id": "ev-9",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "trends-action-signature",
-      "new_line": 309,
-      "excerpt": "[FromQuery] DateTimeOffset? endTime = null,",
-      "reason": "Trends now binds endTime as a DateTimeOffset query parameter."
+      "hunk_id": "controller-382",
+      "new_line": 385,
+      "excerpt": "/// \u003Cparam name=\u0022startTime\u0022\u003EOptional start time (ISO-8601 date-time). Must be within the last 60 days and \u2264 endTime. Defaults to now \u2212 7 days.\u003C/param\u003E\n/// \u003Cparam name=\u0022endTime\u0022\u003EOptional end time (ISO-8601 date-time). Must be \u0026gt; startTime and \u2264 now. Window must not exceed 60 days. Defaults to now.\u003C/param\u003E",
+      "reason": "Contract-bearing XML comments apply the same stricter caller contract to /errors/top."
     },
     {
       "evidence_id": "ev-10",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "trends-action-date-resolution",
-      "new_line": 335,
-      "excerpt": "var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);",
-      "reason": "Trends switches to the new strict date-contract resolver."
+      "hunk_id": "controller-398",
+      "new_line": 401,
+      "excerpt": "[FromQuery] DateTimeOffset? startTime = null,\n[FromQuery] DateTimeOffset? endTime = null,",
+      "reason": "The /errors/top action signature now exposes only nullable DateTimeOffset bounds and no dateRange parameter."
     },
     {
       "evidence_id": "ev-11",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "top-errors-action-signature",
-      "new_line": 398,
-      "excerpt": "[FromQuery] DateTimeOffset? startTime = null,",
-      "reason": "Top-errors now binds startTime as a DateTimeOffset query parameter."
+      "hunk_id": "controller-425",
+      "new_line": 428,
+      "excerpt": "var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);",
+      "reason": "The /errors/top request pipeline now uses the shared strict resolver."
     },
     {
       "evidence_id": "ev-12",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "top-errors-action-signature",
-      "new_line": 399,
-      "excerpt": "[FromQuery] DateTimeOffset? endTime = null,",
-      "reason": "Top-errors now binds endTime as a DateTimeOffset query parameter."
+      "hunk_id": "controller-582",
+      "new_line": 585,
+      "excerpt": "/// \u003Csummary\u003E\n/// Resolves the date range for Insights v2.0.6 endpoints (/summary, /trends, /errors/top).\n/// Enforces the v2.0.6 \u00A73.3 contract verbatim:\n///   startTime: ISO-8601 date-time, \u2265 now \u2212 60d, \u2264 endTime, default = now \u2212 7d.\n///   endTime:   ISO-8601 date-time, \u0026gt; startTime, \u2264 now, window \u2264 60d, default = now.\n/// Defaults are applied independently when a side is omitted.\n/// Comparisons run at full DateTimeOffset instant precision; the SQL layer is day-bucketed\n/// (results in yyyy-MM-dd UTC) so same-day windows are honored at day resolution.\n/// \u003C/summary\u003E",
+      "reason": "This is a contract-bearing summary comment that explicitly narrows the allowed input domain and documents same-day/day-bucket behavior for all three endpoints."
     },
     {
       "evidence_id": "ev-13",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "top-errors-action-date-resolution",
-      "new_line": 425,
-      "excerpt": "var (startDate, endDate, dateError) = ResolveStrictDateRange(startTime, endTime);",
-      "reason": "Top-errors switches to the new strict date-contract resolver."
+      "hunk_id": "controller-582",
+      "new_line": 596,
+      "excerpt": "var now = DateTimeOffset.UtcNow;\nvar start = startTime ?? now.AddDays(-DefaultDateRangeDays);\nvar end = endTime ?? now;",
+      "reason": "Implements independent defaults for omitted start and end bounds."
     },
     {
       "evidence_id": "ev-14",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 597,
-      "excerpt": "var start = startTime ?? now.AddDays(-DefaultDateRangeDays);",
-      "reason": "Missing startTime now defaults to now minus the standard 7-day range."
+      "hunk_id": "controller-582",
+      "new_line": 600,
+      "excerpt": "if (start \u003C now.AddDays(-MaxStrictDateRangeDays))\n{\n    return (null, null, BadRequest(new { error = $\u0022startTime must be within the last {MaxStrictDateRangeDays} days.\u0022 }));\n}",
+      "reason": "Adds the 400 path for starts older than the v2.0.6 60-day floor."
     },
     {
       "evidence_id": "ev-15",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 598,
-      "excerpt": "var end = endTime ?? now;",
-      "reason": "Missing endTime now defaults to the current instant."
+      "hunk_id": "controller-582",
+      "new_line": 605,
+      "excerpt": "if (end \u003E now)\n{\n    return (null, null, BadRequest(new { error = \u0022endTime cannot be in the future.\u0022 }));\n}",
+      "reason": "Adds the 400 path for future endTime values."
     },
     {
       "evidence_id": "ev-16",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 602,
-      "excerpt": "return (null, null, BadRequest(new { error = $\u0022startTime must be within the last {MaxStrictDateRangeDays} days.\u0022 }));",
-      "reason": "Adds the explicit 400 guard for startTime older than the 60-day floor."
+      "hunk_id": "controller-582",
+      "new_line": 608,
+      "excerpt": "if (end \u003C= start)\n{\n    return (null, null, BadRequest(new { error = \u0022endTime must be after startTime.\u0022 }));\n}",
+      "reason": "Adds the strict-order 400 path covering both equal and reversed bounds."
     },
     {
       "evidence_id": "ev-17",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 607,
-      "excerpt": "return (null, null, BadRequest(new { error = \u0022endTime cannot be in the future.\u0022 }));",
-      "reason": "Adds the explicit 400 guard for future endTime values."
+      "hunk_id": "controller-582",
+      "new_line": 611,
+      "excerpt": "if ((end - start) \u003E TimeSpan.FromDays(MaxStrictDateRangeDays))\n{\n    return (null, null, BadRequest(new { error = $\u0022Date range must not exceed {MaxStrictDateRangeDays} days.\u0022 }));\n}",
+      "reason": "Encodes the explicit \u0027window must not exceed 60 days\u0027 branch of the new date contract."
     },
     {
       "evidence_id": "ev-18",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 612,
-      "excerpt": "return (null, null, BadRequest(new { error = \u0022endTime must be after startTime.\u0022 }));",
-      "reason": "Adds the strict ordering guard that rejects equal or reversed ranges."
+      "hunk_id": "controller-582",
+      "new_line": 614,
+      "excerpt": "var startStr = start.UtcDateTime.ToString(\u0022yyyy-MM-dd\u0022, System.Globalization.CultureInfo.InvariantCulture);\nvar endStr = end.UtcDateTime.ToString(\u0022yyyy-MM-dd\u0022, System.Globalization.CultureInfo.InvariantCulture);\nreturn (startStr, endStr, null);",
+      "reason": "Normalizes explicit/defaulted bounds into UTC yyyy-MM-dd strings, which is the observable query-service input shape."
     },
     {
       "evidence_id": "ev-19",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs",
       "side": "right",
       "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 617,
-      "excerpt": "return (null, null, BadRequest(new { error = $\u0022Date range must not exceed {MaxStrictDateRangeDays} days.\u0022 }));",
-      "reason": "Adds the explicit 400 guard for windows longer than 60 days."
-    },
-    {
-      "evidence_id": "ev-20",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
-      "side": "right",
-      "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 620,
-      "excerpt": "var startStr = start.UtcDateTime.ToString(\u0022yyyy-MM-dd\u0022, System.Globalization.CultureInfo.InvariantCulture);",
-      "reason": "Resolved startTime is converted to a UTC date string before being sent to SQL/query-service layers."
-    },
-    {
-      "evidence_id": "ev-21",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
-      "side": "right",
-      "base_sha": "74c538b15da7954aa7b132e0135fa73f8e447347",
-      "hunk_id": "resolve-strict-date-range",
-      "new_line": 621,
-      "excerpt": "var endStr = end.UtcDateTime.ToString(\u0022yyyy-MM-dd\u0022, System.Globalization.CultureInfo.InvariantCulture);",
-      "reason": "Resolved endTime is converted to a UTC date string before being sent to SQL/query-service layers."
+      "hunk_id": "tests-680",
+      "new_line": 1020,
+      "excerpt": "public void V206Endpoints_DoNotExposeDateRangeParameter()\n{\n    ...\n    var hasDateRange = method.GetParameters().Any(p =\u003E p.Name == \u0022dateRange\u0022);\n    Assert.IsFalse(hasDateRange, $\u0022{methodName} must not declare a \u0027dateRange\u0027 parameter under v2.0.6.\u0022);\n}",
+      "reason": "Adds an explicit contract test that locks in removal of the dateRange parameter from the three v2.0.6 endpoints."
     }
   ],
   "scenario_sketches": [
     {
       "sketch_id": "sk-1",
-      "title": "Insights v2.0.6 endpoints expose startTime/endTime only",
-      "category": "Regression",
+      "title": "v2.0.6 insights actions expose only DateTimeOffset start/end bounds and no dateRange",
+      "category": "EdgeCase",
       "technique": "RegressionGuard",
-      "rationale": "Reflect over GetSummaryAsync, GetTrendsAsync, and GetTopErrorsAsync to assert the public query contract contains DateTimeOffset start/end parameters and no longer depends on the legacy dateRange input.",
+      "rationale": "Reflect over GetSummaryAsync, GetTrendsAsync, and GetTopErrorsAsync (or generated API metadata) to assert there is no dateRange query parameter, startTime/endTime are nullable DateTimeOffset query args, and the published contract text matches the stricter v2.0.6 caller shape.",
       "evidence_refs": [
         "ev-2",
         "ev-3",
-        "ev-4",
-        "ev-8",
+        "ev-6",
+        "ev-7",
         "ev-9",
         "ev-10",
-        "ev-11",
         "ev-12",
-        "ev-13"
-      ]
-    },
-    {
-      "sketch_id": "sk-2",
-      "title": "Omitted bounds default independently to last-7-days-through-now",
-      "category": "HappyPath",
-      "technique": "TruthTable",
-      "rationale": "Exercise a small matrix of calls with neither bound, start only, and end only; assert the forwarded dates use now-7d when start is missing and now when end is missing, rather than deriving one side from the other.",
-      "evidence_refs": [
-        "ev-14",
-        "ev-15"
-      ]
-    },
-    {
-      "sketch_id": "sk-3",
-      "title": "Reject startTime older than the 60-day floor",
-      "category": "EdgeCase",
-      "technique": "BoundaryTriplet",
-      "rationale": "Probe just inside the floor, exactly at the floor, and just beyond it to confirm only older-than-60-days requests fail with 400.",
-      "evidence_refs": [
-        "ev-1",
-        "ev-16"
-      ]
-    },
-    {
-      "sketch_id": "sk-4",
-      "title": "Reject future endTime values",
-      "category": "EdgeCase",
-      "technique": "BoundaryTriplet",
-      "rationale": "Validate endTime just before now, exactly now, and just after now to pin the future-time guard.",
-      "evidence_refs": [
-        "ev-17"
-      ]
-    },
-    {
-      "sketch_id": "sk-5",
-      "title": "Require endTime to be strictly after startTime",
-      "category": "EdgeCase",
-      "technique": "BoundaryTriplet",
-      "rationale": "Cover reversed ranges, equal instants, and a minimally greater endTime to prove equality is invalid while a same-day later timestamp is valid.",
-      "evidence_refs": [
-        "ev-18"
-      ]
-    },
-    {
-      "sketch_id": "sk-6",
-      "title": "Reject ranges longer than 60 days",
-      "category": "EdgeCase",
-      "technique": "BoundaryTriplet",
-      "rationale": "Check spans just under 60 days, exactly 60 days, and slightly over 60 days to verify only over-cap windows are rejected.",
-      "evidence_refs": [
-        "ev-1",
         "ev-19"
       ]
     },
     {
-      "sketch_id": "sk-7",
-      "title": "Accept same-day timestamp windows",
+      "sketch_id": "sk-2",
+      "title": "Missing date bounds default independently to now - 7d and now across summary/trends/top-errors",
+      "category": "EdgeCase",
+      "technique": "EquivalencePartition",
+      "rationale": "Exercise three partitions: neither bound supplied, start-only supplied, and end-only supplied. Verify the shared strict resolver fills each missing side independently and the three endpoints all route through that behavior.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-8",
+        "ev-11",
+        "ev-12",
+        "ev-13",
+        "ev-18"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "Explicit DateTimeOffset bounds are normalized to UTC yyyy-MM-dd before querying",
       "category": "HappyPath",
       "technique": "HappyPath",
-      "rationale": "Send startTime and endTime on the same UTC day with start\u003Cend, expect success, and verify both forwarded query dates collapse to the same yyyy-MM-dd bucket.",
+      "rationale": "Pass explicit timestamped start/end values and assert the downstream query-service call receives UTC day strings, not local-time or raw timestamp text.",
       "evidence_refs": [
-        "ev-18",
-        "ev-20",
-        "ev-21"
+        "ev-3",
+        "ev-4",
+        "ev-7",
+        "ev-8",
+        "ev-10",
+        "ev-11",
+        "ev-18"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Same-day timestamp windows are accepted when endTime is later than startTime",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Use two instants on the same UTC day to prove the accept/reject decision is based on full DateTimeOffset precision before day truncation; a same-day later end should still return OK.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-16",
+        "ev-18"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Requests beyond the 60-day date envelope return 400",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Probe the 60-day boundary and just beyond it to preserve the v2.0.6 envelope. This covers the observable contract that too-old requests are rejected and anchors the explicit \u003E60-day-span branch as part of the same 60-day limit.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-12",
+        "ev-14",
+        "ev-17"
+      ]
+    },
+    {
+      "sketch_id": "sk-6",
+      "title": "Future endTime is rejected on the strict insights endpoints",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Set endTime just after UtcNow and verify the shared strict resolver returns BadRequest before any query execution.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-15"
+      ]
+    },
+    {
+      "sketch_id": "sk-7",
+      "title": "endTime must be strictly after startTime",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Cover both reversed bounds and equal instants, since the new rule is a strict end \u003E start invariant rather than end \u003E= start.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-16"
       ]
     },
     {
       "sketch_id": "sk-8",
-      "title": "Summary previous-period calculation is culture-invariant",
-      "category": "Regression",
-      "technique": "RegressionGuard",
-      "rationale": "Run GetSummaryAsync under a non-default CurrentCulture and assert the previous-period start date passed to the query service is still derived correctly from the ISO day strings.",
-      "evidence_refs": [
-        "ev-5",
-        "ev-6",
-        "ev-7"
-      ]
-    },
-    {
-      "sketch_id": "sk-9",
-      "title": "Offset-bearing inputs normalize to UTC day strings",
-      "category": "Regression",
+      "title": "Summary previous-period start remains culture-invariant",
+      "category": "EdgeCase",
       "technique": "Counterfactual",
-      "rationale": "Use DateTimeOffset inputs whose local date differs from their UTC date and assert the query-service start/end strings follow the UTC date component, not the caller-local one.",
+      "rationale": "Run GetSummaryAsync under a non-invariant CurrentCulture and assert prevStartDate still uses yyyy-MM-dd and correct period math, proving the new InvariantCulture parse/format calls are required.",
       "evidence_refs": [
-        "ev-2",
-        "ev-3",
-        "ev-8",
-        "ev-9",
-        "ev-11",
-        "ev-12",
-        "ev-20",
-        "ev-21"
+        "ev-5"
       ]
     }
   ]

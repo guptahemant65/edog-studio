@@ -28,8 +28,8 @@
 //   - hits /openai/responses with ?api-version= present
 //   - has api-key header
 //   - has strict json_schema in text.format
-//   - Architect: effort=high + max_output_tokens=65536 + prompt_cache_key=edog-qa-architect-v1
-//   - Editor:    effort=low  + max_output_tokens=16384 + prompt_cache_key=edog-qa-editor-v1
+//   - Architect: effort=high + max_output_tokens=96000 + prompt_cache_key=edog-qa-architect-v2
+//   - Editor:    effort=low  + max_output_tokens=32000 + prompt_cache_key=edog-qa-editor-v2
 //
 // Schema-strictness (recursive walk):
 //   - Architect plan schema and scenario batch schema both pass
@@ -288,7 +288,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 hasStrictJsonSchema = body.Contains("\"type\":\"json_schema\"", StringComparison.Ordinal)
                     && body.Contains("\"strict\":true", StringComparison.Ordinal),
                 hasReasoningEffortHigh = body.Contains("\"effort\":\"high\"", StringComparison.Ordinal),
-                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":65536", StringComparison.Ordinal),
+                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":96000", StringComparison.Ordinal),
                 hasPromptCacheKey = body.Contains("\"prompt_cache_key\":\"" + EdogQaLlmClient.PromptCacheKeyArchitect + "\"", StringComparison.Ordinal),
                 modelMentioned = body.Contains("\"model\":\"gpt-5.4\"", StringComparison.Ordinal),
                 schemaNamePinned = body.Contains("\"name\":\"" + EdogQaLlmClient.ArchitectSchemaName + "\"", StringComparison.Ordinal),
@@ -315,7 +315,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 hasStrictJsonSchema = body.Contains("\"type\":\"json_schema\"", StringComparison.Ordinal)
                     && body.Contains("\"strict\":true", StringComparison.Ordinal),
                 hasReasoningEffortLow = body.Contains("\"effort\":\"low\"", StringComparison.Ordinal),
-                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":16384", StringComparison.Ordinal),
+                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":32000", StringComparison.Ordinal),
                 hasPromptCacheKey = body.Contains("\"prompt_cache_key\":\"" + EdogQaLlmClient.PromptCacheKeyEditor + "\"", StringComparison.Ordinal),
                 modelMentioned = body.Contains("\"model\":\"gpt-5.4-mini\"", StringComparison.Ordinal),
                 schemaNamePinned = body.Contains("\"name\":\"" + EdogQaLlmClient.EditorSchemaName + "\"", StringComparison.Ordinal),

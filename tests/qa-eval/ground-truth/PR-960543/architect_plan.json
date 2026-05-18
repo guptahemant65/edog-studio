@@ -1,68 +1,112 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-18T15:23:49.7808695\u002B00:00",
+  "captured_at": "2026-05-18T18:50:14.6939651\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "960543",
   "zone_id": "PR-960543-full-diff",
   "zone_summary": "Data integrity error codes (MLV_DATA_CORRUPTED, MLV_ENTITY_NOT_FOUND)",
   "plan_outcome": "testable",
   "counts": {
-    "behavioral_changes": 7,
+    "behavioral_changes": 13,
     "grounding_evidence": 14,
-    "scenario_sketches": 9
+    "scenario_sketches": 13
   },
   "behavioral_changes": [
     {
-      "summary": "Catalog lookup now treats a cross-lakehouse artifact with an empty ObjectId as corrupted metadata, throwing CatalogException with HTTP 500 and ErrorCode.MLV_DATA_CORRUPTED using a formatted lakehouse/workspace identifier.",
+      "summary": "Cross-lakehouse catalog validation now classifies a Guid.Empty lakehouse ObjectId as corrupted metadata and throws CatalogException with MLV_DATA_CORRUPTED instead of a generic server error.",
       "evidence_refs": [
         "ev-1",
-        "ev-7"
+        "ev-12",
+        "ev-13"
       ]
     },
     {
-      "summary": "Data quality report creation now maps missing lakehouse properties to CatalogException/MLV_DATA_CORRUPTED, and the controller converts that CatalogException into an HTTP error response that preserves the exception status code and message.",
+      "summary": "PySpark DAG construction now treats a missing SourceInfo payload as corrupted catalog data and throws CatalogException with MLV_DATA_CORRUPTED.",
+      "evidence_refs": [
+        "ev-5",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "PySpark DAG construction now treats a structurally invalid/null-parsed SourceInfo object as corrupted catalog data and throws CatalogException with MLV_DATA_CORRUPTED.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "PySpark DAG construction now converts SourceInfo deserialization/parsing failures into CatalogException with MLV_DATA_CORRUPTED.",
+      "evidence_refs": [
+        "ev-7",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "PySpark DAG construction now treats missing workspaceId or notebookId fields in SourceInfo as corrupted catalog data.",
+      "evidence_refs": [
+        "ev-8",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "PySpark DAG construction now treats invalid GUID strings in SourceInfo as corrupted catalog data.",
+      "evidence_refs": [
+        "ev-9",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "Catalog table rebuilding now classifies an empty table name as MLV_DATA_CORRUPTED instead of throwing ArgumentException.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "Catalog table rebuilding now classifies an empty table type as MLV_DATA_CORRUPTED instead of throwing ArgumentException.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "Data quality report creation now classifies null lakehouse properties as CatalogException with MLV_DATA_CORRUPTED.",
       "evidence_refs": [
         "ev-2",
-        "ev-3",
-        "ev-7"
+        "ev-12",
+        "ev-13"
       ]
     },
     {
-      "summary": "Public execution-definition validation now throws a standardized MLV_SELECTED_NOT_FOUND message from ErrorRegistry using the joined missing-MLV names, instead of hardcoded MLV_ENTITY_NOT_FOUND text.",
+      "summary": "The data-quality-report controller pipeline now catches CatalogException and returns the exception\u0027s HTTP status and message to the client.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "Selected-MLV validation in the public execution-definition API now uses ErrorRegistry-based MLV_SELECTED_NOT_FOUND responses that list missing MLV names, replacing the old hardcoded MLV_ENTITY_NOT_FOUND text.",
       "evidence_refs": [
         "ev-4"
       ]
     },
     {
-      "summary": "The ErrorRegistry contract for MLV_ENTITY_NOT_FOUND now describes incomplete source metadata for a named materialized lake view, replacing the old generic \u0027referenced couldn\u0027t be found or is inaccessible\u0027 wording.",
+      "summary": "A new MLV_DATA_CORRUPTED error code and registry template were added, with recreate/retry/support guidance and FullyQualifiedMLVName substitution.",
       "evidence_refs": [
-        "ev-5"
-      ]
-    },
-    {
-      "summary": "The service adds a first-class MLV_DATA_CORRUPTED error code and standardized ErrorRegistry template that injects a fully qualified MLV/lakehouse identifier and supports standard error-code prefixing.",
-      "evidence_refs": [
-        "ev-6",
-        "ev-7"
-      ]
-    },
-    {
-      "summary": "PySpark DAG creation now consistently converts source-info corruption cases\u2014missing source info, invalid/null parsed source info, malformed JSON, blank required identifiers, and invalid GUIDs\u2014into CatalogException with HTTP 500 and ErrorCode.MLV_DATA_CORRUPTED.",
-      "evidence_refs": [
-        "ev-8",
-        "ev-9",
-        "ev-10",
-        "ev-11",
         "ev-12",
-        "ev-7"
+        "ev-13"
       ]
     },
     {
-      "summary": "Catalog table metadata validation now treats empty table names and missing table types as corrupted catalog data, throwing CatalogException/MLV_DATA_CORRUPTED instead of ArgumentException.",
+      "summary": "The MLV_ENTITY_NOT_FOUND registry message was repurposed to describe incomplete source metadata for a materialized lake view, using MLVName substitution.",
       "evidence_refs": [
-        "ev-13",
-        "ev-14",
-        "ev-7"
+        "ev-14"
       ]
     }
   ],
@@ -72,237 +116,289 @@
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -507,7 \u002B507,11 @@",
+      "hunk_id": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs@@-507,7\u002B507,11",
       "new_line": 510,
       "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, $\u0022lakehouse \u0027{srcEntityLakehouseName}\u0027 in workspace \u0027{srcEntityWorkspaceName}\u0027\u0022 } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This replacement is the concrete throw-site that changes invalid lakehouse ObjectId handling from a generic server error to the new corrupted-metadata contract."
+      "reason": "Changed the invalid-ObjectId branch from a generic server error to a specific corrupted-metadata CatalogException with formatted error text."
     },
     {
       "evidence_id": "ev-2",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -86,7 \u002B88,11 @@",
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs@@-86,7\u002B88,11",
       "new_line": 91,
       "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, $\u0022lakehouse \u0027{requestContext.ArtifactId}\u0027\u0022 } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This is the new defensive guard that reclassifies null lakehouse properties as corrupted catalog data via CatalogException/MLV_DATA_CORRUPTED."
+      "reason": "New defensive guard for null lakehouse properties now raises a typed CatalogException carrying the corrupted-data code and message."
     },
     {
       "evidence_id": "ev-3",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -719,6 \u002B719,12 @@",
+      "hunk_id": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs@@-719,6\u002B719,12",
       "new_line": 722,
       "excerpt": "catch (CatalogException ex)\n{\n    Tracer.LogSanitizedError(ex, $\u0022Catalog error during Data Quality Report creation. StatusCode: {ex.StatusCode}, ErrorCode: {ex.ErrorCode}\u0022);\n    resultCode = ex.StatusCode;\n    return CreateErrorResponse(ex.Message, resultCode);\n}",
-      "reason": "This new catch block is the controller behavior that surfaces CatalogException status/message to HTTP callers during data-quality-report creation."
+      "reason": "Adds a new controller branch that preserves CatalogException status/message instead of falling through to broader handlers."
     },
     {
       "evidence_id": "ev-4",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -526,12 \u002B527,12 @@",
+      "hunk_id": "Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs@@-526,12\u002B527,12",
       "new_line": 530,
       "excerpt": "var missingNames = string.Join(\u0022, \u0022, displayedNames) \u002B suffix;\n\nvar parameters = new Dictionary\u003Cstring, string\u003E { { Constants.MissingMLVNamesKey, missingNames } };\nthrow new MLVExecutionDefinitionException(\n    HttpStatusCode.BadRequest,\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_SELECTED_NOT_FOUND, parameters, ErrorCodePrefixFormat.Standard));",
-      "reason": "This is the exact validation branch that changes the selected-MLV error payload from hardcoded MLV_ENTITY_NOT_FOUND text to a standardized MLV_SELECTED_NOT_FOUND message built from missing names."
+      "reason": "Switches invalid-selected-MLV validation from hardcoded text to a standardized error code/message path that injects the missing names list."
     },
     {
       "evidence_id": "ev-5",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -171,7 \u002B171,7 @@",
-      "new_line": 174,
-      "excerpt": "{ ErrorCode.MLV_ENTITY_NOT_FOUND, $\u0022The materialized lake view \u0027{{{Constants.MLVNameKey}}}\u0027 has incomplete source metadata and can\u0027t be processed. Update the lake view definition to include a valid source, then try again.\u0022 },",
-      "reason": "This changed registry entry is the message-contract change for MLV_ENTITY_NOT_FOUND."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-644,7\u002B644,11",
+      "new_line": 647,
+      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
+      "reason": "Replaces the PySpark missing-SourceInfo InvalidOperationException with a specific CatalogException/MLV_DATA_CORRUPTED path."
     },
     {
       "evidence_id": "ev-6",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -645,6 \u002B645,11 @@",
-      "new_line": 650,
-      "excerpt": "/// Error indicating catalog data is corrupted or missing required information for processing.\nMLV_DATA_CORRUPTED,",
-      "reason": "This enum addition creates the new first-class error code used by the updated Catalog, DAG, and Data Quality paths."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-658,7\u002B662,11",
+      "new_line": 665,
+      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
+      "reason": "Changes the branch for invalid/null-parsed SourceInfo objects to the new corrupted-metadata error contract."
     },
     {
       "evidence_id": "ev-7",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -197,6 \u002B197,9 @@",
-      "new_line": 202,
-      "excerpt": "{ ErrorCode.MLV_DATA_CORRUPTED, $\u0022Catalog data does not have information needed to process this request. Recreate the materialized lake view \u0027{{{Constants.FullyQualifiedMLVNameKey}}}\u0027 and retry the operation. If issue persists, reach out to support.\u0022 },",
-      "reason": "This new registry template defines the standardized caller-visible message for corrupted metadata scenarios."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-670,7\u002B678,12",
+      "new_line": 681,
+      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED,\n    ex);",
+      "reason": "Normalizes exceptions raised while interpreting SourceInfo into CatalogException with the corrupted-data code, preserving the inner exception."
     },
     {
       "evidence_id": "ev-8",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -644,7 \u002B644,11 @@",
-      "new_line": 647,
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-685,7\u002B698,11",
+      "new_line": 701,
       "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This PySpark-only branch changes the \u0027missing source info\u0027 path from InvalidOperationException to CatalogException/MLV_DATA_CORRUPTED."
+      "reason": "Adds a dedicated corruption classification when required SourceInfo fields are blank or whitespace."
     },
     {
       "evidence_id": "ev-9",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -658,7 \u002B662,11 @@",
-      "new_line": 665,
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-703,7\u002B720,11",
+      "new_line": 723,
       "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This is the PySpark branch for invalid/null parsed SourceInfo, now mapped to the corrupted-metadata error contract."
+      "reason": "Changes the invalid-GUID error path for PySpark source metadata to the new CatalogException/MLV_DATA_CORRUPTED contract."
     },
     {
       "evidence_id": "ev-10",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -670,7 \u002B678,12 @@",
-      "new_line": 681,
-      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED,\n    ex);",
-      "reason": "This catch-path changes malformed JSON/deserialization failures to CatalogException and preserves the original exception as InnerException."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-800,13\u002B821,21",
+      "new_line": 824,
+      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, \u0022(unknown)\u0022 } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
+      "reason": "Replaces the empty-table-name ArgumentException with a typed corrupted-metadata CatalogException."
     },
     {
       "evidence_id": "ev-11",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -685,7 \u002B698,11 @@",
-      "new_line": 701,
+      "hunk_id": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs@@-800,13\u002B821,21",
+      "new_line": 834,
       "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This guard now treats blank workspaceId/notebookId fields in PySpark SourceInfo as corrupted metadata."
+      "reason": "Replaces the empty-table-type ArgumentException with a typed corrupted-metadata CatalogException."
     },
     {
       "evidence_id": "ev-12",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -703,7 \u002B720,11 @@",
-      "new_line": 723,
-      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This branch changes invalid GUID parsing in PySpark SourceInfo from InvalidOperationException to CatalogException/MLV_DATA_CORRUPTED."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs@@-645,6\u002B645,11",
+      "new_line": 649,
+      "excerpt": "/// \u003Csummary\u003E\n/// Error indicating catalog data is corrupted or missing required information for processing.\n/// \u003C/summary\u003E\nMLV_DATA_CORRUPTED,",
+      "reason": "Introduces the new error-code contract and its documented meaning."
     },
     {
       "evidence_id": "ev-13",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -800,13 \u002B821,21 @@",
-      "new_line": 824,
-      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, \u0022(unknown)\u0022 } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This is the new validation/error path for an empty table name during DAG rebuild."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs@@-197,6\u002B197,9",
+      "new_line": 201,
+      "excerpt": "// Data integrity / corrupted metadata error codes\n{ ErrorCode.MLV_DATA_CORRUPTED, $\u0022Catalog data does not have information needed to process this request. Recreate the materialized lake view \u0027{{{Constants.FullyQualifiedMLVNameKey}}}\u0027 and retry the operation. If issue persists, reach out to support.\u0022 },",
+      "reason": "Defines the user-visible message template for the new MLV_DATA_CORRUPTED code, including placeholder substitution and recovery guidance."
     },
     {
       "evidence_id": "ev-14",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
       "side": "right",
       "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
-      "hunk_id": "@@ -800,13 \u002B821,21 @@",
-      "new_line": 834,
-      "excerpt": "var parameters = new Dictionary\u003Cstring, string\u003E { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };\nthrow new CatalogException(\n    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),\n    HttpStatusCode.InternalServerError,\n    ErrorCode.MLV_DATA_CORRUPTED);",
-      "reason": "This is the new validation/error path for a missing table type during DAG rebuild."
+      "hunk_id": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs@@-171,7\u002B171,7",
+      "new_line": 174,
+      "excerpt": "{ ErrorCode.MLV_ENTITY_NOT_FOUND, $\u0022The materialized lake view \u0027{{{Constants.MLVNameKey}}}\u0027 has incomplete source metadata and can\u0027t be processed. Update the lake view definition to include a valid source, then try again.\u0022 },",
+      "reason": "Repurposes MLV_ENTITY_NOT_FOUND to a new incomplete-source-metadata message contract with MLV-name substitution."
     }
   ],
   "scenario_sketches": [
     {
       "sketch_id": "sk-1",
-      "title": "Cross-lakehouse catalog lookup with Guid.Empty ObjectId returns MLV_DATA_CORRUPTED",
-      "category": "ErrorPath",
+      "title": "Guid.Empty lakehouse ObjectId is reported as MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
       "technique": "ErrorPath",
-      "rationale": "Exercise the CatalogHandler branch where artifact metadata exists but ObjectId is Guid.Empty, and assert the thrown CatalogException carries HTTP 500, ErrorCode.MLV_DATA_CORRUPTED, and a standardized message naming the lakehouse/workspace.",
+      "rationale": "Exercise the cross-lakehouse metadata branch where ObjectId is Guid.Empty and assert CatalogException carries HTTP 500, code MLV_DATA_CORRUPTED, and a message naming the lakehouse/workspace descriptor.",
       "evidence_refs": [
         "ev-1",
-        "ev-7"
+        "ev-12",
+        "ev-13"
       ]
     },
     {
       "sketch_id": "sk-2",
-      "title": "Data quality report creation surfaces corrupted lakehouse metadata as controller error response",
-      "category": "ErrorPath",
+      "title": "PySpark MLVs missing SourceInfo fail with CatalogException/MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
       "technique": "ErrorPath",
-      "rationale": "Drive CreateDataQualityReportAsync through a lakehouse-details response whose Properties is null, then verify the handler throws CatalogException and the controller returns the same status/message in the HTTP response body.",
+      "rationale": "Cover the PySpark-only guard where SourceInfo is absent and verify the flow no longer throws InvalidOperationException but instead returns the standardized corrupted-data CatalogException.",
       "evidence_refs": [
-        "ev-2",
-        "ev-3",
-        "ev-7"
+        "ev-5",
+        "ev-12",
+        "ev-13"
       ]
     },
     {
       "sketch_id": "sk-3",
-      "title": "Selected-MLV validation emits MLV_SELECTED_NOT_FOUND with missing-name list",
+      "title": "PySpark MLVs with null or invalid parsed SourceInfo fail as corrupted metadata",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Use a SourceInfo payload that reaches the \u0027invalid source info\u0027 branch and assert the exception type/code/status are CatalogException \u002B MLV_DATA_CORRUPTED \u002B 500.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "PySpark SourceInfo deserialization failures surface as MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Pass malformed SourceInfo that triggers parsing/deserialization failure and verify the catch path wraps it in CatalogException with the corrupted-data code while preserving the inner exception.",
+      "evidence_refs": [
+        "ev-7",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Blank workspaceId or notebookId in PySpark SourceInfo is classified as MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Probe valid, empty, and whitespace values for required SourceInfo fields and assert blank/whitespace inputs now hit the dedicated corrupted-metadata error path.",
+      "evidence_refs": [
+        "ev-8",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-6",
+      "title": "Invalid GUID strings in PySpark SourceInfo are classified as MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Use non-GUID workspace/notebook identifiers after structural parsing succeeds and verify the invalid-GUID branch now throws CatalogException with MLV_DATA_CORRUPTED.",
+      "evidence_refs": [
+        "ev-9",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-7",
+      "title": "Empty catalog table name is surfaced as MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Exercise catalog-table rebuild with empty versus populated names and assert the empty-name case now produces CatalogException/500/MLV_DATA_CORRUPTED instead of ArgumentException.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-8",
+      "title": "Empty catalog table type is surfaced as MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Exercise catalog-table rebuild with empty versus populated table types and assert the empty-type case now produces CatalogException/500/MLV_DATA_CORRUPTED instead of ArgumentException.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-9",
+      "title": "Null lakehouse properties in data-quality creation surface MLV_DATA_CORRUPTED",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Make GetLakehouseDetailsAsync return a LakehouseDetails object with null Properties and verify handler classification changes from InvalidOperationException to CatalogException/MLV_DATA_CORRUPTED.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-10",
+      "title": "CreateDataQualityReportAsync preserves CatalogException status and body",
       "category": "ErrorPath",
-      "technique": "RegressionGuard",
-      "rationale": "Validate that invalid selected MLV names now produce the standardized ErrorRegistry-backed error code/message, including the joined missing names in the response instead of the old hardcoded MLV_ENTITY_NOT_FOUND text.",
+      "technique": "ErrorPath",
+      "rationale": "Have the data-quality handler throw a CatalogException and assert the controller returns the same HTTP status and includes the exception message in the response body.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-11",
+      "title": "Selected-MLV validation returns MLV_SELECTED_NOT_FOUND with missing names",
+      "category": "ErrorPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Cover one-missing and multiple-missing selected-MLV inputs and assert the 400 response is driven by ErrorRegistry MLV_SELECTED_NOT_FOUND text, includes the missing names, and no longer uses the old MLV_ENTITY_NOT_FOUND phrasing.",
       "evidence_refs": [
         "ev-4"
       ]
     },
     {
-      "sketch_id": "sk-4",
-      "title": "ErrorRegistry MLV_ENTITY_NOT_FOUND now describes incomplete source metadata",
-      "category": "Regression",
-      "technique": "RegressionGuard",
-      "rationale": "Unit-test the registry message for ErrorCode.MLV_ENTITY_NOT_FOUND to ensure it uses the new materialized-lake-view metadata-corruption wording and the MLVName placeholder, not the old inaccessible-entity wording.",
-      "evidence_refs": [
-        "ev-5"
-      ]
-    },
-    {
-      "sketch_id": "sk-5",
-      "title": "ErrorRegistry MLV_DATA_CORRUPTED formats fully qualified name and standard prefix",
-      "category": "Regression",
-      "technique": "RegressionGuard",
-      "rationale": "Verify the new MLV_DATA_CORRUPTED registry entry formats the supplied FullyQualifiedMLVName value and, when requested, prepends the standard error-code prefix.",
-      "evidence_refs": [
-        "ev-6",
-        "ev-7"
-      ]
-    },
-    {
-      "sketch_id": "sk-6",
-      "title": "PySpark DAG creation maps missing or null source-info payloads to CatalogException",
-      "category": "EdgeCase",
-      "technique": "EquivalencePartition",
-      "rationale": "Cover the PySpark-only guard cases where source info is absent or deserializes to an invalid/null object, and assert both partitions now fail with CatalogException/MLV_DATA_CORRUPTED instead of InvalidOperationException.",
-      "evidence_refs": [
-        "ev-8",
-        "ev-9"
-      ]
-    },
-    {
-      "sketch_id": "sk-7",
-      "title": "PySpark DAG malformed source-info JSON becomes MLV_DATA_CORRUPTED with inner exception preserved",
+      "sketch_id": "sk-12",
+      "title": "ErrorRegistry formats MLV_DATA_CORRUPTED with recreate and support guidance",
       "category": "ErrorPath",
-      "technique": "ErrorPath",
-      "rationale": "Pass malformed SourceInfo JSON for a PySpark MLV and assert DAG creation throws CatalogException/MLV_DATA_CORRUPTED with the original deserialization exception attached as InnerException.",
+      "technique": "HappyPath",
+      "rationale": "Unit-test direct ErrorRegistry formatting for MLV_DATA_CORRUPTED with a FullyQualifiedMLVName parameter, including standard-prefix output and the recreate/retry/support guidance.",
       "evidence_refs": [
-        "ev-10"
+        "ev-12",
+        "ev-13"
       ]
     },
     {
-      "sketch_id": "sk-8",
-      "title": "PySpark source-info identifier guards reject blank fields and invalid GUIDs as corrupted metadata",
-      "category": "EdgeCase",
-      "technique": "TruthTable",
-      "rationale": "Use a small truth table across blank workspaceId, blank notebookId, and invalid GUID formats to confirm each identifier-validation branch maps to CatalogException/MLV_DATA_CORRUPTED.",
+      "sketch_id": "sk-13",
+      "title": "ErrorRegistry formats MLV_ENTITY_NOT_FOUND as incomplete-source-metadata guidance",
+      "category": "ErrorPath",
+      "technique": "HappyPath",
+      "rationale": "Unit-test direct ErrorRegistry formatting for MLV_ENTITY_NOT_FOUND with an MLVName parameter and assert the message now describes incomplete source metadata instead of inaccessible/deleted entities.",
       "evidence_refs": [
-        "ev-11",
-        "ev-12"
-      ]
-    },
-    {
-      "sketch_id": "sk-9",
-      "title": "DAG rebuild treats empty table name and missing table type as corrupted catalog metadata",
-      "category": "EdgeCase",
-      "technique": "TruthTable",
-      "rationale": "Cover both metadata-validation guards during DAG rebuild\u2014empty Name and empty TableType\u2014and assert they now raise CatalogException/MLV_DATA_CORRUPTED rather than ArgumentException.",
-      "evidence_refs": [
-        "ev-13",
         "ev-14"
       ]
     }

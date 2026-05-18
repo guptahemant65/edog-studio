@@ -668,10 +668,11 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     # captured), 1.2 (T1f-b scored), 1.3 (T1g re-calibrated against
     # the matcher-tied verb / category disambiguation prompts), 1.4
     # (T1i scorer-side span expansion), 1.5 (T1j global bipartite
-    # matching + N=15), or 1.6 (T1k corpus augmentation 3 -> 6 PRs).
-    # Pre-T1c-c statuses are tolerated to let a checkout-with-stale-
-    # baseline still pass this scaffold-level test.
-    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"}, data
+    # matching + N=15), 1.6 (T1k corpus augmentation 3 -> 6 PRs), or
+    # 1.7 (T2 Architect+Editor prompt tuning + chronic-density budget
+    # bump). Pre-T1c-c statuses are tolerated to let a checkout-with-
+    # stale-baseline still pass this scaffold-level test.
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"}, data
     assert data.get("status") in (
         "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
         "DRY_RUN", "SCORED",
@@ -748,9 +749,11 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
     assert 'EditorReasoningEffort = "low"' in src, (
         "Editor must default to reasoning.effort=low (spec §3.1)."
     )
-    assert "ArchitectMaxOutputTokens = 65536" in src, (
-        "Architect must allow ≥65536 max_output_tokens — the original "
-        "NO_SCENARIOS_GENERATED bug was a 8192 budget starved by reasoning."
+    assert "ArchitectMaxOutputTokens = 96000" in src, (
+        "Architect must allow ≥96000 max_output_tokens (T2 chronic-density bump). "
+        "The original NO_SCENARIOS_GENERATED bug was an 8192 budget starved by "
+        "reasoning; T2 dense PRs (PR-975848, PR-977882) chronically exhausted "
+        "65536. 96000 carries headroom for T3 FLT-priors prefix."
     )
 
 
@@ -880,8 +883,8 @@ def test_llm_client_architect_request_shape(harness_environment, built_harness) 
     assert shape["hasStrictJsonSchema"] is True, shape
     assert shape["hasReasoningEffortHigh"] is True, shape
     assert shape["hasMaxOutputTokens"] is True, (
-        "Architect must request max_output_tokens=65536 — undersizing here "
-        "is the root cause of NO_SCENARIOS_GENERATED. shape=" + repr(shape)
+        "Architect must request max_output_tokens=96000 (T2 chronic-density bump). "
+        "Undersizing here is the root cause of NO_SCENARIOS_GENERATED. shape=" + repr(shape)
     )
     assert shape["hasPromptCacheKey"] is True, shape
     assert shape["modelMentioned"] is True, shape
@@ -1672,8 +1675,8 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.6", (
-        f"expected schema_version=1.6 after T1k corpus augmentation, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.7", (
+        f"expected schema_version=1.7 after T2 prompt+budget lift, got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
     assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
@@ -1857,6 +1860,14 @@ def test_qa_editor_prompt_declares_category_selection_guide() -> None:
     PR-977882 labeled validation guards as ErrorPath; the curator
     grades all of these EdgeCase. Pin the section + the five categories
     + the EdgeCase-not-ErrorPath rule that's the most common confusion.
+
+    Updated at T2 (2026-05-18): the Regression gloss tightens from
+    "the diff fixes a specific past bug" to an ONLY-when triple-trigger
+    list (PR title says fix, test-row flip, or restored prior
+    invariant) because gold-corpus diagnostics on n=6 showed 14 of
+    51 expected scenarios missed via category-only mismatch driven
+    by Architect/Editor overuse of Regression for any change to
+    pre-existing code paths.
     """
     src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
     text = src.read_text(encoding="utf-8")
@@ -1868,7 +1879,7 @@ def test_qa_editor_prompt_declares_category_selection_guide() -> None:
         "HappyPath = the nominal",
         "ErrorPath = the explicit error",
         "EdgeCase = defensive code",
-        "Regression = the diff fixes",
+        "Regression = ONLY when",
         "Performance = latency",
     ):
         assert category in text, f"Editor prompt must contain category gloss starting {category!r}"
@@ -1881,6 +1892,35 @@ def test_qa_editor_prompt_declares_category_selection_guide() -> None:
     # recognises them as EdgeCase fingerprints in the diff.
     for idiom in ("IsDBNullAsync", "COALESCE", "divide-by-zero"):
         assert idiom in text, f"Editor prompt must name {idiom!r} as an EdgeCase fingerprint"
+    # T2: HappyPath gloss must spell out that NEW behaviour on an
+    # existing function is HappyPath (not Regression). Without this
+    # the Editor defaults to Regression for allowlist adds and
+    # threading additions.
+    assert "NEW behaviour added to an existing function" in text, (
+        "Editor's HappyPath gloss must explicitly include 'new behaviour added to an existing function' "
+        "to prevent Regression overuse for net-new feature work on pre-existing code paths"
+    )
+    # T2: Regression gloss must enumerate the three ONLY-when triggers
+    # so the model never defaults to Regression for code-path edits.
+    for trigger_phrase in ("FLIPPED from expected", "explicitly says 'fix'", "restores a prior invariant"):
+        assert trigger_phrase in text, (
+            f"Editor's Regression gloss must enumerate the {trigger_phrase!r} trigger explicitly"
+        )
+    # T2: Editor must NOT relabel an Architect sketch's category/verb.
+    # Without this rule the Editor's own taxonomy guide overrides the
+    # Architect, causing the scorer to miss matches the Architect
+    # already correctly categorised.
+    assert "ARCHITECT-LABEL PRESERVATION" in text, (
+        "Editor prompt must declare an ARCHITECT-LABEL PRESERVATION rule so it preserves "
+        "the Architect sketch's category/verb verbatim instead of reclassifying"
+    )
+    # T2: Editor must emit exactly one scenario per Architect sketch.
+    # Without this rule, granularity collapse in the Editor pass cancels
+    # the Architect's correct per-invariant breakdown.
+    assert "STRICT 1:1 SKETCH-TO-SCENARIO MAPPING" in text, (
+        "Editor prompt must declare a STRICT 1:1 SKETCH-TO-SCENARIO MAPPING rule "
+        "to prevent the Editor from merging or splitting Architect sketches"
+    )
 
 
 def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
@@ -1922,6 +1962,97 @@ def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
         "Architect prompt must explicitly tell the model NOT to anchor evidence at function signatures"
     )
 
+
+def test_qa_architect_prompt_declares_t2_granularity_and_category_policy() -> None:
+    """T2 (2026-05-18): the Architect prompt MUST declare four
+    additional disciplines required to lift macro_recall on n=6 from
+    0.391 to 0.55+.
+
+    Discovered during T2 diagnostic (n=6 corpus, T1g baseline):
+
+    * **14 of 51 expected scenarios missed via category-only mismatch**:
+      Architect labels net-new behaviour on existing code paths as
+      Regression; curator labels them HappyPath/EdgeCase. The PR-type
+      heuristic + the strict ONLY-when Regression trigger list address
+      this dominant failure mode.
+
+    * **8 of 51 missed entirely (no line overlap)**: granularity
+      collapse — Architect emitted 1 sketch covering 3 evidence
+      anchors (PR-966141 enum-arm + int-cast + test row), and missed
+      contract-bearing xmldoc warnings entirely (PR-966141 lines
+      208-213). The independently-revertable invariant test + the
+      contract-comment surfacing rule address this second failure mode.
+
+    * **Anti-quota guard**: the granularity rule must not become a
+      sketch quota. The rubber-duck critique flagged "tiny PRs have
+      3-6 invariants" as quota-shaped wording that hallucinates
+      sketches on truly-tiny PRs (5-LoC log message PRs would
+      synthesize 5 fake invariants to satisfy the count).
+    """
+    src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
+    text = src.read_text(encoding="utf-8")
+    # 1. Granularity discipline — independently-revertable invariant test
+    assert "GRANULARITY RULE" in text, (
+        "Architect prompt must declare a GRANULARITY RULE section so it emits one sketch "
+        "per semantic invariant, not one per code region"
+    )
+    assert "independently-revertable invariant test" in text, (
+        "Architect's GRANULARITY RULE must use the independently-revertable invariant "
+        "test as the split criterion (parallel guards, impl + test-row-flip)"
+    )
+    # 2. Anti-quota guard — the most common over-fire failure mode
+    assert "ANTI-QUOTA GUARD" in text, (
+        "Architect prompt must contain an ANTI-QUOTA GUARD so the granularity rule "
+        "does not hallucinate invariants on truly-tiny PRs"
+    )
+    assert "ceilings, not quotas" in text, (
+        "Architect's anti-quota guard must spell out that LoC-banded ranges are "
+        "ceilings, not quotas"
+    )
+    # 3. PR-type category heuristic — the dominant Regression-overuse fix
+    assert "PR-TYPE CATEGORY HEURISTIC" in text, (
+        "Architect prompt must declare a PR-TYPE CATEGORY HEURISTIC that defaults "
+        "feature PRs to HappyPath/EdgeCase and reserves Regression for an ONLY-when triple-trigger list"
+    )
+    # The three ONLY-when triggers must be enumerated explicitly so the
+    # heuristic cannot collapse back to "Regression = any change to
+    # pre-existing code".
+    for trigger_phrase in (
+        "FLIPS a test assertion",
+        "explicitly says 'fix'",
+        "restores a prior invariant",
+    ):
+        assert trigger_phrase in text, (
+            f"Architect's Regression trigger list must enumerate {trigger_phrase!r} explicitly"
+        )
+    # The PR-type default must be spelled out so feature-PR sketches
+    # don't default to Regression by inertia.
+    assert "feature additions default to HappyPath/EdgeCase" in text, (
+        "Architect prompt must declare that feature-PR additions default to HappyPath/EdgeCase"
+    )
+    # CATEGORY PRECEDENCE must override the PR-type default when a
+    # specific Regression trigger fires inside a feature PR (test-row
+    # flip is still Regression even if the rest of the PR is feature).
+    assert "CATEGORY PRECEDENCE" in text, (
+        "Architect prompt must declare a CATEGORY PRECEDENCE rule so specific evidence "
+        "(test-flip, restored invariant) overrides the PR-type default"
+    )
+    # 4. Contract-bearing comments — surface xmldoc warnings as evidence
+    assert "CONTRACT-BEARING COMMENTS" in text, (
+        "Architect prompt must declare a CONTRACT-BEARING COMMENTS rule so xmldoc warnings "
+        "and contract-scoping comments are surfaced as evidence + dedicated sketches"
+    )
+    for tag in ("<warning>", "<remarks>", "<exception>"):
+        assert tag in text, (
+            f"Architect's contract-comment rule must name the {tag!r} xmldoc tag"
+        )
+    # The rule must have a negative side: typo/formatting/rename-only
+    # comment changes are NOT evidence. Without the negative side the
+    # rule over-fires on doc polish PRs.
+    assert "typo fixes" in text and "formatting/whitespace" in text, (
+        "Architect's contract-comment rule must enumerate negative examples "
+        "(typo fixes, formatting/whitespace) to prevent over-firing on doc polish"
+    )
 
 
 def test_qa_capture_script_passes_write_plan() -> None:
@@ -2349,68 +2480,69 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t1k() -> None:
-    """T1k augmented the corpus from 3 -> 6 PRs to break the original
-    Insights/Trends/Summary controller monoculture. The N-sweep on n=6
-    reconfirms N=15 as the bipartite knee (recall saturates at N=15,
-    identical at N=20 and N=25), but macro recall dropped 0.639 -> 0.391
-    (PR-955910 0.250, PR-960543 0.182, PR-966141 0.000 — the new diverse
-    PRs reveal the T1g prompts are overfit to the original shape). Pin
-    the schema bump 1.5 -> 1.6 and the new T1k floor bands (each must
-    stay BELOW the new n=6 measured baseline so a regression after the
-    next capture surfaces — and ABOVE zero so a total V2 failure trips
-    the gate).
+def test_qa_score_floors_calibrated_for_t2() -> None:
+    """T2 lifted Architect+Editor prompts AND bumped budgets
+    (ArchitectMaxOutputTokens 65536 -> 96000, EditorMaxOutputTokens
+    16384 -> 32000) to unblock chronically-truncated dense PRs. Result:
+    n=6 macro_recall 0.391 -> 0.577 (+47%% relative), macro_precision_highest
+    0.451 -> 0.502 (+11%%). PR-966141 went 0.000 -> 0.750 (Editor granularity
+    fix landed). T2.1 hotfix (PARALLEL-SIBLING COMPRESSION) was REVERTED
+    in-session — over-fired on diverse-touchpoint PRs. Pin the schema
+    bump 1.6 -> 1.7 and the new T2 floor bands (must stay BELOW new n=6
+    measured baseline so a regression after the next capture surfaces —
+    AND ABOVE the T1k floors so a silent prompt revert still trips the
+    gate).
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.6", (
-        f"score_floors.json must be at schema_version 1.6 after T1k corpus augmentation, "
+    assert floors.get("schema_version") == "1.7", (
+        f"score_floors.json must be at schema_version 1.7 after T2 prompt + budget lift, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
-    # T1k floors must stay <= measured n=6 baselines so a future LLM
+    # T2 floors must stay <= measured n=6 baselines so a future LLM
     # nondeterminism flap or scorer regression actually trips the gate.
-    assert absolute.get("corpus_recall_min") <= 0.391, (
-        f"corpus_recall_min must stay <= measured T1k n=6 0.391; got {absolute.get('corpus_recall_min')!r}"
+    assert absolute.get("corpus_recall_min") <= 0.577, (
+        f"corpus_recall_min must stay <= measured T2 n=6 0.577; got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") <= 0.391, (
-        f"p0_p1_recall_min must stay <= measured T1k n=6 0.391; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") <= 0.577, (
+        f"p0_p1_recall_min must stay <= measured T2 n=6 0.577; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    # T1k floors must stay STRICTLY ABOVE zero so a total V2 failure
-    # (e.g. all-architect-truncated) still trips the gate.
-    assert absolute.get("corpus_recall_min") > 0.0, (
-        f"corpus_recall_min must lift ABOVE zero to detect total V2 failure; "
+    # T2 floors must stay STRICTLY ABOVE the T1k floors (0.30/0.30) so a
+    # silent prompt revert OR a regression in scorer composition trips
+    # the gate even though the T1k floors would have accepted it.
+    assert absolute.get("corpus_recall_min") > 0.30, (
+        f"corpus_recall_min must lift ABOVE the T1k 0.30 to detect a T2 prompt revert; "
         f"got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") > 0.0, (
-        f"p0_p1_recall_min must lift ABOVE zero; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") > 0.30, (
+        f"p0_p1_recall_min must lift ABOVE the T1k 0.30; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    # T1k floors must also stay ABOVE the T1f-c values so a deeper revert
-    # (prompt regression) still trips the gate.
-    assert absolute.get("corpus_recall_min") > 0.219, (
-        f"corpus_recall_min must lift ABOVE the T1f-c-era 0.219 to detect a prompt revert; "
+    # T2 floors must also stay ABOVE T1k baseline 0.391 (so any drop
+    # toward T1k surfaces) AND ABOVE T1f-c-era 0.219 (deeper revert).
+    assert absolute.get("corpus_recall_min") > 0.391, (
+        f"corpus_recall_min must lift ABOVE T1k baseline 0.391 to detect a T2 prompt revert; "
         f"got {absolute.get('corpus_recall_min')!r}"
     )
     # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
     assert absolute.get("corpus_precision_min") == 0.0
-    # T1k precision floors lift above zero but stay below the measured
-    # n=6 macro precision_highest 0.451.
-    assert 0.0 < absolute.get("corpus_precision_highest_stage_min") <= 0.451, (
-        "corpus_precision_highest_stage_min must lift above zero "
-        "and stay <= measured T1k n=6 macro 0.451; "
+    # T2 precision floor lifts above the T1k 0.35 but stays below the
+    # measured n=6 macro precision_highest 0.502.
+    assert 0.35 < absolute.get("corpus_precision_highest_stage_min") <= 0.502, (
+        "corpus_precision_highest_stage_min must lift above the T1k 0.35 "
+        "and stay <= measured T2 n=6 macro 0.502; "
         f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
     )
-    # T1k drops per_pr floors to 0.0 because PR-966141 / PR-960543 /
-    # PR-955910 score 0.000 / 0.182 / 0.250 — a per_pr ratchet would
-    # block the honest baseline. Re-introduce after T2 prompt tuning.
+    # T2 keeps per_pr floors at 0.0 because PR-955910 0.333 / PR-960543 0.364
+    # — a per_pr ratchet would block honest captures. Re-introduce after T3.
     assert absolute.get("per_pr_recall_min") == 0.0, (
-        "T1k per_pr_recall_min must be 0.00 (PR-966141 at 0.000 would block ratchet); "
+        "T2 per_pr_recall_min must be 0.00 (PR-955910 at 0.333 is the lowest); "
         f"got {absolute.get('per_pr_recall_min')!r}"
     )
     assert absolute.get("per_pr_precision_highest_stage_min") == 0.0, (
-        "T1k per_pr_precision_highest_stage_min must be 0.00; "
+        "T2 per_pr_precision_highest_stage_min must be 0.00; "
         f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"

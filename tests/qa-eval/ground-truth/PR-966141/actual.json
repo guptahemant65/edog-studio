@@ -1,18 +1,41 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-18T15:15:14.4726310\u002B00:00",
+  "captured_at": "2026-05-18T18:52:15.9519454\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "966141",
   "counts": {
-    "emitted": 1,
-    "validated": 0,
-    "projected": 0
+    "emitted": 4,
+    "validated": 1,
+    "projected": 1
   },
   "scenarios": [
     {
-      "id": "sc-1",
+      "id": "sk-1",
       "topic": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
-      "category": "Regression",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            213
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            227
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-2",
+      "topic": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "category": "EdgeCase",
       "verb": "FieldMatch",
       "stage": "emitted",
       "grounding_changed_lines": [
@@ -20,14 +43,39 @@
           "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
           "side": "right",
           "lines": [
-            229
+            233
           ]
-        },
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
         {
           "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
           "side": "right",
           "lines": [
-            235
+            208
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs",
+          "side": "left",
+          "lines": [
+            883
           ]
         },
         {
