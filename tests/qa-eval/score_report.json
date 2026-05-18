@@ -1,28 +1,33 @@
 {
-  "schema_version": "1.2",
+  "schema_version": "1.3",
   "verdict": "PASS",
   "floor_violations": [],
   "enforcement": "report_only",
   "span_expansion": {
-    "forward_lines": 5,
+    "forward_lines": 15,
     "applied_to": "actual",
     "boundary": "hunk_end",
     "tiebreaker": "original_overlap_first"
   },
+  "matcher": {
+    "algorithm": "bipartite_linear_sum_assignment",
+    "objective": "max_cardinality_then_original_overlap_then_expanded_overlap_then_declared_order",
+    "version": "1.0"
+  },
   "aggregate": {
     "pr_count": 3,
     "macro": {
-      "recall": 0.5833,
+      "recall": 0.6389,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.6607,
+      "precision_highest_stage": 0.7163,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.6185,
-      "p0_p1_recall": 0.5833
+      "f1_highest_stage": 0.6741,
+      "p0_p1_recall": 0.6389
     },
     "micro": {
-      "recall": 0.5833,
+      "recall": 0.625,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.6667
+      "precision_highest_stage": 0.7143
     }
   },
   "prs_scored": [
@@ -30,9 +35,9 @@
       "pr_number": "975848",
       "expected_total": 8,
       "actual_total": {
-        "validated": 0,
         "emitted": 4,
-        "projected": 3
+        "projected": 3,
+        "validated": 0
       },
       "matched_count": 6,
       "missed_expected_ids": [
@@ -44,9 +49,9 @@
       ],
       "recall": 0.75,
       "precision": {
-        "validated": 0.0,
         "emitted": 0.75,
-        "projected": 1.0
+        "projected": 1.0,
+        "validated": 0.0
       },
       "precision_highest_stage": 0.8571,
       "f1_validated": 0.0,
@@ -57,39 +62,37 @@
       "pr_number": "976609",
       "expected_total": 6,
       "actual_total": {
-        "validated": 0,
         "emitted": 2,
-        "projected": 4
+        "projected": 4,
+        "validated": 0
       },
-      "matched_count": 3,
+      "matched_count": 4,
       "missed_expected_ids": [
         "976609-s01",
-        "976609-s03",
         "976609-s06"
       ],
       "unmatched_actual_ids": [
-        "sk-4",
         "sk-6",
         "sk-2"
       ],
-      "recall": 0.5,
+      "recall": 0.6667,
       "precision": {
-        "validated": 0.0,
         "emitted": 0.5,
-        "projected": 0.5
+        "projected": 0.75,
+        "validated": 0.0
       },
-      "precision_highest_stage": 0.5,
+      "precision_highest_stage": 0.6667,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.5,
-      "p0_p1_recall": 0.5
+      "f1_highest_stage": 0.6667,
+      "p0_p1_recall": 0.6667
     },
     {
       "pr_number": "977882",
       "expected_total": 10,
       "actual_total": {
-        "validated": 0,
         "emitted": 1,
-        "projected": 7
+        "projected": 7,
+        "validated": 0
       },
       "matched_count": 5,
       "missed_expected_ids": [
@@ -106,9 +109,9 @@
       ],
       "recall": 0.5,
       "precision": {
-        "validated": 0.0,
         "emitted": 0.0,
-        "projected": 0.7143
+        "projected": 0.7143,
+        "validated": 0.0
       },
       "precision_highest_stage": 0.625,
       "f1_validated": 0.0,

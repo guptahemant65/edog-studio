@@ -1,13 +1,13 @@
 {
-  "schema_version": "1.4",
-  "comment": "F27 P9 T1i — acceptance floors lifted after the deterministic span-expansion scorer landed. Measured 2026-05-18 with score_eval.py --span-expansion 5 (hunk-bounded forward expansion, 2-tier overlap tiebreaker preserving baseline pairs): macro recall 0.583 (was 0.542), macro precision_highest_stage 0.661 (was 0.613), F1_highest 0.619, per-PR recall min 0.500 (unchanged floor of viable corpus), per-PR precision_highest min 0.500 (unchanged floor). PR-975848 gained 975848-s01 (HappyPath FieldMatch sum-to-1.0 invariant) entirely through span expansion: actual sk-1 was anchored at lines [185, 190] (architect block-entry bias) which expansion grew to [185-195, 190-200], catching the curator's expected [193-198]. PR-976609 and PR-977882 unchanged at N=5; larger N captures more but introduces greedy-reallocation pair theft on PR-977882 (sk-3 stolen from s09 by s04 at N>=7) and needs global bipartite matching to be safe — deferred to T1j. Floors sit at ~70-80% of measured so LLM nondeterminism + future per-PR variance stays below the gate. Spec's nominal 80% recall / 90% precision remains the destination; remaining headroom now lives in (a) bipartite assignment with larger N (T1j), and (b) curator augmentation of the 3-PR corpus toward 8-10 PRs (T1k). `enforcement: report_only` until the corpus crosses 0.70 macro recall.",
+  "schema_version": "1.5",
+  "comment": "F27 P9 T1j — acceptance floors lifted after global bipartite matching shipped. Measured 2026-05-18 with score_eval.py defaults (--span-expansion 15 --matcher bipartite): macro recall 0.639 (was T1i 0.583), macro precision_highest_stage 0.716 (was 0.661), F1_highest 0.677, per-PR recall min 0.500, per-PR precision_highest min 0.500. T1j replaces T1i's iterate-over-expected greedy matcher with globally optimal max-weight bipartite matching (scipy.optimize.linear_sum_assignment) under a cardinality-first integer-encoded objective: matches > original_overlap > expanded_overlap > deterministic tiebreaker on declared order. Cardinality dominance is computed against matrix-wide totals (not per-cell) so the matcher provably never trades two weak matches for one strong match. This unlocks safe span_expansion to N=15 (was 5 under greedy where N>=7 introduced PR-977882 sk-3 pair theft between s09 and s04). PR-976609 gained one match (recall 0.500 -> 0.667 via s05 unlocked by N=15 expansion); PR-975848 and PR-977882 unchanged but with provably-optimal assignment. Floors sit at ~78-82% of measured per rubber-duck recommendation (closer to documented 70-80% than aggressive 86% would have been). Spec's nominal 80% recall / 90% precision is still the destination; remaining headroom lives in curator augmentation of the 3-PR corpus toward 8-10 PRs (T1k) plus potential T2 work on Architect prompt for the s04/s09 ambiguity. `enforcement: report_only` until the corpus crosses 0.70 macro recall.",
   "absolute": {
-    "corpus_recall_min": 0.45,
+    "corpus_recall_min": 0.50,
     "corpus_precision_min": 0.0,
-    "corpus_precision_highest_stage_min": 0.50,
+    "corpus_precision_highest_stage_min": 0.55,
     "per_pr_recall_min": 0.35,
     "per_pr_precision_highest_stage_min": 0.30,
-    "p0_p1_recall_min": 0.45
+    "p0_p1_recall_min": 0.50
   },
   "regression": {
     "max_recall_drop": 0.05,

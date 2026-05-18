@@ -84,15 +84,50 @@ BASELINE_PATH = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
 # set, eliminating greedy-reallocation "pair theft" that would otherwise count
 # as a no-op in aggregate but trade one semantically-correct match for another.
 #
-# Shadow-eval (commit b037c59 + 3-PR corpus) picked N=5 as the smallest knee:
-#     N=0  → recall 0.542 / prec_highest 0.613  (T1g baseline)
-#     N=3  → recall 0.583 / prec_highest 0.661  (+0.042 / +0.048, 0 stolen)
-#     N=5  → recall 0.583 / prec_highest 0.661  (+0.042 / +0.048, 0 stolen)  ← chosen
-#     N=7  → same lift, 1 stolen pair on PR-977882
-#     N=15 → recall 0.639 / prec_highest 0.716  (+0.097 / +0.103, 1 stolen)
-# Larger N requires global bipartite matching to be safe; deferred to T1j.
+# Shadow-eval (commit b037c59 + 3-PR corpus) at T1i selected N=5 as the
+# greedy-safe knee. T1j replaces greedy with global bipartite matching
+# (see MATCHER_DEFAULT below) and the safe knee moves up to N=15:
+#     N=0    → recall 0.542 / prec_highest 0.613  (pre-T1i baseline)
+#     N=3-10 → recall 0.583 / prec_highest 0.661  (+0.042 / +0.048)
+#     N=15+  → recall 0.639 / prec_highest 0.716  (+0.097 / +0.103) ← chosen
+# At N=15+ PR-976609 unlocks one additional match (s05) that requires
+# expansion past N=10. N=20/30 saturate at the same values. Bipartite
+# guarantees no greedy-reallocation pair theft, so the N=15 lift is real
+# (not the "1 stolen pair" artifact T1i shadow flagged for greedy).
 
-SPAN_EXPANSION_DEFAULT_N = 5
+SPAN_EXPANSION_DEFAULT_N = 15
+
+# ─── T1j: global bipartite matcher ────────────────────────────────────────
+# The T1i 2-tier overlap tiebreaker stops greedy-reallocation pair theft only
+# while iteration order is over expected. At N >= 7 a different expected E'
+# earlier in expected.json could claim an actual A before E gets a chance —
+# even though E would have had a strictly higher (orig, exp) tuple on A. T1j
+# replaces the greedy `iterate-over-expected` loop with a globally optimal
+# maximum-weight bipartite matching (scipy.optimize.linear_sum_assignment).
+#
+# The objective is CARDINALITY-FIRST then ORIGINAL-OVERLAP then EXPANDED-OVERLAP
+# then a deterministic tiebreaker on declared order. Cardinality must dominate
+# overlap totals so the matcher never trades two weak matches for one strong
+# match (which would reduce recall). Tier bases are sized against matrix-wide
+# totals (not per-cell) so the dominance holds when summed across all
+# assignments:
+#
+#     CARD_BASE   > T * MAX_ORIG * ORIG_BASE       (T ≤ matrix dim ≤ 200)
+#     ORIG_BASE   > T * MAX_EXP  * EXP_BASE
+#     EXP_BASE    > T * MAX_TIE
+#     MAX_TIE     ≈ 1e6 (e_idx, a_idx ≤ 999)
+#
+# Forbidden cells (category/verb mismatch OR exp_overlap = 0) get weight 0 —
+# no cardinality bonus AND no tiebreaker so they can never be picked over a
+# valid match. Post-assignment we discard any pair with weight 0, which
+# correctly handles the case where scipy assigns a forbidden cell to satisfy
+# matrix dimensions (e.g. |E| > |A|).
+#
+# Default matcher = "bipartite". The legacy "greedy" matcher is retained
+# behind `--matcher greedy` for audit-trail reproducibility of T1i scores.
+
+MATCHER_DEFAULT = "bipartite"
+MATCHER_CHOICES = ("bipartite", "greedy")
 
 # ─── Domain enumerations ──────────────────────────────────────────────────
 # Mirrors src/backend/DevMode/EdogQaModels.cs ScenarioCategory + ExpectationType.
@@ -523,27 +558,42 @@ def _max_overlap_tiered(
 def match_scenarios(
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
+    matcher: str = MATCHER_DEFAULT,
 ) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
-    """Greedy max-overlap match by ``(category, verb)`` then 2-tier overlap.
+    """Match expected → actual scenarios under the chosen matcher.
 
-    Returns ``(matched, missed_expected, unmatched_actual)`` where matched
-    is a list of ``MatchPair``, missed_expected is the subset of expected
-    that found no compatible actual, and unmatched_actual is the subset of
-    actuals not consumed by any match (false-positive precision penalty).
+    Returns ``(matched, missed_expected, unmatched_actual)``. Both matchers
+    enforce the same hard compatibility constraint: (category, verb) must
+    match AND post-expansion overlap must be ≥ 1.
 
-    Tiebreaker (T1i): prefers ``(original_overlap, expanded_overlap)``
-    tuple maximization, so an actual whose pre-expansion lines overlap
-    expected is always picked over an actual whose only overlap is via
-    span expansion. This preserves baseline pair semantics across
-    expansion-N changes."""
+    matcher='bipartite' (T1j default): globally optimal max-weight matching
+    via ``scipy.optimize.linear_sum_assignment`` with a cardinality-first
+    integer-encoded objective (matches > original_overlap > expanded_overlap
+    > deterministic tiebreaker on declared order). Cannot reduce match count
+    below greedy; eliminates pair theft.
+
+    matcher='greedy' (T1i legacy): iterate-over-expected greedy with 2-tier
+    (original, expanded) overlap tiebreaker. Retained for audit-trail
+    reproducibility of pre-T1j scores. May exhibit pair theft at high N."""
+    if matcher == "bipartite":
+        return _bipartite_match(expected, actuals)
+    if matcher == "greedy":
+        return _greedy_match(expected, actuals)
+    raise ValueError(f"unknown matcher {matcher!r}; choose from {MATCHER_CHOICES}")
+
+
+def _greedy_match(
+    expected: list[ExpectedScenario],
+    actuals: list[ActualScenario],
+) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
+    """T1i greedy iterate-over-expected matcher with 2-tier overlap tiebreaker.
+
+    Preserved verbatim for audit-trail reproducibility of pre-T1j scores."""
     used_actual: set[int] = set()
     matched: list[MatchPair] = []
     missed: list[ExpectedScenario] = []
 
-    # We iterate expected in declared order (so PRs can pin a stable preferred
-    # match order if two expecteds compete for the same actual — first declared wins).
     for e in expected:
-        # Candidate pool: actuals with same category + verb + unused.
         best_idx = -1
         best_pair = (0, 0)
         for ai, a in enumerate(actuals):
@@ -554,7 +604,7 @@ def match_scenarios(
             if a.verb != e.verb:
                 continue
             pair = _max_overlap_tiered(e, a)
-            if pair[1] == 0:  # require ≥1 line overlap (post-expansion)
+            if pair[1] == 0:
                 continue
             if pair > best_pair:
                 best_pair = pair
@@ -576,6 +626,109 @@ def match_scenarios(
     return matched, missed, unmatched
 
 
+def _bipartite_match(
+    expected: list[ExpectedScenario],
+    actuals: list[ActualScenario],
+) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
+    """T1j globally optimal max-weight bipartite matcher.
+
+    Builds an integer cost matrix with a cardinality-first encoding and
+    solves via scipy.optimize.linear_sum_assignment(maximize=True). The
+    encoding (see header) guarantees:
+      1. Total match count is maximized (no recall regression vs greedy).
+      2. Among max-cardinality matchings, total original-line overlap wins.
+      3. Among those, total expanded-line overlap wins.
+      4. Ties broken deterministically by (earlier-declared expected then
+         earlier-declared actual).
+    Forbidden cells (category/verb mismatch OR exp_overlap == 0) get weight
+    0; scipy may still place an assignment there to satisfy dimensions, so
+    we post-filter assignments with weight 0."""
+    if not expected or not actuals:
+        return ([], list(expected), list(actuals))
+
+    # ── 1. compute (orig, exp) and validity per cell ─────────────────────
+    n_e = len(expected)
+    n_a = len(actuals)
+    tiers = [[(0, 0)] * n_a for _ in range(n_e)]
+    valid = [[False] * n_a for _ in range(n_e)]
+    for ei, e in enumerate(expected):
+        for ai, a in enumerate(actuals):
+            if a.category != e.category or a.verb != e.verb:
+                continue
+            pair = _max_overlap_tiered(e, a)
+            if pair[1] == 0:
+                continue
+            tiers[ei][ai] = pair
+            valid[ei][ai] = True
+
+    # ── 2. size tier bases against matrix-wide totals ────────────────────
+    # MAX_TIE upper bound: (e_idx, a_idx) ≤ 999 ⇒ (1000-e_idx)*1000 + (1000-a_idx) < 1_001_000.
+    # T = min(n_e, n_a) is the upper bound on assignments.
+    t = min(n_e, n_a)
+    max_orig = 0
+    max_exp = 0
+    for ei in range(n_e):
+        for ai in range(n_a):
+            o, x = tiers[ei][ai]
+            if o > max_orig:
+                max_orig = o
+            if x > max_exp:
+                max_exp = x
+    MAX_TIE = 1_001_000
+    EXP_BASE = max(1, t * MAX_TIE + 1)
+    ORIG_BASE = max(1, t * max_exp * EXP_BASE + 1)
+    CARD_BASE = max(1, t * max_orig * ORIG_BASE + 1)
+
+    # ── 3. build the cost matrix ─────────────────────────────────────────
+    # Use plain Python int lists; scipy will accept them and promote.
+    cost: list[list[int]] = [[0] * n_a for _ in range(n_e)]
+    for ei in range(n_e):
+        for ai in range(n_a):
+            if not valid[ei][ai]:
+                continue
+            o, x = tiers[ei][ai]
+            tie = (1000 - ei) * 1000 + (1000 - ai)
+            cost[ei][ai] = CARD_BASE + o * ORIG_BASE + x * EXP_BASE + tie
+
+    # ── 4. solve ────────────────────────────────────────────────────────
+    try:
+        from scipy.optimize import linear_sum_assignment
+    except ImportError as e:  # pragma: no cover - scoped to dev environments
+        raise RuntimeError(
+            "T1j bipartite matcher requires scipy (>=1.10). "
+            "Install via `pip install -r requirements-dev.txt` or pass "
+            "`--matcher greedy` to fall back to the T1i scorer."
+        ) from e
+    row_ind, col_ind = linear_sum_assignment(cost, maximize=True)
+
+    # ── 5. post-filter forbidden assignments + canonicalize order ────────
+    used_actual: set[int] = set()
+    matched: list[MatchPair] = []
+    for ei, ai in zip(row_ind, col_ind, strict=True):
+        if not valid[ei][ai]:
+            continue
+        o, x = tiers[ei][ai]
+        matched.append(
+            MatchPair(
+                expected=expected[ei],
+                actual=actuals[ai],
+                overlap_count=x,
+                original_overlap_count=o,
+            )
+        )
+        used_actual.add(ai)
+
+    # Sort matched by declared-expected order so the audit trail is stable
+    # regardless of scipy's internal row iteration.
+    expected_index: dict[str, int] = {e.id: i for i, e in enumerate(expected)}
+    matched.sort(key=lambda m: expected_index[m.expected.id])
+
+    matched_expected_ids = {m.expected.id for m in matched}
+    missed = [e for e in expected if e.id not in matched_expected_ids]
+    unmatched = [a for ai, a in enumerate(actuals) if ai not in used_actual]
+    return matched, missed, unmatched
+
+
 # ─── Scoring ──────────────────────────────────────────────────────────────
 
 
@@ -587,8 +740,9 @@ def score_pr(
     pr_number: str,
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
+    matcher: str = MATCHER_DEFAULT,
 ) -> PrScore:
-    matched, missed, unmatched = match_scenarios(expected, actuals)
+    matched, missed, unmatched = match_scenarios(expected, actuals, matcher=matcher)
 
     actual_by_stage: dict[str, int] = {stage: 0 for stage in VALID_STAGES}
     for a in actuals:
@@ -805,6 +959,7 @@ def discover_pr_dirs() -> list[Path]:
 def build_report(
     pr_dirs: list[Path],
     span_expansion_n: int = SPAN_EXPANSION_DEFAULT_N,
+    matcher: str = MATCHER_DEFAULT,
 ) -> dict[str, Any]:
     pr_scores: list[PrScore] = []
     pending_grading: list[str] = []
@@ -825,14 +980,14 @@ def build_report(
 
         actuals, a_errs = load_actual(pr_dir, span_expansion_n=span_expansion_n)
         schema_errors.extend(a_errs)
-        pr_scores.append(score_pr(pr_number, expected, actuals))
+        pr_scores.append(score_pr(pr_number, expected, actuals, matcher=matcher))
 
     agg = aggregate(pr_scores)
     floors = load_floors()
     verdict, violations = evaluate_floors(agg, floors, pr_scores)
 
     return {
-        "schema_version": "1.2",  # T1i: added span_expansion block + 2-tier overlap matcher
+        "schema_version": "1.3",  # T1j: added matcher block + bipartite default
         "verdict": verdict,
         "floor_violations": violations,
         "enforcement": floors.get("enforcement", "report_only"),
@@ -841,6 +996,17 @@ def build_report(
             "applied_to": "actual" if span_expansion_n > 0 else "none",
             "boundary": "hunk_end",
             "tiebreaker": "original_overlap_first" if span_expansion_n > 0 else "single_tier",
+        },
+        "matcher": {
+            "algorithm": (
+                "bipartite_linear_sum_assignment" if matcher == "bipartite" else "greedy_iterate_expected"
+            ),
+            "objective": (
+                "max_cardinality_then_original_overlap_then_expanded_overlap_then_declared_order"
+                if matcher == "bipartite"
+                else "greedy_max_2tier_overlap_per_expected"
+            ),
+            "version": "1.0",
         },
         "aggregate": agg,
         "prs_scored": [p.to_json() for p in pr_scores],
@@ -862,6 +1028,9 @@ def print_human(report: dict[str, Any]) -> None:
             f"  Span expansion: N={span['forward_lines']} (hunk-bounded,"
             f" tiebreaker={span.get('tiebreaker', '?')})"
         )
+    matcher = report.get("matcher", {})
+    if matcher:
+        print(f"  Matcher: {matcher.get('algorithm', '?')} (v{matcher.get('version', '?')})")
     print()
     print("  Macro-average (each PR weighted equally):")
     print(f"    recall:               {agg['macro']['recall']:.3f}")
@@ -925,6 +1094,17 @@ def main(argv: list[str] | None = None) -> int:
             f"Default {SPAN_EXPANSION_DEFAULT_N}. Pass 0 to disable (pre-T1i behaviour)."
         ),
     )
+    parser.add_argument(
+        "--matcher",
+        choices=MATCHER_CHOICES,
+        default=MATCHER_DEFAULT,
+        help=(
+            "T1j: 'bipartite' (default) runs globally optimal max-weight "
+            "bipartite matching with a cardinality-first objective; 'greedy' "
+            "is the T1i iterate-over-expected matcher retained for "
+            "audit-trail reproducibility."
+        ),
+    )
     args = parser.parse_args(argv)
 
     pr_dirs = discover_pr_dirs()
@@ -932,7 +1112,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No PR fixtures found under {GROUND_TRUTH}", file=sys.stderr)
         return 2
 
-    report = build_report(pr_dirs, span_expansion_n=args.span_expansion)
+    report = build_report(
+        pr_dirs,
+        span_expansion_n=args.span_expansion,
+        matcher=args.matcher,
+    )
 
     if args.output is not None:
         args.output.write_text(

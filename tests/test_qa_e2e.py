@@ -658,11 +658,12 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
         data = _json.load(fh)
     # Schema_version may be 1.0 (T1a scaffold pre-capture), 1.1 (T1c-c
     # captured), 1.2 (T1f-b scored), 1.3 (T1g re-calibrated against
-    # the matcher-tied verb / category disambiguation prompts), or 1.4
-    # (T1i scorer-side span expansion). Pre-T1c-c statuses are tolerated
-    # to let a checkout-with-stale-baseline still pass this scaffold-level
+    # the matcher-tied verb / category disambiguation prompts), 1.4
+    # (T1i scorer-side span expansion), or 1.5 (T1j global bipartite
+    # matching + N=15). Pre-T1c-c statuses are tolerated to let a
+    # checkout-with-stale-baseline still pass this scaffold-level
     # test.
-    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4"}, data
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5"}, data
     assert data.get("status") in (
         "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
         "DRY_RUN", "SCORED",
@@ -1663,8 +1664,8 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.4", (
-        f"expected schema_version=1.4 after T1i scorer-side span expansion, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.5", (
+        f"expected schema_version=1.5 after T1j global bipartite matching, got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
     assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
@@ -2340,42 +2341,50 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t1i() -> None:
-    """T1i lifted the acceptance floors again after a scorer-side
-    span-expansion lift (macro recall 0.542 → 0.583, +7.7% relative;
-    macro precision_highest 0.613 → 0.661, +7.8% relative). The lift
-    came entirely from hunk-bounded forward expansion of actual-side
-    grounding anchors (EdogQaLlmClient.cs is byte-identical to T1g
-    commit 0cf3903). Pin the schema bump 1.3 → 1.4 and the new floor
-    ceilings (each must stay BELOW the new measured baseline so a
-    regression after the next capture surfaces — and ABOVE the old
-    T1f-c floors so a revert to the verb-monoculture / category-collapse
-    prompts still trips the gate).
+def test_qa_score_floors_calibrated_for_t1j() -> None:
+    """T1j lifted the acceptance floors after global bipartite matching
+    landed (macro recall 0.583 → 0.639, +9.6% relative; macro
+    precision_highest 0.661 → 0.716, +8.3% relative). The lift came
+    entirely from scorer-side normalization — EdogQaLlmClient.cs is
+    byte-identical to T1g commit 0cf3903. Pin the schema bump 1.4 → 1.5
+    and the new floor ceilings (each must stay BELOW the new measured
+    baseline so a regression after the next capture surfaces — and
+    ABOVE the old T1f-c floors so a revert to the verb-monoculture /
+    category-collapse prompts still trips the gate).
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.4", (
-        f"score_floors.json must be at schema_version 1.4 after T1i, "
+    assert floors.get("schema_version") == "1.5", (
+        f"score_floors.json must be at schema_version 1.5 after T1j, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
-    # T1i floors must stay <= measured baselines so a future LLM
-    # nondeterminism flap or prompt regression actually trips the gate.
-    assert absolute.get("corpus_recall_min") <= 0.583, (
-        f"corpus_recall_min must stay <= measured T1i 0.583; got {absolute.get('corpus_recall_min')!r}"
+    # T1j floors must stay <= measured baselines so a future LLM
+    # nondeterminism flap or scorer regression actually trips the gate.
+    assert absolute.get("corpus_recall_min") <= 0.639, (
+        f"corpus_recall_min must stay <= measured T1j 0.639; got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") <= 0.583, (
-        f"p0_p1_recall_min must stay <= measured T1i 0.583; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") <= 0.639, (
+        f"p0_p1_recall_min must stay <= measured T1j 0.639; got {absolute.get('p0_p1_recall_min')!r}"
     )
     assert absolute.get("per_pr_recall_min") <= 0.500, (
-        f"per_pr_recall_min must stay <= measured T1i per-PR min 0.500; got {absolute.get('per_pr_recall_min')!r}"
+        f"per_pr_recall_min must stay <= measured T1j per-PR min 0.500; got {absolute.get('per_pr_recall_min')!r}"
     )
-    # T1i floors must stay STRICTLY ABOVE the old T1f-c values so a
-    # silent revert to the verb-monoculture / category-collapse prompts
-    # (which produced macro recall 0.219 / per-PR min 0.125) trips the
-    # gate. This is the prompt-regression detector.
+    # T1j floors must lift STRICTLY ABOVE the T1i (and earlier) values so
+    # a silent revert to greedy matching at N=5 (which produced macro
+    # recall 0.583) trips the gate as a regression. This is the matcher-
+    # regression detector.
+    assert absolute.get("corpus_recall_min") > 0.45, (
+        f"corpus_recall_min must lift ABOVE the T1i-era 0.45 floor to detect a matcher revert; "
+        f"got {absolute.get('corpus_recall_min')!r}"
+    )
+    assert absolute.get("p0_p1_recall_min") > 0.45, (
+        f"p0_p1_recall_min must lift ABOVE the T1i-era 0.45 floor; got {absolute.get('p0_p1_recall_min')!r}"
+    )
+    # T1j floors must also stay ABOVE the T1f-c values so a deeper revert
+    # (prompt regression) still trips the gate.
     assert absolute.get("corpus_recall_min") > 0.219, (
         f"corpus_recall_min must lift ABOVE the T1f-c-era 0.219 to detect a prompt revert; "
         f"got {absolute.get('corpus_recall_min')!r}"
@@ -2385,26 +2394,27 @@ def test_qa_score_floors_calibrated_for_t1i() -> None:
     )
     # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
     assert absolute.get("corpus_precision_min") == 0.0
-    # T1i precision floors lift above T1f-c (corpus 0.250 / per-PR 0.167)
-    # but stay below the new measured macro 0.661 / per-PR min 0.500.
-    assert 0.250 < absolute.get("corpus_precision_highest_stage_min") <= 0.661, (
-        "corpus_precision_highest_stage_min must lift above T1f-c 0.250 "
-        "and stay <= measured T1i macro 0.661; "
+    # T1j precision floors lift above T1i (0.50) but stay below the new
+    # measured macro 0.716 / per-PR min 0.500.
+    assert 0.50 < absolute.get("corpus_precision_highest_stage_min") <= 0.716, (
+        "corpus_precision_highest_stage_min must lift above T1i 0.50 "
+        "and stay <= measured T1j macro 0.716; "
         f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
     )
     assert 0.167 < absolute.get("per_pr_precision_highest_stage_min") <= 0.500, (
         "per_pr_precision_highest_stage_min must lift above T1f-c 0.167 "
-        "and stay <= measured T1i per-PR min 0.500; "
+        "and stay <= measured T1j per-PR min 0.500; "
         f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"
 
 
-def test_qa_score_report_json_present_at_t1i() -> None:
-    """T1i bumped the score_report.json schema 1.1 → 1.2 by adding the
-    top-level `span_expansion` block (recording forward_lines / boundary /
-    tiebreaker). Pin the new shape so downstream tooling (CI gate,
-    dashboard) can rely on the fields existing.
+def test_qa_score_report_json_present_at_t1j() -> None:
+    """T1j bumped the score_report.json schema 1.2 → 1.3 by adding the
+    top-level `matcher` block (recording algorithm / objective / version)
+    and bumping span_expansion.forward_lines default to 15. Pin the new
+    shape so downstream tooling (CI gate, dashboard) can rely on the
+    fields existing.
     """
     import json
     report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
@@ -2413,24 +2423,36 @@ def test_qa_score_report_json_present_at_t1i() -> None:
         "--output tests/qa-eval/score_report.json` after a capture pass."
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report.get("schema_version") == "1.2", (
-        f"expected score_report schema_version=1.2 after T1i, "
+    assert report.get("schema_version") == "1.3", (
+        f"expected score_report schema_version=1.3 after T1j, "
         f"got {report.get('schema_version')!r}"
     )
     assert report.get("verdict") in {"PASS", "FAIL"}
     assert report.get("enforcement") == "report_only"
-    # T1i span_expansion metadata is mandatory at schema 1.2 — pin its
+    # T1i span_expansion metadata is mandatory at schema 1.3 — pin its
     # presence + that the default forward_lines matches the source
-    # constant SPAN_EXPANSION_DEFAULT_N=5 so a silent disable surfaces.
+    # constant SPAN_EXPANSION_DEFAULT_N=15 so a silent disable surfaces.
     span = report.get("span_expansion") or {}
     assert isinstance(span, dict) and span, (
-        "score_report.json must carry a `span_expansion` block at schema 1.2"
+        "score_report.json must carry a `span_expansion` block at schema 1.3"
     )
-    assert span.get("forward_lines") == 5, (
-        f"span_expansion.forward_lines must default to 5; got {span.get('forward_lines')!r}"
+    assert span.get("forward_lines") == 15, (
+        f"span_expansion.forward_lines must default to 15 at T1j; got {span.get('forward_lines')!r}"
     )
     assert span.get("boundary") == "hunk_end"
     assert span.get("tiebreaker") == "original_overlap_first"
+    # T1j matcher block is mandatory at schema 1.3.
+    matcher = report.get("matcher") or {}
+    assert isinstance(matcher, dict) and matcher, (
+        "score_report.json must carry a `matcher` block at schema 1.3"
+    )
+    assert matcher.get("algorithm") == "bipartite_linear_sum_assignment", (
+        f"expected bipartite matcher; got {matcher.get('algorithm')!r}"
+    )
+    assert "cardinality" in matcher.get("objective", ""), (
+        f"matcher objective must describe cardinality-first; got {matcher.get('objective')!r}"
+    )
+    assert matcher.get("version") == "1.0"
     aggregate = report.get("aggregate") or {}
     macro = aggregate.get("macro") or {}
     # T1f-b headline numbers still required.
@@ -2494,19 +2516,19 @@ def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
 # ── F27 P9 T1i — scorer-side span expansion + 2-tier overlap tiebreaker ──
 
 
-def test_qa_score_eval_declares_span_expansion_default_5() -> None:
-    """T1i defaults the forward span expansion to N=5 — selected from
-    the shadow-eval N-sweep as the largest value that lifts recall
-    (0.542 → 0.583) on the 3-PR corpus WITHOUT triggering greedy-
-    reallocation pair theft. N=7 starts stealing PR-977882 sk-3 from
-    s09 (only fixable by global bipartite matching, deferred to T1j).
-    Pin the constant in the source so a silent bump past the theft
-    threshold can't ship.
+def test_qa_score_eval_declares_span_expansion_default_15() -> None:
+    """T1j bumps the forward span expansion default from N=5 (T1i,
+    greedy-safe knee) to N=15 — selected from the bipartite shadow-eval
+    N-sweep as the saturation point (N>=15 gives identical lift on the
+    3-PR corpus; N=10 leaves PR-976609 s05 unmatched). The bump is only
+    safe because T1j replaced greedy with global bipartite matching,
+    which provably eliminates pair theft. Bumping past N=15 without
+    expanding the corpus first risks over-fitting the knee to 3 PRs.
     """
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
-    assert "SPAN_EXPANSION_DEFAULT_N = 5" in src, (
-        "score_eval.py must declare SPAN_EXPANSION_DEFAULT_N = 5 (T1i shadow-eval knee). "
-        "Bumping past 5 without shipping bipartite matching introduces silent pair theft."
+    assert "SPAN_EXPANSION_DEFAULT_N = 15" in src, (
+        "score_eval.py must declare SPAN_EXPANSION_DEFAULT_N = 15 (T1j bipartite-safe knee). "
+        "Bumping past 15 without expanding the corpus risks knee-overfit."
     )
 
 
@@ -2720,10 +2742,10 @@ def test_qa_t1i_overlap_tiered_prefers_original_match() -> None:
         sys.path.remove(str(qa_eval))
 
 
-def test_qa_t1i_baseline_records_span_expansion_provenance() -> None:
-    """baseline.json schema 1.4 must record the scorer pipeline
-    component + span_expansion_n in the `scores` block. This is the
-    audit trail proving the lift came from scorer-side normalization
+def test_qa_t1j_baseline_records_scorer_provenance() -> None:
+    """baseline.json schema 1.5 must record the scorer pipeline
+    component + span_expansion_n + matcher in the `scores` block. This
+    is the audit trail proving the lift came from scorer-side normalization
     (not a covert LLM prompt revision).
     """
     import json
@@ -2732,14 +2754,206 @@ def test_qa_t1i_baseline_records_span_expansion_provenance() -> None:
     )
     components = baseline.get("pipeline_components") or {}
     assert "scorer" in components, (
-        "baseline.json pipeline_components must record the scorer at T1i"
+        "baseline.json pipeline_components must record the scorer at T1j"
     )
-    assert "span_expansion" in components["scorer"].lower() or "T1i" in components["scorer"], (
-        f"scorer provenance must mention T1i / span_expansion; got {components['scorer']!r}"
+    scorer = components["scorer"]
+    assert "bipartite" in scorer.lower() or "T1j" in scorer, (
+        f"scorer provenance must mention T1j / bipartite; got {scorer!r}"
+    )
+    assert "span_expansion" in scorer.lower() or "T1i" in scorer or "T1j" in scorer, (
+        f"scorer provenance must reference span_expansion; got {scorer!r}"
     )
     scores = baseline.get("scores") or {}
-    assert scores.get("span_expansion_n") == 5, (
-        f"baseline scores.span_expansion_n must be 5 at T1i; got {scores.get('span_expansion_n')!r}"
+    assert scores.get("span_expansion_n") == 15, (
+        f"baseline scores.span_expansion_n must be 15 at T1j; got {scores.get('span_expansion_n')!r}"
     )
+    assert scores.get("matcher") == "bipartite_linear_sum_assignment", (
+        f"baseline scores.matcher must be bipartite_linear_sum_assignment at T1j; "
+        f"got {scores.get('matcher')!r}"
+    )
+
+
+# ── F27 P9 T1j — global bipartite matching ─────────────────────────────
+
+
+def test_qa_score_eval_declares_bipartite_matcher_default() -> None:
+    """T1j defaults the matcher to 'bipartite'. The greedy matcher is
+    retained behind --matcher greedy for audit-trail reproducibility of
+    pre-T1j scores. Pin the default in the source so a silent revert to
+    greedy (which would re-enable the pair-theft pathology at N>=7) can't
+    ship unnoticed.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    assert 'MATCHER_DEFAULT = "bipartite"' in src, (
+        "score_eval.py must declare MATCHER_DEFAULT = \"bipartite\" (T1j default)"
+    )
+    # Both choices must be available so users can run side-by-side for
+    # debugging or audit-trail reproducibility.
+    assert '"bipartite"' in src and '"greedy"' in src, (
+        "score_eval.py must offer both bipartite and greedy matcher choices"
+    )
+
+
+def test_qa_score_eval_declares_bipartite_machinery() -> None:
+    """T1j adds the bipartite matcher implementation as a separate
+    function pair (_greedy_match + _bipartite_match) plus the
+    cardinality-first integer-encoded objective. Pin the symbol names
+    so future contributors don't accidentally rename them.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    for symbol in ("_greedy_match", "_bipartite_match", "linear_sum_assignment"):
+        assert symbol in src, (
+            f"score_eval.py must declare {symbol} (T1j bipartite matcher primitive)"
+        )
+    # Cardinality-first encoding bases must be present in source as
+    # documented constants — the matcher's correctness hinges on these
+    # bases dominating matrix-wide totals.
+    for marker in ("CARD_BASE", "ORIG_BASE", "EXP_BASE", "MAX_TIE"):
+        assert marker in src, (
+            f"score_eval.py must declare {marker} (T1j cardinality-first tier base)"
+        )
+
+
+def test_qa_score_eval_cli_exposes_matcher_flag() -> None:
+    """T1j wires a `--matcher {bipartite,greedy}` CLI flag through main
+    → build_report → score_pr → match_scenarios. Pin the flag so a
+    silent default change (e.g. bipartite → greedy) can't slip past
+    code review.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    assert "--matcher" in src, (
+        "score_eval.py main() must expose --matcher CLI flag"
+    )
+    # Threading: build_report MUST accept matcher and score_pr MUST be
+    # called with it to keep override behaviour honest.
+    assert "matcher=matcher" in src, (
+        "build_report / score_pr / match_scenarios must thread matcher kwarg"
+    )
+
+
+def test_qa_t1j_bipartite_resists_greedy_pair_theft() -> None:
+    """The canonical regression case T1j must defend against:
+    greedy iterate-over-expected matcher can swap a baseline pair
+    (E_late → A) for a different pair (E_early → A) when E_early
+    appears earlier in expected.json, even when the global optimum
+    would keep both E_early and E_late matched. T1j's globally
+    optimal matcher must keep BOTH matches and never collapse the
+    count to 1.
+
+    Synthetic shape:
+      E1 (early): can match A1 (overlap 5) or A2 (overlap 1).
+      E2 (late):  can match ONLY A1 (overlap 3).
+    Greedy gives E1→A1 then E2 unmatched (count=1).
+    Bipartite gives E1→A2 + E2→A1 (count=2, both matched).
+    """
+    import importlib
+    import sys
+    qa_eval = REPO_ROOT / "tests" / "qa-eval"
+    sys.path.insert(0, str(qa_eval))
+    try:
+        score_eval = importlib.import_module("score_eval")
+        ChangedLineSet = score_eval.ChangedLineSet
+        ExpectedScenario = score_eval.ExpectedScenario
+        ActualScenario = score_eval.ActualScenario
+
+        def cls(lines):
+            f = frozenset(lines)
+            return ChangedLineSet(path="x.cs", side="right", lines=f, original_lines=f)
+
+        # E1 has two candidate matches (A1 with 5 lines, A2 with 1 line).
+        e1 = ExpectedScenario(
+            id="E1", behavior_key="b1", category="HappyPath", verb="FieldMatch",
+            title="early", grounding=[cls({10, 11, 12, 13, 14, 100})],
+            criticality="P0", discovered_by="curator", rationale="",
+        )
+        # E2 has only one candidate match (A1, 3 lines).
+        e2 = ExpectedScenario(
+            id="E2", behavior_key="b2", category="HappyPath", verb="FieldMatch",
+            title="late", grounding=[cls({10, 11, 12})],
+            criticality="P0", discovered_by="curator", rationale="",
+        )
+        # A1 overlaps both E1 (5 lines) and E2 (3 lines).
+        a1 = ActualScenario(
+            id="A1", topic="http", category="HappyPath", verb="FieldMatch", stage="projected",
+            grounding=[cls({10, 11, 12, 13, 14})],
+        )
+        # A2 overlaps only E1 (1 line).
+        a2 = ActualScenario(
+            id="A2", topic="http", category="HappyPath", verb="FieldMatch", stage="projected",
+            grounding=[cls({100})],
+        )
+
+        # Greedy gives only 1 match (E1→A1 stealing the slot E2 needs).
+        gm, gmissed, _ = score_eval.match_scenarios([e1, e2], [a1, a2], matcher="greedy")
+        assert len(gm) == 1, f"greedy must steal here (1 match expected); got {len(gm)}"
+        assert {m.expected.id for m in gm} == {"E1"}
+        assert {e.id for e in gmissed} == {"E2"}, (
+            "greedy must miss E2 (the late expected) in this pair-theft setup"
+        )
+
+        # Bipartite must keep both pairs (E1→A2, E2→A1) for count=2.
+        bm, bmissed, _ = score_eval.match_scenarios([e1, e2], [a1, a2], matcher="bipartite")
+        assert len(bm) == 2, (
+            f"bipartite must keep both pairs; got {len(bm)} matches: "
+            f"{[(m.expected.id, m.actual.id) for m in bm]}"
+        )
+        pairs = {(m.expected.id, m.actual.id) for m in bm}
+        assert pairs == {("E1", "A2"), ("E2", "A1")}, (
+            f"bipartite must choose the globally optimal assignment "
+            f"E1→A2 + E2→A1; got {pairs}"
+        )
+        assert not bmissed, f"bipartite must not miss any expected; got {[e.id for e in bmissed]}"
+    finally:
+        sys.path.remove(str(qa_eval))
+
+
+def test_qa_t1j_bipartite_match_count_at_least_greedy_on_corpus() -> None:
+    """Sanity check: on the checked-in 3-PR corpus, bipartite must
+    produce a match count >= greedy at every span expansion level we
+    care about. This is the fundamental correctness invariant of
+    bipartite (global optimum >= greedy optimum on cardinality-first
+    objective).
+    """
+    import importlib
+    import sys
+    qa_eval = REPO_ROOT / "tests" / "qa-eval"
+    sys.path.insert(0, str(qa_eval))
+    try:
+        score_eval = importlib.import_module("score_eval")
+        pr_dirs = score_eval.discover_pr_dirs()
+        assert pr_dirs, "no PR fixtures discovered"
+        for n in (0, 5, 15):
+            greedy_report = score_eval.build_report(pr_dirs, span_expansion_n=n, matcher="greedy")
+            bipartite_report = score_eval.build_report(pr_dirs, span_expansion_n=n, matcher="bipartite")
+            greedy_recall = greedy_report["aggregate"]["macro"]["recall"]
+            bipartite_recall = bipartite_report["aggregate"]["macro"]["recall"]
+            assert bipartite_recall >= greedy_recall - 1e-9, (
+                f"BIPARTITE REGRESSION at N={n}: bipartite recall {bipartite_recall:.4f} "
+                f"< greedy recall {greedy_recall:.4f}. Bipartite must never produce fewer "
+                f"matches than greedy under the cardinality-first objective."
+            )
+    finally:
+        sys.path.remove(str(qa_eval))
+
+
+def test_qa_t1j_scipy_available_in_dev_env() -> None:
+    """T1j depends on scipy.optimize.linear_sum_assignment. requirements-dev.txt
+    must declare scipy >= 1.10 so CI (and local `pip install -r
+    requirements-dev.txt`) succeeds. Pin the dep declaration so a
+    silent removal can't sneak past code review.
+    """
+    deps = (REPO_ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
+    assert "scipy" in deps.lower(), (
+        "requirements-dev.txt must declare scipy (T1j bipartite matcher dependency)"
+    )
+    # Smoke-test that scipy actually imports in the current env.
+    try:
+        from scipy.optimize import linear_sum_assignment  # noqa: F401
+    except ImportError as e:  # pragma: no cover
+        raise AssertionError(
+            "scipy.optimize.linear_sum_assignment must be importable. "
+            "Run `pip install -r requirements-dev.txt`."
+        ) from e
+
 
 
