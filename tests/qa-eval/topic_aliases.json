@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0",
+  "comment": "F27 P9 T1f-a — canonical-behaviour-key aliases for the deterministic scorer. The map is consulted as a SECONDARY tiebreaker only — primary matching is by (category, verb, changed-line-overlap). This file scaffolds the eventual controlled taxonomy the LLM-judge layer (T1f-d) will consume. Keep alphabetical by canonical key.",
+  "aliases": {}
+}

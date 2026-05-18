@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "pr_number": "975848",
+  "curator": "donna",
+  "pass_1": {
+    "timestamp_utc": "2026-05-18T00:00:00Z",
+    "basis": "diff_inspection_blind",
+    "edog_studio_commit_at_grading": "88abb7e",
+    "diff_patch_sha256_at_grading": "computed at pass_2 time",
+    "notes": "Pass 1 graded from diff.patch alone with no access to any V2 pipeline actuals. The PR adds the refresh-policy fractions to the /summary endpoint with a knownPolicies allow-list filter, a FormatDouble round-trip helper for the PySpark schema, and SUM(COALESCE) defenses against pre-PR NULL rows. Eight scenarios are tagged discovered_by=diff_inspection."
+  },
+  "pass_2_pending": true,
+  "pass_2_rules": "Pass 2 lands in T1f-b after capture_v2_actuals.py emits actual.json. The curator reviews V2 output and ADDS items (marked discovered_by=v2_review with explicit rationale) ONLY when a competent test author would have written them from the diff alone. Existing pass-1 items must NOT be re-graded after seeing V2 output."
+}

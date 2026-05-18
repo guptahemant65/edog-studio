@@ -1,8 +1,140 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "pr_number": "977882",
-  "curator": "PENDING_HUMAN_GRADING",
-  "curated_at": null,
-  "scenarios": [],
-  "notes": "Hand-grade required: list the scenarios a production-grade LLM SHOULD generate for this PR. Each scenario must include id, title, category, grounding (file + side + hunkId + newLine), assertions, and a confidence floor. See docs/specs/features/F27-qa-testing/p9-production-grade-llm.md §4 for the schema."
+  "curator_state": "GRADED_PASS_1",
+  "curated_at": "2026-05-18",
+  "curator": "donna",
+  "pass_1_basis": "diff_inspection_blind",
+  "scenarios": [
+    {
+      "id": "977882-s01",
+      "behavior_key": "summary_accepts_datetime_offset_query_params",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "/summary binds startTime and endTime as nullable DateTimeOffset query parameters",
+      "rationale": "Switching from DateTime? to DateTimeOffset? is a wire contract change. Consumers that previously sent unzoned ISO-8601 must now include an offset (or 'Z'). The new binding behaviour is the foundation of every downstream date check.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [110, 111]}
+      ]
+    },
+    {
+      "id": "977882-s02",
+      "behavior_key": "date_window_max_60_days_returns_400",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Requesting a window > 60 days returns 400 BadRequest with an actionable error",
+      "rationale": "MaxStrictDateRangeDays = 60 is the new contract-side floor on query cost. Window-too-large is the single most common failure mode for the new contract and the controller must reject with a 400 carrying the limit value, not silently clamp.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [615, 616, 617, 618]}
+      ]
+    },
+    {
+      "id": "977882-s03",
+      "behavior_key": "start_time_older_than_60_days_returns_400",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "startTime older than MaxStrictDateRangeDays returns 400 BadRequest",
+      "rationale": "Even if the window is within 60 days, an absolute-older startTime is rejected. This anchors the SQL query plan to a bounded retention horizon and prevents accidental full-table scans against the historic partition.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [600, 601, 602, 603]}
+      ]
+    },
+    {
+      "id": "977882-s04",
+      "behavior_key": "end_time_in_future_returns_400",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "endTime later than UtcNow returns 400 BadRequest",
+      "rationale": "A future endTime would either return zero rows or trip an off-by-one in the range comparison. The controller must reject explicitly so callers correct the request rather than silently get an empty payload.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [605, 606, 607, 608]}
+      ]
+    },
+    {
+      "id": "977882-s05",
+      "behavior_key": "end_time_not_after_start_time_returns_400",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "endTime less than or equal to startTime returns 400 BadRequest",
+      "rationale": "Range inversion is a contract violation that produces empty / nonsensical aggregates downstream. ResolveStrictDateRange must catch it at the boundary and emit a clear error.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [610, 611, 612, 613]}
+      ]
+    },
+    {
+      "id": "977882-s06",
+      "behavior_key": "trends_uses_resolve_strict_date_range",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "title": "/trends endpoint resolves its date window through the same ResolveStrictDateRange helper as /summary",
+      "rationale": "The three endpoints (/summary, /trends, /topErrors) must enforce identical date semantics. If /trends used a different helper or branched on its own bounds, the dashboard could show inconsistent inclusion/exclusion across panels for the same user-selected window.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [311, 312, 338]}
+      ]
+    },
+    {
+      "id": "977882-s07",
+      "behavior_key": "top_errors_uses_resolve_strict_date_range",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "title": "/topErrors endpoint resolves its date window through ResolveStrictDateRange",
+      "rationale": "Same parity argument as /trends — the third endpoint must use the shared helper. Any drift here is a contract-divergence bug that's invisible until a user crosses a 60-day boundary on /topErrors but not /summary.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [401, 402, 428]}
+      ]
+    },
+    {
+      "id": "977882-s08",
+      "behavior_key": "summary_calls_resolve_strict_date_range",
+      "category": "HappyPath",
+      "verb": "EventPresent",
+      "title": "/summary endpoint resolves its date window through ResolveStrictDateRange before issuing the SQL",
+      "rationale": "The /summary call site is the canonical example for the new helper. Verifying the call site (not just the helper) catches a regression where someone bypasses the helper to re-introduce DateTime parsing.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [110, 111, 136, 137]}
+      ]
+    },
+    {
+      "id": "977882-s09",
+      "behavior_key": "resolve_strict_date_range_uses_utc_now",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "ResolveStrictDateRange anchors its checks against DateTimeOffset.UtcNow, not Server local time",
+      "rationale": "The helper uses DateTimeOffset.UtcNow as 'now'. If a refactor swapped in DateTime.Now (server local), the 60-day window check would shift by the host's timezone offset — silently miscounting boundary days for non-UTC deployments.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [594, 595, 596, 597, 598, 599, 600]}
+      ]
+    },
+    {
+      "id": "977882-s10",
+      "behavior_key": "max_strict_date_range_days_is_60",
+      "category": "Regression",
+      "verb": "EventPresent",
+      "title": "MaxStrictDateRangeDays compile-time constant is 60",
+      "rationale": "The constant is the single source of truth for the date-window cap. Changing it (even by one) shifts the contract and changes the SQL query plan cost — the constant value itself is a wire-visible promise to callers.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs", "side": "right", "lines": [65]}
+      ]
+    }
+  ]
 }

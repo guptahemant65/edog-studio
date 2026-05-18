@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "comment": "F27 P9 T1f-a — acceptance floors for the deterministic gold-corpus scorer. Absolute floors are calibrated BELOW the spec's nominal 80% recall target until the first live capture (T1f-b) establishes a realistic ceiling. After T1f-b the absolute values will be ratcheted toward 0.80; the regression guards prevent V2 from getting worse between commits.",
+  "absolute": {
+    "corpus_recall_min": 0.40,
+    "corpus_precision_min": 0.50,
+    "per_pr_recall_min": 0.30,
+    "p0_p1_recall_min": 0.60
+  },
+  "regression": {
+    "max_recall_drop": 0.05,
+    "max_precision_drop": 0.05,
+    "p0_p1_recall_drop_blocking": 0.0
+  },
+  "enforcement": "report_only"
+}

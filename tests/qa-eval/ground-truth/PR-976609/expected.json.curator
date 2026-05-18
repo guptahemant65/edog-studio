@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "pr_number": "976609",
+  "curator": "donna",
+  "pass_1": {
+    "timestamp_utc": "2026-05-18T00:00:00Z",
+    "basis": "diff_inspection_blind",
+    "edog_studio_commit_at_grading": "88abb7e",
+    "diff_patch_sha256_at_grading": "computed at pass_2 time",
+    "notes": "Pass 1 graded from diff.patch alone. The PR mirrors PR-975848's refresh-policy fraction work into the /trends endpoint via a new MapTrendEntryAsync extraction, Math.Round(.,1) precision parity with /summary, and SUM(COALESCE) on the daily aggregate. Six scenarios are tagged discovered_by=diff_inspection."
+  },
+  "pass_2_pending": true,
+  "pass_2_rules": "Pass 2 in T1f-b. See PR-975848 curator marker for protocol."
+}

@@ -1,8 +1,115 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "pr_number": "975848",
-  "curator": "PENDING_HUMAN_GRADING",
-  "curated_at": null,
-  "scenarios": [],
-  "notes": "Hand-grade required: list the scenarios a production-grade LLM SHOULD generate for this PR. Each scenario must include id, title, category, grounding (file + side + hunkId + newLine), assertions, and a confidence floor. See docs/specs/features/F27-qa-testing/p9-production-grade-llm.md §4 for the schema."
+  "curator_state": "GRADED_PASS_1",
+  "curated_at": "2026-05-18",
+  "curator": "donna",
+  "pass_1_basis": "diff_inspection_blind",
+  "scenarios": [
+    {
+      "id": "975848-s01",
+      "behavior_key": "fractions_sum_invariant",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "Per-run refresh fractions sum to 1.0 when every terminal node has a known policy",
+      "rationale": "RunMetricsTableWriter computes FractionFull/Incremental/NoRefresh from terminal nodes whose RefreshPolicy is one of {Full, Incremental, NoRefresh}. When the entire terminal set is recognised, the three fractions must sum to exactly 1.0 (within double-precision tolerance) — this is the metric's contract with consumers of the /summary endpoint.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs", "side": "right", "lines": [193, 194, 195, 196, 197, 198]}
+      ]
+    },
+    {
+      "id": "975848-s02",
+      "behavior_key": "fractions_known_policy_filter",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Terminal nodes with unknown or null RefreshPolicy are excluded from the fraction denominator",
+      "rationale": "The knownPolicies allow-list filter is the load-bearing invariant — without it, a single null/empty/unrecognised RefreshPolicy value in the terminal set would either crash the string.Equals call or silently produce fractions summing to < 1.0. The filter is the spec contract: 'fractions describe runs over the recognised-policy subset'.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs", "side": "right", "lines": [178, 179, 180, 181, 182, 183, 184, 185, 186, 187]}
+      ]
+    },
+    {
+      "id": "975848-s03",
+      "behavior_key": "fractions_empty_terminal_set",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "When no terminal nodes have a known refresh policy the fractions stay at default 0.0 with no divide-by-zero",
+      "rationale": "If terminalWithKnownPolicy.Count() is zero, the division branch must not execute. The new code path must guard the denominator; otherwise it produces NaN/Infinity values that poison the PySpark Double column and the downstream SUM(COALESCE) aggregate.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs", "side": "right", "lines": [188, 189, 190, 191, 192, 193]}
+      ]
+    },
+    {
+      "id": "975848-s04",
+      "behavior_key": "format_double_round_trip",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "FormatDouble emits values using R format with InvariantCulture so the PySpark schema stays double-typed end-to-end",
+      "rationale": "PySpark createDataFrame infers column type from the literal text. Without the 'R' round-trip format + InvariantCulture, a value like 1.0 would serialize as '1' (int) on some locales and break the DoubleType schema the writer just declared. This bug is invisible until run on a non-en-US runtime.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs", "side": "right", "lines": [266, 267, 268, 321, 322, 323, 324, 325, 326]}
+      ]
+    },
+    {
+      "id": "975848-s05",
+      "behavior_key": "pyspark_schema_adds_fraction_columns",
+      "category": "Regression",
+      "verb": "EventPresent",
+      "title": "PySpark schema declares fraction_full / fraction_incremental / fraction_no_refresh as DoubleType non-nullable",
+      "rationale": "The schema is the wire contract between the C# writer and the Spark cluster. If any of the three fraction column declarations is missing or wrongly typed, the cluster-side createDataFrame raises and the entire insights pipeline run fails.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs", "side": "right", "lines": [236, 237, 238]}
+      ]
+    },
+    {
+      "id": "975848-s06",
+      "behavior_key": "summary_response_includes_distribution",
+      "category": "HappyPath",
+      "verb": "EventPresent",
+      "title": "/summary InsightsSummaryResponse now carries RefreshPolicyDistribution with Full / Incremental / NoRefresh fields",
+      "rationale": "The new RefreshPolicyDistribution model + InsightsSummaryResponse property is the user-visible API contract. Forgetting to populate it produces a null on the wire and silently breaks consumers who expect the new field to be present on every /summary response.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs", "side": "right", "lines": [92, 93, 94, 95, 96]},
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/Models/RefreshPolicyDistribution.cs", "side": "right", "lines": [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]}
+      ]
+    },
+    {
+      "id": "975848-s07",
+      "behavior_key": "sql_coalesce_protects_pre_pr_rows",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "SUM(COALESCE(fraction_*, 0)) prevents pre-PR rows with NULL fractions from poisoning the aggregate",
+      "rationale": "Rows written before this PR have NULL fraction_* columns. Without COALESCE, the SUM would propagate NULL and the /summary endpoint would return null fractions for any historical window that overlaps the pre-PR period — a silent data-quality regression.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs", "side": "right", "lines": [61, 62, 63]}
+      ]
+    },
+    {
+      "id": "975848-s08",
+      "behavior_key": "sql_endpoint_null_safe_field_mapping",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "/summary endpoint reads fraction columns via IsDBNullAsync guard before GetDouble",
+      "rationale": "Even with SUM(COALESCE), the reader path must individually guard each column with IsDBNullAsync — otherwise a DBNull from a partial-write scenario would throw at GetDouble. The reader hardening is a defensive boundary regardless of the SQL.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs", "side": "right", "lines": [634, 635, 636, 637, 638, 639, 640, 641]}
+      ]
+    }
+  ]
 }

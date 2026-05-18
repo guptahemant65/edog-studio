@@ -1,8 +1,88 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "pr_number": "976609",
-  "curator": "PENDING_HUMAN_GRADING",
-  "curated_at": null,
-  "scenarios": [],
-  "notes": "Hand-grade required: list the scenarios a production-grade LLM SHOULD generate for this PR. Each scenario must include id, title, category, grounding (file + side + hunkId + newLine), assertions, and a confidence floor. See docs/specs/features/F27-qa-testing/p9-production-grade-llm.md §4 for the schema."
+  "curator_state": "GRADED_PASS_1",
+  "curated_at": "2026-05-18",
+  "curator": "donna",
+  "pass_1_basis": "diff_inspection_blind",
+  "scenarios": [
+    {
+      "id": "976609-s01",
+      "behavior_key": "trends_map_entry_extracts_fractions",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "/trends MapTrendEntryAsync populates RefreshPolicyDistribution from fraction columns when reader rows carry them",
+      "rationale": "MapTrendEntryAsync is the seam where the SQL reader becomes a wire-shape DailyTrendEntry. Any miss on a fraction ordinal — wrong column name, wrong order, type mismatch — surfaces here. This is the primary contract test for the new column triple on /trends.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs", "side": "right", "lines": [671, 672, 673, 674, 675, 676, 677, 678, 679, 680, 681, 682, 683, 684, 685, 686, 687, 688, 689, 690]}
+      ]
+    },
+    {
+      "id": "976609-s02",
+      "behavior_key": "trends_math_round_one_decimal_parity",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "/trends rounds fractions to 1 decimal place to match /summary precision contract",
+      "rationale": "The mapping uses Math.Round(value, 1) so /trends and /summary cannot disagree by floating-point noise. Without the rounding, a daily fraction emitted as 0.333333... would mismatch the /summary aggregate (which sums then rounds) and break dashboard reconciliation.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs", "side": "right", "lines": [693, 694, 695, 696, 697, 698, 699]}
+      ]
+    },
+    {
+      "id": "976609-s03",
+      "behavior_key": "trends_null_fraction_safe_default",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "NULL fraction column produces 0.0 in the DailyTrendEntry, never throws",
+      "rationale": "IsDBNullAsync guards each fraction column. If a pre-PR1 row reaches this code path with NULL fractions, the mapping must default to 0.0 — not throw and not skip the trend day. The default keeps daily entries dense even across the pre/post-PR1 boundary.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs", "side": "right", "lines": [691, 692, 693, 694, 695, 696, 697, 698, 699]}
+      ]
+    },
+    {
+      "id": "976609-s04",
+      "behavior_key": "trends_sql_coalesce_protects_pre_pr_rows",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "SUM(COALESCE(fraction_*, 0)) in the /trends query shields the daily aggregate from pre-PR rows",
+      "rationale": "Same pattern as the /summary endpoint — pre-PR rows have NULL fractions; without COALESCE the daily SUM propagates NULL and every historical day in the window returns null fractions on the wire.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs", "side": "right", "lines": [146, 147, 148]}
+      ]
+    },
+    {
+      "id": "976609-s05",
+      "behavior_key": "daily_trend_entry_adds_distribution",
+      "category": "HappyPath",
+      "verb": "EventPresent",
+      "title": "DailyTrendEntry exposes RefreshPolicyDistribution as part of the /trends wire contract",
+      "rationale": "The new property on DailyTrendEntry is the public API surface for /trends consumers. Missing or null distributions break the dashboard that expects every daily entry to carry the field.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs", "side": "right", "lines": [35, 36, 37, 38, 39, 40, 41, 42]}
+      ]
+    },
+    {
+      "id": "976609-s06",
+      "behavior_key": "trends_map_entry_is_unit_testable",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "title": "MapTrendEntryAsync is extracted as an internal static method consuming DbDataReader + CancellationToken for mocked-reader tests",
+      "rationale": "The extracted method shape (internal static, DbDataReader + CT parameters) is what makes the mapping unit-testable. A refactor that moves the body back inline or changes the signature breaks every existing mapping test without touching mapping behaviour.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs", "side": "right", "lines": [671, 672, 673, 674, 675, 676, 677, 678, 679, 680]}
+      ]
+    }
+  ]
 }
