@@ -83,7 +83,7 @@ def _parse_envelope(stdout: str) -> dict | None:
         return None
 
 
-def _invoke_harness(harness_dll: Path, fixture_dir: Path, actual_path: Path, timeout_s: int) -> dict:
+def _invoke_harness(harness_dll: Path, fixture_dir: Path, actual_path: Path, plan_path: Path | None, timeout_s: int) -> dict:
     cmd = [
         "dotnet",
         str(harness_dll),
@@ -93,6 +93,8 @@ def _invoke_harness(harness_dll: Path, fixture_dir: Path, actual_path: Path, tim
         "--write-actual",
         str(actual_path),
     ]
+    if plan_path is not None:
+        cmd += ["--write-plan", str(plan_path)]
     proc = subprocess.run(
         cmd,
         capture_output=True,
@@ -169,9 +171,10 @@ def main(argv: list[str] | None = None) -> int:
     overall_status = "CAPTURED"
     for fx in fixtures:
         actual_path = fx / "actual.json"
+        plan_path = fx / "architect_plan.json"
         t0 = _dt.datetime.now(_dt.timezone.utc)
         print(f"[capture_v2_actuals] {t0.strftime('%H:%M:%SZ')} running harness against {fx.name}…", file=sys.stderr)
-        result = _invoke_harness(args.harness_dll, fx, actual_path, args.timeout_s)
+        result = _invoke_harness(args.harness_dll, fx, actual_path, plan_path, args.timeout_s)
         status = result.get("status", "UNKNOWN")
         elapsed = (_dt.datetime.now(_dt.timezone.utc) - t0).total_seconds()
         print(f"[capture_v2_actuals]   {fx.name} status={status} elapsed={elapsed:.1f}s", file=sys.stderr)

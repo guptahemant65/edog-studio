@@ -1,0 +1,305 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T13:40:20.9291998\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "975848",
+  "zone_id": "PR-975848-full-diff",
+  "zone_summary": "Add refreshPolicyDistribution to /summary API",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 7,
+    "grounding_evidence": 14,
+    "scenario_sketches": 8
+  },
+  "behavioral_changes": [
+    {
+      "summary": "The sys_run_metrics persistence contract now includes three new per-run fraction columns: fraction_full, fraction_incremental, and fraction_no_refresh, carried through table DDL, the in-memory row DTO, and generated PySpark schema/data.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-5",
+        "ev-6",
+        "ev-8"
+      ]
+    },
+    {
+      "summary": "RunMetricsTableWriter now computes per-run refresh-policy fractions from terminal nodes only (Completed or Failed), recognizing Full/Incremental/NoRefresh policies with case-insensitive matching.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "Fraction computation is defensive: null nodeMetrics, unrecognized or blank policies, and runs with zero eligible terminal nodes leave the fraction fields at 0 instead of dividing by zero or diluting the denominator.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "Generated PySpark merge code now treats the fraction values as true doubles by declaring DoubleType columns and serializing each numeric literal as an invariant round-trip Python float(...) expression.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5",
+        "ev-6",
+        "ev-7"
+      ]
+    },
+    {
+      "summary": "The summary SQL projection now adds fractionFullSum, fractionIncrementalSum, and fractionNoRefreshSum for the current date window, using COALESCE so legacy NULL stored values contribute zero.",
+      "evidence_refs": [
+        "ev-9"
+      ]
+    },
+    {
+      "summary": "The /summary response schema now exposes a refreshPolicyDistribution object with full, incremental, and noRefresh fields.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-11"
+      ]
+    },
+    {
+      "summary": "GetSummaryAsync now maps the new SQL aggregates into refreshPolicyDistribution, rounding each value to 1 decimal and defaulting to zeros for DBNull or empty result sets.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-13",
+        "ev-14"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/InsightsMetricsTableManager.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -356,6 \u002B356,9 @@",
+      "new_line": 359,
+      "excerpt": "sb.AppendLine(\u0022    fraction_full DOUBLE,\u0022);\nsb.AppendLine(\u0022    fraction_incremental DOUBLE,\u0022);\nsb.AppendLine(\u0022    fraction_no_refresh DOUBLE,\u0022);",
+      "reason": "Table creation DDL adds the three persisted fraction columns."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -169,6 \u002B169,37 @@",
+      "new_line": 176,
+      "excerpt": "if (nodeMetrics != null)\n{\n    var knownPolicies = new[]\n    {\n        Common.Constants.FullRefreshPolicyValue,\n        Common.Constants.IncrementalRefreshPolicyValue,\n        Common.Constants.NoRefreshPolicyValue,\n    };\n\n    var terminalWithKnownPolicy = nodeMetrics.Values\n        .Where(m =\u003E (m.Status == NodeExecutionStatus.Completed || m.Status == NodeExecutionStatus.Failed)\n                    \u0026\u0026 knownPolicies.Any(p =\u003E string.Equals(m.RefreshPolicy, p, StringComparison.OrdinalIgnoreCase)))\n        .ToList();",
+      "reason": "Eligibility for the new fractions is defined here: only Completed/Failed nodes with recognized refresh policies, matched case-insensitively."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -169,6 \u002B169,37 @@",
+      "new_line": 190,
+      "excerpt": "int denominator = terminalWithKnownPolicy.Count;\nif (denominator \u003E 0)\n{\n    row.FractionFull = (double)terminalWithKnownPolicy.Count(m =\u003E\n        string.Equals(m.RefreshPolicy, Common.Constants.FullRefreshPolicyValue, StringComparison.OrdinalIgnoreCase)) / denominator;\n    row.FractionIncremental = (double)terminalWithKnownPolicy.Count(m =\u003E\n        string.Equals(m.RefreshPolicy, Common.Constants.IncrementalRefreshPolicyValue, StringComparison.OrdinalIgnoreCase)) / denominator;\n    row.FractionNoRefresh = (double)terminalWithKnownPolicy.Count(m =\u003E\n        string.Equals(m.RefreshPolicy, Common.Constants.NoRefreshPolicyValue, StringComparison.OrdinalIgnoreCase)) / denominator;\n}",
+      "reason": "The denominator guard and the three numerator/denominator calculations implement the fraction values and avoid divide-by-zero."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -183,7 \u002B214,7 @@",
+      "new_line": 214,
+      "excerpt": "sb.AppendLine(\u0022from pyspark.sql.types import StructType, StructField, StringType, LongType, IntegerType, DoubleType\u0022);",
+      "reason": "PySpark code generation imports DoubleType specifically to support the new fraction columns."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -202,6 \u002B233,9 @@",
+      "new_line": 236,
+      "excerpt": "sb.AppendLine(\u0022    StructField(\u0027fraction_full\u0027, DoubleType(), True),\u0022);\nsb.AppendLine(\u0022    StructField(\u0027fraction_incremental\u0027, DoubleType(), True),\u0022);\nsb.AppendLine(\u0022    StructField(\u0027fraction_no_refresh\u0027, DoubleType(), True),\u0022);",
+      "reason": "The generated DataFrame schema now exposes the three fraction columns as nullable doubles."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -229,6 \u002B263,9 @@",
+      "new_line": 266,
+      "excerpt": "FormatDouble(row.FractionFull),\nFormatDouble(row.FractionIncremental),\nFormatDouble(row.FractionNoRefresh),",
+      "reason": "The three computed fraction values are emitted into the generated PySpark data tuple for MERGE."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -270,7 \u002B307,24 @@",
+      "new_line": 320,
+      "excerpt": "internal static string FormatDouble(double value)\n{\n    return FormattableString.Invariant($\u0022float({value:R})\u0022);\n}",
+      "reason": "Double literals are now wrapped as invariant, round-trip Python float(...) expressions so even 0/1-like doubles remain Python floats."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DagExecutionHooks/Insights/RunMetricsTableWriter.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -310,6 \u002B364,12 @@",
+      "new_line": 366,
+      "excerpt": "public double FractionFull { get; set; }\n\npublic double FractionIncremental { get; set; }\n\npublic double FractionNoRefresh { get; set; }",
+      "reason": "RunMetricsRow now carries the three new fraction values between collection and PySpark generation."
+    },
+    {
+      "evidence_id": "ev-9",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -58,6 \u002B58,9 @@",
+      "new_line": 61,
+      "excerpt": "SUM(CASE WHEN run_date \u003E= @startDate THEN COALESCE(fraction_full, 0) ELSE 0 END) AS fractionFullSum,\nSUM(CASE WHEN run_date \u003E= @startDate THEN COALESCE(fraction_incremental, 0) ELSE 0 END) AS fractionIncrementalSum,\nSUM(CASE WHEN run_date \u003E= @startDate THEN COALESCE(fraction_no_refresh, 0) ELSE 0 END) AS fractionNoRefreshSum,",
+      "reason": "The summary query projects the new refresh-policy distribution aggregates and null-proofs stored values with COALESCE."
+    },
+    {
+      "evidence_id": "ev-10",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -87,5 \u002B87,12 @@",
+      "new_line": 95,
+      "excerpt": "[JsonProperty(\u0022refreshPolicyDistribution\u0022)]\npublic RefreshPolicyDistribution RefreshPolicyDistribution { get; set; } = new RefreshPolicyDistribution();",
+      "reason": "The summary API contract now includes a non-null refreshPolicyDistribution object."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/RefreshPolicyDistribution.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -0,0 \u002B1,28 @@",
+      "new_line": 16,
+      "excerpt": "[JsonProperty(\u0022full\u0022)]\npublic double Full { get; set; }\n\n[JsonProperty(\u0022incremental\u0022)]\npublic double Incremental { get; set; }\n\n[JsonProperty(\u0022noRefresh\u0022)]\npublic double NoRefresh { get; set; }",
+      "reason": "Defines the three JSON fields exposed under refreshPolicyDistribution."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -639,6 \u002B597,74 @@",
+      "new_line": 632,
+      "excerpt": "response.RefreshPolicyDistribution = new Models.RefreshPolicyDistribution\n{\n    Full = await reader.IsDBNullAsync(reader.GetOrdinal(\u0022fractionFullSum\u0022), cancellationToken) ? 0 : Math.Round(reader.GetDouble(reader.GetOrdinal(\u0022fractionFullSum\u0022)), 1),\n    Incremental = await reader.IsDBNullAsync(reader.GetOrdinal(\u0022fractionIncrementalSum\u0022), cancellationToken) ? 0 : Math.Round(reader.GetDouble(reader.GetOrdinal(\u0022fractionIncrementalSum\u0022)), 1),\n    NoRefresh = await reader.IsDBNullAsync(reader.GetOrdinal(\u0022fractionNoRefreshSum\u0022), cancellationToken) ? 0 : Math.Round(reader.GetDouble(reader.GetOrdinal(\u0022fractionNoRefreshSum\u0022)), 1),\n};",
+      "reason": "DB mapping populates refreshPolicyDistribution from the new SQL aliases, rounds each value to 1 decimal, and defaults DBNull to zero."
+    },
+    {
+      "evidence_id": "ev-13",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -639,6 \u002B597,74 @@",
+      "new_line": 607,
+      "excerpt": "var response = new InsightsSummaryResponse();\n\nif (await reader.ReadAsync(cancellationToken))",
+      "reason": "Empty result sets now return a default InsightsSummaryResponse instead of requiring a row to exist."
+    },
+    {
+      "evidence_id": "ev-14",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
+      "hunk_id": "@@ -365,50 \u002B366,7 @@",
+      "new_line": 368,
+      "excerpt": "return await MapSummaryResponseAsync(reader, cancellationToken);",
+      "reason": "GetSummaryAsync now uses the new mapping path, making the refreshPolicyDistribution fields part of the live /summary response."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "Compute mixed per-run refresh fractions from eligible terminal nodes",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Build a DAG execution with Completed/Failed nodes spanning multiple recognized refresh policies and assert FractionFull/FractionIncremental/FractionNoRefresh are computed as the correct proportions and sum to 1.0 for the eligible run.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "Exclude skipped, blank, unknown, and absent node policies from the denominator",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Cover three boundaries: eligible nodes mixed with excluded nodes, zero eligible nodes, and nodeMetrics == null. Assert fractions remain zero when nothing is eligible and no divide-by-zero occurs.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "Persist the three fraction columns end-to-end in the run-metrics contract",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Assert the table DDL, RunMetricsRow DTO, generated StructType schema, and emitted data tuple all contain fraction_full/fraction_incremental/fraction_no_refresh in the expected contract shape.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-5",
+        "ev-6",
+        "ev-8"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Emit PySpark-safe double literals for zero, integer-valued, and fractional distributions",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Verify FormatDouble and BuildPySparkMergeCode serialize 0, 1, and non-integer values as float(...) with invariant \u0027.\u0027 formatting and round-trip-safe precision so DoubleType rows are not silently rejected.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-6",
+        "ev-7"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Project refresh-policy distribution sums in the summary SQL",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Validate BuildSummaryQuery contains the three fraction sum aliases for the current-period CASE expression so /summary can retrieve the distribution totals from SQL.",
+      "evidence_refs": [
+        "ev-9"
+      ]
+    },
+    {
+      "sketch_id": "sk-6",
+      "title": "Treat legacy NULL fraction columns as zero in summary aggregation/mapping",
+      "category": "EdgeCase",
+      "technique": "EquivalencePartition",
+      "rationale": "Use a reader or integration fixture with null fraction aggregates to confirm the final response reports 0/0/0 rather than nulls or exceptions, matching the COALESCE \u002B IsDBNull behavior.",
+      "evidence_refs": [
+        "ev-9",
+        "ev-12"
+      ]
+    },
+    {
+      "sketch_id": "sk-7",
+      "title": "Expose refreshPolicyDistribution with full/incremental/noRefresh JSON fields",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Serialize or deserialize an InsightsSummaryResponse and assert the payload shape contains refreshPolicyDistribution.full, .incremental, and .noRefresh, with the object present by default.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-11"
+      ]
+    },
+    {
+      "sketch_id": "sk-8",
+      "title": "Map summary fraction sums with 1-decimal rounding and default object on empty results",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Mock DbDataReader for populated values, DBNull values, and no rows; assert MapSummaryResponseAsync rounds to one decimal, returns zeros for DBNull, and still returns a non-null refreshPolicyDistribution when nothing is read.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-12",
+        "ev-13",
+        "ev-14"
+      ]
+    }
+  ]
+}

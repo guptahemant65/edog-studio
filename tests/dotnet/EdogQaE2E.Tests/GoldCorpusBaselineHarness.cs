@@ -63,9 +63,10 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             string fixturePath = ExtractArg(args, "--fixture");
             string writeActualPath = ExtractArg(args, "--write-actual");
+            string writePlanPath = ExtractArg(args, "--write-plan");
             if (fixturePath == null)
             {
-                EmitFailure("ARG_MISSING_FIXTURE", "usage: gold-corpus-baseline --fixture <fixture-dir> [--write-actual <path>]");
+                EmitFailure("ARG_MISSING_FIXTURE", "usage: gold-corpus-baseline --fixture <fixture-dir> [--write-actual <path>] [--write-plan <path>]");
                 return 2;
             }
 
@@ -142,6 +143,22 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var archResult = await EdogQaLlmClient
                 .ArchitectOnceAsync(httpClient, archConfig, zone, linkedCts.Token)
                 .ConfigureAwait(false);
+
+            // T1h: dump the architect plan JSON for diagnostic triage if requested.
+            // We do this BEFORE the architect-failed bail so a failure case (no
+            // sketches / invalid plan) still surfaces what was attempted.
+            if (!string.IsNullOrWhiteSpace(writePlanPath) && archResult?.Plan != null)
+            {
+                try
+                {
+                    WriteArchitectPlanJson(writePlanPath, prMeta, archResult.Plan);
+                }
+                catch (Exception ex)
+                {
+                    EmitFailure("PLAN_WRITE_FAILED", $"{ex.GetType().Name}: {ex.Message}");
+                    return 2;
+                }
+            }
 
             if (archResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
             {
@@ -302,6 +319,101 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     projected = projectedIds.Count,
                 },
                 scenarios = actuals,
+            };
+
+            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+            });
+
+            string dir = Path.GetDirectoryName(outPath);
+            if (!string.IsNullOrWhiteSpace(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(outPath, json);
+        }
+
+        // T1h: serialize the architect plan as-is for diagnostic triage. We
+        // project to plain dictionaries so curators can diff the plan
+        // structure across iterations without binding to internal C# types.
+        private static void WriteArchitectPlanJson(
+            string outPath,
+            PrMetadata prMeta,
+            EdogQaLlmClient.ArchitectPlan plan)
+        {
+            var behavioralChanges = new List<Dictionary<string, object>>();
+            if (plan.BehavioralChanges != null)
+            {
+                foreach (var bc in plan.BehavioralChanges)
+                {
+                    if (bc == null) continue;
+                    behavioralChanges.Add(new Dictionary<string, object>
+                    {
+                        ["summary"] = bc.Summary,
+                        ["evidence_refs"] = bc.EvidenceRefs ?? new List<string>(),
+                    });
+                }
+            }
+
+            var groundingEvidence = new List<Dictionary<string, object>>();
+            if (plan.GroundingEvidence != null)
+            {
+                foreach (var ev in plan.GroundingEvidence)
+                {
+                    if (ev == null) continue;
+                    groundingEvidence.Add(new Dictionary<string, object>
+                    {
+                        ["evidence_id"] = ev.EvidenceId,
+                        ["repo_relative_path"] = ev.RepoRelativePath,
+                        ["side"] = ev.Side,
+                        ["base_sha"] = ev.BaseSha,
+                        ["hunk_id"] = ev.HunkId,
+                        ["new_line"] = ev.NewLine,
+                        ["excerpt"] = ev.Excerpt,
+                        ["reason"] = ev.Reason,
+                    });
+                }
+            }
+
+            var scenarioSketches = new List<Dictionary<string, object>>();
+            if (plan.ScenarioSketches != null)
+            {
+                foreach (var sk in plan.ScenarioSketches)
+                {
+                    if (sk == null) continue;
+                    scenarioSketches.Add(new Dictionary<string, object>
+                    {
+                        ["sketch_id"] = sk.SketchId,
+                        ["title"] = sk.Title,
+                        ["category"] = sk.Category,
+                        ["technique"] = sk.Technique,
+                        ["rationale"] = sk.Rationale,
+                        ["evidence_refs"] = sk.EvidenceRefs ?? new List<string>(),
+                    });
+                }
+            }
+
+            var payload = new
+            {
+                schema_version = "1.0",
+                captured_at = DateTimeOffset.UtcNow.ToString("o"),
+                pipeline = "v2_architect_editor",
+                pr_number = prMeta?.PrNumber,
+                zone_id = plan.ZoneId,
+                zone_summary = plan.ZoneSummary,
+                plan_outcome = plan.PlanOutcome,
+                counts = new
+                {
+                    behavioral_changes = behavioralChanges.Count,
+                    grounding_evidence = groundingEvidence.Count,
+                    scenario_sketches = scenarioSketches.Count,
+                },
+                behavioral_changes = behavioralChanges,
+                grounding_evidence = groundingEvidence,
+                scenario_sketches = scenarioSketches,
             };
 
             var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions

@@ -1,0 +1,394 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T13:42:43.4725842\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "976609",
+  "zone_id": "PR-976609-full-diff",
+  "zone_summary": "Add refreshPolicyDistribution to /trends API",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 10,
+    "grounding_evidence": 19,
+    "scenario_sketches": 10
+  },
+  "behavioral_changes": [
+    {
+      "summary": "The daily-trend SQL now projects three refresh-policy distribution aggregates into the result set: fractionFull, fractionIncremental, and fractionNoRefresh.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "The fractionFull aggregate is now null-safe in SQL via COALESCE(..., 0), preventing legacy NULL source values from propagating into the summed result.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "summary": "The fractionIncremental aggregate is now null-safe in SQL via COALESCE(..., 0), preventing legacy NULL source values from propagating into the summed result.",
+      "evidence_refs": [
+        "ev-2"
+      ]
+    },
+    {
+      "summary": "The fractionNoRefresh aggregate is now null-safe in SQL via COALESCE(..., 0), preventing legacy NULL source values from propagating into the summed result.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "DailyTrendEntry now exposes a refreshPolicyDistribution JSON property and initializes it to a non-null RefreshPolicyDistribution instance.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5"
+      ]
+    },
+    {
+      "summary": "Trend rows are now mapped through MapTrendEntryAsync, which constructs the nested RefreshPolicyDistribution for each DailyTrendEntry.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-10"
+      ]
+    },
+    {
+      "summary": "MapTrendEntryAsync now checks run_date with IsDBNullAsync and returns null when the column is DBNull instead of reading a string unconditionally.",
+      "evidence_refs": [
+        "ev-7",
+        "ev-8",
+        "ev-9"
+      ]
+    },
+    {
+      "summary": "MapTrendEntryAsync now maps fractionFull as 0 when DBNull, otherwise rounds the numeric value to 1 decimal place.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "MapTrendEntryAsync now maps fractionIncremental as 0 when DBNull, otherwise rounds the numeric value to 1 decimal place.",
+      "evidence_refs": [
+        "ev-14",
+        "ev-15",
+        "ev-16"
+      ]
+    },
+    {
+      "summary": "MapTrendEntryAsync now maps fractionNoRefresh as 0 when DBNull, otherwise rounds the numeric value to 1 decimal place.",
+      "evidence_refs": [
+        "ev-17",
+        "ev-18",
+        "ev-19"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -133,13 \u002B133,19 @@",
+      "new_line": 146,
+      "excerpt": "    SUM(COALESCE(fraction_full, 0)) AS fractionFull,",
+      "reason": "New SQL projection for Full refresh distribution, with null-protection embedded in the aggregate."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -133,13 \u002B133,19 @@",
+      "new_line": 147,
+      "excerpt": "    SUM(COALESCE(fraction_incremental, 0)) AS fractionIncremental,",
+      "reason": "New SQL projection for Incremental refresh distribution, with null-protection embedded in the aggregate."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -133,13 \u002B133,19 @@",
+      "new_line": 148,
+      "excerpt": "    SUM(COALESCE(fraction_no_refresh, 0)) AS fractionNoRefresh",
+      "reason": "New SQL projection for NoRefresh distribution, with null-protection embedded in the aggregate."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -30,5 \u002B30,15 @@",
+      "new_line": 41,
+      "excerpt": "        [JsonProperty(\u0022refreshPolicyDistribution\u0022)]",
+      "reason": "Adds the serialized JSON field name for the new response property."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/DailyTrendEntry.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -30,5 \u002B30,15 @@",
+      "new_line": 42,
+      "excerpt": "        public RefreshPolicyDistribution RefreshPolicyDistribution { get; set; } = new RefreshPolicyDistribution();",
+      "reason": "Adds the new response property and initializes it to a non-null default object."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -502,14 \u002B502,7 @@",
+      "new_line": 505,
+      "excerpt": "                        response.DailyTrend.Add(await MapTrendEntryAsync(trendReader, cancellationToken));",
+      "reason": "Changes the row-processing pipeline to use the new mapper when populating DailyTrend entries."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 674,
+      "excerpt": "            string runDate = await reader.IsDBNullAsync(runDateOrd, cancellationToken)",
+      "reason": "Introduces an explicit DBNull check before reading run_date."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 675,
+      "excerpt": "                ? null",
+      "reason": "Defines the null branch for a DBNull run_date."
+    },
+    {
+      "evidence_id": "ev-9",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 676,
+      "excerpt": "                : reader.GetString(runDateOrd);",
+      "reason": "Defines the non-null branch for reading run_date only when safe."
+    },
+    {
+      "evidence_id": "ev-10",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 689,
+      "excerpt": "                RefreshPolicyDistribution = new RefreshPolicyDistribution",
+      "reason": "The mapper now constructs and assigns the nested refresh-policy distribution object on each trend entry."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 691,
+      "excerpt": "                    Full = await reader.IsDBNullAsync(fractionFullOrd, cancellationToken)",
+      "reason": "Introduces the DBNull guard for the Full fraction column."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 692,
+      "excerpt": "                        ? 0",
+      "reason": "Defines the default-zero branch for a DBNull Full fraction."
+    },
+    {
+      "evidence_id": "ev-13",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 693,
+      "excerpt": "                        : Math.Round(reader.GetDouble(fractionFullOrd), 1),",
+      "reason": "Defines one-decimal rounding for non-null Full fraction values."
+    },
+    {
+      "evidence_id": "ev-14",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 694,
+      "excerpt": "                    Incremental = await reader.IsDBNullAsync(fractionIncOrd, cancellationToken)",
+      "reason": "Introduces the DBNull guard for the Incremental fraction column."
+    },
+    {
+      "evidence_id": "ev-15",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 695,
+      "excerpt": "                        ? 0",
+      "reason": "Defines the default-zero branch for a DBNull Incremental fraction."
+    },
+    {
+      "evidence_id": "ev-16",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 696,
+      "excerpt": "                        : Math.Round(reader.GetDouble(fractionIncOrd), 1),",
+      "reason": "Defines one-decimal rounding for non-null Incremental fraction values."
+    },
+    {
+      "evidence_id": "ev-17",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 697,
+      "excerpt": "                    NoRefresh = await reader.IsDBNullAsync(fractionNrOrd, cancellationToken)",
+      "reason": "Introduces the DBNull guard for the NoRefresh fraction column."
+    },
+    {
+      "evidence_id": "ev-18",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 698,
+      "excerpt": "                        ? 0",
+      "reason": "Defines the default-zero branch for a DBNull NoRefresh fraction."
+    },
+    {
+      "evidence_id": "ev-19",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "42b1c616459a8f538e992352b8d66dc9a9e6faa7",
+      "hunk_id": "@@ -665,6 \u002B658,49 @@",
+      "new_line": 699,
+      "excerpt": "                        : Math.Round(reader.GetDouble(fractionNrOrd), 1),",
+      "reason": "Defines one-decimal rounding for non-null NoRefresh fraction values."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "Daily trend query includes all three refresh-policy aggregates for supported groupings",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Exercise BuildDailyTrendQuery for both day and week inputs and assert the generated SELECT includes fractionFull, fractionIncremental, and fractionNoRefresh so the /trends payload can carry refresh-policy distribution at either grouping granularity.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "Full-fraction SQL aggregate remains null-safe via COALESCE",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Guard against regression to plain SUM(fraction_full) by asserting the generated query keeps COALESCE around fraction_full; otherwise legacy rows with NULL Full fractions could surface NULL instead of a numeric total.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "Incremental-fraction SQL aggregate remains null-safe via COALESCE",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Guard against regression to plain SUM(fraction_incremental) by asserting the generated query keeps COALESCE around the Incremental fraction column.",
+      "evidence_refs": [
+        "ev-2"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "NoRefresh-fraction SQL aggregate remains null-safe via COALESCE",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Guard against regression to plain SUM(fraction_no_refresh) by asserting the generated query keeps COALESCE around the NoRefresh fraction column.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Mapped trend rows include refreshPolicyDistribution in the DTO contract",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Map a fully populated synthetic trend row and assert DailyTrendEntry contains a non-null refreshPolicyDistribution subtree populated from the three fraction columns, reflecting the new response shape that the request pipeline now uses.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5",
+        "ev-6",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-6",
+      "title": "DBNull run_date maps to null instead of throwing",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Feed MapTrendEntryAsync a reader whose run_date column is DBNull and assert the resulting DailyTrendEntry.RunDate is null, proving the new IsDBNullAsync branch prevents an unsafe string read.",
+      "evidence_refs": [
+        "ev-7",
+        "ev-8",
+        "ev-9"
+      ]
+    },
+    {
+      "sketch_id": "sk-7",
+      "title": "DBNull Full fraction defaults to 0 in mapped trend entries",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Cover Full-fraction mapping with values {DBNull, 0.0, non-zero} and assert DBNull becomes 0 while numeric values remain numeric, targeting the new defensive branch for the Full distribution component.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12"
+      ]
+    },
+    {
+      "sketch_id": "sk-8",
+      "title": "DBNull Incremental fraction defaults to 0 in mapped trend entries",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Cover Incremental-fraction mapping with values {DBNull, 0.0, non-zero} and assert DBNull becomes 0 while numeric values remain numeric, targeting the new defensive branch for the Incremental distribution component.",
+      "evidence_refs": [
+        "ev-14",
+        "ev-15"
+      ]
+    },
+    {
+      "sketch_id": "sk-9",
+      "title": "DBNull NoRefresh fraction defaults to 0 in mapped trend entries",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Cover NoRefresh-fraction mapping with values {DBNull, 0.0, non-zero} and assert DBNull becomes 0 while numeric values remain numeric, targeting the new defensive branch for the NoRefresh distribution component.",
+      "evidence_refs": [
+        "ev-17",
+        "ev-18"
+      ]
+    },
+    {
+      "sketch_id": "sk-10",
+      "title": "Trend refresh-policy fractions are rounded to one decimal place",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Supply non-integer fraction values with extra precision and assert Full, Incremental, and NoRefresh are each rounded to one decimal place, preserving the endpoint\u2019s intended precision contract for refresh-policy distribution values.",
+      "evidence_refs": [
+        "ev-13",
+        "ev-16",
+        "ev-19"
+      ]
+    }
+  ]
+}

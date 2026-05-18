@@ -1913,6 +1913,52 @@ def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
     )
 
 
+
+def test_qa_capture_script_passes_write_plan() -> None:
+    """T1h: ``capture_v2_actuals.py`` MUST request architect_plan.json
+    sibling files so the next paid capture iteration immediately yields
+    diagnostic triage data without re-running the pipeline.
+
+    Discovered during T1h diagnostic: the post-Editor actual.json alone
+    cannot distinguish 'Architect skipped this line-cluster' from 'Editor
+    reclassified the sketch' as the failure mode. Dumping the Architect
+    plan JSON to a sibling file lets the operator triage each miss as
+    Architect-vs-Editor in a single re-read of disk, no re-spend required.
+    """
+    script = REPO_ROOT / "tests" / "qa-eval" / "capture_v2_actuals.py"
+    text = script.read_text(encoding="utf-8")
+    assert "--write-plan" in text, (
+        "capture_v2_actuals.py must forward --write-plan to the harness so "
+        "architect_plan.json is captured alongside actual.json"
+    )
+    assert "architect_plan.json" in text, (
+        "capture_v2_actuals.py must write the architect plan to "
+        "architect_plan.json alongside actual.json"
+    )
+
+
+def test_qa_harness_supports_write_plan_argument() -> None:
+    """T1h: ``GoldCorpusBaselineHarness`` MUST accept ``--write-plan <path>``
+    and serialize the architect plan to that path before the editor pass.
+
+    This is the .NET-side companion to the Python pin test above. Without
+    the harness ack-ing the argument the capture script's flag is a no-op.
+    """
+    src = REPO_ROOT / "tests" / "dotnet" / "EdogQaE2E.Tests" / "GoldCorpusBaselineHarness.cs"
+    text = src.read_text(encoding="utf-8")
+    assert "--write-plan" in text, (
+        "GoldCorpusBaselineHarness must parse a --write-plan CLI argument"
+    )
+    assert "WriteArchitectPlanJson" in text, (
+        "GoldCorpusBaselineHarness must implement an architect-plan JSON writer"
+    )
+    # Ensure the plan dump runs even when the editor pass fails — diagnostic
+    # is most valuable when something has gone wrong.
+    assert "writePlanPath" in text, (
+        "GoldCorpusBaselineHarness must wire the parsed --write-plan path"
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────
 # F27 P9 T1d — Adversarial prompt-injection fixtures.
 #
