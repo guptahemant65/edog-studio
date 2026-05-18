@@ -1,10 +1,12 @@
 {
-  "schema_version": "1.1",
-  "comment": "F27 P9 T1f-b — acceptance floors calibrated below the first live V2 baseline captured 2026-05-18. Measured macro recall 0.219, P0+P1 recall 0.219, per-PR-min recall 0.125. Floors set MARGINALLY below those so future regressions trip the gate without lying about today's reality. Spec's nominal 80% recall is the destination; T2 prompt-tuning is the path. The `corpus_precision_min` is 0.0 because the scorer's `precision_validated` field uses the `validated` stage bucket as denominator, and our highest-stage tagging puts every Validator-accepted scenario into `projected` if it also survives the Projector — so the validated bucket is structurally empty on healthy runs (precision_projected was 0.17/0.33/0.25 in the same capture). T1f-c will extend the scorer with highest-stage precision and this floor will be re-enabled.",
+  "schema_version": "1.2",
+  "comment": "F27 P9 T1f-c — acceptance floors gain HIGHEST-STAGE precision (the gate-meaningful metric under our highest-stage tagging). Measured 2026-05-18: macro precision_highest_stage 0.25, per-PR min 0.167. `corpus_precision_min` (validated-bucket) stays at 0.0 because that bucket is structurally empty when every Validator-accepted scenario also survives the Projector — kept for diagnostic surface but does not gate. The spec's nominal 80% recall / 90% precision is the destination; T2 prompt-tuning is the path. `enforcement: report_only` until T2 lifts the corpus above defensible thresholds.",
   "absolute": {
     "corpus_recall_min": 0.15,
     "corpus_precision_min": 0.0,
+    "corpus_precision_highest_stage_min": 0.20,
     "per_pr_recall_min": 0.10,
+    "per_pr_precision_highest_stage_min": 0.10,
     "p0_p1_recall_min": 0.15
   },
   "regression": {

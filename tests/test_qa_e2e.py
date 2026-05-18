@@ -2162,22 +2162,27 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t1fb() -> None:
-    """T1f-b calibrated score_floors.json down to honest values BELOW
-    the first measured baseline so future regressions trip the gate.
-    Pin the schema bump (1.0 → 1.1) + the marginal-below-measured
-    structure so a well-meaning revert to the spec's nominal 0.80
-    targets cannot land silently.
+def test_qa_score_floors_calibrated_for_t1fc() -> None:
+    """T1f-c added the highest-stage precision floor to score_floors.json
+    and bumped the schema 1.1 → 1.2. Pin the schema bump + the new
+    `corpus_precision_highest_stage_min` and per-PR variant so a revert
+    cannot silently land. Highest-stage precision is the GATE-MEANINGFUL
+    precision number under our highest-stage tagging — the `validated`
+    bucket is structurally empty, but `precision_highest_stage` measures
+    "of every scenario the pipeline produced, what fraction matched
+    expected", which is what the corpus precision floor actually wants
+    to gate against.
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.1", (
-        f"score_floors.json must be at schema_version 1.1 after T1f-b, "
+    assert floors.get("schema_version") == "1.2", (
+        f"score_floors.json must be at schema_version 1.2 after T1f-c, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
+    # T1f-b recall floors still apply.
     assert absolute.get("corpus_recall_min") <= 0.219, (
         f"corpus_recall_min must stay <= measured 0.219; got {absolute.get('corpus_recall_min')!r}"
     )
@@ -2187,17 +2192,26 @@ def test_qa_score_floors_calibrated_for_t1fb() -> None:
     assert absolute.get("per_pr_recall_min") <= 0.125, (
         f"per_pr_recall_min must stay <= measured min 0.125; got {absolute.get('per_pr_recall_min')!r}"
     )
-    assert absolute.get("corpus_precision_min") == 0.0, (
-        "corpus_precision_min must be 0.0 — validated-stage bucket is structurally "
-        "empty under highest-stage tagging; T1f-c re-enables this floor"
+    # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
+    assert absolute.get("corpus_precision_min") == 0.0
+    # T1f-c new floors — must stay <= measured macro 0.25 (corpus) and
+    # <= measured per-PR min 0.167 (per_pr) so future regressions fire.
+    assert absolute.get("corpus_precision_highest_stage_min") <= 0.25, (
+        "corpus_precision_highest_stage_min must stay <= measured macro 0.25; "
+        f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
+    )
+    assert absolute.get("per_pr_precision_highest_stage_min") <= 0.167, (
+        "per_pr_precision_highest_stage_min must stay <= measured per-PR min 0.167; "
+        f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"
 
 
-def test_qa_score_report_json_present_at_t1fb() -> None:
-    """T1f-b committed the first immutable score_report.json sibling.
-    Pin its top-level shape so downstream tooling (CI gate, dashboard)
-    can rely on the fields existing.
+def test_qa_score_report_json_present_at_t1fc() -> None:
+    """T1f-c bumped the score_report.json schema 1.0 → 1.1 by adding
+    `precision_highest_stage` + `f1_highest_stage` to per-PR + macro +
+    micro blocks. Pin the new shape so downstream tooling (CI gate,
+    dashboard) can rely on the fields existing.
     """
     import json
     report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
@@ -2206,17 +2220,67 @@ def test_qa_score_report_json_present_at_t1fb() -> None:
         "--output tests/qa-eval/score_report.json` after a capture pass."
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report.get("schema_version") == "1.0"
+    assert report.get("schema_version") == "1.1", (
+        f"expected score_report schema_version=1.1 after T1f-c, "
+        f"got {report.get('schema_version')!r}"
+    )
     assert report.get("verdict") in {"PASS", "FAIL"}
     assert report.get("enforcement") == "report_only"
     aggregate = report.get("aggregate") or {}
     macro = aggregate.get("macro") or {}
+    # T1f-b headline numbers still required.
     for k in ("recall", "precision_validated", "f1_validated", "p0_p1_recall"):
         assert isinstance(macro.get(k), (int, float)), (
             f"aggregate.macro.{k} must be numeric, got {macro.get(k)!r}"
         )
+    # T1f-c new headline numbers.
+    for k in ("precision_highest_stage", "f1_highest_stage"):
+        assert isinstance(macro.get(k), (int, float)), (
+            f"aggregate.macro.{k} must be numeric at T1f-c, got {macro.get(k)!r}"
+        )
+        assert 0.0 <= float(macro[k]) <= 1.0, (
+            f"aggregate.macro.{k} must be in [0,1], got {macro[k]!r}"
+        )
+    micro = aggregate.get("micro") or {}
+    assert isinstance(micro.get("precision_highest_stage"), (int, float)), (
+        "aggregate.micro.precision_highest_stage required at T1f-c"
+    )
     prs_scored = report.get("prs_scored") or []
     assert len(prs_scored) == 3, f"expected 3 scored PRs, got {len(prs_scored)}"
     expected = {"975848", "976609", "977882"}
     actual = {str(p.get("pr_number")) for p in prs_scored}
     assert actual == expected, f"prs_scored set mismatch: {actual}"
+    # Every PR must carry the new T1f-c per-PR metric.
+    for pr in prs_scored:
+        assert "precision_highest_stage" in pr, (
+            f"PR-{pr.get('pr_number')!r} missing precision_highest_stage"
+        )
+        assert "f1_highest_stage" in pr, (
+            f"PR-{pr.get('pr_number')!r} missing f1_highest_stage"
+        )
+
+
+def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
+    """T1f-c extends the baseline.json `scores` block with
+    `macro_precision_highest_stage`, `macro_f1_highest_stage`, and
+    `micro_precision_highest_stage`. These three fields are the
+    headline numbers that future PR-vs-PR regression checks compare
+    against — pin them so a baseline refresh can't accidentally drop
+    them.
+    """
+    import json
+    baseline_path = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+    scores = baseline.get("scores")
+    assert isinstance(scores, dict), "baseline.json must carry a `scores` block"
+    for k in (
+        "macro_precision_highest_stage",
+        "macro_f1_highest_stage",
+        "micro_precision_highest_stage",
+    ):
+        assert isinstance(scores.get(k), (int, float)), (
+            f"scores.{k} must be numeric at T1f-c, got {scores.get(k)!r}"
+        )
+        assert 0.0 <= float(scores[k]) <= 1.0, (
+            f"scores.{k} must be in [0,1], got {scores[k]!r}"
+        )

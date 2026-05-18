@@ -240,7 +240,9 @@ class PrScore:
     # Computed at the end of `score_pr`.
     recall: float = 0.0
     precision_by_stage: dict[str, float] = field(default_factory=dict)
+    precision_highest_stage: float = 0.0
     f1_validated: float = 0.0
+    f1_highest_stage: float = 0.0
     p0_p1_recall: float = 0.0
 
     def to_json(self) -> dict[str, Any]:
@@ -253,7 +255,9 @@ class PrScore:
             "unmatched_actual_ids": [a.id for a in self.unmatched_actual],
             "recall": round(self.recall, 4),
             "precision": {k: round(v, 4) for k, v in self.precision_by_stage.items()},
+            "precision_highest_stage": round(self.precision_highest_stage, 4),
             "f1_validated": round(self.f1_validated, 4),
+            "f1_highest_stage": round(self.f1_highest_stage, 4),
             "p0_p1_recall": round(self.p0_p1_recall, 4),
         }
 
@@ -417,9 +421,27 @@ def score_pr(
         for stage in VALID_STAGES
     }
 
+    # T1f-c: highest-stage precision — matched ÷ total scenarios produced
+    # (sum across all stages). Because we tag each scenario at its highest
+    # reached stage exactly once, this denominator is the count of every
+    # distinct scenario the V2 pipeline emitted. This is the honest
+    # corpus-wide precision number; the per-stage breakdown above is for
+    # diagnosing WHERE precision drops happen. The `validated` headline
+    # is structurally 0 under highest-stage tagging when every Validator-
+    # accepted scenario also survives the Projector — `precision_highest_stage`
+    # is the gate-meaningful number.
+    total_actual = sum(actual_by_stage.values())
+    total_matched_count = len(matched)
+    precision_highest = _safe_div(total_matched_count, total_actual)
+
     # F1 on the headline (validated) stage.
     val_p = precision["validated"]
     f1 = _safe_div(2 * val_p * recall, val_p + recall) if (val_p + recall) > 0 else 0.0
+    # F1 on highest-stage precision — the gate-meaningful pair.
+    f1_high = (
+        _safe_div(2 * precision_highest * recall, precision_highest + recall)
+        if (precision_highest + recall) > 0 else 0.0
+    )
 
     # P0+P1 recall — must-pass criticality bucket.
     p0_p1_expected = [e for e in expected if e.criticality in {"P0", "P1"}]
@@ -437,7 +459,9 @@ def score_pr(
         unmatched_actual=unmatched,
         recall=recall,
         precision_by_stage=precision,
+        precision_highest_stage=precision_highest,
         f1_validated=f1,
+        f1_highest_stage=f1_high,
         p0_p1_recall=p0_p1_recall,
     )
 
@@ -446,14 +470,27 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
     if not pr_scores:
         return {
             "pr_count": 0,
-            "macro": {"recall": 0.0, "precision_validated": 0.0, "f1_validated": 0.0, "p0_p1_recall": 0.0},
-            "micro": {"recall": 0.0, "precision_validated": 0.0},
+            "macro": {
+                "recall": 0.0,
+                "precision_validated": 0.0,
+                "precision_highest_stage": 0.0,
+                "f1_validated": 0.0,
+                "f1_highest_stage": 0.0,
+                "p0_p1_recall": 0.0,
+            },
+            "micro": {
+                "recall": 0.0,
+                "precision_validated": 0.0,
+                "precision_highest_stage": 0.0,
+            },
         }
 
     # Macro: each PR weighted equally.
     macro_recall = sum(p.recall for p in pr_scores) / len(pr_scores)
     macro_prec = sum(p.precision_by_stage["validated"] for p in pr_scores) / len(pr_scores)
+    macro_prec_high = sum(p.precision_highest_stage for p in pr_scores) / len(pr_scores)
     macro_f1 = sum(p.f1_validated for p in pr_scores) / len(pr_scores)
+    macro_f1_high = sum(p.f1_highest_stage for p in pr_scores) / len(pr_scores)
     macro_p0 = sum(p.p0_p1_recall for p in pr_scores) / len(pr_scores)
 
     # Micro: each scenario weighted equally.
@@ -463,19 +500,30 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
     total_matched_validated = sum(
         len([m for m in p.matched if m.actual.stage == "validated"]) for p in pr_scores
     )
+    # T1f-c: highest-stage micro — total matched ÷ total scenarios produced
+    # across the corpus. This is what the corpus-level precision floor
+    # should gate against.
+    total_actual_highest = sum(
+        sum(p.actual_total_by_stage.values()) for p in pr_scores
+    )
 
     return {
         "pr_count": len(pr_scores),
         "macro": {
             "recall": round(macro_recall, 4),
             "precision_validated": round(macro_prec, 4),
+            "precision_highest_stage": round(macro_prec_high, 4),
             "f1_validated": round(macro_f1, 4),
+            "f1_highest_stage": round(macro_f1_high, 4),
             "p0_p1_recall": round(macro_p0, 4),
         },
         "micro": {
             "recall": round(_safe_div(total_matched, total_expected), 4),
             "precision_validated": round(
                 _safe_div(total_matched_validated, total_validated_actual), 4
+            ),
+            "precision_highest_stage": round(
+                _safe_div(total_matched, total_actual_highest), 4
             ),
         },
     }
@@ -515,6 +563,17 @@ def evaluate_floors(
             f"corpus_precision_validated {macro.get('precision_validated', 0.0)} "
             f"< min {absolute['corpus_precision_min']}",
         )
+    # T1f-c: highest-stage precision floor — this is the gate-meaningful
+    # one because the `validated` bucket is structurally empty under our
+    # highest-stage tagging. Macro precision_highest_stage = average of
+    # per-PR (matched / total-actual-scenarios) across the corpus.
+    if macro.get("precision_highest_stage", 0.0) < absolute.get(
+        "corpus_precision_highest_stage_min", 0.0
+    ):
+        violations.append(
+            f"corpus_precision_highest_stage {macro.get('precision_highest_stage', 0.0)} "
+            f"< min {absolute['corpus_precision_highest_stage_min']}",
+        )
     if macro.get("p0_p1_recall", 0.0) < absolute.get("p0_p1_recall_min", 0.0):
         violations.append(
             f"corpus_p0_p1_recall {macro.get('p0_p1_recall', 0.0)} "
@@ -524,6 +583,14 @@ def evaluate_floors(
         if p.recall < absolute.get("per_pr_recall_min", 0.0):
             violations.append(
                 f"PR-{p.pr_number} recall {p.recall} < per_pr min {absolute['per_pr_recall_min']}",
+            )
+        # T1f-c: per-PR highest-stage precision floor.
+        if p.precision_highest_stage < absolute.get(
+            "per_pr_precision_highest_stage_min", 0.0
+        ):
+            violations.append(
+                f"PR-{p.pr_number} precision_highest_stage {round(p.precision_highest_stage, 4)} "
+                f"< per_pr min {absolute['per_pr_precision_highest_stage_min']}",
             )
 
     if violations:
@@ -569,7 +636,7 @@ def build_report(pr_dirs: list[Path]) -> dict[str, Any]:
     verdict, violations = evaluate_floors(agg, floors, pr_scores)
 
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "verdict": verdict,
         "floor_violations": violations,
         "enforcement": floors.get("enforcement", "report_only"),
@@ -591,12 +658,15 @@ def print_human(report: dict[str, Any]) -> None:
     print("  Macro-average (each PR weighted equally):")
     print(f"    recall:               {agg['macro']['recall']:.3f}")
     print(f"    precision (validated): {agg['macro']['precision_validated']:.3f}")
+    print(f"    precision (highest-stage): {agg['macro']['precision_highest_stage']:.3f}")
     print(f"    F1 (validated):       {agg['macro']['f1_validated']:.3f}")
+    print(f"    F1 (highest-stage):   {agg['macro']['f1_highest_stage']:.3f}")
     print(f"    P0+P1 recall:         {agg['macro']['p0_p1_recall']:.3f}")
     print()
     print("  Micro-average (each scenario weighted equally):")
     print(f"    recall:               {agg['micro']['recall']:.3f}")
     print(f"    precision (validated): {agg['micro']['precision_validated']:.3f}")
+    print(f"    precision (highest-stage): {agg['micro']['precision_highest_stage']:.3f}")
     print()
     if report["floor_violations"]:
         print("  Floor violations:")
@@ -615,9 +685,10 @@ def print_human(report: dict[str, Any]) -> None:
         print(
             f"    PR-{pr['pr_number']}: "
             f"recall={pr['recall']:.3f} "
-            f"precision_validated={pr['precision']['validated']:.3f} "
+            f"precision_highest_stage={pr['precision_highest_stage']:.3f} "
             f"p0_p1_recall={pr['p0_p1_recall']:.3f} "
-            f"expected={pr['expected_total']} actual_validated={pr['actual_total']['validated']}"
+            f"expected={pr['expected_total']} "
+            f"actual_total={sum(pr['actual_total'].values())}"
         )
 
 
