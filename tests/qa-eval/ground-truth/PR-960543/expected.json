@@ -1,0 +1,157 @@
+{
+  "schema_version": "2.0",
+  "pr_number": "960543",
+  "curator_state": "GRADED_PASS_1",
+  "curated_at": "2026-05-18",
+  "curator": "donna",
+  "pass_1_basis": "diff_inspection_blind",
+  "scenarios": [
+    {
+      "id": "960543-s01",
+      "behavior_key": "error_code_enum_adds_mlv_data_corrupted",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "ErrorCode enum declares MLV_DATA_CORRUPTED for catalog data integrity failures",
+      "rationale": "The enum value is the canonical declaration — every call site that throws CatalogException with this code depends on it. Without the enum entry, every throw site (8+ across Dag.cs, CatalogHandler.cs, DataQualityReportHandler.cs) fails to compile. The xmldoc explicitly scopes it to 'catalog data is corrupted or missing required information for processing' — a behavior contract distinct from the generic MLV_SERVER_ERROR fallback.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs", "side": "right", "lines": [648, 649, 650, 651, 652]}
+      ]
+    },
+    {
+      "id": "960543-s02",
+      "behavior_key": "error_registry_templates_mlv_data_corrupted_message",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "ErrorRegistry registers the MLV_DATA_CORRUPTED user-facing message template parameterized by FullyQualifiedMLVNameKey",
+      "rationale": "The template IS the user-visible error message contract — 'Catalog data does not have information needed to process this request. Recreate the materialized lake view {FQMLVName} and retry. If issue persists, reach out to support.' Missing the registration would surface the raw enum name (or a fallback) to the user. The {FullyQualifiedMLVNameKey} placeholder must match exactly the Constants key consumers populate at call sites — this string IS the wire contract between Constants.FullyQualifiedMLVNameKey (s05) and the substitution engine.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs", "side": "right", "lines": [200, 201, 202]}
+      ]
+    },
+    {
+      "id": "960543-s03",
+      "behavior_key": "error_registry_rewrites_entity_not_found_template_to_mlvname",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "ErrorRegistry rewrites the MLV_ENTITY_NOT_FOUND template to use MLVNameKey with a specific 'incomplete source metadata' message (was: generic ErrorMessageKey-based template)",
+      "rationale": "This is a USER-FACING wire change — every consumer of MLV_ENTITY_NOT_FOUND now receives a different message text AND must populate MLVNameKey instead of ErrorMessageKey when constructing the parameters dictionary. Existing call sites that pass ErrorMessageKey will now substitute empty in the new template. The template rewrite is an independently breaking change that any production-grade LLM must flag separately from the MLV_DATA_CORRUPTED addition.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs", "side": "right", "lines": [174]}
+      ]
+    },
+    {
+      "id": "960543-s04",
+      "behavior_key": "constants_declare_fully_qualified_mlv_name_key_and_mlvname_key",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "Constants declare FullyQualifiedMLVNameKey and MLVNameKey placeholder keys for the new MLV_DATA_CORRUPTED and rewritten MLV_ENTITY_NOT_FOUND templates",
+      "rationale": "Template substitution uses these keys as the dictionary lookup tokens. The two keys are intentionally distinct — FullyQualifiedMLVNameKey carries 'schemaName.tableName' (for system errors where qualified name is needed for support) while MLVNameKey carries just the view name (for user-facing actionable messages). A mismatch between the Constants string value and the {{Constants.X}} interpolation in the template would silently substitute empty — invisible until the error fires. Both keys must land together with their respective templates (s02, s03).",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs", "side": "right", "lines": [536, 537, 538, 539, 541, 542, 543, 544]}
+      ]
+    },
+    {
+      "id": "960543-s05",
+      "behavior_key": "catalog_handler_throws_typed_corrupted_for_empty_object_id",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "CatalogHandler throws typed CatalogException(MLV_DATA_CORRUPTED) when source entity ObjectId is Guid.Empty (was: untyped CatalogException with MLV_SERVER_ERROR)",
+      "rationale": "Pre-PR an empty source ObjectId surfaced as a generic server error — opaque to both users (got 500 with no actionable code) and support (no canonical error code to triage on). Post-PR the same condition is classified as MLV_DATA_CORRUPTED with the offending lakehouse/workspace named in the parameters dictionary. This is the canonical example of the L1 → L2 error-code migration this PR ships. A curator must surface this as its own behavior because the StatusCode + ErrorCode + message contract all change simultaneously.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs", "side": "right", "lines": [510, 511, 512, 513, 514]}
+      ]
+    },
+    {
+      "id": "960543-s06",
+      "behavior_key": "dag_extract_notebook_code_reference_throws_typed_corrupted",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Dag.ExtractNotebookCodeReference throws typed CatalogException(MLV_DATA_CORRUPTED) when PySpark MLV catalog metadata is missing/invalid source info (was: InvalidOperationException with raw message)",
+      "rationale": "Pre-PR, missing-source-info conditions for PySpark MLVs surfaced as untyped InvalidOperationException — they bubbled out of the DAG build pipeline with no error code, hit a generic 500 handler, and produced no user-actionable message. Post-PR all four corruption shapes (missing source info, invalid source info, JSON deserialization failure, missing required fields) are classified as MLV_DATA_CORRUPTED with the fully-qualified MLV name in the parameters dictionary. The four throw-sites are semantically distinct corruption modes but share the same error code and message template — a curator may legitimately consolidate them into one scenario because the LLM should generate one behavior 'catalog metadata corruption surfaces as typed CatalogException(MLV_DATA_CORRUPTED) for PySpark MLVs'.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs", "side": "right", "lines": [648, 649, 650, 651, 666, 667, 668, 669, 682, 683, 684, 685, 702, 703, 704, 705]}
+      ]
+    },
+    {
+      "id": "960543-s07",
+      "behavior_key": "dag_addnode_validates_table_name_and_type_with_typed_corrupted",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Dag.AddNode throws typed CatalogException(MLV_DATA_CORRUPTED) when Table.Name or Table.TableType is missing (was: ArgumentException with raw message)",
+      "rationale": "Pre-PR, a malformed catalog row (empty table name or empty table type) would surface as ArgumentException at DAG build time — the operator would see 500 with no actionable code. Post-PR both validation failures are mapped to MLV_DATA_CORRUPTED with the offending MLV name in the parameters dictionary. The two throw-sites here are distinct validation failures but share the same error contract — consolidate into one behavior. Critical detail: for the table-name-empty case, parameters carries '(unknown)' as a placeholder rather than an empty string — this preserves operator-visible information about which validation failed.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs", "side": "right", "lines": [824, 825, 826, 827, 828, 834, 835, 836, 837, 838]}
+      ]
+    },
+    {
+      "id": "960543-s08",
+      "behavior_key": "dq_handler_validates_lakehouse_properties_with_typed_corrupted",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "DataQualityReportHandler throws typed CatalogException(MLV_DATA_CORRUPTED) when Lakehouse.Properties is null in CreateDataQualityReportAsync (was: InvalidOperationException with generic message)",
+      "rationale": "Pre-PR, a null Properties on a lakehouse artifact (transient metadata service failure or genuinely corrupted catalog row) would bubble up as InvalidOperationException — the public DQ-report API would return 500 with no error code. Post-PR the condition is classified as MLV_DATA_CORRUPTED, the artifact id is included in the parameters dictionary, and (paired with s10) the new catch in LiveTableController maps the typed exception to a proper error response. This is the DQ-report-specific call site of the same migration — must be surfaced separately because the file/handler/throw context are different from Dag.cs and CatalogHandler.cs.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs", "side": "right", "lines": [90, 91, 92, 93, 94, 95]}
+      ]
+    },
+    {
+      "id": "960543-s09",
+      "behavior_key": "public_controller_swaps_inline_message_for_template_driven_selected_not_found",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "MLVExecutionDefinitionPublicController replaces hand-formatted 'MLV_ENTITY_NOT_FOUND: …' inline message with ErrorRegistry.GetErrorMessage(MLV_SELECTED_NOT_FOUND, …)",
+      "rationale": "This is a TWO-part change: (a) the error CODE changes from inline-string MLV_ENTITY_NOT_FOUND to typed MLV_SELECTED_NOT_FOUND — a wire contract change for anyone matching on the prefix; (b) the message construction pattern shifts from inline interpolation to template-driven ErrorRegistry lookup, putting the message under PM-governed control. Forgetting to add the ErrorMapping using-directive (line 25) would fail compilation; forgetting to populate MissingMLVNamesKey in the parameters dictionary would silently substitute empty into the user-facing message.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs", "side": "right", "lines": [25, 530, 531, 532, 533, 534, 535]}
+      ]
+    },
+    {
+      "id": "960543-s10",
+      "behavior_key": "controller_catches_catalog_exception_in_dq_report_flow",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "LiveTableController adds a CatalogException catch handler in the Data Quality Report creation flow to map the typed exception to a structured error response",
+      "rationale": "Without this catch handler, the new CatalogException(MLV_DATA_CORRUPTED) from DataQualityReportHandler (s08) would bubble out as an unhandled exception, surface as a generic 500 from ASP.NET, and bypass the entire ErrorRegistry-driven user-message pipeline. The handler reads ex.StatusCode + ex.ErrorCode, logs them via Tracer.LogSanitizedError for SSR telemetry, and uses CreateErrorResponse to honor the configured status code. This is the load-bearing pairing for s08 — they must land together.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs", "side": "right", "lines": [722, 723, 724, 725, 726, 727]}
+      ]
+    },
+    {
+      "id": "960543-s11",
+      "behavior_key": "tests_lock_in_typed_catalog_exception_replaces_invalid_operation",
+      "category": "Regression",
+      "verb": "EventPresent",
+      "title": "Unit tests across Catalog/Dag/DQReport/Controller/ErrorRegistry suites updated to assert the new CatalogException(MLV_DATA_CORRUPTED) instead of InvalidOperationException/ArgumentException — the regression net for s05-s10",
+      "rationale": "Six test files (CatalogHandlerTests, LiveTableControllerAdditionalTests, MLVExecutionDefinitionPublicControllerValidationTests, DagSqlAndPySparkNotebookLinkTests, DagUnitTests, DataQualityReportHandlerTests, ErrorRegistryTests) were updated together. Without the test updates, the new typed exceptions would silently pass through pre-PR tests that asserted InvalidOperationException / ArgumentException — those tests would either fail (catching the wrong exception type) OR silently pass while testing the wrong contract. A production-grade LLM should consolidate the cross-suite changes into one regression-coverage scenario rather than enumerate each file (they all share the same migration shape).",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs", "side": "right", "lines": [1605, 1640, 1641, 1642]},
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerAdditionalTests.cs", "side": "right", "lines": [21, 528, 529, 530]},
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs", "side": "right", "lines": [1364, 1403, 1640, 2679]},
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/DataQualityReportTests/DataQualityReportHandlerTests.cs", "side": "right", "lines": [11, 95, 96, 97]},
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs", "side": "right", "lines": [762, 776, 777, 778, 779, 780]}
+      ]
+    }
+  ]
+}

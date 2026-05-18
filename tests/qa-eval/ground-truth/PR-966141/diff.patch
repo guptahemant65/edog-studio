@@ -1,0 +1,79 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs b/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs
+index 327afc5b..df2a4852 100644
+--- a/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs
++++ b/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs
+@@ -205,12 +205,17 @@ namespace Microsoft.LiveTable.Service.Utils
+         }
+ 
+         /// <summary>
+-        /// Determines if the given HTTP status code represents a user error.
++        /// Determines if the given HTTP status code represents a user error for user-facing API classification.
++        /// Used by controllers to classify domain exceptions (e.g., MLVExecutionDefinitionException,
++        /// NotebookException) for SSR telemetry. Do NOT use for OneLake/storage errors — OneLake can
++        /// return 400 for system-side issues and has its own classification in OnelakeBasedFileSystem.
+         /// User errors include:
++        /// - 400 (BadRequest): Invalid user input/validation errors (e.g., missing displayName)
+         /// - 401 (Unauthorized): Authentication/permission issues
+         /// - 403 (Forbidden): Authorization issues
+         /// - 404 (NotFound): Resource not found
+-        /// - 422 (UnprocessableContent): Invalid input/validation errors
++        /// - 409 (Conflict): Resource state conflict
++        /// - 422 (UnprocessableContent): Semantic validation errors
+         /// System errors include:
+         /// - 5xx status codes: Server-side errors
+         /// - All other status codes not explicitly classified as user errors
+@@ -219,16 +224,18 @@ namespace Microsoft.LiveTable.Service.Utils
+         /// <returns>True if the status code represents a user error, false if it represents a system error.</returns>
+         public static bool IsUserError(HttpStatusCode statusCode)
+         {
+-            return statusCode == HttpStatusCode.Unauthorized ||
++            return statusCode == HttpStatusCode.BadRequest ||
++                   statusCode == HttpStatusCode.Unauthorized ||
+                    statusCode == HttpStatusCode.Forbidden ||
+                    statusCode == HttpStatusCode.NotFound ||
+                    statusCode == HttpStatusCode.Conflict ||
+                    statusCode == HttpStatusCode.UnprocessableContent ||
++                   (int)statusCode == 400 ||
+                    (int)statusCode == 401 ||
+                    (int)statusCode == 403 ||
+-                   (int)statusCode == 422 ||
++                   (int)statusCode == 404 ||
+                    (int)statusCode == 409 ||
+-                   (int)statusCode == 404;
++                   (int)statusCode == 422;
+         }
+ 
+         /// <summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs
+index 2636e34c..49805ab5 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs
+@@ -864,23 +864,24 @@ namespace Microsoft.LiveTable.Service.UnitTests.Utils
+         }
+ 
+         /// <summary>
+-        /// Tests IsUserError with various HTTP status codes.
+-        /// User errors (401, 403, 404, 422) should return true.
++        /// Tests IsUserError with various HTTP status codes for user-facing API classification.
++        /// User errors (400, 401, 403, 404, 409, 422) should return true.
+         /// System errors (5xx) and other errors (4xx, 2xx) should return false.
++        /// Note: OneLake can return 400 for system issues — OnelakeBasedFileSystem has its own classification.
+         /// </summary>
+         /// <param name="statusCodeValue">The HTTP status code to test.</param>
+         /// <param name="expected">The expected result.</param>
+         [DataTestMethod]
++        [DataRow(400, true)] // BadRequest - User error (invalid input, e.g. missing displayName)
+         [DataRow(401, true)] // Unauthorized - User error
+         [DataRow(403, true)] // Forbidden - User error
+         [DataRow(404, true)] // NotFound - User error
+-        [DataRow(422, true)] // UnprocessableContent - User error
+         [DataRow(409, true)] // Conflict - User error
++        [DataRow(422, true)] // UnprocessableContent - User error
+         [DataRow(500, false)] // InternalServerError - System error
+         [DataRow(502, false)] // BadGateway - System error
+         [DataRow(503, false)] // ServiceUnavailable - System error
+         [DataRow(504, false)] // GatewayTimeout - System error
+-        [DataRow(400, false)] // BadRequest - Not classified as user error
+         [DataRow(429, false)] // TooManyRequests - Not classified as user error
+         [DataRow(200, false)] // OK - Success status
+         [DataRow(201, false)] // Created - Success status

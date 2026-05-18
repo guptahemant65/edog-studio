@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T15:15:10.2966947\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "966141",
+  "zone_id": "PR-966141-full-diff",
+  "zone_summary": "Classify HttpStatusCode.BadRequest as user error in IsUserError()",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 1,
+    "grounding_evidence": 3,
+    "scenario_sketches": 1
+  },
+  "behavioral_changes": [
+    {
+      "summary": "NodeExecutionUtils.IsUserError now classifies HTTP 400 / HttpStatusCode.BadRequest as a user error for the shared user-facing API error classifier.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-3"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+      "hunk_id": "@@ -219,16 \u002B224,18 @@",
+      "new_line": 229,
+      "excerpt": "return statusCode == HttpStatusCode.BadRequest ||",
+      "reason": "Adds BadRequest to the explicit HttpStatusCode user-error allowlist in IsUserError()."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+      "hunk_id": "@@ -219,16 \u002B224,18 @@",
+      "new_line": 235,
+      "excerpt": "(int)statusCode == 400 ||",
+      "reason": "Adds numeric 400 to the same allowlist, ensuring raw/cast enum values for 400 are also treated as user errors."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs",
+      "side": "right",
+      "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+      "hunk_id": "@@ -864,23 \u002B864,24 @@",
+      "new_line": 875,
+      "excerpt": "[DataRow(400, true)] // BadRequest - User error (invalid input, e.g. missing displayName)",
+      "reason": "Updates the unit-test matrix to expect HTTP 400 to return true from IsUserError()."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sc-1",
+      "title": "IsUserError returns true for BadRequest without widening classification to other non-allowlisted 4xx codes",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Guard the newly added 400 classification in the shared utility and verify the allowlist remains narrow by contrasting it with a nearby non-user 4xx such as 429 and a 5xx code that should still return false.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-3"
+      ]
+    }
+  ]
+}

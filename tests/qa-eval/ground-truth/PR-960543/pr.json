@@ -1,0 +1,86 @@
+{
+  "pr_number": "960543",
+  "pr_url": "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/960543",
+  "repo": "workload-fabriclivetable",
+  "title": "Merged PR 960543: PR-Cat2: Data integrity error codes (MLV_DATA_CORRUPTED, MLV_ENTITY_NOT_FOUND)",
+  "description": "Data integrity error codes (MLV_DATA_CORRUPTED, MLV_ENTITY_NOT_FOUND)",
+  "base_sha": "2f151d25554da964b492d5481417a6bad4ff72ce",
+  "head_sha": "ab6b718a30f01b76be85da3640884301b0796e01",
+  "author_email": "saagnihotri@microsoft.com",
+  "authored_date": "2026-04-30T09:48:06Z",
+  "files_changed": 17,
+  "files": [
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs"
+    },
+    {
+      "status": "D",
+      "path": "pr-division-file.md"
+    },
+    {
+      "status": "M",
+      "path": "pr-division-plan.md"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerAdditionalTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/PublicAPI/MLVExecutionDefinitionPublicControllerValidationTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagSqlAndPySparkNotebookLinkTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DataQualityReportTests/DataQualityReportHandlerTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs"
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 107139,
+  "captured_at": "2026-05-18T14:54:46Z",
+  "captured_from": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable (local clone)"
+}

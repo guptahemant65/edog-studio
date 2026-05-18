@@ -1,0 +1,593 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs b/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs
+index 87cea455..02dcdab5 100644
+--- a/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs
++++ b/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs
+@@ -201,6 +201,7 @@ namespace Microsoft.LiveTable.Service.Core.RefreshTrigger
+                 eventGroupType: eventGroupTypeString,
+                 eventTypes: eventTypes,
+                 triggerId: triggerId.ToString(),
++                mlvExecDefnId: request.MlvExecutionDefinitionId?.ToString() ?? string.Empty,
+                 actionUid: actionUid.ToString(),
+                 rthSourceUid: rthSourceUid.ToString(),
+                 eventTsvUid: eventTsvUid.ToString(),
+diff --git a/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs b/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs
+index a737d082..9c47021a 100644
+--- a/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs
++++ b/Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs
+@@ -153,6 +153,7 @@ namespace Microsoft.LiveTable.Service.Core.RefreshTrigger.Template
+             /// <param name="eventGroupType">Event group type.</param>
+             /// <param name="eventTypes">Event types.</param>
+             /// <param name="triggerId">Trigger id.</param>
++            /// <param name="mlvExecDefnId">Mlv Execution Definition id.</param>
+             /// <param name="actionUid">Action uid.</param>
+             /// <param name="rthSourceUid">RTH source uid.</param>
+             /// <param name="eventTsvUid">Event TSV uid.</param>
+@@ -173,6 +174,7 @@ namespace Microsoft.LiveTable.Service.Core.RefreshTrigger.Template
+                 string eventGroupType,
+                 IReadOnlyList<string> eventTypes,
+                 string triggerId,
++                string mlvExecDefnId,
+                 string actionUid,
+                 string rthSourceUid,
+                 string eventTsvUid,
+@@ -193,6 +195,7 @@ namespace Microsoft.LiveTable.Service.Core.RefreshTrigger.Template
+                 this.EventGroupType = eventGroupType;
+                 this.EventTypes = eventTypes;
+                 this.TriggerId = triggerId;
++                this.MlvExecDefnId = mlvExecDefnId;
+                 this.ActionUid = actionUid;
+                 this.RthSourceUid = rthSourceUid;
+                 this.EventTsvUid = eventTsvUid;
+@@ -259,6 +262,12 @@ namespace Microsoft.LiveTable.Service.Core.RefreshTrigger.Template
+             [JsonProperty("trigger_id")]
+             public string TriggerId { get; }
+ 
++            /// <summary>
++            /// Gets the mlv execution definition id value for Scriban templates.
++            /// </summary>
++            [JsonProperty("mlv_exec_defn_id")]
++            public string MlvExecDefnId { get; }
++
+             /// <summary>
+             /// Gets the action uid value for Scriban templates.
+             /// </summary>
+diff --git a/Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs b/Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs
+index d6205e36..be84dbd5 100644
+--- a/Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs
++++ b/Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs
+@@ -141,6 +141,12 @@ namespace Microsoft.LiveTable.Service.DataModel.RefreshTrigger
+                 return null;
+             }
+ 
++            var fmlvExecDefId = FindFmlvExecutionDefinitionId(triggerDefinition);
++            if (Guid.TryParse(fmlvExecDefId, out var parsedExecDefId))
++            {
++                action.FmlvExecutionDefinitionId = parsedExecDefId;
++            }
++
+             var source = ParseSource(triggerDefinition, eventTsvByUid, rthSourcesByUid);
+ 
+             return new FMLVActivatorRule
+@@ -315,6 +321,49 @@ namespace Microsoft.LiveTable.Service.DataModel.RefreshTrigger
+                 ?.ToString();
+         }
+ 
++        internal static string FindFmlvExecutionDefinitionId(JObject triggerDefinition)
++        {
++            // Path: steps[*].rows[kind=FabricItemInvocation].arguments[name=parameters]
++            //   .values[*] (FabricItemParameter groups) → find group where
++            //   arguments[name=parameterName].value == "fmlvExecutionDefinitionId"
++            //   → read arguments[name=parameterValue].values[0].value
++            var parameterGroups = triggerDefinition
++                .SelectToken("steps")
++                ?.Children<JObject>()
++                .SelectMany(s => s.SelectToken("rows")?.Children<JObject>() ?? Enumerable.Empty<JObject>())
++                .Where(r => string.Equals((string)r["kind"], "FabricItemInvocation", StringComparison.OrdinalIgnoreCase))
++                .SelectMany(r => r.SelectToken("arguments")?.Children<JObject>() ?? Enumerable.Empty<JObject>())
++                .FirstOrDefault(a => string.Equals((string)a["name"], "parameters", StringComparison.OrdinalIgnoreCase))
++                ?.SelectToken("values")?.Children<JObject>();
++
++            if (parameterGroups == null)
++            {
++                return null;
++            }
++
++            foreach (var group in parameterGroups)
++            {
++                var args = group.SelectToken("arguments")?.Children<JObject>().ToList();
++                if (args == null)
++                {
++                    continue;
++                }
++
++                var paramName = args
++                    .FirstOrDefault(a => string.Equals((string)a["name"], "parameterName", StringComparison.OrdinalIgnoreCase))
++                    ?["value"]?.ToString();
++
++                if (string.Equals(paramName, "fmlvExecutionDefinitionId", StringComparison.OrdinalIgnoreCase))
++                {
++                    return args
++                        .FirstOrDefault(a => string.Equals((string)a["name"], "parameterValue", StringComparison.OrdinalIgnoreCase))
++                        ?.SelectToken("values[0].value")?.ToString();
++                }
++            }
++
++            return null;
++        }
++
+         private static string TryGetPartPayloadAsString(ReflexDefinition definition, string path)
+         {
+             var parts = definition?.Parts;
+diff --git a/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban b/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban
+index 42a7d0ef..073aaccd 100644
+--- a/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban
++++ b/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban
+@@ -24,7 +24,8 @@
+       "source": [
+         "capacity = None\n",
+         "workspace = None\n",
+-        "lakehouse = None"
++        "lakehouse = None\n",
++        "fmlvExecutionDefinitionId = None"
+       ],
+       "outputs": [],
+       "metadata": {
+@@ -41,6 +42,7 @@
+       "cell_type": "code",
+       "source": [
+         "import uuid\n",
++        "import json\n",
+         "import requests\n",
+         "from notebookutils import mssparkutils\n",
+         "\n",
+@@ -49,23 +51,32 @@
+         "\n",
+         "nbctxt = notebookutils.runtime.context\n",
+         "\n",
+-        "API_HOST = f\"{ENV}api.fabric.microsoft.com\"\n",
++        "API_HOST = \"api.fabric.microsoft.com\" if ENV == \"prod\" else f\"{ENV}api.fabric.microsoft.com\"\n",
+         "CPID = capacity if capacity else nbctxt.get('capacityId', 'NA')\n",
+         "WSID = workspace if workspace else nbctxt.get('currentWorkspaceId', 'NA')\n",
+         "LHID = lakehouse if lakehouse else nbctxt.get('defaultLakehouseId', 'NA')\n",
+         "RUNID = str(uuid.uuid4())\n",
+         "\n",
+-        "publicuri = f\"https://{API_HOST}/v1/workspaces/{WSID}/lakehouses/{LHID}/jobs/instances?jobType=RefreshMaterializedLakeViews\"\n",
++        "publicuri = f\"https://{API_HOST}/v1/workspaces/{WSID}/lakehouses/{LHID}/jobs/RefreshMaterializedLakeViews/instances\"\n",
+         "\n",
+         "authtoken = mssparkutils.credentials.getToken('pbi')\n",
+         "\n",
+         "headers = {\"Authorization\": f\"Bearer {str(authtoken)}\"}\n",
+         "\n",
+         "# submit refresh request\n",
+-        "resp = requests.post(publicuri, headers=headers)\n",
++        "exec_def_id = str(fmlvExecutionDefinitionId).strip() if fmlvExecutionDefinitionId else ''\n",
++        "if exec_def_id:\n",
++        "    headers[\"Content-Type\"] = \"application/json\"\n",
++        "    body = {\"executionData\": {\"mlvExecutionDefinitionId\": exec_def_id}}\n",
++        "    resp = requests.post(publicuri, headers=headers, data=json.dumps(body))\n",
++        "else:\n",
++        "    resp = requests.post(publicuri, headers=headers)\n",
+         "\n",
+-        "mlvRefreshStatusUrl = resp.headers['Location']\n",
+-        "print(f\"FMLV refresh successfully submitted. Status url: {mlvRefreshStatusUrl}\")\n",
++        "resp.raise_for_status()\n",
++        "\n",
++        "if 'Location' in resp.headers:\n",
++        "    mlvRefreshStatusUrl = resp.headers['Location']\n",
++        "    print(f\"FMLV refresh successfully submitted. Status url: {mlvRefreshStatusUrl}\")\n",
+         "\n",
+         "notebookutils.session.stop()\n"
+       ],
+diff --git a/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban b/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban
+index a6880f76..c5423937 100644
+--- a/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban
++++ b/Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban
+@@ -123,7 +123,7 @@
+                         {
+                           "name": "string",
+                           "type": "string",
+-                          "value": "{{ trigger_id }}"
++                          "value": "{{ mlv_exec_defn_id }}"
+                         }
+                       ]
+                     },
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs
+index 47870f1b..0018a732 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs
+@@ -311,6 +311,8 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+             var sourceWorkspaceId = Guid.NewGuid();
+             var sourceArtifactId = Guid.NewGuid();
+ 
++            var fmlvExecDefId = Guid.NewGuid();
++
+             var def = new ReflexEntitiesBuilder()
+                 .WithAction(actionUid, workspaceId, lakehouseId)
+                 .WithRthSource(
+@@ -323,7 +325,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+                         ["eventTypes"] = new JArray { new JObject { ["name"] = "TableUpdated" } },
+                     })
+                 .WithEventTsv(eventUid, rthUid)
+-                .WithRule(ruleUid, actionUid, eventUid, lakehouseId, shouldRun: false)
++                .WithRule(ruleUid, actionUid, eventUid, lakehouseId, shouldRun: false, fmlvExecutionDefinitionId: fmlvExecDefId.ToString())
+                 .BuildDefinition();
+ 
+             var activator = parser.Parse(def);
+@@ -339,6 +341,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+             Assert.AreEqual("RunNotebook", rule.Action.JobType);
+             Assert.AreEqual(workspaceId, rule.Action.WorkspaceId);
+             Assert.AreEqual(lakehouseId, rule.Action.LakehouseId);
++            Assert.AreEqual(fmlvExecDefId, rule.Action.FmlvExecutionDefinitionId);
+ 
+             Assert.IsNotNull(rule.Source);
+             Assert.AreEqual(sourceWorkspaceId, rule.Source.WorkspaceId);
+@@ -991,6 +994,287 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+             Assert.AreEqual(expectedId, result);
+         }
+ 
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when a parameter group has no arguments property.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenGroupHasNoArguments_SkipsAndReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[
++                            { ""kind"":""FabricItemParameter"" }
++                        ]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when parameter groups exist but none match fmlvExecutionDefinitionId.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenNoMatchingParameterName_ReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[{
++                            ""kind"":""FabricItemParameter"",
++                            ""arguments"":[
++                                { ""name"":""parameterName"", ""value"":""someOtherParam"" },
++                                { ""name"":""parameterValue"", ""values"":[{ ""value"":""someValue"" }] }
++                            ]
++                        }]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when trigger definition has no steps key.
++        /// Covers the null-conditional short-circuit on line 331.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenNoStepsKey_ReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{ ""other"": ""value"" }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns the correct value when FabricItemInvocation
++        /// arguments contain both "parameters" and other non-matching argument names, and includes
++        /// mixed rows with non-FabricItemInvocation kinds. Exercises the false branch of the Where
++        /// predicate on line 334 and the false branch of the FirstOrDefault predicate on line 336.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenMixedRowsAndArguments_ReturnsValue()
++        {
++            var expectedId = Guid.NewGuid().ToString();
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[
++                    { ""kind"":""Event"", ""arguments"":[{ ""name"":""entityId"" }] },
++                    {
++                        ""kind"":""FabricItemInvocation"",
++                        ""arguments"":[
++                            { ""name"":""fabricJobConnectionDocumentId"", ""value"":""some-uid"" },
++                            {
++                                ""name"":""parameters"",
++                                ""values"":[{
++                                    ""kind"":""FabricItemParameter"",
++                                    ""arguments"":[
++                                        { ""name"":""parameterName"", ""value"":""fmlvExecutionDefinitionId"" },
++                                        { ""name"":""parameterValue"", ""values"":[{ ""value"":""" + expectedId + @""" }] }
++                                    ]
++                                }]
++                            }
++                        ]
++                    }
++                ]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.AreEqual(expectedId, result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when parameterName argument exists
++        /// but has no "value" property. Covers the null-conditional ?["value"] branch on line 353.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenParameterNameArgHasNoValue_SkipsGroup()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[{
++                            ""kind"":""FabricItemParameter"",
++                            ""arguments"":[
++                                { ""name"":""parameterName"" }
++                            ]
++                        }]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when parameterName matches
++        /// fmlvExecutionDefinitionId but no parameterValue argument exists in the group.
++        /// Covers the FirstOrDefault returning null on line 358.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenMatchButNoParameterValueArg_ReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[{
++                            ""kind"":""FabricItemParameter"",
++                            ""arguments"":[
++                                { ""name"":""parameterName"", ""value"":""fmlvExecutionDefinitionId"" },
++                                { ""name"":""parameterType"", ""value"":""String"" }
++                            ]
++                        }]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns the correct value when a matching parameter exists.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenMatchingParameterExists_ReturnsValue()
++        {
++            var expectedId = Guid.NewGuid().ToString();
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[{
++                            ""kind"":""FabricItemParameter"",
++                            ""arguments"":[
++                                { ""name"":""parameterName"", ""value"":""fmlvExecutionDefinitionId"" },
++                                { ""name"":""parameterValue"", ""values"":[{ ""value"":""" + expectedId + @""" }] }
++                            ]
++                        }]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.AreEqual(expectedId, result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId handles steps with missing rows and arguments gracefully.
++        /// Covers the null-coalescing fallback branches on lines 333 and 335.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenStepHasNoRowsAndRowHasNoArguments_ReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[
++                    {},
++                    {""rows"":[
++                        { ""kind"":""FabricItemInvocation"" },
++                        { ""kind"":""Other"", ""arguments"":[{ ""name"":""irrelevant"" }] }
++                    ]}
++                ]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when parameters argument has no values token.
++        /// Covers the null-conditional on line 337.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenParametersHasNoValues_ReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{ ""name"":""parameters"" }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when parameterName arg is missing from the group.
++        /// Covers lines 352-354 when FirstOrDefault returns null.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenGroupHasNoParameterNameArg_SkipsGroup()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[{
++                            ""kind"":""FabricItemParameter"",
++                            ""arguments"":[
++                                { ""name"":""somethingElse"", ""value"":""x"" }
++                            ]
++                        }]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
++        /// <summary>
++        /// Verifies FindFmlvExecutionDefinitionId returns null when parameterValue has no values array.
++        /// Covers the null-conditional path on lines 358-360.
++        /// </summary>
++        [TestMethod]
++        public void FindFmlvExecutionDefinitionId_WhenParameterValueHasNoValues_ReturnsNull()
++        {
++            var triggerDef = JObject.Parse(@"{
++                ""steps"":[{""rows"":[{
++                    ""kind"":""FabricItemInvocation"",
++                    ""arguments"":[{
++                        ""name"":""parameters"",
++                        ""values"":[{
++                            ""kind"":""FabricItemParameter"",
++                            ""arguments"":[
++                                { ""name"":""parameterName"", ""value"":""fmlvExecutionDefinitionId"" },
++                                { ""name"":""parameterValue"" }
++                            ]
++                        }]
++                    }]
++                }]}]
++            }");
++
++            var result = FMLVActivatorParser.FindFmlvExecutionDefinitionId(triggerDef);
++
++            Assert.IsNull(result);
++        }
++
+         /// <summary>
+         /// Verifies ParseAction returns null when actionObj has no payload.
+         /// </summary>
+@@ -1174,9 +1458,9 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+                 return this;
+             }
+ 
+-            public ReflexEntitiesBuilder WithRule(Guid uid, string actionUid, string eventId, Guid lakehouseId, bool shouldRun = true)
++            public ReflexEntitiesBuilder WithRule(Guid uid, string actionUid, string eventId, Guid lakehouseId, bool shouldRun = true, string fmlvExecutionDefinitionId = null)
+             {
+-                var instance = BuildTriggerDefInstance(actionUid, eventId);
++                var instance = BuildTriggerDefInstance(actionUid, eventId, fmlvExecutionDefinitionId);
+                 return AddRuleTsv(uid, (JToken)instance, lakehouseId, shouldRun);
+             }
+ 
+@@ -1206,8 +1490,44 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+                 }
+             }
+ 
+-            private static string BuildTriggerDefInstance(string actionUid, string eventId)
++            private static string BuildTriggerDefInstance(string actionUid, string eventId, string fmlvExecutionDefinitionId = null)
+             {
++                var fabricInvocationArgs = new JArray
++                {
++                    new JObject { ["name"] = "fabricJobConnectionDocumentId", ["value"] = actionUid },
++                };
++
++                if (!string.IsNullOrEmpty(fmlvExecutionDefinitionId))
++                {
++                    fabricInvocationArgs.Add(new JObject
++                    {
++                        ["name"] = "parameters",
++                        ["type"] = "array",
++                        ["values"] = new JArray
++                        {
++                            new JObject
++                            {
++                                ["kind"] = "FabricItemParameter",
++                                ["type"] = "complex",
++                                ["arguments"] = new JArray
++                                {
++                                    new JObject { ["name"] = "parameterName", ["type"] = "string", ["value"] = "fmlvExecutionDefinitionId" },
++                                    new JObject
++                                    {
++                                        ["name"] = "parameterValue",
++                                        ["type"] = "complexArray",
++                                        ["values"] = new JArray
++                                        {
++                                            new JObject { ["name"] = "string", ["type"] = "string", ["value"] = fmlvExecutionDefinitionId },
++                                        },
++                                    },
++                                    new JObject { ["name"] = "parameterType", ["type"] = "string", ["value"] = "String" },
++                                },
++                            },
++                        },
++                    });
++                }
++
+                 var triggerDef = new JObject
+                 {
+                     ["steps"] = new JArray
+@@ -1219,10 +1539,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+                                 new JObject
+                                 {
+                                     ["kind"] = "FabricItemInvocation",
+-                                    ["arguments"] = new JArray
+-                                    {
+-                                        new JObject { ["name"] = "fabricJobConnectionDocumentId", ["value"] = actionUid },
+-                                    },
++                                    ["arguments"] = fabricInvocationArgs,
+                                 },
+                                 new JObject
+                                 {
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/RefreshTriggersTemplateRendererTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/RefreshTriggersTemplateRendererTests.cs
+index 601e544b..045f11e4 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/RefreshTriggersTemplateRendererTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/RefreshTriggersTemplateRendererTests.cs
+@@ -186,6 +186,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.RefreshTrigger
+                 eventGroupType: "eg",
+                 eventTypes: new List<string> { "e1" },
+                 triggerId: "tr",
++                mlvExecDefnId: string.Empty,
+                 actionUid: "au",
+                 rthSourceUid: "rth",
+                 eventTsvUid: "tsv",

@@ -1,0 +1,46 @@
+{
+  "pr_number": "955910",
+  "pr_url": "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/955910",
+  "repo": "workload-fabriclivetable",
+  "title": "Merged PR 955910: [RefreshTriggers] Enable Multi-schedule support",
+  "description": "[RefreshTriggers] Enable Multi-schedule support",
+  "base_sha": "d520c5b14a8f212003e3d8eb1bfe3dcec40186f3",
+  "head_sha": "ea9f451d85b89e4cee59b4a6aed64956900594fd",
+  "author_email": "kumarank@microsoft.com",
+  "authored_date": "2026-04-30T06:12:53Z",
+  "files_changed": 7,
+  "files": [
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban"
+    },
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/RefreshTriggersTemplateRendererTests.cs"
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 28927,
+  "captured_at": "2026-05-18T14:54:47Z",
+  "captured_from": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable (local clone)"
+}

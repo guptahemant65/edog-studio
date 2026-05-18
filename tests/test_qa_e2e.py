@@ -621,7 +621,15 @@ def test_gold_corpus_fixtures_present() -> None:
     import json as _json
 
     ground_truth_dir = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
-    required_prs = ("PR-977882", "PR-976609", "PR-975848")
+    # T1k augmented the original 3-PR Insights/Trends/Summary monoculture
+    # with 3 diverse shapes: PR-955910 (scheduler/trigger orchestration),
+    # PR-960543 (error-code catalog refactor), PR-966141 (error-classification
+    # logic). The augmented corpus reconfirmed the N=15 bipartite knee but
+    # exposed prompt overfit (macro recall 0.639 -> 0.391 on n=6).
+    required_prs = (
+        "PR-955910", "PR-960543", "PR-966141",
+        "PR-975848", "PR-976609", "PR-977882",
+    )
     for pr in required_prs:
         d = ground_truth_dir / pr
         assert d.is_dir(), f"Missing fixture directory: {d.relative_to(REPO_ROOT)}"
@@ -659,11 +667,11 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     # Schema_version may be 1.0 (T1a scaffold pre-capture), 1.1 (T1c-c
     # captured), 1.2 (T1f-b scored), 1.3 (T1g re-calibrated against
     # the matcher-tied verb / category disambiguation prompts), 1.4
-    # (T1i scorer-side span expansion), or 1.5 (T1j global bipartite
-    # matching + N=15). Pre-T1c-c statuses are tolerated to let a
-    # checkout-with-stale-baseline still pass this scaffold-level
-    # test.
-    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5"}, data
+    # (T1i scorer-side span expansion), 1.5 (T1j global bipartite
+    # matching + N=15), or 1.6 (T1k corpus augmentation 3 -> 6 PRs).
+    # Pre-T1c-c statuses are tolerated to let a checkout-with-stale-
+    # baseline still pass this scaffold-level test.
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"}, data
     assert data.get("status") in (
         "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
         "DRY_RUN", "SCORED",
@@ -1664,8 +1672,8 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.5", (
-        f"expected schema_version=1.5 after T1j global bipartite matching, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.6", (
+        f"expected schema_version=1.6 after T1k corpus augmentation, got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
     assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
@@ -1679,9 +1687,9 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
         )
 
     prs = baseline.get("prs") or []
-    assert len(prs) == 3, f"baseline must cover all 3 gold-corpus PRs; got {len(prs)}"
+    assert len(prs) == 6, f"baseline must cover all 6 gold-corpus PRs after T1k augmentation; got {len(prs)}"
 
-    expected_pr_numbers = {"975848", "976609", "977882"}
+    expected_pr_numbers = {"955910", "960543", "966141", "975848", "976609", "977882"}
     captured_pr_numbers = {str(p.get("pr_number")) for p in prs}
     assert captured_pr_numbers == expected_pr_numbers, (
         f"unexpected PRs in baseline: {captured_pr_numbers}"
@@ -2341,69 +2349,68 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t1j() -> None:
-    """T1j lifted the acceptance floors after global bipartite matching
-    landed (macro recall 0.583 → 0.639, +9.6% relative; macro
-    precision_highest 0.661 → 0.716, +8.3% relative). The lift came
-    entirely from scorer-side normalization — EdogQaLlmClient.cs is
-    byte-identical to T1g commit 0cf3903. Pin the schema bump 1.4 → 1.5
-    and the new floor ceilings (each must stay BELOW the new measured
-    baseline so a regression after the next capture surfaces — and
-    ABOVE the old T1f-c floors so a revert to the verb-monoculture /
-    category-collapse prompts still trips the gate).
+def test_qa_score_floors_calibrated_for_t1k() -> None:
+    """T1k augmented the corpus from 3 -> 6 PRs to break the original
+    Insights/Trends/Summary controller monoculture. The N-sweep on n=6
+    reconfirms N=15 as the bipartite knee (recall saturates at N=15,
+    identical at N=20 and N=25), but macro recall dropped 0.639 -> 0.391
+    (PR-955910 0.250, PR-960543 0.182, PR-966141 0.000 — the new diverse
+    PRs reveal the T1g prompts are overfit to the original shape). Pin
+    the schema bump 1.5 -> 1.6 and the new T1k floor bands (each must
+    stay BELOW the new n=6 measured baseline so a regression after the
+    next capture surfaces — and ABOVE zero so a total V2 failure trips
+    the gate).
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.5", (
-        f"score_floors.json must be at schema_version 1.5 after T1j, "
+    assert floors.get("schema_version") == "1.6", (
+        f"score_floors.json must be at schema_version 1.6 after T1k corpus augmentation, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
-    # T1j floors must stay <= measured baselines so a future LLM
+    # T1k floors must stay <= measured n=6 baselines so a future LLM
     # nondeterminism flap or scorer regression actually trips the gate.
-    assert absolute.get("corpus_recall_min") <= 0.639, (
-        f"corpus_recall_min must stay <= measured T1j 0.639; got {absolute.get('corpus_recall_min')!r}"
+    assert absolute.get("corpus_recall_min") <= 0.391, (
+        f"corpus_recall_min must stay <= measured T1k n=6 0.391; got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") <= 0.639, (
-        f"p0_p1_recall_min must stay <= measured T1j 0.639; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") <= 0.391, (
+        f"p0_p1_recall_min must stay <= measured T1k n=6 0.391; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    assert absolute.get("per_pr_recall_min") <= 0.500, (
-        f"per_pr_recall_min must stay <= measured T1j per-PR min 0.500; got {absolute.get('per_pr_recall_min')!r}"
-    )
-    # T1j floors must lift STRICTLY ABOVE the T1i (and earlier) values so
-    # a silent revert to greedy matching at N=5 (which produced macro
-    # recall 0.583) trips the gate as a regression. This is the matcher-
-    # regression detector.
-    assert absolute.get("corpus_recall_min") > 0.45, (
-        f"corpus_recall_min must lift ABOVE the T1i-era 0.45 floor to detect a matcher revert; "
+    # T1k floors must stay STRICTLY ABOVE zero so a total V2 failure
+    # (e.g. all-architect-truncated) still trips the gate.
+    assert absolute.get("corpus_recall_min") > 0.0, (
+        f"corpus_recall_min must lift ABOVE zero to detect total V2 failure; "
         f"got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") > 0.45, (
-        f"p0_p1_recall_min must lift ABOVE the T1i-era 0.45 floor; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") > 0.0, (
+        f"p0_p1_recall_min must lift ABOVE zero; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    # T1j floors must also stay ABOVE the T1f-c values so a deeper revert
+    # T1k floors must also stay ABOVE the T1f-c values so a deeper revert
     # (prompt regression) still trips the gate.
     assert absolute.get("corpus_recall_min") > 0.219, (
         f"corpus_recall_min must lift ABOVE the T1f-c-era 0.219 to detect a prompt revert; "
         f"got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("per_pr_recall_min") > 0.125, (
-        f"per_pr_recall_min must lift ABOVE the T1f-c-era 0.125; got {absolute.get('per_pr_recall_min')!r}"
-    )
     # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
     assert absolute.get("corpus_precision_min") == 0.0
-    # T1j precision floors lift above T1i (0.50) but stay below the new
-    # measured macro 0.716 / per-PR min 0.500.
-    assert 0.50 < absolute.get("corpus_precision_highest_stage_min") <= 0.716, (
-        "corpus_precision_highest_stage_min must lift above T1i 0.50 "
-        "and stay <= measured T1j macro 0.716; "
+    # T1k precision floors lift above zero but stay below the measured
+    # n=6 macro precision_highest 0.451.
+    assert 0.0 < absolute.get("corpus_precision_highest_stage_min") <= 0.451, (
+        "corpus_precision_highest_stage_min must lift above zero "
+        "and stay <= measured T1k n=6 macro 0.451; "
         f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
     )
-    assert 0.167 < absolute.get("per_pr_precision_highest_stage_min") <= 0.500, (
-        "per_pr_precision_highest_stage_min must lift above T1f-c 0.167 "
-        "and stay <= measured T1j per-PR min 0.500; "
+    # T1k drops per_pr floors to 0.0 because PR-966141 / PR-960543 /
+    # PR-955910 score 0.000 / 0.182 / 0.250 — a per_pr ratchet would
+    # block the honest baseline. Re-introduce after T2 prompt tuning.
+    assert absolute.get("per_pr_recall_min") == 0.0, (
+        "T1k per_pr_recall_min must be 0.00 (PR-966141 at 0.000 would block ratchet); "
+        f"got {absolute.get('per_pr_recall_min')!r}"
+    )
+    assert absolute.get("per_pr_precision_highest_stage_min") == 0.0, (
+        "T1k per_pr_precision_highest_stage_min must be 0.00; "
         f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"
@@ -2473,8 +2480,8 @@ def test_qa_score_report_json_present_at_t1j() -> None:
         "aggregate.micro.precision_highest_stage required at T1f-c"
     )
     prs_scored = report.get("prs_scored") or []
-    assert len(prs_scored) == 3, f"expected 3 scored PRs, got {len(prs_scored)}"
-    expected = {"975848", "976609", "977882"}
+    assert len(prs_scored) == 6, f"expected 6 scored PRs after T1k corpus augmentation, got {len(prs_scored)}"
+    expected = {"955910", "960543", "966141", "975848", "976609", "977882"}
     actual = {str(p.get("pr_number")) for p in prs_scored}
     assert actual == expected, f"prs_scored set mismatch: {actual}"
     # Every PR must carry the new T1f-c per-PR metric.

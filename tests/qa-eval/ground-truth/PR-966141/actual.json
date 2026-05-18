@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T15:15:14.4726310\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "966141",
+  "counts": {
+    "emitted": 1,
+    "validated": 0,
+    "projected": 0
+  },
+  "scenarios": [
+    {
+      "id": "sc-1",
+      "topic": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            229
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            235
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs",
+          "side": "right",
+          "lines": [
+            875
+          ]
+        }
+      ]
+    }
+  ]
+}

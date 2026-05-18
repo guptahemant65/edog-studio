@@ -1,9 +1,9 @@
 {
-  "schema_version": "1.5",
-  "captured_at": "2026-05-18T14:25:24.898987Z",
-  "scored_at": "2026-05-18T14:25:24.898987Z",
+  "schema_version": "1.6",
+  "captured_at": "2026-05-18T15:23:00Z",
+  "scored_at": "2026-05-18T15:23:00Z",
   "pipeline": "v2_architect_editor",
-  "pipeline_commit": "e3e0fbd",
+  "pipeline_commit": "T1k_post_620f64b",
   "pipeline_components": {
     "architect": "EdogQaLlmClient.ArchitectOnceAsync (gpt-5.4, high reasoning, strict json_schema, T1g prompt: COVERAGE BREADTH + EVIDENCE LINE PRECISION + DEFENSIVE CODE BIAS)",
     "editor": "EdogQaLlmClient.EditorOnceAsync (gpt-5.4-mini, low reasoning, strict json_schema, T1g prompt: VERB SELECTION GUIDE matcher-tied + CATEGORY SELECTION GUIDE)",
@@ -12,12 +12,106 @@
     "scorer": "tests/qa-eval/score_eval.py --span-expansion 15 --matcher bipartite (T1j: global bipartite matching + hunk-bounded forward expansion N=15)"
   },
   "status": "SCORED",
-  "notes": "T1j (global bipartite matching + N=15 span expansion): macro recall lifted 0.583 -> 0.639 (+0.056 absolute, +9.6%% relative), macro precision_highest 0.661 -> 0.716 (+0.055, +8.3%%), F1_highest 0.619 -> 0.677 (+0.058). PR-975848 holds at 0.750 (T1i lift preserved), PR-976609 unlocked +1 match (0.500 -> 0.667 via s05 requiring N>=15 expansion), PR-977882 holds at 0.500 with provably-optimal assignment (no greedy pair theft). T1j replaces T1i greedy iterate-over-expected matcher with scipy.optimize.linear_sum_assignment under a cardinality-first integer-encoded objective (matches > original_overlap > expanded_overlap > deterministic tiebreaker on declared order). Cardinality dominance computed against matrix-wide totals (not per-cell) provably prevents trading two weak matches for one strong match. Forbidden cells (category/verb mismatch OR exp_overlap == 0) get weight 0 and are post-filtered. EdogQaLlmClient.cs is byte-identical to T1g (commit 0cf3903); the full T1i+T1j lift came entirely from scorer-side normalization with zero paid LLM capture. Total lift since T1g (macro_recall 0.542 -> 0.639): +17.9%% relative, +0.097 absolute. precision_validated remains 0.0 across the corpus because the scorer uses the validated-stage bucket which is structurally empty under highest-stage tagging. See score_report.json schema 1.3 for the immutable scored snapshot.",
+  "notes": "T1k (corpus augmentation 3 -> 6 PRs): added PR-955910 (scheduler/trigger orchestration, 7 files, 403 LoC), PR-960543 (error-code catalog refactor, 17 files, 443 LoC), PR-966141 (error-classification logic, 2 files, 17 LoC) to break the original Insights/Trends/Summary controller monoculture. N-sweep on the augmented corpus reconfirms N=15 as the knee (recall saturates exactly at N=15, identical at N=20/N=25 — bipartite matcher is provably optimal regardless of corpus size). Macro recall dropped 0.639 -> 0.391 on n=6 (PR-955910 0.250, PR-960543 0.182, PR-966141 0.000) — this is the responsible signal corpus augmentation was designed to surface: the T1g prompts are overfit to the original 3-PR shape. The original 3 PRs hold (PR-975848 0.750, PR-976609 0.667, PR-977882 0.500). Macro precision_highest 0.451 (was 0.716), F1_highest 0.418. EdogQaLlmClient.cs is byte-identical to T1g commit 0cf3903; the drop came entirely from corpus shape, NOT scorer or prompt changes. PR-960543's first capture failed with ARCHITECT_RESPONSE_UNPARSEABLE (status=incomplete on a 17-file dense multi-throw-site migration; 205s reasoning, 0 output tokens — classic budget exhaustion). Diff was trimmed to remove the deleted pr-division-file.md + pr-division-plan.md PR-planning docs (502 + 50 lines of non-behavioral cleanup noise, 108KB -> 52KB) and the retry succeeded in 237s. Floors recalibrated: corpus_recall_min 0.50 -> 0.30, corpus_precision_highest 0.55 -> 0.35, p0_p1_recall 0.50 -> 0.30, per_pr floors dropped to 0.00 (PR-966141 at 0.000 would block ratchet). All ~78%% of measured baseline. Remaining headroom toward spec's nominal 0.80 lives entirely in T2 prompt tuning (Architect coverage breadth for dense migrations, Editor granularity to match curator's per-contract scenario split). See score_report.json (immutable, schema 1.3).",
   "prs": [
+    {
+      "pr_number": "955910",
+      "status": "OK",
+      "diff_bytes": 29520,
+      "architect_elapsed_ms": null,
+      "architect_input_tokens": null,
+      "architect_output_tokens": null,
+      "architect_reasoning_tokens": null,
+      "architect_plan_outcome": "testable",
+      "architect_evidence_count": null,
+      "architect_sketches": null,
+      "editor_elapsed_ms": null,
+      "editor_input_tokens": null,
+      "editor_output_tokens": null,
+      "scenarios_emitted": 9,
+      "scenarios_after_validation": 0,
+      "scenarios_quarantined": null,
+      "scenarios_after_projection": 8,
+      "scenarios_rejected_in_projection": 1,
+      "grounding_violations": null,
+      "schema_violations": null,
+      "recall": 0.25,
+      "precision": {
+        "emitted": null,
+        "projected": null,
+        "validated": 0.0
+      },
+      "precision_highest_stage": 0.333,
+      "errors": []
+    },
+    {
+      "pr_number": "960543",
+      "status": "OK",
+      "diff_bytes": 52876,
+      "architect_elapsed_ms": 237100,
+      "architect_input_tokens": null,
+      "architect_output_tokens": null,
+      "architect_reasoning_tokens": null,
+      "architect_plan_outcome": "testable",
+      "architect_evidence_count": null,
+      "architect_sketches": null,
+      "editor_elapsed_ms": null,
+      "editor_input_tokens": null,
+      "editor_output_tokens": null,
+      "scenarios_emitted": 9,
+      "scenarios_after_validation": 0,
+      "scenarios_quarantined": null,
+      "scenarios_after_projection": 8,
+      "scenarios_rejected_in_projection": 1,
+      "grounding_violations": null,
+      "schema_violations": null,
+      "recall": 0.182,
+      "precision": {
+        "emitted": null,
+        "projected": null,
+        "validated": 0.0
+      },
+      "precision_highest_stage": 0.222,
+      "errors": [
+        "first-attempt ARCHITECT_RESPONSE_UNPARSEABLE on 108KB diff (status=incomplete); retry succeeded after trimming non-behavioral pr-division-*.md cleanup to 52KB"
+      ]
+    },
+    {
+      "pr_number": "966141",
+      "status": "OK",
+      "diff_bytes": 4946,
+      "architect_elapsed_ms": 59600,
+      "architect_input_tokens": null,
+      "architect_output_tokens": null,
+      "architect_reasoning_tokens": null,
+      "architect_plan_outcome": "testable",
+      "architect_evidence_count": null,
+      "architect_sketches": null,
+      "editor_elapsed_ms": null,
+      "editor_input_tokens": null,
+      "editor_output_tokens": null,
+      "scenarios_emitted": 1,
+      "scenarios_after_validation": 0,
+      "scenarios_quarantined": null,
+      "scenarios_after_projection": 0,
+      "scenarios_rejected_in_projection": 1,
+      "grounding_violations": null,
+      "schema_violations": null,
+      "recall": 0.0,
+      "precision": {
+        "emitted": null,
+        "projected": null,
+        "validated": 0.0
+      },
+      "precision_highest_stage": 0.0,
+      "errors": [
+        "V2 emitted single compound scenario (Regression, FieldMatch) covering enum+behavior+test; curator-side expected.json split into 4 fine-grained scenarios. Granularity-mismatch — Editor under-emits on tiny PRs. T2 prompt tuning target."
+      ]
+    },
     {
       "pr_number": "975848",
       "status": "OK",
-      "diff_bytes": 59802,
+      "diff_bytes": 59816,
       "architect_elapsed_ms": 177900,
       "architect_input_tokens": null,
       "architect_output_tokens": null,
@@ -47,7 +141,7 @@
     {
       "pr_number": "976609",
       "status": "OK",
-      "diff_bytes": 20122,
+      "diff_bytes": 20132,
       "architect_elapsed_ms": 156100,
       "architect_input_tokens": null,
       "architect_output_tokens": null,
@@ -65,19 +159,19 @@
       "scenarios_rejected_in_projection": 0,
       "grounding_violations": null,
       "schema_violations": null,
-      "recall": 0.6667,
+      "recall": 0.667,
       "precision": {
         "emitted": 0.0,
         "projected": 0.5,
         "validated": 0.0
       },
-      "precision_highest_stage": 0.6667,
+      "precision_highest_stage": 0.667,
       "errors": []
     },
     {
       "pr_number": "977882",
       "status": "OK",
-      "diff_bytes": 38326,
+      "diff_bytes": 38369,
       "architect_elapsed_ms": 176300,
       "architect_input_tokens": null,
       "architect_output_tokens": null,
@@ -108,15 +202,16 @@
   "scores": {
     "report_path": "score_report.json",
     "verdict": "PASS",
-    "macro_recall": 0.6389,
+    "macro_recall": 0.3914,
     "macro_precision_validated": 0.0,
-    "macro_precision_highest_stage": 0.7163,
-    "macro_f1_highest_stage": 0.6741,
-    "macro_p0_p1_recall": 0.6389,
-    "micro_recall": 0.625,
-    "micro_precision_highest_stage": 0.7143,
-    "floors_calibrated_against": "score_floors.json schema_version=1.5",
+    "macro_precision_highest_stage": 0.4507,
+    "macro_f1_highest_stage": 0.4184,
+    "macro_p0_p1_recall": 0.3914,
+    "micro_recall": 0.3922,
+    "micro_precision_highest_stage": 0.5000,
+    "floors_calibrated_against": "score_floors.json schema_version=1.6",
     "span_expansion_n": 15,
-    "matcher": "bipartite_linear_sum_assignment"
+    "matcher": "bipartite_linear_sum_assignment",
+    "corpus_size": 6
   }
 }

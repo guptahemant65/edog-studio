@@ -1,0 +1,166 @@
+{
+  "schema_version": "2.0",
+  "pr_number": "955910",
+  "curator_state": "GRADED_PASS_1",
+  "curated_at": "2026-05-18",
+  "curator": "donna",
+  "pass_1_basis": "diff_inspection_blind",
+  "scenarios": [
+    {
+      "id": "955910-s01",
+      "behavior_key": "adapter_threads_exec_defn_id_to_template",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "RefreshTriggerAdapter forwards request.MlvExecutionDefinitionId to the template renderer (string.Empty fallback when null)",
+      "rationale": "This is the wire entry for the multi-schedule feature: the adapter is the only place where the incoming request's MlvExecutionDefinitionId reaches the Scriban template layer. Forgetting this line silently disables the entire multi-schedule plumbing — the trigger_definition.json.scriban substitution would emit an empty string into the wire contract.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs", "side": "right", "lines": [204]}
+      ]
+    },
+    {
+      "id": "955910-s02",
+      "behavior_key": "template_renderer_accepts_exec_defn_id_param",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "RefreshTriggersTemplateRenderer constructor accepts mlvExecDefnId and assigns it to the MlvExecDefnId property",
+      "rationale": "The constructor parameter + field-assignment pair is the canonical wiring pattern for adding a Scriban template variable. Both lines must land together — adding only the parameter (without the assignment) would silently emit empty strings; adding only the property (without the parameter) would fail compilation.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs", "side": "right", "lines": [177, 198]}
+      ]
+    },
+    {
+      "id": "955910-s03",
+      "behavior_key": "template_renderer_exposes_scriban_mlv_exec_defn_id",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "MlvExecDefnId property is exposed to Scriban via [JsonProperty(\"mlv_exec_defn_id\")] — the wire-contract name templates reference",
+      "rationale": "The JsonProperty attribute IS the contract: Scriban templates reference variables by the snake_case JSON property name, not the C# PascalCase property name. A mismatch between the attribute string and the template's {{ ... }} placeholder would silently substitute empty — invisible until the trigger fires in production. The curator must surface this as a separate behavior from the property declaration itself.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs", "side": "right", "lines": [268, 269]}
+      ]
+    },
+    {
+      "id": "955910-s04",
+      "behavior_key": "parser_extracts_exec_defn_id_from_reflex_definition",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "FMLVActivatorParser.FindFmlvExecutionDefinitionId walks steps[*].rows[FabricItemInvocation].arguments[parameters].values[*] to extract the fmlvExecutionDefinitionId parameter value",
+      "rationale": "The new parser method is the inverse of the template — it reads back the ID a previously-rendered ReflexDefinition serialized. Every guard in the LINQ chain (Where kind=FabricItemInvocation, FirstOrDefault name=parameters, paramName==fmlvExecutionDefinitionId) is a load-bearing contract with the Scriban template output shape. A curator must surface this as a single behavioural scenario; the 11 unit tests that probe each null-path are covered separately by s12.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs", "side": "right", "lines": [324, 356]}
+      ]
+    },
+    {
+      "id": "955910-s05",
+      "behavior_key": "parser_guards_exec_defn_id_with_guid_tryparse",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Parser only assigns action.FmlvExecutionDefinitionId when Guid.TryParse succeeds — malformed values are silently skipped (action keeps default null)",
+      "rationale": "The TryParse + conditional-assign pattern is the defensive boundary: a malformed fmlvExecutionDefinitionId in the ReflexDefinition (e.g. a leftover from an older trigger format) must NOT throw a FormatException, must NOT poison the rule with an undefined Guid value, and must leave the rule's Action in a state equivalent to the pre-PR baseline (no exec defn id). The guard is the load-bearing back-compat invariant.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs", "side": "right", "lines": [144, 145, 146, 147]}
+      ]
+    },
+    {
+      "id": "955910-s06",
+      "behavior_key": "trigger_definition_template_substitutes_exec_defn_id",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "trigger_definition.json.scriban substitutes {{ mlv_exec_defn_id }} (replacing the pre-PR {{ trigger_id }}) into the FabricItemParameter value field — the source-of-truth wire change",
+      "rationale": "This single-line template substitution IS the multi-schedule feature: pre-PR, every trigger received the trigger_id (always unique per trigger) as the exec defn id, which forced one-trigger-per-execution-definition. Post-PR, the field carries the actual mlvExecDefnId, decoupling trigger lifecycle from execution-definition lifecycle and enabling multiple triggers to fan out to a shared exec defn. Without this template change every other wire change in the PR is inert.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban", "side": "right", "lines": [126]}
+      ]
+    },
+    {
+      "id": "955910-s07",
+      "behavior_key": "notebook_template_declares_exec_defn_id_variable",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "fmlv_refresh_notebook.ipynb.scriban declares `fmlvExecutionDefinitionId = None` as a parameterized notebook variable",
+      "rationale": "This is the notebook-side input boundary: the Fabric notebook runtime injects the parameter by name. The `= None` default ensures backward compatibility with pre-PR triggers that don't carry an exec defn id, so the conditional s08 branch falls through to the legacy bodyless POST.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban", "side": "right", "lines": [28]}
+      ]
+    },
+    {
+      "id": "955910-s08",
+      "behavior_key": "notebook_conditional_post_body_with_exec_defn_id",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Notebook builds a JSON POST body `{executionData: {mlvExecutionDefinitionId: exec_def_id}}` when exec_def_id is present; falls back to the legacy bodyless POST when absent",
+      "rationale": "The conditional branch is the load-bearing back-compat path: forgetting the else-branch would break every pre-PR trigger that doesn't carry an exec defn id, since the new path with `body` would still POST but with an empty exec defn id and the API would reject it. The branch is also the only place that injects `Content-Type: application/json` — without it the server would reject the JSON body.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban", "side": "right", "lines": [67, 68, 69, 70, 71, 72, 73]}
+      ]
+    },
+    {
+      "id": "955910-s09",
+      "behavior_key": "notebook_publicuri_path_segment_form",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Notebook publicuri changed from query-string form `/jobs/instances?jobType=RefreshMaterializedLakeViews` to path-segment form `/jobs/RefreshMaterializedLakeViews/instances`",
+      "rationale": "The Fabric public API expects the jobType as a path segment when a body is supplied (the query-string form is the bodyless invocation contract). Mixing the two forms produces a 400 from the API. This change must land together with s08 — a curator must surface it as its own scenario because it is independently breaking: even pre-multi-schedule triggers will start hitting the new URL form.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban", "side": "right", "lines": [60]}
+      ]
+    },
+    {
+      "id": "955910-s10",
+      "behavior_key": "notebook_response_error_and_location_guards",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "Notebook adds resp.raise_for_status() and guards Location-header presence before reading resp.headers['Location']",
+      "rationale": "Pre-PR the notebook would silently swallow 4xx/5xx responses (no raise_for_status) and would KeyError if the server returned a 2xx without a Location header — both bugs surface only under multi-schedule traffic patterns where the response shape can vary across job submissions. The defensive boundary is a separate behavior from the body construction (s08).",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban", "side": "right", "lines": [75, 77, 78]}
+      ]
+    },
+    {
+      "id": "955910-s11",
+      "behavior_key": "parser_test_locks_in_action_exec_defn_id_assignment",
+      "category": "Regression",
+      "verb": "EventPresent",
+      "title": "Existing FMLVActivatorParser happy-path test extended with WithRule(fmlvExecutionDefinitionId: …) + Assert.AreEqual on rule.Action.FmlvExecutionDefinitionId",
+      "rationale": "The pre-PR test asserted everything about a parsed rule EXCEPT its exec defn id (the field didn't exist). The new assertion locks in s05 — a silent revert of the TryParse-and-assign branch would now fail this specific assertion line, not just the new edge-case tests in s12.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs", "side": "right", "lines": [328, 344]}
+      ]
+    },
+    {
+      "id": "955910-s12",
+      "behavior_key": "parser_test_suite_covers_find_method_null_paths",
+      "category": "Regression",
+      "verb": "EventPresent",
+      "title": "FindFmlvExecutionDefinitionId has comprehensive null-path coverage: empty steps, missing rows, wrong kind, no matching parameterName, missing parameterValue, missing values, etc.",
+      "rationale": "FindFmlvExecutionDefinitionId is a deep-LINQ JObject walker — every node along the chain can be null in malformed input. The 11 new test methods enumerate every null-path that the implementation guards. Without this coverage, a refactor that drops a `?.` operator would silently NullReferenceException at runtime under malformed input from an older ReflexDefinition format. The test suite is the regression net for s04.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/FMLVActivatorParserTests.cs", "side": "right", "lines": [1001, 1024, 1052, 1068, 1103, 1131, 1158, 1187, 1209, 1228, 1255]}
+      ]
+    }
+  ]
+}

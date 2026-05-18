@@ -1,0 +1,206 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T15:24:01.2410824\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "960543",
+  "counts": {
+    "emitted": 9,
+    "validated": 8,
+    "projected": 8
+  },
+  "scenarios": [
+    {
+      "id": "sk-2",
+      "topic": "DataQuality",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs",
+          "side": "right",
+          "lines": [
+            91
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            722
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            202
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "PublicAPI",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs",
+          "side": "right",
+          "lines": [
+            530
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "ErrorMapping",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            174
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "ErrorMapping",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
+          "side": "right",
+          "lines": [
+            650
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            202
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-6",
+      "topic": "DAG",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            647
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            665
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-7",
+      "topic": "DAG",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            681
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-8",
+      "topic": "DAG",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            701
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            723
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-9",
+      "topic": "DAG",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            824
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            834
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-1",
+      "topic": "Catalog",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "side": "right",
+          "lines": [
+            510
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            202
+          ]
+        }
+      ]
+    }
+  ]
+}

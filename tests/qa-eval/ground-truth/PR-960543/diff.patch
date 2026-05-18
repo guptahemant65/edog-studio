@@ -1,0 +1,923 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs b/Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs
+index 87a50d77..66b88890 100644
+--- a/Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs
++++ b/Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs
+@@ -507,7 +507,11 @@ namespace Microsoft.LiveTable.Service.Catalog
+                             if (srcEntityLakehouseId == Guid.Empty)
+                             {
+                                 Tracer.LogSanitizedError($"SYSTEM ERROR: Artifact metadata for lakehouse '{srcEntityLakehouseName}' in workspace '{srcEntityWorkspaceName}' has invalid ObjectId (Guid.Empty). This indicates corrupted metadata.");
+-                                throw new CatalogException($"Artifact metadata for lakehouse '{srcEntityLakehouseName}' in workspace '{srcEntityWorkspaceName}' does not contain a valid ObjectId.", HttpStatusCode.InternalServerError, ErrorCode.MLV_SERVER_ERROR);
++                                var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, $"lakehouse '{srcEntityLakehouseName}' in workspace '{srcEntityWorkspaceName}'" } };
++                                throw new CatalogException(
++                                    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                                    HttpStatusCode.InternalServerError,
++                                    ErrorCode.MLV_DATA_CORRUPTED);
+                             }
+ 
+                             // Check if schema is enabled for the lakehouse
+diff --git a/Service/Microsoft.LiveTable.Service/Common/Constants.cs b/Service/Microsoft.LiveTable.Service/Common/Constants.cs
+index 9746a616..bc0dd6bd 100644
+--- a/Service/Microsoft.LiveTable.Service/Common/Constants.cs
++++ b/Service/Microsoft.LiveTable.Service/Common/Constants.cs
+@@ -533,6 +533,16 @@ namespace Microsoft.LiveTable.Service.Common
+         /// </summary>
+         public static readonly string ToNodeNameKey = "ToNodeName";
+ 
++        /// <summary>
++        /// Placeholder key for the fully qualified materialized lake view name (e.g., "schemaName.tableName").
++        /// </summary>
++        public static readonly string FullyQualifiedMLVNameKey = "FullyQualifiedMLVName";
++
++        /// <summary>
++        /// Placeholder key for the materialized lake view name in error message templates.
++        /// </summary>
++        public static readonly string MLVNameKey = "MLVName";
++
+         /// <summary>
+         /// MWC workload type claim value for LiveTable.
+         /// </summary>
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs
+index 46100bdb..9d572c19 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs
+@@ -719,6 +719,12 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
+                     return Accepted();
+                 }
++                catch (CatalogException ex)
++                {
++                    Tracer.LogSanitizedError(ex, $"Catalog error during Data Quality Report creation. StatusCode: {ex.StatusCode}, ErrorCode: {ex.ErrorCode}");
++                    resultCode = ex.StatusCode;
++                    return CreateErrorResponse(ex.Message, resultCode);
++                }
+                 catch (UnauthorizedAccessException ex)
+                 {
+                     Tracer.LogSanitizedError($"Unauthorized access: {ex.Message}");
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs b/Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs
+index f7c7e409..526019e8 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/PublicAPI/MLVExecutionDefinitionPublicController.cs
+@@ -22,6 +22,7 @@ namespace Microsoft.LiveTable.Service.Controllers.PublicAPI
+     using Microsoft.LiveTable.Service.Core;
+     using Microsoft.LiveTable.Service.Core.Exceptions;
+     using Microsoft.LiveTable.Service.DataModel;
++    using Microsoft.LiveTable.Service.ErrorMapping;
+     using Microsoft.LiveTable.Service.FeatureFlightProvider;
+     using Microsoft.LiveTable.Service.SecurityAuditing;
+     using Microsoft.LiveTable.Service.Telemetry;
+@@ -526,12 +527,12 @@ namespace Microsoft.LiveTable.Service.Controllers.PublicAPI
+                 var displayedNames = invalidMlvs.Take(maxInvalidNamesToShow).ToList();
+                 var remainingCount = invalidMlvs.Count - displayedNames.Count;
+                 var suffix = remainingCount > 0 ? $" and {remainingCount} more" : string.Empty;
+-                var entityLabel = invalidMlvs.Count == 1 ? "Entity" : "Entities";
+-                var entityList = string.Join(", ", displayedNames) + suffix;
++                var missingNames = string.Join(", ", displayedNames) + suffix;
+ 
++                var parameters = new Dictionary<string, string> { { Constants.MissingMLVNamesKey, missingNames } };
+                 throw new MLVExecutionDefinitionException(
+                     HttpStatusCode.BadRequest,
+-                    $"MLV_ENTITY_NOT_FOUND: {entityLabel} {entityList} referenced couldn't be found or is inaccessible. This may be due to deletion, renaming, or permission issues. Ensure that all referenced entities exist and are accessible.");
++                    ErrorRegistry.GetErrorMessage(ErrorCode.MLV_SELECTED_NOT_FOUND, parameters, ErrorCodePrefixFormat.Standard));
+             }
+         }
+ 
+diff --git a/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs b/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs
+index 82aa094e..edb7a54c 100644
+--- a/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs
++++ b/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs
+@@ -1,4 +1,4 @@
+-﻿// <copyright file="Dag.cs" company="Microsoft">
++// <copyright file="Dag.cs" company="Microsoft">
+ // Copyright (c) Microsoft. All rights reserved.
+ // </copyright>
+ 
+@@ -644,7 +644,11 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+             {
+                 if (isPySpark)
+                 {
+-                    throw new InvalidOperationException($"Catalog file doesn't contain Source Info for MLV {tableObject.Name}");
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED);
+                 }
+ 
+                 return null; // SQL tolerant
+@@ -658,7 +662,11 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                 {
+                     if (isPySpark)
+                     {
+-                        throw new InvalidOperationException($"Invalid Source Info for PySpark MLV {tableObject.Name}");
++                        var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };
++                        throw new CatalogException(
++                            ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                            HttpStatusCode.InternalServerError,
++                            ErrorCode.MLV_DATA_CORRUPTED);
+                     }
+ 
+                     return null;
+@@ -670,7 +678,12 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                 Tracer.LogSanitizedError(errorMessage);
+                 if (isPySpark)
+                 {
+-                    throw new InvalidOperationException(errorMessage, ex);
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED,
++                        ex);
+                 }
+ 
+                 return null;
+@@ -685,7 +698,11 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+             {
+                 if (string.IsNullOrWhiteSpace(workspaceIdStr) || string.IsNullOrWhiteSpace(notebookIdStr))
+                 {
+-                    throw new InvalidOperationException($"Source Info for PySpark MLV {tableObject.Name} is missing required fields");
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED);
+                 }
+             }
+             else
+@@ -703,7 +720,11 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                 if (isPySpark)
+                 {
+                     Tracer.LogSanitizedError(errorMessage);
+-                    throw new InvalidOperationException(errorMessage);
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED);
+                 }
+ 
+                 return null;
+@@ -800,13 +821,21 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                 }
+                 else
+                 {
+-                    throw new ArgumentException($"Table name is empty");
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, "(unknown)" } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED);
+                 }
+ 
+                 string tableType = tableObject.TableType;
+                 if (string.IsNullOrEmpty(tableType))
+                 {
+-                    throw new ArgumentException($"Table Type for table {tableName} is not defined");
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, tableObject.Name } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED);
+                 }
+ 
+                 string abfsPath = tableObject.Storage?.LocationUri;
+diff --git a/Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs b/Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs
+index f4aeb71a..7ff40ea9 100644
+--- a/Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs
++++ b/Service/Microsoft.LiveTable.Service/DataQuality/DataQualityReportHandler.cs
+@@ -11,6 +11,7 @@ namespace Microsoft.LiveTable.Service.DataQuality
+     using System.Threading;
+     using System.Threading.Tasks;
+     using Microsoft.AzureAD.Policy;
++    using Microsoft.LiveTable.Service.Catalog.Exceptions;
+     using Microsoft.LiveTable.Service.Common;
+     using Microsoft.LiveTable.Service.Core.Exceptions;
+     using Microsoft.LiveTable.Service.DataModel;
+@@ -18,6 +19,7 @@ namespace Microsoft.LiveTable.Service.DataQuality
+     using Microsoft.LiveTable.Service.DataQuality.StateManagement;
+     using Microsoft.LiveTable.Service.ErrorMapping;
+     using Microsoft.ServicePlatform.Telemetry;
++    using Constants = Microsoft.LiveTable.Service.Common.Constants;
+ 
+     /// <summary>
+     /// Provides services for managing and executing Directed Acyclic Graphs (DAGs).
+@@ -86,7 +88,11 @@ namespace Microsoft.LiveTable.Service.DataQuality
+                 }
+                 else if (lakehouseDetails.Properties == null)
+                 {
+-                    throw new InvalidOperationException("Lakehouse properties not found.");
++                    var parameters = new Dictionary<string, string> { { Constants.FullyQualifiedMLVNameKey, $"lakehouse '{requestContext.ArtifactId}'" } };
++                    throw new CatalogException(
++                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_DATA_CORRUPTED, parameters, ErrorCodePrefixFormat.Standard),
++                        HttpStatusCode.InternalServerError,
++                        ErrorCode.MLV_DATA_CORRUPTED);
+                 }
+                 else if (lakehouseDetails.Properties.SqlEndpointProperties == null)
+                 {
+diff --git a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs
+index da57658b..67f047b8 100644
+--- a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs
++++ b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs
+@@ -1,4 +1,4 @@
+-﻿// <copyright file="ErrorCode.cs" company="Microsoft">
++// <copyright file="ErrorCode.cs" company="Microsoft">
+ // Copyright (c) Microsoft. All rights reserved.
+ // </copyright>
+ 
+@@ -645,6 +645,11 @@ namespace Microsoft.LiveTable.Service.ErrorMapping
+         /// Error indicating the entity is currently locked by another operation (lock acquisition timeout).
+         /// </summary>
+         MLV_RESOURCE_LOCKED,
++
++        /// <summary>
++        /// Error indicating catalog data is corrupted or missing required information for processing.
++        /// </summary>
++        MLV_DATA_CORRUPTED,
+     }
+ 
+     // Important: The naming convention changed over time to time and so we can see different naming pattern.
+diff --git a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs
+index bbb16f43..abf38253 100644
+--- a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs
++++ b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs
+@@ -171,7 +171,7 @@ namespace Microsoft.LiveTable.Service.ErrorMapping
+                 { ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, $"Magic commands (e.g., %pip, %run) in cell {{{Constants.CellIndexKey}}} at line {{{Constants.LineNumberKey}}} of Notebook '{{{Constants.NotebookIdKey}}}' are not supported in materialized lake view definitions. Remove or comment out magic commands and retry." },
+                 { ErrorCode.MLV_NOT_SUPPORTED, "This feature is not available for your tenant. Contact your administrator to enable the feature before retrying." },
+                 { ErrorCode.MLV_INVALID, "Request parameters are invalid or not in a supported format." },
+-                { ErrorCode.MLV_ENTITY_NOT_FOUND, $"Entity {{{Constants.ErrorMessageKey}}} referenced couldn't be found or is inaccessible. This may be due to deletion, renaming, or permission issues. Ensure that all referenced entities exist and are accessible." },
++                { ErrorCode.MLV_ENTITY_NOT_FOUND, $"The materialized lake view '{{{Constants.MLVNameKey}}}' has incomplete source metadata and can't be processed. Update the lake view definition to include a valid source, then try again." },
+                 { ErrorCode.MLV_UNAUTHORIZED_ACCESS, "Your session is missing the required credentials. Sign in again and try the action once access is restored." },
+                 { ErrorCode.MLV_EXEC_DEFN_NOT_FOUND, "Execution definition could not be found. Ensure that the ID exists in the given Lakehouse." },
+                 { ErrorCode.MLV_EXEC_DEFN_EXISTS, $"Another execution definition with same name exists in the Lakehouse. Try again with a different name." },
+@@ -197,6 +197,9 @@ namespace Microsoft.LiveTable.Service.ErrorMapping
+ 
+                 // Server error fallback
+                 { ErrorCode.MLV_SERVER_ERROR, "An unexpected server error occurred. Try again or contact support if the issue persists." },
++
++                // Data integrity / corrupted metadata error codes
++                { ErrorCode.MLV_DATA_CORRUPTED, $"Catalog data does not have information needed to process this request. Recreate the materialized lake view '{{{Constants.FullyQualifiedMLVNameKey}}}' and retry the operation. If issue persists, reach out to support." },
+             };
+         }
+ 
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs
+index f9bfd4b0..3cb01da0 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs
+@@ -1602,10 +1602,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.CatalogTests
+ 
+         /// <summary>
+         /// Test GetCatalogObjectsAsync when a general catalog error occurs.
++        /// Verifies the error code is MLV_DATA_CORRUPTED for invalid ObjectId.
+         /// </summary>
+         /// <returns>The task.</returns>
+         [TestMethod]
+-        [ExpectedException(typeof(CatalogException))]
+         public async Task GetCatalogObjectsAsync_CrossLakehouseArtifactWithEmptyObjectId_ThrowsCatalogException_Async()
+         {
+             // Arrange
+@@ -1635,15 +1635,19 @@ namespace Microsoft.LiveTable.Service.UnitTests.CatalogTests
+                 .Setup(s => s.GetWorkspaceNameAsync(testTenantId, testWorkspaceId, CancellationToken.None))
+                 .ReturnsAsync(TestWorkspaceName);
+ 
+-            // Act - should throw due to invalid ObjectId
+-            await catalogHandler.GetCatalogObjectsAsync(
+-                testTenantId,
+-                testWorkspaceId,
+-                testArtifactId,
+-                TestWorkspaceName,
+-                TestArtifactName,
+-                TestMwcToken,
+-                CancellationToken.None);
++            // Act & Assert
++            var ex = await Assert.ThrowsExceptionAsync<CatalogException>(() =>
++                catalogHandler.GetCatalogObjectsAsync(
++                    testTenantId,
++                    testWorkspaceId,
++                    testArtifactId,
++                    TestWorkspaceName,
++                    TestArtifactName,
++                    TestMwcToken,
++                    CancellationToken.None));
++
++            Assert.AreEqual(ErrorCode.MLV_DATA_CORRUPTED, ex.ErrorCode);
++            Assert.AreEqual(HttpStatusCode.InternalServerError, ex.StatusCode);
+         }
+ 
+         /// <summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerAdditionalTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerAdditionalTests.cs
+index 7c4016db..dfa3687d 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerAdditionalTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerAdditionalTests.cs
+@@ -18,6 +18,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+     using Microsoft.AspNetCore.Mvc;
+     using Microsoft.LiveTable.Service.Artifacts;
+     using Microsoft.LiveTable.Service.Catalog;
++    using Microsoft.LiveTable.Service.Catalog.Exceptions;
+     using Microsoft.LiveTable.Service.Common;
+     using Microsoft.LiveTable.Service.Contracts.Api;
+     using Microsoft.LiveTable.Service.Core;
+@@ -527,6 +528,57 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             }
+         }
+ 
++        /// <summary>
++        /// Verify CreateDataQualityReportAsync returns correct status when handler throws CatalogException.
++        /// </summary>
++        /// <returns>A Task representing the asynchronous test.</returns>
++        [TestMethod]
++        public async Task CreateDataQualityReportAsync_CatalogException_ReturnsCorrectStatusAsync()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++
++                mockDataQualityReportHandler
++                    .Setup(h => h.CreateDataQualityReportAsync(It.IsAny<RequestContext>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(new CatalogException("MLV_DATA_CORRUPTED: Catalog data corrupted", HttpStatusCode.InternalServerError, ErrorCode.MLV_DATA_CORRUPTED));
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/dataQualityReport" }.Uri;
++                var response = await client.PostAsync(uri, new StringContent(string.Empty, Encoding.UTF8, "application/json"));
++                response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
++
++                // Verify error message reaches the response body
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain("MLV_DATA_CORRUPTED");
++            }
++        }
++
++        /// <summary>
++        /// Verify CreateDataQualityReportAsync preserves CatalogException status code (500) for data corruption errors.
++        /// </summary>
++        /// <returns>A Task representing the asynchronous test.</returns>
++        [TestMethod]
++        public async Task CreateDataQualityReportAsync_CatalogException500_ReturnsInternalServerErrorAsync()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++
++                mockDataQualityReportHandler
++                    .Setup(h => h.CreateDataQualityReportAsync(It.IsAny<RequestContext>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(new CatalogException("MLV_DATA_CORRUPTED: Catalog data does not have information needed to process this request", HttpStatusCode.InternalServerError, ErrorCode.MLV_DATA_CORRUPTED));
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/dataQualityReport" }.Uri;
++                var response = await client.PostAsync(uri, new StringContent(string.Empty, Encoding.UTF8, "application/json"));
++                response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
++
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain("MLV_DATA_CORRUPTED");
++            }
++        }
++
+         /// <summary>
+         /// Verify CreateDataQualityReportAsync returns Unauthorized when handler throws UnauthorizedAccessException.
+         /// </summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/PublicAPI/MLVExecutionDefinitionPublicControllerValidationTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/PublicAPI/MLVExecutionDefinitionPublicControllerValidationTests.cs
+index 6567e0f0..6461804e 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/PublicAPI/MLVExecutionDefinitionPublicControllerValidationTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/PublicAPI/MLVExecutionDefinitionPublicControllerValidationTests.cs
+@@ -214,7 +214,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests.PublicAPI
+ 
+                     response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+                     body.Should().Contain("dbo.nonexistent_mlv");
+-                    body.Should().Contain("MLV_ENTITY_NOT_FOUND");
++                    body.Should().Contain("MLV_SELECTED_NOT_FOUND");
+                 }
+             }
+         }
+@@ -296,7 +296,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests.PublicAPI
+                     var body = await response.Content.ReadAsStringAsync();
+ 
+                     response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+-                    body.Should().Contain("Entities");
++                    body.Should().Contain("MLV_SELECTED_NOT_FOUND");
+                     body.Should().Contain("dbo.bad1");
+                     body.Should().Contain("dbo.bad2");
+                     body.Should().Contain("dbo.bad3");
+@@ -800,5 +800,147 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests.PublicAPI
+                 }
+             }
+         }
++
++        // Integration regression tests for PR-Cat2: MLV_SELECTED_NOT_FOUND via ErrorRegistry
++        // Verify the full pipeline: controller -> handler -> ErrorRegistry -> HTTP response body
++        [TestMethod("Create: MLV_SELECTED_NOT_FOUND message uses ErrorRegistry template, not hardcoded text")]
++        public async Task Create_SelectedNotFound_UsesErrorRegistryTemplate_Async()
++        {
++            var dag = new Dag();
++            dag.Nodes.Add(new Node(Guid.NewGuid(), "dbo.existing_mlv"));
++
++            this.mockLiveTableHandler
++                .Setup(h => h.GetDagFromCatalogAsync(
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<string>(),
++                    It.IsAny<bool>(),
++                    It.IsAny<CancellationToken>()))
++                .ReturnsAsync(dag);
++
++            var request = new MLVExecutionDefinitionPublicRequest
++            {
++                DisplayName = "Test",
++                CurrentLakehouseExecutionContext = new CurrentLakehouseExecutionContext
++                {
++                    Mode = ExecutionBoundaryMode.Selected,
++                    SelectedMlvs = new List<string> { "dbo.missing_mlv" },
++                },
++            };
++
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                var uri = new UriBuilder(baseUri) { Path = BasePath }.Uri;
++                var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
++                var response = await client.PostAsync(uri, content);
++                var body = await response.Content.ReadAsStringAsync();
++
++                response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
++                body.Should().Contain("MLV_SELECTED_NOT_FOUND:");
++                body.Should().Contain("do not exist in the current lakehouse");
++                body.Should().NotContain("referenced couldn't be found or is inaccessible");
++                body.Should().NotContain("incomplete source metadata");
++                body.Should().Contain("dbo.missing_mlv");
++            }
++        }
++
++        [TestMethod("Create: MLV_SELECTED_NOT_FOUND with multiple missing MLVs includes all names")]
++        public async Task Create_SelectedNotFound_MultipleNames_IncludesAllInResponse_Async()
++        {
++            var dag = new Dag();
++            dag.Nodes.Add(new Node(Guid.NewGuid(), "dbo.good_mlv"));
++
++            this.mockLiveTableHandler
++                .Setup(h => h.GetDagFromCatalogAsync(
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<string>(),
++                    It.IsAny<bool>(),
++                    It.IsAny<CancellationToken>()))
++                .ReturnsAsync(dag);
++
++            var request = new MLVExecutionDefinitionPublicRequest
++            {
++                DisplayName = "Test",
++                CurrentLakehouseExecutionContext = new CurrentLakehouseExecutionContext
++                {
++                    Mode = ExecutionBoundaryMode.Selected,
++                    SelectedMlvs = new List<string> { "dbo.bad1", "dbo.bad2" },
++                },
++            };
++
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                var uri = new UriBuilder(baseUri) { Path = BasePath }.Uri;
++                var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
++                var response = await client.PostAsync(uri, content);
++                var body = await response.Content.ReadAsStringAsync();
++
++                response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
++                body.Should().Contain("MLV_SELECTED_NOT_FOUND:");
++                body.Should().Contain("dbo.bad1");
++                body.Should().Contain("dbo.bad2");
++                body.Should().Contain("do not exist in the current lakehouse");
++            }
++        }
++
++        [TestMethod("Create: Valid selectedMlvs matching DAG nodes returns 201, not error")]
++        public async Task Create_ValidSelectedMlvs_Returns201_NoRegressionFromErrorCodeChange_Async()
++        {
++            var dag = new Dag();
++            dag.Nodes.Add(new Node(Guid.NewGuid(), "dbo.mlv1"));
++            dag.Nodes.Add(new Node(Guid.NewGuid(), "dbo.mlv2"));
++
++            this.mockLiveTableHandler
++                .Setup(h => h.GetDagFromCatalogAsync(
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<string>(),
++                    It.IsAny<bool>(),
++                    It.IsAny<CancellationToken>()))
++                .ReturnsAsync(dag);
++
++            this.mockMLVExecutionDefHandler
++                .Setup(h => h.CreateMLVExecutionDefinitionAsync(
++                    It.IsAny<string>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<Guid>(),
++                    It.IsAny<MLVExecutionDefinitionRequest>(),
++                    It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new MLVExecutionDefinition
++                {
++                    Id = Guid.NewGuid(),
++                    Name = "Test",
++                    ExecutionMode = ExecutionMode.SelectedOnly,
++                    SelectedMLVs = new List<string> { "dbo.mlv1" },
++                });
++
++            var request = new MLVExecutionDefinitionPublicRequest
++            {
++                DisplayName = "Test",
++                CurrentLakehouseExecutionContext = new CurrentLakehouseExecutionContext
++                {
++                    Mode = ExecutionBoundaryMode.Selected,
++                    SelectedMlvs = new List<string> { "dbo.mlv1" },
++                },
++            };
++
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                var uri = new UriBuilder(baseUri) { Path = BasePath }.Uri;
++                var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
++                var response = await client.PostAsync(uri, content);
++                var body = await response.Content.ReadAsStringAsync();
++
++                response.StatusCode.Should().Be(HttpStatusCode.Created, body);
++                body.Should().NotContain("MLV_SELECTED_NOT_FOUND");
++            }
++        }
+     }
+ }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagSqlAndPySparkNotebookLinkTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagSqlAndPySparkNotebookLinkTests.cs
+index a9e50f91..e8ebfd82 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagSqlAndPySparkNotebookLinkTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagSqlAndPySparkNotebookLinkTests.cs
+@@ -79,11 +79,11 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Verifies PySpark MLV with invalid JSON sourceinfo throws InvalidOperationException.
++        /// Verifies PySpark MLV with invalid JSON sourceinfo throws CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+-        public async Task CreateFromCatalogTables_PySparkInvalidJson_ShouldThrowInvalidOperationExceptionAsync()
++        [ExpectedException(typeof(CatalogException))]
++        public async Task CreateFromCatalogTables_PySparkInvalidJson_ShouldThrowCatalogExceptionAsync()
+         {
+             Guid ws = Guid.NewGuid();
+             Guid lh = Guid.NewGuid();
+@@ -103,11 +103,11 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Verifies PySpark MLV missing notebook id in source info throws InvalidOperationException.
++        /// Verifies PySpark MLV missing notebook id in source info throws CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+-        public async Task CreateFromCatalogTables_PySparkMissingNotebookId_ShouldThrowInvalidOperationExceptionAsync()
++        [ExpectedException(typeof(CatalogException))]
++        public async Task CreateFromCatalogTables_PySparkMissingNotebookId_ShouldThrowCatalogExceptionAsync()
+         {
+             Guid ws = Guid.NewGuid();
+             Guid lh = Guid.NewGuid();
+@@ -128,11 +128,11 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Verifies PySpark MLV missing workspace id in source info throws InvalidOperationException.
++        /// Verifies PySpark MLV missing workspace id in source info throws CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+-        public async Task CreateFromCatalogTables_PySparkMissingWorkspaceId_ShouldThrowInvalidOperationExceptionAsync()
++        [ExpectedException(typeof(CatalogException))]
++        public async Task CreateFromCatalogTables_PySparkMissingWorkspaceId_ShouldThrowCatalogExceptionAsync()
+         {
+             Guid ws = Guid.NewGuid();
+             Guid lh = Guid.NewGuid();
+@@ -392,11 +392,11 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Verifies PySpark MLV with invalid GUID formats throws InvalidOperationException (strict).
++        /// Verifies PySpark MLV with invalid GUID formats throws CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+-        public async Task CreateFromCatalogTables_PySparkInvalidGuid_ShouldThrowInvalidOperationExceptionAsync()
++        [ExpectedException(typeof(CatalogException))]
++        public async Task CreateFromCatalogTables_PySparkInvalidGuid_ShouldThrowCatalogExceptionAsync()
+         {
+             Guid ws = Guid.NewGuid();
+             Guid lh = Guid.NewGuid();
+@@ -417,11 +417,11 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Verifies PySpark MLV with whitespace-only sourceinfo throws InvalidOperationException.
++        /// Verifies PySpark MLV with whitespace-only sourceinfo throws CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+-        public async Task CreateFromCatalogTables_PySparkWhitespaceSourceInfo_ShouldThrowInvalidOperationExceptionAsync()
++        [ExpectedException(typeof(CatalogException))]
++        public async Task CreateFromCatalogTables_PySparkWhitespaceSourceInfo_ShouldThrowCatalogExceptionAsync()
+         {
+             Guid ws = Guid.NewGuid();
+             Guid lh = Guid.NewGuid();
+@@ -441,11 +441,11 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Verifies PySpark MLV where keys present but values are whitespace causes InvalidOperationException.
++        /// Verifies PySpark MLV where keys present but values are whitespace causes CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+-        public async Task CreateFromCatalogTables_PySparkWorkspaceOrNotebookWhitespace_ShouldThrowInvalidOperationExceptionAsync()
++        [ExpectedException(typeof(CatalogException))]
++        public async Task CreateFromCatalogTables_PySparkWorkspaceOrNotebookWhitespace_ShouldThrowCatalogExceptionAsync()
+         {
+             Guid ws = Guid.NewGuid();
+             Guid lh = Guid.NewGuid();
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs
+index c96881a1..fe9522cc 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs
+@@ -1341,10 +1341,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+ 
+         /// <summary>
+         /// Tests that PySpark nodes created from catalog objects require source info.
++        /// Verifies the specific ErrorCode is MLV_DATA_CORRUPTED with 500 status.
+         /// </summary>
+         /// <returns>Task representing async op</returns>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+         public async Task TestDagFromCatalog_PySparkNode_WithMissingSourceInfo_ThrowsException_Async()
+         {
+             // Arrange
+@@ -1364,24 +1364,26 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         },
+     };
+ 
+-            // Act - This should throw InvalidOperationException
+-            await Dag.CreateFromCatalogTablesAsync(
+-                Example.GetWorkSpaceId(),
+-                Example.GetArtifactId(),
+-                "ws1",
+-                "LakehouseName",
+-                tableObjects,
+-                "mwcToken");
++            // Act & Assert
++            var ex = await Assert.ThrowsExceptionAsync<CatalogException>(() =>
++                Dag.CreateFromCatalogTablesAsync(
++                    Example.GetWorkSpaceId(),
++                    Example.GetArtifactId(),
++                    "ws1",
++                    "LakehouseName",
++                    tableObjects,
++                    "mwcToken"));
+ 
+-            // Assert - Exception expected
++            Assert.AreEqual(ErrorCode.MLV_DATA_CORRUPTED, ex.ErrorCode);
++            Assert.AreEqual(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
+         }
+ 
+         /// <summary>
+         /// Tests that PySpark nodes created from catalog objects with empty source info throw exception.
++        /// Verifies the specific ErrorCode is MLV_DATA_CORRUPTED with 500 status.
+         /// </summary>
+         /// <returns>Task representing async op</returns>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+         public async Task TestDagFromCatalog_PySparkNode_WithEmptySourceInfo_ThrowsException_Async()
+         {
+             // Arrange
+@@ -1401,16 +1403,18 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         },
+     };
+ 
+-            // Act - This should throw InvalidOperationException
+-            await Dag.CreateFromCatalogTablesAsync(
+-                Example.GetWorkSpaceId(),
+-                Example.GetArtifactId(),
+-                "ws1",
+-                "LakehouseName",
+-                tableObjects,
+-                "mwcToken");
++            // Act & Assert
++            var ex = await Assert.ThrowsExceptionAsync<CatalogException>(() =>
++                Dag.CreateFromCatalogTablesAsync(
++                    Example.GetWorkSpaceId(),
++                    Example.GetArtifactId(),
++                    "ws1",
++                    "LakehouseName",
++                    tableObjects,
++                    "mwcToken"));
+ 
+-            // Assert - Exception expected
++            Assert.AreEqual(ErrorCode.MLV_DATA_CORRUPTED, ex.ErrorCode);
++            Assert.AreEqual(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
+         }
+ 
+         /// <summary>
+@@ -1613,11 +1617,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Tests that PySpark nodes with invalid JSON in source info throw InvalidOperationException.
++        /// Tests that PySpark nodes with invalid JSON in source info throw CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         /// <returns>A task representing the asynchronous test operation.</returns>
+         [TestMethod]
+-        [ExpectedException(typeof(InvalidOperationException))]
+         public async Task TestDagFromCatalog_PySparkNode_WithInvalidJsonSourceInfo_ThrowsException_Async()
+         {
+             // Arrange
+@@ -1637,16 +1640,18 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         },
+     };
+ 
+-            // Act - This should throw InvalidOperationException due to JSON deserialization failure
+-            await Dag.CreateFromCatalogTablesAsync(
+-                Example.GetWorkSpaceId(),
+-                Example.GetArtifactId(),
+-                "ws1",
+-                "LakehouseName",
+-                tableObjects,
+-                "mwcToken");
++            // Act & Assert
++            var ex = await Assert.ThrowsExceptionAsync<CatalogException>(() =>
++                Dag.CreateFromCatalogTablesAsync(
++                    Example.GetWorkSpaceId(),
++                    Example.GetArtifactId(),
++                    "ws1",
++                    "LakehouseName",
++                    tableObjects,
++                    "mwcToken"));
+ 
+-            // Assert - Exception expected
++            Assert.AreEqual(ErrorCode.MLV_DATA_CORRUPTED, ex.ErrorCode);
++            Assert.AreEqual(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
+         }
+ 
+         /// <summary>
+@@ -2654,11 +2659,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+ 
+         /// <summary>
+         /// Tests ReBuildDagFromCatalogTableAsync with empty table name.
+-        /// Covers line 601-604: Throws ArgumentException for empty table name.
++        /// Covers the validation path where Table.Name is null/empty, throwing CatalogException with MLV_DATA_CORRUPTED.
+         /// </summary>
+         /// <returns>A task representing the asynchronous test operation.</returns>
+         [TestMethod]
+-        [ExpectedException(typeof(ArgumentException))]
+         public async Task ReBuildDagFromCatalogTableAsync_EmptyTableName_ThrowsAsync()
+         {
+             // Arrange
+@@ -2675,14 +2679,54 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+                 },
+             };
+ 
+-            // Act - should throw ArgumentException
+-            await Dag.CreateFromCatalogTablesAsync(
+-                Example.GetWorkSpaceId(),
+-                Example.GetArtifactId(),
+-                "ws1",
+-                "TestLH",
+-                tableObjects,
+-                "testToken");
++            // Act & Assert
++            var ex = await Assert.ThrowsExceptionAsync<CatalogException>(() =>
++                Dag.CreateFromCatalogTablesAsync(
++                    Example.GetWorkSpaceId(),
++                    Example.GetArtifactId(),
++                    "ws1",
++                    "TestLH",
++                    tableObjects,
++                    "testToken"));
++
++            Assert.AreEqual(ErrorCode.MLV_DATA_CORRUPTED, ex.ErrorCode);
++            Assert.AreEqual(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
++        }
++
++        /// <summary>
++        /// Tests ReBuildDagFromCatalogTableAsync with empty table type.
++        /// Covers the validation path where Table.TableType is null/empty, throwing CatalogException with MLV_DATA_CORRUPTED.
++        /// </summary>
++        /// <returns>A task representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task ReBuildDagFromCatalogTableAsync_EmptyTableType_ThrowsAsync()
++        {
++            // Arrange
++            var tableObjects = new List<Table>
++            {
++                new Table("dbo.testTable", string.Empty, new List<string>())
++                {
++                    WorkspaceId = Example.GetWorkSpaceId(),
++                    LakehouseId = Example.GetArtifactId(),
++                    WorkspaceName = "ws1",
++                    LakehouseName = "TestLH",
++                    Storage = new StorageFormat("abfs://test", false, new Dictionary<string, string>()),
++                    Provider = "delta",
++                },
++            };
++
++            // Act & Assert
++            var ex = await Assert.ThrowsExceptionAsync<CatalogException>(() =>
++                Dag.CreateFromCatalogTablesAsync(
++                    Example.GetWorkSpaceId(),
++                    Example.GetArtifactId(),
++                    "ws1",
++                    "TestLH",
++                    tableObjects,
++                    "testToken"));
++
++            Assert.AreEqual(ErrorCode.MLV_DATA_CORRUPTED, ex.ErrorCode);
++            Assert.AreEqual(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
+         }
+ 
+         /// <summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DataQualityReportTests/DataQualityReportHandlerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DataQualityReportTests/DataQualityReportHandlerTests.cs
+index ed46e7d5..c3e47334 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DataQualityReportTests/DataQualityReportHandlerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DataQualityReportTests/DataQualityReportHandlerTests.cs
+@@ -8,6 +8,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DataQualityReportTests
+     using System.Net;
+     using System.Threading;
+     using System.Threading.Tasks;
++    using Microsoft.LiveTable.Service.Catalog.Exceptions;
+     using Microsoft.LiveTable.Service.Core.Exceptions;
+     using Microsoft.LiveTable.Service.DataModel;
+     using Microsoft.LiveTable.Service.DataQuality;
+@@ -94,18 +95,18 @@ namespace Microsoft.LiveTable.Service.UnitTests.DataQualityReportTests
+         }
+ 
+         /// <summary>
+-        /// Verifies that <see cref="DataQualityReportHandler.CreateDataQualityReportAsync"/> throws <see cref="InvalidOperationException"/>
++        /// Verifies that <see cref="DataQualityReportHandler.CreateDataQualityReportAsync"/> throws <see cref="CatalogException"/>
+         /// when lakehouse properties are null.
+         /// </summary>
+         /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
+         [TestMethod]
+-        public async Task CreateDataQualityReportAsync_LakehousePropertiesNull_ThrowsInvalidOperationExceptionAsync()
++        public async Task CreateDataQualityReportAsync_LakehousePropertiesNull_ThrowsCatalogExceptionAsync()
+         {
+             reportStateManagerMock.Setup(m => m.TryGetStateAsync(requestContext)).ReturnsAsync((false, null));
+             reportStateManagerMock.Setup(m => m.InitializeStateAsync(requestContext)).ReturnsAsync(true);
+             fabricApiClientMock.Setup(m => m.GetLakehouseDetailsAsync(requestContext, cancellationToken)).ReturnsAsync(new LakehouseDetails());
+ 
+-            await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
++            await Assert.ThrowsExceptionAsync<CatalogException>(() =>
+                 handler.CreateDataQualityReportAsync(requestContext, "token", cancellationToken));
+         }
+ 
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs
+index 9146b63b..fb192bc4 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs
+@@ -759,15 +759,15 @@ namespace Microsoft.LiveTable.Service.UnitTests.ErrorMappingTests
+         }
+ 
+         /// <summary>
+-        /// Tests that the error message for entity not found is returned correctly with entity details.
++        /// Tests that the error message for data corrupted is returned correctly with MLV name and support suffix.
+         /// </summary>
+         [TestMethod]
+-        public void GetErrorMessage_EntityNotFound_ReturnsFormattedMessage()
++        public void GetErrorMessage_DataCorrupted_ReturnsFormattedMessageWithSupportSuffix()
+         {
+             // Arrange
+-            var errorCode = ErrorCode.MLV_ENTITY_NOT_FOUND;
+-            var parameters = new Dictionary<string, string> { { "ErrorMessage", "dbo.TableA" } };
+-            var expectedMessage = "Entity dbo.TableA referenced couldn't be found or is inaccessible. This may be due to deletion, renaming, or permission issues. Ensure that all referenced entities exist and are accessible.";
++            var errorCode = ErrorCode.MLV_DATA_CORRUPTED;
++            var parameters = new Dictionary<string, string> { { Common.Constants.FullyQualifiedMLVNameKey, "dbo.myView" } };
++            var expectedMessage = "Catalog data does not have information needed to process this request. Recreate the materialized lake view 'dbo.myView' and retry the operation. If issue persists, reach out to support.";
+ 
+             // Act
+             var result = ErrorRegistry.GetErrorMessage(errorCode, parameters);
+@@ -776,6 +776,25 @@ namespace Microsoft.LiveTable.Service.UnitTests.ErrorMappingTests
+             Assert.AreEqual(expectedMessage, result);
+         }
+ 
++        /// <summary>
++        /// Tests that the error message for data corrupted with Standard prefix includes the error code prefix.
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_DataCorrupted_WithStandardPrefix_IncludesErrorCodePrefix()
++        {
++            // Arrange
++            var errorCode = ErrorCode.MLV_DATA_CORRUPTED;
++            var parameters = new Dictionary<string, string> { { Common.Constants.FullyQualifiedMLVNameKey, "dbo.myView" } };
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(errorCode, parameters, ErrorCodePrefixFormat.Standard);
++
++            // Assert
++            Assert.IsTrue(result.StartsWith("MLV_DATA_CORRUPTED: "), $"Expected Standard prefix but got: {result}");
++            Assert.IsTrue(result.Contains("dbo.myView"), "Expected MLV name placeholder to be substituted");
++            Assert.IsTrue(result.EndsWith("reach out to support."), $"Expected support suffix but got: {result}");
++        }
++
+         /// <summary>
+         /// Tests that the error message for unauthorized access is returned correctly.
+         /// </summary>

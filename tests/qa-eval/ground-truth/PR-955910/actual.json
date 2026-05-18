@@ -1,0 +1,283 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-18T15:10:49.7037388\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "955910",
+  "counts": {
+    "emitted": 9,
+    "validated": 8,
+    "projected": 8
+  },
+  "scenarios": [
+    {
+      "id": "sk-2",
+      "topic": "FMLV activator parsing",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            144
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            145
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            327
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            349
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "FMLV activator parsing null-guards",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            327
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            336
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            343
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "FMLV activator parsing GUID validation",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            144
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RefreshTrigger/FMLVActivatorParser.cs",
+          "side": "right",
+          "lines": [
+            145
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "Refresh notebook request routing",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            60
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-6",
+      "topic": "Refresh notebook submission request",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            67
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            69
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            70
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            71
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-7",
+      "topic": "Refresh notebook request branching",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs",
+          "side": "right",
+          "lines": [
+            204
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            67
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            72
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-8",
+      "topic": "Refresh notebook failure propagation",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            75
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-9",
+      "topic": "Refresh notebook success logging",
+      "category": "EdgeCase",
+      "verb": "EventAbsent",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            77
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            78
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/fmlv_refresh_notebook.ipynb.scriban",
+          "side": "right",
+          "lines": [
+            79
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-1",
+      "topic": "RefreshTrigger template rendering",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs",
+          "side": "right",
+          "lines": [
+            204
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs",
+          "side": "right",
+          "lines": [
+            177
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs",
+          "side": "right",
+          "lines": [
+            198
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Template/RefreshTriggersTemplateRenderer.cs",
+          "side": "right",
+          "lines": [
+            267
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/RefreshTrigger/trigger_definition.json.scriban",
+          "side": "right",
+          "lines": [
+            125
+          ]
+        }
+      ]
+    }
+  ]
+}

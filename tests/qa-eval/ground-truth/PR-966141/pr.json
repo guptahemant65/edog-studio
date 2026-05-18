@@ -1,0 +1,26 @@
+{
+  "pr_number": "966141",
+  "pr_url": "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/966141",
+  "repo": "workload-fabriclivetable",
+  "title": "Merged PR 966141: Classify HttpStatusCode.BadRequest as user error in IsUserError()",
+  "description": "Classify HttpStatusCode.BadRequest as user error in IsUserError()",
+  "base_sha": "5fa59d9d79f8502912e7589f831dec597958b841",
+  "head_sha": "f96896ca0585e715874959cae7946aa732ee3861",
+  "author_email": "sravuri@microsoft.com",
+  "authored_date": "2026-05-04T06:47:18Z",
+  "files_changed": 2,
+  "files": [
+    {
+      "status": "M",
+      "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs"
+    },
+    {
+      "status": "M",
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs"
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 4867,
+  "captured_at": "2026-05-18T14:54:47Z",
+  "captured_from": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable (local clone)"
+}

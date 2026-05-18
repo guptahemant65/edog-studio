@@ -1,0 +1,62 @@
+{
+  "schema_version": "2.0",
+  "pr_number": "966141",
+  "curator_state": "GRADED_PASS_1",
+  "curated_at": "2026-05-18",
+  "curator": "donna",
+  "pass_1_basis": "diff_inspection_blind",
+  "scenarios": [
+    {
+      "id": "966141-s01",
+      "behavior_key": "is_user_error_classifies_bad_request_true",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "title": "IsUserError(HttpStatusCode.BadRequest) now returns true (was false pre-PR)",
+      "rationale": "This is the load-bearing semantic flip of the PR. Pre-PR, BadRequest (400) was not in the user-error allow-list and IsUserError(BadRequest) returned false, causing the SSR telemetry pipeline to misclassify domain-validation failures (e.g. missing displayName on item create) as system errors. The added `statusCode == HttpStatusCode.BadRequest` clause is the canonical fix — any production-grade LLM must surface this as a HappyPath behavior change.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs", "side": "right", "lines": [227]}
+      ]
+    },
+    {
+      "id": "966141-s02",
+      "behavior_key": "is_user_error_classifies_bad_request_via_int_cast",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "IsUserError accepts BadRequest via raw int cast (`(int)statusCode == 400`) for callers that pass non-enum status values",
+      "rationale": "The implementation pattern in IsUserError is belt-and-suspenders: every enum match has a parallel raw-int match to handle callers that synthesize HttpStatusCode from arbitrary int values (e.g. when proxying status from upstream services). Forgetting the parallel `(int)statusCode == 400` branch would silently misclassify any caller using the raw-int code path — a subtle regression invisible until production. The parallel-branch invariant is the contract a curator-graded scenario must surface.",
+      "criticality": "P1",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs", "side": "right", "lines": [233]}
+      ]
+    },
+    {
+      "id": "966141-s03",
+      "behavior_key": "onelake_boundary_documented_in_xmldoc",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "title": "XML doc warns IsUserError must NOT be used for OneLake/storage errors — OneLake returns 400 for system-side issues and has its own classification in OnelakeBasedFileSystem",
+      "rationale": "Adding 400 to the user-error allow-list creates an immediate cross-boundary risk: OneLake legitimately returns HTTP 400 for system-side conditions (transient storage issues, drift detection) that are NOT user errors. Without the xmldoc warning + the explicit reference to OnelakeBasedFileSystem's separate classification, a future maintainer would naturally extend IsUserError usage to storage call sites and silently misclassify storage errors as user errors. The xmldoc paragraph IS the contract that scopes the method to controller-tier domain exceptions — a curator must flag it as a separate behavior, not collapse it into s01.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs", "side": "right", "lines": [208, 209, 210, 211, 213]}
+      ]
+    },
+    {
+      "id": "966141-s04",
+      "behavior_key": "test_regression_locks_in_bad_request_flip",
+      "category": "Regression",
+      "verb": "EventPresent",
+      "title": "Unit test DataRow(400, true) replaces the pre-PR DataRow(400, false) to lock in the IsUserError(BadRequest) flip and prevent silent revert",
+      "rationale": "The pre-PR test asserted DataRow(400, false) — the exact opposite of the new behavior. If the implementation were ever reverted (intentionally or via merge conflict), the test would fail loudly. The flipped DataRow is the regression test for s01 and must be surfaced as a separate scenario from the implementation change itself — without it, a future contributor could silently revert s01 by editing the impl AND the test together. Curator must require this row's presence to fail the V2 pipeline if the test were dropped.",
+      "criticality": "P0",
+      "discovered_by": "diff_inspection",
+      "grounding_changed_lines": [
+        {"path": "test/Microsoft.LiveTable.Service.UnitTests/Utils/NodeExecutionUtilsTests.cs", "side": "right", "lines": [867, 870, 875]}
+      ]
+    }
+  ]
+}

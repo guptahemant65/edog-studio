@@ -51,6 +51,34 @@ PRS = [
         "42b1c616^",
         "Add refreshPolicyDistribution to /summary API",
     ),
+    # F27 P9 T1k — corpus augmentation to validate the bipartite N=15 knee
+    # against diverse change shapes (current 3-PR corpus is monoculture:
+    # all Insights /summary or /trends controllers). The trio below covers:
+    #   - PR-960543: ERROR-CODE CATALOG (17 files, MLV_DATA_CORRUPTED +
+    #     MLV_ENTITY_NOT_FOUND + ~half-dozen call-site migrations)
+    #   - PR-955910: SCHEDULER / TRIGGER ORCHESTRATION (7 files, multi-
+    #     schedule refresh trigger model + validation + persistence)
+    #   - PR-966141: ERROR-CLASSIFICATION LOGIC (2 files, IsUserError()
+    #     classification of HttpStatusCode.BadRequest — tiny semantic
+    #     diff stress-tests scorer on minimal grounding)
+    (
+        "960543",
+        "ab6b718a",
+        "ab6b718a^",
+        "Data integrity error codes (MLV_DATA_CORRUPTED, MLV_ENTITY_NOT_FOUND)",
+    ),
+    (
+        "955910",
+        "ea9f451d",
+        "ea9f451d^",
+        "[RefreshTriggers] Enable Multi-schedule support",
+    ),
+    (
+        "966141",
+        "f96896ca",
+        "f96896ca^",
+        "Classify HttpStatusCode.BadRequest as user error in IsUserError()",
+    ),
 ]
 
 
