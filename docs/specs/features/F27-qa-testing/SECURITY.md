@@ -68,7 +68,7 @@ PR introduces (or worse, a vulnerability).
 | M1.3 | Editor cannot introduce new grounding citations — its `groundingEvidenceRefs` MUST be a subset of the Architect plan's evidenceIds. `EDITOR_GROUNDING_VIOLATION` drops the entire batch. | **Shipped (T1b).** | `EdogQaLlmClient.cs` |
 | M1.4 | Validator's grounding-existence gate cross-checks every `groundingEvidenceRef` against the unified diff's `(path, side, line)` triple; injection text that isn't anchored to a real changed line fails the gate. | **Shipped (T1c-a-1 `053824e`).** | `EdogQaScenarioValidator.cs` |
 | M1.5 | Curation UI is the mandatory gate. No scenario reaches the execution engine without explicit human review. | **Shipped (P5).** | curation UI |
-| M1.6 | ≥ 5 adversarial PRs in `tests/qa-eval/adversarial/` exercise inline-injection text; eval gate fails closed if any judge accepts a compliant scenario. | **Pending T2.** | future `tests/qa-eval/adversarial/` |
+| M1.6 | ≥ 5 adversarial PRs in `tests/qa-eval/adversarial/` exercise inline-injection text; eval gate fails closed if any judge accepts a compliant scenario. | **Structural corpus shipped (T1d).** Five fixtures (`01-system-prompt-override`, `02-fake-architect-plan`, `03-tool-use-exfil`, `04-base64-payload`, `05-rtl-override`) + README cross-referencing this section. Live LLM evaluation harness pending T2. | `tests/qa-eval/adversarial/` |
 
 ### 3.2 Secret / token exfiltration via LLM telemetry
 
