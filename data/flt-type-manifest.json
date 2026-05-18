@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "EDOG Studio — FLT interface types that DevMode interceptors depend on. Used by scripts/validate_flt_types.py to detect renames/removals before deployment.",
+  "generatedFrom": "src/backend/DevMode/EdogInterceptorRegistry.cs + EdogDevModeRegistrar.cs",
+
+  "interceptors": [
+    {
+      "name": "FeatureFlighter",
+      "fltInterface": "Microsoft.LiveTable.Service.FeatureFlightProvider.IFeatureFlighter",
+      "shortName": "IFeatureFlighter",
+      "wrapper": "EdogFeatureFlighterWrapper"
+    },
+    {
+      "name": "PerfMarker",
+      "fltInterface": "Microsoft.ServicePlatform.Telemetry.IServiceMonitoringCallback",
+      "shortName": "IServiceMonitoringCallback",
+      "wrapper": "EdogPerfMarkerCallback",
+      "external": true,
+      "note": "Platform NuGet package — not in FLT source tree"
+    },
+    {
+      "name": "Token + HttpPipeline",
+      "fltInterface": "System.Net.Http.IHttpClientFactory",
+      "shortName": "IHttpClientFactory",
+      "wrapper": "EdogHttpClientFactoryWrapper",
+      "note": "BCL type — will never change. LOW risk."
+    },
+    {
+      "name": "FileSystemFactory",
+      "fltInterface": "Microsoft.LiveTable.Service.Persistence.Fs.IFileSystemFactory",
+      "shortName": "IFileSystemFactory",
+      "wrapper": "EdogFileSystemFactoryWrapper"
+    },
+    {
+      "name": "SparkSession",
+      "fltInterface": "Microsoft.LiveTable.Service.SparkHttp.ISparkClientFactory",
+      "shortName": "ISparkClientFactory",
+      "wrapper": "EdogSparkSessionInterceptor"
+    },
+    {
+      "name": "TokenLifecycle",
+      "fltInterface": "Microsoft.LiveTable.Service.TokenManagement.ITokenManager",
+      "shortName": "ITokenManager",
+      "wrapper": "EdogTokenLifecycleInterceptor"
+    },
+    {
+      "name": "Catalog",
+      "fltInterface": "Microsoft.LiveTable.Service.Catalog.ICatalogHandler",
+      "shortName": "ICatalogHandler",
+      "wrapper": "EdogCatalogInterceptor"
+    },
+    {
+      "name": "RefreshTriggers",
+      "fltInterface": "Microsoft.LiveTable.Service.Core.RefreshTrigger.IRefreshTriggersHandler",
+      "shortName": "IRefreshTriggersHandler",
+      "wrapper": "EdogRefreshTriggersWrapper"
+    },
+    {
+      "name": "MLVDefinition",
+      "fltInterface": "Microsoft.LiveTable.Service.Persistence.IMLVExecutionDefinitionPersistenceManager",
+      "shortName": "IMLVExecutionDefinitionPersistenceManager",
+      "wrapper": "EdogMLVDefinitionWrapper"
+    },
+    {
+      "name": "ReportState",
+      "fltInterface": "Microsoft.LiveTable.Service.DataQuality.StateManagement.IReportStateManager",
+      "shortName": "IReportStateManager",
+      "wrapper": "EdogReportStateWrapper"
+    },
+    {
+      "name": "TableMaintenance",
+      "fltInterface": "Microsoft.LiveTable.Service.Maintenance.MaintenanceHttp.ITableMaintenanceClientFactory",
+      "shortName": "ITableMaintenanceClientFactory",
+      "wrapper": "EdogTableMaintenanceFactoryWrapper"
+    }
+  ],
+
+  "additionalDependencies": [
+    {
+      "name": "WireUp",
+      "fltType": "Microsoft.PowerBI.ServicePlatform.WireUp.WireUp",
+      "shortName": "WireUp",
+      "note": "DI container access — platform type, very stable"
+    },
+    {
+      "name": "TokenManager (concrete)",
+      "fltType": "Microsoft.LiveTable.Service.TokenManagement.TokenManager",
+      "shortName": "TokenManager",
+      "note": "Instantiated directly in RegisterTokenLifecycleInterceptor for fresh-inner pattern"
+    },
+    {
+      "name": "AuthorityProvider",
+      "fltType": "Microsoft.MWC.Workload.Client.Library.Providers.IWorkloadApplicationAuthorityProvider",
+      "shortName": "IWorkloadApplicationAuthorityProvider",
+      "note": "Resolved for TokenManager constructor"
+    },
+    {
+      "name": "ParametersProvider",
+      "fltType": "Microsoft.MWC.Workload.Client.Library.Providers.CustomParameters.IParametersProvider",
+      "shortName": "IParametersProvider",
+      "note": "Resolved for TokenManager constructor"
+    }
+  ]
+}

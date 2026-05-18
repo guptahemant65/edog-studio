@@ -1,0 +1,51 @@
+{
+  "$comment": "Retry log-stream patterns extracted from FLT's Polly onRetryAsync log messages. EdogRetryInterceptor loads these at startup. Edit here when FLT changes retry log format — no C# recompile needed.",
+  "generatedFrom": "src/backend/DevMode/EdogRetryInterceptor.cs (manual extraction 2026-05-18)",
+
+  "patterns": {
+    "retryAttempt": {
+      "regex": "[Rr]etry attempt[:\\s]+(\\d+)(?:\\s*/\\s*(\\d+))?",
+      "description": "Matches 'Retry attempt 2/3' or 'Retry attempt: 2'",
+      "captureGroups": ["attempt", "totalAttempts"]
+    },
+    "retryDelay": {
+      "regex": "retried? (?:in|after)\\s+([\\d.]+)\\s*seconds",
+      "description": "Matches 'will be retried after 5.2 seconds'",
+      "captureGroups": ["delaySeconds"],
+      "options": "IgnoreCase"
+    },
+    "retryAfterHint": {
+      "regex": "Retry-After hint found.*?in\\s+([\\d.]+)\\s*seconds",
+      "description": "Matches 'Retry-After hint found. Retrying ... in 12 seconds'",
+      "captureGroups": ["delaySeconds"],
+      "options": "IgnoreCase"
+    },
+    "nodeDetails": {
+      "regex": "\\[Artifact:\\s*([0-9a-fA-F-]+).*?[Ii]teration:\\s*([0-9a-fA-F-]+).*?[Nn]ame:\\s*([^\\]]+)\\]",
+      "description": "Matches '[Artifact: guid, Iteration: guid, Name: nodeName]'",
+      "captureGroups": ["artifactId", "iterationId", "nodeName"]
+    },
+    "notebookRetry": {
+      "regex": "[Nn]otebook content retry attempt\\s+(\\d+).*?\\[Workspace:\\s*([0-9a-fA-F-]+).*?Notebook:\\s*([0-9a-fA-F-]+)\\]",
+      "description": "Matches 'Notebook content retry attempt 2 for [Workspace: guid, Notebook: guid]'",
+      "captureGroups": ["attempt", "workspaceId", "notebookId"]
+    }
+  },
+
+  "strategyClassifiers": {
+    "$comment": "Substring → strategy name mapping. Order matters — first match wins.",
+    "rules": [
+      { "contains": "SparkTransformSubmit", "strategy": "SparkTransformSubmitRetry" },
+      { "containsAll": ["Node", "execution"],  "strategy": "NodeExecutionRetry", "caseInsensitive": ["execution"] },
+      { "contains": "Cancellation",          "strategy": "NodeCancellationRetry" },
+      { "contains": "CDF",                   "strategy": "CdfEnablementRetry" },
+      { "contains": "Notebook",              "strategy": "NotebookContentRetry", "caseInsensitive": ["Notebook"] },
+      { "default": true,                     "strategy": "StandardRetry" }
+    ]
+  },
+
+  "throttleIndicators": {
+    "statusCodes": [429, 430],
+    "substrings": ["TooManyRequests"]
+  }
+}

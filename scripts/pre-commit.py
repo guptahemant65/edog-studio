@@ -121,6 +121,15 @@ def main():
         )
     )
 
+    # 6. FLT type manifest validation (non-fatal if FLT repo not configured)
+    gates.append(
+        run(
+            "FLT type manifest",
+            [sys.executable, "scripts/validate_flt_types.py"],
+            allow_fail=True,
+        )
+    )
+
     elapsed = time.time() - start
     passed = sum(gates)
     total = len(gates)

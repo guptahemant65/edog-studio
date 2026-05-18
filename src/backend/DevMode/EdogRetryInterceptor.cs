@@ -8,6 +8,7 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Collections.Generic;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
@@ -171,17 +172,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
-            // Check for throttle indicators
-            if (msg.IndexOf("429", StringComparison.Ordinal) >= 0
-                || msg.IndexOf("430", StringComparison.Ordinal) >= 0
-                || msg.IndexOf("TooManyRequests", StringComparison.OrdinalIgnoreCase) >= 0)
+            // Check for throttle indicators (from config)
+            foreach (var sub in _throttleSubstrings)
             {
-                isThrottle = true;
+                if (msg.IndexOf(sub, StringComparison.OrdinalIgnoreCase) >= 0)
+                    isThrottle = true;
             }
 
             int statusCode = 0;
-            if (msg.Contains("429")) statusCode = 429;
-            else if (msg.Contains("430")) statusCode = 430;
+            foreach (var code in _throttleCodes)
+            {
+                if (msg.Contains(code.ToString()))
+                {
+                    isThrottle = true;
+                    if (statusCode == 0) statusCode = code;
+                }
+            }
 
             var eventData = new
             {
@@ -237,19 +243,171 @@ namespace Microsoft.LiveTable.Service.DevMode
             EdogTopicRouter.Publish("retry", eventData);
         }
 
+        // ── Strategy classification — loaded from data/retry-patterns.json ───
+        // At startup, we load the classifier rules from the JSON config.
+        // This avoids hardcoding FLT-specific strategy names in C# code.
+        // If the file is missing, we fall back to the embedded defaults.
+
+        private static List<StrategyRule> _strategyRules;
+        private static int[] _throttleCodes;
+        private static string[] _throttleSubstrings;
+
+        private class StrategyRule
+        {
+            public string Contains;
+            public string[] ContainsAll;
+            public bool[] CaseInsensitive;   // per-element flag for ContainsAll
+            public string Strategy;
+            public bool IsDefault;
+        }
+
+        static EdogRetryInterceptor()
+        {
+            LoadPatternConfig();
+        }
+
+        private static void LoadPatternConfig()
+        {
+            _strategyRules = new List<StrategyRule>();
+            _throttleCodes = new[] { 429, 430 };
+            _throttleSubstrings = new[] { "TooManyRequests" };
+
+            try
+            {
+                // Walk up from the executing assembly to find the repo root
+                var dir = new System.IO.DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+                string configPath = null;
+                while (dir != null)
+                {
+                    var candidate = System.IO.Path.Combine(dir.FullName, "data", "retry-patterns.json");
+                    if (System.IO.File.Exists(candidate)) { configPath = candidate; break; }
+                    // Also check the edog-studio repo root marker
+                    candidate = System.IO.Path.Combine(dir.FullName, "edog-studio", "data", "retry-patterns.json");
+                    if (System.IO.File.Exists(candidate)) { configPath = candidate; break; }
+                    dir = dir.Parent;
+                }
+
+                if (configPath == null)
+                {
+                    // Try relative to current directory
+                    var cwd = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "data", "retry-patterns.json");
+                    if (System.IO.File.Exists(cwd)) configPath = cwd;
+                }
+
+                if (configPath != null)
+                {
+                    var json = System.IO.File.ReadAllText(configPath);
+                    var doc = System.Text.Json.JsonDocument.Parse(json);
+
+                    // Load strategy classifier rules
+                    if (doc.RootElement.TryGetProperty("strategyClassifiers", out var classifiers)
+                        && classifiers.TryGetProperty("rules", out var rules))
+                    {
+                        foreach (var rule in rules.EnumerateArray())
+                        {
+                            var sr = new StrategyRule();
+                            sr.Strategy = rule.TryGetProperty("strategy", out var s) ? s.GetString() : "StandardRetry";
+
+                            if (rule.TryGetProperty("default", out var def) && def.GetBoolean())
+                            {
+                                sr.IsDefault = true;
+                            }
+                            else if (rule.TryGetProperty("containsAll", out var ca))
+                            {
+                                var items = new List<string>();
+                                var ciFlags = new List<bool>();
+                                var ciSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                if (rule.TryGetProperty("caseInsensitive", out var ciArr))
+                                    foreach (var ci in ciArr.EnumerateArray()) ciSet.Add(ci.GetString());
+
+                                foreach (var item in ca.EnumerateArray())
+                                {
+                                    var v = item.GetString();
+                                    items.Add(v);
+                                    ciFlags.Add(ciSet.Contains(v));
+                                }
+                                sr.ContainsAll = items.ToArray();
+                                sr.CaseInsensitive = ciFlags.ToArray();
+                            }
+                            else if (rule.TryGetProperty("contains", out var c))
+                            {
+                                sr.Contains = c.GetString();
+                                // Check if this keyword is case-insensitive
+                                var ciSet2 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                if (rule.TryGetProperty("caseInsensitive", out var ciArr2))
+                                    foreach (var ci in ciArr2.EnumerateArray()) ciSet2.Add(ci.GetString());
+                                if (ciSet2.Contains(sr.Contains))
+                                    sr.CaseInsensitive = new[] { true };
+                            }
+
+                            _strategyRules.Add(sr);
+                        }
+                    }
+
+                    // Load throttle indicators
+                    if (doc.RootElement.TryGetProperty("throttleIndicators", out var throttle))
+                    {
+                        if (throttle.TryGetProperty("statusCodes", out var codes))
+                        {
+                            var codeList = new List<int>();
+                            foreach (var c in codes.EnumerateArray()) codeList.Add(c.GetInt32());
+                            _throttleCodes = codeList.ToArray();
+                        }
+                        if (throttle.TryGetProperty("substrings", out var subs))
+                        {
+                            var subList = new List<string>();
+                            foreach (var sub in subs.EnumerateArray()) subList.Add(sub.GetString());
+                            _throttleSubstrings = subList.ToArray();
+                        }
+                    }
+
+                    Console.WriteLine($"[EDOG] Retry patterns loaded from {configPath} ({_strategyRules.Count} rules)");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] Retry patterns config load failed, using defaults: {ex.Message}");
+            }
+
+            // Fallback defaults — same as the previously hardcoded values
+            _strategyRules.AddRange(new[]
+            {
+                new StrategyRule { Contains = "SparkTransformSubmit", Strategy = "SparkTransformSubmitRetry" },
+                new StrategyRule { ContainsAll = new[] { "Node", "execution" }, CaseInsensitive = new[] { false, true }, Strategy = "NodeExecutionRetry" },
+                new StrategyRule { Contains = "Cancellation", Strategy = "NodeCancellationRetry" },
+                new StrategyRule { Contains = "CDF", Strategy = "CdfEnablementRetry" },
+                new StrategyRule { Contains = "Notebook", CaseInsensitive = new[] { true }, Strategy = "NotebookContentRetry" },
+                new StrategyRule { IsDefault = true, Strategy = "StandardRetry" },
+            });
+        }
+
         private static string DetermineStrategyName(string msg)
         {
-            if (msg.IndexOf("SparkTransformSubmit", StringComparison.Ordinal) >= 0)
-                return "SparkTransformSubmitRetry";
-            if (msg.IndexOf("Node", StringComparison.Ordinal) >= 0
-                && msg.IndexOf("execution", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "NodeExecutionRetry";
-            if (msg.IndexOf("Cancellation", StringComparison.Ordinal) >= 0)
-                return "NodeCancellationRetry";
-            if (msg.IndexOf("CDF", StringComparison.Ordinal) >= 0)
-                return "CdfEnablementRetry";
-            if (msg.IndexOf("Notebook", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "NotebookContentRetry";
+            foreach (var rule in _strategyRules)
+            {
+                if (rule.IsDefault) return rule.Strategy;
+
+                if (rule.ContainsAll != null)
+                {
+                    bool allMatch = true;
+                    for (int i = 0; i < rule.ContainsAll.Length; i++)
+                    {
+                        var cmp = (rule.CaseInsensitive != null && i < rule.CaseInsensitive.Length && rule.CaseInsensitive[i])
+                            ? StringComparison.OrdinalIgnoreCase
+                            : StringComparison.Ordinal;
+                        if (msg.IndexOf(rule.ContainsAll[i], cmp) < 0) { allMatch = false; break; }
+                    }
+                    if (allMatch) return rule.Strategy;
+                }
+                else if (rule.Contains != null)
+                {
+                    var cmp = (rule.CaseInsensitive != null && rule.CaseInsensitive.Length > 0 && rule.CaseInsensitive[0])
+                        ? StringComparison.OrdinalIgnoreCase
+                        : StringComparison.Ordinal;
+                    if (msg.IndexOf(rule.Contains, cmp) >= 0) return rule.Strategy;
+                }
+            }
             return "StandardRetry";
         }
 
