@@ -613,29 +613,25 @@ class HttpPipelineTab {
       self._closeDetail();
     });
 
-    // Detail resize
-    var resizing = false;
-    var startY = 0;
-    var startH = 0;
+    // Detail resize — scoped listeners (add on mousedown, remove on mouseup)
     this._els.resize.addEventListener('mousedown', function(e) {
-      resizing = true;
-      startY = e.clientY;
-      startH = self._els.detail.offsetHeight;
+      var startY = e.clientY;
+      var startH = self._els.detail.offsetHeight;
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!resizing) return;
-      var h = Math.max(120, startH - (e.clientY - startY));
-      self._els.detail.style.height = h + 'px';
-      self._detailHeight = h;
-    });
-    document.addEventListener('mouseup', function() {
-      if (resizing) {
-        resizing = false;
+      var onMove = function(ev) {
+        var h = Math.max(120, startH - (ev.clientY - startY));
+        self._els.detail.style.height = h + 'px';
+        self._detailHeight = h;
+      };
+      var onUp = function() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-      }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
 
     // Keyboard navigation

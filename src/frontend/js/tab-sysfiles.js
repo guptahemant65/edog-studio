@@ -82,8 +82,10 @@ class SystemFilesTab {
 
   activate() {
     this._active = true;
-    this._signalr.on('fileop', this._onEvent);
-    this._signalr.subscribeTopic('fileop');
+    if (this._signalr) {
+      this._signalr.on('fileop', this._onEvent);
+      this._signalr.subscribeTopic('fileop');
+    }
     document.addEventListener('click', this._onDocClick);
     document.addEventListener('keydown', this._onDocKeyDown);
     this._createBodyEls();
@@ -92,10 +94,13 @@ class SystemFilesTab {
 
   deactivate() {
     this._active = false;
-    this._signalr.unsubscribeTopic('fileop');
-    this._signalr.off('fileop', this._onEvent);
+    if (this._signalr) {
+      this._signalr.unsubscribeTopic('fileop');
+      this._signalr.off('fileop', this._onEvent);
+    }
     document.removeEventListener('click', this._onDocClick);
     document.removeEventListener('keydown', this._onDocKeyDown);
+    clearTimeout(this._toastTimer);
     this._removeBodyEls();
   }
 

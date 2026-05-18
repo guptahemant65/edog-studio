@@ -102,8 +102,10 @@ class TokensTab {
 
   activate() {
     this._isActive = true;
-    this._signalr.on('token', this._onEvent);
-    this._signalr.subscribeTopic('token');
+    if (this._signalr) {
+      this._signalr.on('token', this._onEvent);
+      this._signalr.subscribeTopic('token');
+    }
     document.addEventListener('click', this._onDocClick);
     this._startTicking();
     this._render();
@@ -112,8 +114,10 @@ class TokensTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('click', this._onDocClick);
-    this._signalr.unsubscribeTopic('token');
-    this._signalr.off('token', this._onEvent);
+    if (this._signalr) {
+      this._signalr.unsubscribeTopic('token');
+      this._signalr.off('token', this._onEvent);
+    }
     this._stopTicking();
   }
 

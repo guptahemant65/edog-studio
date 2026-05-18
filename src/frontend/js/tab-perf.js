@@ -61,16 +61,20 @@ class PerfMarkersTab {
   /** Called when the tab becomes visible. Subscribe to perf topic. */
   activate() {
     this._active = true;
-    this._signalr.on('perf', this._onEvent);
-    this._signalr.subscribeTopic('perf');
+    if (this._signalr) {
+      this._signalr.on('perf', this._onEvent);
+      this._signalr.subscribeTopic('perf');
+    }
     this._render();
   }
 
   /** Called when the tab is hidden. Unsubscribe to save resources. */
   deactivate() {
     this._active = false;
-    this._signalr.off('perf', this._onEvent);
-    this._signalr.unsubscribeTopic('perf');
+    if (this._signalr) {
+      this._signalr.off('perf', this._onEvent);
+      this._signalr.unsubscribeTopic('perf');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -435,30 +439,24 @@ class PerfMarkersTab {
       navigator.clipboard.writeText(JSON.stringify(obj, null, 2)).catch(() => {});
     });
 
-    // Detail resize
-    let resizing = false;
-    let startY = 0;
-    let startH = 0;
+    // Detail resize — scoped listeners (add on mousedown, remove on mouseup)
     this._resizeHandle.addEventListener('mousedown', (e) => {
-      resizing = true;
-      startY = e.clientY;
-      startH = this._detailEl.offsetHeight;
+      const startY = e.clientY;
+      const startH = this._detailEl.offsetHeight;
       document.body.style.userSelect = 'none';
-    });
-    const onMouseMove = (e) => {
-      if (!resizing) return;
-      const h = Math.max(120, startH - (e.clientY - startY));
-      this._detailEl.style.height = h + 'px';
-      this._detailHeight = h;
-    };
-    const onMouseUp = () => {
-      if (resizing) {
-        resizing = false;
+      const onMouseMove = (ev) => {
+        const h = Math.max(120, startH - (ev.clientY - startY));
+        this._detailEl.style.height = h + 'px';
+        this._detailHeight = h;
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
         document.body.style.userSelect = '';
-      }
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
 
     // Keyboard
     this._container.addEventListener('keydown', (e) => this._onKeyDown(e));

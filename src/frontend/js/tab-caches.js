@@ -39,11 +39,6 @@ class CachesTab {
     // DOM refs (set in _buildDOM)
     this._els = {};
 
-    // Resize state
-    this._resizing = false;
-    this._resizeStartY = 0;
-    this._resizeStartH = 0;
-
     // Active state
     this._active = false;
 
@@ -347,29 +342,26 @@ class CachesTab {
       });
     }
 
-    // Detail panel resize
+    // Detail panel resize — scoped listeners (add on mousedown, remove on mouseup)
     els.detailResize.addEventListener('mousedown', (e) => {
-      this._resizing = true;
-      this._resizeStartY = e.clientY;
-      this._resizeStartH = this._detailHeight;
+      const startY = e.clientY;
+      const startH = this._detailHeight;
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!this._resizing) return;
-      this._detailHeight = Math.max(120,
-        Math.min(500, this._resizeStartH - (e.clientY - this._resizeStartY))
-      );
-      els.detailPanel.style.height = this._detailHeight + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (this._resizing) {
-        this._resizing = false;
+      const onMove = (ev) => {
+        this._detailHeight = Math.max(120,
+          Math.min(500, startH - (ev.clientY - startY))
+        );
+        els.detailPanel.style.height = this._detailHeight + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-      }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
 
     // Keyboard navigation — registered in activate(), removed in deactivate()

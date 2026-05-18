@@ -12368,6 +12368,11 @@ mark {
   color: var(--text);
 }
 
+/* Prevent flex children from shrinking — let the panel scroll instead */
+.environment-panel > * {
+  flex-shrink: 0;
+}
+
 .environment-panel .panel-header {
   display: flex;
   align-items: baseline;
@@ -12390,6 +12395,76 @@ mark {
 }
 
 /* ── Environment info cards (Config, Token, Build, Interceptors) ───── */
+
+/* Scroll-aware status strip — sticky summary when cards scroll out of view */
+.ecard-status-strip {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 160ms cubic-bezier(0.4,0,0.2,1),
+              transform 160ms cubic-bezier(0.4,0,0.2,1);
+}
+.ecard-status-strip.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.estrip-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background 160ms cubic-bezier(0.4,0,0.2,1), color 160ms cubic-bezier(0.4,0,0.2,1);
+}
+.estrip-seg:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.estrip-label { font-weight: 500; }
+
+.estrip-badge {
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.estrip-badge.ok { color: var(--status-succeeded); border-color: rgba(24,160,88,0.25); background: rgba(24,160,88,0.06); }
+.estrip-badge.warn { color: var(--level-warning); border-color: rgba(229,148,12,0.25); background: rgba(229,148,12,0.06); }
+.estrip-badge.error { color: var(--status-failed); border-color: rgba(229,69,59,0.25); background: rgba(229,69,59,0.06); }
+
+.estrip-sep {
+  color: var(--text-dim);
+  opacity: 0.4;
+  font-size: 14px;
+  line-height: 1;
+}
 
 /* 2×2 dashboard grid for the 4 environment cards */
 .ecard-grid {
@@ -51937,8 +52012,10 @@ class SystemFilesTab {
 
   activate() {
     this._active = true;
-    this._signalr.on('fileop', this._onEvent);
-    this._signalr.subscribeTopic('fileop');
+    if (this._signalr) {
+      this._signalr.on('fileop', this._onEvent);
+      this._signalr.subscribeTopic('fileop');
+    }
     document.addEventListener('click', this._onDocClick);
     document.addEventListener('keydown', this._onDocKeyDown);
     this._createBodyEls();
@@ -51947,10 +52024,13 @@ class SystemFilesTab {
 
   deactivate() {
     this._active = false;
-    this._signalr.unsubscribeTopic('fileop');
-    this._signalr.off('fileop', this._onEvent);
+    if (this._signalr) {
+      this._signalr.unsubscribeTopic('fileop');
+      this._signalr.off('fileop', this._onEvent);
+    }
     document.removeEventListener('click', this._onDocClick);
     document.removeEventListener('keydown', this._onDocKeyDown);
+    clearTimeout(this._toastTimer);
     this._removeBodyEls();
   }
 
@@ -54469,8 +54549,10 @@ class TokensTab {
 
   activate() {
     this._isActive = true;
-    this._signalr.on('token', this._onEvent);
-    this._signalr.subscribeTopic('token');
+    if (this._signalr) {
+      this._signalr.on('token', this._onEvent);
+      this._signalr.subscribeTopic('token');
+    }
     document.addEventListener('click', this._onDocClick);
     this._startTicking();
     this._render();
@@ -54479,8 +54561,10 @@ class TokensTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('click', this._onDocClick);
-    this._signalr.unsubscribeTopic('token');
-    this._signalr.off('token', this._onEvent);
+    if (this._signalr) {
+      this._signalr.unsubscribeTopic('token');
+      this._signalr.off('token', this._onEvent);
+    }
     this._stopTicking();
   }
 
@@ -55393,11 +55477,6 @@ class CachesTab {
     // DOM refs (set in _buildDOM)
     this._els = {};
 
-    // Resize state
-    this._resizing = false;
-    this._resizeStartY = 0;
-    this._resizeStartH = 0;
-
     // Active state
     this._active = false;
 
@@ -55701,29 +55780,26 @@ class CachesTab {
       });
     }
 
-    // Detail panel resize
+    // Detail panel resize — scoped listeners (add on mousedown, remove on mouseup)
     els.detailResize.addEventListener('mousedown', (e) => {
-      this._resizing = true;
-      this._resizeStartY = e.clientY;
-      this._resizeStartH = this._detailHeight;
+      const startY = e.clientY;
+      const startH = this._detailHeight;
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!this._resizing) return;
-      this._detailHeight = Math.max(120,
-        Math.min(500, this._resizeStartH - (e.clientY - this._resizeStartY))
-      );
-      els.detailPanel.style.height = this._detailHeight + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (this._resizing) {
-        this._resizing = false;
+      const onMove = (ev) => {
+        this._detailHeight = Math.max(120,
+          Math.min(500, startH - (ev.clientY - startY))
+        );
+        els.detailPanel.style.height = this._detailHeight + 'px';
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-      }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
 
     // Keyboard navigation — registered in activate(), removed in deactivate()
@@ -56914,29 +56990,25 @@ class HttpPipelineTab {
       self._closeDetail();
     });
 
-    // Detail resize
-    var resizing = false;
-    var startY = 0;
-    var startH = 0;
+    // Detail resize — scoped listeners (add on mousedown, remove on mouseup)
     this._els.resize.addEventListener('mousedown', function(e) {
-      resizing = true;
-      startY = e.clientY;
-      startH = self._els.detail.offsetHeight;
+      var startY = e.clientY;
+      var startH = self._els.detail.offsetHeight;
       document.body.style.cursor = 'ns-resize';
       document.body.style.userSelect = 'none';
-    });
-    document.addEventListener('mousemove', function(e) {
-      if (!resizing) return;
-      var h = Math.max(120, startH - (e.clientY - startY));
-      self._els.detail.style.height = h + 'px';
-      self._detailHeight = h;
-    });
-    document.addEventListener('mouseup', function() {
-      if (resizing) {
-        resizing = false;
+      var onMove = function(ev) {
+        var h = Math.max(120, startH - (ev.clientY - startY));
+        self._els.detail.style.height = h + 'px';
+        self._detailHeight = h;
+      };
+      var onUp = function() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
-      }
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     });
 
     // Keyboard navigation
@@ -60366,6 +60438,8 @@ class FeatureFlagsMatrix {
       clearTimeout(this._syncPollTimer);
       this._syncPollTimer = null;
     }
+    if (this._stripScrollCleanup) { this._stripScrollCleanup(); this._stripScrollCleanup = null; }
+    if (this._badgeObserver) { this._badgeObserver.disconnect(); this._badgeObserver = null; }
     if (this._inspector) {
       this._inspector.destroy();
       this._inspector = null;
@@ -60676,6 +60750,16 @@ class FeatureFlagsMatrix {
           </div>
         </div>
 
+        <div class="ecard-status-strip" id="ecardStatusStrip" aria-hidden="true">
+          <button class="estrip-seg" data-card="card-config-snapshot"><span class="estrip-label">Config</span><span class="estrip-badge" data-mirror="card-config-snapshot">--</span></button>
+          <span class="estrip-sep">\u00B7</span>
+          <button class="estrip-seg" data-card="card-token-state"><span class="estrip-label">Token</span><span class="estrip-badge" data-mirror="card-token-state">--</span></button>
+          <span class="estrip-sep">\u00B7</span>
+          <button class="estrip-seg" data-card="card-build-patch"><span class="estrip-label">Build</span><span class="estrip-badge" data-mirror="card-build-patch">--</span></button>
+          <span class="estrip-sep">\u00B7</span>
+          <button class="estrip-seg" data-card="card-interceptors"><span class="estrip-label">Interceptors</span><span class="estrip-badge" data-mirror="card-interceptors">--</span></button>
+        </div>
+
         <div class="ecard-grid">
           <div class="env-card ecard-collapsible" id="card-config-snapshot">
             <div class="env-card-header">
@@ -60826,6 +60910,71 @@ class FeatureFlagsMatrix {
     sovBtn.addEventListener('click', toggleSov);
     sovBtn.addEventListener('keydown', (e) => {
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSov(); }
+    });
+
+    // ── Scroll-aware status strip ──
+    this._initStatusStrip();
+  }
+
+  // ── Status strip: scroll-aware card summary ──────────────────────
+
+  _initStatusStrip() {
+    const panel = this._mount.querySelector('#environmentPanel');
+    const grid = this._mount.querySelector('.ecard-grid');
+    const strip = this._mount.querySelector('#ecardStatusStrip');
+    if (!panel || !grid || !strip) return;
+
+    // Click a strip segment → scroll to its card
+    strip.addEventListener('click', (e) => {
+      const seg = e.target.closest('.estrip-seg');
+      if (!seg) return;
+      const cardId = seg.dataset.card;
+      const card = this._mount.querySelector('#' + cardId);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Scroll listener: show strip when card grid scrolls mostly out of view.
+    // We check the grid's bottom edge relative to the panel's top — once the
+    // bottom of the grid is within 40px of the panel top, the cards are gone.
+    let stripVisible = false;
+    const onScroll = () => {
+      const panelRect = panel.getBoundingClientRect();
+      const gridRect = grid.getBoundingClientRect();
+      const gridBottomInPanel = gridRect.bottom - panelRect.top;
+      const shouldShow = gridBottomInPanel < 40;
+      if (shouldShow !== stripVisible) {
+        stripVisible = shouldShow;
+        strip.classList.toggle('visible', shouldShow);
+        strip.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      }
+    };
+    panel.addEventListener('scroll', onScroll, { passive: true });
+    this._stripScrollCleanup = () => panel.removeEventListener('scroll', onScroll);
+
+    // Sync badge text: MutationObserver mirrors card badges → strip badges
+    const cardIds = ['card-config-snapshot', 'card-token-state', 'card-build-patch', 'card-interceptors'];
+    this._badgeObserver = new MutationObserver(() => this._syncStripBadges());
+    for (const id of cardIds) {
+      const badge = this._mount.querySelector('#' + id + ' .ecard-header-badge');
+      if (badge) this._badgeObserver.observe(badge, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+    // Initial sync
+    this._syncStripBadges();
+  }
+
+  _syncStripBadges() {
+    const strip = this._mount.querySelector('#ecardStatusStrip');
+    if (!strip) return;
+    strip.querySelectorAll('.estrip-badge[data-mirror]').forEach((el) => {
+      const cardId = el.dataset.mirror;
+      const badge = this._mount.querySelector('#' + cardId + ' .ecard-header-badge');
+      if (badge) {
+        el.textContent = badge.textContent;
+        el.className = 'estrip-badge';
+        if (badge.classList.contains('ok')) el.classList.add('ok');
+        else if (badge.classList.contains('warn')) el.classList.add('warn');
+        else if (badge.classList.contains('error')) el.classList.add('error');
+      }
     });
   }
 
@@ -62418,16 +62567,20 @@ class PerfMarkersTab {
   /** Called when the tab becomes visible. Subscribe to perf topic. */
   activate() {
     this._active = true;
-    this._signalr.on('perf', this._onEvent);
-    this._signalr.subscribeTopic('perf');
+    if (this._signalr) {
+      this._signalr.on('perf', this._onEvent);
+      this._signalr.subscribeTopic('perf');
+    }
     this._render();
   }
 
   /** Called when the tab is hidden. Unsubscribe to save resources. */
   deactivate() {
     this._active = false;
-    this._signalr.off('perf', this._onEvent);
-    this._signalr.unsubscribeTopic('perf');
+    if (this._signalr) {
+      this._signalr.off('perf', this._onEvent);
+      this._signalr.unsubscribeTopic('perf');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -62792,30 +62945,24 @@ class PerfMarkersTab {
       navigator.clipboard.writeText(JSON.stringify(obj, null, 2)).catch(() => {});
     });
 
-    // Detail resize
-    let resizing = false;
-    let startY = 0;
-    let startH = 0;
+    // Detail resize — scoped listeners (add on mousedown, remove on mouseup)
     this._resizeHandle.addEventListener('mousedown', (e) => {
-      resizing = true;
-      startY = e.clientY;
-      startH = this._detailEl.offsetHeight;
+      const startY = e.clientY;
+      const startH = this._detailEl.offsetHeight;
       document.body.style.userSelect = 'none';
-    });
-    const onMouseMove = (e) => {
-      if (!resizing) return;
-      const h = Math.max(120, startH - (e.clientY - startY));
-      this._detailEl.style.height = h + 'px';
-      this._detailHeight = h;
-    };
-    const onMouseUp = () => {
-      if (resizing) {
-        resizing = false;
+      const onMouseMove = (ev) => {
+        const h = Math.max(120, startH - (ev.clientY - startY));
+        this._detailEl.style.height = h + 'px';
+        this._detailHeight = h;
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
         document.body.style.userSelect = '';
-      }
-    };
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
 
     // Keyboard
     this._container.addEventListener('keydown', (e) => this._onKeyDown(e));

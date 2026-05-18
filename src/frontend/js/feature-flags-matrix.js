@@ -98,6 +98,8 @@ class FeatureFlagsMatrix {
       clearTimeout(this._syncPollTimer);
       this._syncPollTimer = null;
     }
+    if (this._stripScrollCleanup) { this._stripScrollCleanup(); this._stripScrollCleanup = null; }
+    if (this._badgeObserver) { this._badgeObserver.disconnect(); this._badgeObserver = null; }
     if (this._inspector) {
       this._inspector.destroy();
       this._inspector = null;
@@ -408,6 +410,16 @@ class FeatureFlagsMatrix {
           </div>
         </div>
 
+        <div class="ecard-status-strip" id="ecardStatusStrip" aria-hidden="true">
+          <button class="estrip-seg" data-card="card-config-snapshot"><span class="estrip-label">Config</span><span class="estrip-badge" data-mirror="card-config-snapshot">--</span></button>
+          <span class="estrip-sep">\u00B7</span>
+          <button class="estrip-seg" data-card="card-token-state"><span class="estrip-label">Token</span><span class="estrip-badge" data-mirror="card-token-state">--</span></button>
+          <span class="estrip-sep">\u00B7</span>
+          <button class="estrip-seg" data-card="card-build-patch"><span class="estrip-label">Build</span><span class="estrip-badge" data-mirror="card-build-patch">--</span></button>
+          <span class="estrip-sep">\u00B7</span>
+          <button class="estrip-seg" data-card="card-interceptors"><span class="estrip-label">Interceptors</span><span class="estrip-badge" data-mirror="card-interceptors">--</span></button>
+        </div>
+
         <div class="ecard-grid">
           <div class="env-card ecard-collapsible" id="card-config-snapshot">
             <div class="env-card-header">
@@ -558,6 +570,71 @@ class FeatureFlagsMatrix {
     sovBtn.addEventListener('click', toggleSov);
     sovBtn.addEventListener('keydown', (e) => {
       if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleSov(); }
+    });
+
+    // ── Scroll-aware status strip ──
+    this._initStatusStrip();
+  }
+
+  // ── Status strip: scroll-aware card summary ──────────────────────
+
+  _initStatusStrip() {
+    const panel = this._mount.querySelector('#environmentPanel');
+    const grid = this._mount.querySelector('.ecard-grid');
+    const strip = this._mount.querySelector('#ecardStatusStrip');
+    if (!panel || !grid || !strip) return;
+
+    // Click a strip segment → scroll to its card
+    strip.addEventListener('click', (e) => {
+      const seg = e.target.closest('.estrip-seg');
+      if (!seg) return;
+      const cardId = seg.dataset.card;
+      const card = this._mount.querySelector('#' + cardId);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Scroll listener: show strip when card grid scrolls mostly out of view.
+    // We check the grid's bottom edge relative to the panel's top — once the
+    // bottom of the grid is within 40px of the panel top, the cards are gone.
+    let stripVisible = false;
+    const onScroll = () => {
+      const panelRect = panel.getBoundingClientRect();
+      const gridRect = grid.getBoundingClientRect();
+      const gridBottomInPanel = gridRect.bottom - panelRect.top;
+      const shouldShow = gridBottomInPanel < 40;
+      if (shouldShow !== stripVisible) {
+        stripVisible = shouldShow;
+        strip.classList.toggle('visible', shouldShow);
+        strip.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+      }
+    };
+    panel.addEventListener('scroll', onScroll, { passive: true });
+    this._stripScrollCleanup = () => panel.removeEventListener('scroll', onScroll);
+
+    // Sync badge text: MutationObserver mirrors card badges → strip badges
+    const cardIds = ['card-config-snapshot', 'card-token-state', 'card-build-patch', 'card-interceptors'];
+    this._badgeObserver = new MutationObserver(() => this._syncStripBadges());
+    for (const id of cardIds) {
+      const badge = this._mount.querySelector('#' + id + ' .ecard-header-badge');
+      if (badge) this._badgeObserver.observe(badge, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    }
+    // Initial sync
+    this._syncStripBadges();
+  }
+
+  _syncStripBadges() {
+    const strip = this._mount.querySelector('#ecardStatusStrip');
+    if (!strip) return;
+    strip.querySelectorAll('.estrip-badge[data-mirror]').forEach((el) => {
+      const cardId = el.dataset.mirror;
+      const badge = this._mount.querySelector('#' + cardId + ' .ecard-header-badge');
+      if (badge) {
+        el.textContent = badge.textContent;
+        el.className = 'estrip-badge';
+        if (badge.classList.contains('ok')) el.classList.add('ok');
+        else if (badge.classList.contains('warn')) el.classList.add('warn');
+        else if (badge.classList.contains('error')) el.classList.add('error');
+      }
     });
   }
 
