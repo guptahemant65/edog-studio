@@ -7,38 +7,45 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style id="edog-splash-style">
-#edog-splash{position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse 70% 50% at 50% 38%,rgba(109,92,255,.12),transparent 65%),radial-gradient(ellipse 80% 50% at 50% 110%,rgba(56,189,248,.05),transparent 70%),#0f1117;color:#e6e9ef;font-family:'Plus Jakarta Sans','Inter','Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;animation:spIn .48s cubic-bezier(.2,.7,.2,1) both;transition:opacity .46s ease,transform .46s ease,filter .46s ease}
-#edog-splash.fade-out{opacity:0;transform:scale(1.02);filter:blur(2px);pointer-events:none}
-.sp-orb{position:absolute;left:50%;top:38%;width:520px;height:520px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(109,92,255,.22),transparent 60%);filter:blur(18px);animation:spGlow 3.2s ease-in-out infinite;pointer-events:none}
-.sp-stage{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:22px}
-.sp-mark{position:relative;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#cdbfff}
-.sp-mark::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(109,92,255,.18),rgba(56,189,248,.10));border:1px solid rgba(255,255,255,.10);border-radius:22px;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 24px 48px -16px rgba(109,92,255,.45);animation:spPulse 2.4s ease-in-out infinite}
-.sp-halo{position:absolute;inset:-22px;border-radius:26px;background:conic-gradient(from 0deg,transparent,rgba(109,92,255,.55),transparent 60%);filter:blur(14px);animation:spSpin 4.8s linear infinite,spGlow 3.2s ease-in-out infinite;opacity:.85}
-.sp-bolt{position:relative;z-index:1;width:46px;height:46px;filter:drop-shadow(0 4px 14px rgba(109,92,255,.55));animation:spBolt 2.4s ease-in-out infinite}
-.sp-wordmark{display:flex;align-items:baseline;gap:10px;font-weight:800;letter-spacing:.14em;font-size:22px;line-height:1}
-.sp-edog{background:linear-gradient(180deg,#fff,#c8c8d4);background-clip:text;-webkit-background-clip:text;color:transparent}
-.sp-studio{color:#8b7dff;font-weight:700;letter-spacing:.22em;font-size:14px}
-.sp-tag{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#7d8290;opacity:.85}
-.sp-foot{position:absolute;left:0;right:0;bottom:0;padding:20px 26px;display:flex;flex-direction:column;gap:12px;z-index:2}
-.sp-status{display:flex;align-items:center;gap:10px;color:#9aa1ad;font-size:12px}
-.sp-dot{width:7px;height:7px;border-radius:50%;background:#6d5cff;box-shadow:0 0 10px rgba(109,92,255,.85);animation:spDot 1.4s ease-in-out infinite;flex-shrink:0}
-.sp-stack{position:relative;height:16px;min-width:200px}
-.sp-line{position:absolute;left:0;top:0;opacity:0;transform:translateY(4px);color:#d0d4dd;white-space:nowrap}
+/* Splash — uses design system tokens. Light-first, theme-aware, professional. */
+#edog-splash{position:fixed;inset:0;z-index:99999;background:#f4f5f7;color:#1a1d23;font-family:'Plus Jakarta Sans','Inter',-apple-system,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 150ms ease-out}
+#edog-splash.fade-out{opacity:0;pointer-events:none}
+/* Theme-aware: dark mode overrides */
+[data-theme="dark"] #edog-splash{background:#0c0e14;color:#e4e7ed}
+/* Center stage */
+.sp-stage{display:flex;flex-direction:column;align-items:center;gap:20px}
+/* Icon tile — matches sidebar nav-icon size/radius */
+.sp-mark{width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:rgba(109,92,255,0.07);border:1px solid rgba(109,92,255,0.12);border-radius:10px;color:#6d5cff}
+[data-theme="dark"] .sp-mark{background:rgba(133,119,255,0.10);border-color:rgba(133,119,255,0.15);color:#8577ff}
+.sp-mark svg{width:24px;height:24px}
+/* Wordmark — matches topbar brand exactly */
+.sp-wordmark{display:flex;align-items:baseline;gap:6px;font-family:'Cascadia Code','JetBrains Mono','Fira Code','Consolas',monospace;font-weight:800;font-size:15px;letter-spacing:0.06em;color:#6d5cff}
+[data-theme="dark"] .sp-wordmark{color:#8577ff}
+.sp-studio{font-weight:600;font-size:11px;letter-spacing:0.14em;opacity:0.85;color:#1a1d23}
+[data-theme="dark"] .sp-studio{color:#e4e7ed}
+.sp-tag{font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#8e95a5}
+[data-theme="dark"] .sp-tag{color:#555d70}
+/* Footer — status + shimmer bar */
+.sp-foot{position:absolute;left:0;right:0;bottom:0;padding:16px 24px;display:flex;flex-direction:column;gap:10px}
+.sp-status{display:flex;align-items:center;gap:8px;font-size:12px;color:#5a6070}
+[data-theme="dark"] .sp-status{color:#8a91a3}
+.sp-dot{width:6px;height:6px;border-radius:50%;background:#6d5cff;flex-shrink:0}
+[data-theme="dark"] .sp-dot{background:#8577ff}
+.sp-stack{position:relative;height:16px;min-width:180px}
+.sp-line{position:absolute;left:0;top:0;opacity:0;white-space:nowrap}
 .sp-l1{animation:spLine 5.4s 0s infinite}
 .sp-l2{animation:spLine 5.4s 1.8s infinite}
 .sp-l3{animation:spLine 5.4s 3.6s infinite}
-.sp-ver{margin-left:auto;font-size:10px;letter-spacing:.2em;color:#5b6271;text-transform:uppercase}
-.sp-bar{position:relative;height:2px;background:rgba(255,255,255,.05);overflow:hidden;border-radius:2px}
-.sp-bar i{position:absolute;top:0;left:0;height:100%;width:34%;background:linear-gradient(90deg,transparent,#6d5cff 45%,#b5a8ff 60%,transparent);filter:drop-shadow(0 0 6px rgba(109,92,255,.7));animation:spSweep 1.8s cubic-bezier(.45,.05,.55,.95) infinite}
-@keyframes spIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
-@keyframes spPulse{0%,100%{transform:scale(1);box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 18px 36px -16px rgba(109,92,255,.35)}50%{transform:scale(1.04);box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 30px 60px -16px rgba(109,92,255,.65)}}
-@keyframes spBolt{0%,100%{transform:translateY(0) scale(1);opacity:.95}50%{transform:translateY(-1px) scale(1.06);opacity:1}}
-@keyframes spGlow{0%,100%{opacity:.4}50%{opacity:.9}}
-@keyframes spSpin{to{transform:rotate(360deg)}}
-@keyframes spSweep{0%{transform:translateX(-110%)}100%{transform:translateX(380%)}}
-@keyframes spLine{0%{opacity:0;transform:translateY(4px)}6%,28%{opacity:1;transform:translateY(0)}34%,100%{opacity:0;transform:translateY(-4px)}}
-@keyframes spDot{0%,100%{transform:scale(1);box-shadow:0 0 10px rgba(109,92,255,.85)}50%{transform:scale(1.35);box-shadow:0 0 16px rgba(109,92,255,1)}}
-@media (prefers-reduced-motion:reduce){#edog-splash *,#edog-splash{animation:none!important;transition:opacity .2s ease!important}}
+.sp-ver{margin-left:auto;font-size:10px;letter-spacing:0.16em;color:#8e95a5;text-transform:uppercase}
+[data-theme="dark"] .sp-ver{color:#555d70}
+/* Shimmer bar — reuses design system pattern */
+.sp-bar{position:relative;height:2px;background:#ebedf0;overflow:hidden;border-radius:2px}
+[data-theme="dark"] .sp-bar{background:#282d3a}
+.sp-bar i{position:absolute;top:0;left:0;height:100%;width:40%;background:linear-gradient(90deg,transparent,rgba(109,92,255,0.5),transparent);animation:spSweep 1.5s ease-in-out infinite}
+[data-theme="dark"] .sp-bar i{background:linear-gradient(90deg,transparent,rgba(133,119,255,0.5),transparent)}
+@keyframes spSweep{0%{transform:translateX(-110%)}100%{transform:translateX(350%)}}
+@keyframes spLine{0%{opacity:0;transform:translateY(3px)}6%,28%{opacity:1;transform:translateY(0)}34%,100%{opacity:0;transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){#edog-splash *{animation:none!important}}
   </style>
   <style>
 /* __CSS_MODULES__ */
@@ -47,13 +54,11 @@
 <body>
   <!-- Boot splash — first paint, dismissed by hideEdogSplash() once app is ready. -->
   <div id="edog-splash" role="status" aria-live="polite" aria-label="Loading EDOG Studio">
-    <div class="sp-orb"></div>
     <div class="sp-stage">
       <div class="sp-mark">
-        <div class="sp-halo"></div>
-        <svg class="sp-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <svg viewBox="0 0 20 20" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="3" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M5 9l3 3-3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><line x1="11" y1="15" x2="15" y2="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </div>
-      <div class="sp-wordmark"><span class="sp-edog">EDOG</span><span class="sp-studio">STUDIO</span></div>
+      <div class="sp-wordmark">EDOG <span class="sp-studio">STUDIO</span></div>
       <div class="sp-tag">FabricLiveTable &#183; Developer Cockpit</div>
     </div>
     <div class="sp-foot">

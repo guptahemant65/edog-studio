@@ -12,7 +12,7 @@ function hideEdogSplash() {
   splash.classList.add('fade-out');
   setTimeout(function () {
     if (splash.parentNode) splash.parentNode.removeChild(splash);
-  }, 520);
+  }, 200);
 }
 window.edogHideSplash = hideEdogSplash;
 
