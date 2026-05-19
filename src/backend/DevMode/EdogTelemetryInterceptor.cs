@@ -12,6 +12,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System.Linq;
     using System.Text.RegularExpressions;
     using Microsoft.LiveTable.Service.Telemetry;
+    using Microsoft.ServicePlatform.Exceptions.Core;
     using Microsoft.ServicePlatform.Telemetry;
     /// <summary>
     /// Decorator that intercepts ICustomLiveTableTelemetryReporter calls and forwards them to EdogLogServer
@@ -74,11 +75,11 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // reporter applies — CustomerTenantId, CapacityObjectId, ClusterName)
                 try
                 {
-                    var tenantIdCtx = ServicePlatform.Hosting.ExecutionContext.GetProperty("CustomerTenantId");
+                    var tenantIdCtx = ExecutionContext.GetProperty("CustomerTenantId");
                     if (tenantIdCtx != null) attributes["CustomerTenantId"] = tenantIdCtx.ToString();
-                    var capacityCtx = ServicePlatform.Hosting.ExecutionContext.GetProperty("CustomerCapacityObjectId");
+                    var capacityCtx = ExecutionContext.GetProperty("CustomerCapacityObjectId");
                     if (capacityCtx != null) attributes["CustomerCapacityObjectId"] = capacityCtx.ToString();
-                    var clusterName = ServicePlatform.Hosting.ServiceExecutionContext.ExecutionEnvironment?.ClusterName;
+                    var clusterName = ServiceExecutionContext.ExecutionEnvironment?.ClusterName;
                     if (!string.IsNullOrEmpty(clusterName)) attributes["ClusterName"] = clusterName;
                 }
                 catch { /* ExecutionContext may not be available in all code paths */ }
