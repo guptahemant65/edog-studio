@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gold-Corpus Curator Workbench — F27 P9 T4-D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS — F16 Standard (Light default)
+   ═══════════════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #ffffff;
+  --bg-2: #f8f9fb;
+  --bg-3: #f4f5f7;
+  --bg-4: #ebedf0;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #ebedf0;
+
+  --text: #1a1d23;
+  --text-dim: #5a6070;
+  --text-muted: #8e95a5;
+
+  --border: rgba(0,0,0,0.06);
+  --border-bright: rgba(0,0,0,0.12);
+
+  --accent: #6d5cff;
+  --accent-dim: rgba(109,92,255,0.07);
+  --accent-hover: rgba(109,92,255,0.04);
+  --accent-glow: rgba(109,92,255,0.15);
+  --accent-soft: rgba(109,92,255,0.10);
+
+  --green: #18a058;
+  --green-dim: rgba(24,160,88,0.08);
+  --green-glow: rgba(24,160,88,0.15);
+  --amber: #e5940c;
+  --amber-dim: rgba(229,148,12,0.08);
+  --red: #e5453b;
+  --red-dim: rgba(229,69,59,0.08);
+  --blue: #2d7ff9;
+  --teal: #0d9488;
+
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  --r-sm: 4px; --r-md: 6px; --r-lg: 10px; --r-xl: 14px; --r-full: 100px;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-glow: 0 0 0 3px var(--accent-glow);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --t-fast: 80ms;
+  --t-normal: 150ms;
+  --t-page: 360ms;
+
+  /* JSON syntax colors */
+  --json-key: #6d5cff;
+  --json-string: #18a058;
+  --json-number: #e5940c;
+  --json-bool: #2d7ff9;
+  --json-null: #8e95a5;
+  --json-brace: #5a6070;
+  --json-comment: #8e95a5;
+}
+
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg-2: #161923;
+  --bg-3: #1e2230;
+  --bg-4: #252a38;
+  --surface: #161923;
+  --surface-2: #1e2230;
+  --surface-3: #252a38;
+
+  --text: #e8eaf0;
+  --text-dim: #9aa0b2;
+  --text-muted: #5f6578;
+
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.2);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.3);
+  --shadow-xl: 0 12px 40px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4);
+
+  --json-key: #a99eff;
+  --json-string: #5ec992;
+  --json-number: #f0b856;
+  --json-bool: #6fa8ff;
+  --json-null: #5f6578;
+  --json-brace: #9aa0b2;
+  --json-comment: #5f6578;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAME ANIMATIONS (35 named)
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideLeft { from { opacity: 0; transform: translateX(60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes slideRight { from { opacity: 0; transform: translateX(-60px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes scaleSpring { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+@keyframes pulseAccent { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes pulseGreen { 0%, 100% { box-shadow: 0 0 0 0 var(--green-glow); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@keyframes checkPop { 0% { transform: scale(0); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes flowDash { to { stroke-dashoffset: -20; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes badgeSlide { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes dotPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+@keyframes expandPanel { from { max-height: 0; opacity: 0; } to { max-height: 800px; opacity: 1; } }
+@keyframes nodeGlow { 0%, 100% { filter: drop-shadow(0 0 2px var(--accent-glow)); } 50% { filter: drop-shadow(0 0 8px var(--accent-glow)); } }
+@keyframes borderPulse { 0%, 100% { border-color: var(--accent); } 50% { border-color: transparent; } }
+@keyframes rowStagger { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes tabSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes codeReveal { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(12px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-8px); } }
+@keyframes validatePulse { 0% { background: var(--green-dim); } 50% { background: var(--green-glow); } 100% { background: var(--green-dim); } }
+@keyframes errorShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+@keyframes fieldFocus { from { box-shadow: 0 0 0 0 var(--accent-glow); } to { box-shadow: 0 0 0 3px var(--accent-glow); } }
+@keyframes arrowBounce { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+@keyframes stateFlip { from { opacity: 0; transform: rotateX(90deg); } to { opacity: 1; transform: rotateX(0); } }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@keyframes progressFill { from { width: 0; } }
+@keyframes svgNodeEnter { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes highlightFlash { 0% { background: var(--accent-dim); } 100% { background: transparent; } }
+@keyframes collapseOut { from { max-height: 800px; opacity: 1; } to { max-height: 0; opacity: 0; } }
+@keyframes countUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════ */
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font); font-size: var(--text-md); color: var(--text);
+  background: var(--bg-2); line-height: 1.5; -webkit-font-smoothing: antialiased;
+  min-height: 100vh; transition: background var(--t-page) var(--ease), color var(--t-page) var(--ease);
+}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
+button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════════════ */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--t-page) var(--ease);
+}
+.header-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 var(--sp-8);
+  height: 52px; display: flex; align-items: center; justify-content: space-between;
+}
+.wordmark {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-weight: 700; font-size: var(--text-lg); letter-spacing: -0.02em;
+  cursor: default; user-select: none;
+}
+.wordmark-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  animation: breathe 3s ease-in-out infinite;
+}
+.wordmark span { color: var(--text-muted); font-weight: 500; }
+.header-actions { display: flex; align-items: center; gap: var(--sp-3); }
+
+.theme-toggle {
+  width: 32px; height: 32px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 15px;
+  transition: all var(--t-fast) var(--ease);
+}
+.theme-toggle:hover { background: var(--surface-3); color: var(--text); transform: translateY(-1px); }
+
+.nav-pill {
+  padding: 5px 12px; border-radius: var(--r-full); font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-dim); transition: all var(--t-fast) var(--ease);
+}
+.nav-pill:hover { background: var(--accent-dim); color: var(--accent); }
+.nav-pill.active { background: var(--accent-dim); color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════ */
+.container { max-width: 1100px; margin: 0 auto; padding: var(--sp-8); }
+.section { margin-bottom: var(--sp-10); animation: slideUp 500ms var(--ease) both; }
+.section:nth-child(2) { animation-delay: 80ms; }
+.section:nth-child(3) { animation-delay: 160ms; }
+.section:nth-child(4) { animation-delay: 240ms; }
+.section-title {
+  font-size: var(--text-xl); font-weight: 700; letter-spacing: -0.02em;
+  margin-bottom: var(--sp-4); display: flex; align-items: center; gap: var(--sp-2);
+}
+.section-title .accent-dot { color: var(--accent); }
+.section-subtitle {
+  font-size: var(--text-md); color: var(--text-dim); margin-bottom: var(--sp-6); max-width: 680px; line-height: 1.65;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CARDS
+   ═══════════════════════════════════════════════════════════════════ */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm); transition: all var(--t-normal) var(--ease);
+}
+.card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.card-static { composes: card; }
+.card-static:hover { transform: none; }
+.card-header {
+  padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-header-title { font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; }
+.card-body { padding: var(--sp-5); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BADGES / PILLS
+   ═══════════════════════════════════════════════════════════════════ */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: var(--r-full); font-size: var(--text-xs); font-weight: 600;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+.badge-graded { background: var(--green-dim); color: var(--green); }
+.badge-pending { background: var(--amber-dim); color: var(--amber); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
+.badge-red { background: var(--red-dim); color: var(--red); }
+.badge-muted { background: var(--bg-3); color: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TABLE
+   ═══════════════════════════════════════════════════════════════════ */
+.queue-table {
+  width: 100%; border-collapse: collapse; font-size: var(--text-sm);
+}
+.queue-table th {
+  text-align: left; padding: var(--sp-2) var(--sp-3); color: var(--text-muted);
+  font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border-bright); user-select: none;
+}
+.queue-table td {
+  padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.queue-table tr.clickable { cursor: pointer; transition: background var(--t-fast) var(--ease); }
+.queue-table tr.clickable:hover { background: var(--accent-hover); }
+.queue-table tr.clickable:active { background: var(--accent-dim); }
+.queue-table tr.row-enter { animation: rowStagger 300ms var(--ease) both; }
+.queue-table .pr-id { font-family: var(--mono); font-weight: 600; font-size: var(--text-sm); }
+.queue-table .count { font-family: var(--mono); font-size: var(--text-sm); text-align: right; }
+.queue-table .indicator {
+  width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; border-radius: var(--r-sm);
+}
+.indicator-yes { color: var(--green); background: var(--green-dim); }
+.indicator-no { color: var(--text-muted); background: var(--bg-3); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TABS
+   ═══════════════════════════════════════════════════════════════════ */
+.tab-bar {
+  display: flex; gap: 2px; padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-3); border-radius: var(--r-md); margin-bottom: var(--sp-4);
+}
+.tab-btn {
+  flex: 1; padding: 6px 12px; border-radius: var(--r-sm); font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-dim); transition: all var(--t-fast) var(--ease); text-align: center;
+}
+.tab-btn:hover { color: var(--text); background: var(--accent-hover); }
+.tab-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); font-weight: 600; }
+.tab-content { animation: tabSlide 250ms var(--ease) both; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CODE PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.code-panel {
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  overflow: auto; max-height: 400px; position: relative;
+}
+.code-panel pre {
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.65; padding: var(--sp-4);
+  white-space: pre; tab-size: 2; animation: codeReveal 300ms var(--ease) both;
+}
+.code-panel .line-num {
+  display: inline-block; width: 32px; text-align: right; padding-right: 12px;
+  color: var(--text-muted); user-select: none; font-size: 10px;
+}
+.json-key { color: var(--json-key); }
+.json-string { color: var(--json-string); }
+.json-number { color: var(--json-number); }
+.json-bool { color: var(--json-bool); }
+.json-null { color: var(--json-null); font-style: italic; }
+.json-brace { color: var(--json-brace); }
+.json-highlight { background: var(--accent-dim); border-radius: 2px; animation: highlightFlash 1.5s var(--ease) both; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   WALKTHROUGH PANEL
+   ═══════════════════════════════════════════════════════════════════ */
+.walkthrough {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md); animation: scaleSpring 400ms var(--spring) both;
+  overflow: hidden;
+}
+.walkthrough-header {
+  padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.walkthrough-pr { font-family: var(--mono); font-weight: 700; font-size: var(--text-lg); }
+.walkthrough-close {
+  width: 28px; height: 28px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 14px; transition: all var(--t-fast) var(--ease);
+}
+.walkthrough-close:hover { background: var(--surface-3); color: var(--text); }
+.walkthrough-body { padding: var(--sp-5); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   VALIDATION PLAYGROUND
+   ═══════════════════════════════════════════════════════════════════ */
+.field-group { margin-bottom: var(--sp-3); }
+.field-label { font-size: var(--text-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; display: block; }
+.field-input {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--border-bright); border-radius: var(--r-sm);
+  font-size: var(--text-sm); background: var(--bg-2); color: var(--text);
+  transition: all var(--t-fast) var(--ease);
+}
+.field-input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); outline: none; }
+.field-input.has-error { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-dim); animation: errorShake 300ms var(--ease); }
+.field-select {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--border-bright); border-radius: var(--r-sm);
+  font-size: var(--text-sm); background: var(--bg-2); color: var(--text);
+  transition: all var(--t-fast) var(--ease); appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238e95a5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+}
+.field-select:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); outline: none; }
+.error-pill {
+  display: inline-block; padding: 2px 8px; border-radius: var(--r-full); font-size: var(--text-xs); font-weight: 500;
+  background: var(--red-dim); color: var(--red); margin-top: 4px; animation: badgeSlide 200ms var(--spring) both;
+}
+.success-pulse {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: var(--r-full);
+  font-size: var(--text-sm); font-weight: 600; background: var(--green-dim); color: var(--green);
+  animation: validatePulse 800ms var(--ease) both;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CLI CHEATSHEET
+   ═══════════════════════════════════════════════════════════════════ */
+.cli-block {
+  display: flex; align-items: center; gap: var(--sp-2);
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2);
+  transition: all var(--t-fast) var(--ease);
+}
+.cli-block:hover { border-color: var(--accent); }
+.cli-block code {
+  flex: 1; font-family: var(--mono); font-size: var(--text-sm); color: var(--text); white-space: nowrap; overflow-x: auto;
+}
+.cli-copy {
+  padding: 3px 8px; border-radius: var(--r-sm); font-size: var(--text-xs); font-weight: 600;
+  color: var(--text-muted); background: var(--bg-3); transition: all var(--t-fast) var(--ease);
+  white-space: nowrap;
+}
+.cli-copy:hover { background: var(--accent-dim); color: var(--accent); transform: translateY(-1px); }
+.cli-copy.copied { background: var(--green-dim); color: var(--green); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   COLLAPSIBLE
+   ═══════════════════════════════════════════════════════════════════ */
+.collapsible-toggle {
+  width: 100%; padding: var(--sp-3) var(--sp-4); display: flex; align-items: center; justify-content: space-between;
+  font-size: var(--text-md); font-weight: 600; color: var(--text); cursor: pointer;
+  background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  transition: all var(--t-fast) var(--ease);
+}
+.collapsible-toggle:hover { background: var(--accent-hover); border-color: var(--accent); }
+.collapsible-toggle .chevron { transition: transform var(--t-normal) var(--ease); font-size: 11px; color: var(--text-muted); }
+.collapsible-toggle.open .chevron { transform: rotate(90deg); }
+.collapsible-body {
+  overflow: hidden; max-height: 0; opacity: 0; transition: max-height var(--t-page) var(--ease), opacity var(--t-normal) var(--ease);
+}
+.collapsible-body.open { max-height: 2000px; opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCHEMA TABLE
+   ═══════════════════════════════════════════════════════════════════ */
+.schema-table {
+  width: 100%; border-collapse: collapse; font-size: var(--text-sm); margin-top: var(--sp-3);
+}
+.schema-table th {
+  text-align: left; padding: 6px 10px; font-size: var(--text-xs); font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 2px solid var(--border-bright); user-select: none;
+}
+.schema-table td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+}
+.schema-table tr:hover { background: var(--accent-hover); }
+.schema-table .field-name { font-family: var(--mono); font-weight: 500; font-size: var(--text-sm); color: var(--accent); cursor: pointer; }
+.schema-table .field-name:hover { text-decoration: underline; }
+.schema-table .type-badge {
+  font-family: var(--mono); font-size: var(--text-xs); padding: 1px 6px; border-radius: var(--r-sm);
+  background: var(--bg-3); color: var(--text-dim);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   COMPARISON CARD
+   ═══════════════════════════════════════════════════════════════════ */
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.compare-col {
+  padding: var(--sp-4); border-radius: var(--r-md); border: 1px solid var(--border);
+  background: var(--bg-2);
+}
+.compare-col h4 { font-size: var(--text-md); font-weight: 700; margin-bottom: var(--sp-2); display: flex; align-items: center; gap: 6px; }
+.compare-col ul { list-style: none; padding: 0; }
+.compare-col li { font-size: var(--text-sm); color: var(--text-dim); padding: 3px 0; padding-left: 14px; position: relative; }
+.compare-col li::before { content: '▸'; position: absolute; left: 0; color: var(--text-muted); font-size: 10px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIFECYCLE SVG
+   ═══════════════════════════════════════════════════════════════════ */
+.lifecycle-svg { width: 100%; max-width: 740px; margin: 0 auto; display: block; }
+.lifecycle-svg text { font-family: var(--font); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DIFF VIEW
+   ═══════════════════════════════════════════════════════════════════ */
+.diff-view { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.diff-panel { overflow: auto; }
+.diff-panel-title {
+  font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-muted); padding: var(--sp-2) var(--sp-3); background: var(--bg-3);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+}
+.diff-added { background: rgba(24,160,88,0.06); }
+.diff-removed { background: rgba(229,69,59,0.06); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   VALIDATION CHECKLIST
+   ═══════════════════════════════════════════════════════════════════ */
+.check-list { list-style: none; padding: 0; }
+.check-item {
+  display: flex; align-items: center; gap: var(--sp-2); padding: 5px 0;
+  font-size: var(--text-sm); color: var(--text-dim);
+}
+.check-icon {
+  width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 10px; flex-shrink: 0; transition: all var(--t-normal) var(--ease);
+}
+.check-icon.pass { background: var(--green-dim); color: var(--green); animation: checkPop 350ms var(--spring) both; }
+.check-icon.pending { background: var(--bg-3); color: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOOTER STATE MACHINE
+   ═══════════════════════════════════════════════════════════════════ */
+.footer-section {
+  padding: var(--sp-6) 0; border-top: 1px solid var(--border); margin-top: var(--sp-8);
+  color: var(--text-dim); font-size: var(--text-sm);
+}
+.state-machine-row {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: var(--sp-3);
+}
+.state-node {
+  padding: 4px 12px; border-radius: var(--r-full); font-family: var(--mono); font-size: var(--text-xs); font-weight: 600;
+  border: 1px solid var(--border-bright);
+}
+.state-arrow { color: var(--text-muted); font-size: var(--text-sm); animation: arrowBounce 1.5s var(--ease) infinite; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  padding: 8px 16px; border-radius: var(--r-md); font-size: var(--text-sm); font-weight: 500;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  color: var(--text); animation: toastIn 300ms var(--spring) both;
+  display: flex; align-items: center; gap: 6px;
+}
+.toast.leaving { animation: toastOut 200ms var(--ease) both; }
+.toast-icon { font-size: 13px; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MENTAL MODEL CALLOUT
+   ═══════════════════════════════════════════════════════════════════ */
+.callout {
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); border-left: 3px solid var(--accent);
+  background: var(--accent-dim); font-size: var(--text-sm); color: var(--text-dim); margin: var(--sp-3) 0;
+}
+.callout strong { color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   BACK BUTTON
+   ═══════════════════════════════════════════════════════════════════ */
+.back-btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px;
+  border-radius: var(--r-full); font-size: var(--text-sm); font-weight: 500;
+  color: var(--text-dim); background: var(--bg-3); transition: all var(--t-fast) var(--ease);
+  margin-bottom: var(--sp-4);
+}
+.back-btn:hover { background: var(--accent-dim); color: var(--accent); transform: translateY(-1px); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .container { padding: var(--sp-4); }
+  .compare-grid { grid-template-columns: 1fr; }
+  .diff-view { grid-template-columns: 1fr; }
+  .header-inner { padding: 0 var(--sp-4); }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     HEADER
+     ═══════════════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-inner">
+    <div class="wordmark">
+      <span class="wordmark-dot"></span>
+      Gold-Corpus Curator <span>F27 P9 T4-D</span>
+    </div>
+    <div class="header-actions">
+      <button class="nav-pill active" onclick="showView('queue')" id="nav-queue">Queue</button>
+      <button class="nav-pill" onclick="showView('cheatsheet')" id="nav-cheatsheet">CLI</button>
+      <button class="nav-pill" onclick="showView('schema')" id="nav-schema">Schema</button>
+      <button class="nav-pill" onclick="showView('playground')" id="nav-playground">Validate</button>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    </div>
+  </div>
+</header>
+
+<div class="toast-container" id="toasts"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MAIN CONTENT
+     ═══════════════════════════════════════════════════════════════════ -->
+<main class="container" id="app"></main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   DATA
+   ═══════════════════════════════════════════════════════════════════ */
+const CORPUS = [
+  { pr: 'PR-879735', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-910832', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-927641', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-929467', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-933822', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-934326', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: false, plan: true },
+  { pr: 'PR-936352', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-950638', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-955910', state: 'GRADED_PASS_1', scenarios: 12, actual: true, plan: true },
+  { pr: 'PR-960426', state: 'PENDING_HUMAN_GRADING', scenarios: 0, actual: true, plan: true },
+  { pr: 'PR-960543', state: 'GRADED_PASS_1', scenarios: 11, actual: true, plan: true },
+  { pr: 'PR-966141', state: 'GRADED_PASS_1', scenarios: 4, actual: true, plan: true },
+  { pr: 'PR-975848', state: 'GRADED_PASS_1', scenarios: 8, actual: true, plan: true },
+  { pr: 'PR-976609', state: 'GRADED_PASS_1', scenarios: 6, actual: true, plan: true },
+  { pr: 'PR-977882', state: 'GRADED_PASS_1', scenarios: 10, actual: true, plan: true },
+];
+
+const GRADED_COUNT = CORPUS.filter(c => c.state === 'GRADED_PASS_1').length;
+const PENDING_COUNT = CORPUS.filter(c => c.state === 'PENDING_HUMAN_GRADING').length;
+const TOTAL = CORPUS.length;
+
+/* ═══════════════════════════════════════════════════════════════════
+   JSON SYNTAX HIGHLIGHTER (minimal tokenizer, zero dependencies)
+   ═══════════════════════════════════════════════════════════════════ */
+function highlightJSON(obj, indent) {
+  indent = indent || 0;
+  const pad = '  '.repeat(indent);
+  const pad1 = '  '.repeat(indent + 1);
+  if (obj === null) return '<span class="json-null">null</span>';
+  if (typeof obj === 'boolean') return '<span class="json-bool">' + obj + '</span>';
+  if (typeof obj === 'number') return '<span class="json-number">' + obj + '</span>';
+  if (typeof obj === 'string') {
+    const escaped = obj.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return '<span class="json-string">"' + escaped + '"</span>';
+  }
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return '<span class="json-brace">[]</span>';
+    const items = obj.map(item => pad1 + highlightJSON(item, indent + 1));
+    return '<span class="json-brace">[</span>\n' + items.join(',\n') + '\n' + pad + '<span class="json-brace">]</span>';
+  }
+  const keys = Object.keys(obj);
+  if (keys.length === 0) return '<span class="json-brace">{}</span>';
+  const entries = keys.map(k => {
+    const ek = k.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return pad1 + '<span class="json-key">"' + ek + '"</span>: ' + highlightJSON(obj[k], indent + 1);
+  });
+  return '<span class="json-brace">{</span>\n' + entries.join(',\n') + '\n' + pad + '<span class="json-brace">}</span>';
+}
+
+function renderCodePanel(json, id) {
+  const highlighted = highlightJSON(json);
+  const lines = highlighted.split('\n');
+  const numbered = lines.map((l, i) => '<span class="line-num">' + (i+1) + '</span>' + l).join('\n');
+  return '<div class="code-panel" id="' + (id||'') + '"><pre>' + numbered + '</pre></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DRAFT GENERATORS (mirror curate.py logic exactly)
+   ═══════════════════════════════════════════════════════════════════ */
+function blindDraft(prNum) {
+  return {
+    schema_version: "2.0",
+    pr_number: prNum,
+    curator_state: "PENDING_HUMAN_GRADING",
+    curated_at: null,
+    curator: null,
+    pass_1_basis: "diff_inspection_blind",
+    scenarios: [1,2,3].map(i => ({
+      id: prNum + '-s0' + i,
+      behavior_key: "REPLACE_ME_stable_snake_case",
+      category: "HappyPath",
+      verb: "FieldMatch",
+      title: "REPLACE_ME \u2014 what the scenario asserts on the wire",
+      rationale: "REPLACE_ME \u2014 why this matters, link to the load-bearing change",
+      criticality: "P1",
+      discovered_by: "diff_inspection",
+      grounding_changed_lines: [{ path: "REPLACE_ME/path/relative/to/repo.cs", side: "right", lines: [0] }]
+    }))
+  };
+}
+
+function anchoredDraft(prNum) {
+  return {
+    schema_version: "2.0",
+    pr_number: prNum,
+    curator_state: "PENDING_HUMAN_GRADING",
+    curated_at: null,
+    curator: null,
+    pass_1_basis: "actual_review_anchored",
+    scenarios: [
+      { id: prNum + '-s01', behavior_key: "REPLACE_ME_stable_snake_case", category: "HappyPath", verb: "FieldMatch",
+        title: "CORS policy", rationale: "REPLACE_ME \u2014 anchored from LLM scenario; confirm grounding",
+        criticality: "P1", discovered_by: "diff_inspection",
+        grounding_changed_lines: [{ path: "src/Middleware/CorsHandler.cs", side: "right", lines: [42,43] }],
+        _source_llm_stage: "projected", _source_llm_id: "sk-1" },
+      { id: prNum + '-s02', behavior_key: "REPLACE_ME_stable_snake_case", category: "EdgeCase", verb: "FieldMatch",
+        title: "Header echoed in response", rationale: "REPLACE_ME \u2014 anchored from LLM scenario; confirm grounding",
+        criticality: "P1", discovered_by: "diff_inspection",
+        grounding_changed_lines: [{ path: "src/Middleware/CorsHandler.cs", side: "right", lines: [58] }],
+        _source_llm_stage: "emitted", _source_llm_id: "sk-2" }
+    ]
+  };
+}
+
+function finalizedExample(prNum) {
+  return {
+    schema_version: "2.0",
+    pr_number: prNum,
+    curator_state: "GRADED_PASS_1",
+    curated_at: new Date().toISOString().slice(0,10),
+    curator: "hemant",
+    pass_1_basis: "diff_inspection_blind",
+    scenarios: [
+      { id: prNum + '-s01', behavior_key: "cors_handler_allows_origin",
+        category: "HappyPath", verb: "FieldMatch",
+        title: "CorsHandler forwards Access-Control-Allow-Origin for whitelisted domains",
+        rationale: "The middleware is the sole enforcement point for CORS policy. Missing this header causes browser-side fetch failures for all frontend clients.",
+        criticality: "P0", discovered_by: "diff_inspection",
+        grounding_changed_lines: [{ path: "src/Middleware/CorsHandler.cs", side: "right", lines: [42,43] }] },
+      { id: prNum + '-s02', behavior_key: "cors_handler_echoes_request_header",
+        category: "EdgeCase", verb: "FieldMatch",
+        title: "CorsHandler echoes the request Origin header verbatim when origin is in whitelist",
+        rationale: "The echo behavior is distinct from 'allows origin' \u2014 some CORS implementations use wildcard * instead. This PR explicitly echoes to support credentialed requests.",
+        criticality: "P1", discovered_by: "diff_inspection",
+        grounding_changed_lines: [{ path: "src/Middleware/CorsHandler.cs", side: "right", lines: [58] }] }
+    ]
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VALIDATION ENGINE (mirrors _validate_scenario from curate.py)
+   ═══════════════════════════════════════════════════════════════════ */
+const VALID_CRITICALITY = new Set(['P0','P1','P2','P3']);
+
+function validateScenario(sc, idx) {
+  const errors = [];
+  const bk = sc.behavior_key || '';
+  if (!bk || bk.startsWith('REPLACE_ME')) errors.push('scenarios[' + idx + '].behavior_key missing or template-placeholder');
+  const rat = sc.rationale || '';
+  if (!rat || rat.startsWith('REPLACE_ME')) errors.push('scenarios[' + idx + '].rationale missing or template-placeholder');
+  const crit = sc.criticality || '';
+  if (!VALID_CRITICALITY.has(crit)) errors.push('scenarios[' + idx + '].criticality must be one of [P0,P1,P2,P3] (got \'' + crit + '\')');
+  const title = sc.title || '';
+  if (!title || title.startsWith('REPLACE_ME')) errors.push('scenarios[' + idx + '].title missing or template-placeholder');
+  if (title.length > 200) errors.push('scenarios[' + idx + '].title exceeds 200 chars');
+  const gcl = sc.grounding_changed_lines;
+  if (!Array.isArray(gcl) || gcl.length === 0) {
+    errors.push('scenarios[' + idx + '].grounding_changed_lines must be a non-empty list');
+  } else {
+    gcl.forEach((anchor, j) => {
+      const p = anchor.path || '';
+      if (!p || p.startsWith('REPLACE_ME')) errors.push('scenarios[' + idx + '].grounding_changed_lines[' + j + '].path placeholder/empty');
+      const lines = anchor.lines;
+      if (!Array.isArray(lines) || lines.length === 0 || lines.includes(0))
+        errors.push('scenarios[' + idx + '].grounding_changed_lines[' + j + '].lines must be a non-empty list of positive ints');
+    });
+  }
+  return errors;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOAST SYSTEM
+   ═══════════════════════════════════════════════════════════════════ */
+function showToast(msg, icon) {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = '<span class="toast-icon">' + (icon||'\u25C6') + '</span>' + escHTML(msg);
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('leaving'); setTimeout(() => t.remove(), 250); }, 2200);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THEME TOGGLE
+   ═══════════════════════════════════════════════════════════════════ */
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   NAV
+   ═══════════════════════════════════════════════════════════════════ */
+let currentView = 'queue';
+function showView(view) {
+  currentView = view;
+  document.querySelectorAll('.nav-pill').forEach(p => p.classList.remove('active'));
+  const btn = document.getElementById('nav-' + view);
+  if (btn) btn.classList.add('active');
+  render();
+}
+
+function escHTML(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   VIEWS
+   ═══════════════════════════════════════════════════════════════════ */
+let selectedPR = null;
+let activeTab = 0;
+
+function render() {
+  const app = document.getElementById('app');
+  if (currentView === 'queue') {
+    if (selectedPR) { app.innerHTML = renderWalkthrough(selectedPR); }
+    else { app.innerHTML = renderHero() + renderQueueTable(); }
+  } else if (currentView === 'cheatsheet') {
+    app.innerHTML = renderCheatsheet();
+  } else if (currentView === 'schema') {
+    app.innerHTML = renderSchemaInspector();
+  } else if (currentView === 'playground') {
+    app.innerHTML = renderPlayground();
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HERO / OVERVIEW
+   ═══════════════════════════════════════════════════════════════════ */
+function renderHero() {
+  return '<div class="section" style="animation-delay:0ms">' +
+    '<div class="section-title"><span class="accent-dot">\u25C6</span> Gold-Corpus Curator Workbench</div>' +
+    '<div class="section-subtitle">' +
+      'Promotes <strong>PENDING_HUMAN_GRADING</strong> fixtures to <strong>GRADED_PASS_1</strong> through blind or anchored grading. ' +
+      'Blind grading discipline preserves <code style="font-family:var(--mono);font-size:var(--text-sm);background:var(--bg-3);padding:1px 5px;border-radius:3px">pass_1_basis="diff_inspection_blind"</code> from the original baseline. ' +
+      'Current corpus: <strong>' + GRADED_COUNT + '</strong> graded, <strong>' + PENDING_COUNT + '</strong> pending \u2014 ' +
+      'promoting all ' + TOTAL + ' fixtures unlocks higher-confidence QA scoring.' +
+    '</div>' +
+    renderLifecycleDiagram() +
+    renderModesComparison() +
+  '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIFECYCLE SVG DIAGRAM
+   ═══════════════════════════════════════════════════════════════════ */
+function renderLifecycleDiagram() {
+  return '<div style="margin-bottom:var(--sp-6);overflow-x:auto">' +
+    '<svg class="lifecycle-svg" viewBox="0 0 740 120" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    /* Node: PENDING */
+    '<rect x="10" y="35" width="160" height="50" rx="10" fill="var(--amber-dim)" stroke="var(--amber)" stroke-width="1.5"/>' +
+    '<text x="90" y="57" text-anchor="middle" font-size="10" font-weight="700" fill="var(--amber)">PENDING_HUMAN_GRADING</text>' +
+    '<text x="90" y="73" text-anchor="middle" font-size="9" fill="var(--text-dim)">n=' + PENDING_COUNT + ' fixtures</text>' +
+    /* Arrow 1 */
+    '<line x1="170" y1="60" x2="230" y2="60" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6 3">' +
+      '<animate attributeName="stroke-dashoffset" from="0" to="-20" dur="1.5s" repeatCount="indefinite"/>' +
+    '</line>' +
+    '<polygon points="228,55 238,60 228,65" fill="var(--text-muted)"/>' +
+    '<text x="200" y="50" text-anchor="middle" font-size="9" font-weight="600" fill="var(--accent)">prepare</text>' +
+    /* Node: Draft */
+    '<rect x="240" y="35" width="120" height="50" rx="10" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.5" style="animation:pulseAccent 3s ease-in-out infinite"/>' +
+    '<text x="300" y="57" text-anchor="middle" font-size="10" font-weight="700" fill="var(--accent)">Curator Edits</text>' +
+    '<text x="300" y="73" text-anchor="middle" font-size="9" fill="var(--text-dim)">expected.json draft</text>' +
+    /* Arrow 2 */
+    '<line x1="360" y1="60" x2="430" y2="60" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6 3">' +
+      '<animate attributeName="stroke-dashoffset" from="0" to="-20" dur="1.5s" repeatCount="indefinite"/>' +
+    '</line>' +
+    '<polygon points="428,55 438,60 428,65" fill="var(--text-muted)"/>' +
+    '<text x="395" y="50" text-anchor="middle" font-size="9" font-weight="600" fill="var(--accent)">finalize</text>' +
+    /* Node: Validation */
+    '<rect x="440" y="35" width="100" height="50" rx="10" fill="var(--bg-3)" stroke="var(--border-bright)" stroke-width="1.5"/>' +
+    '<text x="490" y="57" text-anchor="middle" font-size="10" font-weight="700" fill="var(--text-dim)">Validation</text>' +
+    '<text x="490" y="73" text-anchor="middle" font-size="9" fill="var(--text-muted)">_validate_scenario</text>' +
+    /* Arrow 3 */
+    '<line x1="540" y1="60" x2="590" y2="60" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="6 3">' +
+      '<animate attributeName="stroke-dashoffset" from="0" to="-20" dur="1.5s" repeatCount="indefinite"/>' +
+    '</line>' +
+    '<polygon points="588,55 598,60 588,65" fill="var(--text-muted)"/>' +
+    /* Node: GRADED */
+    '<rect x="600" y="35" width="130" height="50" rx="10" fill="var(--green-dim)" stroke="var(--green)" stroke-width="1.5"/>' +
+    '<text x="665" y="57" text-anchor="middle" font-size="10" font-weight="700" fill="var(--green)">GRADED_PASS_1</text>' +
+    '<text x="665" y="73" text-anchor="middle" font-size="9" fill="var(--text-dim)">n=' + GRADED_COUNT + ' fixtures</text>' +
+    /* Reject loop */
+    '<path d="M490,85 L490,105 L300,105 L300,85" stroke="var(--red)" stroke-width="1" stroke-dasharray="4 2" fill="none"/>' +
+    '<polygon points="297,87 300,80 303,87" fill="var(--red)"/>' +
+    '<text x="395" y="115" text-anchor="middle" font-size="8" fill="var(--red)">validation fails \u2192 fix &amp; re-run finalize</text>' +
+  '</svg></div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODES COMPARISON
+   ═══════════════════════════════════════════════════════════════════ */
+function renderModesComparison() {
+  return '<div class="compare-grid" style="margin-top:var(--sp-4)">' +
+    '<div class="compare-col">' +
+      '<h4><span class="badge badge-accent">\u25C9 Blind</span> prepare PR-NNN</h4>' +
+      '<ul>' +
+        '<li>Empty scenarios[] \u2014 curator drafts from <code style="font-family:var(--mono);font-size:11px">diff.patch</code> + <code style="font-family:var(--mono);font-size:11px">notes.md</code></li>' +
+        '<li>pass_1_basis = <code style="font-family:var(--mono);font-size:11px">"diff_inspection_blind"</code></li>' +
+        '<li>Preferred for new fixtures \u2014 preserves baseline discipline</li>' +
+        '<li>LLM actual.json stays CLOSED until blind draft is done</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div class="compare-col">' +
+      '<h4><span class="badge badge-pending">\u25C9 Anchored</span> prepare --from-actual</h4>' +
+      '<ul>' +
+        '<li>Scenarios seeded from actual.json (category, verb, title, grounding)</li>' +
+        '<li>pass_1_basis = <code style="font-family:var(--mono);font-size:11px">"actual_review_anchored"</code></li>' +
+        '<li>Faster but biases curator toward LLM choices</li>' +
+        '<li>Scorer flags anchored basis for downstream awareness</li>' +
+        '<li>Debug fields <code style="font-family:var(--mono);font-size:11px">_source_llm_id</code> / <code style="font-family:var(--mono);font-size:11px">_source_llm_stage</code> stripped on finalize</li>' +
+      '</ul>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   QUEUE TABLE
+   ═══════════════════════════════════════════════════════════════════ */
+function renderQueueTable() {
+  const rows = CORPUS.map((c, i) => {
+    const isGraded = c.state === 'GRADED_PASS_1';
+    const badge = isGraded
+      ? '<span class="badge badge-graded">\u25CF GRADED_PASS_1</span>'
+      : '<span class="badge badge-pending">\u25CB PENDING</span>';
+    const indicator = (v) => v
+      ? '<span class="indicator indicator-yes">\u25CF</span>'
+      : '<span class="indicator indicator-no">\u2014</span>';
+    return '<tr class="clickable row-enter" style="animation-delay:' + (i * 30) + 'ms" onclick="enterFixture(\'' + c.pr + '\')">' +
+      '<td class="pr-id">' + c.pr + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td class="count">' + c.scenarios + '</td>' +
+      '<td style="text-align:center">' + indicator(c.actual) + '</td>' +
+      '<td style="text-align:center">' + indicator(c.plan) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  return '<div class="section" style="animation-delay:80ms">' +
+    '<div class="section-title"><span class="accent-dot">\u25C6</span> Fixture Queue</div>' +
+    '<div class="section-subtitle">Click any row to walk through the grading workflow for that fixture. ' +
+      '<span class="badge badge-graded" style="vertical-align:middle">' + GRADED_COUNT + ' graded</span> ' +
+      '<span class="badge badge-pending" style="vertical-align:middle">' + PENDING_COUNT + ' pending</span></div>' +
+    '<div class="card" style="overflow:hidden">' +
+      '<table class="queue-table">' +
+        '<thead><tr>' +
+          '<th>PR</th><th>State</th><th style="text-align:right">Scenarios</th><th style="text-align:center">Actual</th><th style="text-align:center">Plan</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+    renderFooterAudit() +
+  '</div>';
+}
+
+function enterFixture(pr) {
+  selectedPR = pr;
+  activeTab = 0;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function exitFixture() {
+  selectedPR = null;
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   WALKTHROUGH (per fixture)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderWalkthrough(pr) {
+  const fixture = CORPUS.find(c => c.pr === pr);
+  const prNum = pr.replace('PR-', '');
+  const isGraded = fixture && fixture.state === 'GRADED_PASS_1';
+
+  const tabs = [
+    { label: 'prepare (blind)', id: 0 },
+    { label: 'prepare --from-actual', id: 1 },
+    { label: 'finalize', id: 2 },
+  ];
+  const tabBar = '<div class="tab-bar">' + tabs.map(t =>
+    '<button class="tab-btn' + (activeTab === t.id ? ' active' : '') + '" onclick="switchTab(' + t.id + ')">' + t.label + '</button>'
+  ).join('') + '</div>';
+
+  let content = '';
+  if (activeTab === 0) content = renderPrepareBlind(prNum, fixture);
+  else if (activeTab === 1) content = renderPrepareAnchored(prNum, fixture);
+  else content = renderFinalize(prNum, fixture);
+
+  return '<button class="back-btn" onclick="exitFixture()">\u25C2 Back to queue</button>' +
+    '<div class="walkthrough">' +
+      '<div class="walkthrough-header">' +
+        '<div class="walkthrough-pr">' + pr + ' <span style="font-weight:400;font-size:var(--text-sm);color:var(--text-dim)">' +
+          (isGraded ? 'GRADED_PASS_1 \u2014 ' + fixture.scenarios + ' scenarios' : 'PENDING_HUMAN_GRADING') + '</span></div>' +
+        '<button class="walkthrough-close" onclick="exitFixture()" title="Close">\u2715</button>' +
+      '</div>' +
+      '<div class="walkthrough-body">' + tabBar + '<div class="tab-content" key="' + activeTab + '">' + content + '</div></div>' +
+    '</div>';
+}
+
+function switchTab(id) {
+  activeTab = id;
+  render();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TAB 1: prepare (blind)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderPrepareBlind(prNum, fixture) {
+  const draft = blindDraft(prNum);
+  return '<div class="callout">' +
+      '<strong>Curator mental model:</strong> Read <code style="font-family:var(--mono);font-size:11px">diff.patch</code> + ' +
+      '<code style="font-family:var(--mono);font-size:11px">notes.md</code>, write scenarios from scratch. ' +
+      'The LLM\'s <code style="font-family:var(--mono);font-size:11px">actual.json</code> stays <strong>closed</strong> until your blind draft is complete.' +
+    '</div>' +
+    '<div style="margin:var(--sp-3) 0">' +
+      '<div style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-2);color:var(--text-dim)">What <code style="font-family:var(--mono);font-size:11px">prepare ' + fixture.pr + '</code> does:</div>' +
+      '<ul style="list-style:none;padding:0;font-size:var(--text-sm);color:var(--text-dim)">' +
+        '<li style="padding:3px 0">\u25B8 Backs up <code style="font-family:var(--mono);font-size:11px">expected.json</code> \u2192 <code style="font-family:var(--mono);font-size:11px">expected.json.bak</code></li>' +
+        '<li style="padding:3px 0">\u25B8 Writes draft with <strong>3 empty scenario templates</strong> + guidance comment block</li>' +
+        '<li style="padding:3px 0">\u25B8 Sets <code style="font-family:var(--mono);font-size:11px">curator_state = "PENDING_HUMAN_GRADING"</code></li>' +
+        '<li style="padding:3px 0">\u25B8 Sets <code style="font-family:var(--mono);font-size:11px">pass_1_basis = "diff_inspection_blind"</code></li>' +
+        '<li style="padding:3px 0">\u25B8 Opens <code style="font-family:var(--mono);font-size:11px">$EDITOR</code> on the draft (skip with <code style="font-family:var(--mono);font-size:11px">--no-editor</code>)</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:var(--sp-2)">Generated draft expected.json</div>' +
+    renderCodePanel(draft, 'blind-code');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TAB 2: prepare --from-actual (anchored)
+   ═══════════════════════════════════════════════════════════════════ */
+function renderPrepareAnchored(prNum, fixture) {
+  const draft = anchoredDraft(prNum);
+  return '<div class="callout" style="border-left-color:var(--amber)">' +
+      '<strong>Anchored mode:</strong> Scenarios seeded from the LLM\'s <code style="font-family:var(--mono);font-size:11px">actual.json</code>. ' +
+      'Fields carried over: <code style="font-family:var(--mono);font-size:11px">category</code>, <code style="font-family:var(--mono);font-size:11px">verb</code>, ' +
+      '<code style="font-family:var(--mono);font-size:11px">topic\u2192title</code>, <code style="font-family:var(--mono);font-size:11px">grounding_changed_lines</code>. ' +
+      'Debug fields <code style="font-family:var(--mono);font-size:11px">_source_llm_id</code> / <code style="font-family:var(--mono);font-size:11px">_source_llm_stage</code> are added (stripped on finalize).' +
+    '</div>' +
+    '<div style="margin:var(--sp-3) 0">' +
+      '<div style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-2);color:var(--text-dim)">What <code style="font-family:var(--mono);font-size:11px">prepare --from-actual ' + fixture.pr + '</code> does:</div>' +
+      '<ul style="list-style:none;padding:0;font-size:var(--text-sm);color:var(--text-dim)">' +
+        '<li style="padding:3px 0">\u25B8 Backs up <code style="font-family:var(--mono);font-size:11px">expected.json</code> \u2192 <code style="font-family:var(--mono);font-size:11px">expected.json.bak</code></li>' +
+        '<li style="padding:3px 0">\u25B8 Reads <code style="font-family:var(--mono);font-size:11px">actual.json</code>, carries <strong>category/verb/topic\u2192title/grounding</strong> into draft</li>' +
+        '<li style="padding:3px 0">\u25B8 Sets <code style="font-family:var(--mono);font-size:11px">pass_1_basis = "actual_review_anchored"</code></li>' +
+        '<li style="padding:3px 0">\u25B8 Adds <code style="font-family:var(--mono);font-size:11px">_source_llm_id</code> + <code style="font-family:var(--mono);font-size:11px">_source_llm_stage</code> debug scaffolding</li>' +
+        '<li style="padding:3px 0">\u25B8 Curator fills <strong>behavior_key + rationale + criticality</strong>, deletes rejected rows</li>' +
+      '</ul>' +
+    '</div>' +
+    '<div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:var(--sp-2)">Generated draft expected.json (anchored)</div>' +
+    renderCodePanel(draft, 'anchored-code');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TAB 3: finalize
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFinalize(prNum, fixture) {
+  const before = blindDraft(prNum);
+  before.pass_1_basis = "pending_curator_review";
+  const after = finalizedExample(prNum);
+
+  const validationRules = [
+    { label: 'behavior_key non-empty, not REPLACE_ME placeholder', pass: true },
+    { label: 'rationale non-empty, not REPLACE_ME placeholder', pass: true },
+    { label: 'criticality \u2208 {P0, P1, P2, P3}', pass: true },
+    { label: 'title non-empty, not REPLACE_ME, \u2264 200 chars', pass: true },
+    { label: 'grounding_changed_lines is a non-empty list', pass: true },
+    { label: 'Each anchor path non-empty, not placeholder', pass: true },
+    { label: 'Each anchor lines[] non-empty, no zeros', pass: true },
+    { label: 'No duplicate behavior_keys across scenarios', pass: true },
+  ];
+
+  const checkList = '<ul class="check-list">' + validationRules.map((r, i) =>
+    '<li class="check-item" id="check-' + i + '">' +
+      '<span class="check-icon pending">\u2022</span>' +
+      '<span>' + escHTML(r.label) + '</span>' +
+    '</li>'
+  ).join('') + '</ul>';
+
+  return '<div style="font-size:var(--text-sm);font-weight:600;margin-bottom:var(--sp-2);color:var(--text-dim)">What <code style="font-family:var(--mono);font-size:11px">finalize ' + fixture.pr + '</code> does:</div>' +
+    '<ul style="list-style:none;padding:0;font-size:var(--text-sm);color:var(--text-dim);margin-bottom:var(--sp-4)">' +
+      '<li style="padding:3px 0">\u25B8 Runs <code style="font-family:var(--mono);font-size:11px">_validate_scenario()</code> on every scenario</li>' +
+      '<li style="padding:3px 0">\u25B8 Checks for duplicate <code style="font-family:var(--mono);font-size:11px">behavior_key</code> values</li>' +
+      '<li style="padding:3px 0">\u25B8 Sentinel <code style="font-family:var(--mono);font-size:11px">"pending_curator_review"</code> auto-converts to <code style="font-family:var(--mono);font-size:11px">"diff_inspection_blind"</code></li>' +
+      '<li style="padding:3px 0">\u25B8 Flips <code style="font-family:var(--mono);font-size:11px">curator_state</code> \u2192 <code style="font-family:var(--mono);font-size:11px">GRADED_PASS_1</code></li>' +
+      '<li style="padding:3px 0">\u25B8 Stamps <code style="font-family:var(--mono);font-size:11px">curated_at</code> + <code style="font-family:var(--mono);font-size:11px">curator</code></li>' +
+      '<li style="padding:3px 0">\u25B8 Strips <code style="font-family:var(--mono);font-size:11px">_source_llm_*</code> debug fields</li>' +
+      '<li style="padding:3px 0">\u25B8 Deletes <code style="font-family:var(--mono);font-size:11px">expected.json.bak</code></li>' +
+    '</ul>' +
+    '<div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:var(--sp-2)">Validation gate</div>' +
+    '<div style="margin-bottom:var(--sp-4)">' +
+      checkList +
+      '<button onclick="runValidationAnimation()" style="margin-top:var(--sp-3);padding:6px 16px;border-radius:var(--r-full);font-size:var(--text-sm);font-weight:600;background:var(--accent);color:#fff;transition:all var(--t-fast) var(--ease)">Run validation \u25B8</button>' +
+    '</div>' +
+    '<div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:var(--sp-2)">Before \u2192 After diff</div>' +
+    '<div class="diff-view">' +
+      '<div class="diff-panel">' +
+        '<div class="diff-panel-title">Before (draft)</div>' +
+        renderCodePanel(before, 'diff-before') +
+      '</div>' +
+      '<div class="diff-panel">' +
+        '<div class="diff-panel-title diff-added" style="color:var(--green)">After (finalized)</div>' +
+        renderCodePanel(after, 'diff-after') +
+      '</div>' +
+    '</div>';
+}
+
+let validationRunning = false;
+function runValidationAnimation() {
+  if (validationRunning) return;
+  validationRunning = true;
+  const total = 8;
+  for (let i = 0; i < total; i++) {
+    setTimeout(() => {
+      const el = document.getElementById('check-' + i);
+      if (!el) return;
+      const icon = el.querySelector('.check-icon');
+      icon.className = 'check-icon pass';
+      icon.textContent = '\u2713';
+      if (i === total - 1) {
+        validationRunning = false;
+        showToast('All validation rules passed', '\u2713');
+      }
+    }, (i + 1) * 200);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CLI CHEATSHEET
+   ═══════════════════════════════════════════════════════════════════ */
+function renderCheatsheet() {
+  const cmds = [
+    { label: 'List all fixtures', cmd: 'python tests/qa-eval/curate.py list' },
+    { label: 'List pending only', cmd: 'python tests/qa-eval/curate.py list --pending' },
+    { label: 'List graded only', cmd: 'python tests/qa-eval/curate.py list --graded' },
+    { label: 'Prepare blind (3 templates)', cmd: 'python tests/qa-eval/curate.py prepare PR-879735' },
+    { label: 'Prepare blind (custom rows)', cmd: 'python tests/qa-eval/curate.py prepare PR-879735 --empty-rows 5' },
+    { label: 'Prepare blind (no editor)', cmd: 'python tests/qa-eval/curate.py prepare PR-879735 --no-editor' },
+    { label: 'Prepare anchored', cmd: 'python tests/qa-eval/curate.py prepare PR-879735 --from-actual' },
+    { label: 'Force re-prepare graded', cmd: 'python tests/qa-eval/curate.py prepare PR-955910 --force' },
+    { label: 'Finalize fixture', cmd: 'python tests/qa-eval/curate.py finalize PR-879735' },
+    { label: 'Finalize with curator', cmd: 'python tests/qa-eval/curate.py finalize PR-879735 --curator hemant' },
+    { label: 'Finalize override basis', cmd: 'python tests/qa-eval/curate.py finalize PR-879735 --basis actual_review_anchored' },
+    { label: 'Finalize empty (no-test)', cmd: 'python tests/qa-eval/curate.py finalize PR-934326 --allow-empty' },
+  ];
+
+  return '<div class="section">' +
+    '<div class="section-title"><span class="accent-dot">\u25C6</span> CLI Cheatsheet</div>' +
+    '<div class="section-subtitle">Copy-pasteable commands for every subcommand. Click the copy button to copy to clipboard.</div>' +
+    cmds.map(c =>
+      '<div class="cli-block">' +
+        '<div style="font-size:var(--text-xs);color:var(--text-muted);min-width:160px;font-weight:500">' + escHTML(c.label) + '</div>' +
+        '<code>' + escHTML(c.cmd) + '</code>' +
+        '<button class="cli-copy" onclick="copyCmd(this, \'' + c.cmd.replace(/'/g, "\\'") + '\')">Copy</button>' +
+      '</div>'
+    ).join('') +
+    '<div style="margin-top:var(--sp-6)">' +
+      '<div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:var(--sp-2)">Environment variables</div>' +
+      '<div class="cli-block"><code>export EDOG_CURATOR="your_name"</code><button class="cli-copy" onclick="copyCmd(this, \'export EDOG_CURATOR=your_name\')">Copy</button></div>' +
+      '<div class="cli-block"><code>export EDITOR="code --wait"</code><button class="cli-copy" onclick="copyCmd(this, \'export EDITOR=code\\ --wait\')">Copy</button></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function copyCmd(btn, cmd) {
+  navigator.clipboard.writeText(cmd).then(() => {
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    showToast('Copied to clipboard', '\u25C6');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SCHEMA INSPECTOR
+   ═══════════════════════════════════════════════════════════════════ */
+function renderSchemaInspector() {
+  const fields = [
+    { name: 'schema_version', type: 'string', req: true, values: '"2.0"', desc: 'Schema format version. Always "2.0" for current corpus.' },
+    { name: 'pr_number', type: 'string', req: true, values: '"955910"', desc: 'PR number without the PR- prefix.' },
+    { name: 'curator_state', type: 'string', req: true, values: '"PENDING_HUMAN_GRADING" | "GRADED_PASS_1"', desc: 'Lifecycle state. Flipped by finalize.' },
+    { name: 'curated_at', type: 'string|null', req: true, values: '"2026-05-18" | null', desc: 'ISO date when finalize was run. null until graded.' },
+    { name: 'curator', type: 'string|null', req: true, values: '"hemant" | null', desc: 'Curator identity. Defaults to $EDOG_CURATOR or "hemant".' },
+    { name: 'pass_1_basis', type: 'string', req: true, values: '"diff_inspection_blind" | "actual_review_anchored" | "pending_curator_review"', desc: 'Grading methodology. Sentinel "pending_curator_review" auto-converts to "diff_inspection_blind" on finalize.' },
+    { name: 'scenarios', type: 'array', req: true, values: '[...Scenario]', desc: 'Ordered list of behavioural scenarios. Empty allowed only with --allow-empty.' },
+    { name: 'scenarios[].id', type: 'string', req: true, values: '"955910-s01"', desc: 'Unique scenario ID: {pr_number}-s{NN}.' },
+    { name: 'scenarios[].behavior_key', type: 'string', req: true, values: '"cors_handler_allows_origin"', desc: 'Stable snake_case key. Must not start with REPLACE_ME. No duplicates across scenarios.' },
+    { name: 'scenarios[].category', type: 'string', req: true, values: '"HappyPath" | "EdgeCase" | "Regression"', desc: 'Scenario classification.' },
+    { name: 'scenarios[].verb', type: 'string', req: true, values: '"FieldMatch" | "EventPresent"', desc: 'Assertion verb type.' },
+    { name: 'scenarios[].title', type: 'string', req: true, values: '(max 200 chars)', desc: 'Human-readable description of what the scenario asserts. Must not be placeholder.' },
+    { name: 'scenarios[].rationale', type: 'string', req: true, values: '(free text)', desc: 'Why this scenario matters. Must not be placeholder.' },
+    { name: 'scenarios[].criticality', type: 'string', req: true, values: '"P0" | "P1" | "P2" | "P3"', desc: 'Severity. Must be one of the four valid values.' },
+    { name: 'scenarios[].discovered_by', type: 'string', req: false, values: '"diff_inspection"', desc: 'How the scenario was identified.' },
+    { name: 'scenarios[].grounding_changed_lines', type: 'array', req: true, values: '[{path, side, lines}]', desc: 'Non-empty list of anchors to changed code.' },
+    { name: '  .path', type: 'string', req: true, values: '"src/X.cs"', desc: 'File path relative to repo root. Must not be placeholder.' },
+    { name: '  .side', type: 'string', req: false, values: '"right"', desc: 'Diff side (usually "right" for additions).' },
+    { name: '  .lines', type: 'int[]', req: true, values: '[42, 43]', desc: 'Non-empty list of positive integers (no zeros).' },
+    { name: 'scenarios[]._source_llm_id', type: 'string', req: false, values: '"sk-1"', desc: 'Debug: LLM scenario ID. Added by --from-actual, stripped on finalize.' },
+    { name: 'scenarios[]._source_llm_stage', type: 'string', req: false, values: '"projected"', desc: 'Debug: LLM stage. Added by --from-actual, stripped on finalize.' },
+  ];
+
+  const example = {
+    schema_version: "2.0", pr_number: "955910",
+    curator_state: "GRADED_PASS_1", curated_at: "2026-05-18", curator: "donna",
+    pass_1_basis: "diff_inspection_blind",
+    scenarios: [{
+      id: "955910-s01", behavior_key: "adapter_threads_exec_defn_id_to_template",
+      category: "HappyPath", verb: "FieldMatch",
+      title: "RefreshTriggerAdapter forwards request.MlvExecutionDefinitionId to the template renderer",
+      rationale: "This is the wire entry for the multi-schedule feature.",
+      criticality: "P0", discovered_by: "diff_inspection",
+      grounding_changed_lines: [{ path: "Service/.../RefreshTriggerAdapter.cs", side: "right", lines: [204] }]
+    }]
+  };
+
+  return '<div class="section">' +
+    '<div class="section-title"><span class="accent-dot">\u25C6</span> Schema Inspector</div>' +
+    '<div class="section-subtitle">expected.json v2.0 schema. Click any field name to highlight it in the example JSON below.</div>' +
+    '<div class="card" style="overflow:hidden;margin-bottom:var(--sp-4)">' +
+      '<table class="schema-table">' +
+        '<thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Valid Values</th><th>Description</th></tr></thead>' +
+        '<tbody>' + fields.map(f =>
+          '<tr>' +
+            '<td><span class="field-name" onclick="highlightField(\'' + f.name.replace(/'/g, "\\'") + '\')">' + escHTML(f.name) + '</span></td>' +
+            '<td><span class="type-badge">' + escHTML(f.type) + '</span></td>' +
+            '<td>' + (f.req ? '<span style="color:var(--green);font-weight:600">\u25CF</span>' : '<span style="color:var(--text-muted)">\u25CB</span>') + '</td>' +
+            '<td style="font-family:var(--mono);font-size:var(--text-xs);color:var(--text-dim)">' + escHTML(f.values) + '</td>' +
+            '<td style="color:var(--text-dim)">' + escHTML(f.desc) + '</td>' +
+          '</tr>'
+        ).join('') +
+        '</tbody>' +
+      '</table>' +
+    '</div>' +
+    '<div style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:var(--sp-2)">Example GRADED_PASS_1 fixture (PR-955910, 1 scenario shown)</div>' +
+    renderCodePanel(example, 'schema-example') +
+  '</div>';
+}
+
+function highlightField(name) {
+  const clean = name.replace(/^scenarios\[\]\./, '').replace(/^ +\./, '');
+  const panel = document.getElementById('schema-example');
+  if (!panel) return;
+  panel.querySelectorAll('.json-highlight').forEach(el => el.classList.remove('json-highlight'));
+  const keys = panel.querySelectorAll('.json-key');
+  keys.forEach(k => {
+    if (k.textContent.includes('"' + clean + '"')) {
+      k.classList.add('json-highlight');
+      k.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+  showToast('Highlighted: ' + clean, '\u25C6');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VALIDATION PLAYGROUND
+   ═══════════════════════════════════════════════════════════════════ */
+function renderPlayground() {
+  return '<div class="section">' +
+    '<div class="section-title"><span class="accent-dot">\u25C6</span> Validation Playground</div>' +
+    '<div class="section-subtitle">Fill in a single scenario to see what <code style="font-family:var(--mono);font-size:var(--text-sm);background:var(--bg-3);padding:1px 5px;border-radius:3px">_validate_scenario()</code> would return. Errors appear as red pills inline; success shows a green pulse.</div>' +
+    '<div class="card" style="max-width:640px">' +
+      '<div class="card-body">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)">' +
+          fieldGroup('behavior_key', 'Behavior Key', 'text', 'cors_handler_allows_origin') +
+          fieldGroup('criticality', 'Criticality', 'select', '') +
+        '</div>' +
+        fieldGroup('title', 'Title', 'text', 'CorsHandler forwards Access-Control-Allow-Origin...') +
+        fieldGroup('rationale', 'Rationale', 'text', 'The middleware is the sole enforcement point...') +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)">' +
+          fieldGroup('category', 'Category', 'text', 'HappyPath') +
+          fieldGroup('verb', 'Verb', 'text', 'FieldMatch') +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:2fr 1fr;gap:var(--sp-3)">' +
+          fieldGroup('grounding_path', 'Grounding Path', 'text', 'src/Middleware/CorsHandler.cs') +
+          fieldGroup('grounding_lines', 'Lines (comma-sep)', 'text', '42,43') +
+        '</div>' +
+        '<div style="margin-top:var(--sp-4);display:flex;align-items:center;gap:var(--sp-3)">' +
+          '<button onclick="runPlaygroundValidation()" style="padding:7px 20px;border-radius:var(--r-full);font-size:var(--text-sm);font-weight:600;background:var(--accent);color:#fff;transition:all var(--t-fast) var(--ease)">Validate \u25B8</button>' +
+          '<div id="playground-result"></div>' +
+        '</div>' +
+        '<div id="playground-errors" style="margin-top:var(--sp-3)"></div>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function fieldGroup(id, label, type, placeholder) {
+  if (type === 'select') {
+    return '<div class="field-group">' +
+      '<label class="field-label" for="pg-' + id + '">' + label + '</label>' +
+      '<select class="field-select" id="pg-' + id + '">' +
+        '<option value="">Select...</option>' +
+        '<option value="P0">P0</option><option value="P1" selected>P1</option><option value="P2">P2</option><option value="P3">P3</option>' +
+      '</select></div>';
+  }
+  return '<div class="field-group">' +
+    '<label class="field-label" for="pg-' + id + '">' + label + '</label>' +
+    '<input class="field-input" type="text" id="pg-' + id + '" placeholder="' + escHTML(placeholder) + '"></div>';
+}
+
+function runPlaygroundValidation() {
+  const v = (id) => (document.getElementById('pg-' + id) || {}).value || '';
+  const linesRaw = v('grounding_lines');
+  const lines = linesRaw ? linesRaw.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n)) : [];
+
+  const sc = {
+    behavior_key: v('behavior_key'),
+    criticality: v('criticality'),
+    title: v('title'),
+    rationale: v('rationale'),
+    category: v('category'),
+    verb: v('verb'),
+    grounding_changed_lines: [{
+      path: v('grounding_path'),
+      side: 'right',
+      lines: lines
+    }]
+  };
+
+  const errors = validateScenario(sc, 0);
+  const resultEl = document.getElementById('playground-result');
+  const errorsEl = document.getElementById('playground-errors');
+
+  // Clear error styling
+  document.querySelectorAll('.field-input.has-error').forEach(el => el.classList.remove('has-error'));
+
+  if (errors.length === 0) {
+    resultEl.innerHTML = '<span class="success-pulse">\u2713 Scenario is valid</span>';
+    errorsEl.innerHTML = '';
+    showToast('Validation passed', '\u2713');
+  } else {
+    resultEl.innerHTML = '<span class="badge badge-red">' + errors.length + ' error(s)</span>';
+    errorsEl.innerHTML = errors.map(e => '<div class="error-pill">' + escHTML(e) + '</div>').join(' ');
+    // Highlight errored fields
+    errors.forEach(e => {
+      if (e.includes('behavior_key')) markError('behavior_key');
+      if (e.includes('rationale')) markError('rationale');
+      if (e.includes('criticality')) markError('criticality');
+      if (e.includes('.title')) markError('title');
+      if (e.includes('.path')) markError('grounding_path');
+      if (e.includes('.lines')) markError('grounding_lines');
+    });
+  }
+}
+
+function markError(id) {
+  const el = document.getElementById('pg-' + id);
+  if (el) el.classList.add('has-error');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FOOTER AUDIT TRAIL
+   ═══════════════════════════════════════════════════════════════════ */
+function renderFooterAudit() {
+  return '<div class="footer-section">' +
+    '<div style="font-size:var(--text-md);font-weight:600;margin-bottom:var(--sp-3)">State Machine</div>' +
+    '<div class="state-machine-row">' +
+      '<span class="state-node" style="background:var(--amber-dim);border-color:var(--amber);color:var(--amber)">PENDING_HUMAN_GRADING</span>' +
+      '<span class="state-arrow">\u2192</span>' +
+      '<span class="state-node" style="background:var(--accent-dim);border-color:var(--accent);color:var(--accent)">prepare</span>' +
+      '<span class="state-arrow">\u2192</span>' +
+      '<span class="state-node" style="background:var(--bg-3)">curator edits</span>' +
+      '<span class="state-arrow">\u2192</span>' +
+      '<span class="state-node" style="background:var(--accent-dim);border-color:var(--accent);color:var(--accent)">finalize</span>' +
+      '<span class="state-arrow">\u2192</span>' +
+      '<span class="state-node" style="background:var(--green-dim);border-color:var(--green);color:var(--green)">GRADED_PASS_1</span>' +
+    '</div>' +
+    '<div style="margin-top:var(--sp-4);font-size:var(--text-sm);color:var(--text-dim)">' +
+      '<div style="font-weight:600;margin-bottom:var(--sp-1)">Files touched per subcommand:</div>' +
+      '<table style="font-size:var(--text-sm);border-collapse:collapse">' +
+        '<tr><td style="padding:3px 16px 3px 0;font-family:var(--mono);font-weight:500;color:var(--accent)">prepare</td><td>Reads: <code style="font-family:var(--mono);font-size:11px">expected.json</code>, <code style="font-family:var(--mono);font-size:11px">actual.json</code> (if --from-actual). Writes: <code style="font-family:var(--mono);font-size:11px">expected.json</code>, <code style="font-family:var(--mono);font-size:11px">expected.json.bak</code></td></tr>' +
+        '<tr><td style="padding:3px 16px 3px 0;font-family:var(--mono);font-weight:500;color:var(--accent)">finalize</td><td>Reads + writes: <code style="font-family:var(--mono);font-size:11px">expected.json</code>. Deletes: <code style="font-family:var(--mono);font-size:11px">expected.json.bak</code></td></tr>' +
+        '<tr><td style="padding:3px 16px 3px 0;font-family:var(--mono);font-weight:500;color:var(--accent)">list</td><td>Reads: <code style="font-family:var(--mono);font-size:11px">expected.json</code> in every <code style="font-family:var(--mono);font-size:11px">PR-*</code> directory</td></tr>' +
+      '</table>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════════ */
+render();
+</script>
+</body>
+</html>
