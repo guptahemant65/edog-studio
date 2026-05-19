@@ -64,6 +64,8 @@ class QaPanel {
     this._killSwitch = document.getElementById('qaKillSwitch');
     this._killBtn = document.getElementById('qaKillBtn');
     this._editorOverlay = document.getElementById('qaEditorOverlay');
+    this._llmPill = document.getElementById('qaLlmPill');
+    this._llmPillLabel = document.getElementById('qaLlmPillLabel');
 
     // Stage bar: click completed stages to navigate back
     if (this._stageBar) {
@@ -78,6 +80,12 @@ class QaPanel {
     // Kill switch
     if (this._killBtn) {
       this._killBtn.addEventListener('click', () => this._handleKillSwitch());
+    }
+
+    // LLM readiness pill — click to refresh the capability state.
+    // Useful when the probe was mid-flight at first connect.
+    if (this._llmPill) {
+      this._llmPill.addEventListener('click', () => this._loadCapabilities(true));
     }
 
     // Subscribe to QA server events via topic bus
@@ -116,6 +124,106 @@ class QaPanel {
   setPhase(phase) {
     this._phase = phase;
     this._updatePhaseGate();
+    if (phase === 'connected') {
+      // Probe state may take a few seconds to settle on cold start.
+      // Load once now, then poll-refresh after 3s if still 'unknown'.
+      this._loadCapabilities(false);
+    } else {
+      this._renderLlmPill(null);
+    }
+  }
+
+  // ── LLM V2 readiness pill ──
+  //
+  // QaGetCapabilities is wired in the hub (EdogPlaygroundHub.cs) and
+  // returns the QaCapabilityReport that the registry builds from the
+  // probe's last DualProbeResult. The pill is purely informational —
+  // QA analysis runs regardless of state, but a green pill confirms
+  // that scenarios will use the Architect + Editor pipeline rather
+  // than the legacy single-prompt fallback.
+
+  _loadCapabilities(isManualRefresh) {
+    if (!this._llmPill || !this._ws || !this._ws.connection) return;
+    const conn = this._ws.connection;
+    if (!conn || conn.state !== 'Connected') {
+      this._renderLlmPill(null);
+      return;
+    }
+    if (isManualRefresh) {
+      this._renderLlmPill({ state: 'refreshing' });
+    }
+    conn.invoke('QaGetCapabilities').then((report) => {
+      this._renderLlmPill(report);
+      // If the probe was mid-flight, poll once more after 4s. The
+      // dual probe normally takes < 2s on a healthy tenant.
+      if (
+        report &&
+        !report.llmV2ProbedAt &&
+        !this._llmPillRetryScheduled
+      ) {
+        this._llmPillRetryScheduled = true;
+        setTimeout(() => {
+          this._llmPillRetryScheduled = false;
+          this._loadCapabilities(false);
+        }, 4000);
+      }
+    }).catch((err) => {
+      console.warn('[qa-panel] QaGetCapabilities failed:', err);
+      this._renderLlmPill({ state: 'error', error: String(err && err.message || err) });
+    });
+  }
+
+  _renderLlmPill(report) {
+    if (!this._llmPill || !this._llmPillLabel) return;
+    if (!report) {
+      this._llmPill.style.display = 'none';
+      return;
+    }
+    this._llmPill.style.display = '';
+    this._llmPill.classList.remove(
+      'qa-llm-pill-ready',
+      'qa-llm-pill-legacy',
+      'qa-llm-pill-error',
+      'qa-llm-pill-unknown'
+    );
+
+    if (report.state === 'refreshing') {
+      this._llmPill.classList.add('qa-llm-pill-unknown');
+      this._llmPillLabel.textContent = 'LLM: refreshing…';
+      this._llmPill.title = 'Refreshing capability probe…';
+      return;
+    }
+    if (report.state === 'error') {
+      this._llmPill.classList.add('qa-llm-pill-error');
+      this._llmPillLabel.textContent = 'LLM: hub error';
+      this._llmPill.title = report.error || 'Capability hub call failed.';
+      return;
+    }
+    if (!report.llmV2ProbedAt) {
+      this._llmPill.classList.add('qa-llm-pill-unknown');
+      this._llmPillLabel.textContent = 'LLM: probing…';
+      this._llmPill.title = report.llmV2Reason || 'Capability probe still in flight.';
+      return;
+    }
+    if (report.llmV2Ready) {
+      this._llmPill.classList.add('qa-llm-pill-ready');
+      this._llmPillLabel.textContent = 'LLM V2: ready';
+      this._llmPill.title = report.llmV2Reason || 'Architect + Editor probes passed.';
+    } else {
+      // Legacy-fallback path (Auto mode + probe failed) is the most
+      // common case; show orange so users know they're on the
+      // degraded pipeline.
+      const mode = (report.llmV2RequestedMode || '').toLowerCase();
+      const legacyPath = mode === 'auto' || mode === 'off' || mode === 'shadow';
+      if (legacyPath) {
+        this._llmPill.classList.add('qa-llm-pill-legacy');
+        this._llmPillLabel.textContent = 'LLM: legacy fallback';
+      } else {
+        this._llmPill.classList.add('qa-llm-pill-error');
+        this._llmPillLabel.textContent = 'LLM: not ready';
+      }
+      this._llmPill.title = report.llmV2Reason || 'V2 probe failed — see studio logs.';
+    }
   }
 
   destroy() {

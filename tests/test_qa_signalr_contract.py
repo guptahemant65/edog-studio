@@ -141,6 +141,7 @@ EXPECTED_JS_INVOKES: set[str] = {
     "QaGetRunDetail",
     "QaGetRunHistory",
     "QaCompareRuns",  # F27 P7 — wired by qa-results.js compare dropdown
+    "QaGetCapabilities",  # F27 P9 V2 wiring — qa-panel.js LLM readiness pill
 }
 
 EXPECTED_JS_EVENT_CASES: set[str] = {
@@ -165,7 +166,6 @@ EXPECTED_JS_EVENT_CASES: set[str] = {
 SERVER_ONLY_HUB_METHODS: set[str] = {
     "QaCancelRun",  # Cancel button planned, not yet wired in qa-execution.js
     "QaGetTelemetry",  # F27 P0 — used by tests + future telemetry banner UI
-    "QaGetCapabilities",  # F27 P5 — used by tests; UI badges land with Stage 2 frontend
 }
 
 # Event handlers the JS prepares for but the C# side does not yet emit.

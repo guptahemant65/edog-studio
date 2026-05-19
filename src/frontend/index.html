@@ -455,6 +455,11 @@ window.onerror = function(msg, src, line, col, err) {
               <span class="qa-stage-num">5</span>
               <span class="qa-stage-label">Results</span>
             </div>
+            <!-- LLM V2 readiness pill (set by QaPanel._loadCapabilities) -->
+            <div class="qa-llm-pill qa-llm-pill-unknown" id="qaLlmPill" title="LLM pipeline readiness — click to refresh" style="display:none">
+              <span class="qa-llm-pill-dot" aria-hidden="true">&#9679;</span>
+              <span class="qa-llm-pill-label" id="qaLlmPillLabel">LLM: checking…</span>
+            </div>
             <!-- Kill switch (right-aligned, shown during execution) -->
             <div class="qa-kill-switch" id="qaKillSwitch" style="display:none">
               <button class="qa-kill-btn" id="qaKillBtn" title="Abort execution">&#10005; Kill</button>
