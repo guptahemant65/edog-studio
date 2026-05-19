@@ -195,6 +195,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <inheritdoc/>
+        public async Task WriteFileBytesAsync(string path, byte[] content, CancellationToken cancellationToken = default)
+        {
+            var sw = Stopwatch.StartNew();
+            await _inner.WriteFileBytesAsync(path, content, cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+
+            var contentSize = content?.Length ?? 0;
+
+            PublishEvent("WriteFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: content != null, contentPreview: null, ttlSeconds: 0);
+        }
+
+        /// <inheritdoc/>
         public async Task<(List<string> Paths, string ContinuationToken)> ListWithContinuationAsync(string path, int maxCount = default, string continuationToken = null, CancellationToken cancellationToken = default)
         {
             var sw = Stopwatch.StartNew();
