@@ -58,6 +58,19 @@ namespace Microsoft.LiveTable.Service.DevMode
                 // Nexus aggregator — consumes topic events, emits dependency graph snapshots
                 StartNexusAggregator();
 
+                // Dynamic runtime discovery — reflection-based scan of FLT internals
+                // (DI registrations, cache fields, code markers, EDOG wrappers).
+                // Runs LAST so all interceptors are wired before we probe DI state.
+                // Wrapped here defensively even though DiscoverAll has its own try/catch.
+                try
+                {
+                    EdogRuntimeDiscovery.DiscoverAll();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[EDOG] ✗ Runtime discovery threw (non-fatal): {ex.Message}");
+                }
+
                 // Set the flag only AFTER all work completes. If an exception bubbled out of
                 // the inner Register* methods (each has its own try/catch, so unlikely), we
                 // want RegisterAll() to be retryable on the next invocation rather than

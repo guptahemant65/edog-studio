@@ -96,6 +96,7 @@ DEVMODE_FILES = {
     "EdogCacheInterceptor": SERVICE_PATH / "DevMode/EdogCacheInterceptor.cs",
     "EdogSparkSessionInterceptor": SERVICE_PATH / "DevMode/EdogSparkSessionInterceptor.cs",
     "EdogSparkClientWrapper": SERVICE_PATH / "DevMode/EdogSparkClientWrapper.cs",
+    "EdogRuntimeDiscovery": SERVICE_PATH / "DevMode/EdogRuntimeDiscovery.cs",
     "EdogDiRegistryCapture": SERVICE_PATH / "DevMode/EdogDiRegistryCapture.cs",
     "EdogAuthDiagnostic": SERVICE_PATH / "DevMode/EdogAuthDiagnostic.cs",
     "EdogTokenLifecycleInterceptor": SERVICE_PATH / "DevMode/EdogTokenLifecycleInterceptor.cs",
