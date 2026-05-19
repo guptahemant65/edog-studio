@@ -264,8 +264,18 @@ class TopBar {
   }
 
   _updateSidebarDot(color) {
-    if (!this._sidebarDot) return;
-    this._sidebarDot.className = 'sidebar-token-dot' + (color ? ' ' + color : '');
+    if (this._sidebarDot) {
+      this._sidebarDot.className = 'sidebar-token-dot' + (color ? ' ' + color : '');
+    }
+    // Mirror to the new sidebar token ring (legacy dot may not exist in DOM).
+    if (window.edogSidebar && typeof window.edogSidebar.setTokenHealth === 'function') {
+      var status = color === 'green' ? 'healthy'
+        : color === 'amber' ? 'warning'
+        : color === 'red' ? 'expired'
+        : 'none';
+      var timeLabel = (this._tokenCountdownEl && status !== 'none') ? this._tokenCountdownEl.textContent : '';
+      window.edogSidebar.setTokenHealth(status, timeLabel);
+    }
   }
 
   // ─── Token Inspector ───
@@ -718,6 +728,35 @@ class TopBar {
 
   _tickInspectorTTL() {
     var now = Date.now();
+
+    // Decode view uses fixed IDs for its single visible card.
+    if (this._inspectorView === 'decode' && this._decodeTarget) {
+      var dt = this._decodeTarget;
+      var dTtlEl = document.getElementById('ti-decode-ttl');
+      var dBarEl = document.getElementById('ti-decode-bar');
+      if (dTtlEl) {
+        var dRemainSec = Math.max(0, Math.floor((dt.expiresAt - now) / 1000));
+        var dTotalSec = Math.max(1, Math.floor((dt.expiresAt - dt.issuedAt) / 1000));
+        var dPct = dt.expiresAt > now ? Math.min(100, Math.round((dRemainSec / dTotalSec) * 100)) : 0;
+        var dExpired = dt.expiresAt <= now;
+        var dColor = dExpired ? 'expired' : dRemainSec > 600 ? 'green' : dRemainSec > 300 ? 'amber' : 'red';
+        if (dExpired) {
+          var dAgoMin = Math.floor((now - dt.expiresAt) / 60000);
+          dTtlEl.textContent = 'EXPIRED ' + (dAgoMin < 1 ? '<1m ago' : dAgoMin + 'm ago');
+        } else {
+          var dMm = Math.floor(dRemainSec / 60);
+          var dSs = dRemainSec % 60;
+          dTtlEl.textContent = dMm + 'm ' + dSs + 's remaining';
+        }
+        dTtlEl.className = 'ti-ttl-badge ' + dColor;
+        if (dBarEl) {
+          dBarEl.style.width = dPct + '%';
+          dBarEl.className = 'ti-card-bar-fill ' + dColor;
+        }
+      }
+      return;
+    }
+
     for (var i = 0; i < this._inspectorTokens.length; i++) {
       var tok = this._inspectorTokens[i];
       var ttlEl = document.querySelector('[data-ti-ttl="' + i + '"]');

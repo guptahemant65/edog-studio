@@ -21,6 +21,7 @@ class TokensTab {
     // ── State ──
     this._tokenMap = new Map();   // dedupKey -> token object
     this._rawEvents = [];         // raw event log (capped)
+    this._lifecycleEvents = [];   // token lifecycle events (OboExchange, TokenAcquired, etc.)
     this._selectedKey = null;
     this._kbIndex = -1;
     this._typeFilter = 'all';
@@ -47,10 +48,6 @@ class TokensTab {
     this._detailAud = null;
     this._detailBody = null;
     this._tooltipEl = null;
-
-    // ── SVG ring constants ──
-    this._RING_R = 18;
-    this._RING_C = 2 * Math.PI * this._RING_R;
 
     // ── Token type resolution table ──
     this._TYPE_TABLE = {
@@ -133,13 +130,70 @@ class TokensTab {
   _onEvent = (event) => {
     if (!event || !event.data) return;
     const d = event.data;
+    const eventTime = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
 
+    // ── Lifecycle event branch (OboExchange, TokenAcquired, TokenCached,
+    //    TokenRefreshAttempt, TokenEvicted). These carry no audience/expiry —
+    //    they describe operations, not token issuance. ──
+    if (d.event) {
+      const resolvedKey = this._resolveType(d.tokenType).key;
+      const lifeEntry = {
+        time: eventTime,
+        event: d.event,
+        tokenType: resolvedKey,
+        audience: d.audience || '',
+        lakehouseId: d.lakehouseId || '',
+        iterationId: d.iterationId || '',
+        tenantId: d.tenantId || '',
+        durationMs: typeof d.durationMs === 'number' ? d.durationMs : null,
+        cacheInference: d.cacheInference || '',
+        success: d.success,
+        refreshed: d.refreshed,
+        errorType: d.errorType || ''
+      };
+      this._lifecycleEvents.push(lifeEntry);
+      if (this._lifecycleEvents.length > this._maxEvents) this._lifecycleEvents.shift();
+
+      // Attach to any matching tokens (by resolved type; audience match optional)
+      for (const tok of this._tokenMap.values()) {
+        if (tok.typeKey !== resolvedKey) continue;
+        if (lifeEntry.audience && tok.audience && tok.audience !== lifeEntry.audience) continue;
+        tok.lifecycle.push(lifeEntry);
+        if (tok.lifecycle.length > 50) tok.lifecycle.shift();
+
+        // Refresh count from successful TokenRefreshAttempt lifecycle events
+        if (d.event === 'TokenRefreshAttempt' && d.refreshed === true) {
+          tok.refreshCount++;
+        }
+        // Track cache events
+        if (d.event === 'TokenCached' && d.success === true) {
+          tok.cacheWriteCount = (tok.cacheWriteCount || 0) + 1;
+        }
+        if (d.event === 'TokenEvicted' && d.success === true) {
+          tok.evictionCount = (tok.evictionCount || 0) + 1;
+        }
+      }
+
+      if (this._isActive) this._render();
+      // Refresh detail panel if open and showing a matching token
+      if (this._selectedKey) {
+        const selected = this._tokenMap.get(this._selectedKey);
+        if (selected && selected.typeKey === resolvedKey) {
+          this._renderDetailBody(selected);
+        }
+      }
+      return;
+    }
+
+    // ── HTTP pipeline event branch ──
     const typeInfo = this._resolveType(d.tokenType);
     const audience = d.audience || '';
-    const dedupKey = typeInfo.key + '|' + audience;
+    // Include scope in dedup key so tokens with same type+audience but
+    // different scopes don't collapse into one card.
+    const scope = (d.claims && d.claims.scp) ? String(d.claims.scp) : '';
+    const dedupKey = typeInfo.key + '|' + audience + (scope ? '|' + scope : '');
     const issuedMs = d.issuedUtc ? new Date(d.issuedUtc).getTime() : Date.now();
     const expiresMs = d.expiryUtc ? new Date(d.expiryUtc).getTime() : (issuedMs + 3600000);
-    const eventTime = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
 
     // Store raw event (capped)
     this._rawEvents.push({ time: eventTime, type: typeInfo.key, audience: audience, endpoint: d.endpoint || '' });
@@ -150,7 +204,9 @@ class TokensTab {
     if (existing) {
       // Token already tracked for this type+audience
       const tokenExpired = existing.expiresAt <= Date.now();
-      const isNewIssuance = Math.abs(existing.issuedAt - issuedMs) > 5000;
+      // 1000ms threshold: tokens reissued within the same second are the
+      // same issuance; anything beyond that is a refresh worth counting.
+      const isNewIssuance = Math.abs(existing.issuedAt - issuedMs) > 1000;
 
       if (tokenExpired && isNewIssuance) {
         // Expired token refreshed with a new issuance
@@ -189,15 +245,19 @@ class TokensTab {
         rawType: d.tokenType || '',
         scheme: d.scheme || typeInfo.label,
         audience: audience,
+        scope: scope,
         issuedAt: issuedMs,
         expiresAt: expiresMs,
         httpClientName: d.httpClientName || '',
         usageCount: 1,
         refreshCount: 0,
+        cacheWriteCount: 0,
+        evictionCount: 0,
         lastSeen: eventTime,
         lastEndpoint: d.endpoint || '',
         jwtClaims: d.claims || {},
-        usage: []
+        usage: [],
+        lifecycle: []
       };
 
       if (d.endpoint) {
@@ -383,7 +443,22 @@ class TokensTab {
     }
 
     const fragment = document.createDocumentFragment();
-    visible.forEach(tok => fragment.appendChild(this._buildCard(tok)));
+    let dividerInserted = false;
+    visible.forEach(tok => {
+      // Insert a subtle divider between the last active token and the first
+      // expired token. Sort puts active tokens first; expired tokens last.
+      if (!dividerInserted && this._isExpired(tok)) {
+        const hasActive = visible.some(t => !this._isExpired(t));
+        if (hasActive) {
+          const divider = document.createElement('div');
+          divider.className = 'tok-divider';
+          divider.innerHTML = '<span class="tok-divider-label">Expired</span>';
+          fragment.appendChild(divider);
+        }
+        dividerInserted = true;
+      }
+      fragment.appendChild(this._buildCard(tok));
+    });
     this._cardsEl.innerHTML = '';
     this._cardsEl.appendChild(fragment);
   }
@@ -635,12 +710,15 @@ class TokensTab {
     let metaRows =
       '<div class="tok-jwt-row"><span class="tok-jwt-key">scheme</span><span class="tok-jwt-val">' + this._escHTML(tok.scheme) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">audience</span><span class="tok-jwt-val">' + this._escHTML(tok.audience) + '</span></div>' +
+      (tok.scope ? '<div class="tok-jwt-row"><span class="tok-jwt-key">scope</span><span class="tok-jwt-val">' + this._escHTML(tok.scope) + '</span></div>' : '') +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">httpClient</span><span class="tok-jwt-val">' + this._escHTML(tok.httpClientName) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">issued</span><span class="tok-jwt-val">' + this._fmtTimestamp(Math.floor(tok.issuedAt / 1000)) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">expires</span><span class="tok-jwt-val' + (this._isExpired(tok) ? ' highlight' : '') + '">' + this._fmtTimestamp(Math.floor(tok.expiresAt / 1000)) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">TTL</span><span class="tok-jwt-val">' + this._fmtTTL(tok) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">usage</span><span class="tok-jwt-val">' + tok.usageCount + ' calls</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">refreshed</span><span class="tok-jwt-val">' + tok.refreshCount + '\u00D7</span></div>' +
+      (tok.cacheWriteCount ? '<div class="tok-jwt-row"><span class="tok-jwt-key">cached</span><span class="tok-jwt-val">' + tok.cacheWriteCount + '\u00D7</span></div>' : '') +
+      (tok.evictionCount ? '<div class="tok-jwt-row"><span class="tok-jwt-key">evicted</span><span class="tok-jwt-val">' + tok.evictionCount + '\u00D7</span></div>' : '') +
       (tok.rawType && tok.rawType !== tok.typeLabel ? '<div class="tok-jwt-row"><span class="tok-jwt-key">rawType</span><span class="tok-jwt-val">' + this._escHTML(tok.rawType) + '</span></div>' : '');
 
     let usageRows = '';
@@ -651,6 +729,29 @@ class TokensTab {
           '<span class="tok-usage-time">' + this._fmtTime(u.time) + '</span>' +
           '<span class="tok-usage-method ' + mc + '">' + u.method + '</span>' +
           '<span class="tok-usage-path">' + this._escHTML(u.path) + '</span>' +
+        '</div>';
+    });
+
+    // Lifecycle events (most recent first)
+    let lifecycleRows = '';
+    const life = (tok.lifecycle || []).slice().reverse();
+    life.forEach(le => {
+      const cls = le.success === false || le.errorType ? 'err'
+        : le.event === 'TokenEvicted' ? 'warn'
+        : le.event === 'TokenRefreshAttempt' && le.refreshed ? 'ok'
+        : le.event === 'TokenAcquired' && le.cacheInference === 'hit' ? 'ok'
+        : '';
+      let meta = '';
+      if (le.cacheInference) meta += ' \u00B7 ' + le.cacheInference;
+      if (le.refreshed === true) meta += ' \u00B7 refreshed';
+      if (le.refreshed === false) meta += ' \u00B7 not refreshed';
+      if (le.durationMs !== null && le.durationMs !== undefined) meta += ' \u00B7 ' + le.durationMs + 'ms';
+      if (le.errorType) meta += ' \u00B7 ' + this._escHTML(le.errorType);
+      lifecycleRows +=
+        '<div class="tok-usage-row tok-life-row ' + cls + '">' +
+          '<span class="tok-usage-time">' + this._fmtTime(le.time) + '</span>' +
+          '<span class="tok-usage-method ' + cls + '">' + this._escHTML(le.event) + '</span>' +
+          '<span class="tok-usage-path">' + this._escHTML(meta.replace(/^ \u00B7 /, '')) + '</span>' +
         '</div>';
     });
 
@@ -677,6 +778,15 @@ class TokensTab {
             (usageRows || '<div style="padding:12px;color:var(--text-muted);text-align:center">No API calls recorded</div>') +
           '</div>' +
         '</div>' +
+        (life.length ?
+          '<div class="tok-usage-panel">' +
+            '<div class="tok-usage-header">' +
+              '<svg viewBox="0 0 24 24"><path d="M12 8v5l4.25 2.52.77-1.28-3.52-2.09V8z"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>' +
+              'Lifecycle Events (' + life.length + ')' +
+            '</div>' +
+            '<div class="tok-usage-body">' + lifecycleRows + '</div>' +
+          '</div>'
+        : '') +
       '</div>';
   }
 
@@ -754,11 +864,11 @@ class TokensTab {
   _onKeyDown(e) {
     const cards = Array.from(this._cardsEl.querySelectorAll('.tok-card'));
 
-    if (e.key === 'ArrowDown' && cards.length) {
+    if ((e.key === 'ArrowDown' || e.key === 'j') && cards.length && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       this._kbIndex = Math.min(this._kbIndex + 1, cards.length - 1);
       this._focusCard(cards);
-    } else if (e.key === 'ArrowUp' && cards.length) {
+    } else if ((e.key === 'ArrowUp' || e.key === 'k') && cards.length && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       this._kbIndex = Math.max(this._kbIndex - 1, 0);
       this._focusCard(cards);
@@ -868,7 +978,11 @@ class TokensTab {
           tok.lastEndpoint
         ]);
       });
-      content = rows.map(r => r.join(',')).join('\n');
+      const escCsv = (v) => {
+        const s = v === null || v === undefined ? '' : String(v);
+        return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      content = rows.map(r => r.map(escCsv).join(',')).join('\n');
     }
 
     try { navigator.clipboard.writeText(content); } catch (_) { /* clipboard may not be available */ }
@@ -892,7 +1006,23 @@ class TokensTab {
   _copyCurl() {
     const tok = this._tokenMap.get(this._selectedKey);
     if (!tok) return;
-    const curl = 'curl -H "Authorization: ' + tok.scheme + ' <' + tok.typeLabel + '_TOKEN>" https://' + tok.audience + '/v1/resource';
+    const ep = tok.lastEndpoint || '';
+    let url;
+    if (/^https?:\/\//i.test(ep)) {
+      url = ep;
+    } else if (ep && tok.audience) {
+      url = (tok.audience.startsWith('http') ? tok.audience : 'https://' + tok.audience) +
+            (ep.startsWith('/') ? ep : '/' + ep);
+    } else if (tok.audience) {
+      url = tok.audience.startsWith('http') ? tok.audience : 'https://' + tok.audience;
+    } else {
+      url = 'https://api.example.com';
+    }
+    const method = this._guessMethod(ep);
+    const curl =
+      'curl -X ' + method + ' \\\n' +
+      '  -H "Authorization: ' + tok.scheme + ' <' + tok.typeLabel + '_TOKEN>" \\\n' +
+      '  "' + url + '"';
     try { navigator.clipboard.writeText(curl); } catch (_) { /* */ }
   }
 

@@ -680,6 +680,11 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.tok-detail-resize:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.08));
 }
 
 .tok-detail-resize::after {
@@ -688,6 +693,62 @@
   height: 3px;
   border-radius: 2px;
   background: var(--border-bright);
+  transition: width 120ms ease, background 120ms ease;
+}
+
+.tok-detail-resize:hover::after {
+  width: 56px;
+  background: var(--accent, var(--text-dim));
+}
+
+/* ── Divider between active and expired tokens ── */
+.tok-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) var(--space-2) var(--space-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tok-divider::before,
+.tok-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.tok-divider-label {
+  padding: 0 var(--space-2);
+}
+
+/* ── Lifecycle event rows ── */
+.tok-life-row .tok-usage-method {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(127, 127, 127, 0.1));
+  color: var(--text-dim);
+}
+
+.tok-life-row .tok-usage-method.ok {
+  background: var(--status-succeeded-dim, rgba(34, 197, 94, 0.15));
+  color: var(--status-succeeded);
+}
+
+.tok-life-row .tok-usage-method.warn {
+  background: var(--level-warning-dim, rgba(245, 158, 11, 0.15));
+  color: var(--level-warning);
+}
+
+.tok-life-row .tok-usage-method.err {
+  background: var(--level-error-dim, rgba(239, 68, 68, 0.15));
+  color: var(--level-error);
 }
 
 .tok-detail-header {
