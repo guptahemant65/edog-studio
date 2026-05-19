@@ -48,6 +48,13 @@ class CachesTab {
     // Build UI
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to cache topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('cache', this._onCacheEvent);
+      this._signalr.subscribeTopic('cache');
+    }
   }
 
   // ── Lifecycle ──
@@ -55,10 +62,7 @@ class CachesTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('cache', this._onCacheEvent);
-      this._signalr.subscribeTopic('cache');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._keyHandler);
     document.addEventListener('click', this._onDocClick);
     this._filterAndRender();
@@ -68,10 +72,7 @@ class CachesTab {
     this._active = false;
     document.removeEventListener('keydown', this._keyHandler);
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.off('cache', this._onCacheEvent);
-      this._signalr.unsubscribeTopic('cache');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ── DOM Construction ──

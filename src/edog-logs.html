@@ -52885,6 +52885,13 @@ class SystemFilesTab {
     this._onDocKeyDown = (e) => this._handleKeyDown(e);
 
     this._buildDOM();
+
+    // Subscribe to fileop topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('fileop', this._onEvent);
+      this._signalr.subscribeTopic('fileop');
+    }
   }
 
   // ── Lifecycle ──
@@ -52892,10 +52899,7 @@ class SystemFilesTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('fileop', this._onEvent);
-      this._signalr.subscribeTopic('fileop');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('click', this._onDocClick);
     document.addEventListener('keydown', this._onDocKeyDown);
     this._createBodyEls();
@@ -52904,10 +52908,7 @@ class SystemFilesTab {
 
   deactivate() {
     this._active = false;
-    if (this._signalr) {
-      this._signalr.unsubscribeTopic('fileop');
-      this._signalr.off('fileop', this._onEvent);
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     document.removeEventListener('click', this._onDocClick);
     document.removeEventListener('keydown', this._onDocKeyDown);
     clearTimeout(this._toastTimer);
@@ -54172,6 +54173,13 @@ class SparkSessionsTab {
     this._buildDOM();
     this._bindStaticListeners();
     this._tooltipEl = null;
+
+    // Subscribe to spark topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on("spark", this._boundOnEvent);
+      this._signalr.subscribeTopic("spark");
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -54182,10 +54190,7 @@ class SparkSessionsTab {
     if (this._active) return;
     this._active = true;
 
-    if (this._signalr) {
-      this._signalr.on("spark", this._boundOnEvent);
-      this._signalr.subscribeTopic("spark");
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
 
     document.addEventListener("keydown", this._boundKeyDown);
     document.addEventListener("click", this._boundDocClick);
@@ -54199,10 +54204,7 @@ class SparkSessionsTab {
     if (!this._active) return;
     this._active = false;
 
-    if (this._signalr) {
-      this._signalr.off("spark", this._boundOnEvent);
-      this._signalr.unsubscribeTopic("spark");
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
 
     document.removeEventListener("keydown", this._boundKeyDown);
     document.removeEventListener("click", this._boundDocClick);
@@ -55820,6 +55822,13 @@ class TokensTab {
 
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to token topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('token', this._onEvent);
+      this._signalr.subscribeTopic('token');
+    }
   }
 
   // ═══════ LIFECYCLE ═══════
@@ -55827,10 +55836,7 @@ class TokensTab {
   activate() {
     if (this._isActive) return;
     this._isActive = true;
-    if (this._signalr) {
-      this._signalr.on('token', this._onEvent);
-      this._signalr.subscribeTopic('token');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('click', this._onDocClick);
     this._startTicking();
     this._render();
@@ -55839,10 +55845,7 @@ class TokensTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.unsubscribeTopic('token');
-      this._signalr.off('token', this._onEvent);
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     this._stopTicking();
   }
 
@@ -56764,6 +56767,13 @@ class CachesTab {
     // Build UI
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to cache topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('cache', this._onCacheEvent);
+      this._signalr.subscribeTopic('cache');
+    }
   }
 
   // ── Lifecycle ──
@@ -56771,10 +56781,7 @@ class CachesTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('cache', this._onCacheEvent);
-      this._signalr.subscribeTopic('cache');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._keyHandler);
     document.addEventListener('click', this._onDocClick);
     this._filterAndRender();
@@ -56784,10 +56791,7 @@ class CachesTab {
     this._active = false;
     document.removeEventListener('keydown', this._keyHandler);
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.off('cache', this._onCacheEvent);
-      this._signalr.unsubscribeTopic('cache');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ── DOM Construction ──
@@ -57706,34 +57710,35 @@ class HttpPipelineTab {
     // Build DOM
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to http topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('http', this._onEvent);
+      this._signalr.subscribeTopic('http');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════════════════
 
-  /** Called when tab becomes visible. Subscribe to `http` topic. */
+  /** Called when tab becomes visible. */
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('http', this._onEvent);
-      this._signalr.subscribeTopic('http');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._globalKeyHandler);
     document.addEventListener('click', this._onDocClick);
     this._scheduleRender();
   }
 
-  /** Called when tab is hidden. Unsubscribe to save resources. */
+  /** Called when tab is hidden. */
   deactivate() {
     this._active = false;
     document.removeEventListener('keydown', this._globalKeyHandler);
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.off('http', this._onEvent);
-      this._signalr.unsubscribeTopic('http');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -59038,6 +59043,13 @@ class RetriesTab {
 
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to retry topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('retry', this._onEvent);
+      this._signalr.subscribeTopic('retry');
+    }
   }
 
   // ═══════════════════════════════════════════
@@ -59047,10 +59059,7 @@ class RetriesTab {
   activate() {
     if (this._isActive) return;
     this._isActive = true;
-    if (this._signalr) {
-      this._signalr.on('retry', this._onEvent);
-      this._signalr.subscribeTopic('retry');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._onKeyDown);
     document.addEventListener('click', this._onDocClick);
     this._render();
@@ -59058,10 +59067,7 @@ class RetriesTab {
 
   deactivate() {
     this._isActive = false;
-    if (this._signalr) {
-      this._signalr.off('retry', this._onEvent);
-      this._signalr.unsubscribeTopic('retry');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     document.removeEventListener('keydown', this._onKeyDown);
     document.removeEventListener('click', this._onDocClick);
     this._clearAllCountdowns();
@@ -60473,6 +60479,13 @@ class FeatureFlagsTab {
     // Build DOM
     this._build();
     this._bindEvents();
+
+    // Subscribe to flag topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('flag', this._onEvent);
+      this._signalr.subscribeTopic('flag');
+    }
   }
 
   // ── Lifecycle ───────────────────────────────────────────────
@@ -60481,10 +60494,7 @@ class FeatureFlagsTab {
   activate() {
     if (this._isActive) return; // idempotent guard
     this._isActive = true;
-    if (this._signalr) {
-      this._signalr.on('flag', this._onEvent);
-      this._signalr.subscribeTopic('flag');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._onKeyDown);
   }
 
@@ -60492,10 +60502,7 @@ class FeatureFlagsTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('keydown', this._onKeyDown);
-    if (this._signalr) {
-      this._signalr.off('flag', this._onEvent);
-      this._signalr.unsubscribeTopic('flag');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ── SignalR event handler ───────────────────────────────────
@@ -63029,6 +63036,13 @@ class DiRegistryTab {
 
     // Build DOM
     this._build();
+
+    // Subscribe to di topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('di', this._onEvent);
+      this._signalr.subscribeTopic('di');
+    }
   }
 
   /* ─────────────────────────────────────────────
@@ -63038,10 +63052,7 @@ class DiRegistryTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('di', this._onEvent);
-      this._signalr.subscribeTopic('di');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('click', this._onDocClick);
     this._applyFilters();
   }
@@ -63049,10 +63060,7 @@ class DiRegistryTab {
   deactivate() {
     this._active = false;
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.off('di', this._onEvent);
-      this._signalr.unsubscribeTopic('di');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   /* ─────────────────────────────────────────────
@@ -63883,30 +63891,31 @@ class PerfMarkersTab {
 
     // Bound handler for SignalR
     this._onEvent = this._onEvent.bind(this);
+
+    // Subscribe to perf topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('perf', this._onEvent);
+      this._signalr.subscribeTopic('perf');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════════════════
 
-  /** Called when the tab becomes visible. Subscribe to perf topic. */
+  /** Called when the tab becomes visible. */
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('perf', this._onEvent);
-      this._signalr.subscribeTopic('perf');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     this._render();
   }
 
-  /** Called when the tab is hidden. Unsubscribe to save resources. */
+  /** Called when the tab is hidden. */
   deactivate() {
     this._active = false;
-    if (this._signalr) {
-      this._signalr.off('perf', this._onEvent);
-      this._signalr.unsubscribeTopic('perf');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -64382,6 +64391,7 @@ class PerfMarkersTab {
   // ═══════════════════════════════════════════════════════════════════
 
   _render() {
+    if (!this._active) return;
     this._renderTable();
     this._updateBadges();
     if (this._summaryOpen) this._renderSummary();
@@ -64937,36 +64947,38 @@ class NexusTab {
     this._cssCacheDirty = true;
 
     this._buildDOM();
+
+    // Subscribe to nexus topic immediately so snapshots accumulate
+    // even before the tab is first activated. The animation loop
+    // only runs while the tab is active (started in activate()).
+    if (this._signalr) {
+      this._signalr.on('nexus', this._onSnapshot);
+      this._signalr.subscribeTopic('nexus');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════════════════
 
-  /** Called when tab becomes visible. Subscribe to `nexus` topic. */
+  /** Called when tab becomes visible. */
   activate() {
     if (this._active) return;
     this._active = true;
     this._cssCacheDirty = true;
     this._resizeCanvas();
-    if (this._signalr) {
-      this._signalr.on('nexus', this._onSnapshot);
-      this._signalr.subscribeTopic('nexus');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('resize', this._onResize);
     this._startAnimLoop();
   }
 
-  /** Called when tab is hidden. Unsubscribe to save resources. */
+  /** Called when tab is hidden. */
   deactivate() {
     this._active = false;
     document.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('resize', this._onResize);
-    if (this._signalr) {
-      this._signalr.off('nexus', this._onSnapshot);
-      this._signalr.unsubscribeTopic('nexus');
-    }
+    // Don't unsubscribe from SignalR — snapshots should accumulate while tab is hidden
     this._stopAnimLoop();
   }
 

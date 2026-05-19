@@ -96,6 +96,13 @@ class TokensTab {
 
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to token topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('token', this._onEvent);
+      this._signalr.subscribeTopic('token');
+    }
   }
 
   // ═══════ LIFECYCLE ═══════
@@ -103,10 +110,7 @@ class TokensTab {
   activate() {
     if (this._isActive) return;
     this._isActive = true;
-    if (this._signalr) {
-      this._signalr.on('token', this._onEvent);
-      this._signalr.subscribeTopic('token');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('click', this._onDocClick);
     this._startTicking();
     this._render();
@@ -115,10 +119,7 @@ class TokensTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.unsubscribeTopic('token');
-      this._signalr.off('token', this._onEvent);
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     this._stopTicking();
   }
 

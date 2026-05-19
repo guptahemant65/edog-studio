@@ -48,6 +48,13 @@ class RetriesTab {
 
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to retry topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('retry', this._onEvent);
+      this._signalr.subscribeTopic('retry');
+    }
   }
 
   // ═══════════════════════════════════════════
@@ -57,10 +64,7 @@ class RetriesTab {
   activate() {
     if (this._isActive) return;
     this._isActive = true;
-    if (this._signalr) {
-      this._signalr.on('retry', this._onEvent);
-      this._signalr.subscribeTopic('retry');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._onKeyDown);
     document.addEventListener('click', this._onDocClick);
     this._render();
@@ -68,10 +72,7 @@ class RetriesTab {
 
   deactivate() {
     this._isActive = false;
-    if (this._signalr) {
-      this._signalr.off('retry', this._onEvent);
-      this._signalr.unsubscribeTopic('retry');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     document.removeEventListener('keydown', this._onKeyDown);
     document.removeEventListener('click', this._onDocClick);
     this._clearAllCountdowns();

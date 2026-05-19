@@ -45,6 +45,13 @@ class SparkSessionsTab {
     this._buildDOM();
     this._bindStaticListeners();
     this._tooltipEl = null;
+
+    // Subscribe to spark topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on("spark", this._boundOnEvent);
+      this._signalr.subscribeTopic("spark");
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -55,10 +62,7 @@ class SparkSessionsTab {
     if (this._active) return;
     this._active = true;
 
-    if (this._signalr) {
-      this._signalr.on("spark", this._boundOnEvent);
-      this._signalr.subscribeTopic("spark");
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
 
     document.addEventListener("keydown", this._boundKeyDown);
     document.addEventListener("click", this._boundDocClick);
@@ -72,10 +76,7 @@ class SparkSessionsTab {
     if (!this._active) return;
     this._active = false;
 
-    if (this._signalr) {
-      this._signalr.off("spark", this._boundOnEvent);
-      this._signalr.unsubscribeTopic("spark");
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
 
     document.removeEventListener("keydown", this._boundKeyDown);
     document.removeEventListener("click", this._boundDocClick);

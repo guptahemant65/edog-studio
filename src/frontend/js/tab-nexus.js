@@ -76,36 +76,38 @@ class NexusTab {
     this._cssCacheDirty = true;
 
     this._buildDOM();
+
+    // Subscribe to nexus topic immediately so snapshots accumulate
+    // even before the tab is first activated. The animation loop
+    // only runs while the tab is active (started in activate()).
+    if (this._signalr) {
+      this._signalr.on('nexus', this._onSnapshot);
+      this._signalr.subscribeTopic('nexus');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════════════════
 
-  /** Called when tab becomes visible. Subscribe to `nexus` topic. */
+  /** Called when tab becomes visible. */
   activate() {
     if (this._active) return;
     this._active = true;
     this._cssCacheDirty = true;
     this._resizeCanvas();
-    if (this._signalr) {
-      this._signalr.on('nexus', this._onSnapshot);
-      this._signalr.subscribeTopic('nexus');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('resize', this._onResize);
     this._startAnimLoop();
   }
 
-  /** Called when tab is hidden. Unsubscribe to save resources. */
+  /** Called when tab is hidden. */
   deactivate() {
     this._active = false;
     document.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('resize', this._onResize);
-    if (this._signalr) {
-      this._signalr.off('nexus', this._onSnapshot);
-      this._signalr.unsubscribeTopic('nexus');
-    }
+    // Don't unsubscribe from SignalR — snapshots should accumulate while tab is hidden
     this._stopAnimLoop();
   }
 

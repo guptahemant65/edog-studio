@@ -37,6 +37,13 @@ class DiRegistryTab {
 
     // Build DOM
     this._build();
+
+    // Subscribe to di topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('di', this._onEvent);
+      this._signalr.subscribeTopic('di');
+    }
   }
 
   /* ─────────────────────────────────────────────
@@ -46,10 +53,7 @@ class DiRegistryTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('di', this._onEvent);
-      this._signalr.subscribeTopic('di');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('click', this._onDocClick);
     this._applyFilters();
   }
@@ -57,10 +61,7 @@ class DiRegistryTab {
   deactivate() {
     this._active = false;
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.off('di', this._onEvent);
-      this._signalr.unsubscribeTopic('di');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   /* ─────────────────────────────────────────────

@@ -48,6 +48,13 @@ class FeatureFlagsTab {
     // Build DOM
     this._build();
     this._bindEvents();
+
+    // Subscribe to flag topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('flag', this._onEvent);
+      this._signalr.subscribeTopic('flag');
+    }
   }
 
   // ── Lifecycle ───────────────────────────────────────────────
@@ -56,10 +63,7 @@ class FeatureFlagsTab {
   activate() {
     if (this._isActive) return; // idempotent guard
     this._isActive = true;
-    if (this._signalr) {
-      this._signalr.on('flag', this._onEvent);
-      this._signalr.subscribeTopic('flag');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._onKeyDown);
   }
 
@@ -67,10 +71,7 @@ class FeatureFlagsTab {
   deactivate() {
     this._isActive = false;
     document.removeEventListener('keydown', this._onKeyDown);
-    if (this._signalr) {
-      this._signalr.off('flag', this._onEvent);
-      this._signalr.unsubscribeTopic('flag');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ── SignalR event handler ───────────────────────────────────

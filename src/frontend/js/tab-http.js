@@ -50,34 +50,35 @@ class HttpPipelineTab {
     // Build DOM
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to http topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('http', this._onEvent);
+      this._signalr.subscribeTopic('http');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════════════════
 
-  /** Called when tab becomes visible. Subscribe to `http` topic. */
+  /** Called when tab becomes visible. */
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('http', this._onEvent);
-      this._signalr.subscribeTopic('http');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._globalKeyHandler);
     document.addEventListener('click', this._onDocClick);
     this._scheduleRender();
   }
 
-  /** Called when tab is hidden. Unsubscribe to save resources. */
+  /** Called when tab is hidden. */
   deactivate() {
     this._active = false;
     document.removeEventListener('keydown', this._globalKeyHandler);
     document.removeEventListener('click', this._onDocClick);
-    if (this._signalr) {
-      this._signalr.off('http', this._onEvent);
-      this._signalr.unsubscribeTopic('http');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ═══════════════════════════════════════════════════════════════════

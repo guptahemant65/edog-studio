@@ -52,30 +52,31 @@ class PerfMarkersTab {
 
     // Bound handler for SignalR
     this._onEvent = this._onEvent.bind(this);
+
+    // Subscribe to perf topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('perf', this._onEvent);
+      this._signalr.subscribeTopic('perf');
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
   // LIFECYCLE
   // ═══════════════════════════════════════════════════════════════════
 
-  /** Called when the tab becomes visible. Subscribe to perf topic. */
+  /** Called when the tab becomes visible. */
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('perf', this._onEvent);
-      this._signalr.subscribeTopic('perf');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     this._render();
   }
 
-  /** Called when the tab is hidden. Unsubscribe to save resources. */
+  /** Called when the tab is hidden. */
   deactivate() {
     this._active = false;
-    if (this._signalr) {
-      this._signalr.off('perf', this._onEvent);
-      this._signalr.unsubscribeTopic('perf');
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -551,6 +552,7 @@ class PerfMarkersTab {
   // ═══════════════════════════════════════════════════════════════════
 
   _render() {
+    if (!this._active) return;
     this._renderTable();
     this._updateBadges();
     if (this._summaryOpen) this._renderSummary();

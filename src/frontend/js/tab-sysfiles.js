@@ -76,6 +76,13 @@ class SystemFilesTab {
     this._onDocKeyDown = (e) => this._handleKeyDown(e);
 
     this._buildDOM();
+
+    // Subscribe to fileop topic immediately so events accumulate
+    // even before the tab is first activated.
+    if (this._signalr) {
+      this._signalr.on('fileop', this._onEvent);
+      this._signalr.subscribeTopic('fileop');
+    }
   }
 
   // ── Lifecycle ──
@@ -83,10 +90,7 @@ class SystemFilesTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('fileop', this._onEvent);
-      this._signalr.subscribeTopic('fileop');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('click', this._onDocClick);
     document.addEventListener('keydown', this._onDocKeyDown);
     this._createBodyEls();
@@ -95,10 +99,7 @@ class SystemFilesTab {
 
   deactivate() {
     this._active = false;
-    if (this._signalr) {
-      this._signalr.unsubscribeTopic('fileop');
-      this._signalr.off('fileop', this._onEvent);
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     document.removeEventListener('click', this._onDocClick);
     document.removeEventListener('keydown', this._onDocKeyDown);
     clearTimeout(this._toastTimer);
