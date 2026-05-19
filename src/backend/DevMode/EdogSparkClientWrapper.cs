@@ -85,6 +85,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     transformationId = transformationId.ToString(),
                     nodeName = node?.Name ?? string.Empty,
                     nodeKind = node?.Kind ?? string.Empty,
+                    nodeId = node?.NodeId.ToString(),
+                    refreshMode = refreshMode.ToString(),
                     state = result.State.ToString(),
                     gtsSessionId = sessionId,
                     replId,
@@ -128,12 +130,50 @@ namespace Microsoft.LiveTable.Service.DevMode
                 string errorCode = null;
                 string errorMessage = null;
                 string errorSource = null;
+                string errorStage = null;
+                string[] stackTrace = null;
 
                 if (result.ErrorDetails != null)
                 {
                     errorCode = result.ErrorDetails.ErrorCode;
                     errorMessage = result.ErrorDetails.Message;
                     errorSource = result.ErrorDetails.ErrorSource.ToString();
+                    errorStage = result.ErrorDetails.ErrorStage.ToString();
+                    if (result.ErrorDetails.StackTrace != null)
+                        stackTrace = result.ErrorDetails.StackTrace.ToArray();
+                }
+
+                // Parse MLV refresh output on terminal success
+                string refreshPolicy = null;
+                string totalRowsProcessed = null;
+                string totalRowsDropped = null;
+                string mlvNamespace = null;
+                string mlvName = null;
+                string mlvId = null;
+                string refreshTimestamp = null;
+                string outputMessage = null;
+                string totalViolations = null;
+                string violationsPerConstraint = null;
+
+                if (isTerminal && !string.IsNullOrEmpty(result.Output))
+                {
+                    try
+                    {
+                        if (MLVRefreshOutput.TryParse(node?.Name ?? "", result.Output, out var parsed))
+                        {
+                            refreshPolicy = parsed.RefreshPolicy;
+                            totalRowsProcessed = parsed.TotalRowsProcessed;
+                            totalRowsDropped = parsed.TotalRowsDropped;
+                            mlvNamespace = parsed.MlvNamespace;
+                            mlvName = parsed.MlvName;
+                            mlvId = parsed.MlvId;
+                            refreshTimestamp = parsed.RefreshTimestamp?.ToString("O");
+                            outputMessage = parsed.Message;
+                            totalViolations = parsed.TotalViolations;
+                            violationsPerConstraint = parsed.ViolationsPerConstraint;
+                        }
+                    }
+                    catch { /* parsing is best-effort */ }
                 }
 
                 EdogTopicRouter.Publish("spark", new
@@ -152,7 +192,19 @@ namespace Microsoft.LiveTable.Service.DevMode
                     errorCode,
                     errorMessage,
                     errorSource,
+                    errorStage,
+                    stackTrace,
                     hasOutput = !string.IsNullOrEmpty(result.Output),
+                    refreshPolicy,
+                    totalRowsProcessed,
+                    totalRowsDropped,
+                    mlvNamespace,
+                    mlvName,
+                    mlvId,
+                    refreshTimestamp,
+                    outputMessage,
+                    totalViolations,
+                    violationsPerConstraint,
                 });
 
                 _lastState = newState;
