@@ -62,6 +62,14 @@ class TelemetryTab {
 
     this._buildDOM();
     this._bindEvents();
+
+    // Subscribe to telemetry topic immediately so events accumulate
+    // even before the tab is first activated. Without this, the tab
+    // appears empty on first visit because no events were collected.
+    if (this._signalr) {
+      this._signalr.on('telemetry', this._onEvent);
+      this._signalr.subscribeTopic('telemetry');
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -71,10 +79,7 @@ class TelemetryTab {
   activate() {
     if (this._active) return;
     this._active = true;
-    if (this._signalr) {
-      this._signalr.on('telemetry', this._onEvent);
-      this._signalr.subscribeTopic('telemetry');
-    }
+    // SignalR subscription is done in constructor — no need to re-subscribe here
     document.addEventListener('keydown', this._boundKeyDown);
     document.addEventListener('click', this._boundDocClick);
     this._startTicking();
@@ -85,10 +90,7 @@ class TelemetryTab {
     this._active = false;
     document.removeEventListener('keydown', this._boundKeyDown);
     document.removeEventListener('click', this._boundDocClick);
-    if (this._signalr) {
-      this._signalr.unsubscribeTopic('telemetry');
-      this._signalr.off('telemetry', this._onEvent);
-    }
+    // Don't unsubscribe from SignalR — events should accumulate while tab is hidden
     this._stopTicking();
     this._hideTooltip();
 
