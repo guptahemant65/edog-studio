@@ -266,6 +266,7 @@ class SparkSessionsTab {
 
     switch (kind) {
       case "Created": this._onCreated(data); break;
+      case "Error": this._onError(data); break;
       case "TransformSubmitted": this._onSubmitted(data); break;
       case "TransformPolled": this._onPolled(data); break;
       case "TransformCompleted": this._onCompleted(data); break;
@@ -304,6 +305,20 @@ class SparkSessionsTab {
       s._sessionRawEvents.push({ at: Date.now(), kind: "Created", data: d });
       this._recomputeStatus(s);
     }
+  }
+
+  _onError(d) {
+    const sid = d.sessionTrackingId;
+    if (!sid) return;
+    const s = this._getOrCreateSession(sid);
+    this._mergePendingCreated(s, sid);
+    s.createError = d.error || "Unknown factory error";
+    s.errorType = d.errorType || null;
+    s.errorStack = d.stackTrace || null;
+    s.disposed = true;
+    s.disposedAt = Date.now();
+    s._sessionRawEvents.push({ at: Date.now(), kind: "Error", data: d });
+    this._recomputeStatus(s);
   }
 
   /** Merge pending Created metadata into session when first TransformSubmitted arrives */
@@ -635,6 +650,7 @@ class SparkSessionsTab {
       return;
     }
     const lanes = visible.slice(0, 8);
+    const overflow = visible.length - lanes.length;
     const now = Date.now();
     const earliest = Math.min(...lanes.map((s) => s.startedAt));
     const latest = Math.max(now, ...lanes.map((s) => s.disposed && s.disposedAt ? s.disposedAt : now));
@@ -671,6 +687,9 @@ class SparkSessionsTab {
         </div>`;
     }
     html += `<div class="sp-lane-axis">${tickHtml}</div>`;
+    if (overflow > 0) {
+      html += `<div class="sp-lane-overflow">+${overflow} more session${overflow > 1 ? "s" : ""}</div>`;
+    }
     this._elSwimCanvas.innerHTML = html;
   }
 

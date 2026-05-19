@@ -39,7 +39,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         private readonly string _iterationId;
         private readonly long _createdAtMs;
         private int _transformCount;
-        private string _lastState;
+        private volatile string _lastState;
 
         public EdogSparkClientWrapper(ISparkClient inner, string trackingId, string iterationId)
         {
@@ -75,8 +75,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
-                var sessionId = result.ComputeInfo?.SessionId?.ToString();
-                var replId = result.ComputeInfo?.ReplId?.ToString();
+                var sessionId = result.ComputeInfo?.SessionId?.ToString() ?? string.Empty;
+                var replId = result.ComputeInfo?.ReplId?.ToString() ?? string.Empty;
 
                 EdogTopicRouter.Publish("spark", new
                 {
@@ -86,7 +86,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     transformationId = transformationId.ToString(),
                     nodeName = node?.Name ?? string.Empty,
                     nodeKind = node?.Kind ?? string.Empty,
-                    nodeId = node?.NodeId.ToString(),
+                    nodeId = node?.NodeId?.ToString() ?? string.Empty,
                     refreshMode = refreshMode.ToString(),
                     state = result.State.ToString(),
                     gtsSessionId = sessionId,
@@ -99,9 +99,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 _lastState = result.State.ToString();
             }
-            catch
+            catch (Exception ex)
             {
-                // Never propagate — interceptor failures are non-fatal
+                System.Diagnostics.Debug.WriteLine($"[EDOG] SparkWrapper.SendTransform publish error: {ex.Message}");
             }
 
             return result;
@@ -156,25 +156,36 @@ namespace Microsoft.LiveTable.Service.DevMode
                 string totalViolations = null;
                 string violationsPerConstraint = null;
 
-                if (isTerminal && !string.IsNullOrEmpty(result.Output))
+                string rawOutput = null;
+                if (!string.IsNullOrEmpty(result.Output))
                 {
-                    try
+                    rawOutput = result.Output.Length > 4096
+                        ? result.Output.Substring(0, 4096)
+                        : result.Output;
+
+                    if (isTerminal)
                     {
-                        if (MLVRefreshOutput.TryParse(node?.Name ?? "", result.Output, out var parsed))
+                        try
                         {
-                            refreshPolicy = parsed.RefreshPolicy;
-                            totalRowsProcessed = parsed.TotalRowsProcessed;
-                            totalRowsDropped = parsed.TotalRowsDropped;
-                            mlvNamespace = parsed.MlvNamespace;
-                            mlvName = parsed.MlvName;
-                            mlvId = parsed.MlvId;
-                            refreshTimestamp = parsed.RefreshTimestamp?.ToString("O");
-                            outputMessage = parsed.Message;
-                            totalViolations = parsed.TotalViolations;
-                            violationsPerConstraint = parsed.ViolationsPerConstraint;
+                            if (MLVRefreshOutput.TryParse(node?.Name ?? "", result.Output, out var parsed))
+                            {
+                                refreshPolicy = parsed.RefreshPolicy;
+                                totalRowsProcessed = parsed.TotalRowsProcessed;
+                                totalRowsDropped = parsed.TotalRowsDropped;
+                                mlvNamespace = parsed.MlvNamespace;
+                                mlvName = parsed.MlvName;
+                                mlvId = parsed.MlvId;
+                                refreshTimestamp = parsed.RefreshTimestamp?.ToString("O");
+                                outputMessage = parsed.Message;
+                                totalViolations = parsed.TotalViolations;
+                                violationsPerConstraint = parsed.ViolationsPerConstraint;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[EDOG] MLVRefreshOutput parse error: {ex.Message}");
                         }
                     }
-                    catch { /* parsing is best-effort */ }
                 }
 
                 EdogTopicRouter.Publish("spark", new
@@ -196,6 +207,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     errorStage,
                     stackTrace,
                     hasOutput = !string.IsNullOrEmpty(result.Output),
+                    rawOutput,
                     refreshPolicy,
                     totalRowsProcessed,
                     totalRowsDropped,
@@ -210,9 +222,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 _lastState = newState;
             }
-            catch
+            catch (Exception ex)
             {
-                // Never propagate
+                System.Diagnostics.Debug.WriteLine($"[EDOG] SparkWrapper.GetTransformStatus publish error: {ex.Message}");
             }
 
             return result;
@@ -246,9 +258,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     retryAfterMs = result.RetryAfter?.TotalMilliseconds,
                 });
             }
-            catch
+            catch (Exception ex)
             {
-                // Never propagate
+                System.Diagnostics.Debug.WriteLine($"[EDOG] SparkWrapper.CancelTransform publish error: {ex.Message}");
             }
 
             return result;
@@ -271,9 +283,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     lastState = _lastState,
                 });
             }
-            catch
+            catch (Exception ex)
             {
-                // Never propagate
+                System.Diagnostics.Debug.WriteLine($"[EDOG] SparkWrapper.Dispose publish error: {ex.Message}");
             }
 
             _inner.Dispose();

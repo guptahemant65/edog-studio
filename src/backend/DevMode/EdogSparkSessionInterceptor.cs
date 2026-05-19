@@ -76,6 +76,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     artifactName = artifactName ?? string.Empty,
                     durationMs = sw.Elapsed.TotalMilliseconds,
                     error = ex.Message,
+                    errorType = ex.GetType().Name,
+                    stackTrace = ex.StackTrace,
                 });
 
                 throw;
