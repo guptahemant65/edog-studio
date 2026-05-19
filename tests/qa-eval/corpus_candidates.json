@@ -1,16 +1,25 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-05-19T09:00:33Z",
+  "generated_at": "2026-05-19T13:16:17Z",
   "phase": "T4-C-prep",
   "flt_repo_path": "C:\\Users\\guptahemant\\newrepo\\workload-fabriclivetable",
-  "since_filter": "2 months ago",
+  "since_filter": "3 months ago",
   "target_additions": 9,
-  "discovered_count": 111,
+  "discovered_count": 137,
   "selected_count": 9,
-  "rejected_count": 102,
-  "existing_corpus_size": 6,
+  "rejected_count": 128,
+  "existing_corpus_size": 15,
   "existing_corpus_prs": [
+    "879735",
+    "910832",
+    "927641",
+    "929467",
+    "933822",
+    "934326",
+    "936352",
+    "950638",
     "955910",
+    "960426",
     "960543",
     "966141",
     "975848",
@@ -19,522 +28,320 @@
   ],
   "selected": [
     {
-      "pr_number": "960426",
-      "merge_commit_sha": "001641bb6be6a9183bdc564beb4390321d75e41f",
-      "title": "Merged PR 960426: Align Insights APIs with latest PM specs: pagination, filters, top errors, swagger AB#5227527",
-      "authored_date": "2026-05-05T16:47:00Z",
-      "files_changed": 17,
-      "additions": 1937,
-      "deletions": 197,
-      "diff_size_bytes": 155904,
-      "change_shape": "schema",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Features/5054458/design-spec.md",
-          "additions": 224,
-          "deletions": 16
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
-          "additions": 149,
-          "deletions": 33
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
-          "additions": 262,
-          "deletions": 23
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs",
-          "additions": 4,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/IInsightsQueryService.cs",
-          "additions": 31,
-          "deletions": 5
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
-          "additions": 80,
-          "deletions": 21
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs",
-          "additions": 5,
-          "deletions": 1
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs",
-          "additions": 4,
-          "deletions": 4
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
-          "additions": 23,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
-          "additions": 42,
-          "deletions": 1
-        }
-      ],
-      "files_bucket": "16+_files",
-      "size_bucket": "large_50KB+",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=schema (count_was=1); files_bucket=16+_files (count_was=3); size_bucket=large_50KB+ (count_was=5)",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "950638",
-      "merge_commit_sha": "25cb2993d3ecbf07bcf48c65a7544a85effffad2",
-      "title": "Merged PR 950638: DQ 3 -  Add DQ suite parsing and DAG build integration AB#5154322",
-      "authored_date": "2026-04-23T11:11:55Z",
-      "files_changed": 6,
-      "additions": 1275,
-      "deletions": 4,
-      "diff_size_bytes": 72768,
-      "change_shape": "schema",
-      "subsystem": "test",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
-          "additions": 42,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
-          "additions": 155,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
-          "additions": 262,
-          "deletions": 4
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/TableTests.cs",
-          "additions": 198,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs",
-          "additions": 467,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/DqSuiteCommandTests.cs",
-          "additions": 151,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "6-15_files",
-      "size_bucket": "large_50KB+",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=schema (count_was=0); files_bucket=6-15_files (count_was=3); size_bucket=large_50KB+ (count_was=4)",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "934326",
-      "merge_commit_sha": "0cef073124fc4e529f27294b15c7654b9fd8024d",
-      "title": "Merged PR 934326: [SECURITY] Bump Scriban from 6.2.0 to 7.0.0",
-      "authored_date": "2026-04-20T09:26:42Z",
-      "files_changed": 1,
-      "additions": 1,
-      "deletions": 1,
-      "diff_size_bytes": 720,
-      "change_shape": "mixed",
-      "subsystem": "Directory.Packages.props",
-      "files": [
-        {
-          "path": "Directory.Packages.props",
-          "additions": 1,
-          "deletions": 1
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "small_<5KB",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=mixed (count_was=1); files_bucket=1_file (count_was=1); size_bucket=small_<5KB (count_was=2)",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "910832",
-      "merge_commit_sha": "8052934fbaf4779091d0d79cb02f1c09fbc61826",
-      "title": "Merged PR 910832: Notebook user facing messages",
-      "authored_date": "2026-04-13T10:33:08Z",
-      "files_changed": 17,
-      "additions": 1766,
-      "deletions": 248,
-      "diff_size_bytes": 184062,
-      "change_shape": "error_handling",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
-          "additions": 39,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
-          "additions": 58,
-          "deletions": 34
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
-          "additions": 5,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
-          "additions": 5,
-          "deletions": 3
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
-          "additions": 97,
-          "deletions": 7
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookParsingException.cs",
-          "additions": 0,
-          "deletions": 77
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
-          "additions": 15,
-          "deletions": 16
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs",
-          "additions": 6,
-          "deletions": 3
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
-          "additions": 41,
-          "deletions": 9
-        },
-        {
-          "path": "pr-division-plan.md",
-          "additions": 486,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "16+_files",
-      "size_bucket": "large_50KB+",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=error_handling (count_was=0); files_bucket=16+_files (count_was=2); size_bucket=large_50KB+ (count_was=3)",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "936352",
-      "merge_commit_sha": "37c58e1f40fc42009dcc1a43fa56f97df0153eea",
-      "title": "Merged PR 936352: feat: Add FMLV-DevSkills plugin hook (Phase 1 - keep local skill)",
-      "authored_date": "2026-03-30T17:44:14Z",
-      "files_changed": 1,
-      "additions": 15,
+      "pr_number": "974006",
+      "merge_commit_sha": "c3ece26d475869824f16decfda655eda0729d988",
+      "title": "Merged PR 974006: [File Ingestion] PR17: Facilitate UI to show Source Folder in the DAG",
+      "authored_date": "2026-05-13T13:39:02Z",
+      "files_changed": 5,
+      "additions": 487,
       "deletions": 0,
-      "diff_size_bytes": 1248,
-      "change_shape": "mixed",
-      "subsystem": ".github",
-      "files": [
-        {
-          "path": ".github/hooks/hooks.json",
-          "additions": 15,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "small_<5KB",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=mixed (count_was=2); files_bucket=1_file (count_was=2); size_bucket=small_<5KB (count_was=3)",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "933822",
-      "merge_commit_sha": "45a07672d2b7d6c65f916850de56c380bddd33ff",
-      "title": "Merged PR 933822: Expose x-ms-continuation-token in CORS for JavaScript access",
-      "authored_date": "2026-03-30T08:53:17Z",
-      "files_changed": 1,
-      "additions": 2,
-      "deletions": 1,
-      "diff_size_bytes": 829,
-      "change_shape": "controller",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs",
-          "additions": 2,
-          "deletions": 1
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "small_<5KB",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=controller (count_was=0); files_bucket=1_file (count_was=0); size_bucket=small_<5KB (count_was=1)",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "879735",
-      "merge_commit_sha": "f77df9a4ed7f6e468e8ba5a42a1b5bfdb4fd75f2",
-      "title": "Merged PR 879735: Add cursor-based pagination for listDAGExecutionIterationIds API",
-      "authored_date": "2026-03-23T09:06:54Z",
-      "files_changed": 28,
-      "additions": 3634,
-      "deletions": 963,
-      "diff_size_bytes": 325621,
-      "change_shape": "mixed",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": ".gitignore",
-          "additions": 1,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service.EntryPoint/WorkloadParameters/ParametersManifest.json",
-          "additions": 2,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
-          "additions": 36,
-          "deletions": 6
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
-          "additions": 9,
-          "deletions": 5
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/ListDagExecutionIterationsRequestFilters.cs",
-          "additions": 2,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
-          "additions": 7,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadParameterNames.cs",
-          "additions": 8,
-          "deletions": 1
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
-          "additions": 393,
-          "deletions": 17
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/IFileSystem.cs",
-          "additions": 27,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
-          "additions": 58,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "16+_files",
-      "size_bucket": "large_50KB+",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=mixed (count_was=0); files_bucket=16+_files (count_was=1); size_bucket=large_50KB+ (count_was=2)",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "929467",
-      "merge_commit_sha": "9aa96ddeabc183619e5638b122f2564c48002b27",
-      "title": "Merged PR 929467: TokenManager - Tokens are not getting cleared after Dag iteration run gets over",
-      "authored_date": "2026-03-22T11:27:24Z",
-      "files_changed": 7,
-      "additions": 281,
-      "deletions": 46,
-      "diff_size_bytes": 31308,
+      "diff_size_bytes": 23203,
       "change_shape": "dag",
       "subsystem": "Service",
       "files": [
         {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
-          "additions": 54,
-          "deletions": 33
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
-          "additions": 9,
-          "deletions": 4
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs",
-          "additions": 3,
-          "deletions": 5
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
-          "additions": 6,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "additions": 43,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/TokenManagement/TokenManager.cs",
-          "additions": 3,
-          "deletions": 2
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/FileSourceInfo.cs",
+          "additions": 126,
+          "deletions": 0
         },
         {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
-          "additions": 204,
-          "deletions": 1
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Node.cs",
+          "additions": 8,
+          "deletions": 0
         },
         {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs",
-          "additions": 2,
-          "deletions": 1
-        }
-      ],
-      "files_bucket": "6-15_files",
-      "size_bucket": "medium_5-50KB",
-      "selected": true,
-      "rejection_reason": "",
-      "selection_rationale": "fills shape=dag (count_was=0); files_bucket=6-15_files (count_was=2); size_bucket=medium_5-50KB (count_was=3)",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "927641",
-      "merge_commit_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
-      "title": "Merged PR 927641: [Multi-Schedule][Public API][PATCH] : clear stale SelectedMLVs when mode changes away from SelectedOnly",
-      "authored_date": "2026-03-22T06:33:37Z",
-      "files_changed": 2,
-      "additions": 63,
-      "deletions": 7,
-      "diff_size_bytes": 6204,
-      "change_shape": "controller",
-      "subsystem": "test",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
-          "additions": 10,
-          "deletions": 3
+          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+          "additions": 55,
+          "deletions": 0
         },
         {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
-          "additions": 53,
-          "deletions": 4
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/FileIngestion/FileSourceInfoTests.cs",
+          "additions": 255,
+          "deletions": 0
         }
       ],
       "files_bucket": "2-5_files",
       "size_bucket": "medium_5-50KB",
       "selected": true,
       "rejection_reason": "",
-      "selection_rationale": "fills shape=controller (count_was=1); files_bucket=2-5_files (count_was=3); size_bucket=medium_5-50KB (count_was=4)",
+      "selection_rationale": "fills shape=dag (count_was=1); files_bucket=2-5_files (count_was=5); size_bucket=medium_5-50KB (count_was=8)",
       "files_truncated": false
-    }
-  ],
-  "rejected": [
+    },
     {
-      "pr_number": "978874",
-      "merge_commit_sha": "8571963838808edc06ce0e33c3d595c2ed851832",
-      "title": "Merged PR 978874: [File sourced ingestion] PR9: Finalization - Read summary, update manifest, publish log, cleanup",
-      "authored_date": "2026-05-19T07:54:49Z",
-      "files_changed": 12,
-      "additions": 1328,
+      "pr_number": "969050",
+      "merge_commit_sha": "4a497978d2d10d75c1967234cac82b927035ecac",
+      "title": "Merged PR 969050: PR2: Foundation — Data Models, Error Codes, Feature Flag, Catalog Read",
+      "authored_date": "2026-05-11T09:24:28Z",
+      "files_changed": 36,
+      "additions": 2716,
       "deletions": 0,
-      "diff_size_bytes": 60360,
-      "change_shape": "mixed",
+      "diff_size_bytes": 121650,
+      "change_shape": "schema",
       "subsystem": "Service",
       "files": [
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/CheckpointCleaner.cs",
-          "additions": 91,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+          "additions": 65,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/FinalizationOrchestrator.cs",
-          "additions": 178,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/BucketFileEntry.cs",
+          "additions": 51,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/ICheckpointCleaner.cs",
-          "additions": 31,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/ChangeDetectionResult.cs",
+          "additions": 56,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IFinalizationOrchestrator.cs",
-          "additions": 37,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/ChangeManifest.cs",
+          "additions": 51,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IIngestionLogPublisher.cs",
-          "additions": 31,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/CheckpointInfo.cs",
+          "additions": 63,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IRefreshSummaryReader.cs",
-          "additions": 31,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/CheckpointStatus.cs",
+          "additions": 43,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IngestionLogPublisher.cs",
-          "additions": 55,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DeltaCommitAction.cs",
+          "additions": 36,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/RefreshSummaryReader.cs",
-          "additions": 68,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DeltaCommitInfo.cs",
+          "additions": 44,
           "deletions": 0
         },
         {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/FileIngestion/CheckpointCleanerTests.cs",
-          "additions": 144,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DeltaFileAction.cs",
+          "additions": 29,
           "deletions": 0
         },
         {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/FileIngestion/FinalizationOrchestratorTests.cs",
-          "additions": 365,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DriftClassification.cs",
+          "additions": 35,
           "deletions": 0
         }
       ],
-      "files_bucket": "6-15_files",
+      "files_bucket": "16+_files",
       "size_bucket": "large_50KB+",
-      "selected": false,
+      "selected": true,
       "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
+      "selection_rationale": "fills shape=schema (count_was=0); files_bucket=16+_files (count_was=5); size_bucket=large_50KB+ (count_was=6)",
       "files_truncated": true
     },
     {
-      "pr_number": "970186",
-      "merge_commit_sha": "ea5f896b463f9f016243b852e87c0e99ce64feba",
-      "title": "Merged PR 970186: [RefreshTrigger] Implement DeleteRefreshTriggerAsync",
-      "authored_date": "2026-05-19T03:30:47Z",
-      "files_changed": 7,
-      "additions": 1858,
-      "deletions": 7,
-      "diff_size_bytes": 103721,
+      "pr_number": "952015",
+      "merge_commit_sha": "fcbba54071d6b452c3a97f4e0f75bd5b06665224",
+      "title": "Merged PR 952015: [BugFix] EventGroupType enum serialization",
+      "authored_date": "2026-04-17T05:41:42Z",
+      "files_changed": 1,
+      "additions": 1,
+      "deletions": 1,
+      "diff_size_bytes": 712,
       "change_shape": "mixed",
       "subsystem": "Service",
       "files": [
         {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableRefreshTriggersController.cs",
-          "additions": 62,
-          "deletions": 6
-        },
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "small_<5KB",
+      "selected": true,
+      "rejection_reason": "",
+      "selection_rationale": "fills shape=mixed (count_was=2); files_bucket=1_file (count_was=5); size_bucket=small_<5KB (count_was=6)",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "942592",
+      "merge_commit_sha": "93639f5ac5452b5d35e7156bea7df0d28b115e43",
+      "title": "Merged PR 942592: EsMetadata schema version update to 1.0.0",
+      "authored_date": "2026-04-15T20:44:22Z",
+      "files_changed": 1,
+      "additions": 12,
+      "deletions": 8,
+      "diff_size_bytes": 706,
+      "change_shape": "mixed",
+      "subsystem": "es-metadata.yml",
+      "files": [
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/IRefreshTriggersHandler.cs",
-          "additions": 19,
+          "path": "es-metadata.yml",
+          "additions": 12,
+          "deletions": 8
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "small_<5KB",
+      "selected": true,
+      "rejection_reason": "",
+      "selection_rationale": "fills shape=mixed (count_was=1); files_bucket=1_file (count_was=4); size_bucket=small_<5KB (count_was=5)",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "948855",
+      "merge_commit_sha": "29748b29b24556603d8cd448a7e3b49c85784286",
+      "title": "Merged PR 948855: Use Global Spark Confs to Enable and Disable DQ Metrics Writes for Pyspark an...",
+      "authored_date": "2026-04-15T12:33:34Z",
+      "files_changed": 3,
+      "additions": 107,
+      "deletions": 10,
+      "diff_size_bytes": 14117,
+      "change_shape": "dag",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+          "additions": 18,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggersHandler.cs",
-          "additions": 349,
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Node.cs",
+          "additions": 2,
+          "deletions": 2
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/NodeGetCodeTests.cs",
+          "additions": 87,
+          "deletions": 8
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": true,
+      "rejection_reason": "",
+      "selection_rationale": "fills shape=dag (count_was=0); files_bucket=2-5_files (count_was=4); size_bucket=medium_5-50KB (count_was=7)",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "925948",
+      "merge_commit_sha": "b302a3170f797d139721ff9836d9aa7ad22417f2",
+      "title": "Merged PR 925948: Remove metadata from persistence log lines",
+      "authored_date": "2026-03-18T03:43:48Z",
+      "files_changed": 1,
+      "additions": 3,
+      "deletions": 4,
+      "diff_size_bytes": 2837,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
+          "additions": 3,
+          "deletions": 4
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "small_<5KB",
+      "selected": true,
+      "rejection_reason": "",
+      "selection_rationale": "fills shape=mixed (count_was=0); files_bucket=1_file (count_was=3); size_bucket=small_<5KB (count_was=4)",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "899650",
+      "merge_commit_sha": "06ca7ed7771867c8ee9d4ac35f5bc54720982753",
+      "title": "Merged PR 899650: [TriggerSchedule] Controller for trigger schedule",
+      "authored_date": "2026-02-25T06:01:46Z",
+      "files_changed": 18,
+      "additions": 766,
+      "deletions": 0,
+      "diff_size_bytes": 36799,
+      "change_shape": "controller",
+      "subsystem": "Bruno",
+      "files": [
+        {
+          "path": ".gitattributes",
+          "additions": 3,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/.gitignore",
+          "additions": 9,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/RefreshTriggersController/CreateRefreshTrigger.yml",
+          "additions": 18,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/RefreshTriggersController/DeleteRefreshTrigger.yml",
+          "additions": 18,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/RefreshTriggersController/GetRefreshTrigger.yml",
+          "additions": 18,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/RefreshTriggersController/ListRefreshTriggers.yml",
+          "additions": 15,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/RefreshTriggersController/UpdateRefreshTrigger.yml",
+          "additions": 18,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/RefreshTriggersController/folder.yml",
+          "additions": 12,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/environments/Local.yml",
+          "additions": 20,
+          "deletions": 0
+        },
+        {
+          "path": "Bruno/FLT/opencollection.yml",
+          "additions": 10,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": true,
+      "rejection_reason": "",
+      "selection_rationale": "fills shape=controller (count_was=0); files_bucket=16+_files (count_was=4); size_bucket=medium_5-50KB (count_was=5)",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "899721",
+      "merge_commit_sha": "0aa2f9bb132ef0b319103cb1037ee3bec5109412",
+      "title": "Merged PR 899721: [MultiSchedule] Add API to get an MLV execution definition with passed definition template",
+      "authored_date": "2026-02-20T15:35:46Z",
+      "files_changed": 6,
+      "additions": 1407,
+      "deletions": 0,
+      "diff_size_bytes": 76649,
+      "change_shape": "controller",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "additions": 123,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/MLVExecutionDefinitionHandler.cs",
+          "additions": 135,
           "deletions": 0
         },
         {
@@ -543,388 +350,85 @@
           "deletions": 0
         },
         {
-          "path": "docs/RefreshTriggers/DeleteRefreshTriggerAsync.md",
-          "additions": 225,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableRefreshTriggersControllerTests.cs",
-          "additions": 205,
-          "deletions": 1
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/RefreshTrigger/RefreshTriggersHandlerTests.cs",
-          "additions": 993,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "6-15_files",
-      "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "975967",
-      "merge_commit_sha": "e8c96f3b61cba4990e689eeb4391210650f60623",
-      "title": "Merged PR 975967: [File sourced ingestion] PR5: Manifest, Lock & Stale Checkpoint Recovery",
-      "authored_date": "2026-05-18T16:42:51Z",
-      "files_changed": 25,
-      "additions": 1894,
-      "deletions": 9,
-      "diff_size_bytes": 97351,
-      "change_shape": "mixed",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/CheckpointIdGenerator.cs",
-          "additions": 47,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/FullRefreshSummaryReader.cs",
-          "additions": 117,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/ICheckpointIdGenerator.cs",
-          "additions": 18,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IFullRefreshSummaryReader.cs",
-          "additions": 28,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/ILockManager.cs",
-          "additions": 37,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IManifestManager.cs",
-          "additions": 38,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IStaleCheckpointRecoveryHandler.cs",
-          "additions": 27,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/LockFileContent.cs",
-          "additions": 32,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/LockManager.cs",
-          "additions": 106,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/ManifestManager.cs",
-          "additions": 81,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "16+_files",
-      "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "974709",
-      "merge_commit_sha": "81083feff330a768461325dfd7b4887a6a14fa70",
-      "title": "Merged PR 974709: Regenerate Swagger.json as per latest branch",
-      "authored_date": "2026-05-18T12:48:57Z",
-      "files_changed": 1,
-      "additions": 321,
-      "deletions": 229,
-      "diff_size_bytes": 25740,
-      "change_shape": "generated_or_config",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
-          "additions": 321,
-          "deletions": 229
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "medium_5-50KB",
-      "selected": false,
-      "rejection_reason": "hard_reject:generated_or_config",
-      "selection_rationale": "",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "974531",
-      "merge_commit_sha": "e856db1310ce97adc87bab47a8200be17487a801",
-      "title": "Merged PR 974531: Make LiveTableSchedulerRunControllerTests run faster",
-      "authored_date": "2026-05-18T12:14:38Z",
-      "files_changed": 2,
-      "additions": 553,
-      "deletions": 1079,
-      "diff_size_bytes": 136481,
-      "change_shape": "controller",
-      "subsystem": "test",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
-          "additions": 4,
-          "deletions": 3
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
-          "additions": 549,
-          "deletions": 1076
-        }
-      ],
-      "files_bucket": "2-5_files",
-      "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "979662",
-      "merge_commit_sha": "cfdf6352a23855c527bbe35ff060a540efc688d1",
-      "title": "Merged PR 979662: Fix: Update GetBucketPartFilePath test for LiveTableSystem path",
-      "authored_date": "2026-05-18T11:33:27Z",
-      "files_changed": 1,
-      "additions": 1,
-      "deletions": 1,
-      "diff_size_bytes": 981,
-      "change_shape": "test_only",
-      "subsystem": "test",
-      "files": [
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/FileIngestion/FileIngestionPathsTests.cs",
-          "additions": 1,
-          "deletions": 1
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "small_<5KB",
-      "selected": false,
-      "rejection_reason": "hard_reject:test_only",
-      "selection_rationale": "",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "975784",
-      "merge_commit_sha": "438fe251dbc0ab85b1deaf18f066ea2f1b3699c8",
-      "title": "Merged PR 975784: [File sourced ingestion] PR4: OneLake File Listing & Hash Bucketing",
-      "authored_date": "2026-05-18T04:11:39Z",
-      "files_changed": 27,
-      "additions": 1890,
-      "deletions": 68,
-      "diff_size_bytes": 109565,
-      "change_shape": "mixed",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Directory.Packages.props",
+          "path": "Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs",
           "additions": 2,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/BucketedListingParquetCodec.cs",
-          "additions": 85,
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs",
+          "additions": 477,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/BucketedListingReader.cs",
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/MLVExecutionDefinitionHandlerTests.cs",
+          "additions": 665,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "large_50KB+",
+      "selected": true,
+      "rejection_reason": "",
+      "selection_rationale": "fills shape=controller (count_was=1); files_bucket=6-15_files (count_was=5); size_bucket=large_50KB+ (count_was=7)",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "900711",
+      "merge_commit_sha": "5658bbdb46ee954f7353ec3ac37c2dea48da61d3",
+      "title": "Merged PR 900711: [Multischedule] Run dag should fast fail in case of faulted node in the created DAG for the execution",
+      "authored_date": "2026-02-19T15:48:07Z",
+      "files_changed": 7,
+      "additions": 418,
+      "deletions": 0,
+      "diff_size_bytes": 29298,
+      "change_shape": "error_handling",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/DagExecutionHandler.cs",
+          "additions": 25,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/V2/DagExecutionHandlerV2.cs",
+          "additions": 23,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
+          "additions": 5,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs",
+          "additions": 259,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionTests.cs",
           "additions": 86,
           "deletions": 0
         },
         {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/BucketedListingWriter.cs",
-          "additions": 148,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/FileListingOrchestrator.cs",
-          "additions": 113,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IBucketHashFunction.cs",
-          "additions": 28,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IBucketedListingReader.cs",
-          "additions": 37,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IBucketedListingWriter.cs",
-          "additions": 40,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/IFileListingOrchestrator.cs",
-          "additions": 34,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/FileIngestion/ISourceFileLister.cs",
-          "additions": 36,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "16+_files",
-      "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "977923",
-      "merge_commit_sha": "179eb3588acde94f4f276c536db3b424adc80641",
-      "title": "Merged PR 977923: [File Ingestion] Anoop review followup - Remove ListFilesAsync, fix Table.cs FQCN, add schemaMode to summaries",
-      "authored_date": "2026-05-18T04:11:35Z",
-      "files_changed": 11,
-      "additions": 83,
-      "deletions": 101,
-      "diff_size_bytes": 31035,
-      "change_shape": "schema",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
-          "additions": 10,
-          "deletions": 8
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/FileIngestionConstants.cs",
-          "additions": 6,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/FileIngestionPaths.cs",
-          "additions": 7,
-          "deletions": 7
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/FullRefreshSummary.cs",
-          "additions": 9,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/RefreshSummary.cs",
-          "additions": 13,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/OneLake/IOneLakeRestClient.cs",
-          "additions": 0,
-          "deletions": 18
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/OneLake/OneLakeRestClient.cs",
-          "additions": 0,
-          "deletions": 52
-        },
-        {
-          "path": "docs/design/FileIngestion_RunDetails_API_Design.md",
-          "additions": 8,
-          "deletions": 5
-        },
-        {
-          "path": "docs/design/FileSourcedFMLV_ComponentDesign.md",
-          "additions": 10,
-          "deletions": 5
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/FileIngestion/FileIngestionModelSerializationTests.cs",
-          "additions": 14,
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs",
+          "additions": 19,
           "deletions": 0
         }
       ],
       "files_bucket": "6-15_files",
       "size_bucket": "medium_5-50KB",
-      "selected": false,
+      "selected": true,
       "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "976841",
-      "merge_commit_sha": "995fba317a04f762434f310efcf4eb3931b4317f",
-      "title": "Merged PR 976841: POC: Enable TDS/TCP SQL connect on WSPL-enabled workspaces (FF-gated)",
-      "authored_date": "2026-05-15T20:38:44Z",
-      "files_changed": 11,
-      "additions": 1275,
-      "deletions": 16,
-      "diff_size_bytes": 73504,
-      "change_shape": "controller",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Common/NetworkSecurity/NetworkSecurityUtils.cs",
-          "additions": 91,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
-          "additions": 18,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/IPrivateLinkSqlConnectionFactory.cs",
-          "additions": 71,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/PrivateLinkSqlConnectionFactory.cs",
-          "additions": 216,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointHostHelper.cs",
-          "additions": 87,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
-          "additions": 41,
-          "deletions": 7
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/WorkloadApp.cs",
-          "additions": 1,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/CommonTests/NetworkSecurity/NetworkSecurityUtilsTests.cs",
-          "additions": 206,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/PrivateLinkSqlConnectionFactoryTests.cs",
-          "additions": 432,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointHostHelperTests.cs",
-          "additions": 89,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "6-15_files",
-      "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": true
-    },
+      "selection_rationale": "fills shape=error_handling (count_was=0); files_bucket=6-15_files (count_was=4); size_bucket=medium_5-50KB (count_was=6)",
+      "files_truncated": false
+    }
+  ],
+  "rejected": [
     {
       "pr_number": "973008",
       "merge_commit_sha": "1ed9655a9afb74b67a75bb393cb1ed429ed1d7c5",
@@ -980,51 +484,6 @@
       ],
       "files_bucket": "6-15_files",
       "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "974006",
-      "merge_commit_sha": "c3ece26d475869824f16decfda655eda0729d988",
-      "title": "Merged PR 974006: [File Ingestion] PR17: Facilitate UI to show Source Folder in the DAG",
-      "authored_date": "2026-05-13T13:39:02Z",
-      "files_changed": 5,
-      "additions": 487,
-      "deletions": 0,
-      "diff_size_bytes": 23203,
-      "change_shape": "dag",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
-          "additions": 43,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/FileSourceInfo.cs",
-          "additions": 126,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Node.cs",
-          "additions": 8,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
-          "additions": 55,
-          "deletions": 0
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/FileIngestion/FileSourceInfoTests.cs",
-          "additions": 255,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "2-5_files",
-      "size_bucket": "medium_5-50KB",
       "selected": false,
       "rejection_reason": "",
       "selection_rationale": "not_selected:bucket_fill_complete",
@@ -1363,76 +822,6 @@
       "selected": false,
       "rejection_reason": "hard_reject:test_only",
       "selection_rationale": "",
-      "files_truncated": true
-    },
-    {
-      "pr_number": "969050",
-      "merge_commit_sha": "4a497978d2d10d75c1967234cac82b927035ecac",
-      "title": "Merged PR 969050: PR2: Foundation — Data Models, Error Codes, Feature Flag, Catalog Read",
-      "authored_date": "2026-05-11T09:24:28Z",
-      "files_changed": 36,
-      "additions": 2716,
-      "deletions": 0,
-      "diff_size_bytes": 121650,
-      "change_shape": "schema",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
-          "additions": 65,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/BucketFileEntry.cs",
-          "additions": 51,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/ChangeDetectionResult.cs",
-          "additions": 56,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/ChangeManifest.cs",
-          "additions": 51,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/CheckpointInfo.cs",
-          "additions": 63,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/CheckpointStatus.cs",
-          "additions": 43,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DeltaCommitAction.cs",
-          "additions": 36,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DeltaCommitInfo.cs",
-          "additions": 44,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DeltaFileAction.cs",
-          "additions": 29,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/FileIngestion/DriftClassification.cs",
-          "additions": 35,
-          "deletions": 0
-        }
-      ],
-      "files_bucket": "16+_files",
-      "size_bucket": "large_50KB+",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
       "files_truncated": true
     },
     {
@@ -2039,7 +1428,7 @@
       "additions": 58,
       "deletions": 6332,
       "diff_size_bytes": 367098,
-      "change_shape": "mixed",
+      "change_shape": "generated_or_config",
       "subsystem": ".github",
       "files": [
         {
@@ -2096,8 +1485,8 @@
       "files_bucket": "16+_files",
       "size_bucket": "large_50KB+",
       "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
+      "rejection_reason": "hard_reject:generated_or_config",
+      "selection_rationale": "",
       "files_truncated": true
     },
     {
@@ -2906,31 +2295,6 @@
       "files_truncated": false
     },
     {
-      "pr_number": "952015",
-      "merge_commit_sha": "fcbba54071d6b452c3a97f4e0f75bd5b06665224",
-      "title": "Merged PR 952015: [BugFix] EventGroupType enum serialization",
-      "authored_date": "2026-04-17T05:41:42Z",
-      "files_changed": 1,
-      "additions": 1,
-      "deletions": 1,
-      "diff_size_bytes": 712,
-      "change_shape": "mixed",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/RefreshTriggerAdapter.cs",
-          "additions": 1,
-          "deletions": 1
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "small_<5KB",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": false
-    },
-    {
       "pr_number": "948446",
       "merge_commit_sha": "91951a68d6f27079ee5da814a9b69621e4556354",
       "title": "Merged PR 948446: feat(4582571): Scaffold Feature Registry pointer for Trigger Based Scheduling",
@@ -2953,31 +2317,6 @@
       "selected": false,
       "rejection_reason": "hard_reject:docs",
       "selection_rationale": "",
-      "files_truncated": false
-    },
-    {
-      "pr_number": "942592",
-      "merge_commit_sha": "93639f5ac5452b5d35e7156bea7df0d28b115e43",
-      "title": "Merged PR 942592: EsMetadata schema version update to 1.0.0",
-      "authored_date": "2026-04-15T20:44:22Z",
-      "files_changed": 1,
-      "additions": 12,
-      "deletions": 8,
-      "diff_size_bytes": 706,
-      "change_shape": "mixed",
-      "subsystem": "es-metadata.yml",
-      "files": [
-        {
-          "path": "es-metadata.yml",
-          "additions": 12,
-          "deletions": 8
-        }
-      ],
-      "files_bucket": "1_file",
-      "size_bucket": "small_<5KB",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
       "files_truncated": false
     },
     {
@@ -3119,41 +2458,6 @@
       "rejection_reason": "",
       "selection_rationale": "not_selected:bucket_fill_complete",
       "files_truncated": true
-    },
-    {
-      "pr_number": "948855",
-      "merge_commit_sha": "29748b29b24556603d8cd448a7e3b49c85784286",
-      "title": "Merged PR 948855: Use Global Spark Confs to Enable and Disable DQ Metrics Writes for Pyspark an...",
-      "authored_date": "2026-04-15T12:33:34Z",
-      "files_changed": 3,
-      "additions": 107,
-      "deletions": 10,
-      "diff_size_bytes": 14117,
-      "change_shape": "dag",
-      "subsystem": "Service",
-      "files": [
-        {
-          "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
-          "additions": 18,
-          "deletions": 0
-        },
-        {
-          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Node.cs",
-          "additions": 2,
-          "deletions": 2
-        },
-        {
-          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/NodeGetCodeTests.cs",
-          "additions": 87,
-          "deletions": 8
-        }
-      ],
-      "files_bucket": "2-5_files",
-      "size_bucket": "medium_5-50KB",
-      "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
-      "files_truncated": false
     },
     {
       "pr_number": "949624",
@@ -3499,7 +2803,7 @@
       "additions": 66,
       "deletions": 0,
       "diff_size_bytes": 2726,
-      "change_shape": "mixed",
+      "change_shape": "generated_or_config",
       "subsystem": ".github",
       "files": [
         {
@@ -3526,8 +2830,8 @@
       "files_bucket": "2-5_files",
       "size_bucket": "small_<5KB",
       "selected": false,
-      "rejection_reason": "",
-      "selection_rationale": "not_selected:bucket_fill_complete",
+      "rejection_reason": "hard_reject:generated_or_config",
+      "selection_rationale": "",
       "files_truncated": false
     },
     {
@@ -5539,6 +4843,1826 @@
       "rejection_reason": "",
       "selection_rationale": "not_selected:bucket_fill_complete",
       "files_truncated": false
+    },
+    {
+      "pr_number": "925107",
+      "merge_commit_sha": "07cff4ca55fd7ec0a04f3d9ae3889461abc8d5af",
+      "title": "Merged PR 925107: Cleanup FLTUnresolvedEntitySupport feature flag - always enable unresolved entity handling",
+      "authored_date": "2026-03-19T06:11:38Z",
+      "files_changed": 6,
+      "additions": 86,
+      "deletions": 441,
+      "diff_size_bytes": 36938,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "additions": 54,
+          "deletions": 77
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 0,
+          "deletions": 5
+        },
+        {
+          "path": "docs/design/LiveTableSchedulerRunControllerGuide.md",
+          "additions": 13,
+          "deletions": 24
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs",
+          "additions": 18,
+          "deletions": 326
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerWithV2ClientTests.cs",
+          "additions": 0,
+          "deletions": 8
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs",
+          "additions": 1,
+          "deletions": 1
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "923584",
+      "merge_commit_sha": "c82f00e04c3b86a1e56aedf9707111d09e5bf722",
+      "title": "Merged PR 923584: Optimal Concurrency experiment for ParallelNodeLimit",
+      "authored_date": "2026-03-19T04:57:17Z",
+      "files_changed": 10,
+      "additions": 735,
+      "deletions": 1,
+      "diff_size_bytes": 43674,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service.EntryPoint/WorkloadParameters/ParametersManifest.json",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/V2/DagExecutionHandlerV2.cs",
+          "additions": 126,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 18,
+          "deletions": 0
+        },
+        {
+          "path": "docs/design/DevSpec_ParallelNodeLimit_Experiment.md",
+          "additions": 362,
+          "deletions": 0
+        },
+        {
+          "path": "docs/design/RequirementSpec_ParallelNodeLimit_Experiment.md",
+          "additions": 46,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/V2/DagExecutionHandlerV2CoverageTests.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs",
+          "additions": 177,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2WithCustomSparkCodeTests.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagMultischeduleTests.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagSettingsOverrideTests.cs",
+          "additions": 1,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "926157",
+      "merge_commit_sha": "f10a373ff3a0a8873bfa1698ac2d84d7ee655ef1",
+      "title": "Merged PR 926157: Add CatalogHandler test with non mocked ILakeHouseMetastoreClient  asserting IO patterns",
+      "authored_date": "2026-03-18T08:57:22Z",
+      "files_changed": 1,
+      "additions": 777,
+      "deletions": 0,
+      "diff_size_bytes": 41492,
+      "change_shape": "test_only",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerWithV2ClientTests.cs",
+          "additions": 777,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:test_only",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "908199",
+      "merge_commit_sha": "961c44b1d49e874238ef2c7eebce0086fbb83cbf",
+      "title": "Merged PR 908199: Implement CreateRefreshTriggerAsync",
+      "authored_date": "2026-03-18T05:30:06Z",
+      "files_changed": 41,
+      "additions": 5289,
+      "deletions": 8,
+      "diff_size_bytes": 274431,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Directory.Packages.props",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableRefreshTriggersController.cs",
+          "additions": 64,
+          "deletions": 6
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/Constants.cs",
+          "additions": 21,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/DeterministicGuid.cs",
+          "additions": 84,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/FabricClientDelegate.cs",
+          "additions": 59,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/FabricClientFactory.cs",
+          "additions": 26,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/IFabricClientDelegate.cs",
+          "additions": 74,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/IFabricClientFactory.cs",
+          "additions": 19,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/IRefreshTriggerAdapter.cs",
+          "additions": 55,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/RefreshTrigger/IRefreshTriggersHandler.cs",
+          "additions": 36,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "924891",
+      "merge_commit_sha": "37b3e6573ce21c1d2281900c32c474637a78dda0",
+      "title": "Merged PR 924891: Dag Settings behavior with multischedule and regular runs",
+      "authored_date": "2026-03-17T08:59:30Z",
+      "files_changed": 1,
+      "additions": 253,
+      "deletions": 52,
+      "diff_size_bytes": 12626,
+      "change_shape": "docs",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/design/DagSettingsSelection.md",
+          "additions": 253,
+          "deletions": 52
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "923452",
+      "merge_commit_sha": "e79d1bf177680f5ad849729c98ef29e4fc549e0f",
+      "title": "Merged PR 923452: Non shortcut schema contains shortcut mv causing get lineage to fail",
+      "authored_date": "2026-03-16T16:42:52Z",
+      "files_changed": 2,
+      "additions": 253,
+      "deletions": 1,
+      "diff_size_bytes": 18605,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "additions": 54,
+          "deletions": 1
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs",
+          "additions": 199,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "921152",
+      "merge_commit_sha": "b83b9f6f9995ecb53994edb79b1192144622d118",
+      "title": "Merged PR 921152:  TMDL templates for Insights & Trends report",
+      "authored_date": "2026-03-16T03:23:35Z",
+      "files_changed": 7,
+      "additions": 643,
+      "deletions": 0,
+      "diff_size_bytes": 17758,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/database.tmdl.scriban",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/model.tmdl.scriban",
+          "additions": 19,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/relationships.tmdl.scriban",
+          "additions": 9,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/semantic_model_payload.json.scriban",
+          "additions": 44,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/sys_error_metrics.tmdl.scriban",
+          "additions": 138,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/sys_node_metrics.tmdl.scriban",
+          "additions": 144,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Resources/Templates/InsightsSemanticModel/sys_run_metrics.tmdl.scriban",
+          "additions": 287,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "923080",
+      "merge_commit_sha": "4e814b53df3fa3535868932cae9d7b8f642e65eb",
+      "title": "Merged PR 923080: feat(reliability-skill): Add Step 4b — Region & Lakehouse Commonality Analysis",
+      "authored_date": "2026-03-16T03:23:14Z",
+      "files_changed": 2,
+      "additions": 221,
+      "deletions": 1,
+      "diff_size_bytes": 12585,
+      "change_shape": "docs",
+      "subsystem": ".github",
+      "files": [
+        {
+          "path": ".github/skills/reliability-analysis/SKILL.md",
+          "additions": 118,
+          "deletions": 1
+        },
+        {
+          "path": ".github/skills/reliability-analysis/references/REFERENCE.md",
+          "additions": 103,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "904939",
+      "merge_commit_sha": "5a6ac17f1d8c3b26aff80b0917d23000896e5575",
+      "title": "Merged PR 904939: Added Code to Handle DAG is null Case for Pyspark SSR logs",
+      "authored_date": "2026-03-13T08:40:43Z",
+      "files_changed": 6,
+      "additions": 1327,
+      "deletions": 55,
+      "diff_size_bytes": 104528,
+      "change_shape": "controller",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "additions": 34,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
+          "additions": 25,
+          "deletions": 7
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/V2/DagExecutionHandlerV2.cs",
+          "additions": 2,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/DagUtils.cs",
+          "additions": 129,
+          "deletions": 5
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CommonTests/DagUtilsTests.cs",
+          "additions": 946,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs",
+          "additions": 191,
+          "deletions": 40
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "916928",
+      "merge_commit_sha": "b640e2941da4b8a107cfd7e4fdf2b979ed4e05d2",
+      "title": "Merged PR 916928: Add CatalogHandler error-path tests: OBO/S2S token failure + workspace name f...",
+      "authored_date": "2026-03-13T04:53:54Z",
+      "files_changed": 1,
+      "additions": 89,
+      "deletions": 0,
+      "diff_size_bytes": 4877,
+      "change_shape": "test_only",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs",
+          "additions": 89,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "small_<5KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:test_only",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "920002",
+      "merge_commit_sha": "83bf6f2fcffe8bef3cd3a5a0c55dc96e74f2cce2",
+      "title": "Merged PR 920002: Add FLTListPathOptimization: pass Delta list-path confs to GTS session",
+      "authored_date": "2026-03-11T19:56:51Z",
+      "files_changed": 4,
+      "additions": 400,
+      "deletions": 12,
+      "diff_size_bytes": 27127,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/V2/NodeExecutor.cs",
+          "additions": 48,
+          "deletions": 12
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 22,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/NodeExecutorTests.cs",
+          "additions": 322,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/SparkClientStub.cs",
+          "additions": 8,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "911035",
+      "merge_commit_sha": "1f4119c7249f15798fbbf5f66f2f07011f8242d6",
+      "title": "Merged PR 911035: Add resilient catalog listing with per-table/per-schema error isolation and s...",
+      "authored_date": "2026-03-11T16:34:09Z",
+      "files_changed": 5,
+      "additions": 2012,
+      "deletions": 108,
+      "diff_size_bytes": 123313,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "additions": 32,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/LakeHouseMetastoreClientWithShortcutSupport.cs",
+          "additions": 173,
+          "deletions": 31
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 10,
+          "deletions": 0
+        },
+        {
+          "path": "docs/DevSpec_ResilientCatalogListing.md",
+          "additions": 635,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/LakeHouseMetastoreClientWithShortcutSupportTests.cs",
+          "additions": 1162,
+          "deletions": 76
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "915744",
+      "merge_commit_sha": "9052a9e7a5c2fea1d57b771dd5d5f51a8eb61aa7",
+      "title": "Merged PR 915744: [Reliability Improvements] Fix: Update namespace for de-duplicated source entities on workspace/lakehouse rename",
+      "authored_date": "2026-03-11T11:32:42Z",
+      "files_changed": 2,
+      "additions": 106,
+      "deletions": 0,
+      "diff_size_bytes": 7219,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "additions": 3,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs",
+          "additions": 103,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "918454",
+      "merge_commit_sha": "09f9449ecb44170abf2b8f983882841794190c1d",
+      "title": "Merged PR 918454: Updated OnboardNewPublicAPI.md",
+      "authored_date": "2026-03-10T09:01:27Z",
+      "files_changed": 1,
+      "additions": 39,
+      "deletions": 0,
+      "diff_size_bytes": 2285,
+      "change_shape": "docs",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/contributing/OnboardNewPublicAPI.md",
+          "additions": 39,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "small_<5KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "917081",
+      "merge_commit_sha": "d187627a6d62a11a9b6cd4f3e97174bf411ce9c9",
+      "title": "Merged PR 917081: Restructure docs/ folder into logical subdirectories with TOC",
+      "authored_date": "2026-03-10T07:50:03Z",
+      "files_changed": 63,
+      "additions": 128,
+      "deletions": 38,
+      "diff_size_bytes": 38025,
+      "change_shape": "docs",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": ".github/README.md",
+          "additions": 1,
+          "deletions": 1
+        },
+        {
+          "path": ".github/skills/deploy-livetable-cst/SKILL.md",
+          "additions": 2,
+          "deletions": 2
+        },
+        {
+          "path": "docs/README.md",
+          "additions": 90,
+          "deletions": 0
+        },
+        {
+          "path": "docs/{ => contributing}/BrunoCollectionGuide.md",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/{ => contributing}/CodingStandards.md",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/{ => contributing}/GenerateSwagger.md",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/{ => contributing}/OnboardNewPublicAPI.md",
+          "additions": 16,
+          "deletions": 16
+        },
+        {
+          "path": "docs/{DesignDocs => design}/CAPACITY_RETRY_SPEC.md",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "CDFEnableAPISpec.md => docs/design/CDFEnableAPISpec.md",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/{DesignDocs => design}/ConcurrentSchedulesLockingDesign.md",
+          "additions": 0,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "917206",
+      "merge_commit_sha": "aa315d3dc55866ecd4243182c0d4c4ea0566adc8",
+      "title": "Merged PR 917206: Add code-review-knowledge skill from 2-year PR review analysis",
+      "authored_date": "2026-03-09T15:49:51Z",
+      "files_changed": 1,
+      "additions": 448,
+      "deletions": 0,
+      "diff_size_bytes": 69994,
+      "change_shape": "docs",
+      "subsystem": ".github",
+      "files": [
+        {
+          "path": ".github/skills/code-review-knowledge/SKILL.md",
+          "additions": 448,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "915768",
+      "merge_commit_sha": "027cab310f7d263932c81bc351c4e6adea28b6ef",
+      "title": "Merged PR 915768: Propogate JobInvokeType to DagExecMetrics and Past Runs (listDAGIterationIds)",
+      "authored_date": "2026-03-09T11:45:20Z",
+      "files_changed": 20,
+      "additions": 793,
+      "deletions": 13,
+      "diff_size_bytes": 58764,
+      "change_shape": "dag",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "additions": 3,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
+          "additions": 2,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/V2/DagExecutionHandlerV2.cs",
+          "additions": 3,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionInstance.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionIteration.cs",
+          "additions": 7,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
+          "additions": 9,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Execution/DagExecutionContext.cs",
+          "additions": 6,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/RequestContext.cs",
+          "additions": 6,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "additions": 28,
+          "deletions": 9
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/Constants.cs",
+          "additions": 6,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "914695",
+      "merge_commit_sha": "2e921a675a8f558950b7fccfd6f0ca35dfea6442",
+      "title": "Merged PR 914695: mlvExecutionDefinitions find API to match DagSettings field values also",
+      "authored_date": "2026-03-09T02:02:30Z",
+      "files_changed": 3,
+      "additions": 1001,
+      "deletions": 0,
+      "diff_size_bytes": 48641,
+      "change_shape": "controller",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "additions": 4,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/MLVExecutionDefinitionHandler.cs",
+          "additions": 37,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/MLVExecutionDefinitionHandlerTests.cs",
+          "additions": 960,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "909361",
+      "merge_commit_sha": "a52fe5ac7acbafbbe354b7af7d9868bf3a5c33e9",
+      "title": "Merged PR 909361: Refactor LakeMetastoreClient for proper abstraction of own business logic and external storage dependency",
+      "authored_date": "2026-03-08T10:06:42Z",
+      "files_changed": 12,
+      "additions": 2651,
+      "deletions": 101,
+      "diff_size_bytes": 173578,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "additions": 51,
+          "deletions": 11
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/LakeHouseMetastoreClientV2.cs",
+          "additions": 716,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 8,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/IFileSystem.cs",
+          "additions": 9,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
+          "additions": 16,
+          "deletions": 0
+        },
+        {
+          "path": "docs/external-dependencies-analysis.md",
+          "additions": 251,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerLoggingTests.cs",
+          "additions": 6,
+          "deletions": 1
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs",
+          "additions": 398,
+          "deletions": 89
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/LakeHouseMetastoreClientV2Tests.cs",
+          "additions": 1170,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/InMemoryMLVExecutionDefFSStub.cs",
+          "additions": 12,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "914863",
+      "merge_commit_sha": "84af5262f5efe3fe7bc58080d1e72e6ec8710746",
+      "title": "Merged PR 914863: Add new Maintenance APIs to List and Delete the Index Directories for MLV Exec Definitions which have been deleted",
+      "authored_date": "2026-03-06T06:35:06Z",
+      "files_changed": 18,
+      "additions": 1264,
+      "deletions": 2,
+      "diff_size_bytes": 74573,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableMaintenanceController.cs",
+          "additions": 115,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
+          "additions": 98,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Monitoring/CodeMarkers.cs",
+          "additions": 10,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "additions": 59,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/IFileSystem.cs",
+          "additions": 8,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
+          "additions": 11,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/IDagExecutionPersistenceManager.cs",
+          "additions": 50,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/IMLVExecutionDefinitionPersistenceManager.cs",
+          "additions": 48,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/MLVExecutionDefinitionPersistenceManager.cs",
+          "additions": 69,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Store/DagExecutionStore.cs",
+          "additions": 37,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "914590",
+      "merge_commit_sha": "306ee55085c47c08cc8708e27ad542014cbcbe8a",
+      "title": "Merged PR 914590: Add comprehensive guide for onboarding new Public APIs in FLT",
+      "authored_date": "2026-03-06T05:06:43Z",
+      "files_changed": 1,
+      "additions": 758,
+      "deletions": 0,
+      "diff_size_bytes": 38249,
+      "change_shape": "docs",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/OnboardNewPublicAPI.md",
+          "additions": 758,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "913504",
+      "merge_commit_sha": "70400d6ec1aed1f341dc3a9a2c7d951fc0ce5750",
+      "title": "Merged PR 913504: Classifying Capacity Throttling as User Error",
+      "authored_date": "2026-03-04T13:27:30Z",
+      "files_changed": 3,
+      "additions": 9,
+      "deletions": 115,
+      "diff_size_bytes": 11026,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 0,
+          "deletions": 5
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "additions": 5,
+          "deletions": 31
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CommonTests/NodeExecutionUtilsTests.cs",
+          "additions": 4,
+          "deletions": 79
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "897301",
+      "merge_commit_sha": "4b6f3589864070fffe41eb82fe62cf143ee25ad4",
+      "title": "Merged PR 897301: [Doc] Design doc for Trigger based schedule for FMLV refresh",
+      "authored_date": "2026-03-03T14:07:21Z",
+      "files_changed": 4,
+      "additions": 848,
+      "deletions": 0,
+      "diff_size_bytes": 46188,
+      "change_shape": "mixed",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/DesignDocs/FMLVTriggerSchedulingDesign.md",
+          "additions": 720,
+          "deletions": 0
+        },
+        {
+          "path": "docs/specs/media/image1.png",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/specs/media/image2.png",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/specs/trigger.md",
+          "additions": 128,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "911372",
+      "merge_commit_sha": "8e3cd91c5301898f2e9ae0ccee950dbdd4078709",
+      "title": "Merged PR 911372: Restructure skills to follow agentskills.io spec",
+      "authored_date": "2026-03-03T08:18:58Z",
+      "files_changed": 4,
+      "additions": 541,
+      "deletions": 1375,
+      "diff_size_bytes": 78434,
+      "change_shape": "docs",
+      "subsystem": ".github",
+      "files": [
+        {
+          "path": ".github/instructions/reliability-analysis.instructions.md",
+          "additions": 0,
+          "deletions": 853
+        },
+        {
+          "path": ".copilot/skills/test-coverage-skill.md => .github/skills/fabriclivetable-test-coverage/SKILL.md",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": ".copilot/skills/reliability-analysis-skill.md => .github/skills/reliability-analysis/SKILL.md",
+          "additions": 12,
+          "deletions": 522
+        },
+        {
+          "path": ".github/skills/reliability-analysis/references/REFERENCE.md",
+          "additions": 529,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "908561",
+      "merge_commit_sha": "71ce6586a6bc8fe032f679df550b14d598426118",
+      "title": "Merged PR 908561: Increase test coverage further",
+      "authored_date": "2026-03-02T06:19:30Z",
+      "files_changed": 81,
+      "additions": 10970,
+      "deletions": 97,
+      "diff_size_bytes": 577523,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": ".copilot/skills/test-coverage-skill.md",
+          "additions": 131,
+          "deletions": 0
+        },
+        {
+          "path": ".github/copilot-instructions.md",
+          "additions": 32,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/AuthContextProvider.cs",
+          "additions": 0,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/MwcV2PermissionsValidator.cs",
+          "additions": 0,
+          "deletions": 4
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/MwcV2RequirePermissionsFilter.cs",
+          "additions": 0,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/RequiresPermissionFilter.cs",
+          "additions": 0,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/UserMwcAndS2STokenAuthenticator.cs",
+          "additions": 1,
+          "deletions": 3
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/WorkloadMwcTokenAuthenticatorBase.cs",
+          "additions": 0,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/WorkloadMwcTokenV1Authenticator.cs",
+          "additions": 1,
+          "deletions": 3
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Authorization/WorkloadMwcTokenV2Authenticator.cs",
+          "additions": 0,
+          "deletions": 2
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "909497",
+      "merge_commit_sha": "e66c71f5a5e8aa09f42759ba4e3b9a6d03553d6c",
+      "title": "Merged PR 909497: Adding reliability skills for 80:20 analysis",
+      "authored_date": "2026-03-02T05:52:25Z",
+      "files_changed": 2,
+      "additions": 1706,
+      "deletions": 0,
+      "diff_size_bytes": 78668,
+      "change_shape": "docs",
+      "subsystem": ".github",
+      "files": [
+        {
+          "path": ".copilot/skills/reliability-analysis-skill.md",
+          "additions": 853,
+          "deletions": 0
+        },
+        {
+          "path": ".github/instructions/reliability-analysis.instructions.md",
+          "additions": 853,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "908654",
+      "merge_commit_sha": "11410ad0c74e1733c07b4b16c5ed736d1aa57a36",
+      "title": "Merged PR 908654: Cleaning up DagExecutionHandler old flow.",
+      "authored_date": "2026-02-28T14:04:46Z",
+      "files_changed": 25,
+      "additions": 18,
+      "deletions": 16504,
+      "diff_size_bytes": 868723,
+      "change_shape": "test_only",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/DagExecutionHandler.cs",
+          "additions": 0,
+          "deletions": 1113
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/INodeExecutionHandler.cs",
+          "additions": 0,
+          "deletions": 29
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/NodeExecutionHandler.cs",
+          "additions": 0,
+          "deletions": 1028
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "additions": 0,
+          "deletions": 5
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/HttpClients/HttpClientFactoryRegistry.cs",
+          "additions": 0,
+          "deletions": 3
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/HttpClients/HttpClientNames.cs",
+          "additions": 0,
+          "deletions": 5
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Managers/GTSOperationManager.cs",
+          "additions": 0,
+          "deletions": 260
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ReliableOperations/ReliableOperationExecutionManager.cs",
+          "additions": 1,
+          "deletions": 27
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/WorkloadApp.cs",
+          "additions": 1,
+          "deletions": 4
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/DagExecutionHandlerAdditionalTests.cs",
+          "additions": 0,
+          "deletions": 766
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "hard_reject:test_only",
+      "selection_rationale": "",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "909478",
+      "merge_commit_sha": "d7e23c51a978a6b42cf2f46bf258e64a5e2608a6",
+      "title": "Merged PR 909478: Copilot cst skill improvements: email alias, multi-pipeline, VPN pre-check",
+      "authored_date": "2026-02-27T08:22:39Z",
+      "files_changed": 5,
+      "additions": 95,
+      "deletions": 32,
+      "diff_size_bytes": 11434,
+      "change_shape": "docs",
+      "subsystem": ".github",
+      "files": [
+        {
+          "path": ".github/README.md",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/SKILL.md",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/CstPoolManager.psm1",
+          "additions": 41,
+          "deletions": 20
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Get-TeamPoolUsage.ps1",
+          "additions": 21,
+          "deletions": 11
+        },
+        {
+          "path": ".github/skills/deploy-livetable-cst/SKILL.md",
+          "additions": 31,
+          "deletions": 1
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "902718",
+      "merge_commit_sha": "1e965136d1e96b283d0a48df102b7e6371cb46bd",
+      "title": "Merged PR 902718: [Multischedule] Make CurrentLakehouse as default ExecutionMode when request does not mention ExcutionMode",
+      "authored_date": "2026-02-27T06:26:49Z",
+      "files_changed": 4,
+      "additions": 27,
+      "deletions": 14,
+      "diff_size_bytes": 5170,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionRequest.cs",
+          "additions": 2,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/ExecutionMode.cs",
+          "additions": 8,
+          "deletions": 8
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+          "additions": 4,
+          "deletions": 4
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/MLVExecutionDefinitionHandlerTests.cs",
+          "additions": 13,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "908469",
+      "merge_commit_sha": "a4f05b35061e93ac1b95c9cc51d5b66c458b0abf",
+      "title": "Merged PR 908469: Update wiki to run MWC CST tests locally against a CST cluster",
+      "authored_date": "2026-02-27T05:59:54Z",
+      "files_changed": 6,
+      "additions": 90,
+      "deletions": 9,
+      "diff_size_bytes": 8752,
+      "change_shape": "mixed",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/CreateCSTRunnerTests.md",
+          "additions": 90,
+          "deletions": 9
+        },
+        {
+          "path": "docs/Runners-10.png",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/Runners-6.png",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/Runners-7.png",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/Runners-8.png",
+          "additions": 0,
+          "deletions": 0
+        },
+        {
+          "path": "docs/Runners-9.png",
+          "additions": 0,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "908302",
+      "merge_commit_sha": "bd5f613208ad7e6c5e9b53cbe9558f2292422b2b",
+      "title": "Merged PR 908302: [Multi-Schedule] Extend ExtractMLVExecutionDefinitionId to fall back to JobPayloadJson",
+      "authored_date": "2026-02-26T15:56:35Z",
+      "files_changed": 2,
+      "additions": 305,
+      "deletions": 19,
+      "diff_size_bytes": 17178,
+      "change_shape": "controller",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "additions": 51,
+          "deletions": 17
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+          "additions": 254,
+          "deletions": 2
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "899956",
+      "merge_commit_sha": "859f10f424a551a2a01a8936b922bda5e955dab0",
+      "title": "Merged PR 899956: Add Copilot skills: Manage CST Pools and application deployment to CST",
+      "authored_date": "2026-02-25T11:21:13Z",
+      "files_changed": 19,
+      "additions": 3601,
+      "deletions": 2,
+      "diff_size_bytes": 170810,
+      "change_shape": "generated_or_config",
+      "subsystem": ".github",
+      "files": [
+        {
+          "path": ".github/README.md",
+          "additions": 228,
+          "deletions": 0
+        },
+        {
+          "path": ".github/copilot-instructions.md",
+          "additions": 33,
+          "deletions": 2
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/SKILL.md",
+          "additions": 301,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Checkin-Cst.ps1",
+          "additions": 53,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Checkout-Cst.ps1",
+          "additions": 57,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/CstPoolManager.psm1",
+          "additions": 712,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Get-CstStatus.ps1",
+          "additions": 40,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Get-MyCsts.ps1",
+          "additions": 192,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Get-TeamPoolUsage.ps1",
+          "additions": 322,
+          "deletions": 0
+        },
+        {
+          "path": ".github/skills/cst-pool-manager/scripts/Renew-CstLease.ps1",
+          "additions": 83,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "hard_reject:generated_or_config",
+      "selection_rationale": "",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "905462",
+      "merge_commit_sha": "4048aa7a14871bfa3ba754fdb7285aa0c0627344",
+      "title": "Merged PR 905462: [Lineage Improvements] Lakehouse Name auto-correction if rename scenario",
+      "authored_date": "2026-02-25T10:58:55Z",
+      "files_changed": 4,
+      "additions": 605,
+      "deletions": 4,
+      "diff_size_bytes": 45199,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Artifacts/ArtifactMetadataService.cs",
+          "additions": 9,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Catalog/CatalogHandler.cs",
+          "additions": 79,
+          "deletions": 4
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/Artifacts/ArtifactMetadataServiceTests.cs",
+          "additions": 27,
+          "deletions": 0
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/CatalogHandlerTests.cs",
+          "additions": 490,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "903504",
+      "merge_commit_sha": "7c4246ecfc05867df0653d54bfc51a886e1cb8ec",
+      "title": "Merged PR 903504: Add test coverage skill for Copilot CLI agents",
+      "authored_date": "2026-02-24T18:03:48Z",
+      "files_changed": 81,
+      "additions": 14192,
+      "deletions": 11,
+      "diff_size_bytes": 630106,
+      "change_shape": "test_only",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": ".copilot/skills/test-coverage-skill.md",
+          "additions": 369,
+          "deletions": 0
+        },
+        {
+          "path": ".gitignore",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/PublicUnprotectedController.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Initialization/Add500ErrorResponseOperationFilter.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/LiveTableAutoPremiumServiceListener.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Monitoring/CodeMarkers.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Monitoring/ConfigureMetricsAttribute.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Monitoring/MetricsEnabledSingletonMonitoredCodeMarker.cs",
+          "additions": 2,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/MoveToWcl/CrashHandler/ExceptionBehaviorExecutionHelper.cs",
+          "additions": 2,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "hard_reject:test_only",
+      "selection_rationale": "",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "902110",
+      "merge_commit_sha": "a1a8206c2b262f5edb51b66df2fdf3a588e73b38",
+      "title": "Merged PR 902110: [MultiSchedule] Create a Recovery JSON file with required MLV Execution Definition data in case the definition is deleted",
+      "authored_date": "2026-02-24T02:43:34Z",
+      "files_changed": 24,
+      "additions": 1410,
+      "deletions": 59,
+      "diff_size_bytes": 106947,
+      "change_shape": "mixed",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "additions": 1,
+          "deletions": 1
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
+          "additions": 47,
+          "deletions": 3
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionInstance.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
+          "additions": 9,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "additions": 7,
+          "deletions": 23
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/Constants.cs",
+          "additions": 5,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/IMLVExecutionDefinitionPersistenceManager.cs",
+          "additions": 17,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/MLVExecutionDefinitionPersistenceManager.cs",
+          "additions": 69,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/DagUtils.cs",
+          "additions": 60,
+          "deletions": 0
+        },
+        {
+          "path": "docs/DesignDocs/Recovery-MLVExecutionDefinition.md",
+          "additions": 206,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "16+_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
+    },
+    {
+      "pr_number": "896813",
+      "merge_commit_sha": "584a87796da18c4524cef1ccb643eb52122225d4",
+      "title": "Merged PR 896813: Dev Spec: Mitigate OneLake TCP Connection Storm in Catalog Operations",
+      "authored_date": "2026-02-23T15:07:49Z",
+      "files_changed": 1,
+      "additions": 773,
+      "deletions": 0,
+      "diff_size_bytes": 38141,
+      "change_shape": "docs",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/DesignDocs/DevSpec_CatalogOneLake_TCPStorm_Mitigation.md",
+          "additions": 773,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "903651",
+      "merge_commit_sha": "e7633cbd7d8583733dd24457ca1ae01df86c38ba",
+      "title": "Merged PR 903651: Changed sync submit cdf enablement API from sync to fire and forget",
+      "authored_date": "2026-02-23T09:43:14Z",
+      "files_changed": 4,
+      "additions": 748,
+      "deletions": 257,
+      "diff_size_bytes": 76758,
+      "change_shape": "controller",
+      "subsystem": "test",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "additions": 187,
+          "deletions": 127
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+          "additions": 15,
+          "deletions": 71
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/CdfEnablementControllerTests.cs",
+          "additions": 426,
+          "deletions": 7
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs",
+          "additions": 120,
+          "deletions": 52
+        }
+      ],
+      "files_bucket": "2-5_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "904849",
+      "merge_commit_sha": "ac7b1c6b80e6212e6b290e4007a16226ccc80889",
+      "title": "Merged PR 904849: [MultiSchedule] Submit User & Find API Swagger",
+      "authored_date": "2026-02-23T06:45:23Z",
+      "files_changed": 1,
+      "additions": 356,
+      "deletions": 7,
+      "diff_size_bytes": 14248,
+      "change_shape": "generated_or_config",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+          "additions": 356,
+          "deletions": 7
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "medium_5-50KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:generated_or_config",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "903644",
+      "merge_commit_sha": "00107f9eaf3b6cde374dab467d6ef4b4778d5724",
+      "title": "Merged PR 903644: Wiki update to rotate from FMLV 07 to 08 tenants",
+      "authored_date": "2026-02-23T05:29:59Z",
+      "files_changed": 1,
+      "additions": 7,
+      "deletions": 6,
+      "diff_size_bytes": 2651,
+      "change_shape": "docs",
+      "subsystem": "docs",
+      "files": [
+        {
+          "path": "docs/CreateCSTCluster.md",
+          "additions": 7,
+          "deletions": 6
+        }
+      ],
+      "files_bucket": "1_file",
+      "size_bucket": "small_<5KB",
+      "selected": false,
+      "rejection_reason": "hard_reject:docs",
+      "selection_rationale": "",
+      "files_truncated": false
+    },
+    {
+      "pr_number": "903579",
+      "merge_commit_sha": "acc7699abc9890a38a8257bc144e6fcd77cab059",
+      "title": "Merged PR 903579: [MultiScheduling] Add SubmitUser to getDAGExecMetrics and View Past Runs Response",
+      "authored_date": "2026-02-23T03:54:39Z",
+      "files_changed": 14,
+      "additions": 1482,
+      "deletions": 47,
+      "diff_size_bytes": 96958,
+      "change_shape": "mixed",
+      "subsystem": "Service",
+      "files": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/DagExecutionHandler.cs",
+          "additions": 8,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
+          "additions": 1,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Core/V2/DagExecutionHandlerV2.cs",
+          "additions": 8,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionInstance.cs",
+          "additions": 20,
+          "deletions": 15
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionIteration.cs",
+          "additions": 16,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
+          "additions": 19,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Execution/DagExecutionContext.cs",
+          "additions": 2,
+          "deletions": 2
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "additions": 84,
+          "deletions": 16
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/Constants.cs",
+          "additions": 12,
+          "deletions": 0
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/HttpTokenUtils.cs",
+          "additions": 34,
+          "deletions": 0
+        }
+      ],
+      "files_bucket": "6-15_files",
+      "size_bucket": "large_50KB+",
+      "selected": false,
+      "rejection_reason": "",
+      "selection_rationale": "not_selected:bucket_fill_complete",
+      "files_truncated": true
     }
   ],
   "notes": "Selection methodology: stratified greedy bucket-fill across three diversity dimensions (change_shape, files_bucket, size_bucket). Hard-rejects: docs-only, test-only, generated_or_config, empty/trivial diffs. Tiebreaker for equal-score candidates: prefer larger pr_number (more recent). Deterministic: same FLT repo state + same flags yields byte-identical output. This is T4-C-prep — selection is curated, NOT yet graded. Each selected PR must pass curator hand-grading before its expected.json transitions from PENDING_HUMAN_GRADING to GRADED_PASS_1 and joins the scored corpus."
