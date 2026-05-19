@@ -10,16 +10,6 @@
   font-weight: 500;
 }
 
-#clear-correlation {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0;
-  margin-left: 4px;
-}
-
 /* ===== Detail Panel — Chrome DevTools inspired ===== */
 .detail-panel {
   position: fixed;

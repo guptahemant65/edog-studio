@@ -162,6 +162,25 @@ class EdogLogViewer {
       ? new ControlPanel(cpEl, { autoDetector: this.autoDetector, stateManager: this.state })
       : null;
 
+    // ErrorDecoder — detects error codes in log messages, highlights them
+    // in the renderer, provides popover cards with error descriptions.
+    this.errorDecoder = new ErrorDecoder(window.ERROR_CODES_DB || {});
+    this.renderer.setErrorDecoder(this.errorDecoder);
+
+    // ErrorTimeline — 48px bar chart of error frequency over time.
+    // Mounted into the logs tab above the log list.
+    this.errorTimeline = new ErrorTimeline(this.state, {
+      onFilterChange: (bucketIndex) => {
+        // When user clicks a timeline bucket, filter logs to that time range
+        if (this.errorTimeline && typeof this.errorTimeline.getBucketTimeRange === 'function') {
+          const range = this.errorTimeline.getBucketTimeRange(bucketIndex);
+          if (range && this.filter) {
+            this.filter.setTimeRange(range.start, range.end);
+          }
+        }
+      }
+    });
+
     // Wire error-intel jump-to-error
     this.errorIntel.onJumpToError = (errorMsg) => {
       this.filter.setSearch(errorMsg.substring(0, 60));
@@ -254,6 +273,14 @@ class EdogLogViewer {
       // so the cluster UI renders grouped errors.
       if (this.errorIntel && this.errorIntel.clusterEngine) {
         this.logsEnhancements.setClusterEngine(this.errorIntel.clusterEngine);
+      }
+    }
+
+    // Mount ErrorTimeline into the logs tab (above the log list)
+    if (this.errorTimeline) {
+      const logsTab = document.getElementById('rt-tab-logs');
+      if (logsTab) {
+        this.errorTimeline.mount(logsTab);
       }
     }
 
@@ -594,6 +621,7 @@ class EdogLogViewer {
         this.autoDetector.processLog(data);
         this.anomaly.processLog(data);
         if (this.errorIntel) this.errorIntel.addToCluster(data);
+        if (this.errorTimeline) this.errorTimeline.addEntry(data);
         this.extractEndpointFromLog(data);
         this.extractComponentFromLog(data);
         this.extractIterationIdFromLog(data);
