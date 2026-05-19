@@ -234,17 +234,18 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <inheritdoc/>
-        public async Task CreateFileWithContentIfNotExistsAsync(string path, string content, CancellationToken cancellationToken = default)
+        public async Task<bool> CreateFileWithContentIfNotExistsAsync(string path, string content, CancellationToken cancellationToken = default)
         {
             var sw = Stopwatch.StartNew();
-            await _inner.CreateFileWithContentIfNotExistsAsync(path, content, cancellationToken).ConfigureAwait(false);
+            var result = await _inner.CreateFileWithContentIfNotExistsAsync(path, content, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
             var contentSize = content != null ? System.Text.Encoding.UTF8.GetByteCount(content) : 0;
             var preview = TruncatePreview(content);
             var truncated = content != null && content.Length > MaxContentPreviewBytes;
 
-            PublishEvent("CreateFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: content != null, contentPreview: preview, ttlSeconds: 0, previewTruncated: truncated);
+            PublishEvent("CreateFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: content != null, contentPreview: preview, ttlSeconds: 0, operationResult: result, previewTruncated: truncated);
+            return result;
         }
 
         /// <inheritdoc/>
