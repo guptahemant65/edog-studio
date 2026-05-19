@@ -672,7 +672,7 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     # 1.7 (T2 Architect+Editor prompt tuning + chronic-density budget
     # bump). Pre-T1c-c statuses are tolerated to let a checkout-with-
     # stale-baseline still pass this scaffold-level test.
-    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"}, data
+    assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"}, data
     assert data.get("status") in (
         "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
         "DRY_RUN", "SCORED",
@@ -1675,8 +1675,9 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     import json
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
-    assert baseline.get("schema_version") == "1.7", (
-        f"expected schema_version=1.7 after T2 prompt+budget lift, got {baseline.get('schema_version')!r}"
+    assert baseline.get("schema_version") == "1.8", (
+        f"expected schema_version=1.8 after T4-A category-cluster matcher calibration, "
+        f"got {baseline.get('schema_version')!r}"
     )
     assert baseline.get("pipeline") == "v2_architect_editor"
     assert baseline.get("status") in {"CAPTURED", "CAPTURED_WITH_ERRORS", "DRY_RUN", "SCORED"}, (
@@ -2480,80 +2481,99 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
 
-def test_qa_score_floors_calibrated_for_t2() -> None:
-    """T2 lifted Architect+Editor prompts AND bumped budgets
-    (ArchitectMaxOutputTokens 65536 -> 96000, EditorMaxOutputTokens
-    16384 -> 32000) to unblock chronically-truncated dense PRs. Result:
-    n=6 macro_recall 0.391 -> 0.577 (+47%% relative), macro_precision_highest
-    0.451 -> 0.502 (+11%%). PR-966141 went 0.000 -> 0.750 (Editor granularity
-    fix landed). T2.1 hotfix (PARALLEL-SIBLING COMPRESSION) was REVERTED
-    in-session — over-fired on diverse-touchpoint PRs. Pin the schema
-    bump 1.6 -> 1.7 and the new T2 floor bands (must stay BELOW new n=6
-    measured baseline so a regression after the next capture surfaces —
-    AND ABOVE the T1k floors so a silent prompt revert still trips the
-    gate).
+def test_qa_score_floors_calibrated_for_t4a() -> None:
+    """T4-A is the matcher-side category-cluster calibration (no LLM
+    cost). The matcher sensitivity audit measured a +19 pp gap between
+    strict raw-label category matching and cluster matching on the
+    IDENTICAL T2 captures; 11/11 newly-recovered pairs were hand-
+    validated as TRUE semantic equivalents. The cluster map
+    (tests/qa-eval/category_aliases.json) folds
+    {HappyPath, EdgeCase, ErrorPath, Regression} into one 'behavioral'
+    bucket for cardinality; Performance stays its own cluster.
+    category_label_accuracy is the new diagnostic preserving raw-label
+    agreement signal (0.622 on n=6). Result: n=6 macro_recall 0.577 ->
+    0.767 (+33%% relative, +0.190 abs), macro_precision_highest 0.502
+    -> 0.666, macro_F1_highest 0.527 -> 0.701. Pin the schema bump
+    1.7 -> 1.8 and the new T4-A floor bands (must stay BELOW measured
+    so LLM nondeterminism flap stays under the gate, AND ABOVE T2
+    floors so a silent revert to strict matching trips the gate).
     """
     import json
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
-    assert floors.get("schema_version") == "1.7", (
-        f"score_floors.json must be at schema_version 1.7 after T2 prompt + budget lift, "
+    assert floors.get("schema_version") == "1.8", (
+        f"score_floors.json must be at schema_version 1.8 after T4-A category-cluster matcher, "
         f"got {floors.get('schema_version')!r}"
     )
     absolute = floors.get("absolute") or {}
-    # T2 floors must stay <= measured n=6 baselines so a future LLM
+    # T4-A floors must stay <= measured n=6 baselines so a future LLM
     # nondeterminism flap or scorer regression actually trips the gate.
-    assert absolute.get("corpus_recall_min") <= 0.577, (
-        f"corpus_recall_min must stay <= measured T2 n=6 0.577; got {absolute.get('corpus_recall_min')!r}"
+    assert absolute.get("corpus_recall_min") <= 0.767, (
+        f"corpus_recall_min must stay <= measured T4-A n=6 0.767; got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") <= 0.577, (
-        f"p0_p1_recall_min must stay <= measured T2 n=6 0.577; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") <= 0.767, (
+        f"p0_p1_recall_min must stay <= measured T4-A n=6 0.767; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    # T2 floors must stay STRICTLY ABOVE the T1k floors (0.30/0.30) so a
-    # silent prompt revert OR a regression in scorer composition trips
-    # the gate even though the T1k floors would have accepted it.
-    assert absolute.get("corpus_recall_min") > 0.30, (
-        f"corpus_recall_min must lift ABOVE the T1k 0.30 to detect a T2 prompt revert; "
+    # T4-A floors must stay STRICTLY ABOVE the T2 floors (0.45/0.39/0.45)
+    # so a silent revert to strict-category matching trips the gate.
+    assert absolute.get("corpus_recall_min") > 0.45, (
+        f"corpus_recall_min must lift ABOVE the T2 0.45 to detect a silent strict-matcher revert; "
         f"got {absolute.get('corpus_recall_min')!r}"
     )
-    assert absolute.get("p0_p1_recall_min") > 0.30, (
-        f"p0_p1_recall_min must lift ABOVE the T1k 0.30; got {absolute.get('p0_p1_recall_min')!r}"
+    assert absolute.get("p0_p1_recall_min") > 0.45, (
+        f"p0_p1_recall_min must lift ABOVE the T2 0.45; got {absolute.get('p0_p1_recall_min')!r}"
     )
-    # T2 floors must also stay ABOVE T1k baseline 0.391 (so any drop
-    # toward T1k surfaces) AND ABOVE T1f-c-era 0.219 (deeper revert).
-    assert absolute.get("corpus_recall_min") > 0.391, (
-        f"corpus_recall_min must lift ABOVE T1k baseline 0.391 to detect a T2 prompt revert; "
+    # T4-A floors must also stay ABOVE the T2 baseline 0.577 (so any
+    # drop toward T2 surfaces as a regression).
+    assert absolute.get("corpus_recall_min") > 0.577, (
+        f"corpus_recall_min must lift ABOVE T2 baseline 0.577 to detect a strict-matcher revert; "
         f"got {absolute.get('corpus_recall_min')!r}"
     )
     # T1f-b validated-bucket floor stays at 0.0 (structurally empty).
     assert absolute.get("corpus_precision_min") == 0.0
-    # T2 precision floor lifts above the T1k 0.35 but stays below the
-    # measured n=6 macro precision_highest 0.502.
-    assert 0.35 < absolute.get("corpus_precision_highest_stage_min") <= 0.502, (
-        "corpus_precision_highest_stage_min must lift above the T1k 0.35 "
-        "and stay <= measured T2 n=6 macro 0.502; "
+    # T4-A precision floor lifts above the T2 0.39 but stays below the
+    # measured n=6 macro precision_highest 0.666.
+    assert 0.39 < absolute.get("corpus_precision_highest_stage_min") <= 0.666, (
+        "corpus_precision_highest_stage_min must lift above the T2 0.39 "
+        "and stay <= measured T4-A n=6 macro 0.666; "
         f"got {absolute.get('corpus_precision_highest_stage_min')!r}"
     )
-    # T2 keeps per_pr floors at 0.0 because PR-955910 0.333 / PR-960543 0.364
-    # — a per_pr ratchet would block honest captures. Re-introduce after T3.
+    # T4-A introduces a new diagnostic floor: category_label_accuracy
+    # measured at 0.622 on n=6. Floor stays BELOW measured (so flap
+    # doesn't trip) but ABOVE 0.0 (so total raw-label collapse trips).
+    cla_min = absolute.get("category_label_accuracy_min")
+    assert isinstance(cla_min, (int, float)), (
+        "T4-A floors must declare category_label_accuracy_min; "
+        f"got {cla_min!r}"
+    )
+    assert 0.0 < cla_min <= 0.622, (
+        f"category_label_accuracy_min must be in (0.0, 0.622]; got {cla_min!r}"
+    )
+    # T4-A keeps per_pr floors at 0.0 — even after the lift, the lowest
+    # per-PR recall is PR-955910 at 0.583, but a per_pr ratchet would
+    # block any future capture variance. Re-introduce after corpus
+    # augmentation (T4-C, n>=15).
     assert absolute.get("per_pr_recall_min") == 0.0, (
-        "T2 per_pr_recall_min must be 0.00 (PR-955910 at 0.333 is the lowest); "
+        "T4-A per_pr_recall_min must be 0.00; "
         f"got {absolute.get('per_pr_recall_min')!r}"
     )
     assert absolute.get("per_pr_precision_highest_stage_min") == 0.0, (
-        "T2 per_pr_precision_highest_stage_min must be 0.00; "
+        "T4-A per_pr_precision_highest_stage_min must be 0.00; "
         f"got {absolute.get('per_pr_precision_highest_stage_min')!r}"
     )
     assert floors.get("enforcement") == "report_only"
 
 
-def test_qa_score_report_json_present_at_t1j() -> None:
-    """T1j bumped the score_report.json schema 1.2 → 1.3 by adding the
-    top-level `matcher` block (recording algorithm / objective / version)
-    and bumping span_expansion.forward_lines default to 15. Pin the new
-    shape so downstream tooling (CI gate, dashboard) can rely on the
-    fields existing.
+def test_qa_score_report_json_present_at_t4a() -> None:
+    """T4-A bumped the score_report.json schema 1.3 → 1.4 by extending
+    the top-level `matcher` block with a `category_key` field
+    (recording the cluster source) and bumping matcher version to 1.1
+    when category_aliases.json is in effect (1.0 reserved for
+    `--strict-category` audit-trail reproducibility). Each per-PR
+    record and the macro aggregate also gain `category_label_accuracy`
+    — the new diagnostic measuring raw-label agreement across matched
+    pairs. Pin the new shape so downstream tooling can rely on it.
     """
     import json
     report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
@@ -2562,28 +2582,29 @@ def test_qa_score_report_json_present_at_t1j() -> None:
         "--output tests/qa-eval/score_report.json` after a capture pass."
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert report.get("schema_version") == "1.3", (
-        f"expected score_report schema_version=1.3 after T1j, "
+    assert report.get("schema_version") == "1.4", (
+        f"expected score_report schema_version=1.4 after T4-A, "
         f"got {report.get('schema_version')!r}"
     )
     assert report.get("verdict") in {"PASS", "FAIL"}
     assert report.get("enforcement") == "report_only"
-    # T1i span_expansion metadata is mandatory at schema 1.3 — pin its
+    # T1i span_expansion metadata is mandatory at schema 1.4 — pin its
     # presence + that the default forward_lines matches the source
     # constant SPAN_EXPANSION_DEFAULT_N=15 so a silent disable surfaces.
     span = report.get("span_expansion") or {}
     assert isinstance(span, dict) and span, (
-        "score_report.json must carry a `span_expansion` block at schema 1.3"
+        "score_report.json must carry a `span_expansion` block at schema 1.4"
     )
     assert span.get("forward_lines") == 15, (
-        f"span_expansion.forward_lines must default to 15 at T1j; got {span.get('forward_lines')!r}"
+        f"span_expansion.forward_lines must default to 15; got {span.get('forward_lines')!r}"
     )
     assert span.get("boundary") == "hunk_end"
     assert span.get("tiebreaker") == "original_overlap_first"
-    # T1j matcher block is mandatory at schema 1.3.
+    # T1j matcher block is mandatory at schema 1.4, now with T4-A
+    # category_key provenance.
     matcher = report.get("matcher") or {}
     assert isinstance(matcher, dict) and matcher, (
-        "score_report.json must carry a `matcher` block at schema 1.3"
+        "score_report.json must carry a `matcher` block at schema 1.4"
     )
     assert matcher.get("algorithm") == "bipartite_linear_sum_assignment", (
         f"expected bipartite matcher; got {matcher.get('algorithm')!r}"
@@ -2591,7 +2612,22 @@ def test_qa_score_report_json_present_at_t1j() -> None:
     assert "cardinality" in matcher.get("objective", ""), (
         f"matcher objective must describe cardinality-first; got {matcher.get('objective')!r}"
     )
-    assert matcher.get("version") == "1.0"
+    # T4-A: matcher version 1.1 when cluster matching is active;
+    # version 1.0 reserved for --strict-category audit-trail mode.
+    assert matcher.get("version") in {"1.0", "1.1"}, (
+        f"matcher version must be 1.0 (strict) or 1.1 (cluster) at T4-A; "
+        f"got {matcher.get('version')!r}"
+    )
+    # T4-A: category_key field records the cluster source.
+    category_key = matcher.get("category_key")
+    assert isinstance(category_key, str) and category_key, (
+        "score_report.json must carry a matcher.category_key string at schema 1.4 (T4-A)"
+    )
+    # Cluster mode references the aliases JSON; strict mode says raw_label.
+    assert category_key in {"raw_label", "cluster_from_category_aliases.json"}, (
+        f"matcher.category_key must be 'raw_label' or 'cluster_from_category_aliases.json'; "
+        f"got {category_key!r}"
+    )
     aggregate = report.get("aggregate") or {}
     macro = aggregate.get("macro") or {}
     # T1f-b headline numbers still required.
@@ -2624,6 +2660,154 @@ def test_qa_score_report_json_present_at_t1j() -> None:
         assert "f1_highest_stage" in pr, (
             f"PR-{pr.get('pr_number')!r} missing f1_highest_stage"
         )
+        # T4-A: per-PR category_label_accuracy diagnostic.
+        assert "category_label_accuracy" in pr, (
+            f"PR-{pr.get('pr_number')!r} missing category_label_accuracy at T4-A"
+        )
+        cla = pr["category_label_accuracy"]
+        assert isinstance(cla, (int, float)), (
+            f"PR-{pr.get('pr_number')!r} category_label_accuracy must be numeric; got {cla!r}"
+        )
+        assert 0.0 <= float(cla) <= 1.0, (
+            f"PR-{pr.get('pr_number')!r} category_label_accuracy out of [0,1]: {cla!r}"
+        )
+
+
+# ── F27 P9 T4-A — category-cluster matcher calibration ──────────────
+
+
+def test_qa_category_aliases_json_present() -> None:
+    """T4-A ships ``tests/qa-eval/category_aliases.json`` — the
+    cluster map the matcher consults to decide whether two raw
+    category labels (curator vs Architect) count as the same
+    scenario. The dominant drift on the n=6 corpus is the four
+    behavioural-flavour labels {HappyPath, EdgeCase, ErrorPath,
+    Regression} interchanging — curator describes WHAT BEHAVIOUR is
+    being tested, Architect describes WHAT KIND OF CODE PATH the diff
+    introduces. Both are legitimate lenses on the same scenario, so
+    they cluster into one 'behavioral' bucket for matcher cardinality.
+    Performance stays its own cluster (structurally different —
+    latency/throughput assertion, not behaviour). Pin the file shape
+    so a silent edit can't quietly broaden the cluster (e.g. fold
+    Performance in) and inflate recall.
+    """
+    import json
+    path = REPO_ROOT / "tests" / "qa-eval" / "category_aliases.json"
+    assert path.exists(), (
+        f"T4-A category_aliases.json missing: {path}. "
+        "Without it the scorer falls back to strict raw-label matching "
+        "and macro_recall drops ~0.19 absolute on the n=6 corpus."
+    )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data.get("schema_version") == "1.0", (
+        f"category_aliases.json must be at schema_version 1.0; got {data.get('schema_version')!r}"
+    )
+    clusters = data.get("clusters") or {}
+    assert isinstance(clusters, dict) and clusters, (
+        f"category_aliases.json must declare a non-empty `clusters` map; got {clusters!r}"
+    )
+    # Pin the two clusters we ship today — broadening to fold in
+    # Performance (or any other category) MUST go through a schema bump
+    # + an updated baseline + an explicit Sentinel review.
+    assert "behavioral" in clusters, "behavioral cluster required at T4-A"
+    behavioral = set(clusters["behavioral"])
+    assert behavioral == {"HappyPath", "EdgeCase", "ErrorPath", "Regression"}, (
+        f"behavioral cluster must contain exactly the four behavioural-flavour labels; "
+        f"got {sorted(behavioral)}"
+    )
+    assert "performance" in clusters, "performance cluster required at T4-A"
+    performance = set(clusters["performance"])
+    assert performance == {"Performance"}, (
+        f"performance cluster must contain exactly {{Performance}} at T4-A; got {sorted(performance)}"
+    )
+    # No category may appear in two clusters — clustering must be a
+    # partition (matcher logic depends on it).
+    all_members: list[str] = []
+    for members in clusters.values():
+        all_members.extend(members)
+    assert len(all_members) == len(set(all_members)), (
+        f"category_aliases.json clusters must form a partition (no overlap); "
+        f"got duplicates in {all_members}"
+    )
+
+
+def test_qa_score_eval_uses_category_cluster() -> None:
+    """T4-A wires the category cluster map into the matcher. Pin the
+    presence of the loader, the key lookup function, the cluster
+    constant, and the ``--strict-category`` CLI flag (audit-trail
+    reproducibility — round-trips the pre-T4-A strict matcher
+    byte-for-byte). A silent removal of any of these would silently
+    revert the matcher to strict raw-label matching and drop recall
+    ~0.19 absolute on the n=6 corpus.
+    """
+    src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
+    # Path constant + loader function — pin both so a refactor that
+    # renames either surfaces here.
+    assert "_CATEGORY_ALIASES_PATH" in src, (
+        "score_eval.py must declare _CATEGORY_ALIASES_PATH at T4-A"
+    )
+    assert "_load_category_clusters" in src, (
+        "score_eval.py must declare _load_category_clusters at T4-A"
+    )
+    # Key lookup + cluster constant.
+    assert "_category_key" in src, (
+        "score_eval.py must declare _category_key at T4-A"
+    )
+    assert "_CATEGORY_CLUSTER" in src, (
+        "score_eval.py must declare _CATEGORY_CLUSTER constant at T4-A"
+    )
+    # CLI flag for audit-trail reproducibility — strict mode must
+    # remain reachable so any pre-T4-A score can be re-derived
+    # byte-for-byte.
+    assert "--strict-category" in src, (
+        "score_eval.py must expose a --strict-category CLI flag at T4-A "
+        "(audit-trail reproducibility of pre-T4-A scores)"
+    )
+    # The matcher must thread the strict flag through; pin one of the
+    # canonical sites.
+    assert "strict_category" in src, (
+        "score_eval.py must thread a strict_category kwarg through the matcher at T4-A"
+    )
+
+
+def test_qa_score_report_carries_category_label_accuracy() -> None:
+    """T4-A introduces ``category_label_accuracy`` as a new diagnostic
+    — fraction of matched pairs where the curator's raw category label
+    matches the Architect's raw category label. Cluster matching
+    boosts recall by accepting semantically-equivalent pairs that
+    disagree on the label; this diagnostic preserves the raw-label
+    signal so we still know when the Architect picks the curator's
+    exact label. Pin the macro aggregate field + range.
+    """
+    import json
+    report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    aggregate = report.get("aggregate") or {}
+    macro = aggregate.get("macro") or {}
+    cla = macro.get("category_label_accuracy")
+    assert isinstance(cla, (int, float)), (
+        f"aggregate.macro.category_label_accuracy must be numeric at T4-A; got {cla!r}"
+    )
+    assert 0.0 <= float(cla) <= 1.0, (
+        f"aggregate.macro.category_label_accuracy must be in [0,1]; got {cla!r}"
+    )
+
+
+def test_qa_matcher_audit_script_present() -> None:
+    """T4-A ships ``tests/qa-eval/matcher_audit.py`` as a permanent
+    diagnostic tool — four sweeps (span-N, greedy-vs-bipartite,
+    constraint-relaxation, min-overlap) that report matcher
+    sensitivity against the current actual.json captures. This was
+    the tool that surfaced the +19 pp recall hidden by strict category
+    matching. Pin its existence so it remains a reachable audit
+    entry-point after any future matcher refactor.
+    """
+    path = REPO_ROOT / "tests" / "qa-eval" / "matcher_audit.py"
+    assert path.exists(), (
+        f"T4-A matcher_audit.py missing: {path}. "
+        "This is the permanent matcher-sensitivity audit tool and must "
+        "remain reachable for future calibration cycles."
+    )
 
 
 def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:

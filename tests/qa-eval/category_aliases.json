@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "introduced_in": "F27 P9 T4-A",
+  "rationale": "T4-A matcher sensitivity audit (offline, zero LLM cost) measured a +19 pp macro_recall gap between strict category matching and category-relaxed matching on the n=6 gold corpus (57.7% -> 76.7%), with 11/11 newly-recovered pairs hand-validated as TRUE semantic equivalents. Root cause: the curator and the Architect use the {HappyPath, EdgeCase, ErrorPath, Regression} labels through different lenses. Curator labels describe WHAT BEHAVIOUR is being tested (e.g. 'declares MLV_DATA_CORRUPTED enum' = HappyPath because the curator views adding a constant as the nominal-flow contract). Architect labels describe WHAT KIND OF CODE PATH the diff introduces (e.g. the same line, new-error-code-added, is EdgeCase or ErrorPath from the diff's perspective). Both lenses are legitimate. Neither is wrong. They are different projections of the same underlying scenario. For MATCHER cardinality we cluster these four labels into a single 'behavioral' bucket so the matcher's job is to find scenario-level equivalence; for CATEGORY-LABEL DIAGNOSTIC we separately report the fraction of matched pairs where the exact label agrees (category_label_accuracy) so we still see if Architect picks the curator's exact label. Performance stays in its own cluster because it is structurally different (latency/throughput assertion, not behaviour). Spec target 0.80 macro recall remains the destination; T4-A unlocks the 0.577 -> 0.767 ratchet without touching the LLM, deferring further prompt/priors work until corpus reaches n >= 15 (T4-C).",
+  "clusters": {
+    "behavioral": ["HappyPath", "EdgeCase", "ErrorPath", "Regression"],
+    "performance": ["Performance"]
+  }
+}

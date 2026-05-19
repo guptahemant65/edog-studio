@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.3",
+  "schema_version": "1.4",
   "verdict": "PASS",
   "floor_violations": [],
   "enforcement": "report_only",
@@ -12,22 +12,24 @@
   "matcher": {
     "algorithm": "bipartite_linear_sum_assignment",
     "objective": "max_cardinality_then_original_overlap_then_expanded_overlap_then_declared_order",
-    "version": "1.0"
+    "category_key": "cluster_from_category_aliases.json",
+    "version": "1.1"
   },
   "aggregate": {
     "pr_count": 6,
     "macro": {
-      "recall": 0.5773,
+      "recall": 0.7669,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.5023,
+      "precision_highest_stage": 0.666,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.527,
-      "p0_p1_recall": 0.5773
+      "f1_highest_stage": 0.7011,
+      "p0_p1_recall": 0.7669,
+      "category_label_accuracy": 0.6217
     },
     "micro": {
-      "recall": 0.5294,
+      "recall": 0.7451,
       "precision_validated": 0.0,
-      "precision_highest_stage": 0.45
+      "precision_highest_stage": 0.6333
     }
   },
   "prs_scored": [
@@ -35,89 +37,75 @@
       "pr_number": "955910",
       "expected_total": 12,
       "actual_total": {
+        "emitted": 10,
         "validated": 0,
-        "projected": 2,
-        "emitted": 10
+        "projected": 2
       },
-      "matched_count": 4,
+      "matched_count": 7,
       "missed_expected_ids": [
         "955910-s02",
         "955910-s03",
-        "955910-s05",
         "955910-s06",
-        "955910-s09",
-        "955910-s10",
         "955910-s11",
         "955910-s12"
       ],
       "unmatched_actual_ids": [
         "sk-3",
         "sk-12",
-        "sk-4",
         "sk-5",
         "sk-6",
-        "sk-8",
-        "sk-10",
-        "sk-11"
+        "sk-10"
       ],
-      "recall": 0.3333,
+      "recall": 0.5833,
       "precision": {
+        "emitted": 0.7,
         "validated": 0.0,
-        "projected": 0.0,
-        "emitted": 0.4
+        "projected": 0.0
       },
-      "precision_highest_stage": 0.3333,
+      "precision_highest_stage": 0.5833,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.3333,
-      "p0_p1_recall": 0.3333
+      "f1_highest_stage": 0.5833,
+      "p0_p1_recall": 0.5833,
+      "category_label_accuracy": 0.4286
     },
     {
       "pr_number": "960543",
       "expected_total": 11,
       "actual_total": {
+        "emitted": 0,
         "validated": 0,
-        "projected": 13,
-        "emitted": 0
+        "projected": 13
       },
-      "matched_count": 4,
+      "matched_count": 9,
       "missed_expected_ids": [
-        "960543-s01",
-        "960543-s02",
-        "960543-s03",
         "960543-s04",
-        "960543-s09",
-        "960543-s10",
         "960543-s11"
       ],
       "unmatched_actual_ids": [
-        "sk-3",
-        "sk-4",
         "sk-5",
         "sk-6",
         "sk-8",
-        "sk-10",
-        "sk-11",
-        "sk-12",
-        "sk-13"
+        "sk-12"
       ],
-      "recall": 0.3636,
+      "recall": 0.8182,
       "precision": {
+        "emitted": 0.0,
         "validated": 0.0,
-        "projected": 0.3077,
-        "emitted": 0.0
+        "projected": 0.6923
       },
-      "precision_highest_stage": 0.3077,
+      "precision_highest_stage": 0.6923,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.3333,
-      "p0_p1_recall": 0.3636
+      "f1_highest_stage": 0.75,
+      "p0_p1_recall": 0.8182,
+      "category_label_accuracy": 0.4444
     },
     {
       "pr_number": "966141",
       "expected_total": 4,
       "actual_total": {
+        "emitted": 3,
         "validated": 0,
-        "projected": 1,
-        "emitted": 3
+        "projected": 1
       },
       "matched_count": 3,
       "missed_expected_ids": [
@@ -128,22 +116,23 @@
       ],
       "recall": 0.75,
       "precision": {
+        "emitted": 0.6667,
         "validated": 0.0,
-        "projected": 1.0,
-        "emitted": 0.6667
+        "projected": 1.0
       },
       "precision_highest_stage": 0.75,
       "f1_validated": 0.0,
       "f1_highest_stage": 0.75,
-      "p0_p1_recall": 0.75
+      "p0_p1_recall": 0.75,
+      "category_label_accuracy": 1.0
     },
     {
       "pr_number": "975848",
       "expected_total": 8,
       "actual_total": {
+        "emitted": 8,
         "validated": 0,
-        "projected": 6,
-        "emitted": 8
+        "projected": 6
       },
       "matched_count": 6,
       "missed_expected_ids": [
@@ -153,84 +142,80 @@
       "unmatched_actual_ids": [
         "sk-10",
         "sk-11",
-        "sk-14",
+        "sk-3",
         "sk-4",
         "sk-5",
         "sk-7",
         "sk-9",
-        "sk-12"
+        "sk-13"
       ],
       "recall": 0.75,
       "precision": {
+        "emitted": 0.25,
         "validated": 0.0,
-        "projected": 0.5,
-        "emitted": 0.375
+        "projected": 0.6667
       },
       "precision_highest_stage": 0.4286,
       "f1_validated": 0.0,
       "f1_highest_stage": 0.5455,
-      "p0_p1_recall": 0.75
+      "p0_p1_recall": 0.75,
+      "category_label_accuracy": 0.3333
     },
     {
       "pr_number": "976609",
       "expected_total": 6,
       "actual_total": {
+        "emitted": 0,
         "validated": 0,
-        "projected": 9,
-        "emitted": 0
+        "projected": 9
       },
-      "matched_count": 4,
-      "missed_expected_ids": [
-        "976609-s01",
-        "976609-s06"
-      ],
+      "matched_count": 6,
+      "missed_expected_ids": [],
       "unmatched_actual_ids": [
         "sk-3",
         "sk-4",
-        "sk-5",
-        "sk-8",
-        "sk-9"
+        "sk-8"
       ],
-      "recall": 0.6667,
+      "recall": 1.0,
       "precision": {
+        "emitted": 0.0,
         "validated": 0.0,
-        "projected": 0.4444,
-        "emitted": 0.0
+        "projected": 0.6667
       },
-      "precision_highest_stage": 0.4444,
+      "precision_highest_stage": 0.6667,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.5333,
-      "p0_p1_recall": 0.6667
+      "f1_highest_stage": 0.8,
+      "p0_p1_recall": 1.0,
+      "category_label_accuracy": 0.6667
     },
     {
       "pr_number": "977882",
       "expected_total": 10,
       "actual_total": {
+        "emitted": 1,
         "validated": 0,
-        "projected": 7,
-        "emitted": 1
+        "projected": 7
       },
-      "matched_count": 6,
+      "matched_count": 7,
       "missed_expected_ids": [
         "977882-s06",
         "977882-s07",
-        "977882-s08",
         "977882-s10"
       ],
       "unmatched_actual_ids": [
-        "sk-1",
         "sk-8"
       ],
-      "recall": 0.6,
+      "recall": 0.7,
       "precision": {
+        "emitted": 0.0,
         "validated": 0.0,
-        "projected": 0.8571,
-        "emitted": 0.0
+        "projected": 1.0
       },
-      "precision_highest_stage": 0.75,
+      "precision_highest_stage": 0.875,
       "f1_validated": 0.0,
-      "f1_highest_stage": 0.6667,
-      "p0_p1_recall": 0.6
+      "f1_highest_stage": 0.7778,
+      "p0_p1_recall": 0.7,
+      "category_label_accuracy": 0.8571
     }
   ],
   "prs_pending_grading": [],

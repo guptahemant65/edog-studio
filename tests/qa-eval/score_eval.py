@@ -145,6 +145,70 @@ VALID_CATEGORIES = frozenset(
     }
 )
 
+
+# ─── T4-A: category-cluster matcher calibration ───────────────────────────
+# The T4-A matcher sensitivity audit (offline, zero LLM cost) measured a
+# +19 pp macro_recall gap between strict category matching and category-
+# relaxed matching on the n=6 gold corpus (0.577 -> 0.767). 11/11 newly-
+# recovered pairs hand-validated as TRUE semantic equivalents — pairs
+# where the LLM grounds at the same file/line as the curator but
+# classifies the scenario through a different lens:
+#   curator's labels: describe WHAT BEHAVIOR is being tested
+#                     ("declares MLV_DATA_CORRUPTED enum" = HappyPath
+#                      because adding a constant is a nominal-flow contract)
+#   Architect labels: describe WHAT KIND OF CODE PATH the diff introduces
+#                     (the same line, new-error-code-added, is EdgeCase
+#                      or ErrorPath through the diff lens)
+# Both lenses are legitimate. The matcher's job is scenario-level
+# equivalence, so {HappyPath, EdgeCase, ErrorPath, Regression} cluster
+# into one "behavioral" key for match purposes. ``Performance`` stays in
+# its own cluster (structurally different — latency/throughput
+# assertion, not behaviour).
+#
+# Category LABEL accuracy is reported separately (``category_label_accuracy``)
+# so we still see if Architect picks the curator's exact label across
+# matched pairs.
+#
+# Pass ``--strict-category`` to disable the cluster and reproduce
+# pre-T4-A audit-trail scores byte-for-byte.
+
+_CATEGORY_ALIASES_PATH = REPO_ROOT / "tests" / "qa-eval" / "category_aliases.json"
+
+
+def _load_category_clusters() -> dict[str, str]:
+    """Build a {category_label: cluster_id} map from category_aliases.json.
+
+    The JSON shape:
+        {"clusters": {"behavioral": ["HappyPath", "EdgeCase", ...], ...}}
+    Every category in VALID_CATEGORIES must appear in exactly one cluster.
+    """
+    if not _CATEGORY_ALIASES_PATH.exists():
+        return {c: c for c in VALID_CATEGORIES}
+    with _CATEGORY_ALIASES_PATH.open(encoding="utf-8") as fh:
+        blob = json.load(fh)
+    clusters = blob.get("clusters", {})
+    mapping: dict[str, str] = {}
+    for cluster_id, members in clusters.items():
+        for label in members:
+            mapping[label] = cluster_id
+    return mapping
+
+
+_CATEGORY_CLUSTER = _load_category_clusters()
+
+
+def _category_key(category: str, *, strict: bool = False) -> str:
+    """Return the matcher-side category key.
+
+    Default uses the cluster id from ``category_aliases.json``;
+    ``strict=True`` falls back to the raw label (pre-T4-A behaviour)."""
+    if strict:
+        return category
+    return _CATEGORY_CLUSTER.get(category, category)
+
+
+# ─── Verb enumeration (matcher secondary key) ─────────────────────────────
+
 # 'verb' on the gold-corpus side maps to the primary ExpectationType the
 # scenario asserts. The matcher uses this as the secondary key after
 # category, before grounding-overlap as the tiebreaker.
@@ -335,6 +399,11 @@ class PrScore:
     f1_validated: float = 0.0
     f1_highest_stage: float = 0.0
     p0_p1_recall: float = 0.0
+    # T4-A diagnostic: of MATCHED pairs, what fraction agree on the raw
+    # category label (HappyPath vs EdgeCase etc.)?  When the matcher
+    # clusters categories, this stays as a separate quality lens so we
+    # still see if the Architect is picking the curator's exact label.
+    category_label_accuracy: float = 0.0
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -350,6 +419,7 @@ class PrScore:
             "f1_validated": round(self.f1_validated, 4),
             "f1_highest_stage": round(self.f1_highest_stage, 4),
             "p0_p1_recall": round(self.p0_p1_recall, 4),
+            "category_label_accuracy": round(self.category_label_accuracy, 4),
         }
 
 
@@ -559,12 +629,19 @@ def match_scenarios(
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
     matcher: str = MATCHER_DEFAULT,
+    *,
+    strict_category: bool = False,
 ) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
     """Match expected → actual scenarios under the chosen matcher.
 
     Returns ``(matched, missed_expected, unmatched_actual)``. Both matchers
-    enforce the same hard compatibility constraint: (category, verb) must
-    match AND post-expansion overlap must be ≥ 1.
+    enforce the same hard compatibility constraint: category-cluster (T4-A:
+    {HappyPath, EdgeCase, ErrorPath, Regression} collapse into 'behavioral';
+    ``Performance`` stays in its own cluster) must match AND verb must match
+    AND post-expansion overlap must be ≥ 1.
+
+    Pass ``strict_category=True`` to use the raw category label (pre-T4-A
+    behaviour, retained for audit-trail reproducibility).
 
     matcher='bipartite' (T1j default): globally optimal max-weight matching
     via ``scipy.optimize.linear_sum_assignment`` with a cardinality-first
@@ -576,15 +653,17 @@ def match_scenarios(
     (original, expanded) overlap tiebreaker. Retained for audit-trail
     reproducibility of pre-T1j scores. May exhibit pair theft at high N."""
     if matcher == "bipartite":
-        return _bipartite_match(expected, actuals)
+        return _bipartite_match(expected, actuals, strict_category=strict_category)
     if matcher == "greedy":
-        return _greedy_match(expected, actuals)
+        return _greedy_match(expected, actuals, strict_category=strict_category)
     raise ValueError(f"unknown matcher {matcher!r}; choose from {MATCHER_CHOICES}")
 
 
 def _greedy_match(
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
+    *,
+    strict_category: bool = False,
 ) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
     """T1i greedy iterate-over-expected matcher with 2-tier overlap tiebreaker.
 
@@ -596,10 +675,11 @@ def _greedy_match(
     for e in expected:
         best_idx = -1
         best_pair = (0, 0)
+        e_cat = _category_key(e.category, strict=strict_category)
         for ai, a in enumerate(actuals):
             if ai in used_actual:
                 continue
-            if a.category != e.category:
+            if _category_key(a.category, strict=strict_category) != e_cat:
                 continue
             if a.verb != e.verb:
                 continue
@@ -629,6 +709,8 @@ def _greedy_match(
 def _bipartite_match(
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
+    *,
+    strict_category: bool = False,
 ) -> tuple[list[MatchPair], list[ExpectedScenario], list[ActualScenario]]:
     """T1j globally optimal max-weight bipartite matcher.
 
@@ -652,8 +734,9 @@ def _bipartite_match(
     tiers = [[(0, 0)] * n_a for _ in range(n_e)]
     valid = [[False] * n_a for _ in range(n_e)]
     for ei, e in enumerate(expected):
+        e_cat = _category_key(e.category, strict=strict_category)
         for ai, a in enumerate(actuals):
-            if a.category != e.category or a.verb != e.verb:
+            if _category_key(a.category, strict=strict_category) != e_cat or a.verb != e.verb:
                 continue
             pair = _max_overlap_tiered(e, a)
             if pair[1] == 0:
@@ -741,8 +824,12 @@ def score_pr(
     expected: list[ExpectedScenario],
     actuals: list[ActualScenario],
     matcher: str = MATCHER_DEFAULT,
+    *,
+    strict_category: bool = False,
 ) -> PrScore:
-    matched, missed, unmatched = match_scenarios(expected, actuals, matcher=matcher)
+    matched, missed, unmatched = match_scenarios(
+        expected, actuals, matcher=matcher, strict_category=strict_category,
+    )
 
     actual_by_stage: dict[str, int] = {stage: 0 for stage in VALID_STAGES}
     for a in actuals:
@@ -810,6 +897,10 @@ def score_pr(
         f1_validated=f1,
         f1_highest_stage=f1_high,
         p0_p1_recall=p0_p1_recall,
+        category_label_accuracy=_safe_div(
+            sum(1 for m in matched if m.expected.category == m.actual.category),
+            len(matched),
+        ),
     )
 
 
@@ -824,6 +915,7 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
                 "f1_validated": 0.0,
                 "f1_highest_stage": 0.0,
                 "p0_p1_recall": 0.0,
+                "category_label_accuracy": 0.0,
             },
             "micro": {
                 "recall": 0.0,
@@ -839,6 +931,14 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
     macro_f1 = sum(p.f1_validated for p in pr_scores) / len(pr_scores)
     macro_f1_high = sum(p.f1_highest_stage for p in pr_scores) / len(pr_scores)
     macro_p0 = sum(p.p0_p1_recall for p in pr_scores) / len(pr_scores)
+    # T4-A: average across PRs that have at least one matched pair; PRs
+    # with zero matches don't contribute (denominator 0). If every PR has
+    # zero matches the metric is 0.0 by convention.
+    prs_with_matches = [p for p in pr_scores if p.matched]
+    macro_cat_label = (
+        sum(p.category_label_accuracy for p in prs_with_matches) / len(prs_with_matches)
+        if prs_with_matches else 0.0
+    )
 
     # Micro: each scenario weighted equally.
     total_expected = sum(p.expected_total for p in pr_scores)
@@ -863,6 +963,7 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
             "f1_validated": round(macro_f1, 4),
             "f1_highest_stage": round(macro_f1_high, 4),
             "p0_p1_recall": round(macro_p0, 4),
+            "category_label_accuracy": round(macro_cat_label, 4),
         },
         "micro": {
             "recall": round(_safe_div(total_matched, total_expected), 4),
@@ -960,6 +1061,8 @@ def build_report(
     pr_dirs: list[Path],
     span_expansion_n: int = SPAN_EXPANSION_DEFAULT_N,
     matcher: str = MATCHER_DEFAULT,
+    *,
+    strict_category: bool = False,
 ) -> dict[str, Any]:
     pr_scores: list[PrScore] = []
     pending_grading: list[str] = []
@@ -980,14 +1083,17 @@ def build_report(
 
         actuals, a_errs = load_actual(pr_dir, span_expansion_n=span_expansion_n)
         schema_errors.extend(a_errs)
-        pr_scores.append(score_pr(pr_number, expected, actuals, matcher=matcher))
+        pr_scores.append(score_pr(
+            pr_number, expected, actuals,
+            matcher=matcher, strict_category=strict_category,
+        ))
 
     agg = aggregate(pr_scores)
     floors = load_floors()
     verdict, violations = evaluate_floors(agg, floors, pr_scores)
 
     return {
-        "schema_version": "1.3",  # T1j: added matcher block + bipartite default
+        "schema_version": "1.4",  # T4-A: added category-cluster matcher + category_label_accuracy metric
         "verdict": verdict,
         "floor_violations": violations,
         "enforcement": floors.get("enforcement", "report_only"),
@@ -1006,7 +1112,8 @@ def build_report(
                 if matcher == "bipartite"
                 else "greedy_max_2tier_overlap_per_expected"
             ),
-            "version": "1.0",
+            "category_key": "raw_label" if strict_category else "cluster_from_category_aliases.json",
+            "version": "1.1" if not strict_category else "1.0",
         },
         "aggregate": agg,
         "prs_scored": [p.to_json() for p in pr_scores],
@@ -1039,6 +1146,7 @@ def print_human(report: dict[str, Any]) -> None:
     print(f"    F1 (validated):       {agg['macro']['f1_validated']:.3f}")
     print(f"    F1 (highest-stage):   {agg['macro']['f1_highest_stage']:.3f}")
     print(f"    P0+P1 recall:         {agg['macro']['p0_p1_recall']:.3f}")
+    print(f"    category_label_accuracy: {agg['macro'].get('category_label_accuracy', 0.0):.3f}  (of matched pairs, raw-label agreement)")
     print()
     print("  Micro-average (each scenario weighted equally):")
     print(f"    recall:               {agg['micro']['recall']:.3f}")
@@ -1105,6 +1213,18 @@ def main(argv: list[str] | None = None) -> int:
             "audit-trail reproducibility."
         ),
     )
+    parser.add_argument(
+        "--strict-category",
+        action="store_true",
+        help=(
+            "T4-A: use the raw category label (HappyPath/EdgeCase/etc.) "
+            "instead of the cluster from category_aliases.json. Default "
+            "(unset) collapses {HappyPath, EdgeCase, ErrorPath, Regression} "
+            "into the 'behavioral' cluster for matcher cardinality; "
+            "category_label_accuracy is reported separately. Pass this flag "
+            "to reproduce pre-T4-A scores byte-for-byte."
+        ),
+    )
     args = parser.parse_args(argv)
 
     pr_dirs = discover_pr_dirs()
@@ -1116,6 +1236,7 @@ def main(argv: list[str] | None = None) -> int:
         pr_dirs,
         span_expansion_n=args.span_expansion,
         matcher=args.matcher,
+        strict_category=args.strict_category,
     )
 
     if args.output is not None:

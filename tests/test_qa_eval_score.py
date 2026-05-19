@@ -246,12 +246,36 @@ def test_match_prefers_higher_overlap_actual_as_tiebreaker() -> None:
 
 
 def test_match_category_mismatch_no_pair() -> None:
-    e = score_eval.ExpectedScenario.from_json(_expected_blob(category="HappyPath"))
-    a = score_eval.ActualScenario.from_json(_actual_blob(category="EdgeCase"))
-    matched, missed, unmatched = score_eval.match_scenarios([e], [a])
-    assert matched == []
-    assert len(missed) == 1
-    assert len(unmatched) == 1
+    """T4-A: category equivalence is now cluster-based, not raw-label.
+    HappyPath vs EdgeCase are both in the behavioural cluster — they
+    SHOULD match. HappyPath vs Performance crosses clusters and must
+    NOT match. Also pin the strict-mode round-trip: with
+    ``strict_category=True`` the audit-trail matcher reproduces pre-T4-A
+    behaviour byte-for-byte (HappyPath vs EdgeCase = no pair).
+    """
+    # Behavioural-cluster siblings: match under cluster matching (T4-A default).
+    e_hp = score_eval.ExpectedScenario.from_json(_expected_blob(category="HappyPath"))
+    a_ec = score_eval.ActualScenario.from_json(_actual_blob(category="EdgeCase"))
+    matched, missed, unmatched = score_eval.match_scenarios([e_hp], [a_ec])
+    assert len(matched) == 1, "behavioural-cluster siblings must match under T4-A default"
+    assert missed == []
+    assert unmatched == []
+
+    # Same pair under strict mode: must NOT match (audit-trail).
+    matched_strict, missed_strict, unmatched_strict = score_eval.match_scenarios(
+        [e_hp], [a_ec], strict_category=True,
+    )
+    assert matched_strict == [], "strict_category=True must reproduce pre-T4-A raw-label semantics"
+    assert len(missed_strict) == 1
+    assert len(unmatched_strict) == 1
+
+    # Cross-cluster: behavioural vs Performance — must NOT match.
+    e_hp2 = score_eval.ExpectedScenario.from_json(_expected_blob(category="HappyPath"))
+    a_perf = score_eval.ActualScenario.from_json(_actual_blob(category="Performance"))
+    matched_x, missed_x, unmatched_x = score_eval.match_scenarios([e_hp2], [a_perf])
+    assert matched_x == [], "cross-cluster pairs must not match under T4-A default"
+    assert len(missed_x) == 1
+    assert len(unmatched_x) == 1
 
 
 def test_match_verb_mismatch_no_pair() -> None:
