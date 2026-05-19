@@ -2,6 +2,20 @@
  * EDOG Studio — Main Application Orchestrator
  */
 
+// ===== BOOT SPLASH =====
+
+// Dismiss the boot splash overlay with a smooth fade-out. Idempotent.
+// The splash markup + inline CSS lives in src/frontend/index.html.
+function hideEdogSplash() {
+  var splash = document.getElementById('edog-splash');
+  if (!splash || splash.classList.contains('fade-out')) return;
+  splash.classList.add('fade-out');
+  setTimeout(function () {
+    if (splash.parentNode) splash.parentNode.removeChild(splash);
+  }, 520);
+}
+window.edogHideSplash = hideEdogSplash;
+
 // ===== UTILITY FUNCTIONS =====
 
 function copyToClipboard(btn, text) {
@@ -266,6 +280,9 @@ class EdogLogViewer {
 
     // Don't auto-connect WebSocket— _checkDeployResume will connect
     // to the right port if FLT is running. Otherwise no WS is needed.
+
+    // App is ready — dismiss the boot splash (smooth fade + scale).
+    hideEdogSplash();
   }
 
   /** Check for active/completed deploy on page load (refresh recovery). */
@@ -1359,6 +1376,9 @@ class EdogLogViewer {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
+  // Safety net: never leave the splash up longer than 15s, even if init fails.
+  setTimeout(hideEdogSplash, 15000);
+
   // Load theme preference — light is default (no data-theme attribute needed)
   const savedTheme = localStorage.getItem('edog-theme');
   if (savedTheme === 'dark') {
@@ -1408,7 +1428,8 @@ async function resolveAuthGate(health) {
     if (silentOk) return;
   }
 
-  // Must show onboarding UI
+  // Must show onboarding UI — dismiss the splash so the overlay is interactive.
+  hideEdogSplash();
   await new Promise(resolve => {
     onboarding.show(function onAuthComplete() { resolve(); });
   });
@@ -1427,7 +1448,8 @@ async function resolveRepoGate(health) {
   const resolved = await repoGate.tryResolve(currentHealth || {});
   if (resolved) return;
 
-  // Need user interaction — show overlay
+  // Need user interaction — dismiss the splash so the overlay is interactive.
+  hideEdogSplash();
   await new Promise(resolve => {
     repoGate.show(function onRepoComplete() { resolve(); });
   });

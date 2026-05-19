@@ -6,6 +6,40 @@
   <title>EDOG Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style id="edog-splash-style">
+#edog-splash{position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse 70% 50% at 50% 38%,rgba(109,92,255,.12),transparent 65%),radial-gradient(ellipse 80% 50% at 50% 110%,rgba(56,189,248,.05),transparent 70%),#0f1117;color:#e6e9ef;font-family:'Plus Jakarta Sans','Inter','Segoe UI',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;animation:spIn .48s cubic-bezier(.2,.7,.2,1) both;transition:opacity .46s ease,transform .46s ease,filter .46s ease}
+#edog-splash.fade-out{opacity:0;transform:scale(1.02);filter:blur(2px);pointer-events:none}
+.sp-orb{position:absolute;left:50%;top:38%;width:520px;height:520px;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(109,92,255,.22),transparent 60%);filter:blur(18px);animation:spGlow 3.2s ease-in-out infinite;pointer-events:none}
+.sp-stage{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:22px}
+.sp-mark{position:relative;width:96px;height:96px;display:flex;align-items:center;justify-content:center;color:#cdbfff}
+.sp-mark::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(109,92,255,.18),rgba(56,189,248,.10));border:1px solid rgba(255,255,255,.10);border-radius:22px;box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 24px 48px -16px rgba(109,92,255,.45);animation:spPulse 2.4s ease-in-out infinite}
+.sp-halo{position:absolute;inset:-22px;border-radius:26px;background:conic-gradient(from 0deg,transparent,rgba(109,92,255,.55),transparent 60%);filter:blur(14px);animation:spSpin 4.8s linear infinite,spGlow 3.2s ease-in-out infinite;opacity:.85}
+.sp-bolt{position:relative;z-index:1;width:46px;height:46px;filter:drop-shadow(0 4px 14px rgba(109,92,255,.55));animation:spBolt 2.4s ease-in-out infinite}
+.sp-wordmark{display:flex;align-items:baseline;gap:10px;font-weight:800;letter-spacing:.14em;font-size:22px;line-height:1}
+.sp-edog{background:linear-gradient(180deg,#fff,#c8c8d4);background-clip:text;-webkit-background-clip:text;color:transparent}
+.sp-studio{color:#8b7dff;font-weight:700;letter-spacing:.22em;font-size:14px}
+.sp-tag{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#7d8290;opacity:.85}
+.sp-foot{position:absolute;left:0;right:0;bottom:0;padding:20px 26px;display:flex;flex-direction:column;gap:12px;z-index:2}
+.sp-status{display:flex;align-items:center;gap:10px;color:#9aa1ad;font-size:12px}
+.sp-dot{width:7px;height:7px;border-radius:50%;background:#6d5cff;box-shadow:0 0 10px rgba(109,92,255,.85);animation:spDot 1.4s ease-in-out infinite;flex-shrink:0}
+.sp-stack{position:relative;height:16px;min-width:200px}
+.sp-line{position:absolute;left:0;top:0;opacity:0;transform:translateY(4px);color:#d0d4dd;white-space:nowrap}
+.sp-l1{animation:spLine 5.4s 0s infinite}
+.sp-l2{animation:spLine 5.4s 1.8s infinite}
+.sp-l3{animation:spLine 5.4s 3.6s infinite}
+.sp-ver{margin-left:auto;font-size:10px;letter-spacing:.2em;color:#5b6271;text-transform:uppercase}
+.sp-bar{position:relative;height:2px;background:rgba(255,255,255,.05);overflow:hidden;border-radius:2px}
+.sp-bar i{position:absolute;top:0;left:0;height:100%;width:34%;background:linear-gradient(90deg,transparent,#6d5cff 45%,#b5a8ff 60%,transparent);filter:drop-shadow(0 0 6px rgba(109,92,255,.7));animation:spSweep 1.8s cubic-bezier(.45,.05,.55,.95) infinite}
+@keyframes spIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:scale(1)}}
+@keyframes spPulse{0%,100%{transform:scale(1);box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 18px 36px -16px rgba(109,92,255,.35)}50%{transform:scale(1.04);box-shadow:0 1px 0 rgba(255,255,255,.12) inset,0 30px 60px -16px rgba(109,92,255,.65)}}
+@keyframes spBolt{0%,100%{transform:translateY(0) scale(1);opacity:.95}50%{transform:translateY(-1px) scale(1.06);opacity:1}}
+@keyframes spGlow{0%,100%{opacity:.4}50%{opacity:.9}}
+@keyframes spSpin{to{transform:rotate(360deg)}}
+@keyframes spSweep{0%{transform:translateX(-110%)}100%{transform:translateX(380%)}}
+@keyframes spLine{0%{opacity:0;transform:translateY(4px)}6%,28%{opacity:1;transform:translateY(0)}34%,100%{opacity:0;transform:translateY(-4px)}}
+@keyframes spDot{0%,100%{transform:scale(1);box-shadow:0 0 10px rgba(109,92,255,.85)}50%{transform:scale(1.35);box-shadow:0 0 16px rgba(109,92,255,1)}}
+@media (prefers-reduced-motion:reduce){#edog-splash *,#edog-splash{animation:none!important;transition:opacity .2s ease!important}}
+  </style>
   <style>
     /* === css/variables.css === */
 /* Reset and Variables */
@@ -23147,6 +23181,11 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background 120ms ease;
+}
+
+.tok-detail-resize:hover {
+  background: var(--surface-hover, rgba(127, 127, 127, 0.08));
 }
 
 .tok-detail-resize::after {
@@ -23155,6 +23194,62 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   height: 3px;
   border-radius: 2px;
   background: var(--border-bright);
+  transition: width 120ms ease, background 120ms ease;
+}
+
+.tok-detail-resize:hover::after {
+  width: 56px;
+  background: var(--accent, var(--text-dim));
+}
+
+/* ── Divider between active and expired tokens ── */
+.tok-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) var(--space-2) var(--space-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tok-divider::before,
+.tok-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.tok-divider-label {
+  padding: 0 var(--space-2);
+}
+
+/* ── Lifecycle event rows ── */
+.tok-life-row .tok-usage-method {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(127, 127, 127, 0.1));
+  color: var(--text-dim);
+}
+
+.tok-life-row .tok-usage-method.ok {
+  background: var(--status-succeeded-dim, rgba(34, 197, 94, 0.15));
+  color: var(--status-succeeded);
+}
+
+.tok-life-row .tok-usage-method.warn {
+  background: var(--level-warning-dim, rgba(245, 158, 11, 0.15));
+  color: var(--level-warning);
+}
+
+.tok-life-row .tok-usage-method.err {
+  background: var(--level-error-dim, rgba(239, 68, 68, 0.15));
+  color: var(--level-error);
 }
 
 .tok-detail-header {
@@ -32291,15 +32386,41 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   </style>
 </head>
 <body>
+  <!-- Boot splash — first paint, dismissed by hideEdogSplash() once app is ready. -->
+  <div id="edog-splash" role="status" aria-live="polite" aria-label="Loading EDOG Studio">
+    <div class="sp-orb"></div>
+    <div class="sp-stage">
+      <div class="sp-mark">
+        <div class="sp-halo"></div>
+        <svg class="sp-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </div>
+      <div class="sp-wordmark"><span class="sp-edog">EDOG</span><span class="sp-studio">STUDIO</span></div>
+      <div class="sp-tag">FabricLiveTable &#183; Developer Cockpit</div>
+    </div>
+    <div class="sp-foot">
+      <div class="sp-status">
+        <span class="sp-dot"></span>
+        <span class="sp-stack">
+          <span class="sp-line sp-l1">Initializing</span>
+          <span class="sp-line sp-l2">Connecting to Fabric</span>
+          <span class="sp-line sp-l3">Loading workspace</span>
+        </span>
+        <span class="sp-ver">v0.1 &#183; dev</span>
+      </div>
+      <div class="sp-bar"><i></i></div>
+    </div>
+  </div>
 <script>
 /* Global error overlay — makes silent JS death impossible */
 window.onerror = function(msg, src, line, col, err) {
   var d = document.createElement('div');
-  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c53030;color:#fff;padding:10px 16px;font:13px/1.5 monospace;white-space:pre-wrap;cursor:pointer';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:#c53030;color:#fff;padding:10px 16px;font:13px/1.5 monospace;white-space:pre-wrap;cursor:pointer';
   d.textContent = 'JS ERROR: ' + msg + ' (line ' + line + ')';
   d.title = 'Click to dismiss';
   d.onclick = function() { d.remove(); };
   document.body.prepend(d);
+  // Don't trap the user behind the boot splash on JS error.
+  try { if (typeof window.edogHideSplash === 'function') window.edogHideSplash(); } catch (_) { /* ignore */ }
 };
 </script>
 
@@ -47610,8 +47731,18 @@ class TopBar {
   }
 
   _updateSidebarDot(color) {
-    if (!this._sidebarDot) return;
-    this._sidebarDot.className = 'sidebar-token-dot' + (color ? ' ' + color : '');
+    if (this._sidebarDot) {
+      this._sidebarDot.className = 'sidebar-token-dot' + (color ? ' ' + color : '');
+    }
+    // Mirror to the new sidebar token ring (legacy dot may not exist in DOM).
+    if (window.edogSidebar && typeof window.edogSidebar.setTokenHealth === 'function') {
+      var status = color === 'green' ? 'healthy'
+        : color === 'amber' ? 'warning'
+        : color === 'red' ? 'expired'
+        : 'none';
+      var timeLabel = (this._tokenCountdownEl && status !== 'none') ? this._tokenCountdownEl.textContent : '';
+      window.edogSidebar.setTokenHealth(status, timeLabel);
+    }
   }
 
   // ─── Token Inspector ───
@@ -48064,6 +48195,35 @@ class TopBar {
 
   _tickInspectorTTL() {
     var now = Date.now();
+
+    // Decode view uses fixed IDs for its single visible card.
+    if (this._inspectorView === 'decode' && this._decodeTarget) {
+      var dt = this._decodeTarget;
+      var dTtlEl = document.getElementById('ti-decode-ttl');
+      var dBarEl = document.getElementById('ti-decode-bar');
+      if (dTtlEl) {
+        var dRemainSec = Math.max(0, Math.floor((dt.expiresAt - now) / 1000));
+        var dTotalSec = Math.max(1, Math.floor((dt.expiresAt - dt.issuedAt) / 1000));
+        var dPct = dt.expiresAt > now ? Math.min(100, Math.round((dRemainSec / dTotalSec) * 100)) : 0;
+        var dExpired = dt.expiresAt <= now;
+        var dColor = dExpired ? 'expired' : dRemainSec > 600 ? 'green' : dRemainSec > 300 ? 'amber' : 'red';
+        if (dExpired) {
+          var dAgoMin = Math.floor((now - dt.expiresAt) / 60000);
+          dTtlEl.textContent = 'EXPIRED ' + (dAgoMin < 1 ? '<1m ago' : dAgoMin + 'm ago');
+        } else {
+          var dMm = Math.floor(dRemainSec / 60);
+          var dSs = dRemainSec % 60;
+          dTtlEl.textContent = dMm + 'm ' + dSs + 's remaining';
+        }
+        dTtlEl.className = 'ti-ttl-badge ' + dColor;
+        if (dBarEl) {
+          dBarEl.style.width = dPct + '%';
+          dBarEl.className = 'ti-card-bar-fill ' + dColor;
+        }
+      }
+      return;
+    }
+
     for (var i = 0; i < this._inspectorTokens.length; i++) {
       var tok = this._inspectorTokens[i];
       var ttlEl = document.querySelector('[data-ti-ttl="' + i + '"]');
@@ -55747,6 +55907,7 @@ class TokensTab {
     // ── State ──
     this._tokenMap = new Map();   // dedupKey -> token object
     this._rawEvents = [];         // raw event log (capped)
+    this._lifecycleEvents = [];   // token lifecycle events (OboExchange, TokenAcquired, etc.)
     this._selectedKey = null;
     this._kbIndex = -1;
     this._typeFilter = 'all';
@@ -55773,10 +55934,6 @@ class TokensTab {
     this._detailAud = null;
     this._detailBody = null;
     this._tooltipEl = null;
-
-    // ── SVG ring constants ──
-    this._RING_R = 18;
-    this._RING_C = 2 * Math.PI * this._RING_R;
 
     // ── Token type resolution table ──
     this._TYPE_TABLE = {
@@ -55859,13 +56016,70 @@ class TokensTab {
   _onEvent = (event) => {
     if (!event || !event.data) return;
     const d = event.data;
+    const eventTime = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
 
+    // ── Lifecycle event branch (OboExchange, TokenAcquired, TokenCached,
+    //    TokenRefreshAttempt, TokenEvicted). These carry no audience/expiry —
+    //    they describe operations, not token issuance. ──
+    if (d.event) {
+      const resolvedKey = this._resolveType(d.tokenType).key;
+      const lifeEntry = {
+        time: eventTime,
+        event: d.event,
+        tokenType: resolvedKey,
+        audience: d.audience || '',
+        lakehouseId: d.lakehouseId || '',
+        iterationId: d.iterationId || '',
+        tenantId: d.tenantId || '',
+        durationMs: typeof d.durationMs === 'number' ? d.durationMs : null,
+        cacheInference: d.cacheInference || '',
+        success: d.success,
+        refreshed: d.refreshed,
+        errorType: d.errorType || ''
+      };
+      this._lifecycleEvents.push(lifeEntry);
+      if (this._lifecycleEvents.length > this._maxEvents) this._lifecycleEvents.shift();
+
+      // Attach to any matching tokens (by resolved type; audience match optional)
+      for (const tok of this._tokenMap.values()) {
+        if (tok.typeKey !== resolvedKey) continue;
+        if (lifeEntry.audience && tok.audience && tok.audience !== lifeEntry.audience) continue;
+        tok.lifecycle.push(lifeEntry);
+        if (tok.lifecycle.length > 50) tok.lifecycle.shift();
+
+        // Refresh count from successful TokenRefreshAttempt lifecycle events
+        if (d.event === 'TokenRefreshAttempt' && d.refreshed === true) {
+          tok.refreshCount++;
+        }
+        // Track cache events
+        if (d.event === 'TokenCached' && d.success === true) {
+          tok.cacheWriteCount = (tok.cacheWriteCount || 0) + 1;
+        }
+        if (d.event === 'TokenEvicted' && d.success === true) {
+          tok.evictionCount = (tok.evictionCount || 0) + 1;
+        }
+      }
+
+      if (this._isActive) this._render();
+      // Refresh detail panel if open and showing a matching token
+      if (this._selectedKey) {
+        const selected = this._tokenMap.get(this._selectedKey);
+        if (selected && selected.typeKey === resolvedKey) {
+          this._renderDetailBody(selected);
+        }
+      }
+      return;
+    }
+
+    // ── HTTP pipeline event branch ──
     const typeInfo = this._resolveType(d.tokenType);
     const audience = d.audience || '';
-    const dedupKey = typeInfo.key + '|' + audience;
+    // Include scope in dedup key so tokens with same type+audience but
+    // different scopes don't collapse into one card.
+    const scope = (d.claims && d.claims.scp) ? String(d.claims.scp) : '';
+    const dedupKey = typeInfo.key + '|' + audience + (scope ? '|' + scope : '');
     const issuedMs = d.issuedUtc ? new Date(d.issuedUtc).getTime() : Date.now();
     const expiresMs = d.expiryUtc ? new Date(d.expiryUtc).getTime() : (issuedMs + 3600000);
-    const eventTime = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
 
     // Store raw event (capped)
     this._rawEvents.push({ time: eventTime, type: typeInfo.key, audience: audience, endpoint: d.endpoint || '' });
@@ -55876,7 +56090,9 @@ class TokensTab {
     if (existing) {
       // Token already tracked for this type+audience
       const tokenExpired = existing.expiresAt <= Date.now();
-      const isNewIssuance = Math.abs(existing.issuedAt - issuedMs) > 5000;
+      // 1000ms threshold: tokens reissued within the same second are the
+      // same issuance; anything beyond that is a refresh worth counting.
+      const isNewIssuance = Math.abs(existing.issuedAt - issuedMs) > 1000;
 
       if (tokenExpired && isNewIssuance) {
         // Expired token refreshed with a new issuance
@@ -55915,15 +56131,19 @@ class TokensTab {
         rawType: d.tokenType || '',
         scheme: d.scheme || typeInfo.label,
         audience: audience,
+        scope: scope,
         issuedAt: issuedMs,
         expiresAt: expiresMs,
         httpClientName: d.httpClientName || '',
         usageCount: 1,
         refreshCount: 0,
+        cacheWriteCount: 0,
+        evictionCount: 0,
         lastSeen: eventTime,
         lastEndpoint: d.endpoint || '',
         jwtClaims: d.claims || {},
-        usage: []
+        usage: [],
+        lifecycle: []
       };
 
       if (d.endpoint) {
@@ -56109,7 +56329,22 @@ class TokensTab {
     }
 
     const fragment = document.createDocumentFragment();
-    visible.forEach(tok => fragment.appendChild(this._buildCard(tok)));
+    let dividerInserted = false;
+    visible.forEach(tok => {
+      // Insert a subtle divider between the last active token and the first
+      // expired token. Sort puts active tokens first; expired tokens last.
+      if (!dividerInserted && this._isExpired(tok)) {
+        const hasActive = visible.some(t => !this._isExpired(t));
+        if (hasActive) {
+          const divider = document.createElement('div');
+          divider.className = 'tok-divider';
+          divider.innerHTML = '<span class="tok-divider-label">Expired</span>';
+          fragment.appendChild(divider);
+        }
+        dividerInserted = true;
+      }
+      fragment.appendChild(this._buildCard(tok));
+    });
     this._cardsEl.innerHTML = '';
     this._cardsEl.appendChild(fragment);
   }
@@ -56361,12 +56596,15 @@ class TokensTab {
     let metaRows =
       '<div class="tok-jwt-row"><span class="tok-jwt-key">scheme</span><span class="tok-jwt-val">' + this._escHTML(tok.scheme) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">audience</span><span class="tok-jwt-val">' + this._escHTML(tok.audience) + '</span></div>' +
+      (tok.scope ? '<div class="tok-jwt-row"><span class="tok-jwt-key">scope</span><span class="tok-jwt-val">' + this._escHTML(tok.scope) + '</span></div>' : '') +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">httpClient</span><span class="tok-jwt-val">' + this._escHTML(tok.httpClientName) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">issued</span><span class="tok-jwt-val">' + this._fmtTimestamp(Math.floor(tok.issuedAt / 1000)) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">expires</span><span class="tok-jwt-val' + (this._isExpired(tok) ? ' highlight' : '') + '">' + this._fmtTimestamp(Math.floor(tok.expiresAt / 1000)) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">TTL</span><span class="tok-jwt-val">' + this._fmtTTL(tok) + '</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">usage</span><span class="tok-jwt-val">' + tok.usageCount + ' calls</span></div>' +
       '<div class="tok-jwt-row"><span class="tok-jwt-key">refreshed</span><span class="tok-jwt-val">' + tok.refreshCount + '\u00D7</span></div>' +
+      (tok.cacheWriteCount ? '<div class="tok-jwt-row"><span class="tok-jwt-key">cached</span><span class="tok-jwt-val">' + tok.cacheWriteCount + '\u00D7</span></div>' : '') +
+      (tok.evictionCount ? '<div class="tok-jwt-row"><span class="tok-jwt-key">evicted</span><span class="tok-jwt-val">' + tok.evictionCount + '\u00D7</span></div>' : '') +
       (tok.rawType && tok.rawType !== tok.typeLabel ? '<div class="tok-jwt-row"><span class="tok-jwt-key">rawType</span><span class="tok-jwt-val">' + this._escHTML(tok.rawType) + '</span></div>' : '');
 
     let usageRows = '';
@@ -56377,6 +56615,29 @@ class TokensTab {
           '<span class="tok-usage-time">' + this._fmtTime(u.time) + '</span>' +
           '<span class="tok-usage-method ' + mc + '">' + u.method + '</span>' +
           '<span class="tok-usage-path">' + this._escHTML(u.path) + '</span>' +
+        '</div>';
+    });
+
+    // Lifecycle events (most recent first)
+    let lifecycleRows = '';
+    const life = (tok.lifecycle || []).slice().reverse();
+    life.forEach(le => {
+      const cls = le.success === false || le.errorType ? 'err'
+        : le.event === 'TokenEvicted' ? 'warn'
+        : le.event === 'TokenRefreshAttempt' && le.refreshed ? 'ok'
+        : le.event === 'TokenAcquired' && le.cacheInference === 'hit' ? 'ok'
+        : '';
+      let meta = '';
+      if (le.cacheInference) meta += ' \u00B7 ' + le.cacheInference;
+      if (le.refreshed === true) meta += ' \u00B7 refreshed';
+      if (le.refreshed === false) meta += ' \u00B7 not refreshed';
+      if (le.durationMs !== null && le.durationMs !== undefined) meta += ' \u00B7 ' + le.durationMs + 'ms';
+      if (le.errorType) meta += ' \u00B7 ' + this._escHTML(le.errorType);
+      lifecycleRows +=
+        '<div class="tok-usage-row tok-life-row ' + cls + '">' +
+          '<span class="tok-usage-time">' + this._fmtTime(le.time) + '</span>' +
+          '<span class="tok-usage-method ' + cls + '">' + this._escHTML(le.event) + '</span>' +
+          '<span class="tok-usage-path">' + this._escHTML(meta.replace(/^ \u00B7 /, '')) + '</span>' +
         '</div>';
     });
 
@@ -56403,6 +56664,15 @@ class TokensTab {
             (usageRows || '<div style="padding:12px;color:var(--text-muted);text-align:center">No API calls recorded</div>') +
           '</div>' +
         '</div>' +
+        (life.length ?
+          '<div class="tok-usage-panel">' +
+            '<div class="tok-usage-header">' +
+              '<svg viewBox="0 0 24 24"><path d="M12 8v5l4.25 2.52.77-1.28-3.52-2.09V8z"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>' +
+              'Lifecycle Events (' + life.length + ')' +
+            '</div>' +
+            '<div class="tok-usage-body">' + lifecycleRows + '</div>' +
+          '</div>'
+        : '') +
       '</div>';
   }
 
@@ -56480,11 +56750,11 @@ class TokensTab {
   _onKeyDown(e) {
     const cards = Array.from(this._cardsEl.querySelectorAll('.tok-card'));
 
-    if (e.key === 'ArrowDown' && cards.length) {
+    if ((e.key === 'ArrowDown' || e.key === 'j') && cards.length && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       this._kbIndex = Math.min(this._kbIndex + 1, cards.length - 1);
       this._focusCard(cards);
-    } else if (e.key === 'ArrowUp' && cards.length) {
+    } else if ((e.key === 'ArrowUp' || e.key === 'k') && cards.length && e.target.tagName !== 'INPUT') {
       e.preventDefault();
       this._kbIndex = Math.max(this._kbIndex - 1, 0);
       this._focusCard(cards);
@@ -56594,7 +56864,11 @@ class TokensTab {
           tok.lastEndpoint
         ]);
       });
-      content = rows.map(r => r.join(',')).join('\n');
+      const escCsv = (v) => {
+        const s = v === null || v === undefined ? '' : String(v);
+        return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      content = rows.map(r => r.map(escCsv).join(',')).join('\n');
     }
 
     try { navigator.clipboard.writeText(content); } catch (_) { /* clipboard may not be available */ }
@@ -56618,7 +56892,23 @@ class TokensTab {
   _copyCurl() {
     const tok = this._tokenMap.get(this._selectedKey);
     if (!tok) return;
-    const curl = 'curl -H "Authorization: ' + tok.scheme + ' <' + tok.typeLabel + '_TOKEN>" https://' + tok.audience + '/v1/resource';
+    const ep = tok.lastEndpoint || '';
+    let url;
+    if (/^https?:\/\//i.test(ep)) {
+      url = ep;
+    } else if (ep && tok.audience) {
+      url = (tok.audience.startsWith('http') ? tok.audience : 'https://' + tok.audience) +
+            (ep.startsWith('/') ? ep : '/' + ep);
+    } else if (tok.audience) {
+      url = tok.audience.startsWith('http') ? tok.audience : 'https://' + tok.audience;
+    } else {
+      url = 'https://api.example.com';
+    }
+    const method = this._guessMethod(ep);
+    const curl =
+      'curl -X ' + method + ' \\\n' +
+      '  -H "Authorization: ' + tok.scheme + ' <' + tok.typeLabel + '_TOKEN>" \\\n' +
+      '  "' + url + '"';
     try { navigator.clipboard.writeText(curl); } catch (_) { /* */ }
   }
 
@@ -91504,6 +91794,20 @@ class QaEditor {
  * EDOG Studio — Main Application Orchestrator
  */
 
+// ===== BOOT SPLASH =====
+
+// Dismiss the boot splash overlay with a smooth fade-out. Idempotent.
+// The splash markup + inline CSS lives in src/frontend/index.html.
+function hideEdogSplash() {
+  var splash = document.getElementById('edog-splash');
+  if (!splash || splash.classList.contains('fade-out')) return;
+  splash.classList.add('fade-out');
+  setTimeout(function () {
+    if (splash.parentNode) splash.parentNode.removeChild(splash);
+  }, 520);
+}
+window.edogHideSplash = hideEdogSplash;
+
 // ===== UTILITY FUNCTIONS =====
 
 function copyToClipboard(btn, text) {
@@ -91768,6 +92072,9 @@ class EdogLogViewer {
 
     // Don't auto-connect WebSocket— _checkDeployResume will connect
     // to the right port if FLT is running. Otherwise no WS is needed.
+
+    // App is ready — dismiss the boot splash (smooth fade + scale).
+    hideEdogSplash();
   }
 
   /** Check for active/completed deploy on page load (refresh recovery). */
@@ -92861,6 +93168,9 @@ class EdogLogViewer {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
+  // Safety net: never leave the splash up longer than 15s, even if init fails.
+  setTimeout(hideEdogSplash, 15000);
+
   // Load theme preference — light is default (no data-theme attribute needed)
   const savedTheme = localStorage.getItem('edog-theme');
   if (savedTheme === 'dark') {
@@ -92910,7 +93220,8 @@ async function resolveAuthGate(health) {
     if (silentOk) return;
   }
 
-  // Must show onboarding UI
+  // Must show onboarding UI — dismiss the splash so the overlay is interactive.
+  hideEdogSplash();
   await new Promise(resolve => {
     onboarding.show(function onAuthComplete() { resolve(); });
   });
@@ -92929,7 +93240,8 @@ async function resolveRepoGate(health) {
   const resolved = await repoGate.tryResolve(currentHealth || {});
   if (resolved) return;
 
-  // Need user interaction — show overlay
+  // Need user interaction — dismiss the splash so the overlay is interactive.
+  hideEdogSplash();
   await new Promise(resolve => {
     repoGate.show(function onRepoComplete() { resolve(); });
   });
