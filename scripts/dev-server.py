@@ -1992,7 +1992,7 @@ def _drain_flt_stdout(proc, deploy_id):
             if line:
                 _deploy_log("[FLT] " + line, "info")
                 # Check for deployment success markers
-                if "DevConnection started" in line:
+                if "DevConnection started" in line or "Dev Connection established" in line:
                     _flt_ready_event.set()
     except Exception:
         pass
