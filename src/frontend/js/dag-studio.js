@@ -860,7 +860,7 @@ class DagStudio {
         self._stopExecPoller();
         return;
       }
-      self._pollExecMetrics();
+      self._pollExecStatus();
     }, 5000);
   }
 
@@ -868,6 +868,37 @@ class DagStudio {
     if (this._execPollInterval) {
       clearInterval(this._execPollInterval);
       this._execPollInterval = null;
+    }
+  }
+
+  /** Lightweight status-only poll during running state. Uses getDagExecStatus
+   *  (single field response) instead of getDagExecMetrics (full node data).
+   *  When terminal status detected, stops poller and triggers one final
+   *  _pollExecMetrics call for the full node metrics. */
+  async _pollExecStatus() {
+    var iterationId = this._esm.activeIterationId;
+    if (!iterationId) return;
+    if (this._pollInFlight) return;
+    this._pollInFlight = true;
+    try {
+      var statusData = await this._api.getDagExecStatus(iterationId);
+      if (!statusData) return;
+      var status = (statusData.status || statusData.dagExecutionStatus || '').toLowerCase();
+      if (status === 'completed' || status === 'succeeded' || status === 'failed' || status === 'cancelled') {
+        this._esm._executionStatus = status === 'succeeded' ? 'completed' : status;
+        this._esm._endedAt = Date.now();
+        this._stopExecPoller();
+        // Now fetch full metrics once
+        this._pollInFlight = false;
+        await this._pollExecMetrics();
+        return;
+      }
+      // Still running — update summary
+      this._updateSummary();
+    } catch (err) {
+      console.log('[DAG-DIAG] Status poll failed:', err.message);
+    } finally {
+      this._pollInFlight = false;
     }
   }
 
