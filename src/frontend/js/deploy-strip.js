@@ -113,12 +113,23 @@ class DeployContextStrip {
     var disconnectBtn = document.createElement('button');
     disconnectBtn.className = 'ds-disconnect';
     disconnectBtn.textContent = 'Disconnect';
-    disconnectBtn.title = 'Disconnect from FLT service';
+    disconnectBtn.title = 'Stop FLT service and disconnect';
     disconnectBtn.addEventListener('click', function() {
-      if (window.edogWs) window.edogWs.disconnect();
-      if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
-      if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
-      if (window.edogDeployStrip) window.edogDeployStrip.hide();
+      // Call the server-side undeploy endpoint to stop FLT + revert
+      fetch('/api/command/undeploy', { method: 'POST' })
+        .then(function() {
+          if (window.edogWs) window.edogWs.disconnect();
+          if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+          if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+          if (window.edogDeployStrip) window.edogDeployStrip.hide();
+        })
+        .catch(function() {
+          // Fallback: at least disconnect the UI side
+          if (window.edogWs) window.edogWs.disconnect();
+          if (window.edogSidebar) window.edogSidebar.setPhase('disconnected');
+          if (window.edogStatusBar) window.edogStatusBar.setPhase('disconnected');
+          if (window.edogDeployStrip) window.edogDeployStrip.hide();
+        });
     });
     this._el.appendChild(disconnectBtn);
 
