@@ -288,7 +288,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 hasStrictJsonSchema = body.Contains("\"type\":\"json_schema\"", StringComparison.Ordinal)
                     && body.Contains("\"strict\":true", StringComparison.Ordinal),
                 hasReasoningEffortHigh = body.Contains("\"effort\":\"high\"", StringComparison.Ordinal),
-                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":96000", StringComparison.Ordinal),
+                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":128000", StringComparison.Ordinal),
                 hasPromptCacheKey = body.Contains("\"prompt_cache_key\":\"" + EdogQaLlmClient.PromptCacheKeyArchitect + "\"", StringComparison.Ordinal),
                 modelMentioned = body.Contains("\"model\":\"gpt-5.4\"", StringComparison.Ordinal),
                 schemaNamePinned = body.Contains("\"name\":\"" + EdogQaLlmClient.ArchitectSchemaName + "\"", StringComparison.Ordinal),
@@ -616,6 +616,22 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
 
                 var resp = _responder(request);
                 if (resp != null) resp.RequestMessage = request;
+
+                // T4-D streaming bridge: when the caller asked for stream:true
+                // (Architect post-streaming), repackage the canned response
+                // envelope as a single-event SSE feed (event: response.completed)
+                // so the production SSE parser can unwrap it. Editor calls do
+                // not set stream:true, so their responses pass through.
+                if (resp != null
+                    && resp.IsSuccessStatusCode
+                    && resp.Content != null
+                    && LastBody.IndexOf("\"stream\":true", StringComparison.Ordinal) >= 0)
+                {
+                    var envelope = await resp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    var sse = "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":" + envelope + "}\n\n";
+                    resp.Content = new StringContent(sse, System.Text.Encoding.UTF8, "text/event-stream");
+                }
+
                 return resp;
             }
         }

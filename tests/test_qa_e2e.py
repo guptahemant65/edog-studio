@@ -749,11 +749,11 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
     assert 'EditorReasoningEffort = "low"' in src, (
         "Editor must default to reasoning.effort=low (spec §3.1)."
     )
-    assert "ArchitectMaxOutputTokens = 96000" in src, (
-        "Architect must allow ≥96000 max_output_tokens (T2 chronic-density bump). "
-        "The original NO_SCENARIOS_GENERATED bug was an 8192 budget starved by "
-        "reasoning; T2 dense PRs (PR-975848, PR-977882) chronically exhausted "
-        "65536. 96000 carries headroom for T3 FLT-priors prefix."
+    assert "ArchitectMaxOutputTokens = 128000" in src, (
+        "Architect must allow ≥128000 max_output_tokens (T4-D streaming + dense-diff bump). "
+        "Original NO_SCENARIOS_GENERATED was an 8192 starved budget; T2 lifted to 96K; "
+        "T4-D large-PR captures (PR-960426/PR-879735) showed 96K returns status=incomplete "
+        "on dense schema diffs near the 80KB cap, so the budget is now 128K."
     )
 
 
@@ -883,8 +883,8 @@ def test_llm_client_architect_request_shape(harness_environment, built_harness) 
     assert shape["hasStrictJsonSchema"] is True, shape
     assert shape["hasReasoningEffortHigh"] is True, shape
     assert shape["hasMaxOutputTokens"] is True, (
-        "Architect must request max_output_tokens=96000 (T2 chronic-density bump). "
-        "Undersizing here is the root cause of NO_SCENARIOS_GENERATED. shape=" + repr(shape)
+        "Architect must request max_output_tokens=128000 (T4-D streaming + density bump). "
+        "Undersizing causes NO_SCENARIOS_GENERATED / status=incomplete on dense diffs. shape=" + repr(shape)
     )
     assert shape["hasPromptCacheKey"] is True, shape
     assert shape["modelMentioned"] is True, shape
@@ -2901,11 +2901,16 @@ def test_qa_corpus_candidates_manifest_present() -> None:
 
 
 def test_qa_pending_curator_fixtures_have_minimal_shape() -> None:
-    """T4-C-prep landed N new PR-NNN/ dirs under tests/qa-eval/ground-
+    """T4-C/T4-D landed N new PR-NNN/ dirs under tests/qa-eval/ground-
     truth/ — each must have the four scorer-pipeline files (pr.json,
-    diff.patch, notes.md, expected.json) and MUST NOT have actual.json
-    or architect_plan.json (those require paid LLM capture and are
-    sentinel-flagged as half-promoted fixtures).
+    diff.patch, notes.md, expected.json) and the scenarios array MUST
+    still be empty until a curator has graded the fixture.
+
+    Note (T4-D): PENDING fixtures MAY now carry actual.json and
+    architect_plan.json — the workflow is capture-then-grade, so the LLM
+    output exists before the curator promotes the fixture. The scorer
+    explicitly skips PENDING fixtures and lists them under
+    ``prs_pending_grading`` regardless of whether actual.json exists.
     """
     import json
     gt = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
@@ -2933,19 +2938,13 @@ def test_qa_pending_curator_fixtures_have_minimal_shape() -> None:
             assert (d / name).exists(), (
                 f"PENDING fixture {d.name} missing required file: {name}"
             )
-        # MUST NOT have actual.json / architect_plan.json.
-        for forbidden in ("actual.json", "architect_plan.json"):
-            assert not (d / forbidden).exists(), (
-                f"PENDING fixture {d.name} must NOT carry {forbidden} — "
-                "either grade expected.json or delete the capture artefact"
-            )
         # pr.json reproducibility metadata.
         pr_blob = json.loads((d / "pr.json").read_text(encoding="utf-8"))
         for k in ("pr_number", "title", "base_sha", "head_sha",
                   "merge_commit_sha", "files", "diff_size_bytes",
                   "diff_sha256", "captured_at", "diff_command"):
             assert k in pr_blob, f"PENDING fixture {d.name} pr.json missing key {k!r}"
-        # Empty scenarios.
+        # Empty scenarios (curator hasn't graded yet).
         exp_blob = json.loads((d / "expected.json").read_text(encoding="utf-8"))
         assert exp_blob.get("scenarios") == [], (
             f"PENDING fixture {d.name} expected.json must have empty scenarios "
