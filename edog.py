@@ -3209,6 +3209,26 @@ def headless_deploy(repo_root):
     except Exception as e:
         emit(2, f"Component scan failed (non-fatal): {e}", "warn")
 
+    # Copy allowlist to build output dirs (must happen AFTER scan_flt_components
+    # generates the file, and AFTER apply_log_viewer_files which only copies
+    # files that exist at the time it runs)
+    try:
+        components_src = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
+        if components_src.exists():
+            entry_point = repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
+            bin_dir = entry_point / "bin"
+            if bin_dir.exists():
+                copied = 0
+                for dll in bin_dir.rglob("Microsoft.LiveTable.Service.EntryPoint.dll"):
+                    out_devmode = dll.parent / "DevMode"
+                    out_devmode.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(components_src, out_devmode / "edog-flt-components.json")
+                    copied += 1
+                if copied:
+                    emit(2, f"Copied component allowlist to {copied} build output(s)", "info")
+    except Exception as e:
+        emit(2, f"Allowlist copy failed (non-fatal): {e}", "warn")
+
     # Step 3: Build
     emit(3, "Building FLT service...")
     entrypoint = get_entrypoint_path(repo_root)
