@@ -153,6 +153,10 @@ class QaPanel {
       this._renderLlmPill({ state: 'refreshing' });
     }
     conn.invoke('QaGetCapabilities').then((report) => {
+      // Log the full report so the user can diagnose why V2 isn't
+      // ready (e.g., missing AZURE_OPENAI_* env vars, deployment
+      // not found) without having to hover the pill.
+      console.info('[qa-panel] QaGetCapabilities ←', report);
       this._renderLlmPill(report);
       // If the probe was mid-flight, poll once more after 4s. The
       // dual probe normally takes < 2s on a healthy tenant.

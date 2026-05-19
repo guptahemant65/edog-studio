@@ -43,6 +43,15 @@ class RingBuffer {
     return this.buffer[idx];
   }
 
+  // Returns the i-th live entry by logical position: 0 is the oldest
+  // currently-retained entry, count-1 is the newest. Mirrors forEach's
+  // index semantics so cluster/logs code can iterate without callbacks.
+  getByIndex(i) {
+    if (i < 0 || i >= this.count) return undefined;
+    const idx = (this.head - this.count + i + this.capacity) % this.capacity;
+    return this.buffer[idx];
+  }
+
   get oldestSeq() { return this.totalPushed - this.count; }
   get newestSeq() { return this.totalPushed - 1; }
 
