@@ -66,6 +66,9 @@ class SignalRManager {
       this.setStatus('connecting');
 
       // Wire up server-to-client handlers
+      // NOTE: Legacy LogEntry/TelemetryEvent group broadcasts removed from
+      // backend (commit a61218a). Kept as no-ops for safety; the topic
+      // stream (SubscribeToTopic) is the sole live delivery path.
       this.connection.on('LogEntry', (entry) => {
         if (this.onMessage) {
           this.onMessage('log', entry);

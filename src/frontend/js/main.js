@@ -666,15 +666,26 @@ class EdogLogViewer {
   }
   
   loadInitialData = async () => {
+    // Guard against concurrent/duplicate calls — each call is a full
+    // snapshot replace so running twice doubles every entry.
+    if (this._loadingInitialData) return;
+    this._loadingInitialData = true;
     try {
       // Refresh API client config so tokens/phase are current after deploy
       await this.apiClient.fetchConfig();
 
-      // Load logs — batch add directly to state (skip pendingLogs buffer)
+      // Load logs — full snapshot replace (clear first to prevent duplicates
+      // when loadInitialData is called from multiple code paths on startup).
       const logsResponse = await fetch('/api/logs');
       if (logsResponse.ok) {
         const logs = await logsResponse.json();
         logs.reverse(); // API returns newest-first; reverse to push oldest-first into RingBuffer
+        this.state.logBuffer.clear();
+        this.state.stats.totalLogs = 0;
+        this.state.stats.error = 0;
+        this.state.stats.warning = 0;
+        this.state.stats.information = 0;
+        this.state.stats.verbose = 0;
         logs.forEach(log => {
           try {
             this.state.logBuffer.push(log);
@@ -690,11 +701,15 @@ class EdogLogViewer {
         });
       }
       
-      // Load telemetry — batch add directly
+      // Load telemetry — full snapshot replace
       const telemetryResponse = await fetch('/api/telemetry');
       if (telemetryResponse.ok) {
         const events = await telemetryResponse.json();
         events.reverse();
+        this.state.telemetryBuffer.clear();
+        this.state.stats.totalEvents = 0;
+        this.state.stats.succeeded = 0;
+        this.state.stats.failed = 0;
         events.forEach(event => {
           this.state.telemetryBuffer.push(event);
           this.state.stats.totalEvents++;
@@ -735,6 +750,8 @@ class EdogLogViewer {
       
     } catch (error) {
       console.error('Failed to load initial data:', error);
+    } finally {
+      this._loadingInitialData = false;
     }
   }
   
