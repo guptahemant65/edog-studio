@@ -96,6 +96,7 @@ class PerfMarkersTab {
     const opType = (event.dimensions && event.dimensions.operationType) || '';
     const result = event.result || '';
     const iterationId = event.iterationId || '';
+    const reliabilityMetric = typeof event.reliabilityMetric === 'number' ? event.reliabilityMetric : null;
 
     // Update rolling stats for this operation
     if (!this._opStats.has(opName)) {
@@ -126,6 +127,7 @@ class PerfMarkersTab {
       operationType: opType,
       result: result,
       iterationId: iterationId,
+      reliabilityMetric: reliabilityMetric,
       isAnomaly: isAnomaly,
       anomalyMultiplier: anomalyMultiplier,
       avgDuration: Math.round(stats.avg),

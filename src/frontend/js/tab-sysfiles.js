@@ -110,17 +110,25 @@ class SystemFilesTab {
     const d = event.data;
     if (!d || !d.path) return;
 
+    // Map granular operation types to display categories
+    const rawOp = d.operation || 'Read';
+    const opCategory = this._opCategory(rawOp);
+
     const op = {
       seq: event.sequenceId || this._events.length,
       path: d.path,
-      operation: d.operation || 'Read',
+      operation: rawOp,
+      opCategory: opCategory,
       sizeBytes: d.contentSizeBytes || 0,
       durationMs: d.durationMs || 0,
       timestamp: new Date(event.timestamp || Date.now()),
       iterationId: d.iterationId || null,
       hasContent: !!d.hasContent,
       contentPreview: d.contentPreview || null,
+      previewTruncated: !!d.previewTruncated,
       ttlSeconds: d.ttlSeconds || null,
+      operationResult: d.operationResult,
+      metadata: d.metadata || null,
       isLock: (d.path || '').includes('.lock')
     };
 
@@ -130,14 +138,13 @@ class SystemFilesTab {
     }
 
     // Delete removes lock tracking
-    if (op.operation === 'Delete' && op.isLock) {
+    if (opCategory === 'Delete' && op.isLock) {
       this._lockFirstSeen.delete(op.path);
     }
 
     this._events.push(op);
     if (this._events.length > this._maxEvents) {
       const evicted = this._events.shift();
-      // Clean _lockFirstSeen if evicted path no longer has events
       if (evicted.isLock && this._lockFirstSeen.has(evicted.path)) {
         const stillExists = this._events.some(e => e.path === evicted.path);
         if (!stillExists) this._lockFirstSeen.delete(evicted.path);
@@ -145,6 +152,16 @@ class SystemFilesTab {
     }
 
     if (this._active) this._queueRender();
+  }
+
+  /** Map granular backend operation types to display categories */
+  _opCategory(op) {
+    switch (op) {
+      case 'CreateDir': case 'CreateFile': case 'WriteFile': case 'Rename': case 'Write': return 'Write';
+      case 'DeleteFile': case 'DeleteDir': case 'Delete': return 'Delete';
+      case 'Read': case 'List': case 'Exists': return 'Read';
+      default: return 'Read';
+    }
   }
 
   // ── Render batching ──
@@ -516,7 +533,7 @@ class SystemFilesTab {
 
     // Operation type filter
     if (!this._activeOps.has('All')) {
-      ops = ops.filter(op => this._activeOps.has(op.operation));
+      ops = ops.filter(op => this._activeOps.has(op.opCategory) || this._activeOps.has(op.operation));
     }
 
     // Search filter
@@ -739,8 +756,8 @@ class SystemFilesTab {
     const dots = [];
     for (let i = 0; i < ops.length; i++) {
       const pct = ((ops[i].timestamp.getTime() - minT) / range) * 100;
-      const cls = ops[i].operation === 'Read' ? 'sf--read' :
-                  ops[i].operation === 'Write' ? 'sf--write' : 'sf--delete';
+      const cls = ops[i].opCategory === 'Read' ? 'sf--read' :
+                  ops[i].opCategory === 'Write' ? 'sf--write' : 'sf--delete';
       dots.push('<div class="sf-timeline-dot ' + cls + '" style="left:' + pct + '%"></div>');
     }
     this._dom.timelineTrack.innerHTML = dots.join('');
@@ -799,8 +816,8 @@ class SystemFilesTab {
     });
 
     // Meta
-    const opColor = op.operation === 'Read' ? 'var(--sf-op-read)' :
-                    op.operation === 'Write' ? 'var(--sf-op-write)' : 'var(--sf-op-delete)';
+    const opColor = op.opCategory === 'Read' ? 'var(--sf-op-read)' :
+                    op.opCategory === 'Write' ? 'var(--sf-op-write)' : 'var(--sf-op-delete)';
     const lockAge = this._getLockAge(op);
     let metaHtml =
       '<div class="sf-meta-item"><span class="sf-meta-label">Operation:</span><span class="sf-meta-value" style="color:' + opColor + '">' + op.operation + '</span></div>' +
@@ -1065,7 +1082,7 @@ class SystemFilesTab {
   // ── Unavailable content ──
 
   _renderUnavailable(op) {
-    const reason = op.operation === 'Delete' ? 'File was deleted \u2014 content not captured' :
+    const reason = op.opCategory === 'Delete' ? 'File was deleted \u2014 content not captured' :
       op.isLock ? 'Lock file \u2014 binary content not captured' :
       'Content was not captured for this operation';
     this._dom.detailBody.innerHTML =
