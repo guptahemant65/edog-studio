@@ -25,7 +25,7 @@ class SparkSessionsTab {
     this._expanded = new Set();
     this._detailTab = "spans";
     this._live = true;
-    this._swimCollapsed = false;
+    this._swimCollapsed = true;
     this._active = false;
 
     this._renderRAF = 0;
@@ -133,7 +133,7 @@ class SparkSessionsTab {
         </div>
       </div>
 
-      <div class="sp-swimlane" data-role="swimlane">
+      <div class="sp-swimlane collapsed" data-role="swimlane">
         <div class="sp-swimlane-head" data-role="swim-head">
           <svg class="sp-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           <span>Timeline</span>
