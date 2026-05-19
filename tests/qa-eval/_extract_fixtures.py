@@ -92,9 +92,7 @@ def git(args: list[str], *, cwd: Path = FLT_REPO) -> str:
         errors="replace",
     )
     if proc.returncode != 0:
-        raise RuntimeError(
-            f"git {' '.join(args)} failed in {cwd}: {proc.stderr.strip()}"
-        )
+        raise RuntimeError(f"git {' '.join(args)} failed in {cwd}: {proc.stderr.strip()}")
     return proc.stdout
 
 
@@ -128,10 +126,7 @@ def extract_one(pr_num: str, ref: str, base_ref: str, desc: str) -> None:
     # pr.json (metadata, always rewritten — deterministic from git)
     meta = {
         "pr_number": pr_num,
-        "pr_url": (
-            "https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable"
-            f"/pullrequest/{pr_num}"
-        ),
+        "pr_url": (f"https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/{pr_num}"),
         "repo": "workload-fabriclivetable",
         "title": subject,
         "description": desc,
@@ -146,9 +141,7 @@ def extract_one(pr_num: str, ref: str, base_ref: str, desc: str) -> None:
         "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "captured_from": f"{FLT_REPO} (local clone)",
     }
-    (out_dir / "pr.json").write_text(
-        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    (out_dir / "pr.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     # expected.json (placeholder — NEVER overwrite if a curator has touched it)
     expected_path = out_dir / "expected.json"
@@ -243,15 +236,8 @@ def main() -> int:
             meta = json.load(fh)
         total_files += meta["files_changed"]
         total_diff_bytes += meta["diff_size_bytes"]
-        print(
-            f"  PR {pr_num}: {meta['files_changed']:2d} files, "
-            f"{round(meta['diff_size_bytes']/1024, 1):>5} KB diff"
-        )
-    print(
-        f"  TOTAL:    {total_files:2d} files, "
-        f"{round(total_diff_bytes/1024, 1):>5} KB diff "
-        f"across {len(PRS)} PRs"
-    )
+        print(f"  PR {pr_num}: {meta['files_changed']:2d} files, {round(meta['diff_size_bytes'] / 1024, 1):>5} KB diff")
+    print(f"  TOTAL:    {total_files:2d} files, {round(total_diff_bytes / 1024, 1):>5} KB diff across {len(PRS)} PRs")
     return 0
 
 

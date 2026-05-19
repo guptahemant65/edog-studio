@@ -129,7 +129,7 @@ def _classify_warnings(stdout: str) -> tuple[list[str], list[str]]:
         if marker_index < 0:
             continue
         # The code starts immediately after "warning ".
-        after_marker = line[marker_index + len("warning "):].lstrip()
+        after_marker = line[marker_index + len("warning ") :].lstrip()
         code = after_marker.split(":", 1)[0].split()[0] if after_marker else ""
         if code in ALLOWED_WARNING_CODES:
             allowed.append(line.strip())
@@ -223,8 +223,7 @@ def test_no_unexpected_warnings(build_result) -> None:
     assert not unexpected, (
         "DevMode build emitted warnings outside the allow-list. Either fix "
         "the warning at the source or add the code to "
-        "ALLOWED_WARNING_CODES with a comment explaining why.\n"
-        + "\n".join(unexpected[:20]),
+        "ALLOWED_WARNING_CODES with a comment explaining why.\n" + "\n".join(unexpected[:20]),
     )
 
 
@@ -238,11 +237,10 @@ def test_devmode_files_count_matches_deploy_list() -> None:
     edog_py = (REPO_ROOT / "edog.py").read_text(encoding="utf-8")
     # Lines like:  "EdogQaTelemetry": SERVICE_PATH / "DevMode/EdogQaTelemetry.cs",
     import re
+
     registered = sorted(
         set(re.findall(r'"DevMode/([\w]+\.cs)"', edog_py)),
     )
     assert actual == registered, (
-        "DevMode/*.cs files do not match edog.py DEVMODE_FILES:\n"
-        f"  on disk:    {actual}\n"
-        f"  registered: {registered}"
+        f"DevMode/*.cs files do not match edog.py DEVMODE_FILES:\n  on disk:    {actual}\n  registered: {registered}"
     )

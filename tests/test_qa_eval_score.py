@@ -98,13 +98,9 @@ def _write_pr(
 ) -> Path:
     pr_dir = tmp_path / f"PR-{pr_number}"
     pr_dir.mkdir(parents=True)
-    (pr_dir / "expected.json").write_text(
-        json.dumps(expected, indent=2), encoding="utf-8"
-    )
+    (pr_dir / "expected.json").write_text(json.dumps(expected, indent=2), encoding="utf-8")
     if actual is not None:
-        (pr_dir / "actual.json").write_text(
-            json.dumps(actual, indent=2), encoding="utf-8"
-        )
+        (pr_dir / "actual.json").write_text(json.dumps(actual, indent=2), encoding="utf-8")
     return pr_dir
 
 
@@ -200,9 +196,7 @@ def test_expected_scenario_rejects_grounding_with_no_lines() -> None:
 def test_categories_match_csharp_enum_set() -> None:
     """If the C# ScenarioCategory enum gains/loses a value this guard
     fires until VALID_CATEGORIES is updated."""
-    csharp = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaModels.cs"
-    ).read_text(encoding="utf-8")
+    csharp = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaModels.cs").read_text(encoding="utf-8")
     for cat in score_eval.VALID_CATEGORIES:
         assert cat in csharp, f"VALID_CATEGORIES has {cat!r} but EdogQaModels.cs does not"
 
@@ -225,12 +219,8 @@ def test_match_exact_pair() -> None:
 def test_match_prefers_higher_overlap_actual_as_tiebreaker() -> None:
     """When two actuals share (category, verb), the one with greater
     changed-line overlap wins — that's the secondary tiebreaker."""
-    e = score_eval.ExpectedScenario.from_json(
-        _expected_blob(grounding=[_grounding("a.cs", [10, 11, 12, 13])])
-    )
-    a_weak = score_eval.ActualScenario.from_json(
-        _actual_blob(sid="act-weak", grounding=[_grounding("a.cs", [10])])
-    )
+    e = score_eval.ExpectedScenario.from_json(_expected_blob(grounding=[_grounding("a.cs", [10, 11, 12, 13])]))
+    a_weak = score_eval.ActualScenario.from_json(_actual_blob(sid="act-weak", grounding=[_grounding("a.cs", [10])]))
     a_strong = score_eval.ActualScenario.from_json(
         _actual_blob(sid="act-strong", grounding=[_grounding("a.cs", [10, 11, 12])])
     )
@@ -263,7 +253,9 @@ def test_match_category_mismatch_no_pair() -> None:
 
     # Same pair under strict mode: must NOT match (audit-trail).
     matched_strict, missed_strict, unmatched_strict = score_eval.match_scenarios(
-        [e_hp], [a_ec], strict_category=True,
+        [e_hp],
+        [a_ec],
+        strict_category=True,
     )
     assert matched_strict == [], "strict_category=True must reproduce pre-T4-A raw-label semantics"
     assert len(missed_strict) == 1
@@ -290,12 +282,8 @@ def test_match_zero_overlap_no_pair_even_when_same_file() -> None:
     """The decisive B5 pin: same path + same (category, verb) but no
     changed-line overlap → MUST be a miss, not a credit. The whole point
     of grounding is that the scenario lands on the modified code."""
-    e = score_eval.ExpectedScenario.from_json(
-        _expected_blob(grounding=[_grounding("a.cs", [10, 11])])
-    )
-    a = score_eval.ActualScenario.from_json(
-        _actual_blob(grounding=[_grounding("a.cs", [500, 501])])
-    )
+    e = score_eval.ExpectedScenario.from_json(_expected_blob(grounding=[_grounding("a.cs", [10, 11])]))
+    a = score_eval.ActualScenario.from_json(_actual_blob(grounding=[_grounding("a.cs", [500, 501])]))
     matched, missed, unmatched = score_eval.match_scenarios([e], [a])
     assert matched == []
     assert len(missed) == 1
@@ -348,9 +336,7 @@ def test_score_pr_precision_drops_on_extra_validated_actuals() -> None:
 
 def test_score_pr_recall_drops_on_missed_expected() -> None:
     e1 = score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-1"))
-    e2 = score_eval.ExpectedScenario.from_json(
-        _expected_blob(sid="exp-2", grounding=[_grounding("b.cs", [99])])
-    )
+    e2 = score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-2", grounding=[_grounding("b.cs", [99])]))
     a = score_eval.ActualScenario.from_json(_actual_blob(sid="act-1"))
     score = score_eval.score_pr("test", [e1, e2], [a])
     assert score.recall == 0.5
@@ -363,9 +349,7 @@ def test_score_pr_precision_per_stage_independent() -> None:
     denominator excludes it. This catches the Validator letting through
     too much OR too little."""
     e = score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-1"))
-    a_validated = score_eval.ActualScenario.from_json(
-        _actual_blob(sid="act-val", stage="validated")
-    )
+    a_validated = score_eval.ActualScenario.from_json(_actual_blob(sid="act-val", stage="validated"))
     a_emitted_only = score_eval.ActualScenario.from_json(
         _actual_blob(sid="act-emit", stage="emitted", grounding=[_grounding("c.cs", [99])])
     )
@@ -376,9 +360,7 @@ def test_score_pr_precision_per_stage_independent() -> None:
 
 
 def test_score_pr_p0_p1_recall_excludes_p2_from_denominator() -> None:
-    p0 = score_eval.ExpectedScenario.from_json(
-        _expected_blob(sid="exp-p0", criticality="P0")
-    )
+    p0 = score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-p0", criticality="P0"))
     p2 = score_eval.ExpectedScenario.from_json(
         _expected_blob(
             sid="exp-p2",
@@ -423,19 +405,13 @@ def test_aggregate_micro_weights_scenarios_equally() -> None:
         for i in range(10)
     ]
     big_actual = [
-        score_eval.ActualScenario.from_json(
-            _actual_blob(sid=f"act-big-{i}", grounding=[_grounding(f"f-{i}.cs", [10])])
-        )
+        score_eval.ActualScenario.from_json(_actual_blob(sid=f"act-big-{i}", grounding=[_grounding(f"f-{i}.cs", [10])]))
         for i in range(10)
     ]
     s_big = score_eval.score_pr("big", big_expected, big_actual)
     s_small = score_eval.score_pr(
         "small",
-        [
-            score_eval.ExpectedScenario.from_json(
-                _expected_blob(sid="exp-small", grounding=[_grounding("z.cs", [1])])
-            )
-        ],
+        [score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-small", grounding=[_grounding("z.cs", [1])]))],
         [],
     )
     agg = score_eval.aggregate([s_big, s_small])
@@ -558,7 +534,12 @@ def test_evaluate_floors_fail_when_below_absolute() -> None:
     pr = score_eval.score_pr("test", [e], [])
     agg = score_eval.aggregate([pr])
     floors = {
-        "absolute": {"corpus_recall_min": 0.5, "corpus_precision_min": 0.0, "p0_p1_recall_min": 0.0, "per_pr_recall_min": 0.0},
+        "absolute": {
+            "corpus_recall_min": 0.5,
+            "corpus_precision_min": 0.0,
+            "p0_p1_recall_min": 0.0,
+            "per_pr_recall_min": 0.0,
+        },
         "regression": {},
         "enforcement": "report_only",
     }
@@ -569,9 +550,7 @@ def test_evaluate_floors_fail_when_below_absolute() -> None:
 
 def test_evaluate_floors_fails_on_per_pr_floor() -> None:
     e1 = score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-1"))
-    e2 = score_eval.ExpectedScenario.from_json(
-        _expected_blob(sid="exp-2", grounding=[_grounding("b.cs", [5])])
-    )
+    e2 = score_eval.ExpectedScenario.from_json(_expected_blob(sid="exp-2", grounding=[_grounding("b.cs", [5])]))
     a = score_eval.ActualScenario.from_json(_actual_blob(sid="act-1"))
     pr_good = score_eval.score_pr("good", [e1], [a])
     pr_bad = score_eval.score_pr("bad", [e2], [])

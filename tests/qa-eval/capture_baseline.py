@@ -62,7 +62,8 @@ def _find_fixtures() -> list[Path]:
     if not GROUND_TRUTH_DIR.exists():
         return []
     fixtures = sorted(
-        p for p in GROUND_TRUTH_DIR.iterdir()
+        p
+        for p in GROUND_TRUTH_DIR.iterdir()
         if p.is_dir() and (p / "pr.json").is_file() and (p / "diff.patch").is_file()
     )
     return fixtures
@@ -73,7 +74,7 @@ def _parse_harness_output(stdout: str) -> dict | None:
     end = stdout.find(HARNESS_JSON_END)
     if begin < 0 or end < 0 or end <= begin:
         return None
-    body = stdout[begin + len(HARNESS_JSON_BEGIN):end].strip()
+    body = stdout[begin + len(HARNESS_JSON_BEGIN) : end].strip()
     try:
         return json.loads(body)
     except json.JSONDecodeError:
@@ -197,36 +198,40 @@ def main(argv: list[str] | None = None) -> int:
             pr_meta = {}
             with contextlib.suppress(Exception):
                 pr_meta = json.loads((fx / "pr.json").read_text(encoding="utf-8"))
-            pr_records.append({
-                "pr_number": str(pr_meta.get("pr_number") or fx.name),
-                "status": "DRY_RUN",
-                "diff_bytes": None,
-                "architect_elapsed_ms": None,
-                "architect_input_tokens": None,
-                "architect_output_tokens": None,
-                "architect_reasoning_tokens": None,
-                "architect_plan_outcome": None,
-                "architect_evidence_count": None,
-                "architect_sketches": None,
-                "editor_elapsed_ms": None,
-                "editor_input_tokens": None,
-                "editor_output_tokens": None,
-                "scenarios_emitted": None,
-                "scenarios_after_validation": None,
-                "scenarios_quarantined": None,
-                "scenarios_after_projection": None,
-                "scenarios_rejected_in_projection": None,
-                "grounding_violations": None,
-                "schema_violations": None,
-                "recall": None,
-                "precision": None,
-                "errors": [],
-            })
+            pr_records.append(
+                {
+                    "pr_number": str(pr_meta.get("pr_number") or fx.name),
+                    "status": "DRY_RUN",
+                    "diff_bytes": None,
+                    "architect_elapsed_ms": None,
+                    "architect_input_tokens": None,
+                    "architect_output_tokens": None,
+                    "architect_reasoning_tokens": None,
+                    "architect_plan_outcome": None,
+                    "architect_evidence_count": None,
+                    "architect_sketches": None,
+                    "editor_elapsed_ms": None,
+                    "editor_input_tokens": None,
+                    "editor_output_tokens": None,
+                    "scenarios_emitted": None,
+                    "scenarios_after_validation": None,
+                    "scenarios_quarantined": None,
+                    "scenarios_after_projection": None,
+                    "scenarios_rejected_in_projection": None,
+                    "grounding_violations": None,
+                    "schema_violations": None,
+                    "recall": None,
+                    "precision": None,
+                    "errors": [],
+                }
+            )
     else:
         if not args.harness_dll.exists():
-            print(f"harness DLL not found: {args.harness_dll}\n"
-                  "Build first: `cd tests/dotnet/EdogQaE2E.Tests && dotnet build -p:FltBin=$EDOG_FLT_BIN`",
-                  file=sys.stderr)
+            print(
+                f"harness DLL not found: {args.harness_dll}\n"
+                "Build first: `cd tests/dotnet/EdogQaE2E.Tests && dotnet build -p:FltBin=$EDOG_FLT_BIN`",
+                file=sys.stderr,
+            )
             return 2
 
         for fx in fixtures:
@@ -234,8 +239,10 @@ def main(argv: list[str] | None = None) -> int:
             harness_result = _run_harness_for_fixture(args.harness_dll, fx, args.timeout_s)
             pr_records.append(_project_pr_record(fx, harness_result))
 
-    overall_status = "DRY_RUN" if args.dry_run else (
-        "CAPTURED" if all(r.get("status") == "OK" for r in pr_records) else "CAPTURED_WITH_ERRORS"
+    overall_status = (
+        "DRY_RUN"
+        if args.dry_run
+        else ("CAPTURED" if all(r.get("status") == "OK" for r in pr_records) else "CAPTURED_WITH_ERRORS")
     )
 
     baseline = {

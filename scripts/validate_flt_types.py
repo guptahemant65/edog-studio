@@ -82,11 +82,13 @@ def validate(flt_repo: Path) -> list[dict[str, str]]:
         if any(flt_type.startswith(p) for p in _EXTERNAL_PREFIXES):
             continue
         if short not in declared:
-            missing.append({
-                "interceptor": entry["name"],
-                "type": flt_type,
-                "shortName": short,
-            })
+            missing.append(
+                {
+                    "interceptor": entry["name"],
+                    "type": flt_type,
+                    "shortName": short,
+                }
+            )
 
     for entry in manifest.get("additionalDependencies", []):
         short = entry["shortName"]
@@ -96,11 +98,13 @@ def validate(flt_repo: Path) -> list[dict[str, str]]:
         if any(flt_type.startswith(p) for p in _EXTERNAL_PREFIXES):
             continue
         if short not in declared:
-            missing.append({
-                "dependency": entry["name"],
-                "type": flt_type,
-                "shortName": short,
-            })
+            missing.append(
+                {
+                    "dependency": entry["name"],
+                    "type": flt_type,
+                    "shortName": short,
+                }
+            )
 
     return missing
 
@@ -119,7 +123,9 @@ def main() -> int:
     missing = validate(flt_repo)
 
     if not missing:
-        print(f"OK: All {len(json.loads(MANIFEST_PATH.read_text(encoding='utf-8')).get('interceptors', []))} interceptor types found in FLT repo")
+        print(
+            f"OK: All {len(json.loads(MANIFEST_PATH.read_text(encoding='utf-8')).get('interceptors', []))} interceptor types found in FLT repo"
+        )
         return 0
 
     print(f"\nFAILED: {len(missing)} type(s) not found in FLT repo:\n")

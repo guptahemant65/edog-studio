@@ -91,13 +91,16 @@ class PrCandidate:
 def _run_git(repo: Path, *args: str) -> str:
     cmd = ["git", "-C", str(repo), "-c", "core.autocrlf=false", "-c", "diff.external=", *args]
     proc = subprocess.run(
-        cmd, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", check=False,
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"git command failed (exit {proc.returncode}): {' '.join(cmd)}\n"
-            f"stderr: {(proc.stderr or '')[-2000:]}"
+            f"git command failed (exit {proc.returncode}): {' '.join(cmd)}\nstderr: {(proc.stderr or '')[-2000:]}"
         )
     return proc.stdout or ""
 
@@ -192,6 +195,7 @@ def _classify_change_shape(files: list[FileChange]) -> str:
     # Docs / generated / dependency PRs — heavily downranked.
     if frac(lambda p: p.endswith((".md", ".txt", ".html")) or "/docs/" in p) >= 0.6:
         return "docs"
+
     # Config / dependency files: package version files, build config, CI/workflow JSON.
     # Dependabot PRs and CI-only PRs land here. Catches Directory.Packages.props,
     # Directory.Build.props, *.csproj, swagger contracts, and anything under .github/.
@@ -204,6 +208,7 @@ def _classify_change_shape(files: list[FileChange]) -> str:
             or p.startswith(".github/")
             or "/.github/" in p
         )
+
     if frac(_is_config) >= 0.6:
         return "generated_or_config"
     if frac(lambda p: "test" in p or p.endswith("tests.cs")) >= 0.6:
@@ -449,14 +454,16 @@ def build_manifest(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Pick FLT PR candidates for gold-corpus expansion (T4-C-prep).")
-    ap.add_argument("--flt-repo", type=Path, default=DEFAULT_FLT_REPO,
-                    help=f"Path to local FLT clone (default: {DEFAULT_FLT_REPO})")
-    ap.add_argument("--since", default="2 months ago",
-                    help="git log --since filter (default: '2 months ago')")
-    ap.add_argument("--target-additions", type=int, default=9,
-                    help="Number of new PRs to pick (default: 9 -> total corpus 15)")
-    ap.add_argument("--output", type=Path, default=DEFAULT_OUTPUT,
-                    help=f"Manifest output path (default: {DEFAULT_OUTPUT})")
+    ap.add_argument(
+        "--flt-repo", type=Path, default=DEFAULT_FLT_REPO, help=f"Path to local FLT clone (default: {DEFAULT_FLT_REPO})"
+    )
+    ap.add_argument("--since", default="2 months ago", help="git log --since filter (default: '2 months ago')")
+    ap.add_argument(
+        "--target-additions", type=int, default=9, help="Number of new PRs to pick (default: 9 -> total corpus 15)"
+    )
+    ap.add_argument(
+        "--output", type=Path, default=DEFAULT_OUTPUT, help=f"Manifest output path (default: {DEFAULT_OUTPUT})"
+    )
     args = ap.parse_args()
 
     if not args.flt_repo.exists():

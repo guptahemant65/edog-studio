@@ -71,13 +71,16 @@ DIFF_FLAGS = (
 def _run_git(repo: Path, *args: str) -> str:
     cmd = ["git", "-C", str(repo), "-c", "core.autocrlf=false", "-c", "diff.external=", *args]
     proc = subprocess.run(
-        cmd, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", check=False,
+        cmd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"git command failed (exit {proc.returncode}): {' '.join(cmd)}\n"
-            f"stderr: {(proc.stderr or '')[-2000:]}"
+            f"git command failed (exit {proc.returncode}): {' '.join(cmd)}\nstderr: {(proc.stderr or '')[-2000:]}"
         )
     return proc.stdout or ""
 
@@ -92,8 +95,12 @@ def _git_remote_url(repo: Path) -> str:
 def _git_version() -> str:
     try:
         proc = subprocess.run(
-            ["git", "--version"], capture_output=True, text=True,
-            encoding="utf-8", errors="replace", check=False,
+            ["git", "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
         )
         return (proc.stdout or "").strip()
     except OSError:
@@ -232,18 +239,12 @@ def _make_notes_md(
     lines.append("")
     lines.append("## Expected scenarios (hand-grade)")
     lines.append("")
-    lines.append(
-        "_Pending: enumerate the scenarios a production-grade LLM SHOULD generate"
-    )
-    lines.append(
-        "for this diff, with grounding evidence. These become `expected.json`._"
-    )
+    lines.append("_Pending: enumerate the scenarios a production-grade LLM SHOULD generate")
+    lines.append("for this diff, with grounding evidence. These become `expected.json`._")
     lines.append("")
     lines.append("## Rejected alternatives")
     lines.append("")
-    lines.append(
-        "_Pending: scenarios the LLM might generate that should be rejected"
-    )
+    lines.append("_Pending: scenarios the LLM might generate that should be rejected")
     lines.append("(over-grounded, hallucinated, irrelevant, low-value)._")
     lines.append("")
     lines.append("## Curator workflow")
@@ -252,14 +253,22 @@ def _make_notes_md(
     lines.append("2. For each behavioural change, draft a scenario:")
     lines.append("   - `behavior_key`: stable snake_case identifier for the behavior.")
     lines.append("   - `category`: one of HappyPath, EdgeCase, ErrorPath, Regression, Performance.")
-    lines.append("   - `verb`: one of FieldMatch, FieldRangeMatch, EventPresent, EventAbsent, … (closed 16-verb vocabulary; see EdogQaLlmClient.cs).")
+    lines.append(
+        "   - `verb`: one of FieldMatch, FieldRangeMatch, EventPresent, EventAbsent, … (closed 16-verb vocabulary; see EdogQaLlmClient.cs)."
+    )
     lines.append("   - `title`: one-line summary of what the scenario asserts.")
     lines.append("   - `rationale`: WHY this scenario matters — link to the load-bearing change.")
     lines.append("   - `criticality`: P0 / P1 / P2 / P3.")
     lines.append("   - `discovered_by`: 'diff_inspection' for hand-graded scenarios.")
-    lines.append("   - `grounding_changed_lines`: list of `{path, side, lines}` pointing at the exact lines that motivate the scenario.")
-    lines.append("3. Promote `expected.json` from `PENDING_HUMAN_GRADING` to `GRADED_PASS_1` by filling `curator_state`, `curated_at`, `curator`, `pass_1_basis`.")
-    lines.append("4. Once promoted, run `python tests/qa-eval/capture_v2_actuals.py --fixture PR-{pr_number}` to capture the LLM's actual output (paid).")
+    lines.append(
+        "   - `grounding_changed_lines`: list of `{path, side, lines}` pointing at the exact lines that motivate the scenario."
+    )
+    lines.append(
+        "3. Promote `expected.json` from `PENDING_HUMAN_GRADING` to `GRADED_PASS_1` by filling `curator_state`, `curated_at`, `curator`, `pass_1_basis`."
+    )
+    lines.append(
+        "4. Once promoted, run `python tests/qa-eval/capture_v2_actuals.py --fixture PR-{pr_number}` to capture the LLM's actual output (paid)."
+    )
     lines.append("5. Run `python tests/qa-eval/score_eval.py` to re-score the corpus.")
     lines.append("")
     return "\n".join(lines)
@@ -281,9 +290,7 @@ def capture(
     target = out_dir or (GROUND_TRUTH_DIR / f"PR-{pr_number}")
 
     if target.exists() and not overwrite:
-        raise FileExistsError(
-            f"Fixture dir already exists: {target}. Pass --overwrite to replace it."
-        )
+        raise FileExistsError(f"Fixture dir already exists: {target}. Pass --overwrite to replace it.")
 
     # Resolve SHAs against the actual repo state.
     head_sha = _resolve_sha(flt_repo, merge_commit_sha)
@@ -349,15 +356,14 @@ def capture(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Capture a PR fixture for the gold corpus (T4-C-prep).")
-    ap.add_argument("--flt-repo", type=Path, default=DEFAULT_FLT_REPO,
-                    help=f"Path to local FLT clone (default: {DEFAULT_FLT_REPO})")
+    ap.add_argument(
+        "--flt-repo", type=Path, default=DEFAULT_FLT_REPO, help=f"Path to local FLT clone (default: {DEFAULT_FLT_REPO})"
+    )
     ap.add_argument("--pr-number", help="PR number (single-PR mode)")
     ap.add_argument("--merge-commit-sha", help="Merge commit SHA (single-PR mode)")
-    ap.add_argument("--from-manifest", type=Path,
-                    help="Read selected entries from a corpus_candidates.json manifest")
+    ap.add_argument("--from-manifest", type=Path, help="Read selected entries from a corpus_candidates.json manifest")
     ap.add_argument("--dry-run", action="store_true", help="Print plan, write nothing")
-    ap.add_argument("--overwrite", action="store_true",
-                    help="Overwrite existing fixture dirs (default: refuse)")
+    ap.add_argument("--overwrite", action="store_true", help="Overwrite existing fixture dirs (default: refuse)")
     args = ap.parse_args()
 
     if not args.flt_repo.exists():
@@ -390,8 +396,7 @@ def main() -> int:
         return 0
 
     if not (args.pr_number and args.merge_commit_sha):
-        print("ERROR: pass --from-manifest, OR (--pr-number AND --merge-commit-sha)",
-              file=sys.stderr)
+        print("ERROR: pass --from-manifest, OR (--pr-number AND --merge-commit-sha)", file=sys.stderr)
         return 2
 
     if not re.fullmatch(r"\d+", args.pr_number):

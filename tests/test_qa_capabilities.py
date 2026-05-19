@@ -316,8 +316,7 @@ def test_chaos_pipeline_wire_gate_constant(registry_src: str) -> None:
     pinned by ``test_chaos_support_short_circuits_on_pipeline_wire``.
     """
     assert "private const bool HttpChaosPipelineWired = true;" in registry_src, (
-        "Stage 2 must set HttpChaosPipelineWired=true so chaos rules can "
-        "be honoured when EDOG_QA_CHAOS_HTTP=1."
+        "Stage 2 must set HttpChaosPipelineWired=true so chaos rules can be honoured when EDOG_QA_CHAOS_HTTP=1."
     )
 
 
@@ -327,9 +326,7 @@ def test_chaos_support_short_circuits_on_pipeline_wire(registry_src: str) -> Non
     re-enable silent passes."""
     body = registry_src.split("IsChaosFaultSupported(", 1)[1]
     body = body.split("public static", 1)[0]
-    assert "HttpChaosPipelineWired" in body, (
-        "IsChaosFaultSupported must consult HttpChaosPipelineWired in its body"
-    )
+    assert "HttpChaosPipelineWired" in body, "IsChaosFaultSupported must consult HttpChaosPipelineWired in its body"
     # The pipeline check must precede the env-var check; otherwise the env
     # var alone would gate support, which is the regression we're guarding.
     wire_idx = body.find("HttpChaosPipelineWired")
@@ -379,14 +376,12 @@ def test_flag_teardown_preserves_external_overrides(exec_engine_src: str) -> Non
     sig = "public Task ClearOverridesForScenarioAsync(string scenarioId)"
     clear_idx = exec_engine_src.find(sig)
     assert clear_idx > 0, f"Method definition not found: {sig}"
-    body = exec_engine_src[clear_idx:clear_idx + 4000]
+    body = exec_engine_src[clear_idx : clear_idx + 4000]
     assert "OriginalValue" in body, (
         "ClearOverridesForScenarioAsync must read OriginalValue to decide "
         "whether to remove a key or leave it for its external owner."
     )
-    assert "HasValue" in body, (
-        "Teardown should branch on OriginalValue.HasValue (pre-existing ⇒ preserve)."
-    )
+    assert "HasValue" in body, "Teardown should branch on OriginalValue.HasValue (pre-existing ⇒ preserve)."
 
 
 # ─── 10. Stage 2 — EdogHttpPipelineHandler wires chaos fault store ────────
@@ -411,9 +406,7 @@ def test_pipeline_consults_fault_store(pipeline_src: str) -> None:
     # branches can pre-empt or wrap the upstream invocation.
     tm_idx = pipeline_src.find("EdogHttpFaultStore.TryMatchFault")
     base_idx = pipeline_src.find("base.SendAsync")
-    assert 0 <= tm_idx < base_idx, (
-        "TryMatchFault must come BEFORE base.SendAsync in SendAsync"
-    )
+    assert 0 <= tm_idx < base_idx, "TryMatchFault must come BEFORE base.SendAsync in SendAsync"
 
 
 def test_pipeline_synthesises_http_error(pipeline_src: str) -> None:
@@ -425,8 +418,7 @@ def test_pipeline_synthesises_http_error(pipeline_src: str) -> None:
 
 def test_pipeline_latency_uses_task_delay(pipeline_src: str) -> None:
     """Latency fault delays via Task.Delay before forwarding."""
-    assert "Task.Delay(chaosFault.LatencyMs" in pipeline_src or \
-           "Task.Delay(fault.LatencyMs" in pipeline_src, (
+    assert "Task.Delay(chaosFault.LatencyMs" in pipeline_src or "Task.Delay(fault.LatencyMs" in pipeline_src, (
         "Latency fault must use Task.Delay with the configured LatencyMs"
     )
 
@@ -451,9 +443,7 @@ def test_pipeline_publishes_chaos_metadata(pipeline_src: str) -> None:
         next_method_idx = pipeline_src.find("\n    }\n}", publish_helper_idx)
     body = pipeline_src[publish_helper_idx:next_method_idx]
 
-    assert "chaos = new" in body, (
-        "Fault-matched publish path must attach a chaos metadata object."
-    )
+    assert "chaos = new" in body, "Fault-matched publish path must attach a chaos metadata object."
 
     # Locate the else branch of the if (chaosFault != null) dispatch and
     # ensure it does NOT assemble a `chaos = ...` property. This pins the

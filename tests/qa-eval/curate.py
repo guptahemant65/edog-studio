@@ -70,13 +70,15 @@ def _cmd_list(args: argparse.Namespace) -> int:
         exp = _load_json(exp_path)
         has_actual = (fx / "actual.json").exists()
         has_plan = (fx / "architect_plan.json").exists()
-        rows.append((
-            fx.name,
-            exp.get("curator_state", "?"),
-            len(exp.get("scenarios", []) or []),
-            "Y" if has_actual else "-",
-            "Y" if has_plan else "-",
-        ))
+        rows.append(
+            (
+                fx.name,
+                exp.get("curator_state", "?"),
+                len(exp.get("scenarios", []) or []),
+                "Y" if has_actual else "-",
+                "Y" if has_plan else "-",
+            )
+        )
 
     if args.pending:
         rows = [r for r in rows if r[1] == "PENDING_HUMAN_GRADING"]
@@ -101,9 +103,7 @@ def _scenario_template(index: int, pr_number: str) -> dict:
         "rationale": "REPLACE_ME — why this matters, link to the load-bearing change",
         "criticality": "P1",
         "discovered_by": "diff_inspection",
-        "grounding_changed_lines": [
-            {"path": "REPLACE_ME/path/relative/to/repo.cs", "side": "right", "lines": [0]}
-        ],
+        "grounding_changed_lines": [{"path": "REPLACE_ME/path/relative/to/repo.cs", "side": "right", "lines": [0]}],
     }
 
 
@@ -111,19 +111,21 @@ def _seed_from_actual(actual: dict, pr_number: str) -> list[dict]:
     """Carry over fields from the LLM's actual.json for the anchored path."""
     out = []
     for i, sc in enumerate(actual.get("scenarios", []) or [], start=1):
-        out.append({
-            "id": f"{pr_number}-s{i:02d}",
-            "behavior_key": "REPLACE_ME_stable_snake_case",
-            "category": sc.get("category", "HappyPath"),
-            "verb": sc.get("verb", "FieldMatch"),
-            "title": sc.get("topic") or sc.get("title") or "REPLACE_ME",
-            "rationale": "REPLACE_ME — anchored from LLM scenario; confirm grounding",
-            "criticality": "P1",
-            "discovered_by": "diff_inspection",
-            "grounding_changed_lines": sc.get("grounding_changed_lines", []),
-            "_source_llm_stage": sc.get("stage"),
-            "_source_llm_id": sc.get("id"),
-        })
+        out.append(
+            {
+                "id": f"{pr_number}-s{i:02d}",
+                "behavior_key": "REPLACE_ME_stable_snake_case",
+                "category": sc.get("category", "HappyPath"),
+                "verb": sc.get("verb", "FieldMatch"),
+                "title": sc.get("topic") or sc.get("title") or "REPLACE_ME",
+                "rationale": "REPLACE_ME — anchored from LLM scenario; confirm grounding",
+                "criticality": "P1",
+                "discovered_by": "diff_inspection",
+                "grounding_changed_lines": sc.get("grounding_changed_lines", []),
+                "_source_llm_stage": sc.get("stage"),
+                "_source_llm_id": sc.get("id"),
+            }
+        )
     return out
 
 
@@ -217,7 +219,9 @@ def _validate_scenario(sc: dict, idx: int) -> list[str]:
                 errors.append(f"scenarios[{idx}].grounding_changed_lines[{j}].path placeholder/empty")
             lines = anchor.get("lines", [])
             if not isinstance(lines, list) or len(lines) == 0 or 0 in lines:
-                errors.append(f"scenarios[{idx}].grounding_changed_lines[{j}].lines must be a non-empty list of positive ints")
+                errors.append(
+                    f"scenarios[{idx}].grounding_changed_lines[{j}].lines must be a non-empty list of positive ints"
+                )
     return errors
 
 
@@ -288,22 +292,27 @@ def main(argv: list[str] | None = None) -> int:
 
     p_prep = sub.add_parser("prepare", help="write a draft expected.json + open editor")
     p_prep.add_argument("pr_number", help="PR number (with or without PR- prefix)")
-    p_prep.add_argument("--from-actual", action="store_true",
-                        help="seed scenarios from LLM actual.json (anchored mode)")
-    p_prep.add_argument("--empty-rows", type=int, default=3,
-                        help="number of blank scenario templates to emit in blind mode (default 3)")
+    p_prep.add_argument(
+        "--from-actual", action="store_true", help="seed scenarios from LLM actual.json (anchored mode)"
+    )
+    p_prep.add_argument(
+        "--empty-rows", type=int, default=3, help="number of blank scenario templates to emit in blind mode (default 3)"
+    )
     p_prep.add_argument("--no-editor", action="store_true", help="skip launching $EDITOR")
-    p_prep.add_argument("--force", action="store_true",
-                        help="re-prepare a fixture that is already GRADED_PASS_1 (destructive)")
+    p_prep.add_argument(
+        "--force", action="store_true", help="re-prepare a fixture that is already GRADED_PASS_1 (destructive)"
+    )
     p_prep.set_defaults(fn=_cmd_prepare)
 
     p_fin = sub.add_parser("finalize", help="validate draft and flip state to GRADED_PASS_1")
     p_fin.add_argument("pr_number", help="PR number (with or without PR- prefix)")
-    p_fin.add_argument("--basis", choices=sorted(VALID_BASIS),
-                       help="override pass_1_basis (defaults to whatever prepare set)")
+    p_fin.add_argument(
+        "--basis", choices=sorted(VALID_BASIS), help="override pass_1_basis (defaults to whatever prepare set)"
+    )
     p_fin.add_argument("--curator", help="curator name (defaults to $EDOG_CURATOR or 'hemant')")
-    p_fin.add_argument("--allow-empty", action="store_true",
-                       help="allow finalizing a fixture with 0 scenarios (no-test anchor)")
+    p_fin.add_argument(
+        "--allow-empty", action="store_true", help="allow finalizing a fixture with 0 scenarios (no-test anchor)"
+    )
     p_fin.set_defaults(fn=_cmd_finalize)
 
     args = ap.parse_args(argv)

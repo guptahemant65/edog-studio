@@ -45,8 +45,7 @@ def models_src() -> str:
 
 def test_store_file_exists() -> None:
     assert STORE_PATH.exists(), (
-        "EdogQaRunStore.cs is the entire P7 persistence layer — "
-        "deleting it removes server-side history."
+        "EdogQaRunStore.cs is the entire P7 persistence layer — deleting it removes server-side history."
     )
 
 
@@ -64,9 +63,7 @@ def test_store_is_registered_for_deployment() -> None:
     not be deployed; the C# build gate catches the mismatch but only
     after the fact — this test fires immediately."""
     edog_src = (REPO_ROOT / "edog.py").read_text(encoding="utf-8")
-    assert '"EdogQaRunStore"' in edog_src, (
-        "EdogQaRunStore must appear in edog.py DEVMODE_FILES."
-    )
+    assert '"EdogQaRunStore"' in edog_src, "EdogQaRunStore must appear in edog.py DEVMODE_FILES."
 
 
 # ───────────────────────────────────────────────────────────────────
@@ -153,7 +150,7 @@ def test_persistence_never_throws(store_src: str) -> None:
     """All write paths catch Exception and log; QA execution must never
     fail because the history file is wedged."""
     assert "catch (Exception ex)" in store_src
-    assert 'non-fatal' in store_src.lower()
+    assert "non-fatal" in store_src.lower()
 
 
 # ───────────────────────────────────────────────────────────────────
@@ -215,7 +212,7 @@ def test_compare_matches_hash_before_id(store_src: str) -> None:
     """ScenarioHash is the authoritative match key; ScenarioId is the
     fallback. The reverse — ID-first — would silently mis-attribute
     flips after a scenario rename."""
-    assert 'KeyOf' in store_src
+    assert "KeyOf" in store_src
     # Key prefix indicates which strategy matched; the comparison test
     # in the behavioural harness pins the actual semantics.
     assert '"h:"' in store_src and '"i:"' in store_src
@@ -263,8 +260,7 @@ def test_hub_persists_record_after_history(hub_src: str) -> None:
     assert add_to_history_idx > 0
     assert persist_idx > 0
     assert persist_idx > add_to_history_idx, (
-        "EdogQaRunStore.Add must be invoked AFTER AddToHistory so the "
-        "in-memory cache is updated first."
+        "EdogQaRunStore.Add must be invoked AFTER AddToHistory so the in-memory cache is updated first."
     )
 
 
@@ -273,7 +269,7 @@ def test_hub_persists_inside_try_catch(hub_src: str) -> None:
     EdogQaRunStore.Add call is wrapped in try/catch as a final safety
     net even though the store itself never throws."""
     idx = hub_src.find("EdogQaRunStore.Add(new QaRunRecord")
-    window = hub_src[max(0, idx - 200): idx + 1200]
+    window = hub_src[max(0, idx - 200) : idx + 1200]
     assert "try" in window
     assert "catch (Exception persistEx)" in window
     assert "non-fatal" in window.lower()
@@ -301,20 +297,18 @@ def test_hub_hydrates_history_once(hub_src: str) -> None:
     # Double-check: read disk OUTSIDE the state lock to avoid stalling
     # SignalR threads on file I/O.
     hydration_idx = hub_src.find("private static void HydrateHistoryFromStore")
-    body = hub_src[hydration_idx: hydration_idx + 2000]
+    body = hub_src[hydration_idx : hydration_idx + 2000]
     list_idx = body.find("EdogQaRunStore.ListAllSummaries()")
     state_lock_idx = body.find("lock (_lock)")
     assert list_idx > 0 and state_lock_idx > 0, body[:400]
-    assert list_idx < state_lock_idx, (
-        "Disk read must happen BEFORE the state lock is taken."
-    )
+    assert list_idx < state_lock_idx, "Disk read must happen BEFORE the state lock is taken."
 
 
 def test_hub_run_detail_falls_back_to_disk(hub_src: str) -> None:
     """If a run is not in the in-memory dictionary (e.g. it predates
     the current FLT process), GetRunResult must fall back to disk."""
     idx = hub_src.find("internal static QaRunResult GetRunResult")
-    body = hub_src[idx: idx + 1400]
+    body = hub_src[idx : idx + 1400]
     assert "EdogQaRunStore.Get(runId)" in body, (
         "GetRunResult must consult EdogQaRunStore when the in-memory "
         "cache misses, otherwise history detail breaks after restart."

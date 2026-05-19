@@ -37,12 +37,18 @@ def main() -> int:
 
     for pr, (expected, actuals) in corpus.items():
         strict_pairs, _, _ = _bipartite_relaxed(
-            expected, actuals,
-            require_category=True, require_verb=True, min_overlap=1,
+            expected,
+            actuals,
+            require_category=True,
+            require_verb=True,
+            min_overlap=1,
         )
         relaxed_pairs, _, _ = _bipartite_relaxed(
-            expected, actuals,
-            require_category=False, require_verb=True, min_overlap=1,
+            expected,
+            actuals,
+            require_category=False,
+            require_verb=True,
+            min_overlap=1,
         )
         strict_ids = {(m.expected.id, m.actual.id) for m in strict_pairs}
         relaxed_ids = {(m.expected.id, m.actual.id) for m in relaxed_pairs}
@@ -60,10 +66,17 @@ def main() -> int:
             print(f"    [{recovered}] expected={m.expected.id} cat={m.expected.category!r:<22}")
             print(f"                  actual  ={m.actual.id} cat={m.actual.category!r:<22} verb={m.actual.verb!r}")
             print(f"                  overlap_orig={m.original_overlap_count}, overlap_exp={m.overlap_count}")
-            drift_pairs.append((
-                pr, m.expected.id, m.expected.category, m.actual.category,
-                m.actual.verb, m.original_overlap_count, m.overlap_count,
-            ))
+            drift_pairs.append(
+                (
+                    pr,
+                    m.expected.id,
+                    m.expected.category,
+                    m.actual.category,
+                    m.actual.verb,
+                    m.original_overlap_count,
+                    m.overlap_count,
+                )
+            )
             if m.expected.id not in strict_matched_exp:
                 total += 1
         print()

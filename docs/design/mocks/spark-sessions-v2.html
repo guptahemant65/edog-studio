@@ -1,0 +1,3916 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EDOG Studio — Spark Sessions · Trace Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style id="tokens">
+:root {
+  --bg: #f8f9fc;
+  --bg-2: #ffffff;
+  --bg-3: #f1f3f9;
+  --bg-4: #e8ebf3;
+  --bg-hover: rgba(109, 92, 255, 0.06);
+  --bg-active: rgba(109, 92, 255, 0.10);
+  --surface: #ffffff;
+  --surface-2: #fbfcfe;
+  --surface-elevated: #ffffff;
+  --line: #e5e7ef;
+  --line-2: #eef0f6;
+  --line-strong: #d4d8e4;
+  --text: #1a1d27;
+  --text-2: #555a6b;
+  --text-3: #8b91a3;
+  --text-4: #b4b9c9;
+  --accent: #6d5cff;
+  --accent-2: #8b7dff;
+  --accent-soft: rgba(109, 92, 255, 0.10);
+  --accent-line: rgba(109, 92, 255, 0.22);
+  --green: #18a058;
+  --green-soft: rgba(24, 160, 88, 0.12);
+  --amber: #e5940c;
+  --amber-soft: rgba(229, 148, 12, 0.12);
+  --red: #e5453b;
+  --red-soft: rgba(229, 69, 59, 0.10);
+  --blue: #2d7ff9;
+  --blue-soft: rgba(45, 127, 249, 0.12);
+  --purple: #a855f7;
+  --purple-soft: rgba(168, 85, 247, 0.12);
+  --teal: #0d9488;
+  --teal-soft: rgba(13, 148, 136, 0.12);
+  --cyan: #06b6d4;
+  --cyan-soft: rgba(6, 182, 212, 0.12);
+  --pink: #ec4899;
+  --pink-soft: rgba(236, 72, 153, 0.12);
+  --grey: #94a3b8;
+  --grey-soft: rgba(148, 163, 184, 0.12);
+
+  --shadow-ambient: 0 1px 2px rgba(15, 17, 23, 0.04);
+  --shadow-key:     0 2px 8px rgba(15, 17, 23, 0.06);
+  --shadow-card: var(--shadow-ambient), var(--shadow-key);
+  --shadow-lift: 0 1px 2px rgba(15,17,23,0.05), 0 8px 24px rgba(15,17,23,0.10);
+  --shadow-panel: 0 2px 4px rgba(15,17,23,0.05), 0 24px 64px rgba(15,17,23,0.14);
+  --shadow-focus: 0 0 0 3px rgba(109, 92, 255, 0.18);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.6);
+
+  --r4: 4px; --r6: 6px; --r8: 8px; --r10: 10px; --r12: 12px; --r14: 14px; --r16: 16px; --r100: 100px;
+
+  --transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --header-h: 44px;
+  --tabbar-h: 40px;
+  --toolbar-h: 48px;
+  --swimlane-h: 168px;
+  --footer-h: 32px;
+}
+[data-theme="dark"] {
+  --bg: #0f1117;
+  --bg-2: #161923;
+  --bg-3: #1c1f2b;
+  --bg-4: #232735;
+  --bg-hover: rgba(139, 125, 255, 0.10);
+  --bg-active: rgba(139, 125, 255, 0.16);
+  --surface: #161923;
+  --surface-2: #1a1d29;
+  --surface-elevated: #1e2230;
+  --line: #262a38;
+  --line-2: #1f2331;
+  --line-strong: #323748;
+  --text: #e6e8ef;
+  --text-2: #a4a9b9;
+  --text-3: #6e7384;
+  --text-4: #4a4f60;
+  --accent: #8b7dff;
+  --accent-2: #a99dff;
+  --accent-soft: rgba(139, 125, 255, 0.14);
+  --accent-line: rgba(139, 125, 255, 0.30);
+  --green: #22c55e; --green-soft: rgba(34, 197, 94, 0.14);
+  --amber: #f59e0b; --amber-soft: rgba(245, 158, 11, 0.14);
+  --red:   #ef4444; --red-soft:   rgba(239, 68, 68, 0.14);
+  --blue:  #3b82f6; --blue-soft:  rgba(59, 130, 246, 0.14);
+  --purple:#c084fc; --purple-soft:rgba(192, 132, 252, 0.14);
+  --teal:  #14b8a6; --teal-soft:  rgba(20, 184, 166, 0.14);
+  --cyan:  #22d3ee; --cyan-soft:  rgba(34, 211, 238, 0.14);
+  --pink:  #f472b6; --pink-soft:  rgba(244, 114, 182, 0.14);
+  --grey:  #64748b; --grey-soft:  rgba(100, 116, 139, 0.18);
+
+  --shadow-ambient: 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-key:     0 4px 16px rgba(0,0,0,0.40);
+  --shadow-card: var(--shadow-ambient), var(--shadow-key);
+  --shadow-lift: 0 2px 6px rgba(0,0,0,0.35), 0 16px 48px rgba(0,0,0,0.45);
+  --shadow-panel: 0 4px 8px rgba(0,0,0,0.35), 0 32px 80px rgba(0,0,0,0.55);
+  --shadow-focus: 0 0 0 3px rgba(139,125,255,0.30);
+  --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+</style>
+<style id="layout">
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv11', 'ss01';
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input { font: inherit; color: inherit; background: none; border: none; outline: none; }
+input::placeholder { color: var(--text-4); }
+code, .mono { font-family: var(--font-mono); font-feature-settings: 'liga' 0; }
+::selection { background: var(--accent-soft); color: var(--text); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 100px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-4); }
+
+#root {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: var(--tabbar-h) var(--toolbar-h) auto 1fr var(--footer-h);
+  grid-template-areas:
+    "tabbar"
+    "toolbar"
+    "swimlane"
+    "content"
+    "footer";
+}
+
+/* ===== TAB BAR ===== */
+.tab-bar {
+  grid-area: tabbar;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  padding: 0 12px;
+  gap: 2px;
+  position: relative;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 100%;
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+  position: relative;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); background: var(--bg-hover); }
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.tab .pill-count {
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--r100);
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
+  transition: background var(--transition);
+}
+.tab.active .pill-count { background: var(--accent-soft); color: var(--accent); }
+.tab .live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 var(--green);
+  animation: liveDot 1.8s ease-in-out infinite;
+}
+.tab-bar .spacer { flex: 1; }
+.tab-bar .controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+.icon-btn {
+  width: 30px; height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r8);
+  color: var(--text-3);
+  transition: all var(--transition);
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+.icon-btn svg { width: 15px; height: 15px; }
+
+/* ===== TOOLBAR ===== */
+.toolbar {
+  grid-area: toolbar;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+}
+.filter-pills {
+  display: flex;
+  align-items: center;
+  background: var(--bg-3);
+  border-radius: var(--r10);
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--line-2);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+  white-space: nowrap;
+}
+.pill:hover { color: var(--text); }
+.pill.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-ambient), 0 1px 2px rgba(15,17,23,0.04);
+}
+.pill .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.pill .count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.pill.active .count { color: var(--text-2); }
+
+.toolbar-sep { width: 1px; height: 22px; background: var(--line); }
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r8);
+  padding: 0 10px;
+  height: 30px;
+  min-width: 280px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.search-box:focus-within {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-focus);
+}
+.search-box svg { width: 13px; height: 13px; color: var(--text-3); flex-shrink: 0; }
+.search-box input { flex: 1; font-size: 12.5px; }
+.search-box .kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.toolbar .spacer { flex: 1; }
+
+.live-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border-radius: var(--r8);
+  border: 1px solid var(--line-2);
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all var(--transition);
+}
+.live-toggle:hover { color: var(--text); border-color: var(--line-strong); }
+.live-toggle.on {
+  color: var(--green);
+  background: var(--green-soft);
+  border-color: rgba(24,160,88,0.30);
+}
+.live-toggle .led {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.live-toggle.on .led {
+  background: var(--green);
+  box-shadow: 0 0 0 0 var(--green);
+  animation: liveDot 1.6s ease-in-out infinite;
+}
+
+.menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--r8);
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all var(--transition);
+}
+.menu-btn:hover { color: var(--text); border-color: var(--line-strong); background: var(--surface); }
+.menu-btn svg { width: 12px; height: 12px; }
+
+/* ===== FOOTER ===== */
+.footer {
+  grid-area: footer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+.footer .kbd-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.footer .kbd-hint .kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--text-2);
+  min-width: 16px;
+  text-align: center;
+}
+.footer .spacer { flex: 1; }
+.footer .stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.footer .stat strong {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+</style>
+<style id="components">
+/* ===== GTS SWIMLANE ===== */
+.swimlane {
+  grid-area: swimlane;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+  transition: max-height 280ms var(--ease-in-out);
+  max-height: var(--swimlane-h);
+  position: relative;
+}
+.swimlane.collapsed { max-height: 28px; }
+.swimlane-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  padding: 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, var(--bg-2), transparent);
+  border-bottom: 1px solid var(--line-2);
+  position: relative;
+  z-index: 2;
+}
+.swimlane-head .chev {
+  transition: transform 200ms var(--ease-out);
+  color: var(--text-3);
+  cursor: pointer;
+}
+.swimlane.collapsed .swimlane-head .chev { transform: rotate(-90deg); }
+.swimlane-head .legend {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.swimlane-head .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.swimlane-head .legend-item .sw { width: 10px; height: 10px; border-radius: 2px; }
+
+.swimlane-canvas {
+  position: relative;
+  padding: 6px 14px 10px;
+  height: calc(var(--swimlane-h) - 28px);
+  overflow: hidden;
+}
+.lane {
+  position: relative;
+  height: 32px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+}
+.lane:last-child { margin-bottom: 0; }
+.lane-label {
+  position: absolute;
+  left: 0; top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-2);
+  background: var(--bg-2);
+  padding: 0 8px 0 0;
+  z-index: 2;
+}
+.lane-label .lane-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.lane-label .lane-meta {
+  color: var(--text-3);
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-ui);
+  font-weight: 600;
+}
+.lane-track {
+  position: absolute;
+  left: 188px; right: 12px;
+  top: 50%;
+  height: 22px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, var(--bg-3), var(--bg-3));
+  border-radius: var(--r6);
+  border: 1px solid var(--line-2);
+  overflow: visible;
+}
+.lane-grid {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 1px), var(--line-2) calc(10% - 1px), var(--line-2) 10%);
+  opacity: 0.5;
+}
+.bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: transform var(--transition), box-shadow var(--transition), filter var(--transition);
+}
+.bar:hover {
+  transform: translateY(-1px) scaleY(1.08);
+  box-shadow: 0 4px 10px rgba(15,17,23,0.18);
+  filter: brightness(1.1);
+  z-index: 5;
+}
+.bar.in-progress {
+  background: linear-gradient(90deg, var(--blue) 0%, var(--blue) 80%, transparent 100%);
+}
+.bar.in-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,0) 0 6px, rgba(255,255,255,0.12) 6px 12px);
+}
+.bar.succeeded { background: var(--green); }
+.bar.failed { background: var(--red); }
+.bar.failed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, rgba(255,255,255,0) 0 6px, rgba(255,255,255,0.20) 6px 8px);
+}
+.bar.cancelled {
+  background: var(--grey);
+  background-image: repeating-linear-gradient(90deg, var(--grey) 0 4px, rgba(0,0,0,0.10) 4px 8px);
+}
+.bar .bar-label {
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.bar.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  z-index: 6;
+}
+.lane-axis {
+  position: absolute;
+  left: 188px; right: 12px;
+  bottom: 0;
+  height: 18px;
+  pointer-events: none;
+}
+.lane-axis .tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 4px;
+  background: var(--line-strong);
+}
+.lane-axis .tick-label {
+  position: absolute;
+  top: 5px;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.now-marker {
+  position: absolute;
+  top: 0; bottom: 18px;
+  left: 188px;
+  width: 1px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 3;
+  box-shadow: 0 0 8px rgba(109,92,255,0.40);
+}
+.now-marker::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px; height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(109,92,255,0.18);
+}
+.now-marker .now-label {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--bg-2);
+  padding: 0 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* ===== CONTENT (cards | detail) ===== */
+.content {
+  grid-area: content;
+  display: grid;
+  grid-template-columns: minmax(380px, 1fr) 0;
+  overflow: hidden;
+  position: relative;
+  transition: grid-template-columns 320ms var(--ease-in-out);
+  min-height: 0;
+}
+.content.has-detail { grid-template-columns: minmax(380px, 1fr) min(620px, 50%); }
+
+.list-pane {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 14px 14px 80px;
+  background: var(--bg);
+  min-height: 0;
+}
+
+.detail-pane {
+  background: var(--bg-2);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* ===== SESSION CARD ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  margin-bottom: 12px;
+  overflow: hidden;
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+  position: relative;
+  box-shadow: var(--shadow-ambient);
+}
+.card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+}
+.card.selected {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-card), 0 0 0 1px var(--accent-line);
+}
+.card-status-rail {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--grey);
+}
+.card.s-running .card-status-rail { background: var(--blue); animation: pulse-dot 2s ease-in-out infinite; }
+.card.s-succeeded .card-status-rail { background: var(--green); }
+.card.s-failed .card-status-rail { background: var(--red); }
+.card.s-cancelled .card-status-rail { background: var(--grey); }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px 8px 17px;
+}
+.status-icon {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.status-icon svg { width: 12px; height: 12px; color: white; }
+.card.s-running .status-icon { background: var(--blue); position: relative; }
+.card.s-succeeded .status-icon { background: var(--green); }
+.card.s-failed .status-icon { background: var(--red); }
+.card.s-cancelled .status-icon { background: var(--grey); }
+
+.session-id {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.session-meta {
+  font-size: 11.5px;
+  color: var(--text-3);
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.session-meta .sep { color: var(--text-4); }
+.session-meta .artifact { color: var(--text-2); font-weight: 500; }
+.card-head-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.elapsed-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r6);
+  padding: 2px 8px;
+  font-weight: 500;
+}
+.elapsed-badge.live { color: var(--blue); border-color: var(--blue-soft); background: var(--blue-soft); }
+.expand-btn {
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r6);
+  color: var(--text-3);
+  transition: all var(--transition);
+}
+.expand-btn:hover { background: var(--bg-hover); color: var(--text-2); }
+.expand-btn svg { width: 12px; height: 12px; transition: transform 200ms var(--ease-out); }
+.card.expanded .expand-btn svg { transform: rotate(90deg); }
+
+.card-lifecycle {
+  margin: 4px 14px 12px 17px;
+  height: 6px;
+  background: var(--bg-3);
+  border-radius: var(--r100);
+  position: relative;
+  overflow: hidden;
+}
+.card-lifecycle .lc-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--blue), var(--accent));
+  border-radius: var(--r100);
+  transition: width 480ms var(--ease-out);
+}
+.card.s-succeeded .lc-fill { background: var(--green); width: 100%; }
+.card.s-failed .lc-fill { background: var(--red); width: 100%; }
+.card.s-cancelled .lc-fill { background: var(--grey); width: 100%; }
+.card-lifecycle .lc-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.lc-marker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 10px;
+  background: var(--surface);
+  border: 1px solid var(--text-3);
+  border-radius: 1px;
+}
+.lc-marker.error { border-color: var(--red); background: var(--red); height: 12px; top: -3px; }
+
+.gts-strip {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 10px 17px;
+  flex-wrap: wrap;
+}
+.gts-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r100);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.gts-chip:hover { border-color: var(--accent-line); color: var(--text); }
+.gts-chip .gts-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+.gts-chip .gts-count {
+  color: var(--text-3);
+  font-size: 9.5px;
+  border-left: 1px solid var(--line);
+  padding-left: 6px;
+  margin-left: 2px;
+}
+
+.transform-list {
+  border-top: 1px solid var(--line-2);
+  background: var(--surface-2);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 280ms var(--ease-out);
+}
+.card.expanded .transform-list { max-height: 600px; }
+.transform-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1.4fr) auto auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 8px 17px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.transform-row:last-child { border-bottom: none; }
+.transform-row:hover { background: var(--bg-hover); }
+.transform-row.selected { background: var(--accent-soft); }
+.transform-row .t-icon {
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.02em;
+}
+.t-icon.sql { background: var(--cyan); }
+.t-icon.pyspark { background: var(--purple); }
+.transform-row .t-name {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.transform-row .t-name .t-id {
+  color: var(--text-3);
+  font-size: 10px;
+  margin-left: 6px;
+}
+
+.state-strip {
+  display: inline-flex;
+  height: 6px;
+  width: 88px;
+  border-radius: 100px;
+  overflow: hidden;
+  background: var(--bg-3);
+  position: relative;
+}
+.state-strip .seg {
+  height: 100%;
+  transition: width 280ms var(--ease-out);
+}
+.seg.s-init { background: var(--blue); }
+.seg.s-exec { background: var(--purple); }
+.seg.s-cleanup { background: var(--teal); }
+.seg.s-final-ok { background: var(--green); }
+.seg.s-final-err { background: var(--red); }
+.seg.s-final-cancel { background: var(--grey); }
+
+.t-state-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 80px;
+  justify-content: flex-end;
+}
+.t-state-label .pulse {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+  opacity: 0.7;
+}
+.card.s-running .t-state-label .pulse {
+  animation: pulse-state 2.2s ease-in-out infinite;
+}
+.t-duration {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  min-width: 56px;
+  text-align: right;
+}
+
+.error-chip {
+  margin: 0 14px 12px 17px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--red-soft);
+  border: 1px solid rgba(229,69,59,0.22);
+  border-radius: var(--r8);
+  font-size: 11.5px;
+  color: var(--red);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.error-chip:hover { background: rgba(229,69,59,0.16); }
+.error-chip .err-code {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  background: rgba(229,69,59,0.18);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+.error-chip svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* ===== DETAIL PANEL ===== */
+.detail-pane {
+  animation: slideInRight 320ms var(--ease-out);
+}
+.detail-head {
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.detail-head-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.detail-head-row .session-id { font-size: 14px; }
+.detail-close {
+  margin-left: auto;
+  width: 26px; height: 26px;
+  border-radius: var(--r6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  transition: all var(--transition);
+}
+.detail-close:hover { background: var(--bg-hover); color: var(--text); }
+.detail-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 16px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.meta-cell .label {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.meta-cell .value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+}
+.meta-cell .value.dim { color: var(--text-2); font-weight: 400; }
+
+.detail-tabs {
+  display: flex;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-2);
+  gap: 2px;
+}
+.dtab {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+  position: relative;
+}
+.dtab:hover { color: var(--text-2); }
+.dtab.active { color: var(--text); border-bottom-color: var(--accent); }
+.dtab.dim { color: var(--text-4); }
+.dtab.dim:hover { color: var(--text-3); }
+.dtab .dot-bullet {
+  display: inline-block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--red);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px 80px;
+  background: var(--bg-2);
+  min-height: 0;
+}
+
+.section-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 18px 0 10px;
+}
+.section-h:first-child { margin-top: 0; }
+.section-h .h-line { flex: 1; height: 1px; background: var(--line-2); }
+
+/* ===== WATERFALL ===== */
+.waterfall {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  padding: 10px 0;
+}
+.wf-axis {
+  position: relative;
+  height: 18px;
+  margin: 0 12px 6px 188px;
+  border-bottom: 1px solid var(--line-2);
+}
+.wf-axis .tick {
+  position: absolute;
+  top: 0;
+  width: 1px; height: 4px;
+  background: var(--line-strong);
+}
+.wf-axis .tick-label {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-3);
+}
+.wf-row {
+  display: grid;
+  grid-template-columns: 176px 1fr;
+  align-items: center;
+  padding: 4px 12px;
+  gap: 12px;
+  cursor: pointer;
+  transition: background var(--transition);
+  border-radius: 4px;
+}
+.wf-row:hover { background: var(--bg-hover); }
+.wf-row.selected { background: var(--accent-soft); }
+.wf-row .wf-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wf-row .wf-name .depth { color: var(--text-4); }
+.wf-track {
+  position: relative;
+  height: 18px;
+  background: var(--bg-3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.wf-span {
+  position: absolute;
+  top: 0; bottom: 0;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: white;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: filter var(--transition);
+}
+.wf-span:hover { filter: brightness(1.10); }
+.wf-span.init { background: var(--blue); }
+.wf-span.exec { background: var(--purple); }
+.wf-span.cleanup { background: var(--teal); }
+.wf-span.terminal-ok { background: var(--green); }
+.wf-span.terminal-err { background: var(--red); }
+.wf-span.terminal-cancel { background: var(--grey); }
+.wf-poll-tick {
+  position: absolute;
+  top: -2px; bottom: -2px;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+  animation: pollTick 240ms var(--ease-out);
+}
+.wf-error-marker {
+  position: absolute;
+  top: -3px;
+  width: 8px; height: 8px;
+  background: var(--red);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  z-index: 2;
+}
+
+/* ===== STATE MACHINE SVG ===== */
+.state-machine {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  padding: 18px;
+  position: relative;
+}
+.state-machine svg { display: block; width: 100%; max-width: 540px; margin: 0 auto; }
+.sm-node {
+  cursor: pointer;
+  transition: filter var(--transition);
+}
+.sm-node:hover { filter: brightness(1.08); }
+.sm-node rect {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+  transition: all 280ms var(--ease-out);
+}
+.sm-node.visited rect {
+  fill: var(--accent-soft);
+  stroke: var(--accent-line);
+}
+.sm-node.current rect {
+  fill: var(--blue);
+  stroke: var(--blue);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 4px rgba(45,127,249,0.35));
+}
+.sm-node.terminal-ok rect { fill: var(--green-soft); stroke: var(--green); }
+.sm-node.terminal-err rect { fill: var(--red-soft); stroke: var(--red); }
+.sm-node.terminal-cancel rect { fill: var(--grey-soft); stroke: var(--grey); }
+.sm-node text {
+  fill: var(--text);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  pointer-events: none;
+}
+.sm-node.current text { fill: white; }
+.sm-edge {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+  marker-end: url(#sm-arrow);
+}
+.sm-edge.visited {
+  stroke: var(--accent);
+  stroke-width: 2;
+  animation: criticalPath 1200ms var(--ease-out);
+}
+.sm-edge.terminal-err { stroke: var(--red); }
+.sm-edge.terminal-cancel { stroke: var(--grey); }
+.sm-edge-label {
+  fill: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+/* ===== POLL LOG ===== */
+.poll-log {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  overflow: hidden;
+}
+.poll-log-head {
+  display: grid;
+  grid-template-columns: 60px 90px 90px 70px 1fr;
+  padding: 8px 12px;
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  font-family: var(--font-ui);
+}
+.poll-row {
+  display: grid;
+  grid-template-columns: 60px 90px 90px 70px 1fr;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  align-items: center;
+  transition: background var(--transition);
+  cursor: pointer;
+}
+.poll-row:hover { background: var(--bg-hover); }
+.poll-row:last-child { border-bottom: none; }
+.poll-row.state-change { background: var(--blue-soft); }
+.poll-row.state-change:hover { background: rgba(45,127,249,0.18); }
+.poll-row.terminal-ok { background: var(--green-soft); font-weight: 600; }
+.poll-row.terminal-err { background: var(--red-soft); font-weight: 600; }
+.poll-row.terminal-cancel { background: var(--grey-soft); font-weight: 600; }
+.poll-row .col-n { color: var(--text-3); }
+.poll-row .col-t { color: var(--text-2); }
+.poll-row .col-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.poll-row .col-state .s-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+.poll-row.terminal-ok .col-state .s-dot { background: var(--green); }
+.poll-row.terminal-err .col-state .s-dot { background: var(--red); }
+.poll-row.terminal-cancel .col-state .s-dot { background: var(--grey); }
+.poll-row .col-delta { color: var(--text-3); }
+.poll-row .col-note { color: var(--text-2); font-family: var(--font-ui); font-size: 11px; }
+.poll-row .col-note .change-arrow { color: var(--accent); margin: 0 4px; font-weight: 700; }
+
+/* ===== ERROR DETAIL ===== */
+.error-block {
+  background: var(--surface);
+  border: 1px solid rgba(229,69,59,0.30);
+  border-radius: var(--r10);
+  overflow: hidden;
+  box-shadow: 0 0 0 4px var(--red-soft);
+}
+.error-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--red-soft);
+  border-bottom: 1px solid rgba(229,69,59,0.20);
+}
+.error-block-head svg { width: 16px; height: 16px; color: var(--red); }
+.error-block-head .err-title { font-weight: 700; color: var(--red); font-size: 13px; }
+.error-block-head .src-badge {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: var(--red);
+  color: white;
+  padding: 2px 8px;
+  border-radius: var(--r6);
+  letter-spacing: 0.04em;
+}
+.error-block-head .src-badge.system { background: var(--amber); }
+.error-block-body {
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.error-block-body .err-code {
+  display: inline-block;
+  background: var(--bg-3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.error-block-foot {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line-2);
+  background: var(--surface-2);
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r6);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-2);
+}
+.tag.retriable { color: var(--amber); border-color: var(--amber-soft); background: var(--amber-soft); }
+.tag.terminal { color: var(--red); border-color: rgba(229,69,59,0.20); background: var(--red-soft); }
+
+/* ===== SCRUBBER ===== */
+.scrubber {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 60px;
+  background: linear-gradient(180deg, transparent, var(--bg-2) 24%);
+  padding: 12px 14px 8px;
+  border-top: 1px solid var(--line);
+  display: none;
+  z-index: 10;
+}
+.content.has-detail .scrubber, .content .scrubber.always { display: block; }
+.scrubber.always { display: block; }
+.scrubber-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+}
+.scrubber-row .time-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  min-width: 64px;
+}
+.scrubber-track {
+  flex: 1;
+  position: relative;
+  height: 18px;
+  cursor: pointer;
+}
+.scrubber-track-bg {
+  position: absolute;
+  inset: 7px 0;
+  background: var(--bg-3);
+  border-radius: var(--r100);
+  border: 1px solid var(--line-2);
+}
+.scrubber-events {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.scrubber-event {
+  position: absolute;
+  top: 4px;
+  width: 3px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0.65;
+}
+.scrubber-event.err { background: var(--red); opacity: 0.85; height: 14px; top: 2px; }
+.scrubber-event.ok { background: var(--green); }
+.scrubber-handle {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--surface);
+  box-shadow: 0 2px 6px rgba(109,92,255,0.40);
+  cursor: grab;
+  transition: transform 120ms var(--ease-out);
+}
+.scrubber-handle:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.18); }
+
+/* ===== TOAST + TOOLTIP ===== */
+.toast-stack {
+  position: fixed;
+  bottom: 48px;
+  right: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+.toast {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text);
+  box-shadow: var(--shadow-lift);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+  pointer-events: auto;
+  animation: toastIn 320ms var(--spring);
+}
+.toast.success .icon { color: var(--green); }
+.toast.error .icon { color: var(--red); }
+.toast.info .icon { color: var(--blue); }
+.toast .icon { width: 16px; height: 16px; flex-shrink: 0; }
+
+.tooltip {
+  position: fixed;
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--r6);
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text);
+  box-shadow: var(--shadow-lift);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 120ms, transform 120ms;
+  z-index: 200;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.tooltip.show { opacity: 1; transform: translateY(0); animation: tooltipFloat 160ms var(--ease-out); }
+
+/* ===== STATE CONTROLLER ===== */
+.state-controller {
+  position: fixed;
+  bottom: 48px;
+  left: 18px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  padding: 8px;
+  box-shadow: var(--shadow-lift);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+.state-controller .sc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  font-weight: 700;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--line-2);
+  margin-bottom: 4px;
+}
+.state-controller .sc-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 0 4px 2px;
+}
+.sc-btn {
+  padding: 6px 8px;
+  border-radius: var(--r6);
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  color: var(--text-2);
+  font-size: 11px;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition);
+  font-weight: 500;
+}
+.sc-btn:hover { color: var(--text); border-color: var(--accent-line); background: var(--accent-soft); }
+.sc-btn .sc-key {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 5px;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* ===== REFRESH MODE BADGE ===== */
+.rm-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-right: 7px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+.rm-badge.rm-optimal     { color: var(--teal);  background: var(--teal-soft);  border: 1px solid rgba(20,184,166,0.22); }
+.rm-badge.rm-full        { color: var(--amber); background: var(--amber-soft); border: 1px solid rgba(229,148,12,0.24); }
+.rm-badge.rm-incremental { color: var(--blue);  background: var(--blue-soft);  border: 1px solid rgba(45,127,249,0.22); }
+
+/* ===== REPL TREE ===== */
+.repl-group {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.repl-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+.repl-group-head .gts-pin { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.repl-group-head .gts-id { font-weight: 600; }
+.repl-group-head .gts-meta { color: var(--text-3); font-size: 10.5px; }
+.repl-group-head .repl-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-2);
+  padding: 2px 8px;
+  background: var(--bg-3);
+  border-radius: var(--r6);
+}
+.repl-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 10px 14px 10px 28px;
+  border-bottom: 1px solid var(--line-2);
+  position: relative;
+  font-size: 11.5px;
+  align-items: start;
+}
+.repl-row:last-child { border-bottom: none; }
+.repl-row::before {
+  content: "└";
+  position: absolute;
+  left: 14px; top: 9px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.repl-row .repl-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.repl-row .repl-id .repl-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.repl-row .repl-txf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.repl-row .repl-txf {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+}
+.repl-row .repl-txf .t-icon {
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+.repl-row .repl-txf-name { color: var(--text); font-weight: 500; }
+.repl-row .repl-txf-state {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+.repl-row .repl-stamp {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-3);
+  text-align: right;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+/* ===== REFRESH OUTPUT ===== */
+.refresh-output {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r10);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.ro-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.ro-stat {
+  border-left: 2px solid var(--accent);
+  padding: 4px 0 4px 10px;
+}
+.ro-stat.policy { border-left-color: var(--purple); }
+.ro-stat.dropped { border-left-color: var(--amber); }
+.ro-stat.violations { border-left-color: var(--red); }
+.ro-stat .ro-label {
+  font-size: 9.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.ro-stat .ro-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.15;
+}
+.ro-stat.policy .ro-value { font-size: 15px; color: var(--purple); }
+.ro-stat.dropped .ro-value { color: var(--amber); }
+.ro-stat.violations .ro-value { color: var(--red); }
+.ro-stat.dropped .ro-value.zero,
+.ro-stat.violations .ro-value.zero { color: var(--green); }
+.ro-stat .ro-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 3px;
+}
+.ro-mlv {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px 14px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line-2);
+}
+.ro-mlv .kvl {
+  font-size: 9.5px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  padding-top: 3px;
+}
+.ro-mlv .kvv {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text);
+  word-break: break-all;
+}
+.ro-mlv .kvv.dim { color: var(--text-2); }
+.ro-msg {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--accent-soft);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r6);
+  font-size: 11.5px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.violation-list { display: flex; flex-direction: column; gap: 6px; }
+.violation-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 60px;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--bg-3);
+  border-radius: var(--r6);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  align-items: center;
+}
+.violation-row .vr-name { color: var(--text); font-weight: 500; }
+.violation-row .vr-bar {
+  position: relative;
+  background: var(--line-2);
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.violation-row .vr-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--amber), var(--red));
+  border-radius: 3px;
+}
+.violation-row .vr-count { color: var(--red); font-weight: 700; text-align: right; }
+
+/* ===== STACK TRACE ===== */
+.stack-trace {
+  background: var(--bg-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r8);
+  padding: 4px 0;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.stack-frame {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 14px 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-2);
+  border-left: 2px solid transparent;
+}
+.stack-frame:hover { background: var(--bg-hover); border-left-color: var(--accent); }
+.stack-frame .sf-num {
+  color: var(--text-3);
+  font-size: 10px;
+  text-align: right;
+  font-weight: 500;
+  user-select: none;
+}
+.stack-frame .sf-line { word-break: break-all; }
+.stack-frame.user { background: rgba(109, 92, 255, 0.04); }
+.stack-frame.user .sf-line { color: var(--text); }
+.stack-frame .sf-cls { color: var(--text); font-weight: 500; }
+.stack-frame .sf-loc { color: var(--text-3); }
+.error-stage-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: var(--red-soft);
+  border: 1px solid rgba(229,69,59,0.20);
+  border-radius: var(--r6);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--red);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ===== EMPTY ===== */
+.empty {
+  padding: 60px 30px;
+  text-align: center;
+  color: var(--text-3);
+}
+.empty svg { width: 36px; height: 36px; color: var(--text-4); margin-bottom: 14px; }
+.empty .e-title { color: var(--text-2); font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.empty .e-sub { font-size: 12px; }
+
+/* ===== UTILITIES ===== */
+.hl { color: var(--accent); background: rgba(109,92,255,0.12); border-radius: 2px; padding: 0 1px; }
+.muted { color: var(--text-3); }
+.fade-in { animation: fadeIn 260ms var(--ease-out); }
+</style>
+<style id="animations">
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@keyframes pulse-state {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+@keyframes barShimmer {
+  from { opacity: 0; transform: scaleX(0.96); transform-origin: left center; }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+@keyframes flowDash {
+  from { background-position: 0 0; }
+  to   { background-position: 32px 0; }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideOutRight {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(16px); }
+}
+@keyframes pollTick {
+  from { opacity: 0; transform: scaleY(0); transform-origin: bottom; }
+  to   { opacity: 0.55; transform: scaleY(1); }
+}
+@keyframes stateTransition {
+  0%, 100% { stroke-width: 1.5; filter: drop-shadow(0 0 0 transparent); }
+  50% { stroke-width: 2.5; filter: drop-shadow(0 0 6px rgba(45,127,249,0.50)); }
+}
+@keyframes errorPulse {
+  0%, 100% { box-shadow: inset 0 0 0 0 rgba(229,69,59,0); }
+  50% { box-shadow: inset 0 0 0 1px rgba(229,69,59,0.18); }
+}
+@keyframes swimlaneRowHover { from { background: transparent; } to { background: var(--bg-hover); } }
+@keyframes dotPop { from { transform: scale(0.3); } to { transform: scale(1); } }
+@keyframes cardFocusGlow {
+  0% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  100% { box-shadow: 0 0 0 8px transparent; }
+}
+@keyframes markerPing {
+  0% { box-shadow: 0 0 0 0 rgba(109,92,255,0.50); }
+  70% { box-shadow: 0 0 0 12px rgba(109,92,255,0); }
+  100% { box-shadow: 0 0 0 0 rgba(109,92,255,0); }
+}
+@keyframes criticalPath {
+  from { stroke-dasharray: 0 1000; }
+  to { stroke-dasharray: 1000 0; }
+}
+@keyframes terminalPunch {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes liveDot {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  60% { box-shadow: 0 0 0 6px transparent; opacity: 0.65; }
+}
+@keyframes progressFill {
+  from { width: 0%; }
+  to { width: var(--target, 100%); }
+}
+@keyframes spinHalo {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes chevronTwist { from { transform: rotate(0deg); } to { transform: rotate(90deg); } }
+@keyframes valueCount { from { opacity: 0.4; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastIn {
+  0% { opacity: 0; transform: translateY(8px) scale(0.96); }
+  60% { transform: translateY(-1px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes tooltipFloat { from { transform: translateY(4px); } to { transform: translateY(0); } }
+@keyframes streamFlow {
+  from { stroke-dashoffset: 24; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes breath { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes iconSlide { from { transform: translateX(-3px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes axisTick { from { opacity: 0; } to { opacity: 1; } }
+@keyframes replConnect {
+  0% { opacity: 0.3; transform: translateX(-3px); }
+  50% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0.7; transform: translateX(3px); }
+}
+@keyframes splatter {
+  0% { transform: scale(0.4) rotate(0deg); opacity: 0; }
+  100% { transform: scale(1) rotate(45deg); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<div id="root">
+
+<!-- ===== TAB BAR ===== -->
+<div class="tab-bar">
+  <div class="tab" data-tab="logs"><span>Logs</span><span class="pill-count">2.1k</span></div>
+  <div class="tab" data-tab="telemetry"><span>Telemetry</span><span class="pill-count">187</span></div>
+  <div class="tab" data-tab="system"><span>System Files</span><span class="pill-count">12</span></div>
+  <div class="tab active" data-tab="spark"><span class="live-dot"></span><span>Spark Sessions</span><span class="pill-count" id="sparkCount">5</span></div>
+  <div class="tab" data-tab="internals"><span>Internals</span>
+    <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+  </div>
+  <div class="spacer"></div>
+  <div class="controls">
+    <button class="icon-btn" title="Theme" id="themeToggle" aria-label="Toggle theme">
+      <svg id="themeIcon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M8 1.5v1.5M8 13v1.5M2.5 8H1M15 8h-1.5M3.5 3.5l1 1M11.5 11.5l1 1M11.5 4.5l1-1M3.5 12.5l1-1"/>
+        <circle cx="8" cy="8" r="3"/>
+      </svg>
+    </button>
+    <button class="icon-btn" title="Help (?)" id="helpBtn">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="8" cy="8" r="6"/><path d="M6.5 6a1.5 1.5 0 113 0c0 1-1.5 1.2-1.5 2.5M8 11h.01"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- ===== TOOLBAR ===== -->
+<div class="toolbar">
+  <div class="filter-pills" id="filterPills">
+    <div class="pill active" data-filter="all"><span>All</span><span class="count" id="cntAll">5</span></div>
+    <div class="pill" data-filter="running"><span class="dot" style="background:var(--blue)"></span><span>Active</span><span class="count" id="cntRunning">1</span></div>
+    <div class="pill" data-filter="succeeded"><span class="dot" style="background:var(--green)"></span><span>Succeeded</span><span class="count" id="cntSucceeded">2</span></div>
+    <div class="pill" data-filter="failed"><span class="dot" style="background:var(--red)"></span><span>Failed</span><span class="count" id="cntFailed">1</span></div>
+    <div class="pill" data-filter="cancelled"><span class="dot" style="background:var(--grey)"></span><span>Cancelled</span><span class="count" id="cntCancelled">1</span></div>
+  </div>
+  <div class="toolbar-sep"></div>
+  <div class="search-box" id="searchBox">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/></svg>
+    <input id="searchInput" placeholder="Search sessions, transforms, errors..." />
+    <span class="kbd">⌘K</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="live-toggle on" id="liveToggle">
+    <span class="led"></span><span id="liveLabel">Live</span>
+  </button>
+  <button class="menu-btn" id="exportBtn">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1.5v9M4.5 7L8 10.5 11.5 7M2 13.5h12"/></svg>
+    <span>Export</span>
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 6l4 4 4-4"/></svg>
+  </button>
+</div>
+
+<!-- ===== SWIMLANE ===== -->
+<div class="swimlane" id="swimlane">
+  <div class="swimlane-head">
+    <svg class="chev" id="swimlaneChev" viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 4.5l3 3 3-3"/></svg>
+    <span>GTS Spark Sessions · Trace Timeline</span>
+    <div class="legend">
+      <div class="legend-item"><span class="sw" style="background:var(--blue)"></span>In Progress</div>
+      <div class="legend-item"><span class="sw" style="background:var(--green)"></span>Succeeded</div>
+      <div class="legend-item"><span class="sw" style="background:var(--red)"></span>Failed</div>
+      <div class="legend-item"><span class="sw" style="background:var(--grey)"></span>Cancelled</div>
+    </div>
+  </div>
+  <div class="swimlane-canvas" id="swimlaneCanvas">
+    <!-- lanes injected by JS -->
+  </div>
+</div>
+
+<!-- ===== CONTENT ===== -->
+<div class="content" id="content">
+  <div class="list-pane" id="listPane">
+    <!-- cards injected by JS -->
+  </div>
+  <div class="detail-pane" id="detailPane" style="display:none;">
+    <!-- detail injected by JS -->
+  </div>
+
+  <div class="scrubber always" id="scrubber">
+    <div class="scrubber-row">
+      <span class="time-label" id="scrubLabel">+0:00</span>
+      <div class="scrubber-track" id="scrubTrack">
+        <div class="scrubber-track-bg"></div>
+        <div class="scrubber-events" id="scrubEvents"></div>
+        <div class="scrubber-handle" id="scrubHandle" style="left:80%;"></div>
+      </div>
+      <span class="time-label" id="scrubEnd">+1:24</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== FOOTER ===== -->
+<div class="footer">
+  <span class="kbd-hint"><span class="kbd">↑</span><span class="kbd">↓</span> navigate</span>
+  <span class="kbd-hint"><span class="kbd">↵</span> open</span>
+  <span class="kbd-hint"><span class="kbd">␣</span> expand</span>
+  <span class="kbd-hint"><span class="kbd">/</span> search</span>
+  <span class="kbd-hint"><span class="kbd">L</span> live</span>
+  <span class="kbd-hint"><span class="kbd">Esc</span> close</span>
+  <div class="spacer"></div>
+  <span class="stat">Events <strong id="statEvents">0</strong></span>
+  <span class="stat">Polls <strong id="statPolls">0</strong></span>
+  <span class="stat">Errors <strong id="statErrors">0</strong></span>
+  <span class="stat">Avg poll <strong id="statAvgPoll">— ms</strong></span>
+  <span class="stat" style="color:var(--green)">●&nbsp;<strong>connected</strong></span>
+</div>
+
+</div><!-- /root -->
+
+<div class="toast-stack" id="toastStack"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<div class="state-controller" id="stateController" style="display:none;">
+  <div class="sc-head">
+    <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="4.5"/><path d="M6 3v3l2 1"/></svg>
+    <span>Demo Scenarios</span>
+  </div>
+  <div class="sc-grid">
+    <button class="sc-btn" data-scenario="cold">Cold start<span class="sc-key">1</span></button>
+    <button class="sc-btn" data-scenario="active">Active run<span class="sc-key">2</span></button>
+    <button class="sc-btn" data-scenario="error">Error storm<span class="sc-key">3</span></button>
+    <button class="sc-btn" data-scenario="cancel">User cancel<span class="sc-key">4</span></button>
+    <button class="sc-btn" data-scenario="replay">Replay<span class="sc-key">R</span></button>
+    <button class="sc-btn" data-scenario="empty">Empty<span class="sc-key">0</span></button>
+  </div>
+</div>
+<script id="data">
+const STATES = ['NotStarted','InProgress','Initializing','Executing','CleanUp','Succeeded','Failed','Cancelled'];
+const TERMINAL = new Set(['Succeeded','Failed','Cancelled']);
+
+const GTS_SESSIONS = {
+  'gts-A91F': { id: 'gts-A91F', region: 'westus3', warm: true,  color: 'var(--cyan)' },
+  'gts-B72E': { id: 'gts-B72E', region: 'westus3', warm: false, color: 'var(--purple)' },
+  'gts-C84D': { id: 'gts-C84D', region: 'westus3', warm: true,  color: 'var(--teal)' },
+};
+
+function genPolls(startOffsetMs, endOffsetMs, fromState, toState, opts={}) {
+  const polls = [];
+  const states = ['Initializing','Executing','CleanUp'];
+  const intervals = [50, 80, 120, 200, 320, 480, 720, 1000, 1500, 2000, 2500];
+  let t = startOffsetMs;
+  let cur = fromState;
+  let n = 0;
+  const duration = endOffsetMs - startOffsetMs;
+  const stateChangePoints = opts.stateChanges || [];
+  while (t < endOffsetMs && n < 64) {
+    const interval = intervals[Math.min(n, intervals.length - 1)] + (n % 3 === 0 ? 0 : 40);
+    t += interval;
+    if (t >= endOffsetMs) break;
+    let prev = cur;
+    let changed = false;
+    for (const sc of stateChangePoints) {
+      if (sc.at <= t && cur !== sc.to) { cur = sc.to; changed = true; }
+    }
+    polls.push({
+      kind: 'TransformPolled',
+      at: t,
+      state: cur,
+      previousState: prev,
+      stateChanged: changed,
+      isTerminal: false,
+      durationMs: interval,
+      retryAfterMs: opts.retryAfter || 250 + (n%4)*50,
+      errorCode: null, errorMessage: null, errorSource: null,
+      hasOutput: cur === 'Executing'
+    });
+    n++;
+  }
+  return polls;
+}
+
+const sessions = [
+  {
+    id: 'iter-7f3a8b21',
+    trackingId: 'spk-tk-7f3a8b21-9c4e',
+    artifactName: 'SalesAggregateDag',
+    workspaceName: 'analytics-prod',
+    workspaceId: '4f2c-a91e-8d7b',
+    tenantId: 'contoso.onmicrosoft.com',
+    status: 'running',
+    startMs: 0,
+    elapsedMs: 84500,
+    durationCreatedMs: 1240,
+    transforms: [
+      {
+        id: 'txf-001-sales-clean',
+        name: 'sales.cleanup',
+        nodeKind: 'sql',
+        gts: 'gts-A91F',
+        state: 'Succeeded',
+        submittedAt: 1240,
+        completedAt: 11420,
+        submitDurationMs: 184,
+        retriable: false,
+        polls: genPolls(1240, 11420, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 2400, to: 'Initializing' },
+            { at: 4200, to: 'Executing' },
+            { at: 9800, to: 'CleanUp' },
+            { at: 11420, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      },
+      {
+        id: 'txf-002-orders-join',
+        name: 'orders.join_dim',
+        nodeKind: 'sql',
+        gts: 'gts-A91F',
+        state: 'Failed',
+        submittedAt: 11500,
+        completedAt: 28900,
+        submitDurationMs: 92,
+        retriable: true,
+        polls: genPolls(11500, 28900, 'NotStarted', 'Failed', {
+          stateChanges: [
+            { at: 12600, to: 'Initializing' },
+            { at: 14800, to: 'Executing' },
+            { at: 28900, to: 'Failed' },
+          ]
+        }),
+        terminalState: 'Failed',
+        error: {
+          code: 'MLV_SPARK_TRANSFORM_EXECUTION_FAILED',
+          source: 'User',
+          message: 'AnalysisException: cannot resolve column `customer_segmnt` given input columns: [customer_id, customer_segment, region, total_value]. Did you mean `customer_segment`?\n  at org.apache.spark.sql.catalyst.analysis.CheckAnalysis$class.failAnalysis(CheckAnalysis.scala:39)\n  at MLV.Spark.SQLTransform.execute(SQLTransform.cs:142)\n  at MLV.Spark.DagRunner.run(DagRunner.cs:88)',
+          retriable: false,
+        }
+      },
+      {
+        id: 'txf-003-orders-retry',
+        name: 'orders.join_dim · retry',
+        nodeKind: 'sql',
+        gts: 'gts-A91F',
+        state: 'Succeeded',
+        submittedAt: 29100,
+        completedAt: 42600,
+        submitDurationMs: 148,
+        retriable: false,
+        polls: genPolls(29100, 42600, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 30200, to: 'Initializing' },
+            { at: 31900, to: 'Executing' },
+            { at: 41100, to: 'CleanUp' },
+            { at: 42600, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      },
+      {
+        id: 'txf-004-enrich-py',
+        name: 'enrich.score_segment',
+        nodeKind: 'pyspark',
+        gts: 'gts-B72E',
+        state: 'Executing',
+        submittedAt: 42800,
+        completedAt: null,
+        submitDurationMs: 2840,
+        retriable: false,
+        polls: genPolls(42800, 84500, 'NotStarted', 'Executing', {
+          stateChanges: [
+            { at: 45000, to: 'Initializing' },
+            { at: 51200, to: 'Executing' },
+          ]
+        }),
+        terminalState: null,
+      },
+      {
+        id: 'txf-005-summary',
+        name: 'sales.daily_summary',
+        nodeKind: 'sql',
+        gts: 'gts-B72E',
+        state: 'NotStarted',
+        submittedAt: 84400,
+        completedAt: null,
+        submitDurationMs: 0,
+        retriable: false,
+        polls: [],
+        terminalState: null,
+      }
+    ]
+  },
+  {
+    id: 'iter-2d8c9f04',
+    trackingId: 'spk-tk-2d8c9f04-1b3a',
+    artifactName: 'CustomerEnrichment',
+    workspaceName: 'analytics-prod',
+    workspaceId: '4f2c-a91e-8d7b',
+    tenantId: 'contoso.onmicrosoft.com',
+    status: 'succeeded',
+    startMs: -240000,
+    elapsedMs: 38400,
+    durationCreatedMs: 980,
+    transforms: [
+      {
+        id: 'txf-101-load',
+        name: 'customers.load',
+        nodeKind: 'sql',
+        gts: 'gts-C84D',
+        state: 'Succeeded',
+        submittedAt: 980,
+        completedAt: 9200,
+        submitDurationMs: 120,
+        retriable: false,
+        polls: genPolls(980, 9200, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 1800, to: 'Initializing' },
+            { at: 3400, to: 'Executing' },
+            { at: 8200, to: 'CleanUp' },
+            { at: 9200, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      },
+      {
+        id: 'txf-102-enrich',
+        name: 'customers.enrich_profile',
+        nodeKind: 'pyspark',
+        gts: 'gts-C84D',
+        state: 'Succeeded',
+        submittedAt: 9400,
+        completedAt: 26800,
+        submitDurationMs: 220,
+        retriable: false,
+        polls: genPolls(9400, 26800, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 10800, to: 'Initializing' },
+            { at: 13200, to: 'Executing' },
+            { at: 25100, to: 'CleanUp' },
+            { at: 26800, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      },
+      {
+        id: 'txf-103-write',
+        name: 'customers.write_dim',
+        nodeKind: 'sql',
+        gts: 'gts-C84D',
+        state: 'Succeeded',
+        submittedAt: 26900,
+        completedAt: 38400,
+        submitDurationMs: 80,
+        retriable: false,
+        polls: genPolls(26900, 38400, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 27800, to: 'Initializing' },
+            { at: 29400, to: 'Executing' },
+            { at: 37100, to: 'CleanUp' },
+            { at: 38400, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      }
+    ]
+  },
+  {
+    id: 'iter-9b4e6c11',
+    trackingId: 'spk-tk-9b4e6c11-fe22',
+    artifactName: 'ProductDimRefresh',
+    workspaceName: 'analytics-prod',
+    workspaceId: '4f2c-a91e-8d7b',
+    tenantId: 'contoso.onmicrosoft.com',
+    status: 'succeeded',
+    startMs: -180000,
+    elapsedMs: 22100,
+    durationCreatedMs: 410,
+    transforms: [
+      {
+        id: 'txf-201-fetch',
+        name: 'products.fetch',
+        nodeKind: 'sql',
+        gts: 'gts-C84D',
+        state: 'Succeeded',
+        submittedAt: 410,
+        completedAt: 11800,
+        submitDurationMs: 102,
+        retriable: false,
+        polls: genPolls(410, 11800, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 1200, to: 'Initializing' },
+            { at: 3000, to: 'Executing' },
+            { at: 10900, to: 'CleanUp' },
+            { at: 11800, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      },
+      {
+        id: 'txf-202-refresh',
+        name: 'products.refresh_dim',
+        nodeKind: 'pyspark',
+        gts: 'gts-C84D',
+        state: 'Succeeded',
+        submittedAt: 11900,
+        completedAt: 22100,
+        submitDurationMs: 150,
+        retriable: false,
+        polls: genPolls(11900, 22100, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 12800, to: 'Initializing' },
+            { at: 14400, to: 'Executing' },
+            { at: 21000, to: 'CleanUp' },
+            { at: 22100, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      }
+    ]
+  },
+  {
+    id: 'iter-5a1f72d3',
+    trackingId: 'spk-tk-5a1f72d3-2c8e',
+    artifactName: 'InventoryReconcile',
+    workspaceName: 'inventory-stg',
+    workspaceId: 'a3e1-7c2d-44b8',
+    tenantId: 'contoso.onmicrosoft.com',
+    status: 'failed',
+    startMs: -90000,
+    elapsedMs: 6240,
+    durationCreatedMs: 5800,
+    transforms: [
+      {
+        id: 'txf-301-acquire',
+        name: 'inventory.acquire_spark',
+        nodeKind: 'sql',
+        gts: 'gts-B72E',
+        state: 'Failed',
+        submittedAt: 5800,
+        completedAt: 6240,
+        submitDurationMs: 5800,
+        retriable: true,
+        polls: [],
+        terminalState: 'Failed',
+        error: {
+          code: 'MLV_SPARK_SESSION_ACQUISITION_FAILED',
+          source: 'System',
+          message: 'Failed to acquire a Spark session for transform execution: capacity workspace `inventory-stg` is over its concurrent session quota (8/8 in use).\nrequestId: 7c2f-a01e-b89d-4f8a\ngts-region: westus3\nretry-after: 12.5s',
+          retriable: true,
+          retryAfterMs: 12500,
+        }
+      }
+    ]
+  },
+  {
+    id: 'iter-c3e7d502',
+    trackingId: 'spk-tk-c3e7d502-08af',
+    artifactName: 'OrdersCleanup',
+    workspaceName: 'analytics-prod',
+    workspaceId: '4f2c-a91e-8d7b',
+    tenantId: 'contoso.onmicrosoft.com',
+    status: 'cancelled',
+    startMs: -380000,
+    elapsedMs: 18200,
+    durationCreatedMs: 720,
+    transforms: [
+      {
+        id: 'txf-401-stage',
+        name: 'orders.stage_delete',
+        nodeKind: 'sql',
+        gts: 'gts-A91F',
+        state: 'Succeeded',
+        submittedAt: 720,
+        completedAt: 9400,
+        submitDurationMs: 110,
+        retriable: false,
+        polls: genPolls(720, 9400, 'NotStarted', 'Succeeded', {
+          stateChanges: [
+            { at: 1500, to: 'Initializing' },
+            { at: 3000, to: 'Executing' },
+            { at: 8500, to: 'CleanUp' },
+            { at: 9400, to: 'Succeeded' },
+          ]
+        }),
+        terminalState: 'Succeeded',
+      },
+      {
+        id: 'txf-402-archive',
+        name: 'orders.archive_old',
+        nodeKind: 'pyspark',
+        gts: 'gts-A91F',
+        state: 'Cancelled',
+        submittedAt: 9500,
+        completedAt: 18200,
+        submitDurationMs: 95,
+        retriable: false,
+        polls: genPolls(9500, 18200, 'NotStarted', 'Cancelled', {
+          stateChanges: [
+            { at: 10400, to: 'Initializing' },
+            { at: 12000, to: 'Executing' },
+            { at: 18200, to: 'Cancelled' },
+          ]
+        }),
+        terminalState: 'Cancelled',
+        cancelReason: 'User cancelled iteration at runtime',
+      }
+    ]
+  }
+];
+
+// === ENRICHMENT: surface GTS output fields on transforms ===
+// Mirrors the fields added to TransformSubmitted / TransformCompleted in
+// EdogSparkClientWrapper.cs: nodeId, refreshMode, gtsSessionId, replId on submit;
+// refreshPolicy, totalRowsProcessed, totalRowsDropped, totalViolations,
+// violationsPerConstraint, mlvNamespace, mlvName, mlvId, refreshTimestamp,
+// outputMessage on complete; plus errorStage + stackTrace on failure.
+const REFRESH_DATA = {
+  'txf-001-sales-clean':  { mode: 'Optimal',     policy: 'Incremental', rows: 1482193, dropped: 412,  violations: 0,
+                            vpc: {},
+                            mlvNs: 'sales_lakehouse.silver',  mlvName: 'silver_sales_clean' },
+  'txf-002-orders-join':  { mode: 'Optimal',     mlvNs: 'sales_lakehouse.gold',    mlvName: 'gold_orders_dim' },
+  'txf-003-orders-retry': { mode: 'Optimal',     policy: 'Incremental', rows: 842761,  dropped: 12,   violations: 3,
+                            vpc: { 'fk_orders_customer': 3 },
+                            mlvNs: 'sales_lakehouse.gold',    mlvName: 'gold_orders_dim' },
+  'txf-004-enrich-py':    { mode: 'Incremental', mlvNs: 'crm_lakehouse.gold',      mlvName: 'gold_customer_segment' },
+  'txf-005-summary':      { mode: 'Full',        mlvNs: 'sales_lakehouse.gold',    mlvName: 'gold_sales_daily' },
+  'txf-101-load':         { mode: 'Optimal',     policy: 'Incremental', rows: 2318094, dropped: 0,    violations: 0,
+                            vpc: {},
+                            mlvNs: 'crm_lakehouse.silver',    mlvName: 'silver_customers' },
+  'txf-102-enrich':       { mode: 'Incremental', policy: 'Incremental', rows: 2318094, dropped: 1283, violations: 18,
+                            vpc: { 'uq_customer_email': 12, 'fk_customer_region': 6 },
+                            mlvNs: 'crm_lakehouse.gold',      mlvName: 'gold_customer_profile' },
+  'txf-103-write':        { mode: 'Full',        policy: 'Full',        rows: 2316811, dropped: 0,    violations: 0,
+                            vpc: {},
+                            mlvNs: 'crm_lakehouse.gold',      mlvName: 'gold_customer_dim' },
+  'txf-201-fetch':        { mode: 'Optimal',     policy: 'Incremental', rows: 48221,   dropped: 0,    violations: 0,
+                            vpc: {},
+                            mlvNs: 'inv_lakehouse.silver',    mlvName: 'silver_products' },
+  'txf-202-refresh':      { mode: 'Full',        policy: 'Full',        rows: 48221,   dropped: 102,  violations: 5,
+                            vpc: { 'uq_product_sku': 5 },
+                            mlvNs: 'inv_lakehouse.gold',      mlvName: 'gold_product_dim' },
+  'txf-301-acquire':      { mode: 'Optimal',     mlvNs: 'inv_lakehouse.silver',    mlvName: 'silver_inventory_recon' },
+  'txf-401-stage':        { mode: 'Optimal',     policy: 'Incremental', rows: 91447,   dropped: 0,    violations: 0,
+                            vpc: {},
+                            mlvNs: 'sales_lakehouse.staging', mlvName: 'staging_orders_delete' },
+  'txf-402-archive':      { mode: 'Full',        mlvNs: 'sales_lakehouse.archive', mlvName: 'archive_orders_old' },
+};
+
+const ERROR_STAGES = {
+  'MLV_SPARK_TRANSFORM_EXECUTION_FAILED': 'SparkJobExecution',
+  'MLV_SPARK_SESSION_ACQUISITION_FAILED': 'SessionAcquisition',
+};
+
+const STACK_TRACES = {
+  'MLV_SPARK_TRANSFORM_EXECUTION_FAILED': [
+    'at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.failAnalysis(CheckAnalysis.scala:53)',
+    'at org.apache.spark.sql.catalyst.analysis.CheckAnalysis.checkAnalysis(CheckAnalysis.scala:182)',
+    'at org.apache.spark.sql.catalyst.analysis.Analyzer.executeAndCheck(Analyzer.scala:178)',
+    'at org.apache.spark.sql.execution.QueryExecution.assertAnalyzed(QueryExecution.scala:75)',
+    'at org.apache.spark.sql.Dataset$.ofRows(Dataset.scala:91)',
+    'at org.apache.spark.sql.SparkSession.sql(SparkSession.scala:619)',
+    'at MLV.Spark.Transforms.SQLTransform.ExecuteAsync(SQLTransform.cs:142)',
+    'at MLV.Spark.EdogSparkClientWrapper.SubmitTransformAsync(EdogSparkClientWrapper.cs:118)',
+    'at MLV.Spark.GtsBasedSparkClient.SubmitTransformAsync(GtsBasedSparkClient.cs:218)',
+    'at MLV.Orchestrator.DagRunner.RunNodeAsync(DagRunner.cs:88)',
+    'at MLV.Orchestrator.DagRunner.RunAsync(DagRunner.cs:54)',
+  ],
+  'MLV_SPARK_SESSION_ACQUISITION_FAILED': [
+    'at MLV.Spark.Capacity.CapacityManager.AssertHasQuota(CapacityManager.cs:142)',
+    'at MLV.Spark.SessionPool.AcquireSessionAsync(SessionPool.cs:88)',
+    'at MLV.Spark.SessionPool.GetOrCreateAsync(SessionPool.cs:54)',
+    'at MLV.Spark.GtsBasedSparkClient.AcquireGtsAsync(GtsBasedSparkClient.cs:97)',
+    'at MLV.Spark.EdogSparkClientWrapper.SubmitTransformAsync(EdogSparkClientWrapper.cs:104)',
+    'at MLV.Spark.GtsBasedSparkClient.SubmitTransformAsync(GtsBasedSparkClient.cs:212)',
+    'at MLV.Orchestrator.DagRunner.RunNodeAsync(DagRunner.cs:88)',
+    'at MLV.Orchestrator.DagRunner.RunAsync(DagRunner.cs:54)',
+    'at MLV.Orchestrator.IterationExecutor.ExecuteAsync(IterationExecutor.cs:121)',
+  ],
+};
+
+function _hexFromSeed(seed, len) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  let out = '';
+  while (out.length < len) {
+    h = (Math.imul(h, 1103515245) + 12345) >>> 0;
+    out += h.toString(16).padStart(8, '0');
+  }
+  return out.slice(0, len);
+}
+function _mkGuid(seed) {
+  const h = _hexFromSeed(seed, 32);
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20,32)}`;
+}
+
+(function enrichTransforms() {
+  sessions.forEach(s => {
+    s.transforms.forEach(t => {
+      const m = REFRESH_DATA[t.id] || {};
+      // submit-side enrichment
+      t.nodeId = _mkGuid(`node::${s.id}::${t.id}`);
+      t.refreshMode = m.mode || 'Optimal';
+      const gtsSuffix = (t.gts.split('-')[1] || 'XXXX');
+      t.replId = `repl-${gtsSuffix}-${_hexFromSeed(t.id, 4)}`;
+      t.mlvNamespace = m.mlvNs || null;
+      t.mlvName = m.mlvName || null;
+      // complete-side enrichment (success only)
+      if (t.terminalState === 'Succeeded' && m.rows != null) {
+        const completedRealMs = Date.now() + (s.startMs >= 0 ? -((s.elapsedMs || 0) - t.completedAt) : (s.startMs + t.completedAt));
+        t.refreshOutput = {
+          refreshPolicy: m.policy,
+          totalRowsProcessed: m.rows,
+          totalRowsDropped: m.dropped,
+          totalViolations: m.violations,
+          violationsPerConstraint: m.vpc || {},
+          mlvNamespace: m.mlvNs,
+          mlvName: m.mlvName,
+          mlvId: _mkGuid(`mlv::${m.mlvNs}::${m.mlvName}`),
+          refreshTimestamp: new Date(completedRealMs).toISOString(),
+          outputMessage: (m.dropped === 0 && m.violations === 0)
+            ? `Refresh completed. ${m.rows.toLocaleString()} rows materialized to ${m.mlvNs}.${m.mlvName}.`
+            : `Refresh completed with data-quality findings. ${m.rows.toLocaleString()} rows processed, ${m.dropped.toLocaleString()} dropped, ${m.violations} constraint violation(s).`,
+        };
+      }
+      // error enrichment
+      if (t.error) {
+        t.error.stage = ERROR_STAGES[t.error.code] || 'SparkJobExecution';
+        t.error.stackTrace = STACK_TRACES[t.error.code] || [];
+      }
+    });
+  });
+})();
+
+// derived state
+const STATE = {
+  sessions,
+  filter: 'all',
+  selectedId: null,
+  selectedTxfId: null,
+  expanded: new Set(['iter-7f3a8b21']),
+  swimlaneCollapsed: false,
+  search: '',
+  live: true,
+  liveOffsetMs: 0,
+  scrubFraction: 1.0,
+  scrubMaxMs: 90000,
+  activeDetailTab: 'spans',
+};
+</script>
+<script id="render">
+// ===== UTILS =====
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const fmtElapsed = ms => {
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.floor(ms/1000);
+  const m = Math.floor(s/60);
+  const r = s % 60;
+  if (m < 1) return `${s}s`;
+  return `${m}:${String(r).padStart(2,'0')}`;
+};
+const fmtDuration = ms => {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms/1000).toFixed(2)}s`;
+};
+const fmtSigned = ms => (ms >= 0 ? '+' : '') + fmtElapsed(Math.abs(ms));
+const highlight = (text, q) => {
+  if (!q) return esc(text);
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  if (i < 0) return esc(text);
+  return esc(text.slice(0,i)) + '<span class="hl">' + esc(text.slice(i, i+q.length)) + '</span>' + esc(text.slice(i+q.length));
+};
+
+function visibleSessions() {
+  let list = STATE.sessions.slice();
+  if (STATE.filter !== 'all') {
+    list = list.filter(s => s.status === STATE.filter);
+  }
+  if (STATE.search) {
+    const q = STATE.search.toLowerCase();
+    list = list.filter(s =>
+      s.id.toLowerCase().includes(q) ||
+      s.artifactName.toLowerCase().includes(q) ||
+      s.workspaceName.toLowerCase().includes(q) ||
+      (s.transforms||[]).some(t => t.name.toLowerCase().includes(q) ||
+        (t.error && (t.error.code||'').toLowerCase().includes(q)) ||
+        (t.error && (t.error.message||'').toLowerCase().includes(q)))
+    );
+  }
+  return list;
+}
+
+function updateCounts() {
+  const list = STATE.sessions;
+  $('#cntAll').textContent = list.length;
+  $('#cntRunning').textContent = list.filter(s => s.status==='running').length;
+  $('#cntSucceeded').textContent = list.filter(s => s.status==='succeeded').length;
+  $('#cntFailed').textContent = list.filter(s => s.status==='failed').length;
+  $('#cntCancelled').textContent = list.filter(s => s.status==='cancelled').length;
+  $('#sparkCount').textContent = list.length;
+}
+
+function updateFooterStats() {
+  let polls = 0, errors = 0, events = 0, pollMsTotal = 0;
+  STATE.sessions.forEach(s => {
+    events += 2; // Created + Disposed (modeled)
+    s.transforms.forEach(t => {
+      events += 1; // submitted
+      events += t.polls.length;
+      polls += t.polls.length;
+      t.polls.forEach(p => { pollMsTotal += p.durationMs; });
+      if (t.terminalState) events += 1;
+      if (t.error) errors += 1;
+    });
+  });
+  $('#statEvents').textContent = events;
+  $('#statPolls').textContent = polls;
+  $('#statErrors').textContent = errors;
+  $('#statAvgPoll').textContent = polls ? Math.round(pollMsTotal / polls) + ' ms' : '— ms';
+}
+
+// ===== ICON HELPERS =====
+const ICON_RUN = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4l7 4-7 4z" fill="currentColor"/></svg>';
+const ICON_OK  = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 8l3 3 5-6"/></svg>';
+const ICON_ERR = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg>';
+const ICON_CXL = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="5" width="6" height="6" rx="1"/></svg>';
+const ICON_WARN = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6.5 11h-13z"/><path d="M8 6.5v3M8 11.5h.01"/></svg>';
+const ICON_INFO = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5h.01"/></svg>';
+
+function statusIcon(status) {
+  if (status === 'running') return ICON_RUN;
+  if (status === 'succeeded') return ICON_OK;
+  if (status === 'failed') return ICON_ERR;
+  if (status === 'cancelled') return ICON_CXL;
+  return ICON_RUN;
+}
+
+// ===== SWIMLANE =====
+function renderSwimlane() {
+  const canvas = $('#swimlaneCanvas');
+  const active = visibleSessions().find(s => s.id === STATE.selectedId) ||
+                 visibleSessions().find(s => s.status === 'running') ||
+                 visibleSessions()[0];
+  if (!active) {
+    canvas.innerHTML = '<div class="empty"><div class="e-title">No sessions to plot</div></div>';
+    return;
+  }
+
+  // group transforms by gts
+  const byGts = {};
+  active.transforms.forEach(t => {
+    if (!byGts[t.gts]) byGts[t.gts] = [];
+    byGts[t.gts].push(t);
+  });
+
+  // determine timeline range from transforms (use scrubFraction)
+  const allEnds = active.transforms.map(t => t.completedAt || active.elapsedMs).filter(x => x);
+  const maxMs = Math.max(active.elapsedMs, Math.max.apply(null, allEnds.length ? allEnds : [active.elapsedMs]));
+  const tEnd = maxMs;
+  const tNow = Math.round(tEnd * STATE.scrubFraction);
+  STATE.scrubMaxMs = tEnd;
+  $('#scrubLabel').textContent = '+' + fmtElapsed(tNow);
+  $('#scrubEnd').textContent = '+' + fmtElapsed(tEnd);
+  $('#scrubHandle').style.left = (STATE.scrubFraction * 100) + '%';
+
+  const lanes = Object.keys(byGts).map(gid => {
+    const gts = GTS_SESSIONS[gid] || { id: gid, repl: 'unknown', region: 'unknown', warm: false };
+    const txfs = byGts[gid];
+    const bars = txfs.map(t => {
+      const start = t.submittedAt;
+      const end = Math.min(t.completedAt || tNow, tNow);
+      if (start > tNow) return '';
+      const left = (start / tEnd) * 100;
+      const right = (Math.max(end, start) / tEnd) * 100;
+      const w = Math.max(right - left, 0.4);
+      let cls = 'in-progress';
+      if (t.completedAt && t.completedAt <= tNow && t.terminalState) {
+        if (t.terminalState === 'Succeeded') cls = 'succeeded';
+        else if (t.terminalState === 'Failed') cls = 'failed';
+        else if (t.terminalState === 'Cancelled') cls = 'cancelled';
+      }
+      const selected = STATE.selectedTxfId === t.id ? ' selected' : '';
+      const label = t.name.length > 22 ? t.name.slice(0,20) + '…' : t.name;
+      return `<div class="bar ${cls}${selected}" data-txf="${t.id}" data-sid="${active.id}"
+        style="left:${left}%;width:${w}%;"
+        data-tt="${esc(t.name)} · ${esc(t.state)} · ${fmtDuration((t.completedAt||tNow)-t.submittedAt)}">
+        <span class="bar-label">${esc(label)}</span>
+      </div>`;
+    }).join('');
+    return `<div class="lane">
+      <div class="lane-label">
+        <span class="lane-dot" style="background:${gts.color||'var(--accent)'}"></span>
+        <span>${esc(gts.id)}</span>
+        <span class="lane-meta">${gts.warm ? 'WARM' : 'COLD'} · ${esc(gts.region||'')}</span>
+      </div>
+      <div class="lane-track">
+        <div class="lane-grid"></div>
+        ${bars}
+      </div>
+    </div>`;
+  }).join('');
+
+  // axis ticks (10 divisions)
+  const ticks = [];
+  for (let i = 0; i <= 10; i++) {
+    const pct = i * 10;
+    const t = Math.round((tEnd * i) / 10);
+    ticks.push(`<div class="tick" style="left:${pct}%"></div>`);
+    if (i % 2 === 0) ticks.push(`<div class="tick-label" style="left:${pct}%">+${fmtElapsed(t)}</div>`);
+  }
+  const nowPct = STATE.scrubFraction * 100;
+  // Now marker positioned inside track region (lane-track has left:188px right:12px)
+  const nowLeft = `calc(188px + (100% - 188px - 12px) * ${STATE.scrubFraction})`;
+
+  canvas.innerHTML = `${lanes}
+    <div class="lane-axis" id="laneAxis">${ticks.join('')}</div>
+    <div class="now-marker" style="left:${nowLeft};">
+      <div class="now-label">now · +${fmtElapsed(tNow)}</div>
+    </div>`;
+
+  $$('.bar', canvas).forEach(bar => {
+    bar.addEventListener('click', () => {
+      const sid = bar.dataset.sid;
+      const tid = bar.dataset.txf;
+      STATE.selectedId = sid;
+      STATE.selectedTxfId = tid;
+      STATE.expanded.add(sid);
+      STATE.activeDetailTab = 'spans';
+      renderAll();
+      // ensure detail open
+      openDetail(sid, tid);
+    });
+    attachTooltip(bar);
+  });
+}
+
+// ===== CARDS =====
+function renderCards() {
+  const pane = $('#listPane');
+  const list = visibleSessions();
+  if (!list.length) {
+    pane.innerHTML = `<div class="empty">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M11 15a3 3 0 016 0M11 21h10"/></svg>
+      <div class="e-title">No matching sessions</div>
+      <div class="e-sub">Adjust filters or clear search to see sessions.</div>
+    </div>`;
+    return;
+  }
+  pane.innerHTML = list.map(s => renderCardHtml(s)).join('');
+  $$('.card', pane).forEach(el => attachCardEvents(el));
+}
+
+function renderCardHtml(s) {
+  const sClass = s.status === 'running' ? 's-running' : s.status === 'succeeded' ? 's-succeeded' : s.status === 'failed' ? 's-failed' : 's-cancelled';
+  const expanded = STATE.expanded.has(s.id) ? ' expanded' : '';
+  const selected = STATE.selectedId === s.id ? ' selected' : '';
+  const elapsed = s.status === 'running' ? fmtElapsed(Math.round(s.elapsedMs * STATE.scrubFraction)) : fmtElapsed(s.elapsedMs);
+  const elapsedLive = s.status === 'running' ? ' live' : '';
+
+  // gts chip group (with REPL multiplicity per GTS)
+  const gtsGroups = {};
+  const replSets = {};
+  s.transforms.forEach(t => {
+    gtsGroups[t.gts] = (gtsGroups[t.gts]||0) + 1;
+    if (!replSets[t.gts]) replSets[t.gts] = new Set();
+    if (t.replId) replSets[t.gts].add(t.replId);
+  });
+  const gtsChips = Object.keys(gtsGroups).map(gid => {
+    const g = GTS_SESSIONS[gid] || { id: gid };
+    const replCount = (replSets[gid] || new Set()).size;
+    const tip = `${esc(g.id)} · ${esc(g.region||'')} · ${g.warm ? 'warm' : 'cold'} · ${gtsGroups[gid]} txf · ${replCount} REPL${replCount===1?'':'s'}`;
+    return `<div class="gts-chip" data-tt="${tip}">
+      <span class="gts-dot" style="background:${g.color||'var(--accent)'}"></span>
+      <span>${esc(g.id)}</span>
+      <span class="gts-count">${gtsGroups[gid]} txf · ${replCount} REPL${replCount===1?'':'s'}</span>
+    </div>`;
+  }).join('');
+
+  // lifecycle fill width based on progress
+  const lcFill = s.status === 'running' ? Math.min(100, (s.elapsedMs * STATE.scrubFraction) / s.elapsedMs * 100) : 100;
+  // markers
+  const markers = s.transforms.map(t => {
+    const pct = (t.submittedAt / Math.max(s.elapsedMs, 1)) * 100;
+    const cls = t.terminalState === 'Failed' ? ' error' : '';
+    return `<div class="lc-marker${cls}" style="left:${clamp(pct,0,100)}%"></div>`;
+  }).join('');
+
+  // transform rows
+  const txfRows = s.transforms.map(t => renderTransformRow(t, s)).join('');
+
+  // error chip (first failed transform's error)
+  const errTxf = s.transforms.find(t => t.error);
+  const errChip = errTxf ? `<div class="error-chip" data-sid="${s.id}" data-txf="${errTxf.id}">
+    ${ICON_WARN}
+    <span class="err-code">${esc(errTxf.error.code)}</span>
+    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc((errTxf.error.message||'').split('\n')[0])}</span>
+  </div>` : '';
+
+  const q = STATE.search;
+  return `<div class="card ${sClass}${expanded}${selected}" data-sid="${s.id}">
+    <div class="card-status-rail"></div>
+    <div class="card-head">
+      <div class="status-icon">${statusIcon(s.status)}</div>
+      <div style="flex:1;min-width:0;">
+        <div class="session-id">${highlight(s.id, q)}</div>
+        <div class="session-meta">
+          <span class="artifact">${highlight(s.artifactName, q)}</span>
+          <span class="sep">·</span>
+          <span>${highlight(s.workspaceName, q)}</span>
+          <span class="sep">·</span>
+          <span class="mono" style="font-size:10.5px;">${esc(s.trackingId)}</span>
+        </div>
+      </div>
+      <div class="card-head-right">
+        <span class="elapsed-badge${elapsedLive}">${elapsed}</span>
+        <button class="expand-btn" data-act="expand" aria-label="Expand">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 3l3 3-3 3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="card-lifecycle">
+      <div class="lc-fill" style="width:${lcFill}%"></div>
+      <div class="lc-markers">${markers}</div>
+    </div>
+    <div class="gts-strip">${gtsChips}</div>
+    ${errChip}
+    <div class="transform-list">${txfRows}</div>
+  </div>`;
+}
+
+function renderTransformRow(t, s) {
+  const selected = STATE.selectedTxfId === t.id ? ' selected' : '';
+  // state strip — show time per phase
+  const phases = [
+    { state: 'Initializing', cls: 's-init' },
+    { state: 'Executing', cls: 's-exec' },
+    { state: 'CleanUp', cls: 's-cleanup' },
+  ];
+  // figure out phase durations from polls
+  const phaseMs = { Initializing: 0, Executing: 0, CleanUp: 0 };
+  let last = t.submittedAt;
+  let curState = 'Initializing';
+  for (const p of t.polls) {
+    const dt = p.at - last;
+    if (curState in phaseMs) phaseMs[curState] += dt;
+    last = p.at;
+    if (p.stateChanged) curState = p.state;
+  }
+  const total = Math.max(phaseMs.Initializing + phaseMs.Executing + phaseMs.CleanUp, 1);
+  const segs = phases.map(p => {
+    const pct = (phaseMs[p.state] / total) * 100;
+    return `<div class="seg ${p.cls}" style="width:${pct}%" data-tt="${p.state} · ${fmtDuration(phaseMs[p.state])}"></div>`;
+  }).join('');
+  // terminal cap
+  let terminalSeg = '';
+  if (t.terminalState === 'Succeeded') terminalSeg = '<div class="seg s-final-ok" style="width:6%"></div>';
+  if (t.terminalState === 'Failed') terminalSeg = '<div class="seg s-final-err" style="width:6%"></div>';
+  if (t.terminalState === 'Cancelled') terminalSeg = '<div class="seg s-final-cancel" style="width:6%"></div>';
+
+  const isLive = !t.terminalState;
+  const pulseHtml = isLive ? '<span class="pulse"></span>' : '';
+  const stateLabel = `<span class="t-state-label" style="color:${stateColor(t.state, t.terminalState)};">
+    ${pulseHtml}<span>${esc(t.state)}</span>
+  </span>`;
+
+  const durMs = (t.completedAt || Math.round((STATE.scrubMaxMs||t.submittedAt) * STATE.scrubFraction)) - t.submittedAt;
+  const rmShort = { Optimal: 'OPT', Full: 'FULL', Incremental: 'INC' }[t.refreshMode] || 'OPT';
+  const rmCls = (t.refreshMode || 'Optimal').toLowerCase();
+  const rmBadge = `<span class="rm-badge rm-${rmCls}" data-tt="refreshMode · ${esc(t.refreshMode||'Optimal')}">${rmShort}</span>`;
+  return `<div class="transform-row${selected}" data-sid="${s.id}" data-txf="${t.id}">
+    <span class="t-icon ${t.nodeKind}">${t.nodeKind==='sql'?'SQL':'PY'}</span>
+    <span class="t-name">${rmBadge}${highlight(t.name, STATE.search)}<span class="t-id">${esc(t.id.slice(0,12))}…</span></span>
+    <span class="state-strip">${segs}${terminalSeg}</span>
+    ${stateLabel}
+    <span class="t-duration">${fmtDuration(durMs)}</span>
+  </div>`;
+}
+
+function stateColor(state, terminal) {
+  if (terminal === 'Succeeded') return 'var(--green)';
+  if (terminal === 'Failed') return 'var(--red)';
+  if (terminal === 'Cancelled') return 'var(--grey)';
+  if (state === 'Executing') return 'var(--purple)';
+  if (state === 'Initializing' || state === 'InProgress') return 'var(--blue)';
+  if (state === 'CleanUp') return 'var(--teal)';
+  return 'var(--text-2)';
+}
+
+function attachCardEvents(el) {
+  const sid = el.dataset.sid;
+  el.addEventListener('click', (e) => {
+    const target = e.target;
+    if (target.closest('[data-act="expand"]')) {
+      e.stopPropagation();
+      if (STATE.expanded.has(sid)) STATE.expanded.delete(sid);
+      else STATE.expanded.add(sid);
+      renderCards();
+      return;
+    }
+    if (target.closest('.transform-row')) {
+      const row = target.closest('.transform-row');
+      const tid = row.dataset.txf;
+      STATE.selectedId = sid;
+      STATE.selectedTxfId = tid;
+      STATE.activeDetailTab = 'spans';
+      openDetail(sid, tid);
+      return;
+    }
+    if (target.closest('.error-chip')) {
+      const chip = target.closest('.error-chip');
+      STATE.selectedId = chip.dataset.sid;
+      STATE.selectedTxfId = chip.dataset.txf;
+      STATE.activeDetailTab = 'error';
+      openDetail(STATE.selectedId, STATE.selectedTxfId);
+      return;
+    }
+    if (target.closest('.gts-chip')) {
+      const chip = target.closest('.gts-chip');
+      toast('info', 'GTS session selected · filtering view');
+      return;
+    }
+    // default: open detail on the first transform (or first failed)
+    STATE.selectedId = sid;
+    const s = STATE.sessions.find(x => x.id === sid);
+    const tx = (s.transforms.find(t => !t.terminalState) || s.transforms.find(t => t.error) || s.transforms[0]);
+    if (tx) STATE.selectedTxfId = tx.id;
+    openDetail(sid, STATE.selectedTxfId);
+  });
+  $$('.gts-chip', el).forEach(c => attachTooltip(c));
+  $$('.rm-badge', el).forEach(b => attachTooltip(b));
+}
+
+// ===== DETAIL =====
+function openDetail(sid, tid) {
+  STATE.selectedId = sid;
+  STATE.selectedTxfId = tid;
+  $('#content').classList.add('has-detail');
+  $('#detailPane').style.display = 'flex';
+  renderDetail();
+  renderSwimlane();
+  renderCards();
+  renderScrubberEvents();
+}
+
+function closeDetail() {
+  $('#content').classList.remove('has-detail');
+  $('#detailPane').style.display = 'none';
+  STATE.selectedTxfId = null;
+  renderCards();
+  renderSwimlane();
+}
+
+function renderDetail() {
+  const pane = $('#detailPane');
+  const s = STATE.sessions.find(x => x.id === STATE.selectedId);
+  if (!s) { pane.style.display = 'none'; return; }
+  const t = (s.transforms.find(x => x.id === STATE.selectedTxfId)) || s.transforms[0];
+  if (!t) { pane.style.display = 'none'; return; }
+
+  const gts = GTS_SESSIONS[t.gts] || {};
+  const sClass = s.status === 'running' ? 's-running' : s.status === 'succeeded' ? 's-succeeded' : s.status === 'failed' ? 's-failed' : 's-cancelled';
+
+  const hasOutput = s.transforms.some(x => x.refreshOutput);
+  const tabs = [
+    { id: 'spans', label: 'Spans' },
+    { id: 'state', label: 'State Machine' },
+    { id: 'polls', label: 'Poll Log', count: t.polls.length },
+    { id: 'repls', label: 'REPLs', count: new Set(s.transforms.map(x => x.replId).filter(Boolean)).size },
+    { id: 'output', label: 'Output', hot: !!t.refreshOutput, dim: !hasOutput },
+    { id: 'error', label: 'Error', hot: !!t.error },
+    { id: 'raw', label: 'Raw Events' },
+  ];
+
+  const tabsHtml = tabs.map(tab => {
+    const active = STATE.activeDetailTab === tab.id ? ' active' : '';
+    const dim = tab.dim ? ' dim' : '';
+    const hot = tab.hot ? '<span class="dot-bullet"></span>' : '';
+    const cnt = tab.count ? ` <span class="muted">${tab.count}</span>` : '';
+    return `<div class="dtab${active}${dim}" data-dtab="${tab.id}">${hot}${tab.label}${cnt}</div>`;
+  }).join('');
+
+  pane.innerHTML = `
+    <div class="detail-head">
+      <div class="detail-head-row">
+        <div class="status-icon ${sClass.replace('s-','s-')}" style="background:${stateColor(t.state, t.terminalState)};animation:dotPop 240ms var(--spring);">${statusIcon(t.terminalState ? (t.terminalState==='Succeeded'?'succeeded':t.terminalState==='Failed'?'failed':'cancelled') : 'running')}</div>
+        <div>
+          <div class="session-id">${esc(t.name)} <span class="muted" style="font-size:11px;font-weight:400;margin-left:6px;">${esc(t.id)}</span></div>
+          <div class="session-meta">
+            <span class="artifact">${esc(s.artifactName)}</span><span class="sep">·</span>
+            <span>${esc(s.id)}</span><span class="sep">·</span>
+            <span class="mono" style="color:${stateColor(t.state, t.terminalState)};font-weight:600;">${esc(t.terminalState || t.state)}</span>
+          </div>
+        </div>
+        <button class="detail-close" id="detailClose" aria-label="Close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="detail-meta">
+      <div class="meta-cell"><div class="label">GTS Session</div><div class="value" style="color:${gts.color||'var(--accent)'};">${esc(t.gts)}</div></div>
+      <div class="meta-cell"><div class="label">Node Kind</div><div class="value">${esc(t.nodeKind.toUpperCase())}</div></div>
+      <div class="meta-cell"><div class="label">Region</div><div class="value dim">${esc(gts.region||'—')}</div></div>
+      <div class="meta-cell"><div class="label">Status</div><div class="value" style="color:${stateColor(t.state, t.terminalState)};">${esc(t.terminalState || t.state)}</div></div>
+      <div class="meta-cell"><div class="label">Submitted</div><div class="value">+${fmtElapsed(t.submittedAt)}</div></div>
+      <div class="meta-cell"><div class="label">Submit Duration</div><div class="value">${fmtDuration(t.submitDurationMs)}</div></div>
+      <div class="meta-cell"><div class="label">Polls</div><div class="value">${t.polls.length}</div></div>
+      <div class="meta-cell"><div class="label">Total Duration</div><div class="value">${fmtDuration((t.completedAt || Math.round(STATE.scrubMaxMs*STATE.scrubFraction)) - t.submittedAt)}</div></div>
+    </div>
+    <div class="detail-tabs" id="detailTabs">${tabsHtml}</div>
+    <div class="detail-body" id="detailBody">${renderDetailBody(s, t)}</div>
+  `;
+
+  $('#detailClose').addEventListener('click', closeDetail);
+  $$('.dtab', pane).forEach(el => el.addEventListener('click', () => {
+    STATE.activeDetailTab = el.dataset.dtab;
+    renderDetail();
+  }));
+}
+
+function renderDetailBody(s, t) {
+  switch (STATE.activeDetailTab) {
+    case 'spans': return renderSpansHtml(s, t);
+    case 'state': return renderStateMachineHtml(s, t);
+    case 'polls': return renderPollLogHtml(s, t);
+    case 'repls': return renderReplMapHtml(s, t);
+    case 'output': return renderOutputHtml(s, t);
+    case 'error': return renderErrorHtml(s, t);
+    case 'raw':   return renderRawEventsHtml(s, t);
+  }
+  return '';
+}
+
+function renderSpansHtml(s, t) {
+  // waterfall: each session-level transform as a span, current transform highlighted
+  const tEnd = Math.max(...s.transforms.map(x => x.completedAt || s.elapsedMs));
+  const ticks = [];
+  for (let i = 0; i <= 5; i++) {
+    const pct = i * 20;
+    const at = Math.round((tEnd * i)/5);
+    ticks.push(`<div class="tick" style="left:${pct}%"></div>`);
+    ticks.push(`<div class="tick-label" style="left:${pct}%">+${fmtElapsed(at)}</div>`);
+  }
+  const rows = s.transforms.map(x => {
+    const phaseMs = { Initializing: 0, Executing: 0, CleanUp: 0 };
+    let last = x.submittedAt;
+    let cur = 'Initializing';
+    for (const p of x.polls) {
+      phaseMs[cur] += (p.at - last);
+      last = p.at;
+      if (p.stateChanged) cur = p.state;
+    }
+    const xEnd = x.completedAt || Math.round(STATE.scrubMaxMs * STATE.scrubFraction);
+    const total = xEnd - x.submittedAt;
+    const startPct = (x.submittedAt / tEnd) * 100;
+    const widthPct = (total / tEnd) * 100;
+    // segmented spans within row
+    const initW = (phaseMs.Initializing / total) * 100;
+    const execW = (phaseMs.Executing / total) * 100;
+    const cleanW = (phaseMs.CleanUp / total) * 100;
+    let termCls = 'terminal-ok';
+    if (x.terminalState === 'Failed') termCls = 'terminal-err';
+    else if (x.terminalState === 'Cancelled') termCls = 'terminal-cancel';
+    const polls = x.polls.slice(0, 16).map(p => {
+      const pct = ((p.at - x.submittedAt) / total) * 100;
+      return `<div class="wf-poll-tick" style="left:${clamp(pct,0,100)}%"></div>`;
+    }).join('');
+    const errMarker = x.error ? `<div class="wf-error-marker" style="right:-3px"></div>` : '';
+    const selected = (x.id === t.id) ? ' selected' : '';
+    return `<div class="wf-row${selected}" data-txf="${x.id}">
+      <div class="wf-name"><span class="depth">└─</span><span class="t-icon ${x.nodeKind}" style="margin-right:6px;">${x.nodeKind==='sql'?'SQL':'PY'}</span>${esc(x.name)}</div>
+      <div class="wf-track" style="position:relative;">
+        <div style="position:absolute;left:${startPct}%;width:${widthPct}%;height:100%;">
+          <div class="wf-span init" style="left:0;width:${initW}%">${initW>14?'init':''}</div>
+          <div class="wf-span exec" style="left:${initW}%;width:${execW}%">${execW>14?'exec':''}</div>
+          <div class="wf-span cleanup" style="left:${initW+execW}%;width:${cleanW}%">${cleanW>14?'clean':''}</div>
+          ${x.terminalState ? `<div class="wf-span ${termCls}" style="right:0;width:4%">${x.terminalState==='Succeeded'?'✓':x.terminalState==='Failed'?'✕':'■'}</div>` : ''}
+          ${polls}
+          ${errMarker}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="section-h"><span>Spans Waterfall</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${s.transforms.length} transforms · ${fmtDuration(tEnd)} total</span><span class="h-line"></span></div>
+  <div class="waterfall">
+    <div class="wf-axis">${ticks.join('')}</div>
+    ${rows}
+  </div>
+  <div class="section-h"><span>Critical Path</span><span class="h-line"></span></div>
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:11.5px;color:var(--text-2);">
+    ${s.transforms.map((x,i) => {
+      const c = stateColor(x.state, x.terminalState);
+      return `<div style="display:flex;align-items:center;gap:6px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:${c};"></span>
+        <span class="mono" style="color:${c};font-weight:600;">${esc(x.name.split('.').pop())}</span>
+        ${i < s.transforms.length-1 ? '<span class="muted">→</span>' : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function renderStateMachineHtml(s, t) {
+  // 6 nodes: NotStarted → Initializing → Executing → CleanUp → Succeeded | Failed | Cancelled
+  const nodes = [
+    { id: 'NotStarted',   x: 30,  y: 80, w: 90, h: 40 },
+    { id: 'Initializing', x: 150, y: 80, w: 100, h: 40 },
+    { id: 'Executing',    x: 280, y: 80, w: 90, h: 40 },
+    { id: 'CleanUp',      x: 400, y: 80, w: 90, h: 40 },
+    { id: 'Succeeded',    x: 520, y: 30, w: 100, h: 36 },
+    { id: 'Failed',       x: 520, y: 90, w: 100, h: 36 },
+    { id: 'Cancelled',    x: 520, y: 150,w: 100, h: 36 },
+  ];
+
+  // determine current and visited states from polls
+  const visited = new Set(['NotStarted']);
+  let lastSeen = t.state;
+  if (t.submittedAt > 0) visited.add('Initializing');
+  for (const p of t.polls) {
+    if (p.previousState) visited.add(p.previousState);
+    if (p.state) visited.add(p.state);
+    lastSeen = p.state;
+  }
+  if (t.terminalState) visited.add(t.terminalState);
+  const current = t.terminalState || lastSeen;
+
+  // edges
+  const edges = [
+    { from: 'NotStarted',   to: 'Initializing', label: 'submit' },
+    { from: 'Initializing', to: 'Executing',    label: 'init→exec' },
+    { from: 'Executing',    to: 'CleanUp',      label: 'success' },
+    { from: 'CleanUp',      to: 'Succeeded',    label: '✓', cls: '' },
+    { from: 'Executing',    to: 'Failed',       label: 'error', cls: 'terminal-err' },
+    { from: 'Initializing', to: 'Failed',       label: 'init-fail', cls: 'terminal-err' },
+    { from: 'Executing',    to: 'Cancelled',    label: 'cancel', cls: 'terminal-cancel' },
+  ];
+
+  function nodeBy(id) { return nodes.find(n => n.id === id); }
+  function nodeCls(n) {
+    if (current === n.id && t.terminalState) {
+      return n.id === 'Succeeded' ? 'terminal-ok' : n.id === 'Failed' ? 'terminal-err' : 'terminal-cancel';
+    }
+    if (current === n.id && !t.terminalState) return 'current';
+    if (visited.has(n.id)) return 'visited';
+    return '';
+  }
+  function edgePath(e) {
+    const a = nodeBy(e.from), b = nodeBy(e.to);
+    if (!a || !b) return '';
+    const ax = a.x + a.w, ay = a.y + a.h/2;
+    const bx = b.x, by = b.y + b.h/2;
+    const mx = (ax + bx) / 2;
+    return `M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`;
+  }
+  function edgeCls(e) {
+    const fromVisited = visited.has(e.from);
+    const toVisited = visited.has(e.to);
+    if (fromVisited && toVisited) {
+      if (e.cls === 'terminal-err' && current === 'Failed') return 'sm-edge visited terminal-err';
+      if (e.cls === 'terminal-cancel' && current === 'Cancelled') return 'sm-edge visited terminal-cancel';
+      if (!e.cls) return 'sm-edge visited';
+    }
+    return `sm-edge ${e.cls||''}`;
+  }
+  function edgeMid(e) {
+    const a = nodeBy(e.from), b = nodeBy(e.to);
+    return { x: (a.x + a.w + b.x)/2, y: ((a.y + a.h/2) + (b.y + b.h/2))/2 };
+  }
+
+  const svgEdges = edges.map(e => `
+    <path class="${edgeCls(e)}" d="${edgePath(e)}"/>
+    <text class="sm-edge-label" x="${edgeMid(e).x}" y="${edgeMid(e).y - 4}" text-anchor="middle">${esc(e.label)}</text>
+  `).join('');
+  const svgNodes = nodes.map(n => `
+    <g class="sm-node ${nodeCls(n)}" transform="translate(${n.x},${n.y})">
+      <rect width="${n.w}" height="${n.h}" rx="8"/>
+      <text x="${n.w/2}" y="${n.h/2 + 4}" text-anchor="middle">${esc(n.id)}</text>
+    </g>
+  `).join('');
+
+  return `<div class="section-h"><span>State Machine</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">visited path · live</span><span class="h-line"></span></div>
+  <div class="state-machine">
+    <svg viewBox="0 0 640 200">
+      <defs>
+        <marker id="sm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 Z" fill="var(--line-strong)"/>
+        </marker>
+      </defs>
+      ${svgEdges}
+      ${svgNodes}
+    </svg>
+  </div>
+  <div style="margin-top:14px;padding:10px 14px;background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r8);font-size:11.5px;color:var(--text-2);">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="mono" style="color:var(--accent);font-weight:600;">${esc(current)}</span>
+      <span class="muted">·</span>
+      <span>${t.terminalState ? 'terminal' : 'live'}</span>
+      <span class="muted">·</span>
+      <span>${visited.size} states visited</span>
+    </div>
+  </div>`;
+}
+
+function renderPollLogHtml(s, t) {
+  if (!t.polls.length) {
+    return `<div class="empty"><div class="e-title">No polls recorded</div><div class="e-sub">This transform has not been polled yet.</div></div>`;
+  }
+  const rows = t.polls.map((p, i) => {
+    let cls = '';
+    if (p.stateChanged) cls = 'state-change';
+    let note = '';
+    if (p.stateChanged) note = `<span>${esc(p.previousState||'∅')}</span><span class="change-arrow">→</span><span>${esc(p.state)}</span>`;
+    else if (p.hasOutput) note = '<span class="muted">streaming output</span>';
+    else note = '<span class="muted">no change</span>';
+    return `<div class="poll-row ${cls}" data-poll="${i}">
+      <div class="col-n">#${String(i+1).padStart(3,'0')}</div>
+      <div class="col-t">+${fmtElapsed(p.at)}</div>
+      <div class="col-state"><span class="s-dot"></span>${esc(p.state)}</div>
+      <div class="col-delta">+${p.durationMs}ms</div>
+      <div class="col-note">${note}</div>
+    </div>`;
+  });
+  // terminal row
+  if (t.terminalState) {
+    const tcls = t.terminalState === 'Succeeded' ? 'terminal-ok' : t.terminalState === 'Failed' ? 'terminal-err' : 'terminal-cancel';
+    rows.push(`<div class="poll-row ${tcls}">
+      <div class="col-n">#${String(t.polls.length+1).padStart(3,'0')}</div>
+      <div class="col-t">+${fmtElapsed(t.completedAt)}</div>
+      <div class="col-state"><span class="s-dot"></span>${esc(t.terminalState)}</div>
+      <div class="col-delta">terminal</div>
+      <div class="col-note">${t.error ? esc(t.error.code) : 'TransformCompleted'}</div>
+    </div>`);
+  }
+
+  // poll cadence histogram
+  const intervals = t.polls.map(p => p.durationMs);
+  const max = Math.max(...intervals, 1);
+  const buckets = [50, 100, 250, 500, 1000, 2000, 3000];
+  const histogram = buckets.map(b => {
+    const c = intervals.filter(i => i <= b && i > (buckets[buckets.indexOf(b)-1]||0)).length;
+    const pct = (c / intervals.length) * 100 || 0;
+    return { label: `≤${b}ms`, count: c, pct };
+  });
+
+  return `<div class="section-h"><span>Poll Log</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${t.polls.length} polls · avg ${Math.round(intervals.reduce((a,b)=>a+b,0)/Math.max(intervals.length,1))}ms</span><span class="h-line"></span></div>
+  <div class="poll-log">
+    <div class="poll-log-head">
+      <div>#</div><div>Time</div><div>State</div><div>Δ</div><div>Note</div>
+    </div>
+    ${rows.join('')}
+  </div>
+  <div class="section-h"><span>Poll Cadence</span><span class="h-line"></span></div>
+  <div style="display:flex;gap:6px;align-items:flex-end;height:64px;padding:6px 4px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r10);">
+    ${histogram.map(h => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <div style="width:100%;height:${Math.max(h.pct*0.5, 2)}px;background:linear-gradient(180deg,var(--accent),var(--accent-2));border-radius:3px 3px 0 0;transition:height 320ms var(--ease-out);"></div>
+      <div class="mono" style="font-size:9.5px;color:var(--text-3);">${h.label}</div>
+      <div class="mono" style="font-size:10px;color:var(--text-2);font-weight:600;">${h.count}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderReplMapHtml(s, t) {
+  // Group transforms by GTS, then by REPL within each GTS.
+  const byGts = {};
+  s.transforms.forEach(x => {
+    if (!byGts[x.gts]) byGts[x.gts] = {};
+    const rid = x.replId || '(no repl)';
+    if (!byGts[x.gts][rid]) byGts[x.gts][rid] = [];
+    byGts[x.gts][rid].push(x);
+  });
+
+  const totalRepls = new Set(s.transforms.map(x => x.replId).filter(Boolean)).size;
+  const groups = Object.keys(byGts).map(gid => {
+    const g = GTS_SESSIONS[gid] || { id: gid };
+    const repls = byGts[gid];
+    const replIds = Object.keys(repls);
+    const rows = replIds.map(rid => {
+      const txfs = repls[rid];
+      const txfList = txfs.map(x => {
+        const c = stateColor(x.state, x.terminalState);
+        const sel = (x.id === t.id) ? ' style="background:var(--accent-soft);border-radius:4px;padding:1px 4px;margin:-1px -4px;"' : '';
+        const stateText = x.terminalState || x.state;
+        return `<div class="repl-txf"${sel}>
+          <span class="t-icon ${x.nodeKind}">${x.nodeKind==='sql'?'SQL':'PY'}</span>
+          <span class="repl-txf-name">${esc(x.name)}</span>
+          <span class="repl-txf-state" style="color:${c};">${esc(stateText)}</span>
+        </div>`;
+      }).join('');
+      const firstSubmittedAt = Math.min(...txfs.map(x => x.submittedAt));
+      return `<div class="repl-row">
+        <div>
+          <div class="repl-id"><span class="repl-dot" style="background:${g.color||'var(--accent)'}"></span>${esc(rid)}</div>
+          <div class="repl-txf-list">${txfList}</div>
+        </div>
+        <div class="repl-stamp">submitted<br>+${fmtElapsed(firstSubmittedAt)}</div>
+      </div>`;
+    }).join('');
+    return `<div class="repl-group">
+      <div class="repl-group-head">
+        <span class="gts-pin" style="background:${g.color||'var(--accent)'}"></span>
+        <span class="gts-id">${esc(g.id)}</span>
+        <span class="gts-meta">${esc(g.region||'')} · ${g.warm ? 'warm' : 'cold'}</span>
+        <span class="repl-count">${replIds.length} REPL${replIds.length===1?'':'s'} · ${Object.values(repls).reduce((a,b)=>a+b.length,0)} txf</span>
+      </div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  return `<div class="section-h"><span>REPL Map</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${Object.keys(byGts).length} GTS session${Object.keys(byGts).length===1?'':'s'} · ${totalRepls} REPL${totalRepls===1?'':'s'} · ${s.transforms.length} transform${s.transforms.length===1?'':'s'}</span><span class="h-line"></span></div>
+  <div style="font-size:11px;color:var(--text-3);line-height:1.55;margin-bottom:10px;">Each transform submission gets its own REPL (Spark statement) inside a GTS session. Warm sessions can host many REPLs across iterations.</div>
+  ${groups}`;
+}
+
+function renderOutputHtml(s, t) {
+  const ro = t.refreshOutput;
+  if (!ro) {
+    return `<div class="empty">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M16 11v6M16 21h.01"/></svg>
+      <div class="e-title">No refresh output</div>
+      <div class="e-sub">This transform is ${t.terminalState || 'still running'}. Output metrics are recorded only on successful completion.</div>
+    </div>`;
+  }
+  const droppedZero = ro.totalRowsDropped === 0;
+  const violationsZero = ro.totalViolations === 0;
+  const violations = ro.violationsPerConstraint || {};
+  const violationKeys = Object.keys(violations);
+  const maxV = Math.max(1, ...violationKeys.map(k => violations[k]));
+  const violationsHtml = violationKeys.length ? `
+    <div class="section-h"><span>Violations by Constraint</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${violationKeys.length} constraint${violationKeys.length===1?'':'s'} affected</span><span class="h-line"></span></div>
+    <div class="violation-list">
+      ${violationKeys.map(k => {
+        const pct = (violations[k] / maxV) * 100;
+        return `<div class="violation-row">
+          <span class="vr-name">${esc(k)}</span>
+          <div class="vr-bar"><div style="width:${pct}%"></div></div>
+          <span class="vr-count">${violations[k]}</span>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  const tsLocal = (() => { try { return new Date(ro.refreshTimestamp).toLocaleString(); } catch(_) { return ro.refreshTimestamp; } })();
+
+  return `<div class="section-h"><span>Refresh Output</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">parsed from TransformCompleted · ${esc(ro.refreshPolicy)} policy</span><span class="h-line"></span></div>
+  <div class="refresh-output">
+    <div class="ro-stats">
+      <div class="ro-stat policy">
+        <div class="ro-label">Refresh Policy</div>
+        <div class="ro-value">${esc(ro.refreshPolicy)}</div>
+        <div class="ro-sub">submitted as ${esc(t.refreshMode)}</div>
+      </div>
+      <div class="ro-stat">
+        <div class="ro-label">Rows Processed</div>
+        <div class="ro-value">${ro.totalRowsProcessed.toLocaleString()}</div>
+        <div class="ro-sub">materialized</div>
+      </div>
+      <div class="ro-stat dropped">
+        <div class="ro-label">Rows Dropped</div>
+        <div class="ro-value${droppedZero?' zero':''}">${ro.totalRowsDropped.toLocaleString()}</div>
+        <div class="ro-sub">${droppedZero ? 'clean' : ((ro.totalRowsDropped/ro.totalRowsProcessed)*100).toFixed(3)+'% of input'}</div>
+      </div>
+      <div class="ro-stat violations">
+        <div class="ro-label">DQ Violations</div>
+        <div class="ro-value${violationsZero?' zero':''}">${ro.totalViolations}</div>
+        <div class="ro-sub">${violationsZero ? 'no constraint failures' : violationKeys.length + ' constraint' + (violationKeys.length===1?'':'s')}</div>
+      </div>
+    </div>
+    <div class="ro-mlv">
+      <div class="kvl">MLV Namespace</div><div class="kvv dim">${esc(ro.mlvNamespace)}</div>
+      <div class="kvl">MLV Name</div>      <div class="kvv">${esc(ro.mlvName)}</div>
+      <div class="kvl">MLV ID</div>        <div class="kvv dim">${esc(ro.mlvId)}</div>
+      <div class="kvl">Refresh Timestamp</div><div class="kvv dim">${esc(tsLocal)} <span class="muted">· ${esc(ro.refreshTimestamp)}</span></div>
+    </div>
+    <div class="ro-msg">${esc(ro.outputMessage)}</div>
+  </div>
+  ${violationsHtml}`;
+}
+
+function renderErrorHtml(s, t) {
+  if (!t.error) {
+    return `<div class="empty">
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="16" cy="16" r="12"/><path d="M11 16l4 4 6-8"/></svg>
+      <div class="e-title">No errors recorded</div>
+      <div class="e-sub">This transform ${t.terminalState || 'is running'} cleanly.</div>
+    </div>`;
+  }
+  const e = t.error;
+  const stack = Array.isArray(e.stackTrace) ? e.stackTrace : [];
+  const stackHtml = stack.length ? `
+  <div class="section-h"><span>Stack Trace</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${stack.length} frames · top frame is innermost</span><span class="h-line"></span></div>
+  <div class="stack-trace">
+    ${stack.map((line, i) => {
+      const isUser = /\bMLV\./.test(line);
+      // split "at Class.Method(File:Line)" into class + location
+      const m = /^(at\s+)(.+?)(\([^)]+\))?$/.exec(line.trim());
+      let body = esc(line);
+      if (m) {
+        body = `<span class="muted">${esc(m[1])}</span><span class="sf-cls">${esc(m[2])}</span>${m[3] ? `<span class="sf-loc">${esc(m[3])}</span>` : ''}`;
+      }
+      return `<div class="stack-frame${isUser ? ' user' : ''}">
+        <span class="sf-num">${i+1}</span>
+        <span class="sf-line">${body}</span>
+      </div>`;
+    }).join('')}
+  </div>` : '';
+
+  return `<div class="section-h"><span>Error Detail</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${esc(e.source)} source · ${esc(e.stage || 'SparkJobExecution')} stage</span><span class="h-line"></span></div>
+  <div class="error-block">
+    <div class="error-block-head">
+      ${ICON_WARN}
+      <span class="err-title">Transform Failed</span>
+      ${e.stage ? `<span class="error-stage-tag">stage · ${esc(e.stage)}</span>` : ''}
+      <span class="src-badge ${e.source.toLowerCase()}">${esc(e.source)}</span>
+    </div>
+    <div class="error-block-body">
+      <span class="err-code">${esc(e.code)}</span>
+${esc(e.message)}
+    </div>
+    <div class="error-block-foot">
+      <span class="tag ${e.retriable ? 'retriable' : 'terminal'}">${e.retriable ? 'retriable' : 'non-retriable'}</span>
+      ${e.retryAfterMs ? `<span class="tag retriable">retry after ${fmtElapsed(e.retryAfterMs)}</span>` : ''}
+      <span class="tag">tracking ${esc(s.trackingId.slice(0,18))}</span>
+    </div>
+  </div>
+  ${stackHtml}
+  <div class="section-h"><span>Suggested Actions</span><span class="h-line"></span></div>
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    ${suggestActions(e).map(a => `<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r8);">
+      <span style="width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">→</span>
+      <div style="flex:1;font-size:12px;line-height:1.55;">
+        <div style="color:var(--text);font-weight:500;">${esc(a.title)}</div>
+        <div class="muted" style="margin-top:2px;">${esc(a.desc)}</div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function suggestActions(e) {
+  const actions = [];
+  if (e.code === 'MLV_SPARK_SESSION_ACQUISITION_FAILED') {
+    actions.push({ title: 'Wait for capacity', desc: 'Capacity is over its concurrent session quota. Retry after the indicated cooldown — system will recover automatically.' });
+    actions.push({ title: 'Scale workspace capacity', desc: 'If acquisition failures are persistent, request a higher concurrent session limit on this workspace.' });
+  } else if (e.code === 'MLV_SPARK_TRANSFORM_EXECUTION_FAILED') {
+    actions.push({ title: 'Inspect SQL query', desc: 'AnalysisException points to a column reference. Verify the schema or fix the typo in the DAG node definition.' });
+    actions.push({ title: 'Open node in DAG Studio', desc: 'Navigate to the node and re-run with the corrected query. Errors of source=User are deterministic.' });
+  } else {
+    actions.push({ title: 'Inspect stack trace', desc: 'Review the full server-side stack trace above and correlate with operation logs.' });
+  }
+  return actions;
+}
+
+function renderRawEventsHtml(s, t) {
+  const events = [];
+  events.push({ kind: 'Created', at: 0, data: {
+    sessionTrackingId: s.trackingId, iterationId: s.id, tenantId: s.tenantId,
+    workspaceId: s.workspaceId, artifactId: 'art-' + s.artifactName.toLowerCase(),
+    workspaceName: s.workspaceName, artifactName: s.artifactName,
+    durationMs: s.durationCreatedMs,
+  }});
+  events.push({ kind: 'TransformSubmitted', at: t.submittedAt, data: {
+    transformationId: t.id, nodeId: t.nodeId, nodeName: t.name, nodeKind: t.nodeKind,
+    refreshMode: t.refreshMode,
+    state: 'Initializing',
+    gtsSessionId: t.gts, replId: t.replId,
+    mlvNamespace: t.mlvNamespace, mlvName: t.mlvName,
+    durationMs: t.submitDurationMs, retriable: t.retriable
+  }});
+  t.polls.forEach((p,i) => events.push({ kind: 'TransformPolled', at: p.at, data: {
+    transformationId: t.id, nodeName: t.name, state: p.state, previousState: p.previousState,
+    stateChanged: p.stateChanged, isTerminal: false, durationMs: p.durationMs,
+    retryAfterMs: p.retryAfterMs, hasOutput: p.hasOutput
+  }, n: i+1 }));
+  if (t.terminalState) {
+    const ro = t.refreshOutput;
+    const completedData = {
+      transformationId: t.id, nodeId: t.nodeId, nodeName: t.name,
+      state: t.terminalState,
+      previousState: t.polls.length ? t.polls[t.polls.length-1].state : 'Initializing',
+      stateChanged: true, isTerminal: true,
+      durationMs: t.completedAt - (t.polls.length ? t.polls[t.polls.length-1].at : t.submittedAt),
+    };
+    if (ro) {
+      completedData.refreshPolicy = ro.refreshPolicy;
+      completedData.totalRowsProcessed = ro.totalRowsProcessed;
+      completedData.totalRowsDropped = ro.totalRowsDropped;
+      completedData.totalViolations = ro.totalViolations;
+      completedData.violationsPerConstraint = JSON.stringify(ro.violationsPerConstraint || {});
+      completedData.mlvNamespace = ro.mlvNamespace;
+      completedData.mlvName = ro.mlvName;
+      completedData.mlvId = ro.mlvId;
+      completedData.refreshTimestamp = ro.refreshTimestamp;
+      completedData.outputMessage = ro.outputMessage;
+    }
+    if (t.error) {
+      completedData.errorCode = t.error.code;
+      completedData.errorMessage = (t.error.message||'').split('\n')[0];
+      completedData.errorSource = t.error.source;
+      completedData.errorStage = t.error.stage;
+      completedData.stackTrace = t.error.stackTrace;
+    }
+    events.push({ kind: 'TransformCompleted', at: t.completedAt, data: completedData });
+  }
+  const html = events.map(ev => {
+    const color = ev.kind === 'Created' ? 'var(--blue)' :
+                  ev.kind === 'TransformSubmitted' ? 'var(--accent)' :
+                  ev.kind === 'TransformPolled' ? 'var(--text-3)' :
+                  ev.kind === 'TransformCompleted' ? (t.error ? 'var(--red)' : 'var(--green)') : 'var(--text-3)';
+    return `<div style="padding:8px 12px;border-bottom:1px solid var(--line-2);background:var(--surface);font-family:var(--font-mono);font-size:11.5px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <span style="color:var(--text-3);">+${fmtElapsed(ev.at)}</span>
+        <span style="color:${color};font-weight:700;">${esc(ev.kind)}</span>
+        ${ev.n ? `<span class="muted">#${ev.n}</span>` : ''}
+      </div>
+      <pre style="margin:0;color:var(--text-2);font-size:11px;line-height:1.55;white-space:pre-wrap;word-break:break-word;">${esc(JSON.stringify(ev.data, null, 2))}</pre>
+    </div>`;
+  }).join('');
+  return `<div class="section-h"><span>Raw Events</span><span class="muted" style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10.5px;">${events.length} events · spark topic</span><span class="h-line"></span></div>
+  <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--r10);overflow:hidden;">${html}</div>`;
+}
+
+function renderScrubberEvents() {
+  const ev = $('#scrubEvents');
+  const s = STATE.sessions.find(x => x.id === STATE.selectedId);
+  if (!s) {
+    const all = STATE.sessions.flatMap(s => s.transforms.flatMap(t =>
+      [{ at: t.submittedAt + (s.startMs >= 0 ? 0 : -s.startMs), kind: 'sub' }]
+      .concat((t.completedAt ? [{ at: t.completedAt + (s.startMs >= 0 ? 0 : -s.startMs), kind: t.terminalState==='Failed'?'err':t.terminalState==='Succeeded'?'ok':'sub' }] : []))
+    ));
+    const maxAt = Math.max(...all.map(e => e.at), 1);
+    ev.innerHTML = all.map(e => {
+      const pct = (e.at / maxAt) * 100;
+      return `<div class="scrubber-event ${e.kind==='err'?'err':e.kind==='ok'?'ok':''}" style="left:${pct}%"></div>`;
+    }).join('');
+    return;
+  }
+  const events = [];
+  s.transforms.forEach(t => {
+    events.push({ at: t.submittedAt, kind: 'sub' });
+    t.polls.forEach(p => events.push({ at: p.at, kind: p.stateChanged ? 'change' : 'poll' }));
+    if (t.terminalState) {
+      events.push({ at: t.completedAt, kind: t.terminalState === 'Failed' ? 'err' : t.terminalState === 'Succeeded' ? 'ok' : 'cxl' });
+    }
+  });
+  const maxAt = Math.max(...events.map(e => e.at), 1);
+  ev.innerHTML = events.map(e => {
+    const pct = (e.at / maxAt) * 100;
+    const cls = e.kind === 'err' ? 'err' : e.kind === 'ok' ? 'ok' : '';
+    return `<div class="scrubber-event ${cls}" style="left:${pct}%"></div>`;
+  }).join('');
+}
+
+function renderAll() {
+  updateCounts();
+  updateFooterStats();
+  renderSwimlane();
+  renderCards();
+  renderScrubberEvents();
+  if (STATE.selectedTxfId) renderDetail();
+}
+
+// ===== TOOLTIP =====
+const tooltip = $('#tooltip');
+function attachTooltip(el) {
+  const text = el.getAttribute('data-tt');
+  if (!text) return;
+  el.addEventListener('mouseenter', (e) => showTooltip(text, e));
+  el.addEventListener('mousemove', (e) => positionTooltip(e));
+  el.addEventListener('mouseleave', () => hideTooltip());
+}
+function showTooltip(text, e) {
+  tooltip.textContent = text;
+  tooltip.classList.add('show');
+  positionTooltip(e);
+}
+function positionTooltip(e) {
+  const x = e.clientX + 12, y = e.clientY + 18;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+function hideTooltip() { tooltip.classList.remove('show'); }
+
+// ===== TOAST =====
+function toast(kind, msg, ms=2400) {
+  const stack = $('#toastStack');
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  const icon = kind === 'success' ? ICON_OK : kind === 'error' ? ICON_ERR : ICON_INFO;
+  el.innerHTML = `<span class="icon">${icon}</span><span>${esc(msg)}</span>`;
+  stack.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity 200ms, transform 200ms';
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(8px)';
+    setTimeout(() => el.remove(), 220);
+  }, ms);
+}
+</script>
+<script id="boot">
+// ===== FILTER PILLS =====
+$$('#filterPills .pill').forEach(p => {
+  p.addEventListener('click', () => {
+    $$('#filterPills .pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+    STATE.filter = p.dataset.filter;
+    renderCards();
+    renderSwimlane();
+  });
+});
+
+// ===== SEARCH =====
+const searchInput = $('#searchInput');
+searchInput.addEventListener('input', e => {
+  STATE.search = e.target.value.trim();
+  renderCards();
+});
+
+// ===== LIVE TOGGLE =====
+$('#liveToggle').addEventListener('click', () => {
+  STATE.live = !STATE.live;
+  const btn = $('#liveToggle');
+  btn.classList.toggle('on', STATE.live);
+  $('#liveLabel').textContent = STATE.live ? 'Live' : 'Paused';
+  toast('info', STATE.live ? 'Live mode resumed' : 'Live mode paused');
+});
+
+// ===== THEME =====
+$('#themeToggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  toast('info', `${next.charAt(0).toUpperCase() + next.slice(1)} theme`);
+});
+
+// ===== SWIMLANE COLLAPSE =====
+$('#swimlaneChev').addEventListener('click', () => {
+  $('#swimlane').classList.toggle('collapsed');
+  STATE.swimlaneCollapsed = $('#swimlane').classList.contains('collapsed');
+});
+$('.swimlane-head').addEventListener('click', (e) => {
+  if (e.target.closest('.legend')) return;
+  if (e.target.closest('.chev')) return; // handled above
+  $('#swimlane').classList.toggle('collapsed');
+});
+
+// ===== EXPORT =====
+$('#exportBtn').addEventListener('click', () => {
+  toast('success', 'Exported trace to spark-trace.json (mock)');
+});
+$('#helpBtn').addEventListener('click', () => {
+  const sc = $('#stateController');
+  sc.style.display = sc.style.display === 'none' ? 'block' : 'none';
+});
+
+// ===== STATE CONTROLLER =====
+$$('.sc-btn').forEach(b => {
+  b.addEventListener('click', () => applyScenario(b.dataset.scenario));
+});
+
+function applyScenario(name) {
+  switch (name) {
+    case 'cold':
+      STATE.filter = 'all';
+      STATE.scrubFraction = 0.05;
+      STATE.expanded.clear();
+      STATE.selectedId = null; STATE.selectedTxfId = null;
+      closeDetail();
+      toast('info', 'Cold start · timeline rewound to t=0');
+      break;
+    case 'active':
+      STATE.filter = 'running';
+      STATE.scrubFraction = 0.94;
+      $$('#filterPills .pill').forEach(x => x.classList.toggle('active', x.dataset.filter === 'running'));
+      const running = STATE.sessions.find(s => s.status === 'running');
+      if (running) {
+        STATE.selectedId = running.id;
+        STATE.expanded.add(running.id);
+        const live = running.transforms.find(t => !t.terminalState);
+        if (live) STATE.selectedTxfId = live.id;
+        openDetail(running.id, STATE.selectedTxfId);
+      }
+      toast('info', 'Focused active iteration');
+      break;
+    case 'error':
+      STATE.filter = 'failed';
+      $$('#filterPills .pill').forEach(x => x.classList.toggle('active', x.dataset.filter === 'failed'));
+      const failed = STATE.sessions.find(s => s.status === 'failed');
+      if (failed) {
+        STATE.selectedId = failed.id;
+        STATE.expanded.add(failed.id);
+        const errTxf = failed.transforms.find(t => t.error);
+        if (errTxf) STATE.selectedTxfId = errTxf.id;
+        STATE.activeDetailTab = 'error';
+        openDetail(failed.id, STATE.selectedTxfId);
+      }
+      toast('error', 'Error storm · acquisition failure detected');
+      break;
+    case 'cancel':
+      STATE.filter = 'cancelled';
+      $$('#filterPills .pill').forEach(x => x.classList.toggle('active', x.dataset.filter === 'cancelled'));
+      const cxl = STATE.sessions.find(s => s.status === 'cancelled');
+      if (cxl) {
+        STATE.selectedId = cxl.id;
+        STATE.expanded.add(cxl.id);
+        const cxlTxf = cxl.transforms.find(t => t.terminalState === 'Cancelled');
+        if (cxlTxf) STATE.selectedTxfId = cxlTxf.id;
+        openDetail(cxl.id, STATE.selectedTxfId);
+      }
+      toast('info', 'User cancellation · transform halted at runtime');
+      break;
+    case 'replay':
+      STATE.scrubFraction = 0;
+      STATE.live = false;
+      $('#liveToggle').classList.remove('on');
+      $('#liveLabel').textContent = 'Paused';
+      toast('info', 'Replay started · drag scrubber to time-travel');
+      // animate
+      let f = 0;
+      const tick = () => {
+        f += 0.012;
+        if (f >= 1) f = 1;
+        STATE.scrubFraction = f;
+        renderAll();
+        if (f < 1) requestAnimationFrame(tick);
+        else toast('success', 'Replay complete');
+      };
+      requestAnimationFrame(tick);
+      return;
+    case 'empty':
+      STATE.sessions.length = 0;
+      renderAll();
+      toast('info', 'Empty state · no sessions');
+      return;
+  }
+  renderAll();
+}
+
+// ===== SCRUBBER DRAG =====
+const track = $('#scrubTrack');
+const handle = $('#scrubHandle');
+let dragging = false;
+function setScrubFromEvent(e) {
+  const rect = track.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  const f = clamp(x / rect.width, 0, 1);
+  STATE.scrubFraction = f;
+  if (f < 0.95) {
+    STATE.live = false;
+    $('#liveToggle').classList.remove('on');
+    $('#liveLabel').textContent = 'Paused';
+  }
+  renderAll();
+}
+track.addEventListener('mousedown', (e) => {
+  dragging = true;
+  setScrubFromEvent(e);
+});
+document.addEventListener('mousemove', (e) => { if (dragging) setScrubFromEvent(e); });
+document.addEventListener('mouseup', () => { dragging = false; });
+handle.addEventListener('touchstart', () => dragging = true);
+document.addEventListener('touchmove', (e) => { if (dragging) setScrubFromEvent(e); });
+document.addEventListener('touchend', () => dragging = false);
+
+// ===== KEYBOARD =====
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') {
+    if (e.key === 'Escape') { e.target.blur(); }
+    return;
+  }
+  // scenarios via number keys
+  if (e.key === '1') return applyScenario('cold');
+  if (e.key === '2') return applyScenario('active');
+  if (e.key === '3') return applyScenario('error');
+  if (e.key === '4') return applyScenario('cancel');
+  if (e.key === '0') return applyScenario('empty');
+  if (e.key === 'r' || e.key === 'R') return applyScenario('replay');
+  // misc
+  if (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key === 'k')) {
+    e.preventDefault(); searchInput.focus(); return;
+  }
+  if (e.key === 'l' || e.key === 'L') { $('#liveToggle').click(); return; }
+  if (e.key === '?') { $('#helpBtn').click(); return; }
+  if (e.key === 'Escape') { closeDetail(); return; }
+
+  const list = visibleSessions();
+  if (!list.length) return;
+  let i = list.findIndex(s => s.id === STATE.selectedId);
+  if (e.key === 'ArrowDown' || e.key === 'j') {
+    e.preventDefault();
+    i = (i + 1 + list.length) % list.length;
+    STATE.selectedId = list[i].id;
+    STATE.selectedTxfId = (list[i].transforms[0]||{}).id;
+    renderAll();
+    if ($('#detailPane').style.display !== 'none') openDetail(STATE.selectedId, STATE.selectedTxfId);
+  } else if (e.key === 'ArrowUp' || e.key === 'k') {
+    e.preventDefault();
+    i = (i - 1 + list.length) % list.length;
+    if (i < 0) i = list.length - 1;
+    STATE.selectedId = list[i].id;
+    STATE.selectedTxfId = (list[i].transforms[0]||{}).id;
+    renderAll();
+    if ($('#detailPane').style.display !== 'none') openDetail(STATE.selectedId, STATE.selectedTxfId);
+  } else if (e.key === ' ') {
+    e.preventDefault();
+    if (STATE.selectedId) {
+      if (STATE.expanded.has(STATE.selectedId)) STATE.expanded.delete(STATE.selectedId);
+      else STATE.expanded.add(STATE.selectedId);
+      renderCards();
+    }
+  } else if (e.key === 'Enter') {
+    if (STATE.selectedId) {
+      const s = STATE.sessions.find(x => x.id === STATE.selectedId);
+      const t = (s.transforms.find(x => x.id === STATE.selectedTxfId) || s.transforms[0]);
+      if (t) openDetail(s.id, t.id);
+    }
+  }
+});
+
+// ===== LIVE TICK (surgical, no full re-render) =====
+let liveTickCount = 0;
+function liveTick() {
+  if (!STATE.live) return;
+  const running = STATE.sessions.find(s => s.status === 'running');
+  if (!running) return;
+
+  // advance data
+  running.elapsedMs += 800;
+  const liveTxf = running.transforms.find(t => !t.terminalState && t.submittedAt <= running.elapsedMs);
+  if (liveTxf && liveTxf.polls.length > 0) {
+    const last = liveTxf.polls[liveTxf.polls.length - 1];
+    const interval = 600 + Math.floor(Math.random() * 700);
+    liveTxf.polls.push({
+      kind: 'TransformPolled',
+      at: last.at + interval,
+      state: last.state,
+      previousState: last.state,
+      stateChanged: false,
+      isTerminal: false,
+      durationMs: interval,
+      retryAfterMs: 250,
+      errorCode: null, errorMessage: null, errorSource: null,
+      hasOutput: last.state === 'Executing',
+    });
+  }
+  STATE.scrubFraction = 1.0;
+  STATE.scrubMaxMs = running.elapsedMs;
+  liveTickCount++;
+
+  // --- surgical DOM updates (no innerHTML rebuilds) ---
+  // 1. elapsed badge + active transform duration on running card
+  const card = document.querySelector(`.card[data-sid="${running.id}"]`);
+  if (card) {
+    const badge = card.querySelector('.elapsed-badge');
+    if (badge) badge.textContent = fmtElapsed(running.elapsedMs);
+    if (liveTxf) {
+      const row = card.querySelector(`.transform-row[data-txf="${liveTxf.id}"]`);
+      if (row) {
+        const dur = row.querySelector('.t-duration');
+        if (dur) dur.textContent = fmtDuration(running.elapsedMs - liveTxf.submittedAt);
+      }
+    }
+  }
+
+  // 2. now marker label + active bar width inside swimlane (no full re-render)
+  const canvas = $('#swimlaneCanvas');
+  if (canvas) {
+    const nowLabel = canvas.querySelector('.now-marker .now-label');
+    if (nowLabel) nowLabel.textContent = 'now · +' + fmtElapsed(running.elapsedMs);
+    if (liveTxf) {
+      const bar = canvas.querySelector(`.bar[data-txf="${liveTxf.id}"]`);
+      if (bar && !liveTxf.terminalState) {
+        const tEnd = Math.max(running.elapsedMs, 1);
+        const left = (liveTxf.submittedAt / tEnd) * 100;
+        const w = Math.max(((tEnd - liveTxf.submittedAt) / tEnd) * 100, 0.4);
+        bar.style.left = left + '%';
+        bar.style.width = w + '%';
+      }
+    }
+  }
+
+  // 3. scrubber labels
+  const sl = $('#scrubLabel'); if (sl) sl.textContent = '+' + fmtElapsed(running.elapsedMs);
+  const se = $('#scrubEnd');   if (se) se.textContent = '+' + fmtElapsed(running.elapsedMs);
+
+  // 4. footer stats (cheap)
+  updateFooterStats();
+
+  // 5. every ~8s, do a full swimlane + detail refresh so axis ticks / polls list catch up.
+  //    Cards list is NOT re-rendered here to avoid flicker and preserve hover/scroll state.
+  if (liveTickCount % 5 === 0) {
+    renderSwimlane();
+    if (STATE.selectedId === running.id) renderDetail();
+  }
+}
+const liveInterval = setInterval(liveTick, 1600);
+
+// ===== TOOLTIP cleanup on click =====
+document.addEventListener('click', () => hideTooltip(), true);
+
+// ===== INITIAL RENDER =====
+function init() {
+  renderAll();
+  // Auto-open detail on first running transform for showcase
+  const running = STATE.sessions.find(s => s.status === 'running');
+  if (running) {
+    const liveT = running.transforms.find(t => !t.terminalState && t.submittedAt > 0) || running.transforms[0];
+    STATE.selectedId = running.id;
+    STATE.selectedTxfId = liveT.id;
+    STATE.expanded.add(running.id);
+    openDetail(running.id, liveT.id);
+  }
+  // Brief welcome toast after init
+  setTimeout(() => toast('success', 'Connected · 5 sessions · streaming events'), 600);
+}
+
+init();
+</script>
+</body>
+</html>

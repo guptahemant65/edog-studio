@@ -48,39 +48,49 @@ def fake_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (fx / "diff.patch").write_text("--- a/x.cs\n+++ b/x.cs\n@@ -1,1 +1,2 @@\n line\n+new\n", encoding="utf-8")
     (fx / "notes.md").write_text("# PR 999000 — Curator Notes\n", encoding="utf-8")
     (fx / "pr.json").write_text(json.dumps({"pr_number": "999000"}), encoding="utf-8")
-    (fx / "expected.json").write_text(json.dumps({
-        "schema_version": "2.0",
-        "pr_number": "999000",
-        "curator_state": "PENDING_HUMAN_GRADING",
-        "curated_at": None,
-        "curator": None,
-        "pass_1_basis": "pending_curator_review",
-        "scenarios": [],
-    }), encoding="utf-8")
-    (fx / "actual.json").write_text(json.dumps({
-        "scenarios": [
+    (fx / "expected.json").write_text(
+        json.dumps(
             {
-                "id": "sk-1",
-                "topic": "CORS policy",
-                "category": "HappyPath",
-                "verb": "FieldMatch",
-                "stage": "projected",
-                "grounding_changed_lines": [
-                    {"path": "x.cs", "side": "right", "lines": [2]},
-                ],
-            },
+                "schema_version": "2.0",
+                "pr_number": "999000",
+                "curator_state": "PENDING_HUMAN_GRADING",
+                "curated_at": None,
+                "curator": None,
+                "pass_1_basis": "pending_curator_review",
+                "scenarios": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (fx / "actual.json").write_text(
+        json.dumps(
             {
-                "id": "sk-2",
-                "topic": "Header echoed",
-                "category": "EdgeCase",
-                "verb": "FieldMatch",
-                "stage": "emitted",
-                "grounding_changed_lines": [
-                    {"path": "x.cs", "side": "right", "lines": [2]},
-                ],
-            },
-        ]
-    }), encoding="utf-8")
+                "scenarios": [
+                    {
+                        "id": "sk-1",
+                        "topic": "CORS policy",
+                        "category": "HappyPath",
+                        "verb": "FieldMatch",
+                        "stage": "projected",
+                        "grounding_changed_lines": [
+                            {"path": "x.cs", "side": "right", "lines": [2]},
+                        ],
+                    },
+                    {
+                        "id": "sk-2",
+                        "topic": "Header echoed",
+                        "category": "EdgeCase",
+                        "verb": "FieldMatch",
+                        "stage": "emitted",
+                        "grounding_changed_lines": [
+                            {"path": "x.cs", "side": "right", "lines": [2]},
+                        ],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
 
     monkeypatch.setattr(curate, "GROUND_TRUTH", ground_truth)
     return fx

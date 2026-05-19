@@ -170,9 +170,7 @@ def _load_openai_config() -> dict:
         or os.environ.get("AZURE_OPENAI_API_VERSION")
         or "2025-04-01-preview"
     )
-    deployment = (
-        os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4"
-    )
+    deployment = os.environ.get("AZURE_OPENAI_PRO_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DEPLOYMENT") or "gpt-5.4"
 
     if not endpoint or not api_key:
         # Load from .env in project root
@@ -1397,22 +1395,15 @@ def _enumerate_delta_active_files_full(
     warnings: list[str] = []
 
     list_url = f"{ONELAKE_HOST}{log_path}?resource=filesystem&recursive=false"
-    req = urllib.request.Request(
-        list_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
-    )
+    req = urllib.request.Request(list_url, headers={"Authorization": f"Bearer {onelake_bearer}"})
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
         listing = json.loads(resp.read())
 
     json_files = sorted(
-        p["name"]
-        for p in listing.get("paths", [])
-        if p["name"].endswith(".json") and not p.get("isDirectory")
+        p["name"] for p in listing.get("paths", []) if p["name"].endswith(".json") and not p.get("isDirectory")
     )
 
-    has_checkpoint = any(
-        p["name"].endswith(".checkpoint.parquet")
-        for p in listing.get("paths", [])
-    )
+    has_checkpoint = any(p["name"].endswith(".checkpoint.parquet") for p in listing.get("paths", []))
     if has_checkpoint:
         warnings.append(
             "Delta checkpoint detected; preview replays commit JSONs only and "
@@ -1420,19 +1411,14 @@ def _enumerate_delta_active_files_full(
         )
 
     if len(json_files) > max_commits:
-        warnings.append(
-            f"Long Delta log: replaying only the latest {max_commits} of "
-            f"{len(json_files)} commits."
-        )
+        warnings.append(f"Long Delta log: replaying only the latest {max_commits} of {len(json_files)} commits.")
         json_files = json_files[-max_commits:]
 
     active: dict[str, dict] = {}
     has_dv = False
     for jf in json_files:
         file_url = f"{ONELAKE_HOST}/{ws_id}/{jf}"
-        req = urllib.request.Request(
-            file_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
-        )
+        req = urllib.request.Request(file_url, headers={"Authorization": f"Bearer {onelake_bearer}"})
         with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
             content = resp.read().decode()
         for line in content.strip().split("\n"):
@@ -2946,7 +2932,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             content_length = int(self.headers.get("Content-Length", 0))
         except ValueError:
-            self._json_response(400, {"error": "invalid_content_length", "message": "Content-Length must be an integer"})
+            self._json_response(
+                400, {"error": "invalid_content_length", "message": "Content-Length must be an integer"}
+            )
             return
 
         if content_length <= 0:
@@ -5783,9 +5771,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            active, warnings = _enumerate_delta_active_files_full(
-                ws_id, lh_id, schema, table
-            )
+            active, warnings = _enumerate_delta_active_files_full(ws_id, lh_id, schema, table)
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 self._json_response(
@@ -5805,14 +5791,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(e.code, {"error": "onelake_error", "message": body})
             return
         except RuntimeError as e:
-            self._json_response(
-                401, {"error": "onelake_bearer_unavailable", "message": str(e)}
-            )
+            self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
             return
         except Exception as e:
-            self._json_response(
-                502, {"error": "delta_log_replay_failed", "message": str(e)}
-            )
+            self._json_response(502, {"error": "delta_log_replay_failed", "message": str(e)})
             return
 
         if not active:
@@ -5840,9 +5822,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         try:
             onelake_bearer = _ensure_onelake_bearer()
         except RuntimeError as e:
-            self._json_response(
-                401, {"error": "onelake_bearer_unavailable", "message": str(e)}
-            )
+            self._json_response(401, {"error": "onelake_bearer_unavailable", "message": str(e)})
             return
 
         import io
@@ -5864,13 +5844,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             if not merged_partition_values:
                 merged_partition_values = partition_values
 
-            file_url = (
-                f"{ONELAKE_HOST}/{ws_id}/{lh_id}/Tables/{schema}/{table}/{fpath}"
-            )
+            file_url = f"{ONELAKE_HOST}/{ws_id}/{lh_id}/Tables/{schema}/{table}/{fpath}"
             try:
-                req = urllib.request.Request(
-                    file_url, headers={"Authorization": f"Bearer {onelake_bearer}"}
-                )
+                req = urllib.request.Request(file_url, headers={"Authorization": f"Bearer {onelake_bearer}"})
                 with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
                     raw_parquet = resp.read()
             except Exception:
@@ -5890,9 +5866,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                     arrow_schema = tbl.schema
                 py_rows = tbl.to_pylist()
 
-                coerced_part = {
-                    k: _coerce_partition_value(v) for k, v in partition_values.items()
-                }
+                coerced_part = {k: _coerce_partition_value(v) for k, v in partition_values.items()}
                 for r in py_rows:
                     out = {k: _coerce_parquet_value(v) for k, v in r.items()}
                     for pcol, pval in coerced_part.items():
@@ -5918,10 +5892,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        columns: list[dict] = [
-            {"name": f.name, "type": _arrow_type_label(f.type)}
-            for f in arrow_schema
-        ]
+        columns: list[dict] = [{"name": f.name, "type": _arrow_type_label(f.type)} for f in arrow_schema]
         existing_names = {c["name"] for c in columns}
         for pcol in merged_partition_values:
             if pcol not in existing_names:

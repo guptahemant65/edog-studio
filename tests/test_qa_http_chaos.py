@@ -92,19 +92,24 @@ def harness() -> dict:
 
     build = subprocess.run(
         [dotnet, "build", str(CSPROJ), f"-p:FltBin={flt_bin}", "--nologo", "--verbosity", "minimal"],
-        capture_output=True, text=True, timeout=300, cwd=PROJECT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=PROJECT_DIR,
     )
     if build.returncode != 0:
         pytest.fail(
-            "Harness build failed.\n"
-            f"--- stdout:\n{build.stdout[-4000:]}\n--- stderr:\n{build.stderr[-2000:]}",
+            f"Harness build failed.\n--- stdout:\n{build.stdout[-4000:]}\n--- stderr:\n{build.stderr[-2000:]}",
         )
     if not BUILT_DLL.exists():
         pytest.fail(f"Build succeeded but DLL not at {BUILT_DLL}")
 
     result = subprocess.run(
         [dotnet, str(BUILT_DLL), "pipeline-chaos"],
-        capture_output=True, text=True, timeout=120, cwd=BUILT_DLL.parent,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=BUILT_DLL.parent,
     )
     if result.returncode != 0:
         raise AssertionError(
@@ -127,9 +132,7 @@ def test_no_fault_request_flows_through(harness: dict) -> None:
     case = harness["noFault"]
     assert case["statusCode"] == 200, case
     assert case["body"] == "real", case
-    assert case["innerInvocations"] == 1, (
-        "Inner handler must be called exactly once on the no-fault path"
-    )
+    assert case["innerInvocations"] == 1, "Inner handler must be called exactly once on the no-fault path"
 
 
 def test_http_error_synthesises_response_without_calling_base(harness: dict) -> None:
@@ -140,9 +143,7 @@ def test_http_error_synthesises_response_without_calling_base(harness: dict) -> 
     assert case["statusCode"] == 503, case
     assert "qa synthesized" in case["body"], case
     assert "chaos" in case["reason"].lower(), case
-    assert case["innerInvocations"] == 0, (
-        "Inner handler must NOT be called when http_error fault matches"
-    )
+    assert case["innerInvocations"] == 0, "Inner handler must NOT be called when http_error fault matches"
 
 
 def test_latency_delays_then_calls_base(harness: dict) -> None:
@@ -151,14 +152,10 @@ def test_latency_delays_then_calls_base(harness: dict) -> None:
     case = harness["latency"]
     assert case["statusCode"] == 201, case
     assert case["body"] == "real-after-delay", case
-    assert case["innerInvocations"] == 1, (
-        "Inner handler must be called once after the latency delay"
-    )
+    assert case["innerInvocations"] == 1, "Inner handler must be called once after the latency delay"
     # Configured for 120ms — allow some scheduler slack but require at
     # least the floor; otherwise the delay short-circuited.
-    assert case["elapsedMs"] >= 100, (
-        f"latency fault elapsed {case['elapsedMs']}ms — expected ≥ 100ms"
-    )
+    assert case["elapsedMs"] >= 100, f"latency fault elapsed {case['elapsedMs']}ms — expected ≥ 100ms"
 
 
 def test_timeout_throws_without_calling_base(harness: dict) -> None:
@@ -168,9 +165,7 @@ def test_timeout_throws_without_calling_base(harness: dict) -> None:
     case = harness["timeout"]
     assert case["exceptionType"] == "TaskCanceledException", case
     assert case["exceptionMessageContains"] is True, case
-    assert case["innerInvocations"] == 0, (
-        "Inner handler must NOT be called when timeout fault matches"
-    )
+    assert case["innerInvocations"] == 0, "Inner handler must NOT be called when timeout fault matches"
 
 
 def test_teardown_removes_rules(harness: dict) -> None:

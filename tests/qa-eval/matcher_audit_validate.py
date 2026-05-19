@@ -35,12 +35,18 @@ def main() -> int:
     pair_count = 0
     for pr_name, (expected, actuals) in corpus.items():
         strict, _, _ = _bipartite_relaxed(
-            expected, actuals,
-            require_category=True, require_verb=True, min_overlap=1,
+            expected,
+            actuals,
+            require_category=True,
+            require_verb=True,
+            min_overlap=1,
         )
         relaxed, _, _ = _bipartite_relaxed(
-            expected, actuals,
-            require_category=False, require_verb=True, min_overlap=1,
+            expected,
+            actuals,
+            require_category=False,
+            require_verb=True,
+            min_overlap=1,
         )
         strict_keys = {(m.expected.id, m.actual.id) for m in strict}
         new = [m for m in relaxed if (m.expected.id, m.actual.id) not in strict_keys]
@@ -61,13 +67,17 @@ def main() -> int:
             a_raw = actual_raw[m.actual.id]
 
             print(f"--- Pair #{pair_count} [{rec}] {pr_name} ---")
-            print(f"  EXPECTED  {m.expected.id}  cat={m.expected.category}  verb={m.expected.verb}  crit={m.expected.criticality}")
-            print(f"    title: {e_raw.get('title','')[:160]}")
-            for g in e_raw.get('grounding', []):
-                print(f"    @ {g.get('path','')}:{g.get('side','')}:{g.get('lines',[])}")
-            print(f"  ACTUAL    {m.actual.id}  topic={a_raw.get('topic','')}  cat={m.actual.category}  verb={m.actual.verb}  stage={m.actual.stage}")
-            for g in a_raw.get('grounding_changed_lines', []):
-                print(f"    @ {g.get('path','')}:{g.get('side','')}:{g.get('lines',[])}")
+            print(
+                f"  EXPECTED  {m.expected.id}  cat={m.expected.category}  verb={m.expected.verb}  crit={m.expected.criticality}"
+            )
+            print(f"    title: {e_raw.get('title', '')[:160]}")
+            for g in e_raw.get("grounding", []):
+                print(f"    @ {g.get('path', '')}:{g.get('side', '')}:{g.get('lines', [])}")
+            print(
+                f"  ACTUAL    {m.actual.id}  topic={a_raw.get('topic', '')}  cat={m.actual.category}  verb={m.actual.verb}  stage={m.actual.stage}"
+            )
+            for g in a_raw.get("grounding_changed_lines", []):
+                print(f"    @ {g.get('path', '')}:{g.get('side', '')}:{g.get('lines', [])}")
             print(f"    overlap: orig={m.original_overlap_count}, expanded={m.overlap_count}")
             print()
 

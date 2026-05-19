@@ -63,7 +63,8 @@ def _find_fixtures(only: list[str] | None = None) -> list[Path]:
     if not GROUND_TRUTH_DIR.exists():
         return []
     out = sorted(
-        p for p in GROUND_TRUTH_DIR.iterdir()
+        p
+        for p in GROUND_TRUTH_DIR.iterdir()
         if p.is_dir() and (p / "pr.json").is_file() and (p / "diff.patch").is_file()
     )
     if only:
@@ -76,14 +77,16 @@ def _parse_envelope(stdout: str) -> dict | None:
     end = stdout.find(HARNESS_JSON_END)
     if begin < 0 or end < 0 or end <= begin:
         return None
-    body = stdout[begin + len(HARNESS_JSON_BEGIN):end].strip()
+    body = stdout[begin + len(HARNESS_JSON_BEGIN) : end].strip()
     try:
         return json.loads(body)
     except json.JSONDecodeError:
         return None
 
 
-def _invoke_harness(harness_dll: Path, fixture_dir: Path, actual_path: Path, plan_path: Path | None, timeout_s: int) -> dict:
+def _invoke_harness(
+    harness_dll: Path, fixture_dir: Path, actual_path: Path, plan_path: Path | None, timeout_s: int
+) -> dict:
     cmd = [
         "dotnet",
         str(harness_dll),

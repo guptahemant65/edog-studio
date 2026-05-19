@@ -170,18 +170,12 @@ def _score_corpus(
                 if m.actual.stage in matched_per_stage:
                     matched_per_stage[m.actual.stage] += 1
             recall = se._safe_div(len(matched), len(expected))
-            precision = {
-                s: se._safe_div(matched_per_stage[s], actual_by_stage[s])
-                for s in se.VALID_STAGES
-            }
+            precision = {s: se._safe_div(matched_per_stage[s], actual_by_stage[s]) for s in se.VALID_STAGES}
             total_actual = sum(actual_by_stage.values())
             prec_high = se._safe_div(len(matched), total_actual)
             val_p = precision["validated"]
             f1 = se._safe_div(2 * val_p * recall, val_p + recall) if (val_p + recall) else 0.0
-            f1_high = (
-                se._safe_div(2 * prec_high * recall, prec_high + recall)
-                if (prec_high + recall) else 0.0
-            )
+            f1_high = se._safe_div(2 * prec_high * recall, prec_high + recall) if (prec_high + recall) else 0.0
             p_exp = [e for e in expected if e.criticality in {"P0", "P1"}]
             p_match = [m for m in matched if m.expected.criticality in {"P0", "P1"}]
             p_recall = se._safe_div(len(p_match), len(p_exp))
@@ -235,21 +229,25 @@ def run_audit() -> dict[str, Any]:
 
     # ── Sweep 3: constraint relaxation at production N ──
     relax_sweep = {
-        "strict_baseline": _score_corpus(corpus_prod, matcher="custom",
-                                         require_category=True, require_verb=True, min_overlap=1),
-        "drop_verb": _score_corpus(corpus_prod, matcher="custom",
-                                   require_category=True, require_verb=False, min_overlap=1),
-        "drop_category": _score_corpus(corpus_prod, matcher="custom",
-                                       require_category=False, require_verb=True, min_overlap=1),
-        "drop_both": _score_corpus(corpus_prod, matcher="custom",
-                                   require_category=False, require_verb=False, min_overlap=1),
+        "strict_baseline": _score_corpus(
+            corpus_prod, matcher="custom", require_category=True, require_verb=True, min_overlap=1
+        ),
+        "drop_verb": _score_corpus(
+            corpus_prod, matcher="custom", require_category=True, require_verb=False, min_overlap=1
+        ),
+        "drop_category": _score_corpus(
+            corpus_prod, matcher="custom", require_category=False, require_verb=True, min_overlap=1
+        ),
+        "drop_both": _score_corpus(
+            corpus_prod, matcher="custom", require_category=False, require_verb=False, min_overlap=1
+        ),
     }
 
     # ── Sweep 4: min-overlap threshold at production N ──
     overlap_sweep = {
-        f"min_overlap_{k}": _score_corpus(corpus_prod, matcher="custom",
-                                          require_category=True, require_verb=True,
-                                          min_overlap=k)
+        f"min_overlap_{k}": _score_corpus(
+            corpus_prod, matcher="custom", require_category=True, require_verb=True, min_overlap=k
+        )
         for k in [1, 2, 3, 5]
     }
 
@@ -264,7 +262,7 @@ def run_audit() -> dict[str, Any]:
 
 
 def _fmt_pct(x: float) -> str:
-    return f"{x*100:5.1f}%"
+    return f"{x * 100:5.1f}%"
 
 
 def print_human(audit: dict[str, Any]) -> None:
@@ -281,37 +279,41 @@ def print_human(audit: dict[str, Any]) -> None:
     for s in audit["span_sweep"]:
         mark = " ← prod" if s["span_n"] == audit["production_span_n"] else ""
         delta = (s["macro_recall"] - base_recall) * 100
-        print(f"  {s['span_n']:>4}  {_fmt_pct(s['macro_recall'])}  {_fmt_pct(s['macro_precision_highest'])}  "
-              f"{_fmt_pct(s['macro_f1_highest'])}   Δrecall vs prod = {delta:+5.1f} pp{mark}")
+        print(
+            f"  {s['span_n']:>4}  {_fmt_pct(s['macro_recall'])}  {_fmt_pct(s['macro_precision_highest'])}  "
+            f"{_fmt_pct(s['macro_f1_highest'])}   Δrecall vs prod = {delta:+5.1f} pp{mark}"
+        )
     print()
 
     print("──── 2. Greedy vs bipartite (at production N) ────")
     for name, s in audit["matcher_sweep"].items():
         mark = " ← prod" if name == audit["production_matcher"] else ""
-        print(f"  {name:<10}  recall={_fmt_pct(s['macro_recall'])}  "
-              f"prec_high={_fmt_pct(s['macro_precision_highest'])}  "
-              f"F1={_fmt_pct(s['macro_f1_highest'])}{mark}")
+        print(
+            f"  {name:<10}  recall={_fmt_pct(s['macro_recall'])}  "
+            f"prec_high={_fmt_pct(s['macro_precision_highest'])}  "
+            f"F1={_fmt_pct(s['macro_f1_highest'])}{mark}"
+        )
     print()
 
     print("──── 3. Constraint relaxation (at production N, bipartite) ────")
     base = audit["relax_sweep"]["strict_baseline"]["macro_recall"]
     for name, s in audit["relax_sweep"].items():
         delta = (s["macro_recall"] - base) * 100
-        print(f"  {name:<18}  recall={_fmt_pct(s['macro_recall'])}  "
-              f"prec_high={_fmt_pct(s['macro_precision_highest'])}   Δrecall = {delta:+5.1f} pp")
+        print(
+            f"  {name:<18}  recall={_fmt_pct(s['macro_recall'])}  "
+            f"prec_high={_fmt_pct(s['macro_precision_highest'])}   Δrecall = {delta:+5.1f} pp"
+        )
     print()
 
     print("──── 4. Min-overlap threshold (at production N, strict cat+verb) ────")
     for name, s in audit["overlap_sweep"].items():
-        print(f"  {name:<18}  recall={_fmt_pct(s['macro_recall'])}  "
-              f"prec_high={_fmt_pct(s['macro_precision_highest'])}")
+        print(f"  {name:<18}  recall={_fmt_pct(s['macro_recall'])}  prec_high={_fmt_pct(s['macro_precision_highest'])}")
     print()
 
     # ── Interpretation guide ──
     print("──── Diagnostic ────")
     span_max = max(s["macro_recall"] for s in audit["span_sweep"])
-    span_at_prod = next(s["macro_recall"] for s in audit["span_sweep"]
-                        if s["span_n"] == audit["production_span_n"])
+    span_at_prod = next(s["macro_recall"] for s in audit["span_sweep"] if s["span_n"] == audit["production_span_n"])
     span_headroom = (span_max - span_at_prod) * 100
     drop_verb_lift = (audit["relax_sweep"]["drop_verb"]["macro_recall"] - base) * 100
     drop_cat_lift = (audit["relax_sweep"]["drop_category"]["macro_recall"] - base) * 100

@@ -194,13 +194,8 @@ def test_no_synthetic_fallback_in_golden_path(harness_environment, built_harness
     data = _run_harness(harness_environment["dotnet"], built_harness, "analyze")
     forbidden = {"stub_llm", "synthetic"}
     seen = set(data["generatedByValues"])
-    assert seen == {"ai"}, (
-        f"generatedBy values must be exactly {{'ai'}} on the golden path; "
-        f"got {seen}"
-    )
-    assert seen.isdisjoint(forbidden), (
-        f"Forbidden fallback tags appeared: {seen & forbidden}"
-    )
+    assert seen == {"ai"}, f"generatedBy values must be exactly {{'ai'}} on the golden path; got {seen}"
+    assert seen.isdisjoint(forbidden), f"Forbidden fallback tags appeared: {seen & forbidden}"
     flags = " ".join(data["degradationFlags"])
     assert "stub_llm_provider_active" not in flags, data["degradationFlags"]
     assert "stub_graph_provider_active" not in flags, data["degradationFlags"]
@@ -255,10 +250,9 @@ def test_harness_project_is_well_formed() -> None:
     content = CSPROJ.read_text(encoding="utf-8")
     assert "<TargetFramework>net8.0</TargetFramework>" in content
     assert "<OutputType>Exe</OutputType>" in content
-    assert (
-        "<AssemblyName>Microsoft.LiveTable.Service.UnitTests</AssemblyName>"
-        in content
-    ), "AssemblyName must match FLT's InternalsVisibleTo grant."
+    assert "<AssemblyName>Microsoft.LiveTable.Service.UnitTests</AssemblyName>" in content, (
+        "AssemblyName must match FLT's InternalsVisibleTo grant."
+    )
     assert "Microsoft.AspNetCore.App" in content
 
 
@@ -367,9 +361,7 @@ def test_llm_provider_rethrows_typed_exception() -> None:
     typed LlmProviderException (P4) instead of swallowing into an empty
     list (pre-P4). Verified by source-grep so the test runs without FLT
     bin being available."""
-    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs").read_text(
-        encoding="utf-8"
-    )
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs").read_text(encoding="utf-8")
     assert "throw new LlmProviderException(" in src or "throw LlmProviderExceptionClassifier" in src, (
         "EdogQaLlmProvider must throw typed LlmProviderException — the silent "
         "fallback to an empty scenario list was the P4 target."
@@ -384,9 +376,7 @@ def test_hub_gates_synthetic_fallback_behind_env_var() -> None:
     """RunAnalysisPipelineAsync must consult QaAnalysisFallbackPolicy
     before emitting synthetic scenarios, and emit a NO_SCENARIOS_GENERATED
     QaError when the env var is off."""
-    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogPlaygroundHub.cs").read_text(
-        encoding="utf-8"
-    )
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogPlaygroundHub.cs").read_text(encoding="utf-8")
     assert "QaAnalysisFallbackPolicy.IsDemoFallbackEnabled()" in src, (
         "Hub must call IsDemoFallbackEnabled() to gate synthetic generation."
     )
@@ -405,12 +395,9 @@ def test_qa_feature_flags_llm_v2_kill_switch_exists() -> None:
     """F27 P9 §8 — the LLM V2 rollout MUST be gated behind a kill switch
     env var so the new pipeline can be flipped off in production without
     a redeploy. Verified by source-grep so the test runs without FLT bin."""
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaFeatureFlags.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaFeatureFlags.cs").read_text(encoding="utf-8")
     assert 'EnvVarLlmV2 = "EDOG_QA_LLM_V2"' in src, (
-        "EdogQaFeatureFlags must declare EnvVarLlmV2 = \"EDOG_QA_LLM_V2\" — the "
-        "kill switch from F27 P9 §8."
+        'EdogQaFeatureFlags must declare EnvVarLlmV2 = "EDOG_QA_LLM_V2" — the kill switch from F27 P9 §8.'
     )
     # The three-state rollout (off | shadow | on) is non-negotiable: a
     # boolean flag would skip the mandatory shadow phase and is forbidden
@@ -428,9 +415,7 @@ def test_qa_capability_probe_declares_required_error_codes() -> None:
     T1a expands the matrix beyond the four AOAI capability codes to cover
     config and transport failures so the orchestrator can render a clear,
     actionable inline error instead of a generic "probe failed"."""
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs").read_text(encoding="utf-8")
     required_codes = (
         "AOAI_DEPLOYMENT_NOT_FOUND",
         "AOAI_RESPONSES_API_UNAVAILABLE",
@@ -460,26 +445,17 @@ def test_qa_capability_probe_real_handshake() -> None:
     """T1a — the probe must POST to /openai/responses with strict
     json_schema + reasoning.effort=low. Verified by source-grep so the
     test runs without FLT bin and is fast in CI."""
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCapabilityProbe.cs").read_text(encoding="utf-8")
     assert "/openai/responses?api-version=" in src, (
-        "Probe must POST to the Responses API endpoint with api-version "
-        "(not the legacy Chat Completions endpoint)."
+        "Probe must POST to the Responses API endpoint with api-version (not the legacy Chat Completions endpoint)."
     )
     assert "ProbeOnceAsync" in src, (
         "Probe must expose a no-cache ProbeOnceAsync overload so tests can "
         "exercise each capability branch without mutating the process cache."
     )
-    assert 'type = "json_schema"' in src, (
-        "Probe must request strict json_schema constrained decoding."
-    )
-    assert "strict = true" in src, (
-        "Probe must set strict=true on the json_schema format."
-    )
-    assert 'effort = "low"' in src, (
-        "Probe must set reasoning.effort=\"low\" so probe cost is negligible."
-    )
+    assert 'type = "json_schema"' in src, "Probe must request strict json_schema constrained decoding."
+    assert "strict = true" in src, "Probe must set strict=true on the json_schema format."
+    assert 'effort = "low"' in src, 'Probe must set reasoning.effort="low" so probe cost is negligible.'
 
 
 def test_qa_llm_provider_default_deployment_is_gpt54() -> None:
@@ -489,24 +465,16 @@ def test_qa_llm_provider_default_deployment_is_gpt54() -> None:
     were resolving to a non-existent deployment, causing 404 / empty
     content. The capability probe (F27 P9 §3.6) is the proper guard but
     the default must still be a real model name."""
-    cs_src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs"
-    ).read_text(encoding="utf-8")
+    cs_src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmProvider.cs").read_text(encoding="utf-8")
     assert '"gpt-5.4-pro"' not in cs_src, (
         "EdogQaLlmProvider must not default to 'gpt-5.4-pro' (a pre-GA placeholder "
         "that does not exist as an Azure deployment name). Use 'gpt-5.4'."
     )
-    assert '?? "gpt-5.4"' in cs_src, (
-        "EdogQaLlmProvider default deployment must be 'gpt-5.4'."
-    )
+    assert '?? "gpt-5.4"' in cs_src, "EdogQaLlmProvider default deployment must be 'gpt-5.4'."
 
     py_src = (REPO_ROOT / "scripts" / "dev-server.py").read_text(encoding="utf-8")
-    assert '"gpt-5.4-pro"' not in py_src, (
-        "dev-server.py must not default to 'gpt-5.4-pro' — same reason as above."
-    )
-    assert 'or "gpt-5.4"' in py_src, (
-        "dev-server.py default deployment must be 'gpt-5.4'."
-    )
+    assert '"gpt-5.4-pro"' not in py_src, "dev-server.py must not default to 'gpt-5.4-pro' — same reason as above."
+    assert 'or "gpt-5.4"' in py_src, "dev-server.py default deployment must be 'gpt-5.4'."
 
 
 # ─── F27 P9 T1a — Capability probe behavioural matrix ─────────────────────
@@ -542,9 +510,7 @@ def test_capability_probe_matrix(harness_environment, built_harness) -> None:
         c = cases[case_id]
         assert c["isReady"] is False, c
         assert "PROBE_CONFIG_MISSING" in c["errorCodes"], c
-        assert c["handlerInvocations"] == 0, (
-            f"{case_id} must short-circuit before any HTTP call"
-        )
+        assert c["handlerInvocations"] == 0, f"{case_id} must short-circuit before any HTTP call"
 
     # ── Network error: handler throws, probe must classify cleanly ──
     c = cases["network_error"]
@@ -574,8 +540,7 @@ def test_capability_probe_matrix(harness_environment, built_harness) -> None:
     c = cases["reasoning_unsupported"]
     assert c["isReady"] is False, c
     assert c["responsesApiAvailable"] is True, (
-        "200 envelope must still promote ResponsesApiAvailable even when "
-        "reasoning is unsupported."
+        "200 envelope must still promote ResponsesApiAvailable even when reasoning is unsupported."
     )
     assert c["jsonSchemaStrictSupported"] is True, c
     assert c["reasoningSupported"] is False, c
@@ -627,17 +592,19 @@ def test_gold_corpus_fixtures_present() -> None:
     # logic). The augmented corpus reconfirmed the N=15 bipartite knee but
     # exposed prompt overfit (macro recall 0.639 -> 0.391 on n=6).
     required_prs = (
-        "PR-955910", "PR-960543", "PR-966141",
-        "PR-975848", "PR-976609", "PR-977882",
+        "PR-955910",
+        "PR-960543",
+        "PR-966141",
+        "PR-975848",
+        "PR-976609",
+        "PR-977882",
     )
     for pr in required_prs:
         d = ground_truth_dir / pr
         assert d.is_dir(), f"Missing fixture directory: {d.relative_to(REPO_ROOT)}"
         for required_file in ("pr.json", "diff.patch", "expected.json", "notes.md"):
             f = d / required_file
-            assert f.exists() and f.stat().st_size > 0, (
-                f"Fixture {pr}/{required_file} missing or empty."
-            )
+            assert f.exists() and f.stat().st_size > 0, f"Fixture {pr}/{required_file} missing or empty."
         # pr.json must declare a non-empty diff.
         with (d / "pr.json").open(encoding="utf-8") as fh:
             meta = _json.load(fh)
@@ -674,8 +641,12 @@ def test_gold_corpus_baseline_scaffold_exists() -> None:
     # stale-baseline still pass this scaffold-level test.
     assert data.get("schema_version") in {"1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7", "1.8"}, data
     assert data.get("status") in (
-        "PENDING_T1B", "PENDING", "CAPTURED", "CAPTURED_WITH_ERRORS",
-        "DRY_RUN", "SCORED",
+        "PENDING_T1B",
+        "PENDING",
+        "CAPTURED",
+        "CAPTURED_WITH_ERRORS",
+        "DRY_RUN",
+        "SCORED",
     ), data
     assert isinstance(data.get("prs"), list), data
 
@@ -688,9 +659,7 @@ def test_qa_llm_client_declares_required_error_codes() -> None:
     codes. The orchestrator + UI inline-error renderer (T1c/T1d) read
     these by exact string match; changing them is a breaking change.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
     required = (
         "CLIENT_CONFIG_MISSING_ARCHITECT",
         "CLIENT_CONFIG_MISSING_EDITOR",
@@ -712,19 +681,13 @@ def test_qa_llm_client_uses_strict_json_schema_not_json_object() -> None:
     must use ``json_schema`` strict-mode constrained decoding so the
     wire output is well-formed by construction.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
     assert '"json_object"' not in src, (
         "EdogQaLlmClient must not use response_format=json_object — that is the "
         "defect P9 exists to fix. Use strict json_schema constrained decoding."
     )
-    assert 'type = "json_schema"' in src, (
-        "EdogQaLlmClient must request text.format.type=\"json_schema\"."
-    )
-    assert "strict = true" in src, (
-        "EdogQaLlmClient must set strict=true on the json_schema format."
-    )
+    assert 'type = "json_schema"' in src, 'EdogQaLlmClient must request text.format.type="json_schema".'
+    assert "strict = true" in src, "EdogQaLlmClient must set strict=true on the json_schema format."
 
 
 def test_qa_llm_client_architect_editor_split_present() -> None:
@@ -732,9 +695,7 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
     be visible in the source as separate methods + separate configs
     + distinct prompt cache keys.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
     assert "ArchitectOnceAsync" in src, "missing Architect test-entry method"
     assert "EditorOnceAsync" in src, "missing Editor test-entry method"
     assert "ArchitectConfig" in src, "missing ArchitectConfig record"
@@ -743,12 +704,8 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
         "Architect and Editor must declare distinct prompt_cache_key constants "
         "so cache hits are reported per-role (spec §3.4)."
     )
-    assert 'ArchitectReasoningEffort = "high"' in src, (
-        "Architect must default to reasoning.effort=high (spec §3.1)."
-    )
-    assert 'EditorReasoningEffort = "low"' in src, (
-        "Editor must default to reasoning.effort=low (spec §3.1)."
-    )
+    assert 'ArchitectReasoningEffort = "high"' in src, "Architect must default to reasoning.effort=high (spec §3.1)."
+    assert 'EditorReasoningEffort = "low"' in src, "Editor must default to reasoning.effort=low (spec §3.1)."
     assert "ArchitectMaxOutputTokens = 192000" in src, (
         "Architect must allow ≥192000 max_output_tokens (T4-D followup; 128K returned "
         "status=incomplete on PR-879735's 80KB-truncated diff — densest in corpus)."
@@ -760,16 +717,13 @@ def test_qa_llm_client_diff_marked_untrusted() -> None:
     submitter must be framed as untrusted in the prompt envelope.
     The field name + the prompt markers carry that constraint.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs").read_text(encoding="utf-8")
     assert "UntrustedRedactedDiff" in src, (
         "ZoneContext must name the diff field UntrustedRedactedDiff so "
         "downstream callers cannot mistake it for trusted content."
     )
     assert "BEGIN UNTRUSTED DIFF" in src and "END UNTRUSTED DIFF" in src, (
-        "Architect + Editor user messages must wrap the diff in "
-        "BEGIN/END UNTRUSTED DIFF sentinels (spec §14)."
+        "Architect + Editor user messages must wrap the diff in BEGIN/END UNTRUSTED DIFF sentinels (spec §14)."
     )
 
 
@@ -811,8 +765,7 @@ def test_llm_client_architect_matrix(harness_environment, built_harness) -> None
     c = cases["truncated_status"]
     assert c["status"] == "Failed", c
     assert "ARCHITECT_RESPONSE_UNPARSEABLE" in c["errorCodes"], (
-        "status=incomplete must surface as unparseable so the orchestrator "
-        "knows the output is not safe to consume."
+        "status=incomplete must surface as unparseable so the orchestrator knows the output is not safe to consume."
     )
 
     c = cases["plan_invalid_zero_sketches"]
@@ -906,14 +859,10 @@ def test_llm_client_editor_request_shape(harness_environment, built_harness) -> 
         "Editor user message must include the Architect plan so the Editor "
         "can ground its scenarios in the plan's evidence pool."
     )
-    assert shape["diffMarkedUntrusted"] is True, (
-        "Editor user message must frame the diff as UNTRUSTED (spec §14)."
-    )
+    assert shape["diffMarkedUntrusted"] is True, "Editor user message must frame the diff as UNTRUSTED (spec §14)."
 
 
-def test_llm_client_schemas_pass_strict_mode_validator(
-    harness_environment, built_harness
-) -> None:
+def test_llm_client_schemas_pass_strict_mode_validator(harness_environment, built_harness) -> None:
     """Defense-in-depth: OpenAI strict-mode rejects ``additionalProperties:true``
     + any property missing from ``required`` + ``type`` arrays at runtime.
     The harness recursively walks both schemas — Architect plan and Editor
@@ -922,18 +871,12 @@ def test_llm_client_schemas_pass_strict_mode_validator(
     """
     data = _run_harness(harness_environment["dotnet"], built_harness, "llm-client")
     strictness = data["schemaStrictness"]
-    assert strictness["architectViolations"] == [], (
-        "Architect plan schema violates OpenAI strict-mode rules: "
-        + repr(strictness["architectViolations"])
+    assert strictness["architectViolations"] == [], "Architect plan schema violates OpenAI strict-mode rules: " + repr(
+        strictness["architectViolations"]
     )
     assert strictness["scenarioViolations"] == [], (
-        "Editor scenario batch schema violates OpenAI strict-mode rules: "
-        + repr(strictness["scenarioViolations"])
+        "Editor scenario batch schema violates OpenAI strict-mode rules: " + repr(strictness["scenarioViolations"])
     )
-
-
-
-
 
 
 # ── F27 P9 T1c-a — Scenario Validator ───────────────────────────────────
@@ -960,18 +903,13 @@ def test_qa_scenario_validator_class_present() -> None:
     diff, context) -> ValidationResult`. Quarantines on failure rather
     than throws, so the Orchestrator can record per-scenario reasons.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioValidator.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioValidator.cs").read_text(encoding="utf-8")
     assert "internal static class EdogQaScenarioValidator" in src, (
         "Validator must be a static class within DevMode assembly."
     )
-    assert "public static ValidationResult Validate(" in src, (
-        "Validator must expose a single Validate entry point."
-    )
+    assert "public static ValidationResult Validate(" in src, "Validator must expose a single Validate entry point."
     assert "public sealed class ValidationResult" in src, (
-        "ValidationResult must be a public sealed class so harness + "
-        "orchestrator can consume it."
+        "ValidationResult must be a public sealed class so harness + orchestrator can consume it."
     )
     assert "public sealed class QuarantineReason" in src
     assert "public sealed class AcceptedScenario" in src
@@ -983,11 +921,9 @@ def test_qa_scenario_validator_declares_required_codes() -> None:
     Reused by the UI inline-error renderer and the orchestrator's
     audit log; renaming them is a breaking change.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioValidator.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioValidator.cs").read_text(encoding="utf-8")
     for code in VALIDATOR_REQUIRED_CODES:
-        assert f"\"{code}\"" in src, f"Validator missing stable code: {code}"
+        assert f'"{code}"' in src, f"Validator missing stable code: {code}"
 
 
 def test_grounding_evidence_carries_source_evidence_id() -> None:
@@ -996,9 +932,7 @@ def test_grounding_evidence_carries_source_evidence_id() -> None:
     Architect's `evidenceId` into engine-shape scenarios for the audit
     trail. Null on the legacy bridge path.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaModels.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaModels.cs").read_text(encoding="utf-8")
     assert "SourceEvidenceId" in src, (
         "GroundingEvidence must carry SourceEvidenceId for the V2 audit "
         "trail; the Projector populates it when EDOG_QA_LLM_V2 is on."
@@ -1041,9 +975,7 @@ def test_validator_gate_matrix(harness_environment, built_harness) -> None:
                 assert required in actual_codes, (case_id, required, actual_codes)
 
 
-def test_validator_multi_failure_reports_all_reasons(
-    harness_environment, built_harness
-) -> None:
+def test_validator_multi_failure_reports_all_reasons(harness_environment, built_harness) -> None:
     """When a single scenario trips multiple gates, EVERY reason must be
     recorded so curation has the full picture for repair. The
     'multi_failure' case deliberately violates four gates; the
@@ -1063,9 +995,7 @@ def test_validator_multi_failure_reports_all_reasons(
     assert "TOPIC_UNKNOWN" in codes, codes
 
 
-def test_validator_semantic_hash_is_deterministic(
-    harness_environment, built_harness
-) -> None:
+def test_validator_semantic_hash_is_deterministic(harness_environment, built_harness) -> None:
     """The semantic-hash dedup key must be deterministic: the same
     scenario (same stimulus + sorted expectations) hashed twice
     produces an identical hex digest. The 'happy_path' and
@@ -1079,8 +1009,7 @@ def test_validator_semantic_hash_is_deterministic(
     clamped_hash = cases["confidence_clamped"]["accepted"][0]["semanticHash"]
     dedup_hash = cases["duplicate_in_batch"]["accepted"][0]["semanticHash"]
     assert happy_hash == clamped_hash, (
-        "Semantic hash must EXCLUDE confidence — same structure with "
-        "different confidence must hash identically."
+        "Semantic hash must EXCLUDE confidence — same structure with different confidence must hash identically."
     )
     assert happy_hash == dedup_hash, (
         "Semantic hash must EXCLUDE title — the duplicate case has a "
@@ -1091,9 +1020,7 @@ def test_validator_semantic_hash_is_deterministic(
     assert all(ch in "0123456789abcdef" for ch in happy_hash), happy_hash
 
 
-def test_validator_confidence_is_clamped_to_unit_interval(
-    harness_environment, built_harness
-) -> None:
+def test_validator_confidence_is_clamped_to_unit_interval(harness_environment, built_harness) -> None:
     """Gate 4 must clamp confidence into [0.0, 1.0] silently. Source
     value 1.7 ⇒ 1.0. This guards against an LLM producing an
     out-of-band probability that would otherwise crash downstream
@@ -1106,9 +1033,7 @@ def test_validator_confidence_is_clamped_to_unit_interval(
     assert clamped["accepted"][0]["calibratedConfidence"] == 1.0, clamped
 
 
-def test_validator_parses_unified_diff_correctly(
-    harness_environment, built_harness
-) -> None:
+def test_validator_parses_unified_diff_correctly(harness_environment, built_harness) -> None:
     """The grounding-existence gate depends on a correct unified-diff
     parser. The canonical sample has 3 added lines (right side) at
     12/13/14 and 1 deleted line (left side) at 12. Garbage input
@@ -1128,9 +1053,7 @@ def test_validator_parses_unified_diff_correctly(
     assert samples["garbage_input"]["changedLineCount"] == 0
 
 
-def test_validator_enum_vocabularies_are_published(
-    harness_environment, built_harness
-) -> None:
+def test_validator_enum_vocabularies_are_published(harness_environment, built_harness) -> None:
     """The Validator exposes its enum vocabularies for the orchestrator
     + UI to share. The harness captures them so this test pins the
     canonical sets — a careless rename surfaces here.
@@ -1142,6 +1065,7 @@ def test_validator_enum_vocabularies_are_published(
     assert len(enum_vocab["stimulusTypes"]) == 6, enum_vocab["stimulusTypes"]
     assert len(enum_vocab["expectationTypes"]) >= 6, enum_vocab["expectationTypes"]
     assert "HappyPath" in enum_vocab["categories"], enum_vocab["categories"]
+
 
 # ── F27 P9 T1c-a-2 — Scenario Projector ─────────────────────────────────
 
@@ -1162,9 +1086,7 @@ def test_qa_scenario_projector_class_present() -> None:
     -> ProjectionResult, reusing Validator's QuarantineReason shape so
     the orchestrator can merge both lists.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioProjector.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioProjector.cs").read_text(encoding="utf-8")
     assert "internal static class EdogQaScenarioProjector" in src
     assert "public static ProjectionResult Project(" in src
     assert "public sealed class ProjectionResult" in src
@@ -1176,16 +1098,12 @@ def test_qa_scenario_projector_declares_required_codes() -> None:
     """All seven wire-stable projection codes must exist as string
     constants. Wire-stable means renaming them is a breaking change.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioProjector.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioProjector.cs").read_text(encoding="utf-8")
     for code in PROJECTOR_REQUIRED_CODES:
         assert f'"{code}"' in src, f"Projector missing stable code: {code}"
 
 
-def test_projector_happy_paths_cover_all_six_stimulus_types(
-    harness_environment, built_harness
-) -> None:
+def test_projector_happy_paths_cover_all_six_stimulus_types(harness_environment, built_harness) -> None:
     """Every StimulusType discriminator (HttpRequest, SignalrInvoke,
     DagTrigger, FileEvent, TimerTick, DirectInvoke) must round-trip
     through the Projector to engine shape with exactly one typed payload
@@ -1222,9 +1140,7 @@ def test_projector_happy_paths_cover_all_six_stimulus_types(
                 assert c[other_flag] is False, (case_id, other_flag, c)
 
 
-def test_projector_matcher_dispatches_all_five_branches(
-    harness_environment, built_harness
-) -> None:
+def test_projector_matcher_dispatches_all_five_branches(harness_environment, built_harness) -> None:
     """Each happy-path case uses a different matcher branch: Exact,
     Exists, Contains, Regex, Range, Exact. Across the six happy paths
     every Matcher discriminator must be exercised at least once. This
@@ -1235,8 +1151,12 @@ def test_projector_matcher_dispatches_all_five_branches(
     cases = {c["caseId"]: c for c in data["cases"]}
     seen_branches = set()
     for case_id in (
-        "happy_http_request", "happy_signalr_invoke", "happy_dag_trigger",
-        "happy_file_event", "happy_timer_tick", "happy_direct_invoke",
+        "happy_http_request",
+        "happy_signalr_invoke",
+        "happy_dag_trigger",
+        "happy_file_event",
+        "happy_timer_tick",
+        "happy_direct_invoke",
     ):
         c = cases[case_id]
         for branch in ("Exact", "Contains", "Regex", "Range", "Exists"):
@@ -1247,9 +1167,7 @@ def test_projector_matcher_dispatches_all_five_branches(
     )
 
 
-def test_projector_rejects_malformed_stimulus_spec(
-    harness_environment, built_harness
-) -> None:
+def test_projector_rejects_malformed_stimulus_spec(harness_environment, built_harness) -> None:
     """A StimulusSpec that is not valid JSON must produce a single
     quarantined record with code PROJECTION_STIMULUS_SPEC_MALFORMED
     bound to fieldPath 'stimulusSpec'. No engine scenario is emitted.
@@ -1263,9 +1181,7 @@ def test_projector_rejects_malformed_stimulus_spec(
     assert "stimulusSpec" in c["rejectedFieldPaths"], c
 
 
-def test_projector_rejects_missing_required_stimulus_field(
-    harness_environment, built_harness
-) -> None:
+def test_projector_rejects_missing_required_stimulus_field(harness_environment, built_harness) -> None:
     """A typed-shape requirement that the LLM client schema cannot
     enforce (e.g. HttpRequest needs 'path') surfaces as
     PROJECTION_STIMULUS_SPEC_MISSING_FIELD bound to the dotted
@@ -1279,9 +1195,7 @@ def test_projector_rejects_missing_required_stimulus_field(
     assert "stimulusSpec.path" in c["rejectedFieldPaths"], c
 
 
-def test_projector_rejects_malformed_or_empty_matcher(
-    harness_environment, built_harness
-) -> None:
+def test_projector_rejects_malformed_or_empty_matcher(harness_environment, built_harness) -> None:
     """Both modes of broken matcher specification must be rejected:
     invalid JSON (PROJECTION_MATCHER_SPEC_MALFORMED) and a JSON
     object with none of exact/contains/regex/range/exists
@@ -1299,9 +1213,7 @@ def test_projector_rejects_malformed_or_empty_matcher(
     assert "expectations[0].matcherSpec" in empty["rejectedFieldPaths"], empty
 
 
-def test_projector_forwards_source_evidence_id_to_engine_grounding(
-    harness_environment, built_harness
-) -> None:
+def test_projector_forwards_source_evidence_id_to_engine_grounding(harness_environment, built_harness) -> None:
     """The audit trail forward-carry: an Architect plan's evidenceId
     must surface on the projected scenario's GroundingEvidence as
     SourceEvidenceId. This is the bridge between the LLM client's
@@ -1319,9 +1231,7 @@ def test_projector_forwards_source_evidence_id_to_engine_grounding(
     assert c["projectedLifecycle"] == "Generated", c
 
 
-def test_projector_processes_mixed_outcomes_per_scenario(
-    harness_environment, built_harness
-) -> None:
+def test_projector_processes_mixed_outcomes_per_scenario(harness_environment, built_harness) -> None:
     """A batch with one well-formed scenario and one broken one must
     yield exactly one projected + one rejected, with each scenario's
     id surfacing on its own side of the result. No cross-contamination
@@ -1335,6 +1245,7 @@ def test_projector_processes_mixed_outcomes_per_scenario(
     assert c["projectedIds"] == ["sk-ok"], c
     assert c["rejectedIds"] == ["sk-bad"], c
     assert "PROJECTION_STIMULUS_SPEC_MISSING_FIELD" in c["rejectedCodes"], c
+
 
 # ── F27 P9 T1c-b — Scenario Orchestrator + LlmV2 wire-in ────────────────
 
@@ -1351,9 +1262,7 @@ def test_qa_scenario_orchestrator_class_present() -> None:
     public RunAsync entry point and the cancellation-safe contract
     documented in its summary.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs").read_text(encoding="utf-8")
     assert "internal sealed class EdogQaScenarioOrchestrator" in src
     assert "public async Task<OrchestratorResult> RunAsync(" in src
     assert "SemaphoreSlim" in src, "bounded concurrency must use SemaphoreSlim"
@@ -1365,9 +1274,7 @@ def test_qa_scenario_orchestrator_declares_required_codes() -> None:
     """All four wire-stable codes must be present as string literals
     so SignalR consumers can pattern-match without re-parsing.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaScenarioOrchestrator.cs").read_text(encoding="utf-8")
     for code in ORCHESTRATOR_REQUIRED_CODES:
         assert code in src, f"orchestrator must declare {code}"
 
@@ -1395,9 +1302,7 @@ def test_orchestrator_happy_multi_zone_no_dedup(harness_environment, built_harne
     assert c["duplicateCount"] == 0, c
 
 
-def test_orchestrator_cross_zone_dedup_keeps_one_winner(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_cross_zone_dedup_keeps_one_winner(harness_environment, built_harness) -> None:
     """Two zones producing the same SemanticHash ⇒ 1 winner +
     1 duplicate after the deterministic cross-zone reducer.
     """
@@ -1407,9 +1312,7 @@ def test_orchestrator_cross_zone_dedup_keeps_one_winner(
     assert c["duplicateCount"] == 1, c
 
 
-def test_orchestrator_dedup_winner_is_first_zone_index(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_dedup_winner_is_first_zone_index(harness_environment, built_harness) -> None:
     """When two zones collide on hash, the winner must be the zone
     with the lower ZoneInputIndex regardless of completion time.
     Determinism guarantee for the curation UI.
@@ -1420,36 +1323,28 @@ def test_orchestrator_dedup_winner_is_first_zone_index(
     assert c["duplicateLoserZoneId"] == "z-1", c
 
 
-def test_orchestrator_no_testable_changes_emits_zero(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_no_testable_changes_emits_zero(harness_environment, built_harness) -> None:
     """planOutcome=no_testable_changes ⇒ editor skipped, 0 merged."""
     data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
     c = {x["caseId"]: x for x in data["cases"]}["architect_no_testable_changes"]
     assert c["mergedScenarioCount"] == 0, c
 
 
-def test_orchestrator_architect_failure_isolated(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_architect_failure_isolated(harness_environment, built_harness) -> None:
     """One zone's architect throwing must not poison sibling zones."""
     data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
     c = {x["caseId"]: x for x in data["cases"]}["architect_failure_isolation"]
     assert c["mergedScenarioCount"] == 1, c
 
 
-def test_orchestrator_editor_failure_isolated(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_editor_failure_isolated(harness_environment, built_harness) -> None:
     """One zone's editor throwing must not poison sibling zones."""
     data = _run_harness(harness_environment["dotnet"], built_harness, "orchestrator")
     c = {x["caseId"]: x for x in data["cases"]}["editor_failure_isolation"]
     assert c["mergedScenarioCount"] == 1, c
 
 
-def test_orchestrator_projector_rejects_winner_surfaces_reject(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_projector_rejects_winner_surfaces_reject(harness_environment, built_harness) -> None:
     """When a winner has a stimulus the projector cannot decode,
     it must surface as ProjectionRejected rather than silently
     appearing in MergedScenarios with garbage fields.
@@ -1460,9 +1355,7 @@ def test_orchestrator_projector_rejects_winner_surfaces_reject(
     assert c["projectionRejectedCount"] == 1, c
 
 
-def test_orchestrator_bounded_concurrency_le_3(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_bounded_concurrency_le_3(harness_environment, built_harness) -> None:
     """6 zones with MaxConcurrentZones=3 ⇒ observed peak parallelism
     must be ≤ 3. SemaphoreSlim is the only thing standing between
     a 100-zone PR and a 100-RPS LLM flood.
@@ -1472,9 +1365,7 @@ def test_orchestrator_bounded_concurrency_le_3(
     assert c["observedMaxConcurrent"] <= 3, c
 
 
-def test_orchestrator_budget_cost_exceeded_emits_canonical_reason(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_budget_cost_exceeded_emits_canonical_reason(harness_environment, built_harness) -> None:
     """Aggressive pricing + tiny budget ⇒ BudgetGateTripped=true,
     reason=BUDGET_EXCEEDED_COST, at least one zone skipped.
     """
@@ -1485,9 +1376,7 @@ def test_orchestrator_budget_cost_exceeded_emits_canonical_reason(
     assert c["skippedCount"] >= 1, c
 
 
-def test_orchestrator_budget_time_exceeded_emits_canonical_reason(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_budget_time_exceeded_emits_canonical_reason(harness_environment, built_harness) -> None:
     """Sub-second deadline + slow architect ⇒ BudgetGateTripped=true,
     reason=BUDGET_EXCEEDED_TIME, at least one zone skipped.
     """
@@ -1498,9 +1387,7 @@ def test_orchestrator_budget_time_exceeded_emits_canonical_reason(
     assert c["skippedCount"] >= 1, c
 
 
-def test_orchestrator_emits_required_progress_event_kinds(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_emits_required_progress_event_kinds(harness_environment, built_harness) -> None:
     """ZoneStarted, ZoneCompleted, and BatchCompleted are non-negotiable
     for live SignalR progress. Other event kinds (Validated, etc.) are
     additive but the three above must always fire on a happy run.
@@ -1513,9 +1400,7 @@ def test_orchestrator_emits_required_progress_event_kinds(
     assert c["lastKind"] == "BatchCompleted", c
 
 
-def test_orchestrator_external_cancellation_throws_oce(
-    harness_environment, built_harness
-) -> None:
+def test_orchestrator_external_cancellation_throws_oce(harness_environment, built_harness) -> None:
     """External CancellationToken.Cancel() ⇒ OperationCanceledException
     propagates to the caller. Per-zone failures DO NOT throw — they
     become ZoneOutcome=Failed. Only the external CT throws OCE.
@@ -1532,9 +1417,7 @@ def test_codeanalyzer_wirein_branches_on_llmv2_flag() -> None:
     must use a linked CTS so its fire-and-forget cannot outlive the
     caller's cancellation.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs").read_text(encoding="utf-8")
     assert "EdogQaFeatureFlags.LlmV2" in src, "must read the V2 flag"
     assert "EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2" in src, "capability probe must hard-gate"
     assert "LlmV2Mode.On" in src
@@ -1550,13 +1433,12 @@ def test_codeanalyzer_v2_wirein_uses_orchestrator_and_validator() -> None:
     surface. Reuse keeps the validation gates uniform between unit
     tests and production paths.
     """
-    src = (
-        REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs"
-    ).read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs").read_text(encoding="utf-8")
     assert "new EdogQaScenarioOrchestrator(" in src
     assert "EdogQaScenarioValidator.ValidationContext" in src
     assert "EdogQaLlmClient.ReadArchitectConfigFromEnv" in src
     assert "EdogQaLlmClient.ReadEditorConfigFromEnv" in src
+
 
 # ── F27 P9 T1c-c — SECURITY.md threat model presence ────────────────────
 
@@ -1570,14 +1452,7 @@ def test_qa_security_doc_exists_with_required_sections() -> None:
     for every shipped mitigation so a quarterly review can be performed
     against the live commit log.
     """
-    sec = (
-        REPO_ROOT
-        / "docs"
-        / "specs"
-        / "features"
-        / "F27-qa-testing"
-        / "SECURITY.md"
-    )
+    sec = REPO_ROOT / "docs" / "specs" / "features" / "F27-qa-testing" / "SECURITY.md"
     assert sec.exists(), f"SECURITY.md missing: {sec}"
     text = sec.read_text(encoding="utf-8")
 
@@ -1631,14 +1506,7 @@ def test_qa_security_doc_status_summary_present() -> None:
     shipped, partial, or pending, with a commit hash where it shipped.
     Without this, the doc rots into prose.
     """
-    sec = (
-        REPO_ROOT
-        / "docs"
-        / "specs"
-        / "features"
-        / "F27-qa-testing"
-        / "SECURITY.md"
-    )
+    sec = REPO_ROOT / "docs" / "specs" / "features" / "F27-qa-testing" / "SECURITY.md"
     text = sec.read_text(encoding="utf-8")
     assert "Status summary" in text
     assert "Shipped:" in text
@@ -1646,6 +1514,7 @@ def test_qa_security_doc_status_summary_present() -> None:
     # At least one commit hash from the P9 series must be cited so the
     # status column is grounded in real code, not aspiration.
     import re
+
     commits = re.findall(r"`[0-9a-f]{7}`", text)
     assert len(commits) >= 3, f"status summary must cite shipped commits; saw {commits}"
 
@@ -1670,6 +1539,7 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     assert baseline_path.exists(), f"baseline.json missing: {baseline_path}"
 
     import json
+
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 
     assert baseline.get("schema_version") == "1.8", (
@@ -1683,27 +1553,33 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
 
     components = baseline.get("pipeline_components") or {}
     for required_component in ("architect", "editor", "validator", "projector"):
-        assert required_component in components, (
-            f"pipeline_components missing {required_component!r}: {components}"
-        )
+        assert required_component in components, f"pipeline_components missing {required_component!r}: {components}"
 
     prs = baseline.get("prs") or []
     assert len(prs) == 6, f"baseline must cover all 6 gold-corpus PRs after T1k augmentation; got {len(prs)}"
 
     expected_pr_numbers = {"955910", "960543", "966141", "975848", "976609", "977882"}
     captured_pr_numbers = {str(p.get("pr_number")) for p in prs}
-    assert captured_pr_numbers == expected_pr_numbers, (
-        f"unexpected PRs in baseline: {captured_pr_numbers}"
-    )
+    assert captured_pr_numbers == expected_pr_numbers, f"unexpected PRs in baseline: {captured_pr_numbers}"
 
     required_per_pr_keys = {
-        "pr_number", "status",
-        "architect_elapsed_ms", "architect_input_tokens", "architect_output_tokens",
-        "architect_reasoning_tokens", "architect_plan_outcome",
-        "editor_elapsed_ms", "editor_input_tokens", "editor_output_tokens",
-        "scenarios_emitted", "scenarios_after_validation", "scenarios_after_projection",
-        "grounding_violations", "schema_violations",
-        "recall", "precision",
+        "pr_number",
+        "status",
+        "architect_elapsed_ms",
+        "architect_input_tokens",
+        "architect_output_tokens",
+        "architect_reasoning_tokens",
+        "architect_plan_outcome",
+        "editor_elapsed_ms",
+        "editor_input_tokens",
+        "editor_output_tokens",
+        "scenarios_emitted",
+        "scenarios_after_validation",
+        "scenarios_after_projection",
+        "grounding_violations",
+        "schema_violations",
+        "recall",
+        "precision",
     }
     for pr in prs:
         missing = required_per_pr_keys - set(pr.keys())
@@ -1715,17 +1591,13 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
         assert isinstance(recall, (int, float)), (
             f"PR {pr.get('pr_number')!r} recall must be numeric at T1f-b, got {recall!r}"
         )
-        assert 0.0 <= float(recall) <= 1.0, (
-            f"PR {pr.get('pr_number')!r} recall out of [0,1]: {recall!r}"
-        )
+        assert 0.0 <= float(recall) <= 1.0, f"PR {pr.get('pr_number')!r} recall out of [0,1]: {recall!r}"
         precision = pr["precision"]
         assert isinstance(precision, dict), (
             f"PR {pr.get('pr_number')!r} precision must be a dict at T1f-b, got {precision!r}"
         )
         for stage in ("emitted", "projected", "validated"):
-            assert stage in precision, (
-                f"PR {pr.get('pr_number')!r} precision missing stage {stage!r}: {precision!r}"
-            )
+            assert stage in precision, f"PR {pr.get('pr_number')!r} precision missing stage {stage!r}: {precision!r}"
 
     # T1g re-calibrated: top-level scores block links the immutable
     # score_report.json sibling and pins the macro-average headline
@@ -1735,9 +1607,7 @@ def test_qa_baseline_json_captured_with_v2_pipeline() -> None:
     assert scores.get("report_path") == "score_report.json"
     assert scores.get("verdict") in {"PASS", "FAIL"}
     for k in ("macro_recall", "macro_precision_validated", "macro_p0_p1_recall", "micro_recall"):
-        assert isinstance(scores.get(k), (int, float)), (
-            f"scores.{k} must be numeric, got {scores.get(k)!r}"
-        )
+        assert isinstance(scores.get(k), (int, float)), f"scores.{k} must be numeric, got {scores.get(k)!r}"
 
 
 def test_qa_baseline_capture_script_present() -> None:
@@ -1813,8 +1683,7 @@ def test_qa_editor_prompt_declares_verb_selection_guide() -> None:
     src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
     text = src.read_text(encoding="utf-8")
     assert "VERB SELECTION GUIDE" in text, (
-        "Editor prompt must contain a VERB SELECTION GUIDE section "
-        "explaining when to pick each closed-set verb"
+        "Editor prompt must contain a VERB SELECTION GUIDE section explaining when to pick each closed-set verb"
     )
     # The six closed-set verbs must each have a semantic gloss
     # (the section appears AFTER the schema enum which also lists them,
@@ -1870,8 +1739,7 @@ def test_qa_editor_prompt_declares_category_selection_guide() -> None:
     src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
     text = src.read_text(encoding="utf-8")
     assert "CATEGORY SELECTION GUIDE" in text, (
-        "Editor prompt must contain a CATEGORY SELECTION GUIDE section "
-        "explaining when to pick each closed-set category"
+        "Editor prompt must contain a CATEGORY SELECTION GUIDE section explaining when to pick each closed-set category"
     )
     for category in (
         "HappyPath = the nominal",
@@ -1940,8 +1808,7 @@ def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
     src = REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaLlmClient.cs"
     text = src.read_text(encoding="utf-8")
     assert "COVERAGE BREADTH" in text, (
-        "Architect prompt must contain a COVERAGE BREADTH directive "
-        "enumerating distinct behavioural classes"
+        "Architect prompt must contain a COVERAGE BREADTH directive enumerating distinct behavioural classes"
     )
     assert "EVIDENCE LINE PRECISION" in text, (
         "Architect prompt must contain an EVIDENCE LINE PRECISION directive "
@@ -1951,8 +1818,7 @@ def test_qa_architect_prompt_declares_coverage_and_line_precision() -> None:
     # CATEGORY guide — if the Architect doesn't sketch them, no amount
     # of Editor category-tuning can recover the recall.
     assert "DEFENSIVE CODE BIAS" in text, (
-        "Architect prompt must contain a DEFENSIVE CODE BIAS directive "
-        "prioritising guard-sketches"
+        "Architect prompt must contain a DEFENSIVE CODE BIAS directive prioritising guard-sketches"
     )
     # NOT the function signature / hunk header — the most common
     # off-by-N-lines failure mode.
@@ -2004,8 +1870,7 @@ def test_qa_architect_prompt_declares_t2_granularity_and_category_policy() -> No
         "does not hallucinate invariants on truly-tiny PRs"
     )
     assert "ceilings, not quotas" in text, (
-        "Architect's anti-quota guard must spell out that LoC-banded ranges are "
-        "ceilings, not quotas"
+        "Architect's anti-quota guard must spell out that LoC-banded ranges are ceilings, not quotas"
     )
     # 3. PR-type category heuristic — the dominant Regression-overuse fix
     assert "PR-TYPE CATEGORY HEURISTIC" in text, (
@@ -2041,9 +1906,7 @@ def test_qa_architect_prompt_declares_t2_granularity_and_category_policy() -> No
         "and contract-scoping comments are surfaced as evidence + dedicated sketches"
     )
     for tag in ("<warning>", "<remarks>", "<exception>"):
-        assert tag in text, (
-            f"Architect's contract-comment rule must name the {tag!r} xmldoc tag"
-        )
+        assert tag in text, f"Architect's contract-comment rule must name the {tag!r} xmldoc tag"
     # The rule must have a negative side: typo/formatting/rename-only
     # comment changes are NOT evidence. Without the negative side the
     # rule over-fires on doc polish PRs.
@@ -2071,8 +1934,7 @@ def test_qa_capture_script_passes_write_plan() -> None:
         "architect_plan.json is captured alongside actual.json"
     )
     assert "architect_plan.json" in text, (
-        "capture_v2_actuals.py must write the architect plan to "
-        "architect_plan.json alongside actual.json"
+        "capture_v2_actuals.py must write the architect plan to architect_plan.json alongside actual.json"
     )
 
 
@@ -2085,17 +1947,11 @@ def test_qa_harness_supports_write_plan_argument() -> None:
     """
     src = REPO_ROOT / "tests" / "dotnet" / "EdogQaE2E.Tests" / "GoldCorpusBaselineHarness.cs"
     text = src.read_text(encoding="utf-8")
-    assert "--write-plan" in text, (
-        "GoldCorpusBaselineHarness must parse a --write-plan CLI argument"
-    )
-    assert "WriteArchitectPlanJson" in text, (
-        "GoldCorpusBaselineHarness must implement an architect-plan JSON writer"
-    )
+    assert "--write-plan" in text, "GoldCorpusBaselineHarness must parse a --write-plan CLI argument"
+    assert "WriteArchitectPlanJson" in text, "GoldCorpusBaselineHarness must implement an architect-plan JSON writer"
     # Ensure the plan dump runs even when the editor pass fails — diagnostic
     # is most valuable when something has gone wrong.
-    assert "writePlanPath" in text, (
-        "GoldCorpusBaselineHarness must wire the parsed --write-plan path"
-    )
+    assert "writePlanPath" in text, "GoldCorpusBaselineHarness must wire the parsed --write-plan path"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -2179,8 +2035,7 @@ def test_qa_v2_user_message_builders_wrap_diff_with_untrusted_sentinels():
 
     # Sentinel markers around the diff insertion in both builders.
     assert text.count("---BEGIN UNTRUSTED DIFF---") >= 2, (
-        "Both BuildArchitectUserMessage and BuildEditorUserMessage must emit "
-        "the BEGIN UNTRUSTED DIFF sentinel"
+        "Both BuildArchitectUserMessage and BuildEditorUserMessage must emit the BEGIN UNTRUSTED DIFF sentinel"
     )
     assert text.count("---END UNTRUSTED DIFF---") >= 2
 
@@ -2263,10 +2118,9 @@ def test_qa_orchestrator_exposes_repair_seam_and_zoneresult_fields() -> None:
         "RepairOutputTokens",
         "RepairFailureCode",
     ):
-        assert (
-            f"public int {field}" in src
-            or f"public string {field}" in src
-        ), f"ZoneResult must expose {field} as a property"
+        assert f"public int {field}" in src or f"public string {field}" in src, (
+            f"ZoneResult must expose {field} as a property"
+        )
 
 
 def test_qa_orchestrator_accumulator_uses_delta_helper() -> None:
@@ -2427,19 +2281,12 @@ def test_qa_baseline_harness_emits_write_actual() -> None:
     WriteActualJson after the projector stage. Source-grep so the build
     gate (P2) catches regressions even when the DLL is stale.
     """
-    harness = (
-        REPO_ROOT / "tests" / "dotnet" / "EdogQaE2E.Tests"
-        / "GoldCorpusBaselineHarness.cs"
-    )
+    harness = REPO_ROOT / "tests" / "dotnet" / "EdogQaE2E.Tests" / "GoldCorpusBaselineHarness.cs"
     text = harness.read_text(encoding="utf-8")
     assert "--write-actual" in text, "harness must parse the --write-actual flag"
     assert "WriteActualJson" in text, "harness must declare WriteActualJson"
-    assert "BuildProjectedActual" in text, (
-        "harness must declare BuildProjectedActual (projected-stage emitter)"
-    )
-    assert "BuildGeneratedActual" in text, (
-        "harness must declare BuildGeneratedActual (emitted/validated emitter)"
-    )
+    assert "BuildProjectedActual" in text, "harness must declare BuildProjectedActual (projected-stage emitter)"
+    assert "BuildGeneratedActual" in text, "harness must declare BuildGeneratedActual (emitted/validated emitter)"
     assert '"v2_architect_editor"' in text
 
 
@@ -2451,6 +2298,7 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
     score_eval.py consumes — a drift here invalidates every score.
     """
     import json
+
     ground_truth = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
     expected_prs = ("PR-975848", "PR-976609", "PR-977882")
     for pr in expected_prs:
@@ -2463,17 +2311,13 @@ def test_qa_gold_corpus_actuals_present_and_shaped() -> None:
         assert data.get("pipeline") == "v2_architect_editor"
         counts = data.get("counts") or {}
         for k in ("emitted", "validated", "projected"):
-            assert isinstance(counts.get(k), int), (
-                f"{pr}/actual.json counts.{k} must be int, got {counts.get(k)!r}"
-            )
+            assert isinstance(counts.get(k), int), f"{pr}/actual.json counts.{k} must be int, got {counts.get(k)!r}"
         scenarios = data.get("scenarios") or []
         assert isinstance(scenarios, list), f"{pr} scenarios must be a list"
         valid_stages = {"emitted", "validated", "projected"}
         for s in scenarios:
             stage = s.get("stage")
-            assert stage in valid_stages, (
-                f"{pr} scenario {s.get('id')!r} has invalid stage {stage!r}"
-            )
+            assert stage in valid_stages, f"{pr} scenario {s.get('id')!r} has invalid stage {stage!r}"
             for k in ("id", "category", "verb", "grounding_changed_lines"):
                 assert k in s, f"{pr} scenario {s.get('id')!r} missing key {k!r}"
 
@@ -2496,6 +2340,7 @@ def test_qa_score_floors_calibrated_for_t4a() -> None:
     floors so a silent revert to strict matching trips the gate).
     """
     import json
+
     floors_path = REPO_ROOT / "tests" / "qa-eval" / "score_floors.json"
     assert floors_path.exists()
     floors = json.loads(floors_path.read_text(encoding="utf-8"))
@@ -2540,20 +2385,14 @@ def test_qa_score_floors_calibrated_for_t4a() -> None:
     # measured at 0.622 on n=6. Floor stays BELOW measured (so flap
     # doesn't trip) but ABOVE 0.0 (so total raw-label collapse trips).
     cla_min = absolute.get("category_label_accuracy_min")
-    assert isinstance(cla_min, (int, float)), (
-        "T4-A floors must declare category_label_accuracy_min; "
-        f"got {cla_min!r}"
-    )
-    assert 0.0 < cla_min <= 0.622, (
-        f"category_label_accuracy_min must be in (0.0, 0.622]; got {cla_min!r}"
-    )
+    assert isinstance(cla_min, (int, float)), f"T4-A floors must declare category_label_accuracy_min; got {cla_min!r}"
+    assert 0.0 < cla_min <= 0.622, f"category_label_accuracy_min must be in (0.0, 0.622]; got {cla_min!r}"
     # T4-A keeps per_pr floors at 0.0 — even after the lift, the lowest
     # per-PR recall is PR-955910 at 0.583, but a per_pr ratchet would
     # block any future capture variance. Re-introduce after corpus
     # augmentation (T4-C, n>=15).
     assert absolute.get("per_pr_recall_min") == 0.0, (
-        "T4-A per_pr_recall_min must be 0.00; "
-        f"got {absolute.get('per_pr_recall_min')!r}"
+        f"T4-A per_pr_recall_min must be 0.00; got {absolute.get('per_pr_recall_min')!r}"
     )
     assert absolute.get("per_pr_precision_highest_stage_min") == 0.0, (
         "T4-A per_pr_precision_highest_stage_min must be 0.00; "
@@ -2573,6 +2412,7 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     pairs. Pin the new shape so downstream tooling can rely on it.
     """
     import json
+
     report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
     assert report_path.exists(), (
         "score_report.json missing — run `python tests/qa-eval/score_eval.py "
@@ -2580,8 +2420,7 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     )
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report.get("schema_version") == "1.4", (
-        f"expected score_report schema_version=1.4 after T4-A, "
-        f"got {report.get('schema_version')!r}"
+        f"expected score_report schema_version=1.4 after T4-A, got {report.get('schema_version')!r}"
     )
     assert report.get("verdict") in {"PASS", "FAIL"}
     assert report.get("enforcement") == "report_only"
@@ -2589,9 +2428,7 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     # presence + that the default forward_lines matches the source
     # constant SPAN_EXPANSION_DEFAULT_N=15 so a silent disable surfaces.
     span = report.get("span_expansion") or {}
-    assert isinstance(span, dict) and span, (
-        "score_report.json must carry a `span_expansion` block at schema 1.4"
-    )
+    assert isinstance(span, dict) and span, "score_report.json must carry a `span_expansion` block at schema 1.4"
     assert span.get("forward_lines") == 15, (
         f"span_expansion.forward_lines must default to 15; got {span.get('forward_lines')!r}"
     )
@@ -2600,9 +2437,7 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     # T1j matcher block is mandatory at schema 1.4, now with T4-A
     # category_key provenance.
     matcher = report.get("matcher") or {}
-    assert isinstance(matcher, dict) and matcher, (
-        "score_report.json must carry a `matcher` block at schema 1.4"
-    )
+    assert isinstance(matcher, dict) and matcher, "score_report.json must carry a `matcher` block at schema 1.4"
     assert matcher.get("algorithm") == "bipartite_linear_sum_assignment", (
         f"expected bipartite matcher; got {matcher.get('algorithm')!r}"
     )
@@ -2612,8 +2447,7 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     # T4-A: matcher version 1.1 when cluster matching is active;
     # version 1.0 reserved for --strict-category audit-trail mode.
     assert matcher.get("version") in {"1.0", "1.1"}, (
-        f"matcher version must be 1.0 (strict) or 1.1 (cluster) at T4-A; "
-        f"got {matcher.get('version')!r}"
+        f"matcher version must be 1.0 (strict) or 1.1 (cluster) at T4-A; got {matcher.get('version')!r}"
     )
     # T4-A: category_key field records the cluster source.
     category_key = matcher.get("category_key")
@@ -2622,24 +2456,19 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     )
     # Cluster mode references the aliases JSON; strict mode says raw_label.
     assert category_key in {"raw_label", "cluster_from_category_aliases.json"}, (
-        f"matcher.category_key must be 'raw_label' or 'cluster_from_category_aliases.json'; "
-        f"got {category_key!r}"
+        f"matcher.category_key must be 'raw_label' or 'cluster_from_category_aliases.json'; got {category_key!r}"
     )
     aggregate = report.get("aggregate") or {}
     macro = aggregate.get("macro") or {}
     # T1f-b headline numbers still required.
     for k in ("recall", "precision_validated", "f1_validated", "p0_p1_recall"):
-        assert isinstance(macro.get(k), (int, float)), (
-            f"aggregate.macro.{k} must be numeric, got {macro.get(k)!r}"
-        )
+        assert isinstance(macro.get(k), (int, float)), f"aggregate.macro.{k} must be numeric, got {macro.get(k)!r}"
     # T1f-c new headline numbers.
     for k in ("precision_highest_stage", "f1_highest_stage"):
         assert isinstance(macro.get(k), (int, float)), (
             f"aggregate.macro.{k} must be numeric at T1f-c, got {macro.get(k)!r}"
         )
-        assert 0.0 <= float(macro[k]) <= 1.0, (
-            f"aggregate.macro.{k} must be in [0,1], got {macro[k]!r}"
-        )
+        assert 0.0 <= float(macro[k]) <= 1.0, f"aggregate.macro.{k} must be in [0,1], got {macro[k]!r}"
     micro = aggregate.get("micro") or {}
     assert isinstance(micro.get("precision_highest_stage"), (int, float)), (
         "aggregate.micro.precision_highest_stage required at T1f-c"
@@ -2651,23 +2480,15 @@ def test_qa_score_report_json_present_at_t4a() -> None:
     assert actual == expected, f"prs_scored set mismatch: {actual}"
     # Every PR must carry the new T1f-c per-PR metric.
     for pr in prs_scored:
-        assert "precision_highest_stage" in pr, (
-            f"PR-{pr.get('pr_number')!r} missing precision_highest_stage"
-        )
-        assert "f1_highest_stage" in pr, (
-            f"PR-{pr.get('pr_number')!r} missing f1_highest_stage"
-        )
+        assert "precision_highest_stage" in pr, f"PR-{pr.get('pr_number')!r} missing precision_highest_stage"
+        assert "f1_highest_stage" in pr, f"PR-{pr.get('pr_number')!r} missing f1_highest_stage"
         # T4-A: per-PR category_label_accuracy diagnostic.
-        assert "category_label_accuracy" in pr, (
-            f"PR-{pr.get('pr_number')!r} missing category_label_accuracy at T4-A"
-        )
+        assert "category_label_accuracy" in pr, f"PR-{pr.get('pr_number')!r} missing category_label_accuracy at T4-A"
         cla = pr["category_label_accuracy"]
         assert isinstance(cla, (int, float)), (
             f"PR-{pr.get('pr_number')!r} category_label_accuracy must be numeric; got {cla!r}"
         )
-        assert 0.0 <= float(cla) <= 1.0, (
-            f"PR-{pr.get('pr_number')!r} category_label_accuracy out of [0,1]: {cla!r}"
-        )
+        assert 0.0 <= float(cla) <= 1.0, f"PR-{pr.get('pr_number')!r} category_label_accuracy out of [0,1]: {cla!r}"
 
 
 # ── F27 P9 T4-A — category-cluster matcher calibration ──────────────
@@ -2689,6 +2510,7 @@ def test_qa_category_aliases_json_present() -> None:
     Performance in) and inflate recall.
     """
     import json
+
     path = REPO_ROOT / "tests" / "qa-eval" / "category_aliases.json"
     assert path.exists(), (
         f"T4-A category_aliases.json missing: {path}. "
@@ -2709,8 +2531,7 @@ def test_qa_category_aliases_json_present() -> None:
     assert "behavioral" in clusters, "behavioral cluster required at T4-A"
     behavioral = set(clusters["behavioral"])
     assert behavioral == {"HappyPath", "EdgeCase", "ErrorPath", "Regression"}, (
-        f"behavioral cluster must contain exactly the four behavioural-flavour labels; "
-        f"got {sorted(behavioral)}"
+        f"behavioral cluster must contain exactly the four behavioural-flavour labels; got {sorted(behavioral)}"
     )
     assert "performance" in clusters, "performance cluster required at T4-A"
     performance = set(clusters["performance"])
@@ -2723,8 +2544,7 @@ def test_qa_category_aliases_json_present() -> None:
     for members in clusters.values():
         all_members.extend(members)
     assert len(all_members) == len(set(all_members)), (
-        f"category_aliases.json clusters must form a partition (no overlap); "
-        f"got duplicates in {all_members}"
+        f"category_aliases.json clusters must form a partition (no overlap); got duplicates in {all_members}"
     )
 
 
@@ -2740,19 +2560,11 @@ def test_qa_score_eval_uses_category_cluster() -> None:
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
     # Path constant + loader function — pin both so a refactor that
     # renames either surfaces here.
-    assert "_CATEGORY_ALIASES_PATH" in src, (
-        "score_eval.py must declare _CATEGORY_ALIASES_PATH at T4-A"
-    )
-    assert "_load_category_clusters" in src, (
-        "score_eval.py must declare _load_category_clusters at T4-A"
-    )
+    assert "_CATEGORY_ALIASES_PATH" in src, "score_eval.py must declare _CATEGORY_ALIASES_PATH at T4-A"
+    assert "_load_category_clusters" in src, "score_eval.py must declare _load_category_clusters at T4-A"
     # Key lookup + cluster constant.
-    assert "_category_key" in src, (
-        "score_eval.py must declare _category_key at T4-A"
-    )
-    assert "_CATEGORY_CLUSTER" in src, (
-        "score_eval.py must declare _CATEGORY_CLUSTER constant at T4-A"
-    )
+    assert "_category_key" in src, "score_eval.py must declare _category_key at T4-A"
+    assert "_CATEGORY_CLUSTER" in src, "score_eval.py must declare _CATEGORY_CLUSTER constant at T4-A"
     # CLI flag for audit-trail reproducibility — strict mode must
     # remain reachable so any pre-T4-A score can be re-derived
     # byte-for-byte.
@@ -2762,9 +2574,7 @@ def test_qa_score_eval_uses_category_cluster() -> None:
     )
     # The matcher must thread the strict flag through; pin one of the
     # canonical sites.
-    assert "strict_category" in src, (
-        "score_eval.py must thread a strict_category kwarg through the matcher at T4-A"
-    )
+    assert "strict_category" in src, "score_eval.py must thread a strict_category kwarg through the matcher at T4-A"
 
 
 def test_qa_score_report_carries_category_label_accuracy() -> None:
@@ -2777,6 +2587,7 @@ def test_qa_score_report_carries_category_label_accuracy() -> None:
     exact label. Pin the macro aggregate field + range.
     """
     import json
+
     report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     aggregate = report.get("aggregate") or {}
@@ -2785,9 +2596,7 @@ def test_qa_score_report_carries_category_label_accuracy() -> None:
     assert isinstance(cla, (int, float)), (
         f"aggregate.macro.category_label_accuracy must be numeric at T4-A; got {cla!r}"
     )
-    assert 0.0 <= float(cla) <= 1.0, (
-        f"aggregate.macro.category_label_accuracy must be in [0,1]; got {cla!r}"
-    )
+    assert 0.0 <= float(cla) <= 1.0, f"aggregate.macro.category_label_accuracy must be in [0,1]; got {cla!r}"
 
 
 def test_qa_matcher_audit_script_present() -> None:
@@ -2821,20 +2630,12 @@ def test_qa_corpus_candidate_picker_present() -> None:
     assert path.exists(), f"T4-C-prep pick_corpus_candidates.py missing: {path}"
     text = path.read_text(encoding="utf-8")
     # Pin the canonical entry-points + key functions.
-    assert "def discover_candidates" in text, (
-        "pick_corpus_candidates.py must expose discover_candidates()"
-    )
-    assert "def build_manifest" in text, (
-        "pick_corpus_candidates.py must expose build_manifest()"
-    )
-    assert "_classify_change_shape" in text, (
-        "pick_corpus_candidates.py must declare _classify_change_shape()"
-    )
+    assert "def discover_candidates" in text, "pick_corpus_candidates.py must expose discover_candidates()"
+    assert "def build_manifest" in text, "pick_corpus_candidates.py must expose build_manifest()"
+    assert "_classify_change_shape" in text, "pick_corpus_candidates.py must declare _classify_change_shape()"
     # Hard-rejects must remain explicit so docs-only / test-only PRs
     # can't silently slip into the corpus.
-    assert "HARD_REJECT" in text, (
-        "pick_corpus_candidates.py must declare HARD_REJECT exclusions"
-    )
+    assert "HARD_REJECT" in text, "pick_corpus_candidates.py must declare HARD_REJECT exclusions"
 
 
 def test_qa_capture_pr_fixture_script_present() -> None:
@@ -2849,9 +2650,7 @@ def test_qa_capture_pr_fixture_script_present() -> None:
     text = path.read_text(encoding="utf-8")
     assert "def capture" in text, "capture_pr_fixture.py must expose capture()"
     # diff_sha256 reproducibility footer — rubber-duck recommendation.
-    assert "diff_sha256" in text, (
-        "capture_pr_fixture.py must record diff_sha256 in pr.json for reproducibility"
-    )
+    assert "diff_sha256" in text, "capture_pr_fixture.py must record diff_sha256 in pr.json for reproducibility"
     # PENDING state is the invariant — capture script must NEVER emit
     # graded fixtures (that's curator work).
     assert "PENDING_HUMAN_GRADING" in text, (
@@ -2872,6 +2671,7 @@ def test_qa_corpus_candidates_manifest_present() -> None:
     refactor) surfaces here.
     """
     import json
+
     path = REPO_ROOT / "tests" / "qa-eval" / "corpus_candidates.json"
     assert path.exists(), (
         f"T4-C-prep corpus_candidates.json missing: {path}. "
@@ -2890,9 +2690,16 @@ def test_qa_corpus_candidates_manifest_present() -> None:
     assert len(selected) >= 1, "corpus_candidates.json.selected must be non-empty"
     # Every selected entry must carry its identification + selection metadata.
     for entry in selected:
-        for k in ("pr_number", "merge_commit_sha", "title",
-                  "change_shape", "files_changed", "diff_size_bytes",
-                  "selected", "selection_rationale"):
+        for k in (
+            "pr_number",
+            "merge_commit_sha",
+            "title",
+            "change_shape",
+            "files_changed",
+            "diff_size_bytes",
+            "selected",
+            "selection_rationale",
+        ):
             assert k in entry, f"selected entry missing key {k!r}: {entry}"
         assert entry["selected"] is True
 
@@ -2910,6 +2717,7 @@ def test_qa_pending_curator_fixtures_have_minimal_shape() -> None:
     ``prs_pending_grading`` regardless of whether actual.json exists.
     """
     import json
+
     gt = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
     pending_dirs: list = []
     for d in sorted(gt.iterdir()):
@@ -2926,20 +2734,26 @@ def test_qa_pending_curator_fixtures_have_minimal_shape() -> None:
             pending_dirs.append(d)
     # At least one pending dir (we shipped 9 at T4-C-prep).
     assert len(pending_dirs) >= 1, (
-        "At least one PENDING_HUMAN_GRADING fixture must exist after T4-C-prep; "
-        f"found {len(pending_dirs)}"
+        f"At least one PENDING_HUMAN_GRADING fixture must exist after T4-C-prep; found {len(pending_dirs)}"
     )
     for d in pending_dirs:
         # Required files.
         for name in ("pr.json", "diff.patch", "notes.md", "expected.json"):
-            assert (d / name).exists(), (
-                f"PENDING fixture {d.name} missing required file: {name}"
-            )
+            assert (d / name).exists(), f"PENDING fixture {d.name} missing required file: {name}"
         # pr.json reproducibility metadata.
         pr_blob = json.loads((d / "pr.json").read_text(encoding="utf-8"))
-        for k in ("pr_number", "title", "base_sha", "head_sha",
-                  "merge_commit_sha", "files", "diff_size_bytes",
-                  "diff_sha256", "captured_at", "diff_command"):
+        for k in (
+            "pr_number",
+            "title",
+            "base_sha",
+            "head_sha",
+            "merge_commit_sha",
+            "files",
+            "diff_size_bytes",
+            "diff_sha256",
+            "captured_at",
+            "diff_command",
+        ):
             assert k in pr_blob, f"PENDING fixture {d.name} pr.json missing key {k!r}"
         # Empty scenarios (curator hasn't graded yet).
         exp_blob = json.loads((d / "expected.json").read_text(encoding="utf-8"))
@@ -2957,13 +2771,12 @@ def test_qa_score_eval_skips_pending_curator_state() -> None:
     accidentally promoted pending PRs into the scored set.
     """
     import json
+
     report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
     report = json.loads(report_path.read_text(encoding="utf-8"))
     # graded count must still be 6 — the T4-A scored set.
     cs = report.get("corpus_status") or {}
-    assert isinstance(cs, dict) and cs, (
-        "score_report.json must carry a corpus_status block at T4-C-prep"
-    )
+    assert isinstance(cs, dict) and cs, "score_report.json must carry a corpus_status block at T4-C-prep"
     assert cs.get("graded_count") == 6, (
         f"corpus_status.graded_count must remain 6 at T4-C-prep "
         f"(promoting pending fixtures requires curator grading); "
@@ -2971,8 +2784,7 @@ def test_qa_score_eval_skips_pending_curator_state() -> None:
     )
     # Headline aggregate.pr_count must agree with graded_count.
     assert report["aggregate"]["pr_count"] == 6, (
-        f"aggregate.pr_count must equal corpus_status.graded_count (=6); "
-        f"got {report['aggregate']['pr_count']!r}"
+        f"aggregate.pr_count must equal corpus_status.graded_count (=6); got {report['aggregate']['pr_count']!r}"
     )
     # T4-A macro numbers must remain byte-stable.
     macro = report["aggregate"]["macro"]
@@ -2986,8 +2798,7 @@ def test_qa_score_eval_skips_pending_curator_state() -> None:
     pending = set(report.get("prs_pending_grading") or [])
     scored = {p["pr_number"] for p in report.get("prs_scored") or []}
     assert pending.isdisjoint(scored), (
-        f"prs_pending_grading and prs_scored must be disjoint; "
-        f"overlap: {pending & scored}"
+        f"prs_pending_grading and prs_scored must be disjoint; overlap: {pending & scored}"
     )
     # The six scored PRs are the exact T4-A set.
     assert scored == {"955910", "960543", "966141", "975848", "976609", "977882"}, (
@@ -3005,6 +2816,7 @@ def test_qa_category_aliases_partition_covers_valid_categories() -> None:
     """
     import json
     import sys as _sys
+
     qa_eval_dir = REPO_ROOT / "tests" / "qa-eval"
     _added = False
     if str(qa_eval_dir) not in _sys.path:
@@ -3012,14 +2824,13 @@ def test_qa_category_aliases_partition_covers_valid_categories() -> None:
         _added = True
     try:
         import score_eval  # type: ignore[import-not-found]
+
         valid_categories = set(score_eval.VALID_CATEGORIES)
     finally:
         if _added:
             _sys.path.remove(str(qa_eval_dir))
     # Load the cluster map.
-    aliases = json.loads(
-        (REPO_ROOT / "tests" / "qa-eval" / "category_aliases.json").read_text(encoding="utf-8")
-    )
+    aliases = json.loads((REPO_ROOT / "tests" / "qa-eval" / "category_aliases.json").read_text(encoding="utf-8"))
     clusters = aliases.get("clusters") or {}
     all_members: list = []
     for members in clusters.values():
@@ -3038,9 +2849,7 @@ def test_qa_category_aliases_partition_covers_valid_categories() -> None:
     # Cluster map must not invent labels outside VALID_CATEGORIES (otherwise
     # the curator could ship scenarios with categories the validator rejects).
     extra = members_set - valid_categories
-    assert not extra, (
-        f"category_aliases.json clusters contain labels not in VALID_CATEGORIES: {extra}"
-    )
+    assert not extra, f"category_aliases.json clusters contain labels not in VALID_CATEGORIES: {extra}"
 
 
 def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
@@ -3052,6 +2861,7 @@ def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
     them.
     """
     import json
+
     baseline_path = REPO_ROOT / "tests" / "qa-eval" / "baseline.json"
     baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     scores = baseline.get("scores")
@@ -3061,12 +2871,8 @@ def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
         "macro_f1_highest_stage",
         "micro_precision_highest_stage",
     ):
-        assert isinstance(scores.get(k), (int, float)), (
-            f"scores.{k} must be numeric at T1f-c, got {scores.get(k)!r}"
-        )
-        assert 0.0 <= float(scores[k]) <= 1.0, (
-            f"scores.{k} must be in [0,1], got {scores[k]!r}"
-        )
+        assert isinstance(scores.get(k), (int, float)), f"scores.{k} must be numeric at T1f-c, got {scores.get(k)!r}"
+        assert 0.0 <= float(scores[k]) <= 1.0, f"scores.{k} must be in [0,1], got {scores[k]!r}"
 
 
 # ── F27 P9 T1i — scorer-side span expansion + 2-tier overlap tiebreaker ──
@@ -3097,9 +2903,7 @@ def test_qa_score_eval_declares_hunk_parser_and_expander() -> None:
     """
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
     for symbol in ("_HUNK_HEADER_RE", "_load_diff_hunks", "_expand_grounding"):
-        assert symbol in src, (
-            f"score_eval.py must declare {symbol} (T1i hunk-bounded expansion primitive)"
-        )
+        assert symbol in src, f"score_eval.py must declare {symbol} (T1i hunk-bounded expansion primitive)"
 
 
 def test_qa_score_eval_declares_two_tier_overlap_machinery() -> None:
@@ -3117,9 +2921,7 @@ def test_qa_score_eval_declares_two_tier_overlap_machinery() -> None:
         "_max_overlap_tiered",
         "original_overlap_count",
     ):
-        assert symbol in src, (
-            f"score_eval.py must declare {symbol} (T1i 2-tier overlap tiebreaker primitive)"
-        )
+        assert symbol in src, f"score_eval.py must declare {symbol} (T1i 2-tier overlap tiebreaker primitive)"
 
 
 def test_qa_score_eval_cli_exposes_span_expansion_flag() -> None:
@@ -3128,12 +2930,8 @@ def test_qa_score_eval_cli_exposes_span_expansion_flag() -> None:
     silent default change (e.g. 5 → 0) can't slip past code review.
     """
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
-    assert "--span-expansion" in src, (
-        "score_eval.py main() must expose --span-expansion CLI flag"
-    )
-    assert "span_expansion_n" in src, (
-        "build_report / load_actual must thread span_expansion_n parameter"
-    )
+    assert "--span-expansion" in src, "score_eval.py main() must expose --span-expansion CLI flag"
+    assert "span_expansion_n" in src, "build_report / load_actual must thread span_expansion_n parameter"
     # Pin the threading: build_report MUST accept and load_actual MUST
     # be called with the same name to keep override behaviour honest.
     assert "build_report(pr_dirs, span_expansion_n=" in src or "span_expansion_n=span_expansion_n" in src, (
@@ -3149,15 +2947,15 @@ def test_qa_score_report_span_expansion_block_matches_default() -> None:
     forward_lines in the checked-in snapshot to the source default.
     """
     import json
+
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
     # Extract the literal default from source (single source of truth).
     import re as _re
+
     match = _re.search(r"SPAN_EXPANSION_DEFAULT_N\s*=\s*(\d+)", src)
     assert match, "could not find SPAN_EXPANSION_DEFAULT_N literal in score_eval.py"
     default_n = int(match.group(1))
-    report = json.loads(
-        (REPO_ROOT / "tests" / "qa-eval" / "score_report.json").read_text(encoding="utf-8")
-    )
+    report = json.loads((REPO_ROOT / "tests" / "qa-eval" / "score_report.json").read_text(encoding="utf-8"))
     span = report.get("span_expansion") or {}
     assert span.get("forward_lines") == default_n, (
         f"score_report.json span_expansion.forward_lines ({span.get('forward_lines')!r}) "
@@ -3175,6 +2973,7 @@ def test_qa_t1i_load_diff_hunks_parses_unified_diff() -> None:
     """
     import importlib
     import sys
+
     qa_eval = REPO_ROOT / "tests" / "qa-eval"
     sys.path.insert(0, str(qa_eval))
     try:
@@ -3208,6 +3007,7 @@ def test_qa_t1i_expand_grounding_is_hunk_bounded_and_forward_only() -> None:
     """
     import importlib
     import sys
+
     qa_eval = REPO_ROOT / "tests" / "qa-eval"
     sys.path.insert(0, str(qa_eval))
     try:
@@ -3248,6 +3048,7 @@ def test_qa_t1i_overlap_tiered_prefers_original_match() -> None:
     """
     import importlib
     import sys
+
     qa_eval = REPO_ROOT / "tests" / "qa-eval"
     sys.path.insert(0, str(qa_eval))
     try:
@@ -3261,17 +3062,20 @@ def test_qa_t1i_overlap_tiered_prefers_original_match() -> None:
         # tier-1=0 case, B's original_lines must be a non-empty set that
         # is disjoint from the expected's original_lines.
         expected = score_eval.ChangedLineSet(
-            path="x.cs", side="right",
+            path="x.cs",
+            side="right",
             lines=frozenset({10, 100, 101, 102}),
             original_lines=frozenset({10, 100, 101, 102}),
         )
         actual_a = score_eval.ChangedLineSet(
-            path="x.cs", side="right",
+            path="x.cs",
+            side="right",
             lines=frozenset({10, 11, 12}),
             original_lines=frozenset({10}),
         )
         actual_b = score_eval.ChangedLineSet(
-            path="x.cs", side="right",
+            path="x.cs",
+            side="right",
             lines=frozenset({100, 101, 102, 103, 104, 105, 106, 107}),
             original_lines=frozenset({999}),  # disjoint from expected.original_lines
         )
@@ -3282,14 +3086,16 @@ def test_qa_t1i_overlap_tiered_prefers_original_match() -> None:
         assert ta > tb, "original-line match must outrank expansion-only match"
         # Path mismatch → (0, 0).
         other_path = score_eval.ChangedLineSet(
-            path="y.cs", side="right",
+            path="y.cs",
+            side="right",
             lines=frozenset({10}),
             original_lines=frozenset({10}),
         )
         assert expected.overlap_tiered(other_path) == (0, 0)
         # Side mismatch → (0, 0).
         other_side = score_eval.ChangedLineSet(
-            path="x.cs", side="left",
+            path="x.cs",
+            side="left",
             lines=frozenset({10}),
             original_lines=frozenset({10}),
         )
@@ -3305,13 +3111,10 @@ def test_qa_t1j_baseline_records_scorer_provenance() -> None:
     (not a covert LLM prompt revision).
     """
     import json
-    baseline = json.loads(
-        (REPO_ROOT / "tests" / "qa-eval" / "baseline.json").read_text(encoding="utf-8")
-    )
+
+    baseline = json.loads((REPO_ROOT / "tests" / "qa-eval" / "baseline.json").read_text(encoding="utf-8"))
     components = baseline.get("pipeline_components") or {}
-    assert "scorer" in components, (
-        "baseline.json pipeline_components must record the scorer at T1j"
-    )
+    assert "scorer" in components, "baseline.json pipeline_components must record the scorer at T1j"
     scorer = components["scorer"]
     assert "bipartite" in scorer.lower() or "T1j" in scorer, (
         f"scorer provenance must mention T1j / bipartite; got {scorer!r}"
@@ -3324,8 +3127,7 @@ def test_qa_t1j_baseline_records_scorer_provenance() -> None:
         f"baseline scores.span_expansion_n must be 15 at T1j; got {scores.get('span_expansion_n')!r}"
     )
     assert scores.get("matcher") == "bipartite_linear_sum_assignment", (
-        f"baseline scores.matcher must be bipartite_linear_sum_assignment at T1j; "
-        f"got {scores.get('matcher')!r}"
+        f"baseline scores.matcher must be bipartite_linear_sum_assignment at T1j; got {scores.get('matcher')!r}"
     )
 
 
@@ -3341,7 +3143,7 @@ def test_qa_score_eval_declares_bipartite_matcher_default() -> None:
     """
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
     assert 'MATCHER_DEFAULT = "bipartite"' in src, (
-        "score_eval.py must declare MATCHER_DEFAULT = \"bipartite\" (T1j default)"
+        'score_eval.py must declare MATCHER_DEFAULT = "bipartite" (T1j default)'
     )
     # Both choices must be available so users can run side-by-side for
     # debugging or audit-trail reproducibility.
@@ -3358,16 +3160,12 @@ def test_qa_score_eval_declares_bipartite_machinery() -> None:
     """
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
     for symbol in ("_greedy_match", "_bipartite_match", "linear_sum_assignment"):
-        assert symbol in src, (
-            f"score_eval.py must declare {symbol} (T1j bipartite matcher primitive)"
-        )
+        assert symbol in src, f"score_eval.py must declare {symbol} (T1j bipartite matcher primitive)"
     # Cardinality-first encoding bases must be present in source as
     # documented constants — the matcher's correctness hinges on these
     # bases dominating matrix-wide totals.
     for marker in ("CARD_BASE", "ORIG_BASE", "EXP_BASE", "MAX_TIE"):
-        assert marker in src, (
-            f"score_eval.py must declare {marker} (T1j cardinality-first tier base)"
-        )
+        assert marker in src, f"score_eval.py must declare {marker} (T1j cardinality-first tier base)"
 
 
 def test_qa_score_eval_cli_exposes_matcher_flag() -> None:
@@ -3377,14 +3175,10 @@ def test_qa_score_eval_cli_exposes_matcher_flag() -> None:
     code review.
     """
     src = (REPO_ROOT / "tests" / "qa-eval" / "score_eval.py").read_text(encoding="utf-8")
-    assert "--matcher" in src, (
-        "score_eval.py main() must expose --matcher CLI flag"
-    )
+    assert "--matcher" in src, "score_eval.py main() must expose --matcher CLI flag"
     # Threading: build_report MUST accept matcher and score_pr MUST be
     # called with it to keep override behaviour honest.
-    assert "matcher=matcher" in src, (
-        "build_report / score_pr / match_scenarios must thread matcher kwarg"
-    )
+    assert "matcher=matcher" in src, "build_report / score_pr / match_scenarios must thread matcher kwarg"
 
 
 def test_qa_t1j_bipartite_resists_greedy_pair_theft() -> None:
@@ -3404,6 +3198,7 @@ def test_qa_t1j_bipartite_resists_greedy_pair_theft() -> None:
     """
     import importlib
     import sys
+
     qa_eval = REPO_ROOT / "tests" / "qa-eval"
     sys.path.insert(0, str(qa_eval))
     try:
@@ -3418,24 +3213,44 @@ def test_qa_t1j_bipartite_resists_greedy_pair_theft() -> None:
 
         # E1 has two candidate matches (A1 with 5 lines, A2 with 1 line).
         e1 = ExpectedScenario(
-            id="E1", behavior_key="b1", category="HappyPath", verb="FieldMatch",
-            title="early", grounding=[cls({10, 11, 12, 13, 14, 100})],
-            criticality="P0", discovered_by="curator", rationale="",
+            id="E1",
+            behavior_key="b1",
+            category="HappyPath",
+            verb="FieldMatch",
+            title="early",
+            grounding=[cls({10, 11, 12, 13, 14, 100})],
+            criticality="P0",
+            discovered_by="curator",
+            rationale="",
         )
         # E2 has only one candidate match (A1, 3 lines).
         e2 = ExpectedScenario(
-            id="E2", behavior_key="b2", category="HappyPath", verb="FieldMatch",
-            title="late", grounding=[cls({10, 11, 12})],
-            criticality="P0", discovered_by="curator", rationale="",
+            id="E2",
+            behavior_key="b2",
+            category="HappyPath",
+            verb="FieldMatch",
+            title="late",
+            grounding=[cls({10, 11, 12})],
+            criticality="P0",
+            discovered_by="curator",
+            rationale="",
         )
         # A1 overlaps both E1 (5 lines) and E2 (3 lines).
         a1 = ActualScenario(
-            id="A1", topic="http", category="HappyPath", verb="FieldMatch", stage="projected",
+            id="A1",
+            topic="http",
+            category="HappyPath",
+            verb="FieldMatch",
+            stage="projected",
             grounding=[cls({10, 11, 12, 13, 14})],
         )
         # A2 overlaps only E1 (1 line).
         a2 = ActualScenario(
-            id="A2", topic="http", category="HappyPath", verb="FieldMatch", stage="projected",
+            id="A2",
+            topic="http",
+            category="HappyPath",
+            verb="FieldMatch",
+            stage="projected",
             grounding=[cls({100})],
         )
 
@@ -3443,20 +3258,16 @@ def test_qa_t1j_bipartite_resists_greedy_pair_theft() -> None:
         gm, gmissed, _ = score_eval.match_scenarios([e1, e2], [a1, a2], matcher="greedy")
         assert len(gm) == 1, f"greedy must steal here (1 match expected); got {len(gm)}"
         assert {m.expected.id for m in gm} == {"E1"}
-        assert {e.id for e in gmissed} == {"E2"}, (
-            "greedy must miss E2 (the late expected) in this pair-theft setup"
-        )
+        assert {e.id for e in gmissed} == {"E2"}, "greedy must miss E2 (the late expected) in this pair-theft setup"
 
         # Bipartite must keep both pairs (E1→A2, E2→A1) for count=2.
         bm, bmissed, _ = score_eval.match_scenarios([e1, e2], [a1, a2], matcher="bipartite")
         assert len(bm) == 2, (
-            f"bipartite must keep both pairs; got {len(bm)} matches: "
-            f"{[(m.expected.id, m.actual.id) for m in bm]}"
+            f"bipartite must keep both pairs; got {len(bm)} matches: {[(m.expected.id, m.actual.id) for m in bm]}"
         )
         pairs = {(m.expected.id, m.actual.id) for m in bm}
         assert pairs == {("E1", "A2"), ("E2", "A1")}, (
-            f"bipartite must choose the globally optimal assignment "
-            f"E1→A2 + E2→A1; got {pairs}"
+            f"bipartite must choose the globally optimal assignment E1→A2 + E2→A1; got {pairs}"
         )
         assert not bmissed, f"bipartite must not miss any expected; got {[e.id for e in bmissed]}"
     finally:
@@ -3472,6 +3283,7 @@ def test_qa_t1j_bipartite_match_count_at_least_greedy_on_corpus() -> None:
     """
     import importlib
     import sys
+
     qa_eval = REPO_ROOT / "tests" / "qa-eval"
     sys.path.insert(0, str(qa_eval))
     try:
@@ -3499,17 +3311,11 @@ def test_qa_t1j_scipy_available_in_dev_env() -> None:
     silent removal can't sneak past code review.
     """
     deps = (REPO_ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
-    assert "scipy" in deps.lower(), (
-        "requirements-dev.txt must declare scipy (T1j bipartite matcher dependency)"
-    )
+    assert "scipy" in deps.lower(), "requirements-dev.txt must declare scipy (T1j bipartite matcher dependency)"
     # Smoke-test that scipy actually imports in the current env.
     try:
         from scipy.optimize import linear_sum_assignment  # noqa: F401
     except ImportError as e:  # pragma: no cover
         raise AssertionError(
-            "scipy.optimize.linear_sum_assignment must be importable. "
-            "Run `pip install -r requirements-dev.txt`."
+            "scipy.optimize.linear_sum_assignment must be importable. Run `pip install -r requirements-dev.txt`."
         ) from e
-
-
-

@@ -609,9 +609,7 @@ def _max_overlap(expected: ExpectedScenario, actual: ActualScenario) -> int:
     return best
 
 
-def _max_overlap_tiered(
-    expected: ExpectedScenario, actual: ActualScenario
-) -> tuple[int, int]:
+def _max_overlap_tiered(expected: ExpectedScenario, actual: ActualScenario) -> tuple[int, int]:
     """Maximum ``(original_overlap, expanded_overlap)`` across grounding pairs.
 
     T1i 2-tier tiebreaker: tuple comparison ranks `(1, 3)` above `(0, 8)`
@@ -828,7 +826,10 @@ def score_pr(
     strict_category: bool = False,
 ) -> PrScore:
     matched, missed, unmatched = match_scenarios(
-        expected, actuals, matcher=matcher, strict_category=strict_category,
+        expected,
+        actuals,
+        matcher=matcher,
+        strict_category=strict_category,
     )
 
     actual_by_stage: dict[str, int] = {stage: 0 for stage in VALID_STAGES}
@@ -851,8 +852,7 @@ def score_pr(
     # much through. Today we tag each actual scenario with exactly one
     # stage = where in the pipeline it lives; the headline is 'validated'.
     precision: dict[str, float] = {
-        stage: _safe_div(matched_per_stage[stage], actual_by_stage[stage])
-        for stage in VALID_STAGES
+        stage: _safe_div(matched_per_stage[stage], actual_by_stage[stage]) for stage in VALID_STAGES
     }
 
     # T1f-c: highest-stage precision — matched ÷ total scenarios produced
@@ -874,14 +874,13 @@ def score_pr(
     # F1 on highest-stage precision — the gate-meaningful pair.
     f1_high = (
         _safe_div(2 * precision_highest * recall, precision_highest + recall)
-        if (precision_highest + recall) > 0 else 0.0
+        if (precision_highest + recall) > 0
+        else 0.0
     )
 
     # P0+P1 recall — must-pass criticality bucket.
     p0_p1_expected = [e for e in expected if e.criticality in {"P0", "P1"}]
-    p0_p1_matched = [
-        m for m in matched if m.expected.criticality in {"P0", "P1"}
-    ]
+    p0_p1_matched = [m for m in matched if m.expected.criticality in {"P0", "P1"}]
     p0_p1_recall = _safe_div(len(p0_p1_matched), len(p0_p1_expected))
 
     return PrScore(
@@ -936,23 +935,18 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
     # zero matches the metric is 0.0 by convention.
     prs_with_matches = [p for p in pr_scores if p.matched]
     macro_cat_label = (
-        sum(p.category_label_accuracy for p in prs_with_matches) / len(prs_with_matches)
-        if prs_with_matches else 0.0
+        sum(p.category_label_accuracy for p in prs_with_matches) / len(prs_with_matches) if prs_with_matches else 0.0
     )
 
     # Micro: each scenario weighted equally.
     total_expected = sum(p.expected_total for p in pr_scores)
     total_matched = sum(len(p.matched) for p in pr_scores)
     total_validated_actual = sum(p.actual_total_by_stage["validated"] for p in pr_scores)
-    total_matched_validated = sum(
-        len([m for m in p.matched if m.actual.stage == "validated"]) for p in pr_scores
-    )
+    total_matched_validated = sum(len([m for m in p.matched if m.actual.stage == "validated"]) for p in pr_scores)
     # T1f-c: highest-stage micro — total matched ÷ total scenarios produced
     # across the corpus. This is what the corpus-level precision floor
     # should gate against.
-    total_actual_highest = sum(
-        sum(p.actual_total_by_stage.values()) for p in pr_scores
-    )
+    total_actual_highest = sum(sum(p.actual_total_by_stage.values()) for p in pr_scores)
 
     return {
         "pr_count": len(pr_scores),
@@ -967,12 +961,8 @@ def aggregate(pr_scores: list[PrScore]) -> dict[str, Any]:
         },
         "micro": {
             "recall": round(_safe_div(total_matched, total_expected), 4),
-            "precision_validated": round(
-                _safe_div(total_matched_validated, total_validated_actual), 4
-            ),
-            "precision_highest_stage": round(
-                _safe_div(total_matched, total_actual_highest), 4
-            ),
+            "precision_validated": round(_safe_div(total_matched_validated, total_validated_actual), 4),
+            "precision_highest_stage": round(_safe_div(total_matched, total_actual_highest), 4),
         },
     }
 
@@ -1015,17 +1005,14 @@ def evaluate_floors(
     # one because the `validated` bucket is structurally empty under our
     # highest-stage tagging. Macro precision_highest_stage = average of
     # per-PR (matched / total-actual-scenarios) across the corpus.
-    if macro.get("precision_highest_stage", 0.0) < absolute.get(
-        "corpus_precision_highest_stage_min", 0.0
-    ):
+    if macro.get("precision_highest_stage", 0.0) < absolute.get("corpus_precision_highest_stage_min", 0.0):
         violations.append(
             f"corpus_precision_highest_stage {macro.get('precision_highest_stage', 0.0)} "
             f"< min {absolute['corpus_precision_highest_stage_min']}",
         )
     if macro.get("p0_p1_recall", 0.0) < absolute.get("p0_p1_recall_min", 0.0):
         violations.append(
-            f"corpus_p0_p1_recall {macro.get('p0_p1_recall', 0.0)} "
-            f"< min {absolute['p0_p1_recall_min']}",
+            f"corpus_p0_p1_recall {macro.get('p0_p1_recall', 0.0)} < min {absolute['p0_p1_recall_min']}",
         )
     for p in pr_scores:
         if p.recall < absolute.get("per_pr_recall_min", 0.0):
@@ -1033,9 +1020,7 @@ def evaluate_floors(
                 f"PR-{p.pr_number} recall {p.recall} < per_pr min {absolute['per_pr_recall_min']}",
             )
         # T1f-c: per-PR highest-stage precision floor.
-        if p.precision_highest_stage < absolute.get(
-            "per_pr_precision_highest_stage_min", 0.0
-        ):
+        if p.precision_highest_stage < absolute.get("per_pr_precision_highest_stage_min", 0.0):
             violations.append(
                 f"PR-{p.pr_number} precision_highest_stage {round(p.precision_highest_stage, 4)} "
                 f"< per_pr min {absolute['per_pr_precision_highest_stage_min']}",
@@ -1052,9 +1037,7 @@ def evaluate_floors(
 def discover_pr_dirs() -> list[Path]:
     if not GROUND_TRUTH.exists():
         return []
-    return sorted(
-        d for d in GROUND_TRUTH.iterdir() if d.is_dir() and d.name.startswith("PR-")
-    )
+    return sorted(d for d in GROUND_TRUTH.iterdir() if d.is_dir() and d.name.startswith("PR-"))
 
 
 def build_report(
@@ -1101,10 +1084,15 @@ def build_report(
 
         actuals, a_errs = load_actual(pr_dir, span_expansion_n=span_expansion_n)
         schema_errors.extend(a_errs)
-        pr_scores.append(score_pr(
-            pr_number, expected, actuals,
-            matcher=matcher, strict_category=strict_category,
-        ))
+        pr_scores.append(
+            score_pr(
+                pr_number,
+                expected,
+                actuals,
+                matcher=matcher,
+                strict_category=strict_category,
+            )
+        )
 
     agg = aggregate(pr_scores)
     floors = load_floors()
@@ -1131,9 +1119,7 @@ def build_report(
             "tiebreaker": "original_overlap_first" if span_expansion_n > 0 else "single_tier",
         },
         "matcher": {
-            "algorithm": (
-                "bipartite_linear_sum_assignment" if matcher == "bipartite" else "greedy_iterate_expected"
-            ),
+            "algorithm": ("bipartite_linear_sum_assignment" if matcher == "bipartite" else "greedy_iterate_expected"),
             "objective": (
                 "max_cardinality_then_original_overlap_then_expanded_overlap_then_declared_order"
                 if matcher == "bipartite"
@@ -1158,10 +1144,7 @@ def print_human(report: dict[str, Any]) -> None:
     print(f"  PRs ungraded (schema=2.0, scenarios=[]): {len(report['prs_ungraded'])}")
     span = report.get("span_expansion", {})
     if span and span.get("forward_lines", 0) > 0:
-        print(
-            f"  Span expansion: N={span['forward_lines']} (hunk-bounded,"
-            f" tiebreaker={span.get('tiebreaker', '?')})"
-        )
+        print(f"  Span expansion: N={span['forward_lines']} (hunk-bounded, tiebreaker={span.get('tiebreaker', '?')})")
     matcher = report.get("matcher", {})
     if matcher:
         print(f"  Matcher: {matcher.get('algorithm', '?')} (v{matcher.get('version', '?')})")
@@ -1173,7 +1156,9 @@ def print_human(report: dict[str, Any]) -> None:
     print(f"    F1 (validated):       {agg['macro']['f1_validated']:.3f}")
     print(f"    F1 (highest-stage):   {agg['macro']['f1_highest_stage']:.3f}")
     print(f"    P0+P1 recall:         {agg['macro']['p0_p1_recall']:.3f}")
-    print(f"    category_label_accuracy: {agg['macro'].get('category_label_accuracy', 0.0):.3f}  (of matched pairs, raw-label agreement)")
+    print(
+        f"    category_label_accuracy: {agg['macro'].get('category_label_accuracy', 0.0):.3f}  (of matched pairs, raw-label agreement)"
+    )
     print()
     print("  Micro-average (each scenario weighted equally):")
     print(f"    recall:               {agg['micro']['recall']:.3f}")

@@ -54,11 +54,8 @@ def load_corpus() -> list[dict]:
                 "pr_number": meta.get("pr_number"),
                 "title": meta.get("title"),
                 "files_changed": meta.get("files_changed"),
-                "diff_bytes": meta.get("diff_size_bytes")
-                or (diff_path.stat().st_size if diff_path.exists() else 0),
-                "expected_status": (expected or {}).get(
-                    "curator", "PENDING_HUMAN_GRADING"
-                ),
+                "diff_bytes": meta.get("diff_size_bytes") or (diff_path.stat().st_size if diff_path.exists() else 0),
+                "expected_status": (expected or {}).get("curator", "PENDING_HUMAN_GRADING"),
                 "expected_scenarios": len((expected or {}).get("scenarios", []) or []),
                 "dir": pr_dir.relative_to(REPO_ROOT).as_posix(),
             }
@@ -94,9 +91,7 @@ def ensure_baseline(corpus: list[dict]) -> dict:
             for entry in corpus
         ],
     }
-    BASELINE_PATH.write_text(
-        json.dumps(scaffold, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    BASELINE_PATH.write_text(json.dumps(scaffold, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return scaffold
 
 
@@ -113,9 +108,7 @@ def main() -> int:
             "corpus_size": len(corpus),
             "total_diff_bytes": sum(e["diff_bytes"] for e in corpus),
             "total_files": sum(e["files_changed"] or 0 for e in corpus),
-            "pending_human_grading": sum(
-                1 for e in corpus if e["expected_status"] == "PENDING_HUMAN_GRADING"
-            ),
+            "pending_human_grading": sum(1 for e in corpus if e["expected_status"] == "PENDING_HUMAN_GRADING"),
             "corpus": corpus,
             "baseline_status": baseline.get("status"),
         }
@@ -129,27 +122,15 @@ def main() -> int:
         return 1
 
     print(f"F27 P9 gold corpus — {len(corpus)} PR(s):\n")
-    print(
-        f"  {'PR':>7}  {'Files':>5}  {'Diff':>7}  {'Expected':>9}  Title"
-    )
-    print(
-        f"  {'-'*7}  {'-'*5}  {'-'*7}  {'-'*9}  {'-'*40}"
-    )
+    print(f"  {'PR':>7}  {'Files':>5}  {'Diff':>7}  {'Expected':>9}  Title")
+    print(f"  {'-' * 7}  {'-' * 5}  {'-' * 7}  {'-' * 9}  {'-' * 40}")
     for entry in corpus:
         diff_kb = round((entry["diff_bytes"] or 0) / 1024, 1)
         title = (entry["title"] or "")[:60]
         status = "PENDING" if entry["expected_status"] == "PENDING_HUMAN_GRADING" else "OK"
-        print(
-            f"  {entry['pr_number']:>7}  "
-            f"{entry['files_changed']:>5}  "
-            f"{diff_kb:>5}KB  "
-            f"{status:>9}  "
-            f"{title}"
-        )
+        print(f"  {entry['pr_number']:>7}  {entry['files_changed']:>5}  {diff_kb:>5}KB  {status:>9}  {title}")
 
-    pending = sum(
-        1 for e in corpus if e["expected_status"] == "PENDING_HUMAN_GRADING"
-    )
+    pending = sum(1 for e in corpus if e["expected_status"] == "PENDING_HUMAN_GRADING")
     print()
     print(f"  Hand-grading pending: {pending} / {len(corpus)}")
     print(f"  Baseline status:      {baseline.get('status', 'unknown')}")

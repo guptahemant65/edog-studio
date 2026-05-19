@@ -278,6 +278,6 @@ def test_stub_llm_provider_tags_generated_by_stub(analyzer_src: str) -> None:
     marker = "public sealed class StubLlmProvider"
     start = analyzer_src.index(marker)
     end = analyzer_src.find("public sealed class", start + 1)
-    block = analyzer_src[start:end if end != -1 else len(analyzer_src)]
+    block = analyzer_src[start : end if end != -1 else len(analyzer_src)]
     assert 'GeneratedBy = "stub_llm"' in block
     assert 'GeneratedBy = "ai"' not in block

@@ -83,19 +83,24 @@ def harness() -> dict:
 
     build = subprocess.run(
         [dotnet, "build", str(CSPROJ), f"-p:FltBin={flt_bin}", "--nologo", "--verbosity", "minimal"],
-        capture_output=True, text=True, timeout=300, cwd=PROJECT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        cwd=PROJECT_DIR,
     )
     if build.returncode != 0:
         pytest.fail(
-            "Harness build failed.\n"
-            f"--- stdout:\n{build.stdout[-4000:]}\n--- stderr:\n{build.stderr[-2000:]}",
+            f"Harness build failed.\n--- stdout:\n{build.stdout[-4000:]}\n--- stderr:\n{build.stderr[-2000:]}",
         )
     if not BUILT_DLL.exists():
         pytest.fail(f"Build succeeded but DLL not at {BUILT_DLL}")
 
     result = subprocess.run(
         [dotnet, str(BUILT_DLL), "history-store"],
-        capture_output=True, text=True, timeout=120, cwd=BUILT_DLL.parent,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=BUILT_DLL.parent,
     )
     if result.returncode != 0:
         raise AssertionError(

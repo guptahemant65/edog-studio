@@ -163,8 +163,8 @@ EXPECTED_JS_EVENT_CASES: set[str] = {
 # them yet. Removing one of these from the server requires an intentional
 # decision; adding one without a JS caller is fine.
 SERVER_ONLY_HUB_METHODS: set[str] = {
-    "QaCancelRun",      # Cancel button planned, not yet wired in qa-execution.js
-    "QaGetTelemetry",   # F27 P0 — used by tests + future telemetry banner UI
+    "QaCancelRun",  # Cancel button planned, not yet wired in qa-execution.js
+    "QaGetTelemetry",  # F27 P0 — used by tests + future telemetry banner UI
     "QaGetCapabilities",  # F27 P5 — used by tests; UI badges land with Stage 2 frontend
 }
 
@@ -210,28 +210,36 @@ def _format_diff(label: str, actual: set[str], expected: set[str]) -> str:
 def test_hub_methods_snapshot() -> None:
     actual = parse_hub_methods()
     assert actual == EXPECTED_HUB_METHODS, _format_diff(
-        "Hub methods", actual, EXPECTED_HUB_METHODS,
+        "Hub methods",
+        actual,
+        EXPECTED_HUB_METHODS,
     )
 
 
 def test_broadcast_events_snapshot() -> None:
     actual = parse_broadcast_events()
     assert actual == EXPECTED_BROADCAST_EVENTS, _format_diff(
-        "Broadcast events", actual, EXPECTED_BROADCAST_EVENTS,
+        "Broadcast events",
+        actual,
+        EXPECTED_BROADCAST_EVENTS,
     )
 
 
 def test_js_invokes_snapshot() -> None:
     actual = parse_js_invokes()
     assert actual == EXPECTED_JS_INVOKES, _format_diff(
-        "JS invokes", actual, EXPECTED_JS_INVOKES,
+        "JS invokes",
+        actual,
+        EXPECTED_JS_INVOKES,
     )
 
 
 def test_js_event_cases_snapshot() -> None:
     actual = parse_js_event_cases()
     assert actual == EXPECTED_JS_EVENT_CASES, _format_diff(
-        "JS event cases", actual, EXPECTED_JS_EVENT_CASES,
+        "JS event cases",
+        actual,
+        EXPECTED_JS_EVENT_CASES,
     )
 
 

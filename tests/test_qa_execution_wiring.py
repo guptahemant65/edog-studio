@@ -34,8 +34,7 @@ def test_hub_calls_execution_engine_run_async() -> None:
     """The run loop MUST drive the real engine. The whole P8 contract."""
     src = _hub()
     assert "EdogQaServiceLocator.ExecutionEngine" in src, (
-        "Hub no longer references the static execution engine locator — "
-        "the engine wiring has been broken."
+        "Hub no longer references the static execution engine locator — the engine wiring has been broken."
     )
     assert ".ExecuteRunAsync(runId, engineScenarios" in src, (
         "Hub must call EdogQaServiceLocator.ExecutionEngine.ExecuteRunAsync "
@@ -76,7 +75,7 @@ def test_hub_does_not_hardcode_passed_verdict() -> None:
     """The fake `verdict = "passed";` line is the canary for the stub loop."""
     src = _hub()
     assert 'verdict = "passed"' not in src, (
-        "Hub contains the hardcoded `verdict = \"passed\"` literal from the "
+        'Hub contains the hardcoded `verdict = "passed"` literal from the '
         "pre-P8 stub run loop. Every scenario was silently green regardless "
         "of the assertion engine. Remove the literal and route through the "
         "real EdogQaExecutionEngine."
@@ -150,6 +149,5 @@ def test_hub_has_scenario_conversion_helper() -> None:
         "curation UI."
     )
     assert "ParseScenarioCategory" in src and "ParseExpectationType" in src, (
-        "Hub is missing the typed enum parsers. The engine's Scenario "
-        "model uses enums; the wire payload is strings."
+        "Hub is missing the typed enum parsers. The engine's Scenario model uses enums; the wire payload is strings."
     )
