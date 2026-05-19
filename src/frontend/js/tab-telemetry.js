@@ -210,7 +210,7 @@ class TelemetryTab {
       durationSec:   durationSec,
       resultCode:    data.resultCode || '',
       correlationId: data.correlationId || '',
-      iterationId:   data.iterationId || '',
+      iterationId:   data.iterationId || this._parseIterationFromCorrelation(data.correlationId),
       attributes:    data.attributes || {},
       userId:        data.userId || '',
       timestamp:     timestamp || new Date().toISOString(),
@@ -218,6 +218,23 @@ class TelemetryTab {
       startTime:     status === 'running' ? Date.now() : (Date.now() - durationMs),
       error:         error
     };
+  }
+
+  /** Extract iterationId from FLT correlation ID format.
+   *  Async: "rootActivityId|iterationId"  Sync: "rootActivityId-iterationId"
+   *  Returns empty string if not parseable. */
+  _parseIterationFromCorrelation(correlationId) {
+    if (!correlationId) return '';
+    // Async format: pipe separator
+    var pipeIdx = correlationId.indexOf('|');
+    if (pipeIdx > 0 && pipeIdx < correlationId.length - 1) {
+      return correlationId.substring(pipeIdx + 1);
+    }
+    // Sync format: GUID-GUID (36 chars each, dash at index 36)
+    if (correlationId.length >= 73 && correlationId.charAt(36) === '-') {
+      return correlationId.substring(37);
+    }
+    return '';
   }
 
   _trackSparkline(activity) {

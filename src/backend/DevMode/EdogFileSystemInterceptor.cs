@@ -90,7 +90,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             await _inner.CreateDirIfNotExistsAsync(path, metadata, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
-            PublishEvent("CreateDir", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
+            PublishEvent("CreateDir", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0, metadata: metadata);
         }
 
         /// <inheritdoc/>
@@ -132,7 +132,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var ttl = timeToExpire != default ? (long)timeToExpire.TotalSeconds : 0;
 
-            PublishEvent("CreateFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: ttl, operationResult: result);
+            PublishEvent("CreateFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: ttl, operationResult: result, metadata: metadata);
             return result;
         }
 
@@ -143,7 +143,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             await _inner.RenameFileAsync(srcPath, destinationPath, metadata, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
-            PublishEvent("Rename", srcPath + " \u2192 " + destinationPath, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
+            PublishEvent("Rename", srcPath + " \u2192 " + destinationPath, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0, metadata: metadata);
         }
 
         /// <inheritdoc/>
@@ -250,7 +250,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         private void PublishEvent(
             string operation, string path, double durationMs,
             long contentSizeBytes, bool hasContent, string contentPreview,
-            long ttlSeconds, bool? operationResult = null, bool previewTruncated = false)
+            long ttlSeconds, bool? operationResult = null, bool previewTruncated = false,
+            IDictionary<string, string> metadata = null)
         {
             try
             {
@@ -265,6 +266,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     previewTruncated,
                     ttlSeconds,
                     operationResult,
+                    metadata = metadata != null ? new Dictionary<string, string>(metadata) : null,
                     iterationId = _iterationId,
                 };
 

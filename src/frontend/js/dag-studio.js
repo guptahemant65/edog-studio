@@ -874,6 +874,9 @@ class DagStudio {
   async _pollExecMetrics() {
     var iterationId = this._esm.activeIterationId;
     if (!iterationId) return;
+    // Guard against stacking polls when FLT is slow/unresponsive
+    if (this._pollInFlight) return;
+    this._pollInFlight = true;
     try {
       var metrics = await this._api.getDagExecMetrics(iterationId);
       if (!metrics) return;
@@ -925,12 +928,14 @@ class DagStudio {
         // the Gantt chart, bottom-bar, and strip all show correct numbers.
         var self = this;
         var finalIterationId = iterationId;
+        var statusBeforeFinal = this._esm._executionStatus;
         setTimeout(async function() {
           try {
             var finalMetrics = await self._api.getDagExecMetrics(finalIterationId);
             if (finalMetrics) {
               var finalRaw = finalMetrics.nodeExecutionMetrices || finalMetrics.nodeExecutionMetrics || {};
               var finalEntries = Array.isArray(finalRaw) ? finalRaw : Object.entries(finalRaw);
+              var anyNodeChanged = false;
               for (var j = 0; j < finalEntries.length; j++) {
                 var fnid, fnm;
                 if (Array.isArray(finalRaw)) {
@@ -945,6 +950,9 @@ class DagStudio {
                 }
                 if (!fnid || !fnm) continue;
                 var newStatus = self._esm._mapNodeStatus(fnm.status || fnm.nodeExecutionStatus);
+                var existing = self._esm._nodeStates.get(fnid);
+                // Only emit if node state actually changed from what we already have
+                if (existing && existing.status === newStatus && existing.source === 'final-poll') continue;
                 var startMs = fnm.startedAt ? new Date(fnm.startedAt).getTime() : (fnm.startTime ? new Date(fnm.startTime).getTime() : null);
                 var endMs = fnm.endedAt ? new Date(fnm.endedAt).getTime() : (fnm.endTime ? new Date(fnm.endTime).getTime() : null);
                 self._esm._nodeStates.set(fnid, {
@@ -954,6 +962,7 @@ class DagStudio {
                   errorCode: fnm.errorCode || null,
                   source: 'final-poll',
                 });
+                anyNodeChanged = true;
                 if (self._esm.onNodeStateChanged) self._esm.onNodeStateChanged(fnid, self._esm._nodeStates.get(fnid));
               }
               self._pushPollToAutoDetector(finalIterationId, dagMetrics, finalEntries, Array.isArray(finalRaw));
@@ -962,7 +971,10 @@ class DagStudio {
             console.log('[DAG-DIAG] Final poll failed:', e.message);
           }
           self._updateSummary();
-          if (self._esm.onExecutionStateChanged) self._esm.onExecutionStateChanged(self._esm._executionStatus);
+          // Only fire execution state changed if status actually changed during final poll
+          if (self._esm._executionStatus !== statusBeforeFinal) {
+            if (self._esm.onExecutionStateChanged) self._esm.onExecutionStateChanged(self._esm._executionStatus);
+          }
           if (self._esm.onExecutionComplete) self._esm.onExecutionComplete(finalIterationId, self._esm._executionStatus);
         }, 2000);
       } else {
@@ -973,6 +985,8 @@ class DagStudio {
     } catch (err) {
       // Poll failed — silently retry next interval
       console.log('[DAG-DIAG] Poll failed:', err.message);
+    } finally {
+      this._pollInFlight = false;
     }
   }
 

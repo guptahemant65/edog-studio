@@ -70,6 +70,19 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
+                // Enrich with ExecutionContext data (same enrichment the concrete
+                // reporter applies — CustomerTenantId, CapacityObjectId, ClusterName)
+                try
+                {
+                    var tenantIdCtx = ServicePlatform.Hosting.ExecutionContext.GetProperty("CustomerTenantId");
+                    if (tenantIdCtx != null) attributes["CustomerTenantId"] = tenantIdCtx.ToString();
+                    var capacityCtx = ServicePlatform.Hosting.ExecutionContext.GetProperty("CustomerCapacityObjectId");
+                    if (capacityCtx != null) attributes["CustomerCapacityObjectId"] = capacityCtx.ToString();
+                    var clusterName = ServicePlatform.Hosting.ServiceExecutionContext.ExecutionEnvironment?.ClusterName;
+                    if (!string.IsNullOrEmpty(clusterName)) attributes["ClusterName"] = clusterName;
+                }
+                catch { /* ExecutionContext may not be available in all code paths */ }
+
                 var effectiveCorrelationId = string.IsNullOrEmpty(correlationId)
                     ? MonitoredScope.RootActivityId.ToString()
                     : correlationId;

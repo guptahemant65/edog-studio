@@ -98,6 +98,9 @@ class HttpPipelineTab {
       requestHeaders: this._redactHeaders(d.requestHeaders || {}),
       responseHeaders: d.responseHeaders || {},
       responseBodyPreview: (d.responseBodyPreview || '').slice(0, 4096),
+      requestBodyPreview: (d.requestBodyPreview || '').slice(0, 4096),
+      requestSizeBytes: d.requestSizeBytes || 0,
+      responseSizeBytes: d.responseSizeBytes || 0,
       httpClientName: d.httpClientName || '',
       correlationId: d.correlationId || ''
     };
@@ -1027,13 +1030,21 @@ class HttpPipelineTab {
           '<span class="jk">Method:</span> <span class="http-method m-' + req.method.toLowerCase() + '">' + this._esc(req.method) + '</span>\n' +
           '<span class="jk">URL:</span> <span class="js">' + this._esc(req.url) + '</span>\n' +
           '<span class="jk">Correlation-ID:</span> <span class="js">' + this._esc(req.correlationId) + '</span>\n' +
-          '<span class="jk">HTTP Client:</span> <span class="js">' + this._esc(req.httpClientName) + '</span>' +
+          '<span class="jk">HTTP Client:</span> <span class="js">' + this._esc(req.httpClientName) + '</span>\n' +
+          (req.requestSizeBytes ? '<span class="jk">Request Size:</span> <span class="jn">' + this._fmtBytes(req.requestSizeBytes) + '</span>' : '') +
         '</div>' +
       '</div>' +
       '<div class="http-detail-section">' +
         '<div class="http-detail-section-title">Request Headers</div>' +
         '<div class="http-json">' + this._jsonHighlight(req.requestHeaders) + '</div>' +
       '</div>';
+    if (req.requestBodyPreview) {
+      html +=
+        '<div class="http-detail-section">' +
+          '<div class="http-detail-section-title">Request Body</div>' +
+          '<div class="http-json" style="white-space:pre-wrap;word-break:break-all;max-height:300px;overflow:auto">' + this._tryJsonHighlight(req.requestBodyPreview) + '</div>' +
+        '</div>';
+    }
     return html;
   }
 
@@ -1046,6 +1057,7 @@ class HttpPipelineTab {
         '<div class="http-json">' +
           '<span class="http-status ' + statusCls + '" style="font-size:14px;padding:4px 12px">' + sc + '</span>' +
           '<span style="margin-left:12px;color:var(--text-muted);font-size:12px">' + req.durationMs + 'ms</span>' +
+          (req.responseSizeBytes ? '<span style="margin-left:12px;color:var(--text-muted);font-size:12px">' + this._fmtBytes(req.responseSizeBytes) + '</span>' : '') +
         '</div>' +
       '</div>' +
       '<div class="http-detail-section">' +
@@ -1253,6 +1265,22 @@ class HttpPipelineTab {
     var div = document.createElement('div');
     div.textContent = String(str || '');
     return div.innerHTML;
+  }
+
+  _fmtBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(2) + ' MB';
+  }
+
+  _tryJsonHighlight(str) {
+    try {
+      var obj = JSON.parse(str);
+      return this._jsonHighlight(obj);
+    } catch (e) {
+      return this._esc(str);
+    }
   }
 
   _jsonHighlight(obj) {
