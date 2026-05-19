@@ -185,6 +185,38 @@ class EdogLogViewer {
     this.ws.onMessage = this.handleWebSocketMessage;
     this.ws.onBatch = this.handleWebSocketBatch;
     this.ws.onSummary = this.handleWebSocketSummary;
+
+    // Subscribe to log + telemetry topic streams for live delivery.
+    // The legacy LogEntry/TelemetryEvent group broadcasts were removed
+    // from the backend — the Phase 3 topic stream is the sole live path.
+    // The stream delivers a snapshot (ring buffer history) then live events.
+    // _initialDataLoaded tracks whether REST already loaded the snapshot
+    // so we can skip stream-delivered duplicates.
+    this._initialDataLoaded = false;
+    this._onLiveLog = (envelope) => {
+      const data = envelope && envelope.data ? envelope.data : envelope;
+      if (!data) return;
+      // If REST already loaded the snapshot, skip stream items with
+      // timestamps at or before the newest REST-loaded entry.
+      if (this._logCutoffTs && data.timestamp) {
+        var ts = typeof data.timestamp === 'string' ? new Date(data.timestamp).getTime() : data.timestamp;
+        if (ts <= this._logCutoffTs) return;
+      }
+      this.handleWebSocketMessage('log', data);
+    };
+    this._onLiveTelemetry = (envelope) => {
+      const data = envelope && envelope.data ? envelope.data : envelope;
+      if (!data) return;
+      if (this._telemetryCutoffTs && data.timestamp) {
+        var ts = typeof data.timestamp === 'string' ? new Date(data.timestamp).getTime() : data.timestamp;
+        if (ts <= this._telemetryCutoffTs) return;
+      }
+      this.handleWebSocketMessage('telemetry', data);
+    };
+    this.ws.on('log', this._onLiveLog);
+    this.ws.on('telemetry', this._onLiveTelemetry);
+    this.ws.subscribeTopic('log');
+    this.ws.subscribeTopic('telemetry');
   }
   
   init = async () => {
@@ -699,6 +731,13 @@ class EdogLogViewer {
             console.error('[load] Failed to process log entry:', err);
           }
         });
+        // Set cutoff so topic-stream snapshot items older than this are skipped.
+        if (logs.length > 0) {
+          var last = logs[logs.length - 1];
+          this._logCutoffTs = last.timestamp
+            ? (typeof last.timestamp === 'string' ? new Date(last.timestamp).getTime() : last.timestamp)
+            : 0;
+        }
       }
       
       // Load telemetry — full snapshot replace
@@ -719,6 +758,12 @@ class EdogLogViewer {
           this.extractEndpointFromTelemetry(event);
           this.extractIterationIdFromTelemetry(event);
         });
+        if (events.length > 0) {
+          var lastEvt = events[events.length - 1];
+          this._telemetryCutoffTs = lastEvt.timestamp
+            ? (typeof lastEvt.timestamp === 'string' ? new Date(lastEvt.timestamp).getTime() : lastEvt.timestamp)
+            : 0;
+        }
       }
       
       // Override stats with server values
