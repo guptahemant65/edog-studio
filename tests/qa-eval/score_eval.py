@@ -1073,13 +1073,31 @@ def build_report(
         pr_number = pr_dir.name.removeprefix("PR-")
         curator_state, expected, errs = load_expected(pr_dir)
         schema_errors.extend(errs)
+        actual_exists = (pr_dir / "actual.json").exists()
 
         if curator_state in {"PENDING_HUMAN_GRADING", None}:
+            # T4-C-prep: pending fixture must NOT carry actual.json —
+            # half-promoted fixtures pollute the pipeline. Flag and skip.
+            if actual_exists:
+                schema_errors.append(
+                    f"{pr_dir.name}: PENDING_HUMAN_GRADING fixture has actual.json — "
+                    "either grade expected.json (set curator_state=GRADED_PASS_1) or "
+                    "delete actual.json. Refusing to score a half-promoted fixture."
+                )
             pending_grading.append(pr_number)
             continue
         if not expected:
             ungraded.append(pr_number)
             continue
+        if not actual_exists:
+            # Graded fixture but no LLM capture yet — record so the
+            # operator knows to run capture_v2_actuals.py, but still
+            # score against an empty actuals set (recall will be 0).
+            schema_errors.append(
+                f"{pr_dir.name}: graded expected.json present but actual.json missing — "
+                "run `python tests/qa-eval/capture_v2_actuals.py --fixture "
+                f"{pr_dir.name}` to capture the V2 pipeline output."
+            )
 
         actuals, a_errs = load_actual(pr_dir, span_expansion_n=span_expansion_n)
         schema_errors.extend(a_errs)
@@ -1097,6 +1115,15 @@ def build_report(
         "verdict": verdict,
         "floor_violations": violations,
         "enforcement": floors.get("enforcement", "report_only"),
+        "corpus_status": {
+            # T4-C-prep: distinguishes graded (scored) from pending (skipped).
+            # Sentinel must never see pending PRs counted in headline numbers.
+            "graded_count": len(pr_scores),
+            "pending_count": len(pending_grading),
+            "ungraded_count": len(ungraded),
+            "total_count": len(pr_scores) + len(pending_grading) + len(ungraded),
+            "phase": "T4-C-prep" if pending_grading else "T4-A",
+        },
         "span_expansion": {
             "forward_lines": span_expansion_n,
             "applied_to": "actual" if span_expansion_n > 0 else "none",

@@ -1,0 +1,108 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs b/Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs
+index 9aa6e044..46385149 100644
+--- a/Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs
++++ b/Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs
+@@ -4,6 +4,7 @@
+ 
+ namespace Microsoft.LiveTable.Service.Contracts.Api
+ {
++    using System.Collections.Generic;
+     using System.Diagnostics.CodeAnalysis;
+     using Microsoft.LiveTable.Service.DataModel;
+     using Microsoft.LiveTable.Service.DataModel.Dag;
+@@ -78,9 +79,15 @@ namespace Microsoft.LiveTable.Service.Contracts.Api
+                 Name = this.DisplayName ?? existing.Name,
+                 Description = this.Description ?? existing.Description,
+                 ExecutionMode = executionMode,
+-                SelectedMLVs = this.CurrentLakehouseExecutionContext?.SelectedMlvs?.Count > 0
+-                    ? this.CurrentLakehouseExecutionContext.SelectedMlvs
+-                    : existing.SelectedMLVs,
++
++                // Clear stale SelectedMLVs only when mode transitions away from SelectedOnly.
++                // CurrentLakehouse mode legitimately uses SelectedMLVs for recursive ancestor
++                // traversal (CatalogHandler.cs:349), so blanket clearing would break that.
++                SelectedMLVs = existing.ExecutionMode == ExecutionMode.SelectedOnly && executionMode != ExecutionMode.SelectedOnly
++                    ? new List<string>()
++                    : this.CurrentLakehouseExecutionContext?.SelectedMlvs?.Count > 0
++                        ? this.CurrentLakehouseExecutionContext.SelectedMlvs
++                        : existing.SelectedMLVs,
+                 IncludedLakehouses = this.ExtendedLineageExecutionContext != null
+                     ? this.ExtendedLineageExecutionContext.SelectedLakehouses?.ConvertAll(item => item.Id)
+                     : existing.IncludedLakehouses,
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs
+index 37b044f8..deaec5a1 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs
+@@ -566,8 +566,8 @@ namespace Microsoft.LiveTable.Service.UnitTests.ContractTests
+                 new List<string> { "schema.mlv1", "schema.mlv2" });
+         }
+ 
+-        [TestMethod("ToInternalPatchRequest: Switching from Selected to All mode preserves SelectedMLVs in internal model")]
+-        public void ToInternalPatchRequest_SwitchingToAllMode_PreservesSelectedMLVsInternally()
++        [TestMethod("ToInternalPatchRequest: Switching from Selected to All mode clears stale SelectedMLVs")]
++        public void ToInternalPatchRequest_SwitchingToAllMode_ClearsStaleSelectedMLVs()
+         {
+             var existing = new MLVExecutionDefinition
+             {
+@@ -587,10 +587,59 @@ namespace Microsoft.LiveTable.Service.UnitTests.ContractTests
+ 
+             var result = patchRequest.ToInternalPatchRequest(existing);
+ 
++            result.ExecutionMode.Should().Be(ExecutionMode.CurrentLakehouse);
++            result.SelectedMLVs.Should().BeEmpty(
++                "SelectedMLVs should be cleared when mode changes away from SelectedOnly to prevent stale filtering in CatalogHandler");
++        }
++
++        [TestMethod("ToInternalPatchRequest: Switching from Selected to FullLineage mode clears stale SelectedMLVs")]
++        public void ToInternalPatchRequest_SwitchingToFullLineage_ClearsStaleSelectedMLVs()
++        {
++            var existing = new MLVExecutionDefinition
++            {
++                Id = Guid.NewGuid(),
++                Name = "Test",
++                ExecutionMode = ExecutionMode.SelectedOnly,
++                SelectedMLVs = new List<string> { "schema.mlv1" },
++            };
++
++            var patchRequest = new MLVExecutionDefinitionPublicPatchRequest
++            {
++                ExtendedLineageExecutionContext = new ExtendedLineageExecutionContext
++                {
++                    ExtendedLineageExecutionMode = ExecutionBoundaryMode.All,
++                },
++            };
++
++            var result = patchRequest.ToInternalPatchRequest(existing);
++
++            result.ExecutionMode.Should().Be(ExecutionMode.FullLineage);
++            result.SelectedMLVs.Should().BeEmpty(
++                "SelectedMLVs should be cleared when transitioning from SelectedOnly to FullLineage");
++        }
++
++        [TestMethod("ToInternalPatchRequest: CurrentLakehouse with existing SelectedMLVs preserves them on no-op PATCH")]
++        public void ToInternalPatchRequest_CurrentLakehouseWithSelectedMLVs_PreservesOnNoOpPatch()
++        {
++            var existing = new MLVExecutionDefinition
++            {
++                Id = Guid.NewGuid(),
++                Name = "Test",
++                ExecutionMode = ExecutionMode.CurrentLakehouse,
++                SelectedMLVs = new List<string> { "schema.mlv1", "schema.mlv2" },
++            };
++
++            var patchRequest = new MLVExecutionDefinitionPublicPatchRequest
++            {
++                DisplayName = "Updated Name",
++            };
++
++            var result = patchRequest.ToInternalPatchRequest(existing);
++
+             result.ExecutionMode.Should().Be(ExecutionMode.CurrentLakehouse);
+             result.SelectedMLVs.Should().BeEquivalentTo(
+-                new List<string> { "schema.mlv1" },
+-                "SelectedMLVs should be preserved internally for potential mode switch back; response filtering handles visibility");
++                new List<string> { "schema.mlv1", "schema.mlv2" },
++                "CurrentLakehouse SelectedMLVs must be preserved — CatalogHandler uses them for recursive ancestor traversal");
+         }
+ 
+         [TestMethod("ToInternalPatchRequest: No context provided on SelectedOnly preserves SelectedMLVs")]

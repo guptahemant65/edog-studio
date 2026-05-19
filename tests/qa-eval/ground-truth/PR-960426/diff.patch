@@ -1,0 +1,2993 @@
+diff --git a/Features/5054458/design-spec.md b/Features/5054458/design-spec.md
+index a869f06f..4eb1064e 100644
+--- a/Features/5054458/design-spec.md
++++ b/Features/5054458/design-spec.md
+@@ -10,34 +10,242 @@ FMLV: Past runs - Trends and insights
+ Feature development — core service implementation for past runs, trends, and insights.
+ 
+ ## System Context
+-> How does this repo's contribution fit into the overall feature? Reference the
+-> [Overall Design Spec](https://dev.azure.com/msdata/A365/_git/FeatureRegistry?path=/Features/active/5054458/overalldesign-spec.md)
+-> in the Feature Registry for the system-level view.
++
++This repo (workload-fabriclivetable) is the core service implementation for the Insights & Trends feature. It provides:
++
++- Delta table writers that persist DAG execution metrics to the `_mlv_system` schema
++- REST API endpoints that read metrics via SQL Analytics Endpoint
++- Feature flag gating for safe rollout
++
++The overall feature spans 4 repos (see the [Overall Design Spec](https://dev.azure.com/msdata/A365/_git/FeatureRegistry?path=/Features/active/5054458/overalldesign-spec.md) in the Feature Registry), but this repo contains ~90% of the feature implementation.
+ 
+ ## Design Goals
+-> What qualities is this area-specific design optimizing for?
++
++- **Never block the DAG:** All metrics writes are fire-and-forget hooks
++- **Zero user setup:** Tables auto-created, data auto-populated on every DAG completion
++- **CU-conscious:** Reuse warm Spark session, cache API responses (60s TTL)
++- **Testable:** Every external interaction behind an interface (`ISparkWriter`, `IQueryService`)
++- **Incremental delivery:** Feature flag gated, per-table parallel writers for isolation
+ 
+ ## Detailed Design
+-> Repo-specific implementation design. Include:
+-> - Components to add or modify
+-> - Internal APIs and data structures
+-> - State management and lifecycle
+-> - Error handling and retry logic
++
++### Hook Architecture
++
++- **`InsightsTableCreationHook`** — Creates `_mlv_system` schema + 3 tables (idempotent, runs once)
++- **`InsightsMetricsDataWriteHook`** — Orchestrates 3 parallel table writers:
++  - **`RunMetricsTableWriter`** — Collects DAG-level metrics, generates PySpark `MERGE INTO sys_run_metrics`
++  - **`NodeMetricsTableWriter`** — Collects per-MLV node metrics, generates PySpark `MERGE INTO sys_node_metrics`
++  - **`ErrorMetricsTableWriter`** — Collects error details, generates PySpark `MERGE INTO sys_error_metrics`
++- **`DagHookUtils`** — Shared utilities for PySpark code generation (escape, format, null-guard)
++
++### API Architecture
++
++- **`LiveTableInsightsController`** — 3 endpoints registered in `LiveTableController` routing, gated by `[FeatureGate(FeatureNames.FLTInsightsMetrics)]` (returns 404 when disabled)
++- **`InsightsQueryBuilder`** — Builds parameterized T-SQL for each endpoint (static class, all queries use `SqlParameter`)
++- **`SqlEndpointQueryService`** — Executes queries via `SqlConnection` to Lakehouse SQL Analytics Endpoint (OBO token)
++- **`IInsightsQueryService`** — Interface for query execution (enables unit testing via mocks)
++
++### Key Classes
++
++| Class | Namespace | Purpose |
++|-------|-----------|---------|
++| `InsightsTableCreationHook` | `Microsoft.LiveTable.Service.Insights` | Schema + table DDL |
++| `InsightsMetricsDataWriteHook` | `Microsoft.LiveTable.Service.Insights` | Hook orchestrator |
++| `RunMetricsTableWriter` | `Microsoft.LiveTable.Service.Insights` | `sys_run_metrics` writer |
++| `NodeMetricsTableWriter` | `Microsoft.LiveTable.Service.Insights` | `sys_node_metrics` writer |
++| `ErrorMetricsTableWriter` | `Microsoft.LiveTable.Service.Insights` | `sys_error_metrics` writer |
++| `InsightsMetricsTableManager` | `Microsoft.LiveTable.Service.Insights` | Table creation manager |
++| `DagHookUtils` | `Microsoft.LiveTable.Service.Insights` | PySpark codegen utilities |
++| `LiveTableInsightsController` | `Microsoft.LiveTable.Service.Controllers` | REST API controller |
++| `InsightsQueryBuilder` | `Microsoft.LiveTable.Service.Trends` | T-SQL query builder (static) |
++| `SqlEndpointQueryService` | `Microsoft.LiveTable.Service.Trends` | SQL endpoint query execution |
++| `InsightsSummaryResponse` | `Microsoft.LiveTable.Service.Trends.Models` | Summary DTO |
++| `InsightsRunResponse` | `Microsoft.LiveTable.Service.Trends.Models` | Single run DTO |
++| `InsightsRunsPageResponse` | `Microsoft.LiveTable.Service.Trends.Models` | Paginated runs wrapper (Items + TotalCount) |
++| `InsightsTrendsResponse` | `Microsoft.LiveTable.Service.Trends.Models` | Trends + top errors DTO |
+ 
+ ## Data Model
+-> New or modified data models specific to this repo.
++
++3 Delta tables in `_mlv_system` schema:
++
++- **`sys_run_metrics`** — One row per DAG run (`iterationId`, `status`, `durationMs`, `refreshMode`, error fields, `mlvCount`, `successCount`, `failedCount`, `skippedCount`). Partitioned by `RunDate`.
++- **`sys_node_metrics`** — One row per MLV per run (`iterationId`, `nodeId`, `mlvName`, `mlvId`, `mlvNamespace`, `status`, `durationMs`, error fields, `addedRowsCount`, `droppedRowsCount`, `detailsPageLink`, `refreshPolicy`). Partitioned by `iterationId`.
++- **`sys_error_metrics`** — Error details per node (`iterationId`, `nodeId`, `errorCode`, `errorMessage`, `errorSource`).
+ 
+ ## API Design
+-> New or modified APIs exposed or consumed by this repo.
++
++3 Phase 1 endpoints under `/v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/liveTable/insights/`:
++
++### GET `/insights/summary`
++
++Returns aggregate metrics for the selected date range.
++
++| Parameter | Type | Required | Default | Description |
++|-----------|------|----------|---------|-------------|
++| `dateRange` | int | No | 7 | Days to look back (1-90) |
++| `startTime` | ISO 8601 | No | — | Explicit start time (overrides dateRange) |
++| `endTime` | ISO 8601 | No | — | Explicit end time (overrides dateRange) |
++
++**Response:** `InsightsSummaryResponse`
++```json
++{
++  "totalRuns": 42,
++  "totalRunsDeltaPct": -4.1,
++  "successRatePct": 85.7,
++  "successRateDeltaPct": 1.5,
++  "avgDurationMin": 8.4,
++  "avgDurationDeltaPct": 3.7,
++  "failedRuns": 3,
++  "failedRunsDeltaPct": -14.3,
++  "skippedRuns": 2,
++  "cancelledRuns": 1,
++  "completedRuns": 36,
++  "lastUpdatedAt": "2026-04-26T20:30:00Z"
++}
++```
++
++The `*DeltaPct` fields are **period-over-period** comparisons: current period vs previous period of the same length. For `dateRange=7`, compares last 7 days vs the 7 days before that. For explicit `startTime/endTime`, the previous period is `duration` days before `startTime`. Fields are `null` when no previous period data exists. `successRateDeltaPct` is a percentage-point difference; all others are percentage change `((current - previous) / previous * 100)`.
++
++### GET `/insights/runs`
++
++Returns paginated list of individual DAG runs with filtering.
++
++| Parameter | Type | Required | Default | Description |
++|-----------|------|----------|---------|-------------|
++| `dateRange` | int | No | 7 | Days to look back (1-90) |
++| `startTime` | ISO 8601 | No | — | Explicit start time |
++| `endTime` | ISO 8601 | No | — | Explicit end time |
++| `statuses` | string | No | — | Comma-separated: Completed, Failed, Skipped, Cancelled |
++| `refreshModes` | string | No | — | Comma-separated: Optimal, Full, Incremental, NoRefresh |
++| `displayName` | string | No | — | Partial match filter (SQL LIKE %term%) |
++| `page` | int | No | 1 | Page number (1-based) |
++| `pageSize` | int | No | 50 | Items per page (1-200) |
++
++**Response:** `InsightsRunsPageResponse`
++```json
++{
++  "items": [
++    {
++      "iterationId": "abc-123",
++      "displayName": "Run #42",
++      "status": "Completed",
++      "startedAt": "2026-04-26T20:00:00Z",
++      "endedAt": "2026-04-26T20:08:24Z",
++      "durationMs": 504000,
++      "refreshMode": "Optimal",
++      "errorCode": null,
++      "errorMessage": null,
++      "errorSource": null,
++      "totalNodes": 5,
++      "succeededNodes": 5,
++      "failedNodes": 0,
++      "skippedNodes": 0
++    }
++  ],
++  "totalCount": 42
++}
++```
++
++### GET `/insights/trends`
++
++Returns daily/weekly trend data for run status distribution.
++
++| Parameter | Type | Required | Default | Description |
++|-----------|------|----------|---------|-------------|
++| `dateRange` | int | No | 7 | Days to look back (1-90) |
++| `startTime` | ISO 8601 | No | — | Explicit start time |
++| `endTime` | ISO 8601 | No | — | Explicit end time |
++| `groupBy` | string | No | day | Aggregation period: `day` or `week` |
++
++**Response:** `InsightsTrendsResponse`
++```json
++{
++  "dailyTrend": [
++    { "runDate": "2026-04-26", "completed": 5, "failed": 1, "skipped": 0, "cancelled": 0 }
++  ]
++}
++```
++
++When `groupBy=week`, `runDate` contains the Monday of each ISO week (e.g., `"2026-04-21"`), aggregated via `DATEADD(DAY, -(DATEPART(WEEKDAY, run_date) - 2), run_date)` cast to `VARCHAR(10)`.
++
++### GET `/insights/errors/top`
++
++Returns top error codes across all failed **nodes** (not DAG runs), enabling visibility into multi-node failures within a single DAG. Queries `sys_node_metrics` to surface per-node error codes with error source classification.
++
++| Parameter | Type | Required | Default | Description |
++|-----------|------|----------|---------|-------------|
++| `dateRange` | int | No | 7 | Days to look back (1-90) |
++| `startTime` | ISO 8601 | No | — | Explicit start time |
++| `endTime` | ISO 8601 | No | — | Explicit end time |
++| `limit` | int | No | 5 | Top N error codes to return (1-20) |
++
++**Response:** `InsightsTopErrorsResponse`
++```json
++{
++  "topErrors": [
++    { "errorCode": "MLV_LINEAGE_CREATION_FAILURE", "errorSource": "System", "count": 3 },
++    { "errorCode": "MLV_NOT_FOUND", "errorSource": "User", "count": 1 }
++  ]
++}
++```
++
++### Feature Gate
++
++All endpoints are gated by `[FeatureGate(FeatureNames.FLTInsightsMetrics)]` at the controller class level. When the feature flag is disabled, all endpoints return **404 Not Found** (not 501).
++
++### Validation
++
++- `refreshModes` values are validated against a whitelist: `Optimal`, `Full`, `Incremental`, `NoRefresh`. Invalid values return 400.
++- `statuses` values are validated against: `Completed`, `Failed`, `Skipped`, `Cancelled`. Invalid values return 400.
++- `groupBy` must be `day` or `week`. Invalid values return 400.
++- `limit` is clamped to 1-20 range.
++- `dateRange` is clamped to 1-90 range.
++
++### Deferred Items
++
++- **Response caching** (60s TTL, R-0211) — deferred to Phase 1.1
++- **sortBy/sortOrder** on `/runs` — needs PM to specify sortable columns
++- **`/runs/{iterationId}`** detail endpoint — Phase 2
++- **`/errors/top`** as standalone endpoint — currently bundled in `/trends` response
++- **Insight cards** (`/cards`, `/cards/{id}/dismiss`) — Phase 2 (Insight Engine)
+ 
+ ## Security Considerations
+-> Repo-specific security concerns: input validation, auth, data protection.
++
++- Parameterized T-SQL everywhere (`SqlParameter`) — no string interpolation
++- MWC token auth via existing FLT auth middleware
++- Workspace RBAC enforced — no cross-workspace data access
++- No PII in Delta tables (no user emails, AAD tokens, etc.)
+ 
+ ## Testing Strategy
+-> Unit tests, integration tests, coverage targets (90% minimum).
++
++- **251 unit tests** across 3 test classes:
++  - `InsightsQueryBuilderTests` — 35 tests covering SQL generation (parameterized queries, LIKE patterns, CAST for week grouping, refresh mode whitelist, limit clamping)
++  - `LiveTableInsightsControllerTests` — 49 tests covering controller behavior (parameter validation, feature gate, pagination, error handling)
++  - `SqlEndpointQueryServiceTests` — Mock-based tests for query service interface
++- API controller tests mock `IInsightsQueryService` interface
++- Unit tests per writer class (mock `ISparkWriter`)
++- CST integration tests via SparkCST Official pipeline
++- Dev mode E2E validation against EDog with real data
++- Coverage gate enforced in CI pipeline
+ 
+ ## Dependencies
+-> Internal and external dependencies specific to this repo's implementation.
+ 
+-## Open Questions
+-> Unresolved design questions for this repo's contribution.
++- `ISparkWriter` — for Delta table writes via GTS
++- `IInsightsQueryService` — interface for SQL endpoint reads (OBO token)
++- `SqlEndpointQueryService` — concrete implementation using `SqlConnection`
++- `InsightsMetricsTableManager` — for table creation
++- `FeatureNames.FLTInsightsMetrics` — feature flag
++- `FeatureGateAttribute` — reads from `CustomerCapacityAsyncLocalContext` + `IFeatureFlighter`
++
++## Open Questions / PM Decisions Pending
++
++See [PM Discrepancy Report](../../docs/pm-discrepancy-report.md) for full details. Key items:
++
++1. **S2 — Period-over-period trend arrows** — Backend computes or UX layer handles? (P0)
++2. **S4 — 60-second response caching** (R-0211) — Deferred to Phase 1.1
++3. **R5 — sortBy/sortOrder params** — PM to specify which columns are sortable
++4. **R6 — Status: Completed vs Succeeded** — Canonical value needs PM decision
++5. **T3 — `/errors/top` bundled in `/trends`** vs separate endpoint
++6. **T4 — Status filter on `/trends`** — IC-05 says filters apply to charts
++7. **X1 — PII: `submit_user` in Delta table** — R-0503 compliance (P0)
++8. **X2 — Retention 90d vs 180d** — Spec conflict needs resolution
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
+index 6a2d719e..03e953ab 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs
+@@ -54,11 +54,7 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         itemIdKey: "artifactId",
+         TenantIdSource = ContextValueSource.RequestProperties)]
+     [InitializeCapacityContext]
+-
+-    [FeatureGate(
+-        featureName: FeatureNames.FLTInsightsMetrics,
+-        errorCode: HttpStatusCode.NotImplemented,
+-        errorMessage: "Insights and Trends feature is not yet enabled in this environment.")]
++    [FeatureGate(FeatureNames.FLTInsightsMetrics, HttpStatusCode.NotFound, "Insights feature is not yet enabled in this environment.")]
+     [Route("v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/insights")]
+     public class LiveTableInsightsController : BaseApiController
+     {
+@@ -67,21 +63,29 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         private const int DefaultDateRangeDays = 7;
+         private const int MaxDateRangeDays = 90;
+         private const int MaxDisplayNameLength = 256;
++        private const int DefaultTopErrorsLimit = 5;
++        private const string DefaultGroupBy = "day";
+ 
+-        private readonly ICustomLiveTableTelemetryReporter customLiveTableTelemetryReporter;
+-        private readonly IThrottlingService throttlingService = WireUp.Resolve<IThrottlingService>();
+-        private readonly IFeatureFlighter featureFlighter = WireUp.Resolve<IFeatureFlighter>();
+-        private readonly IInsightsQueryService queryService = WireUp.Resolve<IInsightsQueryService>();
++        private ICustomLiveTableTelemetryReporter customLiveTableTelemetryReporter;
++        private IThrottlingService throttlingService;
++        private IFeatureFlighter featureFlighter;
++        private IInsightsQueryService queryService;
+ 
+         /// <summary>
+         /// Initializes a new instance of the <see cref="LiveTableInsightsController"/> class.
+         /// </summary>
+-        /// <param name="customLiveTableTelemetryReporter">The custom telemetry reporter instance.</param>
++        /// <param name="customLiveTableTelemetryReporter">Telemetry reporter for LiveTable operations.</param>
+         public LiveTableInsightsController(ICustomLiveTableTelemetryReporter customLiveTableTelemetryReporter)
+         {
+             this.customLiveTableTelemetryReporter = customLiveTableTelemetryReporter;
+         }
+ 
++        private IThrottlingService ThrottlingService => this.throttlingService ??= WireUp.Resolve<IThrottlingService>();
++
++        private IFeatureFlighter FeatureFlighter => this.featureFlighter ??= WireUp.Resolve<IFeatureFlighter>();
++
++        private IInsightsQueryService QueryService => this.queryService ??= WireUp.Resolve<IInsightsQueryService>();
++
+         /// <summary>
+         /// Gets KPI summary (total runs, success rate, avg duration, failed/skipped counts).
+         /// </summary>
+@@ -137,7 +141,14 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     return dateError;
+                 }
+ 
+-                var response = await this.queryService.GetSummaryAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, cancellationToken);
++                // Compute previous period start date for period-over-period comparison.
++                // Previous period has the same length as current, shifted back.
++                var start = DateTime.Parse(startDate);
++                var end = DateTime.Parse(endDate);
++                var periodDays = (end - start).Days + 1;
++                var prevStartDate = start.AddDays(-periodDays).ToString("yyyy-MM-dd");
++
++                var response = await this.QueryService.GetSummaryAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, prevStartDate, cancellationToken);
+ 
+                 featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
+                 return Ok(response);
+@@ -175,14 +186,14 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         /// <param name="startTime">Optional start time (ISO 8601). Takes precedence over dateRange.</param>
+         /// <param name="endTime">Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.</param>
+         /// <param name="statuses">Optional comma-separated status filter (Completed,Failed,Skipped,Cancelled).</param>
+-        /// <param name="displayName">Optional display name filter.</param>
++        /// <param name="displayName">Optional display name filter (partial match).</param>
+         /// <param name="page">Page number (1-based, default: 1).</param>
+         /// <param name="pageSize">Page size (default: 50, max: 200).</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+-        /// <returns>List of run entries.</returns>
++        /// <returns>Paginated list of run entries with total count.</returns>
+         [HttpGet("runs")]
+         [RequiresPermissionFilter(Permissions.ReadAll)]
+-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IList<InsightsRunResponse>))]
++        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(InsightsRunsPageResponse))]
+         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+         [ProducesResponseType(StatusCodes.Status403Forbidden)]
+@@ -249,15 +260,15 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                 pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+                 int offset = (int)Math.Min((long)(Math.Max(page, 1) - 1) * pageSize, int.MaxValue);
+ 
+-                var runs = await this.queryService.GetRunsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, statusList, displayName, offset, pageSize, cancellationToken);
++                var response = await this.QueryService.GetRunsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, statusList, displayName, offset, pageSize, cancellationToken);
+                 featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
+-                return Ok(runs);
++                return Ok(response);
+             }
+             catch (InsightsTableNotReadyException)
+             {
+                 featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
+                 Tracer.LogSanitizedWarning("[Insights] System tables not yet created. Returning empty runs. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
+-                return Ok(new List<InsightsRunResponse>());
++                return Ok(new InsightsRunsPageResponse());
+             }
+             catch (SqlException ex)
+             {
+@@ -278,15 +289,16 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         }
+ 
+         /// <summary>
+-        /// Gets trend data for charts (daily run counts by status + top error codes).
++        /// Gets trend data for charts (daily/weekly run counts by status + top error codes).
+         /// </summary>
+         /// <param name="workspaceId">Workspace ID.</param>
+         /// <param name="artifactId">Lakehouse artifact ID.</param>
+         /// <param name="dateRange">Number of days to look back (default: 7, max: 90). Ignored if startTime/endTime are provided.</param>
+         /// <param name="startTime">Optional start time (ISO 8601). Takes precedence over dateRange.</param>
+         /// <param name="endTime">Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.</param>
++        /// <param name="groupBy">Grouping interval for trend chart: "day" (default) or "week".</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+-        /// <returns>Trends data with daily breakdown and error distribution.</returns>
++        /// <returns>Trends data with daily/weekly breakdown.</returns>
+         [HttpGet("trends")]
+         [RequiresPermissionFilter(Permissions.ReadAll)]
+         [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(InsightsTrendsResponse))]
+@@ -301,6 +313,7 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+             [FromQuery] int dateRange = DefaultDateRangeDays,
+             [FromQuery] DateTime? startTime = null,
+             [FromQuery] DateTime? endTime = null,
++            [FromQuery] string groupBy = DefaultGroupBy,
+             CancellationToken cancellationToken = default)
+         {
+             HttpStatusCode resultCode = HttpStatusCode.OK;
+@@ -332,7 +345,14 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     return dateError;
+                 }
+ 
+-                var response = await this.queryService.GetTrendsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, cancellationToken);
++                // Validate groupBy
++                if (!InsightsQueryBuilder.ValidGroupByValues.Any(v => string.Equals(v, groupBy, StringComparison.OrdinalIgnoreCase)))
++                {
++                    resultCode = HttpStatusCode.BadRequest;
++                    return BadRequest(new { error = $"Invalid groupBy '{groupBy}'. Valid values: {string.Join(", ", InsightsQueryBuilder.ValidGroupByValues)}" });
++                }
++
++                var response = await this.QueryService.GetTrendsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, groupBy, cancellationToken);
+                 featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
+                 return Ok(response);
+             }
+@@ -360,6 +380,93 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+             }
+         }
+ 
++        /// <summary>
++        /// Gets the top-N error codes from failed runs within the specified period.
++        /// </summary>
++        /// <param name="workspaceId">Workspace ID.</param>
++        /// <param name="artifactId">Lakehouse artifact ID.</param>
++        /// <param name="dateRange">Number of days to look back (default: 7, max: 90). Ignored if startTime/endTime are provided.</param>
++        /// <param name="startTime">Optional start time (ISO 8601). Takes precedence over dateRange.</param>
++        /// <param name="endTime">Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.</param>
++        /// <param name="limit">Maximum number of top error codes to return (1-20, default: 5).</param>
++        /// <param name="cancellationToken">Cancellation token.</param>
++        /// <returns>Top error codes sorted by count descending.</returns>
++        [HttpGet("errors/top")]
++        [RequiresPermissionFilter(Permissions.ReadAll)]
++        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(InsightsTopErrorsResponse))]
++        [ProducesResponseType(StatusCodes.Status400BadRequest)]
++        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
++        [ProducesResponseType(StatusCodes.Status403Forbidden)]
++        [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
++        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
++        public async Task<IActionResult> GetTopErrorsAsync(
++            [FromRoute] Guid workspaceId,
++            [FromRoute] Guid artifactId,
++            [FromQuery] int dateRange = DefaultDateRangeDays,
++            [FromQuery] DateTime? startTime = null,
++            [FromQuery] DateTime? endTime = null,
++            [FromQuery] int limit = DefaultTopErrorsLimit,
++            CancellationToken cancellationToken = default)
++        {
++            HttpStatusCode resultCode = HttpStatusCode.OK;
++            var featureUsageEventActivityStatus = StandardizedActivityStatus.Failed;
++            var requestStartTime = DateTime.UtcNow;
++
++            try
++            {
++                using var capacityContext = CustomerCapacityAsyncLocalContext.Initialize(this.Request);
++
++                var throttlingResult = await this.CheckAndApplyThrottlingAsync(ThrottlingConstants.GetInsightsTopErrorsPolicy, workspaceId, artifactId, cancellationToken);
++                if (throttlingResult != null)
++                {
++                    resultCode = HttpStatusCode.TooManyRequests;
++                    return throttlingResult;
++                }
++
++                var (tenantId, mwcToken, extractStatusCode, error) = ExtractRequestContext(workspaceId, artifactId);
++                if (error != null)
++                {
++                    resultCode = extractStatusCode ?? HttpStatusCode.BadRequest;
++                    return error;
++                }
++
++                var (startDate, endDate, dateError) = ResolveDateRange(dateRange, startTime, endTime);
++                if (dateError != null)
++                {
++                    resultCode = HttpStatusCode.BadRequest;
++                    return dateError;
++                }
++
++                int clampedLimit = InsightsQueryBuilder.ClampTopErrorsLimit(limit);
++
++                var response = await this.QueryService.GetTopErrorsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, clampedLimit, cancellationToken);
++                featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
++                return Ok(response);
++            }
++            catch (InsightsTableNotReadyException)
++            {
++                featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
++                Tracer.LogSanitizedWarning("[Insights] System tables not yet created. Returning empty top errors. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
++                return Ok(new InsightsTopErrorsResponse());
++            }
++            catch (SqlException ex)
++            {
++                resultCode = HttpStatusCode.InternalServerError;
++                Tracer.LogSanitizedError(ex, "[Insights] SQL error in GetTopErrors. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
++                return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to query top errors." });
++            }
++            catch (UnauthorizedAccessException ex)
++            {
++                resultCode = HttpStatusCode.InternalServerError;
++                Tracer.LogSanitizedError(ex, "[Insights] SQL endpoint auth failed in GetTopErrors — unable to extract user AAD token from MWC token. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
++                return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Internal error connecting to SQL endpoint." });
++            }
++            finally
++            {
++                this.EmitTelemetryUsageEvent(requestStartTime, Guid.Empty, "GetInsightsTopErrors", featureUsageEventActivityStatus, resultCode.ToString());
++            }
++        }
++
+         /// <summary>
+         /// Checks if the request should be throttled.
+         /// </summary>
+@@ -374,24 +481,33 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+             Guid artifactId,
+             CancellationToken cancellationToken)
+         {
+-            var tenantId = CustomerCapacityAsyncLocalContext.Value?.TenantId;
+-            var capacityId = CustomerCapacityAsyncLocalContext.Value?.CustomerCapacityObjectId;
+-
+-            if (!string.IsNullOrWhiteSpace(tenantId) &&
+-                !string.IsNullOrWhiteSpace(capacityId) &&
+-                Guid.TryParse(tenantId, out var tenantGuid) &&
+-                Guid.TryParse(capacityId, out var capacityGuid))
++            try
+             {
+-                if (!this.featureFlighter.IsEnabled(FeatureNames.EnableFMVServiceAPIThrottling, tenantGuid, capacityGuid, workspaceId))
++                var tenantId = CustomerCapacityAsyncLocalContext.Value?.TenantId;
++                var capacityId = CustomerCapacityAsyncLocalContext.Value?.CustomerCapacityObjectId;
++
++                if (!string.IsNullOrWhiteSpace(tenantId) &&
++                    !string.IsNullOrWhiteSpace(capacityId) &&
++                    Guid.TryParse(tenantId, out var tenantGuid) &&
++                    Guid.TryParse(capacityId, out var capacityGuid))
+                 {
+-                    Tracer.LogSanitizedVerbose($"API throttling is disabled for tenant {tenantId}, capacity {capacityId}, workspace {workspaceId} - skipping throttling");
+-                    return null;
++                    if (!this.FeatureFlighter.IsEnabled(FeatureNames.EnableFMVServiceAPIThrottling, tenantGuid, capacityGuid, workspaceId))
++                    {
++                        Tracer.LogSanitizedVerbose($"API throttling is disabled for tenant {tenantId}, capacity {capacityId}, workspace {workspaceId} - skipping throttling");
++                        return null;
++                    }
+                 }
+-            }
+ 
+-            var evalResult = await this.throttlingService.CheckAndApplyThrottlingAsync(policyKey, this.HttpContext, workspaceId, artifactId, cancellationToken);
++                var evalResult = await this.ThrottlingService.CheckAndApplyThrottlingAsync(policyKey, this.HttpContext, workspaceId, artifactId, cancellationToken);
+ 
+-            return evalResult.IsThrottled ? evalResult.BlockedResponse : null;
++                return evalResult.IsThrottled ? evalResult.BlockedResponse : null;
++            }
++            catch (Exception ex)
++            {
++                // Fail open — skip throttling when resolution fails (e.g., IWorkloadContext unavailable).
++                Tracer.LogSanitizedWarning("[Insights] Throttling check failed. Skipping throttling. Error: {0}", ex.Message);
++                return null;
++            }
+         }
+ 
+         /// <summary>
+diff --git a/Service/Microsoft.LiveTable.Service/Swagger/Swagger.json b/Service/Microsoft.LiveTable.Service/Swagger/Swagger.json
+index d40af574..9d769bb6 100644
+--- a/Service/Microsoft.LiveTable.Service/Swagger/Swagger.json
++++ b/Service/Microsoft.LiveTable.Service/Swagger/Swagger.json
+@@ -2964,10 +2964,18 @@
+               "type": "string"
+             }
+           },
++          {
++            "name": "refreshModes",
++            "in": "query",
++            "description": "Optional comma-separated refresh mode filter (Optimal,Full).",
++            "schema": {
++              "type": "string"
++            }
++          },
+           {
+             "name": "displayName",
+             "in": "query",
+-            "description": "Optional display name filter.",
++            "description": "Optional display name filter (partial match).",
+             "schema": {
+               "type": "string"
+             }
+@@ -2999,26 +3007,17 @@
+             "content": {
+               "text/plain": {
+                 "schema": {
+-                  "type": "array",
+-                  "items": {
+-                    "$ref": "#/components/schemas/InsightsRunResponse"
+-                  }
++                  "$ref": "#/components/schemas/InsightsRunsPageResponse"
+                 }
+               },
+               "application/json": {
+                 "schema": {
+-                  "type": "array",
+-                  "items": {
+-                    "$ref": "#/components/schemas/InsightsRunResponse"
+-                  }
++                  "$ref": "#/components/schemas/InsightsRunsPageResponse"
+                 }
+               },
+               "text/json": {
+                 "schema": {
+-                  "type": "array",
+-                  "items": {
+-                    "$ref": "#/components/schemas/InsightsRunResponse"
+-                  }
++                  "$ref": "#/components/schemas/InsightsRunsPageResponse"
+                 }
+               }
+             }
+@@ -3131,7 +3130,7 @@
+         "tags": [
+           "LiveTableInsights"
+         ],
+-        "summary": "Gets trend data for charts (daily run counts by status + top error codes).",
++        "summary": "Gets trend data for charts (daily/weekly run counts by status).",
+         "parameters": [
+           {
+             "name": "workspaceId",
+@@ -3180,6 +3179,15 @@
+               "type": "string",
+               "format": "date-time"
+             }
++          },
++          {
++            "name": "groupBy",
++            "in": "query",
++            "description": "Grouping interval for trend chart: \"day\" (default) or \"week\".",
++            "schema": {
++              "type": "string",
++              "default": "day"
++            }
+           }
+         ],
+         "responses": {
+@@ -3306,6 +3314,196 @@
+         }
+       }
+     },
++    "/v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/insights/errors/top": {
++      "get": {
++        "tags": [
++          "LiveTableInsights"
++        ],
++        "summary": "Gets the top-N error codes from failed runs within the specified period.",
++        "parameters": [
++          {
++            "name": "workspaceId",
++            "in": "path",
++            "description": "Workspace ID.",
++            "required": true,
++            "schema": {
++              "type": "string",
++              "format": "uuid"
++            }
++          },
++          {
++            "name": "artifactId",
++            "in": "path",
++            "description": "Lakehouse artifact ID.",
++            "required": true,
++            "schema": {
++              "type": "string",
++              "format": "uuid"
++            }
++          },
++          {
++            "name": "dateRange",
++            "in": "query",
++            "description": "Number of days to look back (default: 7, max: 90). Ignored if startTime/endTime are provided.",
++            "schema": {
++              "type": "integer",
++              "format": "int32",
++              "default": 7
++            }
++          },
++          {
++            "name": "startTime",
++            "in": "query",
++            "description": "Optional start time (ISO 8601). Takes precedence over dateRange.",
++            "schema": {
++              "type": "string",
++              "format": "date-time"
++            }
++          },
++          {
++            "name": "endTime",
++            "in": "query",
++            "description": "Optional end time (ISO 8601). Defaults to now if startTime is provided without endTime.",
++            "schema": {
++              "type": "string",
++              "format": "date-time"
++            }
++          },
++          {
++            "name": "limit",
++            "in": "query",
++            "description": "Maximum number of top error codes to return (1-20, default: 5).",
++            "schema": {
++              "type": "integer",
++              "format": "int32",
++              "default": 5
++            }
++          }
++        ],
++        "responses": {
++          "200": {
++            "description": "OK",
++            "content": {
++              "text/plain": {
++                "schema": {
++                  "$ref": "#/components/schemas/InsightsTopErrorsResponse"
++                }
++              },
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/InsightsTopErrorsResponse"
++                }
++              },
++              "text/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/InsightsTopErrorsResponse"
++                }
++              }
++            }
++          },
++          "400": {
++            "description": "Bad Request",
++            "content": {
++              "text/plain": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "text/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              }
++            }
++          },
++          "401": {
++            "description": "Unauthorized",
++            "content": {
++              "text/plain": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "text/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              }
++            }
++          },
++          "403": {
++            "description": "Forbidden",
++            "content": {
++              "text/plain": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "text/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              }
++            }
++          },
++          "429": {
++            "description": "Too Many Requests",
++            "content": {
++              "text/plain": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "text/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              }
++            }
++          },
++          "500": {
++            "description": "Internal Server Error",
++            "content": {
++              "text/plain": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "application/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              },
++              "text/json": {
++                "schema": {
++                  "$ref": "#/components/schemas/ProblemDetails"
++                }
++              }
++            }
++          }
++        }
++      }
++    },
+     "/v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTableMaintanance/forceUnlockDAGExecution/{lockedIterationId}": {
+       "post": {
+         "tags": [
+@@ -6837,7 +7035,7 @@
+             "items": {
+               "type": "string"
+             },
+-            "description": "Gets or sets the fully qualified names of MLVs from the current lakehouse to be refreshed.\r\nOnly used when mode is Selected.",
++            "description": "Gets or sets the fully qualified names of MLVs from the current lakehouse to be refreshed.\r\nOnly used when Microsoft.LiveTable.Service.Contracts.Api.CurrentLakehouseExecutionContext.Mode is Microsoft.LiveTable.Service.Contracts.Api.ExecutionBoundaryMode.Selected.",
+             "nullable": true
+           }
+         },
+@@ -7197,7 +7395,6 @@
+           "runDate": {
+             "type": "string",
+             "description": "Gets or sets the date (YYYY-MM-DD).",
+-            "format": "date",
+             "nullable": true
+           },
+           "completed": {
+@@ -7365,7 +7562,7 @@
+             "items": {
+               "$ref": "#/components/schemas/ItemReferenceById"
+             },
+-            "description": "Gets or sets the references of lakehouses to be included in refresh.\r\nOnly used when mode is Selected.",
++            "description": "Gets or sets the references of lakehouses to be included in refresh.\r\nOnly used when Microsoft.LiveTable.Service.Contracts.Api.ExtendedLineageExecutionContext.Mode is Microsoft.LiveTable.Service.Contracts.Api.ExecutionBoundaryMode.Selected.",
+             "nullable": true
+           }
+         },
+@@ -7443,6 +7640,11 @@
+             "description": "Gets or sets the error code.",
+             "nullable": true
+           },
++          "errorMessage": {
++            "type": "string",
++            "description": "Gets or sets the error message (nullable, only present for failed runs).",
++            "nullable": true
++          },
+           "errorSource": {
+             "type": "string",
+             "description": "Gets or sets the error source (System/User).",
+@@ -7476,6 +7678,26 @@
+         "additionalProperties": false,
+         "description": "Single run entry in the paginated runs response."
+       },
++      "InsightsRunsPageResponse": {
++        "type": "object",
++        "properties": {
++          "items": {
++            "type": "array",
++            "items": {
++              "$ref": "#/components/schemas/InsightsRunResponse"
++            },
++            "description": "Gets or sets the list of run entries for the current page.",
++            "nullable": true
++          },
++          "totalCount": {
++            "type": "integer",
++            "description": "Gets or sets the total number of runs matching the filters (across all pages).",
++            "format": "int32"
++          }
++        },
++        "additionalProperties": false,
++        "description": "Paginated wrapper for the runs list response, including total count for UX pagination controls."
++      },
+       "InsightsSummaryResponse": {
+         "type": "object",
+         "properties": {
+@@ -7484,6 +7706,11 @@
+             "description": "Gets or sets the total number of runs in the date range.",
+             "format": "int32"
+           },
++          "completedRuns": {
++            "type": "integer",
++            "description": "Gets or sets the number of completed (succeeded) runs.",
++            "format": "int32"
++          },
+           "successRatePct": {
+             "type": "number",
+             "description": "Gets or sets the success rate as a percentage (0-100).",
+@@ -7508,6 +7735,12 @@
+             "type": "integer",
+             "description": "Gets or sets the number of cancelled runs.",
+             "format": "int32"
++          },
++          "lastUpdatedAt": {
++            "type": "string",
++            "description": "Gets or sets the timestamp of the most recent metrics write in the date range.",
++            "format": "date-time",
++            "nullable": true
+           }
+         },
+         "additionalProperties": false,
+@@ -7523,18 +7756,25 @@
+             },
+             "description": "Gets or sets the daily run counts grouped by status.",
+             "nullable": true
+-          },
++          }
++        },
++        "additionalProperties": false,
++        "description": "Trends response containing chart data for the Insights dashboard."
++      },
++      "InsightsTopErrorsResponse": {
++        "type": "object",
++        "properties": {
+           "topErrors": {
+             "type": "array",
+             "items": {
+               "$ref": "#/components/schemas/ErrorCountEntry"
+             },
+-            "description": "Gets or sets the top error codes by count.",
++            "description": "Gets or sets the top error codes sorted by count descending.",
+             "nullable": true
+           }
+         },
+         "additionalProperties": false,
+-        "description": "Trends response containing chart data for the Insights dashboard."
++        "description": "Response containing top error codes from failed runs."
+       },
+       "ItemReferenceById": {
+         "required": [
+@@ -8027,8 +8267,7 @@
+               117,
+               118,
+               119,
+-              120,
+-              121
++              120
+             ],
+             "type": "integer",
+             "description": "Gets the error code associated with this faulted node.\r\nOnly populated for faulted nodes created from unresolved entities.\r\nUsed for telemetry to track specific error types (e.g., MLV_STALE_METADATA, MLV_ACCESS_DENIED).",
+@@ -8359,7 +8598,7 @@
+             "nullable": true
+           }
+         },
+-        "additionalProperties": {}
++        "additionalProperties": { }
+       },
+       "PublicEnvironment": {
+         "type": "object",
+diff --git a/Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs b/Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs
+index dc5cf810..103036fd 100644
+--- a/Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs
++++ b/Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs
+@@ -54,6 +54,10 @@ namespace Microsoft.LiveTable.Service.Throttling
+ 
+         public const string GetInsightsTrendsPolicy = "GetInsightsTrends";
+ 
++        public const string GetInsightsTopErrorsPolicy = "GetInsightsTopErrors";
++
++        public const string GetInsightCardsPolicy = "GetInsightCards";
++
+         /// <summary>
+         /// Aggregate throttling policy applied per user across all APIs.
+         /// </summary>
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/IInsightsQueryService.cs b/Service/Microsoft.LiveTable.Service/Trends/IInsightsQueryService.cs
+index 8d8bd1f8..ab9fe4a3 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/IInsightsQueryService.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/IInsightsQueryService.cs
+@@ -40,6 +40,7 @@ namespace Microsoft.LiveTable.Service.Trends
+         /// <param name="mwcToken">The MWC token from the incoming request.</param>
+         /// <param name="startDate">Start date string (yyyy-MM-dd) inclusive.</param>
+         /// <param name="endDate">End date string (yyyy-MM-dd) inclusive.</param>
++        /// <param name="prevStartDate">Previous period start date string (yyyy-MM-dd) for period-over-period comparison.</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+         /// <returns>Summary response DTO.</returns>
+         Task<InsightsSummaryResponse> GetSummaryAsync(
+@@ -49,10 +50,11 @@ namespace Microsoft.LiveTable.Service.Trends
+             string mwcToken,
+             string startDate,
+             string endDate,
++            string prevStartDate,
+             CancellationToken cancellationToken);
+ 
+         /// <summary>
+-        /// Gets paginated run list from sys_run_metrics.
++        /// Gets paginated run list from sys_run_metrics with total count for pagination.
+         /// </summary>
+         /// <param name="tenantId">The tenant identifier.</param>
+         /// <param name="workspaceId">The workspace identifier.</param>
+@@ -61,12 +63,12 @@ namespace Microsoft.LiveTable.Service.Trends
+         /// <param name="startDate">Start date string (yyyy-MM-dd) inclusive.</param>
+         /// <param name="endDate">End date string (yyyy-MM-dd) inclusive.</param>
+         /// <param name="statuses">Optional status filters (e.g. Completed, Failed). Null means no filter.</param>
+-        /// <param name="displayName">Optional display name filter.</param>
++        /// <param name="displayName">Optional display name filter (partial match).</param>
+         /// <param name="offset">Row offset for pagination.</param>
+         /// <param name="pageSize">Number of rows to return.</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+-        /// <returns>List of run response DTOs.</returns>
+-        Task<IList<InsightsRunResponse>> GetRunsAsync(
++        /// <returns>Paginated response with items and total count.</returns>
++        Task<InsightsRunsPageResponse> GetRunsAsync(
+             string tenantId,
+             Guid workspaceId,
+             Guid artifactId,
+@@ -80,7 +82,7 @@ namespace Microsoft.LiveTable.Service.Trends
+             CancellationToken cancellationToken);
+ 
+         /// <summary>
+-        /// Gets daily trend and top error data from sys_run_metrics.
++        /// Gets daily/weekly trend data from sys_run_metrics.
+         /// </summary>
+         /// <param name="tenantId">The tenant identifier.</param>
+         /// <param name="workspaceId">The workspace identifier.</param>
+@@ -88,6 +90,7 @@ namespace Microsoft.LiveTable.Service.Trends
+         /// <param name="mwcToken">The MWC token from the incoming request.</param>
+         /// <param name="startDate">Start date string (yyyy-MM-dd) inclusive.</param>
+         /// <param name="endDate">End date string (yyyy-MM-dd) inclusive.</param>
++        /// <param name="groupBy">Grouping interval: "day" or "week".</param>
+         /// <param name="cancellationToken">Cancellation token.</param>
+         /// <returns>Trends response DTO.</returns>
+         Task<InsightsTrendsResponse> GetTrendsAsync(
+@@ -97,6 +100,29 @@ namespace Microsoft.LiveTable.Service.Trends
+             string mwcToken,
+             string startDate,
+             string endDate,
++            string groupBy,
++            CancellationToken cancellationToken);
++
++        /// <summary>
++        /// Gets the top-N error codes from failed runs within the specified period.
++        /// </summary>
++        /// <param name="tenantId">The tenant identifier.</param>
++        /// <param name="workspaceId">The workspace identifier.</param>
++        /// <param name="artifactId">The lakehouse artifact identifier.</param>
++        /// <param name="mwcToken">The MWC token from the incoming request.</param>
++        /// <param name="startDate">Start date string (yyyy-MM-dd) inclusive.</param>
++        /// <param name="endDate">End date string (yyyy-MM-dd) inclusive.</param>
++        /// <param name="limit">Maximum number of top error codes to return (1-20).</param>
++        /// <param name="cancellationToken">Cancellation token.</param>
++        /// <returns>Top errors response DTO.</returns>
++        Task<InsightsTopErrorsResponse> GetTopErrorsAsync(
++            string tenantId,
++            Guid workspaceId,
++            Guid artifactId,
++            string mwcToken,
++            string startDate,
++            string endDate,
++            int limit,
+             CancellationToken cancellationToken);
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs b/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
+index f3bac8f1..07a6e610 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs
+@@ -31,30 +31,43 @@ namespace Microsoft.LiveTable.Service.Trends
+         /// </summary>
+         internal static readonly IReadOnlyList<string> ValidStatuses = Array.AsReadOnly(new[] { StatusCompleted, StatusFailed, StatusSkipped, StatusCancelled });
+ 
++        /// <summary>
++        /// Valid groupBy values for the trends endpoint.
++        /// </summary>
++        internal static readonly IReadOnlyList<string> ValidGroupByValues = Array.AsReadOnly(new[] { "day", "week" });
++
+         private const string RunMetricsTable = "[_mlv_system].[sys_run_metrics]";
+         private const string NodeMetricsTable = "[_mlv_system].[sys_node_metrics]";
+         private const string ErrorMetricsTable = "[_mlv_system].[sys_error_metrics]";
++        private const int DefaultTopErrorsLimit = 5;
++        private const int MaxTopErrorsLimit = 20;
+ 
+         /// <summary>
+-        /// Builds the KPI summary query.
++        /// Builds the KPI summary query including lastUpdatedAt, completedRuns, and previous-period comparisons.
++        /// Queries both current and previous period in a single scan for period-over-period deltas.
+         /// </summary>
+-        /// <returns>Parameterized SQL with @startDate, @endDate parameters.</returns>
++        /// <returns>Parameterized SQL with @startDate, @endDate, @prevStartDate parameters.</returns>
+         internal static string BuildSummaryQuery()
+         {
+             return $@"
+ SELECT
+-    COUNT(*) AS totalRuns,
+-    SUM(CASE WHEN status = '{StatusCompleted}' THEN 1 ELSE 0 END) AS completedRuns,
+-    SUM(CASE WHEN status = '{StatusFailed}' THEN 1 ELSE 0 END) AS failedRuns,
+-    SUM(CASE WHEN status = '{StatusSkipped}' THEN 1 ELSE 0 END) AS skippedRuns,
+-    SUM(CASE WHEN status = '{StatusCancelled}' THEN 1 ELSE 0 END) AS cancelledRuns,
+-    AVG(CAST(duration_ms AS FLOAT)) AS avgDurationMs
++    COUNT(CASE WHEN run_date >= @startDate THEN 1 END) AS totalRuns,
++    SUM(CASE WHEN run_date >= @startDate AND status = '{StatusCompleted}' THEN 1 ELSE 0 END) AS completedRuns,
++    SUM(CASE WHEN run_date >= @startDate AND status = '{StatusFailed}' THEN 1 ELSE 0 END) AS failedRuns,
++    SUM(CASE WHEN run_date >= @startDate AND status = '{StatusSkipped}' THEN 1 ELSE 0 END) AS skippedRuns,
++    SUM(CASE WHEN run_date >= @startDate AND status = '{StatusCancelled}' THEN 1 ELSE 0 END) AS cancelledRuns,
++    AVG(CASE WHEN run_date >= @startDate THEN CAST(duration_ms AS FLOAT) END) AS avgDurationMs,
++    MAX(CASE WHEN run_date >= @startDate THEN written_at END) AS lastUpdatedAt,
++    COUNT(CASE WHEN run_date < @startDate THEN 1 END) AS prevTotalRuns,
++    SUM(CASE WHEN run_date < @startDate AND status = '{StatusCompleted}' THEN 1 ELSE 0 END) AS prevCompletedRuns,
++    SUM(CASE WHEN run_date < @startDate AND status = '{StatusFailed}' THEN 1 ELSE 0 END) AS prevFailedRuns,
++    AVG(CASE WHEN run_date < @startDate THEN CAST(duration_ms AS FLOAT) END) AS prevAvgDurationMs
+ FROM {RunMetricsTable}
+-WHERE run_date >= @startDate AND run_date <= @endDate";
++WHERE run_date >= @prevStartDate AND run_date <= @endDate";
+         }
+ 
+         /// <summary>
+-        /// Builds the paginated runs list query.
++        /// Builds the paginated runs list query with optional status and displayName filters.
+         /// </summary>
+         /// <param name="statusCount">Number of status filters. 0 means no filter.</param>
+         /// <returns>Parameterized SQL with @startDate, @endDate, @status0..N, @displayName, @offset, @pageSize parameters.</returns>
+@@ -67,47 +80,93 @@ WHERE run_date >= @startDate AND run_date <= @endDate";
+             return $@"
+ SELECT
+     iteration_id, display_name, status, started_at, ended_at, duration_ms,
+-    refresh_mode, error_code, error_source, total_nodes,
++    error_code, error_message, error_source, total_nodes,
+     succeeded_nodes, failed_nodes, skipped_nodes
+ FROM {RunMetricsTable}
+ WHERE run_date >= @startDate AND run_date <= @endDate
+     {statusClause}
+-    AND (@displayName IS NULL OR display_name = @displayName)
++    AND (@displayName IS NULL OR display_name LIKE @displayName)
+ ORDER BY started_at DESC, iteration_id DESC
+ OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY";
+         }
+ 
+         /// <summary>
+-        /// Builds the daily trend query (run counts per day grouped by status).
++        /// Builds a COUNT(*) query matching the same filters as <see cref="BuildRunsQuery"/> for pagination totalCount.
+         /// </summary>
++        /// <param name="statusCount">Number of status filters. 0 means no filter.</param>
++        /// <returns>Parameterized SQL returning a single scalar count.</returns>
++        internal static string BuildRunsCountQuery(int statusCount)
++        {
++            var statusClause = statusCount > 0
++                ? "AND status IN (" + string.Join(", ", Enumerable.Range(0, statusCount).Select(i => $"@status{i}")) + ")"
++                : string.Empty;
++
++            return $@"
++SELECT COUNT(*) AS totalCount
++FROM {RunMetricsTable}
++WHERE run_date >= @startDate AND run_date <= @endDate
++    {statusClause}
++    AND (@displayName IS NULL OR display_name LIKE @displayName)";
++        }
++
++        /// <summary>
++        /// Builds the daily or weekly trend query (run counts grouped by status).
++        /// </summary>
++        /// <param name="groupBy">Grouping interval: "day" (default) or "week".</param>
+         /// <returns>Parameterized SQL with @startDate, @endDate parameters.</returns>
+-        internal static string BuildDailyTrendQuery()
++        internal static string BuildDailyTrendQuery(string groupBy = "day")
+         {
++            string dateExpression;
++            if (string.Equals(groupBy, "week", StringComparison.OrdinalIgnoreCase))
++            {
++                // Group by ISO week: use the Monday of each week as the representative date.
++                // The weekday offset formula ((DATEPART(dw, run_date) + @@DATEFIRST - 2) % 7) + 1 yields
++                // a DATEFIRST-independent ISO day number (Monday=1 .. Sunday=7).
++                // CONVERT with style 120 forces yyyy-MM-dd output regardless of language/DATEFORMAT settings.
++                dateExpression = "CONVERT(VARCHAR(10), DATEADD(DAY, 1 - (((DATEPART(dw, run_date) + @@DATEFIRST - 2) % 7) + 1), CAST(run_date AS DATE)), 120)";
++            }
++            else
++            {
++                dateExpression = "run_date";
++            }
++
+             return $@"
+ SELECT
+-    run_date,
++    {dateExpression} AS run_date,
+     SUM(CASE WHEN status = '{StatusCompleted}' THEN 1 ELSE 0 END) AS completed,
+     SUM(CASE WHEN status = '{StatusFailed}' THEN 1 ELSE 0 END) AS failed,
+     SUM(CASE WHEN status = '{StatusSkipped}' THEN 1 ELSE 0 END) AS skipped,
+     SUM(CASE WHEN status = '{StatusCancelled}' THEN 1 ELSE 0 END) AS cancelled
+ FROM {RunMetricsTable}
+ WHERE run_date >= @startDate AND run_date <= @endDate
+-GROUP BY run_date
++GROUP BY {dateExpression}
+ ORDER BY run_date";
+         }
+ 
+         /// <summary>
+-        /// Builds the top error codes query.
++        /// Builds the top error codes query from per-node metrics with configurable limit.
++        /// Queries sys_node_metrics (per node) instead of sys_run_metrics (per DAG run)
++        /// to surface all distinct error codes across individual node failures, including
++        /// cases where a single DAG has multiple nodes failing with different errors.
+         /// </summary>
++        /// <param name="limit">Maximum number of error codes to return (1-20, default 5).</param>
+         /// <returns>Parameterized SQL with @startDate, @endDate parameters.</returns>
+-        internal static string BuildTopErrorsQuery()
++        internal static string BuildTopErrorsQuery(int limit = DefaultTopErrorsLimit)
+         {
++            limit = ClampTopErrorsLimit(limit);
+             return $@"
+-SELECT TOP 5 error_code, COUNT(*) AS count
+-FROM {RunMetricsTable}
++SELECT TOP {limit} error_code, error_source, COUNT(*) AS count
++FROM {NodeMetricsTable}
+ WHERE error_code IS NOT NULL AND error_code != '' AND run_date >= @startDate AND run_date <= @endDate
+-GROUP BY error_code
++GROUP BY error_code, error_source
+ ORDER BY count DESC";
+         }
++
++        /// <summary>
++        /// Clamps a top-errors limit value to the valid range.
++        /// </summary>
++        /// <param name="limit">The requested limit.</param>
++        /// <returns>A value between 1 and <see cref="MaxTopErrorsLimit"/>.</returns>
++        internal static int ClampTopErrorsLimit(int limit) => Math.Clamp(limit, 1, MaxTopErrorsLimit);
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs
+index 7e2b0d29..5dae599f 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs
+@@ -7,7 +7,7 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+     using Newtonsoft.Json;
+ 
+     /// <summary>
+-    /// An error code with its occurrence count.
++    /// An error code with its occurrence count and source.
+     /// </summary>
+     public class ErrorCountEntry
+     {
+@@ -15,6 +15,10 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         [JsonProperty("errorCode")]
+         public string ErrorCode { get; set; }
+ 
++        /// <summary>Gets or sets the error source (System or User).</summary>
++        [JsonProperty("errorSource")]
++        public string ErrorSource { get; set; }
++
+         /// <summary>Gets or sets the count.</summary>
+         [JsonProperty("count")]
+         public int Count { get; set; }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs
+index fa0d3127..a5c0f290 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs
+@@ -36,14 +36,14 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         [JsonProperty("durationMs")]
+         public long? DurationMs { get; set; }
+ 
+-        /// <summary>Gets or sets the refresh mode (Full/Optimal).</summary>
+-        [JsonProperty("refreshMode")]
+-        public string RefreshMode { get; set; }
+-
+         /// <summary>Gets or sets the error code.</summary>
+         [JsonProperty("errorCode")]
+         public string ErrorCode { get; set; }
+ 
++        /// <summary>Gets or sets the error message (nullable, only present for failed runs).</summary>
++        [JsonProperty("errorMessage")]
++        public string ErrorMessage { get; set; }
++
+         /// <summary>Gets or sets the error source (System/User).</summary>
+         [JsonProperty("errorSource")]
+         public string ErrorSource { get; set; }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs
+new file mode 100644
+index 00000000..a567ca6b
+--- /dev/null
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs
+@@ -0,0 +1,23 @@
++// <copyright file="InsightsRunsPageResponse.cs" company="Microsoft">
++// Copyright (c) Microsoft. All rights reserved.
++// </copyright>
++
++namespace Microsoft.LiveTable.Service.Trends.Models
++{
++    using System.Collections.Generic;
++    using Newtonsoft.Json;
++
++    /// <summary>
++    /// Paginated wrapper for the runs list response, including total count for UX pagination controls.
++    /// </summary>
++    public class InsightsRunsPageResponse
++    {
++        /// <summary>Gets or sets the list of run entries for the current page.</summary>
++        [JsonProperty("items")]
++        public IList<InsightsRunResponse> Items { get; set; } = new List<InsightsRunResponse>();
++
++        /// <summary>Gets or sets the total number of runs matching the filters (across all pages).</summary>
++        [JsonProperty("totalCount")]
++        public int TotalCount { get; set; }
++    }
++}
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs
+index 58d492b8..f6f95dbf 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs
+@@ -4,10 +4,11 @@
+ 
+ namespace Microsoft.LiveTable.Service.Trends.Models
+ {
++    using System;
+     using Newtonsoft.Json;
+ 
+     /// <summary>
+-    /// KPI summary response for the Insights dashboard.
++    /// KPI summary response for the Insights dashboard with period-over-period deltas.
+     /// </summary>
+     public class InsightsSummaryResponse
+     {
+@@ -17,24 +18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         [JsonProperty("totalRuns")]
+         public int TotalRuns { get; set; }
+ 
++        /// <summary>
++        /// Gets or sets the percentage change in total runs vs the previous period.
++        /// Null when no previous period data is available.
++        /// </summary>
++        [JsonProperty("totalRunsDeltaPct")]
++        public double? TotalRunsDeltaPct { get; set; }
++
++        /// <summary>
++        /// Gets or sets the number of completed (succeeded) runs.
++        /// </summary>
++        [JsonProperty("completedRuns")]
++        public int CompletedRuns { get; set; }
++
+         /// <summary>
+         /// Gets or sets the success rate as a percentage (0-100).
+         /// </summary>
+         [JsonProperty("successRatePct")]
+         public double SuccessRatePct { get; set; }
+ 
++        /// <summary>
++        /// Gets or sets the percentage-point change in success rate vs the previous period.
++        /// Null when no previous period data is available.
++        /// </summary>
++        [JsonProperty("successRateDeltaPct")]
++        public double? SuccessRateDeltaPct { get; set; }
++
+         /// <summary>
+         /// Gets or sets the average duration in minutes.
+         /// </summary>
+         [JsonProperty("avgDurationMin")]
+         public double AvgDurationMin { get; set; }
+ 
++        /// <summary>
++        /// Gets or sets the percentage change in average duration vs the previous period.
++        /// Null when no previous period data is available.
++        /// </summary>
++        [JsonProperty("avgDurationDeltaPct")]
++        public double? AvgDurationDeltaPct { get; set; }
++
+         /// <summary>
+         /// Gets or sets the number of failed runs.
+         /// </summary>
+         [JsonProperty("failedRuns")]
+         public int FailedRuns { get; set; }
+ 
++        /// <summary>
++        /// Gets or sets the percentage change in failed runs vs the previous period.
++        /// Null when no previous period data is available.
++        /// </summary>
++        [JsonProperty("failedRunsDeltaPct")]
++        public double? FailedRunsDeltaPct { get; set; }
++
+         /// <summary>
+         /// Gets or sets the number of skipped runs.
+         /// </summary>
+@@ -46,5 +81,11 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         /// </summary>
+         [JsonProperty("cancelledRuns")]
+         public int CancelledRuns { get; set; }
++
++        /// <summary>
++        /// Gets or sets the timestamp of the most recent metrics write in the date range.
++        /// </summary>
++        [JsonProperty("lastUpdatedAt")]
++        public DateTime? LastUpdatedAt { get; set; }
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs
+new file mode 100644
+index 00000000..bf6895d3
+--- /dev/null
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs
+@@ -0,0 +1,20 @@
++// <copyright file="InsightsTopErrorsResponse.cs" company="Microsoft">
++// Copyright (c) Microsoft. All rights reserved.
++// </copyright>
++
++namespace Microsoft.LiveTable.Service.Trends.Models
++{
++    using System.Collections.Generic;
++    using Newtonsoft.Json;
++
++    /// <summary>
++    /// Response for the GET /errors/top endpoint.
++    /// Returns the top-N error codes from failed runs within the specified period.
++    /// </summary>
++    public class InsightsTopErrorsResponse
++    {
++        /// <summary>Gets or sets the top error codes sorted by count descending.</summary>
++        [JsonProperty("topErrors")]
++        public IList<ErrorCountEntry> TopErrors { get; set; } = new List<ErrorCountEntry>();
++    }
++}
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs
+index e324fa69..ffeccd71 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs
+@@ -15,9 +15,5 @@ namespace Microsoft.LiveTable.Service.Trends.Models
+         /// <summary>Gets or sets the daily run counts grouped by status.</summary>
+         [JsonProperty("dailyTrend")]
+         public IList<DailyTrendEntry> DailyTrend { get; set; } = new List<DailyTrendEntry>();
+-
+-        /// <summary>Gets or sets the top error codes by count.</summary>
+-        [JsonProperty("topErrors")]
+-        public IList<ErrorCountEntry> TopErrors { get; set; } = new List<ErrorCountEntry>();
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs b/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
+index 9c0d0970..cfe729f9 100644
+--- a/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
++++ b/Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs
+@@ -348,6 +348,7 @@ namespace Microsoft.LiveTable.Service.Trends
+             string mwcToken,
+             string startDate,
+             string endDate,
++            string prevStartDate,
+             CancellationToken cancellationToken)
+         {
+             SqlConnection connection = null;
+@@ -361,6 +362,7 @@ namespace Microsoft.LiveTable.Service.Trends
+                 command.CommandTimeout = DefaultCommandTimeoutSeconds;
+                 command.Parameters.AddWithValue("@startDate", startDate);
+                 command.Parameters.AddWithValue("@endDate", endDate);
++                command.Parameters.AddWithValue("@prevStartDate", prevStartDate);
+ 
+                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                 var response = new InsightsSummaryResponse();
+@@ -374,11 +376,36 @@ namespace Microsoft.LiveTable.Service.Trends
+ 
+                     int completedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("completedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("completedRuns"));
+                     double avgDurMs = await reader.IsDBNullAsync(reader.GetOrdinal("avgDurationMs"), cancellationToken) ? 0 : reader.GetDouble(reader.GetOrdinal("avgDurationMs"));
++                    string lastUpdatedAtStr = await GetStringOrNullAsync(reader, "lastUpdatedAt", cancellationToken);
+ 
++                    response.CompletedRuns = completedRuns;
+                     response.SuccessRatePct = response.TotalRuns > 0
+                         ? Math.Round((double)completedRuns / response.TotalRuns * 100, 1)
+                         : 0;
+                     response.AvgDurationMin = Math.Round(avgDurMs / 60000.0, 1);
++                    response.LastUpdatedAt = DateTime.TryParse(lastUpdatedAtStr, out var lua) ? lua : null;
++
++                    // Previous period values for delta computation
++                    int prevTotalRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevTotalRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevTotalRuns"));
++                    int prevCompletedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevCompletedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevCompletedRuns"));
++                    int prevFailedRuns = await reader.IsDBNullAsync(reader.GetOrdinal("prevFailedRuns"), cancellationToken) ? 0 : reader.GetInt32(reader.GetOrdinal("prevFailedRuns"));
++                    double prevAvgDurMs = await reader.IsDBNullAsync(reader.GetOrdinal("prevAvgDurationMs"), cancellationToken) ? 0 : reader.GetDouble(reader.GetOrdinal("prevAvgDurationMs"));
++
++                    // Compute deltas only when previous period has data
++                    if (prevTotalRuns > 0)
++                    {
++                        response.TotalRunsDeltaPct = ComputeDeltaPct(response.TotalRuns, prevTotalRuns);
++
++                        double prevSuccessRate = Math.Round((double)prevCompletedRuns / prevTotalRuns * 100, 1);
++                        response.SuccessRateDeltaPct = Math.Round(response.SuccessRatePct - prevSuccessRate, 1);
++
++                        response.FailedRunsDeltaPct = ComputeDeltaPct(response.FailedRuns, prevFailedRuns);
++
++                        double prevAvgDurMin = Math.Round(prevAvgDurMs / 60000.0, 1);
++                        response.AvgDurationDeltaPct = prevAvgDurMin > 0
++                            ? ComputeDeltaPct(response.AvgDurationMin, prevAvgDurMin)
++                            : null;
++                    }
+                 }
+ 
+                 return response;
+@@ -400,7 +427,7 @@ namespace Microsoft.LiveTable.Service.Trends
+ 
+         /// <inheritdoc />
+         [ExcludeFromCodeCoverage]
+-        public async Task<IList<InsightsRunResponse>> GetRunsAsync(
++        public async Task<InsightsRunsPageResponse> GetRunsAsync(
+             string tenantId,
+             Guid workspaceId,
+             Guid artifactId,
+@@ -419,45 +446,58 @@ namespace Microsoft.LiveTable.Service.Trends
+                 connection = await this.GetConnectionAsync(tenantId, workspaceId, artifactId, mwcToken, cancellationToken);
+ 
+                 int statusCount = statuses?.Count ?? 0;
++
++                // Wrap displayName for LIKE partial match (null stays null for "no filter").
++                // Escape SQL LIKE wildcards so user-supplied %, _, [ are treated as literals.
++                string displayNameParam = displayName != null ? $"%{EscapeLikePattern(displayName)}%" : null;
++
++                var response = new InsightsRunsPageResponse();
++
++                // Query 1: Total count for pagination
++                {
+ #pragma warning disable CA2100
+-                await using var command = new SqlCommand(InsightsQueryBuilder.BuildRunsQuery(statusCount), connection);
++                    await using var countCmd = new SqlCommand(InsightsQueryBuilder.BuildRunsCountQuery(statusCount), connection);
+ #pragma warning restore CA2100
+-                command.CommandTimeout = DefaultCommandTimeoutSeconds;
+-                command.Parameters.AddWithValue("@startDate", startDate);
+-                command.Parameters.AddWithValue("@endDate", endDate);
+-                for (int i = 0; i < statusCount; i++)
+-                {
+-                    command.Parameters.AddWithValue($"@status{i}", statuses[i]);
++                    countCmd.CommandTimeout = DefaultCommandTimeoutSeconds;
++                    AddRunsFilterParameters(countCmd, startDate, endDate, statuses, statusCount, displayNameParam);
++                    var countResult = await countCmd.ExecuteScalarAsync(cancellationToken);
++                    response.TotalCount = countResult != null && countResult != DBNull.Value ? (int)Convert.ToInt64(countResult) : 0;
+                 }
+ 
+-                command.Parameters.AddWithValue("@displayName", (object)displayName ?? DBNull.Value);
+-                command.Parameters.AddWithValue("@offset", offset);
+-                command.Parameters.AddWithValue("@pageSize", pageSize);
++                // Query 2: Paginated data
++                {
++#pragma warning disable CA2100
++                    await using var command = new SqlCommand(InsightsQueryBuilder.BuildRunsQuery(statusCount), connection);
++#pragma warning restore CA2100
++                    command.CommandTimeout = DefaultCommandTimeoutSeconds;
++                    AddRunsFilterParameters(command, startDate, endDate, statuses, statusCount, displayNameParam);
++                    command.Parameters.AddWithValue("@offset", offset);
++                    command.Parameters.AddWithValue("@pageSize", pageSize);
+ 
+-                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+-                var runs = new List<InsightsRunResponse>();
++                    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+ 
+-                while (await reader.ReadAsync(cancellationToken))
+-                {
+-                    runs.Add(new InsightsRunResponse
++                    while (await reader.ReadAsync(cancellationToken))
+                     {
+-                        IterationId = await GetStringOrNullAsync(reader, "iteration_id", cancellationToken),
+-                        DisplayName = await GetStringOrNullAsync(reader, "display_name", cancellationToken),
+-                        Status = await GetStringOrNullAsync(reader, "status", cancellationToken),
+-                        StartedAt = DateTime.TryParse(await GetStringOrNullAsync(reader, "started_at", cancellationToken), out var sa) ? sa : null,
+-                        EndedAt = DateTime.TryParse(await GetStringOrNullAsync(reader, "ended_at", cancellationToken), out var ea) ? ea : null,
+-                        DurationMs = await GetLongOrNullAsync(reader, "duration_ms", cancellationToken),
+-                        RefreshMode = await GetStringOrNullAsync(reader, "refresh_mode", cancellationToken),
+-                        ErrorCode = await GetStringOrNullAsync(reader, "error_code", cancellationToken),
+-                        ErrorSource = await GetStringOrNullAsync(reader, "error_source", cancellationToken),
+-                        TotalNodes = await GetIntOrNullAsync(reader, "total_nodes", cancellationToken),
+-                        SucceededNodes = await GetIntOrNullAsync(reader, "succeeded_nodes", cancellationToken),
+-                        FailedNodes = await GetIntOrNullAsync(reader, "failed_nodes", cancellationToken),
+-                        SkippedNodes = await GetIntOrNullAsync(reader, "skipped_nodes", cancellationToken),
+-                    });
++                        response.Items.Add(new InsightsRunResponse
++                        {
++                            IterationId = await GetStringOrNullAsync(reader, "iteration_id", cancellationToken),
++                            DisplayName = await GetStringOrNullAsync(reader, "display_name", cancellationToken),
++                            Status = await GetStringOrNullAsync(reader, "status", cancellationToken),
++                            StartedAt = DateTime.TryParse(await GetStringOrNullAsync(reader, "started_at", cancellationToken), out var sa) ? sa : null,
++                            EndedAt = DateTime.TryParse(await GetStringOrNullAsync(reader, "ended_at", cancellationToken), out var ea) ? ea : null,
++                            DurationMs = await GetLongOrNullAsync(reader, "duration_ms", cancellationToken),
++                            ErrorCode = await GetStringOrNullAsync(reader, "error_code", cancellationToken),
++                            ErrorMessage = await GetStringOrNullAsync(reader, "error_message", cancellationToken),
++                            ErrorSource = await GetStringOrNullAsync(reader, "error_source", cancellationToken),
++                            TotalNodes = await GetIntOrNullAsync(reader, "total_nodes", cancellationToken),
++                            SucceededNodes = await GetIntOrNullAsync(reader, "succeeded_nodes", cancellationToken),
++                            FailedNodes = await GetIntOrNullAsync(reader, "failed_nodes", cancellationToken),
++                            SkippedNodes = await GetIntOrNullAsync(reader, "skipped_nodes", cancellationToken),
++                        });
++                    }
+                 }
+ 
+-                return runs;
++                return response;
+             }
+             catch (SqlException ex) when (IsTableNotFoundError(ex))
+             {
+@@ -483,6 +523,7 @@ namespace Microsoft.LiveTable.Service.Trends
+             string mwcToken,
+             string startDate,
+             string endDate,
++            string groupBy,
+             CancellationToken cancellationToken)
+         {
+             SqlConnection connection = null;
+@@ -492,10 +533,10 @@ namespace Microsoft.LiveTable.Service.Trends
+ 
+                 var response = new InsightsTrendsResponse();
+ 
+-                // Query 1: Daily trend — block scope ensures reader is disposed before next query
++                // Query: Daily/weekly trend
+                 {
+ #pragma warning disable CA2100
+-                    await using var trendCmd = new SqlCommand(InsightsQueryBuilder.BuildDailyTrendQuery(), connection);
++                    await using var trendCmd = new SqlCommand(InsightsQueryBuilder.BuildDailyTrendQuery(groupBy), connection);
+ #pragma warning restore CA2100
+                     trendCmd.CommandTimeout = DefaultCommandTimeoutSeconds;
+                     trendCmd.Parameters.AddWithValue("@startDate", startDate);
+@@ -514,23 +555,57 @@ namespace Microsoft.LiveTable.Service.Trends
+                     }
+                 }
+ 
+-                // Query 2: Top errors
+-                {
++                return response;
++            }
++            catch (SqlException ex) when (IsTableNotFoundError(ex))
++            {
++                throw new InsightsTableNotReadyException("System tables not yet created.", ex);
++            }
++            catch (SqlException ex)
++            {
++                Tracer.LogSanitizedError(ex, "[Insights] SQL error in GetTrends. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
++                throw;
++            }
++            finally
++            {
++                await this.DisposeConnectionAsync(connection);
++            }
++        }
++
++        /// <inheritdoc/>
++        [ExcludeFromCodeCoverage]
++        public async Task<InsightsTopErrorsResponse> GetTopErrorsAsync(
++            string tenantId,
++            Guid workspaceId,
++            Guid artifactId,
++            string mwcToken,
++            string startDate,
++            string endDate,
++            int limit,
++            CancellationToken cancellationToken)
++        {
++            SqlConnection connection = null;
++            try
++            {
++                connection = await this.GetConnectionAsync(tenantId, workspaceId, artifactId, mwcToken, cancellationToken);
++
++                var response = new InsightsTopErrorsResponse();
++
+ #pragma warning disable CA2100
+-                    await using var errCmd = new SqlCommand(InsightsQueryBuilder.BuildTopErrorsQuery(), connection);
++                await using var errCmd = new SqlCommand(InsightsQueryBuilder.BuildTopErrorsQuery(limit), connection);
+ #pragma warning restore CA2100
+-                    errCmd.CommandTimeout = DefaultCommandTimeoutSeconds;
+-                    errCmd.Parameters.AddWithValue("@startDate", startDate);
+-                    errCmd.Parameters.AddWithValue("@endDate", endDate);
+-                    await using var errReader = await errCmd.ExecuteReaderAsync(cancellationToken);
+-                    while (await errReader.ReadAsync(cancellationToken))
++                errCmd.CommandTimeout = DefaultCommandTimeoutSeconds;
++                errCmd.Parameters.AddWithValue("@startDate", startDate);
++                errCmd.Parameters.AddWithValue("@endDate", endDate);
++                await using var errReader = await errCmd.ExecuteReaderAsync(cancellationToken);
++                while (await errReader.ReadAsync(cancellationToken))
++                {
++                    response.TopErrors.Add(new ErrorCountEntry
+                     {
+-                        response.TopErrors.Add(new ErrorCountEntry
+-                        {
+-                            ErrorCode = await GetStringOrNullAsync(errReader, "error_code", cancellationToken),
+-                            Count = errReader.GetInt32(errReader.GetOrdinal("count")),
+-                        });
+-                    }
++                        ErrorCode = await GetStringOrNullAsync(errReader, "error_code", cancellationToken),
++                        ErrorSource = await GetStringOrNullAsync(errReader, "error_source", cancellationToken),
++                        Count = errReader.GetInt32(errReader.GetOrdinal("count")),
++                    });
+                 }
+ 
+                 return response;
+@@ -541,7 +616,7 @@ namespace Microsoft.LiveTable.Service.Trends
+             }
+             catch (SqlException ex)
+             {
+-                Tracer.LogSanitizedError(ex, "[Insights] SQL error in GetTrends. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
++                Tracer.LogSanitizedError(ex, "[Insights] SQL error in GetTopErrors. WorkspaceId={0}, ArtifactId={1}", workspaceId, artifactId);
+                 throw;
+             }
+             finally
+@@ -550,6 +625,36 @@ namespace Microsoft.LiveTable.Service.Trends
+             }
+         }
+ 
++        /// <summary>
++        /// Escapes SQL LIKE wildcard characters so they are treated as literals.
++        /// Brackets [ are escaped first to avoid interfering with subsequent escapes.
++        /// </summary>
++        /// <param name="input">The raw user-supplied search string.</param>
++        /// <returns>The escaped string safe for use inside a LIKE pattern.</returns>
++        internal static string EscapeLikePattern(string input)
++        {
++            return input
++                .Replace("[", "[[]")
++                .Replace("%", "[%]")
++                .Replace("_", "[_]");
++        }
++
++        /// <summary>
++        /// Computes percentage change: ((current - previous) / previous) * 100, rounded to 1 decimal.
++        /// </summary>
++        /// <param name="current">The current period value.</param>
++        /// <param name="previous">The previous period value.</param>
++        /// <returns>Percentage change, or 100 if previous is zero with positive current, or null if both are zero.</returns>
++        internal static double? ComputeDeltaPct(double current, double previous)
++        {
++            if (previous == 0)
++            {
++                return current > 0 ? 100.0 : null;
++            }
++
++            return Math.Round(((current - previous) / previous) * 100, 1);
++        }
++
+         [ExcludeFromCodeCoverage]
+         private static bool IsTableNotFoundError(SqlException ex)
+         {
+@@ -564,6 +669,28 @@ namespace Microsoft.LiveTable.Service.Trends
+             return false;
+         }
+ 
++        /// <summary>
++        /// Adds shared filter parameters used by both the runs data query and runs count query.
++        /// </summary>
++        private static void AddRunsFilterParameters(
++            SqlCommand command,
++            string startDate,
++            string endDate,
++            IList<string> statuses,
++            int statusCount,
++            string displayNameParam)
++        {
++            command.Parameters.AddWithValue("@startDate", startDate);
++            command.Parameters.AddWithValue("@endDate", endDate);
++
++            for (int i = 0; i < statusCount; i++)
++            {
++                command.Parameters.AddWithValue($"@status{i}", statuses[i]);
++            }
++
++            command.Parameters.AddWithValue("@displayName", (object)displayNameParam ?? DBNull.Value);
++        }
++
+         [ExcludeFromCodeCoverage]
+         private static async Task<string> GetStringOrNullAsync(SqlDataReader reader, string column, CancellationToken cancellationToken)
+         {
+diff --git a/Service/Microsoft.LiveTable.Service/WorkloadApp.cs b/Service/Microsoft.LiveTable.Service/WorkloadApp.cs
+index 5ccaf992..bb6b355f 100644
+--- a/Service/Microsoft.LiveTable.Service/WorkloadApp.cs
++++ b/Service/Microsoft.LiveTable.Service/WorkloadApp.cs
+@@ -127,6 +127,7 @@ namespace Microsoft.LiveTable.Service
+             WireUp.RegisterSingletonType<ITokenManager, TokenManager>();
+             WireUp.RegisterSingletonType<IQueryService, SqlEndpointQueryService>();
+             WireUp.RegisterSingletonType<IInsightsQueryService, SqlEndpointQueryService>();
++
+             WireUp.RegisterSingletonType<IOneLakeRestClient, OneLakeRestClient>();
+             WireUp.RegisterSingletonType<IThrottlingService, HierarchicalThrottlingService>();
+             WireUp.RegisterSingletonType<OneLakeRetryPolicyProvider>();
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs
+index 3ac9cd7a..982b80b2 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs
+@@ -1,4 +1,4 @@
+-// <copyright file="LiveTableInsightsControllerTests.cs" company="Microsoft">
++﻿// <copyright file="LiveTableInsightsControllerTests.cs" company="Microsoft">
+ // Copyright (c) Microsoft. All rights reserved.
+ // </copyright>
+ 
+@@ -7,6 +7,9 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+     using System;
+     using System.Collections.Generic;
+     using System.Diagnostics.CodeAnalysis;
++    using System.Linq;
++    using System.Net;
++    using System.Reflection;
+     using System.Threading;
+     using System.Threading.Tasks;
+     using Microsoft.Analytics.LiveTable.Service.Controllers;
+@@ -14,8 +17,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+     using Microsoft.AspNetCore.Mvc;
+     using Microsoft.Data.SqlClient;
+     using Microsoft.LiveTable.Service.Common;
++    using Microsoft.LiveTable.Service.Common.Annotations;
+     using Microsoft.LiveTable.Service.FeatureFlightProvider;
+     using Microsoft.LiveTable.Service.Telemetry;
++    using Microsoft.LiveTable.Service.Throttling;
+     using Microsoft.LiveTable.Service.Throttling.Services;
+     using Microsoft.LiveTable.Service.Trends;
+     using Microsoft.LiveTable.Service.Trends.Models;
+@@ -134,7 +139,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         public async Task GetSummaryAsync_SqlException_ReturnsInternalServerError()
+         {
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ThrowsAsync(CreateSqlException());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -153,7 +158,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         public async Task GetSummaryAsync_UnauthorizedAccessException_ReturnsInternalServerError()
+         {
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ThrowsAsync(new UnauthorizedAccessException("Could not extract user AAD token"));
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -242,7 +247,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         {
+             this.mockQueryService
+                 .Setup(q => q.GetRunsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+-                .ReturnsAsync(new List<InsightsRunResponse>());
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = new List<InsightsRunResponse>(), TotalCount = 0 });
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId, pageSize: 999);
+@@ -296,7 +301,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         public async Task GetTrendsAsync_SqlException_ReturnsInternalServerError()
+         {
+             this.mockQueryService
+-                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ThrowsAsync(CreateSqlException());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -315,7 +320,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         public async Task GetTrendsAsync_UnauthorizedAccessException_ReturnsInternalServerError()
+         {
+             this.mockQueryService
+-                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ThrowsAsync(new UnauthorizedAccessException("Could not extract user AAD token"));
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -334,7 +339,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         public async Task GetSummaryAsync_TableNotFound_ReturnsEmptySummary()
+         {
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ThrowsAsync(new InsightsTableNotReadyException("Tables not created", new Exception("test")));
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -361,7 +366,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+ 
+             var okResult = result as OkObjectResult;
+             Assert.IsNotNull(okResult, "Should return 200 OK when tables don't exist.");
+-            Assert.IsInstanceOfType(okResult.Value, typeof(List<InsightsRunResponse>));
++            Assert.IsInstanceOfType(okResult.Value, typeof(InsightsRunsPageResponse));
+         }
+ 
+         /// <summary>
+@@ -372,7 +377,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         public async Task GetTrendsAsync_TableNotFound_ReturnsEmptyTrends()
+         {
+             this.mockQueryService
+-                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ThrowsAsync(new InsightsTableNotReadyException("Tables not created", new Exception("test")));
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -400,7 +405,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 CancelledRuns = 1,
+             };
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(expected);
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -432,7 +437,6 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                     StartedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                     EndedAt = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc),
+                     DurationMs = 3600000,
+-                    RefreshMode = "Full",
+                     ErrorCode = null,
+                     ErrorSource = null,
+                     TotalNodes = 10,
+@@ -448,7 +452,6 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                     StartedAt = new DateTime(2024, 1, 2, 0, 0, 0, DateTimeKind.Utc),
+                     EndedAt = new DateTime(2024, 1, 2, 0, 30, 0, DateTimeKind.Utc),
+                     DurationMs = 1800000,
+-                    RefreshMode = "Optimal",
+                     ErrorCode = "ERR001",
+                     ErrorSource = "System",
+                     TotalNodes = 5,
+@@ -459,16 +462,16 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             };
+             this.mockQueryService
+                 .Setup(q => q.GetRunsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+-                .ReturnsAsync(expected);
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = expected, TotalCount = expected.Count });
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId);
+ 
+             var okResult = result as OkObjectResult;
+             Assert.IsNotNull(okResult, "Should return 200 OK.");
+-            var runs = okResult.Value as IList<InsightsRunResponse>;
+-            Assert.IsNotNull(runs);
+-            Assert.AreEqual(2, runs.Count);
++            var pageResponse = okResult.Value as InsightsRunsPageResponse;
++            Assert.IsNotNull(pageResponse);
++            Assert.AreEqual(2, pageResponse.Items.Count);
+         }
+ 
+         /// <summary>
+@@ -480,9 +483,8 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         {
+             var expected = new InsightsTrendsResponse();
+             expected.DailyTrend.Add(new DailyTrendEntry { RunDate = "2024-01-01", Completed = 5, Failed = 1, Skipped = 2, Cancelled = 1 });
+-            expected.TopErrors.Add(new ErrorCountEntry { ErrorCode = "ERR001", Count = 3 });
+             this.mockQueryService
+-                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(expected);
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -493,7 +495,6 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             var trends = okResult.Value as InsightsTrendsResponse;
+             Assert.IsNotNull(trends);
+             Assert.AreEqual(1, trends.DailyTrend.Count);
+-            Assert.AreEqual(1, trends.TopErrors.Count);
+         }
+ 
+         /// <summary>
+@@ -533,7 +534,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         {
+             this.mockQueryService
+                 .Setup(q => q.GetRunsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+-                .ReturnsAsync(new List<InsightsRunResponse>());
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = new List<InsightsRunResponse>(), TotalCount = 0 });
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId, pageSize: 0);
+@@ -558,7 +559,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         {
+             this.mockQueryService
+                 .Setup(q => q.GetRunsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+-                .ReturnsAsync(new List<InsightsRunResponse>());
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = new List<InsightsRunResponse>(), TotalCount = 0 });
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId, page: -1);
+@@ -738,22 +739,33 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         {
+             var expectedStart = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+             var expectedEnd = new DateTime(2024, 3, 10, 0, 0, 0, DateTimeKind.Utc);
++            string capturedStartDate = null;
++            string capturedEndDate = null;
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), "2024-03-01", "2024-03-10", It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(
++                    TestTenantId,
++                    TestWorkspaceId,
++                    TestArtifactId,
++                    It.IsAny<string>(),
++                    It.IsAny<string>(),
++                    It.IsAny<string>(),
++                    It.IsAny<string>(),
++                    It.IsAny<CancellationToken>()))
++                .Callback<string, Guid, Guid, string, string, string, string, CancellationToken>(
++                    (t, w, a, tok, start, end, prev, ct) =>
++                    {
++                        capturedStartDate = start;
++                        capturedEndDate = end;
++                    })
+                 .ReturnsAsync(new InsightsSummaryResponse());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetSummaryAsync(TestWorkspaceId, TestArtifactId, dateRange: 7, startTime: expectedStart, endTime: expectedEnd);
+ 
+             var okResult = result as OkObjectResult;
+-            Assert.IsNotNull(okResult, "Should return 200 OK.");
+-
+-#pragma warning disable VSTHRD110 // Observe result of async calls — Moq Verify lambda is not actually invoked
+-            this.mockQueryService.Verify(
+-                q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), "2024-03-01", "2024-03-10", It.IsAny<CancellationToken>()),
+-                Times.Once,
+-                "GetSummaryAsync should be called with startDate/endDate from startTime/endTime.");
+-#pragma warning restore VSTHRD110
++            Assert.IsNotNull(okResult, "Should return 200 OK when startTime/endTime override dateRange.");
++            Assert.AreEqual("2024-03-01", capturedStartDate, "startDate should come from startTime, not dateRange.");
++            Assert.AreEqual("2024-03-10", capturedEndDate, "endDate should come from endTime, not dateRange.");
+         }
+ 
+         /// <summary>
+@@ -766,7 +778,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             var expectedStart = DateTime.UtcNow.Date.AddDays(-7);
+             var startStr = expectedStart.ToString("yyyy-MM-dd");
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), startStr, It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), startStr, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(new InsightsSummaryResponse());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -786,7 +798,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             var endDate = new DateTime(2024, 3, 10, 0, 0, 0, DateTimeKind.Utc);
+             var expectedStart = "2024-03-04"; // endDate - (DefaultDateRangeDays - 1) = 2024-03-10 - 6 = 2024-03-04
+             this.mockQueryService
+-                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), expectedStart, "2024-03-10", It.IsAny<CancellationToken>()))
++                .Setup(q => q.GetSummaryAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), expectedStart, "2024-03-10", It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(new InsightsSummaryResponse());
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+@@ -852,7 +864,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                     It.IsAny<int>(),
+                     It.IsAny<int>(),
+                     It.IsAny<CancellationToken>()))
+-                .ReturnsAsync(new List<InsightsRunResponse>());
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = new List<InsightsRunResponse>(), TotalCount = 0 });
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId, statuses: "Failed,Cancelled");
+@@ -913,7 +925,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                     It.IsAny<int>(),
+                     It.IsAny<int>(),
+                     It.IsAny<CancellationToken>()))
+-                .ReturnsAsync(new List<InsightsRunResponse>());
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = new List<InsightsRunResponse>(), TotalCount = 0 });
+             var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
+ 
+             var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId, statuses: string.Empty);
+@@ -940,6 +952,336 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+ #pragma warning restore VSTHRD110
+         }
+ 
++        // ===================================================================
++        // ===================================================================
++        // R3 — totalCount in response
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies GetRunsAsync returns 200 OK with correct TotalCount and Items count.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetRunsAsync_ValidInputs_ReturnsTotalCount()
++        {
++            var items = new List<InsightsRunResponse>
++            {
++                new InsightsRunResponse { IterationId = "run1" },
++                new InsightsRunResponse { IterationId = "run2" },
++            };
++            this.mockQueryService
++                .Setup(q => q.GetRunsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IList<string>>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new InsightsRunsPageResponse { Items = items, TotalCount = 42 });
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetRunsAsync(TestWorkspaceId, TestArtifactId);
++
++            var okResult = result as OkObjectResult;
++            Assert.IsNotNull(okResult, "Should return 200 OK.");
++            var pageResponse = okResult.Value as InsightsRunsPageResponse;
++            Assert.IsNotNull(pageResponse);
++            Assert.AreEqual(42, pageResponse.TotalCount);
++            Assert.AreEqual(2, pageResponse.Items.Count);
++        }
++
++        // ===================================================================
++        // Standalone GET /errors/top endpoint
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 200 OK with top error codes from the service.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_ValidInputs_ReturnsOkWithErrors()
++        {
++            var expected = new InsightsTopErrorsResponse();
++            expected.TopErrors.Add(new ErrorCountEntry { ErrorCode = "ERR001", Count = 5 });
++            expected.TopErrors.Add(new ErrorCountEntry { ErrorCode = "ERR002", Count = 2 });
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(expected);
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++
++            var okResult = result as OkObjectResult;
++            Assert.IsNotNull(okResult, "Should return 200 OK.");
++            var errors = okResult.Value as InsightsTopErrorsResponse;
++            Assert.IsNotNull(errors);
++            Assert.AreEqual(2, errors.TopErrors.Count);
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync passes custom limit to the query service.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_CustomLimit_PassesToQueryService()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new InsightsTopErrorsResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, limit: 10);
++
++            var okResult = result as OkObjectResult;
++            Assert.IsNotNull(okResult, "Should return 200 OK.");
++
++#pragma warning disable VSTHRD110 // Observe result of async calls — Moq Verify lambda is not actually invoked
++            this.mockQueryService.Verify(
++                q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 10, It.IsAny<CancellationToken>()),
++                Times.Once,
++                "GetTopErrorsAsync should be called with limit matching 10.");
++#pragma warning restore VSTHRD110
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 400 when workspaceId is empty.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_EmptyWorkspaceId_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(Guid.Empty, TestArtifactId);
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 200 with empty response when sys tables don't exist.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_TableNotFound_ReturnsEmptyErrors()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ThrowsAsync(new InsightsTableNotReadyException("Tables not created", new Exception("test")));
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++
++            var okResult = result as OkObjectResult;
++            Assert.IsNotNull(okResult, "Should return 200 OK when tables don't exist.");
++            Assert.IsInstanceOfType(okResult.Value, typeof(InsightsTopErrorsResponse));
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 500 when SQL query fails.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_SqlException_ReturnsInternalServerError()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ThrowsAsync(CreateSqlException());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++
++            var statusResult = result as ObjectResult;
++            Assert.IsNotNull(statusResult);
++            Assert.AreEqual(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 500 when SQL endpoint auth fails.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_UnauthorizedAccessException_ReturnsInternalServerError()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ThrowsAsync(new UnauthorizedAccessException("Token extraction failed."));
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++
++            var statusResult = result as ObjectResult;
++            Assert.IsNotNull(statusResult);
++            Assert.AreEqual(StatusCodes.Status500InternalServerError, statusResult.StatusCode);
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 429 when throttled.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_Throttled_Returns429()
++        {
++            var blockedResponse = new ObjectResult("Too many requests") { StatusCode = 429 };
++            this.mockThrottlingService
++                .Setup(t => t.CheckAndApplyThrottlingAsync(It.IsAny<string>(), It.IsAny<HttpContext>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(ThrottlingEvaluationResult.Blocked(blockedResponse));
++            this.mockFeatureFlighter
++                .Setup(f => f.IsEnabled(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()))
++                .Returns(true);
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++
++            Assert.AreSame(blockedResponse, result);
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync uses the correct throttling policy (GetInsightsTopErrorsPolicy).
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_UsesCorrectThrottlingPolicy()
++        {
++            var blockedResponse = new ObjectResult("Too many requests") { StatusCode = 429 };
++            this.mockThrottlingService
++                .Setup(t => t.CheckAndApplyThrottlingAsync(ThrottlingConstants.GetInsightsTopErrorsPolicy, It.IsAny<HttpContext>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(ThrottlingEvaluationResult.Blocked(blockedResponse));
++            this.mockFeatureFlighter
++                .Setup(f => f.IsEnabled(It.IsAny<string>(), It.IsAny<Guid?>(), It.IsAny<Guid?>(), It.IsAny<Guid?>()))
++                .Returns(true);
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId);
++
++            Assert.AreSame(blockedResponse, result, "Should return blocked response when GetInsightsTopErrorsPolicy is throttled.");
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 400 when dateRange is zero.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_DateRangeZero_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, dateRange: 0);
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync returns 400 when dateRange exceeds maximum.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_DateRangeTooLarge_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, dateRange: 999);
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync clamps limit to max when over 20.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_LimitOver20_ClampedToMax()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new InsightsTopErrorsResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, limit: 100);
++
++#pragma warning disable VSTHRD110 // Observe result of async calls — Moq Verify lambda is not actually invoked
++            this.mockQueryService.Verify(
++                q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 20, It.IsAny<CancellationToken>()),
++                Times.Once,
++                "Limit should be clamped to MaxTopErrorsLimit (20).");
++#pragma warning restore VSTHRD110
++        }
++
++        /// <summary>
++        /// Verifies GetTopErrorsAsync clamps limit to 1 when 0 is passed.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTopErrorsAsync_LimitZero_ClampedToMin()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new InsightsTopErrorsResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            await controller.GetTopErrorsAsync(TestWorkspaceId, TestArtifactId, limit: 0);
++
++#pragma warning disable VSTHRD110 // Observe result of async calls — Moq Verify lambda is not actually invoked
++            this.mockQueryService.Verify(
++                q => q.GetTopErrorsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), 1, It.IsAny<CancellationToken>()),
++                Times.Once,
++                "Limit should be clamped to 1 when 0 is passed.");
++#pragma warning restore VSTHRD110
++        }
++
++        // ===================================================================
++        // T2 — groupBy validation
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies GetTrendsAsync returns 400 when an invalid groupBy value is provided.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTrendsAsync_InvalidGroupBy_ReturnsBadRequest()
++        {
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTrendsAsync(TestWorkspaceId, TestArtifactId, groupBy: "month");
++
++            Assert.IsInstanceOfType(result, typeof(BadRequestObjectResult));
++        }
++
++        /// <summary>
++        /// Verifies GetTrendsAsync passes groupBy "week" to the query service and returns 200 OK.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous test operation.</returns>
++        [TestMethod]
++        public async Task GetTrendsAsync_WeekGroupBy_PassesToQueryService()
++        {
++            this.mockQueryService
++                .Setup(q => q.GetTrendsAsync(TestTenantId, TestWorkspaceId, TestArtifactId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new InsightsTrendsResponse());
++            var controller = CreateControllerWithContext(TestTenantId, "fake-mwc-token");
++
++            var result = await controller.GetTrendsAsync(TestWorkspaceId, TestArtifactId, groupBy: "week");
++
++            var okResult = result as OkObjectResult;
++            Assert.IsNotNull(okResult, "Should return 200 OK with groupBy 'week'.");
++        }
++
++        // ===================================================================
++        // X3 — Feature gate attribute uses NotFound status code
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies the FeatureGateAttribute on the controller class uses HttpStatusCode.NotFound.
++        /// </summary>
++        [TestMethod]
++        public void ControllerClass_FeatureGateAttribute_UsesNotFoundStatusCode()
++        {
++            // Use CustomAttributeData to read attribute metadata without invoking the constructor
++            // (the constructor calls WireUp.Resolve which requires DI to be fully configured).
++            var attrData = typeof(LiveTableInsightsController)
++                .GetCustomAttributesData()
++                .FirstOrDefault(a => a.AttributeType == typeof(FeatureGateAttribute));
++            Assert.IsNotNull(attrData, "LiveTableInsightsController should have a FeatureGateAttribute.");
++
++            // FeatureGateAttribute(string featureName, HttpStatusCode errorCode, string errorMessage)
++            // errorCode is the 2nd positional constructor argument (index 1).
++            Assert.IsTrue(attrData.ConstructorArguments.Count >= 2, "FeatureGateAttribute should have at least 2 constructor arguments.");
++            var errorCode = (HttpStatusCode)attrData.ConstructorArguments[1].Value;
++            Assert.AreEqual(HttpStatusCode.NotFound, errorCode, "FeatureGateAttribute should use HttpStatusCode.NotFound.");
++        }
++
+         /// <summary>
+         /// Creates a <see cref="LiveTableInsightsController"/> with a configured <see cref="HttpContext"/>.
+         /// Sets up <see cref="CustomerCapacityAsyncLocalContext"/> and auth header.
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
+index 60d4acf4..b34f64bb 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs
+@@ -1,10 +1,12 @@
+-// <copyright file="InsightsQueryBuilderTests.cs" company="Microsoft">
++﻿// <copyright file="InsightsQueryBuilderTests.cs" company="Microsoft">
+ // Copyright (c) Microsoft. All rights reserved.
+ // </copyright>
+ 
+ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+ {
++    using System;
+     using Microsoft.LiveTable.Service.Trends;
++    using Microsoft.LiveTable.Service.Trends.Models;
+     using Microsoft.VisualStudio.TestTools.UnitTesting;
+ 
+     /// <summary>
+@@ -112,7 +114,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+         public void BuildRunsQuery_SupportsNullableDisplayNameFilter()
+         {
+             var query = InsightsQueryBuilder.BuildRunsQuery(0);
+-            Assert.IsTrue(query.Contains("@displayName IS NULL OR display_name = @displayName"), "Should handle nullable displayName filter.");
++            Assert.IsTrue(query.Contains("@displayName IS NULL OR display_name LIKE @displayName"), "Should handle nullable displayName filter with LIKE.");
+         }
+ 
+         /// <summary>
+@@ -200,7 +202,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+         public void BuildTopErrorsQuery_GroupsByErrorCodeOrderedByCount()
+         {
+             var query = InsightsQueryBuilder.BuildTopErrorsQuery();
+-            Assert.IsTrue(query.Contains("GROUP BY error_code"), "Should group by error_code.");
++            Assert.IsTrue(query.Contains("GROUP BY error_code, error_source"), "Should group by error_code and error_source.");
+             Assert.IsTrue(query.Contains("ORDER BY count DESC"), "Should order by count descending.");
+         }
+ 
+@@ -223,5 +225,408 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+                 Assert.IsTrue(query.Contains(MlvSystemSchema), $"Query should use bracket notation for _mlv_system schema: {query.Substring(0, 50)}...");
+             }
+         }
++
++        /// <summary>
++        /// Verifies the summary query includes lastUpdatedAt using MAX of written_at.
++        /// </summary>
++        [TestMethod]
++        public void BuildSummaryQuery_IncludesLastUpdatedAt()
++        {
++            var query = InsightsQueryBuilder.BuildSummaryQuery();
++            Assert.IsTrue(query.Contains("lastUpdatedAt"), "Summary query should select lastUpdatedAt.");
++            Assert.IsTrue(query.Contains("written_at"), "Should reference written_at for lastUpdatedAt.");
++        }
++
++        /// <summary>
++        /// Verifies the runs query selects the error_message column.
++        /// </summary>
++        [TestMethod]
++        public void BuildRunsQuery_SelectsErrorMessage()
++        {
++            var query = InsightsQueryBuilder.BuildRunsQuery(0);
++            Assert.IsTrue(query.Contains("error_message"), "Runs query should select error_message column.");
++        }
++
++        /// <summary>
++        /// Verifies the runs query omits refresh_mode IN clause (filter removed; column kept in SELECT).
++        /// </summary>
++        [TestMethod]
++        public void BuildRunsQuery_DoesNotContainRefreshModeFilterClause()
++        {
++            var query = InsightsQueryBuilder.BuildRunsQuery(0);
++            Assert.IsFalse(query.Contains("refresh_mode IN"), "Should not contain refresh_mode IN filter clause.");
++        }
++
++        /// <summary>
++        /// Verifies BuildRunsCountQuery returns a COUNT(*) query without pagination.
++        /// </summary>
++        [TestMethod]
++        public void BuildRunsCountQuery_ReturnsCountQuery()
++        {
++            var query = InsightsQueryBuilder.BuildRunsCountQuery(0);
++            Assert.IsTrue(query.Contains("COUNT(*)"), "Count query should use COUNT(*).");
++            Assert.IsTrue(query.Contains("totalCount"), "Count query should alias as totalCount.");
++            Assert.IsFalse(query.Contains("OFFSET"), "Count query should not have OFFSET.");
++            Assert.IsFalse(query.Contains("FETCH NEXT"), "Count query should not have FETCH NEXT.");
++        }
++
++        /// <summary>
++        /// Verifies BuildRunsCountQuery matches the same filters as BuildRunsQuery.
++        /// </summary>
++        [TestMethod]
++        public void BuildRunsCountQuery_MatchesRunsQueryFilters()
++        {
++            var dataQuery = InsightsQueryBuilder.BuildRunsQuery(2);
++            var countQuery = InsightsQueryBuilder.BuildRunsCountQuery(2);
++            Assert.IsTrue(countQuery.Contains("@status0"), "Count query should have same status params.");
++            Assert.IsTrue(countQuery.Contains("@status1"), "Count query should have same status params.");
++            Assert.IsTrue(countQuery.Contains("@displayName"), "Count query should have displayName filter.");
++        }
++
++        /// <summary>
++        /// Verifies the runs query uses LIKE for partial display name matching.
++        /// </summary>
++        [TestMethod]
++        public void BuildRunsQuery_DisplayNameUsesLikeForPartialMatch()
++        {
++            var query = InsightsQueryBuilder.BuildRunsQuery(0);
++            Assert.IsTrue(query.Contains("LIKE @displayName"), "Should use LIKE for partial display name matching.");
++            Assert.IsFalse(query.Contains("= @displayName"), "Should NOT use exact match for display name.");
++        }
++
++        /// <summary>
++        /// Verifies BuildTopErrorsQuery uses the specified custom limit.
++        /// </summary>
++        [TestMethod]
++        public void BuildTopErrorsQuery_CustomLimit_UsesSpecifiedLimit()
++        {
++            var query = InsightsQueryBuilder.BuildTopErrorsQuery(10);
++            Assert.IsTrue(query.Contains("TOP 10"), "Should use TOP 10 when limit is 10.");
++            Assert.IsFalse(query.Contains("TOP 5"), "Should not use TOP 5 when limit is 10.");
++        }
++
++        /// <summary>
++        /// Verifies BuildTopErrorsQuery clamps to max limit of 20.
++        /// </summary>
++        [TestMethod]
++        public void BuildTopErrorsQuery_ExceedsMaxLimit_ClampedTo20()
++        {
++            var query = InsightsQueryBuilder.BuildTopErrorsQuery(50);
++            Assert.IsTrue(query.Contains("TOP 20"), "Should clamp to TOP 20 when limit exceeds max.");
++        }
++
++        /// <summary>
++        /// Verifies BuildTopErrorsQuery clamps to min limit of 1.
++        /// </summary>
++        [TestMethod]
++        public void BuildTopErrorsQuery_BelowMinLimit_ClampedTo1()
++        {
++            var query = InsightsQueryBuilder.BuildTopErrorsQuery(0);
++            Assert.IsTrue(query.Contains("TOP 1"), "Should clamp to TOP 1 when limit is below min.");
++        }
++
++        /// <summary>
++        /// Verifies ClampTopErrorsLimit returns correctly clamped values.
++        /// </summary>
++        [TestMethod]
++        public void ClampTopErrorsLimit_ReturnsClampedValues()
++        {
++            Assert.AreEqual(1, InsightsQueryBuilder.ClampTopErrorsLimit(0), "Below min should clamp to 1.");
++            Assert.AreEqual(5, InsightsQueryBuilder.ClampTopErrorsLimit(5), "In range should return as-is.");
++            Assert.AreEqual(20, InsightsQueryBuilder.ClampTopErrorsLimit(100), "Above max should clamp to 20.");
++        }
++
++        /// <summary>
++        /// Verifies the daily trend query with default day grouping groups by run_date.
++        /// </summary>
++        [TestMethod]
++        public void BuildDailyTrendQuery_DefaultDay_GroupsByRunDate()
++        {
++            var query = InsightsQueryBuilder.BuildDailyTrendQuery("day");
++            Assert.IsTrue(query.Contains("GROUP BY run_date"), "Day grouping should GROUP BY run_date.");
++        }
++
++        /// <summary>
++        /// Verifies the daily trend query with week grouping uses DATEADD expression.
++        /// </summary>
++        [TestMethod]
++        public void BuildDailyTrendQuery_Week_GroupsByWeek()
++        {
++            var query = InsightsQueryBuilder.BuildDailyTrendQuery("week");
++            Assert.IsTrue(query.Contains("DATEADD"), "Week grouping should use DATEADD expression.");
++            Assert.IsTrue(query.Contains("DATEPART(dw,"), "Week grouping should use DATEPART(dw) for DATEFIRST independence.");
++            Assert.IsTrue(query.Contains("@@DATEFIRST"), "Week grouping should reference @@DATEFIRST for portability.");
++            Assert.IsTrue(query.Contains("CONVERT(VARCHAR(10),"), "Week grouping should use CONVERT with style for deterministic date format.");
++            Assert.IsTrue(query.Contains(", 120)"), "Week grouping should use CONVERT style 120 (yyyy-MM-dd).");
++            Assert.IsFalse(query.Contains("GROUP BY run_date"), "Week grouping should NOT group by plain run_date.");
++        }
++
++        /// <summary>
++        /// Verifies ValidGroupByValues contains the expected values.
++        /// </summary>
++        [TestMethod]
++        public void ValidGroupByValues_ContainsExpectedValues()
++        {
++            Assert.AreEqual(2, InsightsQueryBuilder.ValidGroupByValues.Count, "Should have 2 valid groupBy values.");
++            CollectionAssert.Contains((System.Collections.ICollection)InsightsQueryBuilder.ValidGroupByValues, "day");
++            CollectionAssert.Contains((System.Collections.ICollection)InsightsQueryBuilder.ValidGroupByValues, "week");
++        }
++
++        /// <summary>
++        /// Verifies the runs count query uses bracket notation for schema and tables.
++        /// </summary>
++        [TestMethod]
++        public void BuildRunsCountQuery_UseBracketNotation()
++        {
++            var query = InsightsQueryBuilder.BuildRunsCountQuery(0);
++            Assert.IsTrue(query.Contains("[_mlv_system]"), "Count query should use bracket notation.");
++        }
++
++        /// <summary>
++        /// Verifies EscapeLikePattern escapes %, _, and [ characters.
++        /// </summary>
++        [TestMethod]
++        public void EscapeLikePattern_EscapesWildcards()
++        {
++            Assert.AreEqual("[%]", SqlEndpointQueryService.EscapeLikePattern("%"), "Percent should be escaped.");
++            Assert.AreEqual("[_]", SqlEndpointQueryService.EscapeLikePattern("_"), "Underscore should be escaped.");
++            Assert.AreEqual("[[]", SqlEndpointQueryService.EscapeLikePattern("["), "Open bracket should be escaped.");
++            Assert.AreEqual("hello", SqlEndpointQueryService.EscapeLikePattern("hello"), "Plain text should be unchanged.");
++            Assert.AreEqual("100[%] done", SqlEndpointQueryService.EscapeLikePattern("100% done"), "Percent inside text should be escaped.");
++            Assert.AreEqual("a[_]b[%]c[[]d", SqlEndpointQueryService.EscapeLikePattern("a_b%c[d"), "All wildcards should be escaped together.");
++        }
++
++        /// <summary>
++        /// Verifies InsightsRunsPageResponse default state.
++        /// </summary>
++        [TestMethod]
++        public void InsightsRunsPageResponse_DefaultValues()
++        {
++            var response = new InsightsRunsPageResponse();
++            Assert.IsNotNull(response.Items, "Items should default to an empty list.");
++            Assert.AreEqual(0, response.Items.Count, "Items should start empty.");
++            Assert.AreEqual(0, response.TotalCount, "TotalCount should default to 0.");
++        }
++
++        /// <summary>
++        /// Verifies InsightsRunResponse properties can be set and read.
++        /// </summary>
++        [TestMethod]
++        public void InsightsRunResponse_PropertiesRoundTrip()
++        {
++            var run = new InsightsRunResponse
++            {
++                IterationId = "iter-1",
++                DisplayName = "Test Run",
++                Status = "Failed",
++                StartedAt = new DateTime(2026, 1, 1),
++                EndedAt = new DateTime(2026, 1, 2),
++                DurationMs = 86400000,
++                ErrorCode = "ERR001",
++                ErrorMessage = "Something broke",
++                ErrorSource = "System",
++                TotalNodes = 10,
++                SucceededNodes = 7,
++                FailedNodes = 2,
++                SkippedNodes = 1,
++            };
++
++            Assert.AreEqual("iter-1", run.IterationId);
++            Assert.AreEqual("Test Run", run.DisplayName);
++            Assert.AreEqual("Failed", run.Status);
++            Assert.AreEqual("Something broke", run.ErrorMessage);
++            Assert.AreEqual("System", run.ErrorSource);
++            Assert.AreEqual(10, run.TotalNodes);
++            Assert.AreEqual(7, run.SucceededNodes);
++            Assert.AreEqual(2, run.FailedNodes);
++            Assert.AreEqual(1, run.SkippedNodes);
++        }
++
++        /// <summary>
++        /// Verifies InsightsSummaryResponse properties can be set and read.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_PropertiesRoundTrip()
++        {
++            var summary = new InsightsSummaryResponse
++            {
++                TotalRuns = 100,
++                CompletedRuns = 80,
++                SuccessRatePct = 80.0,
++                AvgDurationMin = 5.5,
++                FailedRuns = 15,
++                SkippedRuns = 3,
++                CancelledRuns = 2,
++                LastUpdatedAt = new DateTime(2026, 4, 27),
++            };
++
++            Assert.AreEqual(100, summary.TotalRuns);
++            Assert.AreEqual(80, summary.CompletedRuns);
++            Assert.AreEqual(80.0, summary.SuccessRatePct);
++            Assert.AreEqual(5.5, summary.AvgDurationMin);
++            Assert.AreEqual(15, summary.FailedRuns);
++            Assert.AreEqual(3, summary.SkippedRuns);
++            Assert.AreEqual(2, summary.CancelledRuns);
++            Assert.AreEqual(new DateTime(2026, 4, 27), summary.LastUpdatedAt);
++        }
++
++        /// <summary>
++        /// Verifies the summary query contains the @prevStartDate parameter.
++        /// </summary>
++        [TestMethod]
++        public void BuildSummaryQuery_ContainsPrevStartDateParameter()
++        {
++            var query = InsightsQueryBuilder.BuildSummaryQuery();
++            Assert.IsTrue(query.Contains("@prevStartDate"), "Summary query should contain @prevStartDate parameter for previous period.");
++        }
++
++        /// <summary>
++        /// Verifies the summary query selects previous-period comparison columns.
++        /// </summary>
++        [TestMethod]
++        public void BuildSummaryQuery_SelectsPreviousPeriodColumns()
++        {
++            var query = InsightsQueryBuilder.BuildSummaryQuery();
++            Assert.IsTrue(query.Contains("prevTotalRuns"), "Summary query should select prevTotalRuns.");
++            Assert.IsTrue(query.Contains("prevCompletedRuns"), "Summary query should select prevCompletedRuns.");
++            Assert.IsTrue(query.Contains("prevFailedRuns"), "Summary query should select prevFailedRuns.");
++            Assert.IsTrue(query.Contains("prevAvgDurationMs"), "Summary query should select prevAvgDurationMs.");
++        }
++
++        /// <summary>
++        /// Verifies the top errors query references the node metrics table, not run metrics.
++        /// </summary>
++        [TestMethod]
++        public void BuildTopErrorsQuery_ReferencesNodeMetricsTable()
++        {
++            var query = InsightsQueryBuilder.BuildTopErrorsQuery();
++            Assert.IsTrue(query.Contains("[_mlv_system].[sys_node_metrics]"), "Top errors query should reference the node metrics table.");
++            Assert.IsFalse(query.Contains("[_mlv_system].[sys_run_metrics]"), "Top errors query should NOT reference the run metrics table.");
++        }
++
++        /// <summary>
++        /// Verifies the top errors query selects error_source.
++        /// </summary>
++        [TestMethod]
++        public void BuildTopErrorsQuery_SelectsErrorSource()
++        {
++            var query = InsightsQueryBuilder.BuildTopErrorsQuery();
++            Assert.IsTrue(query.Contains("error_source"), "Top errors query should select error_source.");
++        }
++
++        /// <summary>
++        /// Verifies the top errors query groups by both error_code and error_source.
++        /// </summary>
++        [TestMethod]
++        public void BuildTopErrorsQuery_GroupsByErrorCodeAndErrorSource()
++        {
++            var query = InsightsQueryBuilder.BuildTopErrorsQuery();
++            Assert.IsTrue(query.Contains("GROUP BY error_code, error_source"), "Top errors query should GROUP BY error_code and error_source.");
++        }
++
++        /// <summary>
++        /// Verifies InsightsSummaryResponse delta fields default to null.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_DeltaFields_DefaultToNull()
++        {
++            var response = new InsightsSummaryResponse();
++            Assert.IsNull(response.TotalRunsDeltaPct, "TotalRunsDeltaPct should default to null.");
++            Assert.IsNull(response.SuccessRateDeltaPct, "SuccessRateDeltaPct should default to null.");
++            Assert.IsNull(response.AvgDurationDeltaPct, "AvgDurationDeltaPct should default to null.");
++            Assert.IsNull(response.FailedRunsDeltaPct, "FailedRunsDeltaPct should default to null.");
++        }
++
++        /// <summary>
++        /// Verifies InsightsSummaryResponse delta fields serialize with correct JSON property names.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_SerializesWithDeltaFields()
++        {
++            var response = new InsightsSummaryResponse
++            {
++                TotalRunsDeltaPct = 12.5,
++                SuccessRateDeltaPct = -3.2,
++                AvgDurationDeltaPct = 0.0,
++                FailedRunsDeltaPct = 100.0,
++            };
++
++            var json = Newtonsoft.Json.JsonConvert.SerializeObject(response);
++            Assert.IsTrue(json.Contains("\"totalRunsDeltaPct\":12.5"), "Should serialize totalRunsDeltaPct.");
++            Assert.IsTrue(json.Contains("\"successRateDeltaPct\":-3.2"), "Should serialize successRateDeltaPct.");
++            Assert.IsTrue(json.Contains("\"avgDurationDeltaPct\":0.0"), "Should serialize avgDurationDeltaPct.");
++            Assert.IsTrue(json.Contains("\"failedRunsDeltaPct\":100.0"), "Should serialize failedRunsDeltaPct.");
++        }
++
++        /// <summary>
++        /// Verifies InsightsSummaryResponse delta fields are null in JSON when not set.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_DeltaFields_SerializeAsNullWhenNotSet()
++        {
++            var response = new InsightsSummaryResponse { TotalRuns = 10 };
++            var json = Newtonsoft.Json.JsonConvert.SerializeObject(response);
++            Assert.IsTrue(json.Contains("\"totalRunsDeltaPct\":null"), "Unset TotalRunsDeltaPct should serialize as null.");
++            Assert.IsTrue(json.Contains("\"successRateDeltaPct\":null"), "Unset SuccessRateDeltaPct should serialize as null.");
++            Assert.IsTrue(json.Contains("\"avgDurationDeltaPct\":null"), "Unset AvgDurationDeltaPct should serialize as null.");
++            Assert.IsTrue(json.Contains("\"failedRunsDeltaPct\":null"), "Unset FailedRunsDeltaPct should serialize as null.");
++        }
++
++        /// <summary>
++        /// Verifies ErrorCountEntry.ErrorSource serializes with the correct JSON property name.
++        /// </summary>
++        [TestMethod]
++        public void ErrorCountEntry_ErrorSource_SerializesCorrectly()
++        {
++            var entry = new ErrorCountEntry
++            {
++                ErrorCode = "ERR001",
++                ErrorSource = "System",
++                Count = 42,
++            };
++
++            var json = Newtonsoft.Json.JsonConvert.SerializeObject(entry);
++            Assert.IsTrue(json.Contains("\"errorSource\":\"System\""), "ErrorSource should serialize with camelCase JSON property name.");
++            Assert.IsTrue(json.Contains("\"errorCode\":\"ERR001\""), "ErrorCode should serialize correctly.");
++            Assert.IsTrue(json.Contains("\"count\":42"), "Count should serialize correctly.");
++        }
++
++        /// <summary>
++        /// Verifies ErrorCountEntry.ErrorSource defaults to null.
++        /// </summary>
++        [TestMethod]
++        public void ErrorCountEntry_ErrorSource_DefaultsToNull()
++        {
++            var entry = new ErrorCountEntry();
++            Assert.IsNull(entry.ErrorSource, "ErrorSource should default to null.");
++        }
++
++        /// <summary>
++        /// Verifies ErrorCountEntry round-trips through JSON deserialization.
++        /// </summary>
++        [TestMethod]
++        public void ErrorCountEntry_DeserializesErrorSource()
++        {
++            var json = "{\"errorCode\":\"ERR002\",\"errorSource\":\"User\",\"count\":7}";
++            var entry = Newtonsoft.Json.JsonConvert.DeserializeObject<ErrorCountEntry>(json);
++            Assert.AreEqual("ERR002", entry.ErrorCode);
++            Assert.AreEqual("User", entry.ErrorSource);
++            Assert.AreEqual(7, entry.Count);
++        }
++
++        /// <summary>
++        /// Verifies InsightsSummaryResponse delta fields round-trip through deserialization.
++        /// </summary>
++        [TestMethod]
++        public void InsightsSummaryResponse_DeltaFields_Deserialize()
++        {
++            var json = "{\"totalRuns\":50,\"totalRunsDeltaPct\":25.3,\"successRateDeltaPct\":-1.5,\"avgDurationDeltaPct\":10.0,\"failedRunsDeltaPct\":null}";
++            var response = Newtonsoft.Json.JsonConvert.DeserializeObject<InsightsSummaryResponse>(json);
++            Assert.AreEqual(50, response.TotalRuns);
++            Assert.AreEqual(25.3, response.TotalRunsDeltaPct);
++            Assert.AreEqual(-1.5, response.SuccessRateDeltaPct);
++            Assert.AreEqual(10.0, response.AvgDurationDeltaPct);
++            Assert.IsNull(response.FailedRunsDeltaPct, "Null delta should deserialize as null.");
++        }
+     }
+ }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
+index b9c25ece..b6fae1d2 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs
+@@ -872,7 +872,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+                 });
+ 
+             await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+-                () => service.GetSummaryAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2024-01-01", "2024-01-07", CancellationToken.None));
++                () => service.GetSummaryAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2023-12-25", "2024-01-01", "2024-01-07", CancellationToken.None));
+         }
+ 
+         /// <summary>
+@@ -894,7 +894,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+ 
+             // GetSummaryAsync delegates to GetConnectionAsync, which will fail at token extraction
+             await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(
+-                () => service.GetSummaryAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2024-01-01", "2024-01-07", CancellationToken.None));
++                () => service.GetSummaryAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2023-12-25", "2024-01-01", "2024-01-07", CancellationToken.None));
+ 
+             this.mockFabricApiClient.Verify(
+                 m => m.GetLakehouseDetailsAsync(It.IsAny<DataModel.RequestContext>(), It.IsAny<CancellationToken>()),
+@@ -986,7 +986,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+                 });
+ 
+             await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+-                () => service.GetTrendsAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2024-01-01", "2024-01-07", CancellationToken.None));
++                () => service.GetTrendsAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2024-01-01", "2024-01-07", "day", CancellationToken.None));
+         }
+ 
+         /// <summary>
+@@ -1008,13 +1008,142 @@ namespace Microsoft.LiveTable.Service.UnitTests.TrendsTests
+ 
+             // GetTrendsAsync delegates to GetConnectionAsync, which will fail at token extraction
+             await Assert.ThrowsExceptionAsync<UnauthorizedAccessException>(
+-                () => service.GetTrendsAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2024-01-01", "2024-01-07", CancellationToken.None));
++                () => service.GetTrendsAsync(tenantId, workspaceId, artifactId, "fake-mwc-token", "2024-01-01", "2024-01-07", "day", CancellationToken.None));
+ 
+             this.mockFabricApiClient.Verify(
+                 m => m.GetLakehouseDetailsAsync(It.IsAny<DataModel.RequestContext>(), It.IsAny<CancellationToken>()),
+                 Times.Once);
+         }
+ 
++        // ===================================================================
++        // ComputeDeltaPct tests
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies ComputeDeltaPct returns correct percentage change.
++        /// </summary>
++        [TestMethod]
++        public void ComputeDeltaPct_NormalValues_ReturnsCorrectPercentage()
++        {
++            var result = SqlEndpointQueryService.ComputeDeltaPct(150, 100);
++
++            Assert.AreEqual(50.0, result, "150 vs 100 should be +50%.");
++        }
++
++        /// <summary>
++        /// Verifies ComputeDeltaPct returns negative for decrease.
++        /// </summary>
++        [TestMethod]
++        public void ComputeDeltaPct_Decrease_ReturnsNegative()
++        {
++            var result = SqlEndpointQueryService.ComputeDeltaPct(50, 100);
++
++            Assert.AreEqual(-50.0, result, "50 vs 100 should be -50%.");
++        }
++
++        /// <summary>
++        /// Verifies ComputeDeltaPct returns 100 when previous is zero and current is positive.
++        /// </summary>
++        [TestMethod]
++        public void ComputeDeltaPct_PreviousZero_CurrentPositive_Returns100()
++        {
++            var result = SqlEndpointQueryService.ComputeDeltaPct(10, 0);
++
++            Assert.AreEqual(100.0, result, "Positive current with zero previous should return 100.");
++        }
++
++        /// <summary>
++        /// Verifies ComputeDeltaPct returns null when both are zero.
++        /// </summary>
++        [TestMethod]
++        public void ComputeDeltaPct_BothZero_ReturnsNull()
++        {
++            var result = SqlEndpointQueryService.ComputeDeltaPct(0, 0);
++
++            Assert.IsNull(result, "Both zero should return null (no meaningful delta).");
++        }
++
++        /// <summary>
++        /// Verifies ComputeDeltaPct returns 0 when values are equal.
++        /// </summary>
++        [TestMethod]
++        public void ComputeDeltaPct_EqualValues_ReturnsZero()
++        {
++            var result = SqlEndpointQueryService.ComputeDeltaPct(100, 100);
++
++            Assert.AreEqual(0.0, result, "Equal values should return 0%.");
++        }
++
++        /// <summary>
++        /// Verifies ComputeDeltaPct rounds to one decimal place.
++        /// </summary>
++        [TestMethod]
++        public void ComputeDeltaPct_FractionalResult_RoundsToOneDecimal()
++        {
++            var result = SqlEndpointQueryService.ComputeDeltaPct(10, 3);
++
++            Assert.AreEqual(233.3, result, "10 vs 3 should be 233.3% (rounded to 1 decimal).");
++        }
++
++        // ===================================================================
++        // EscapeLikePattern tests
++        // ===================================================================
++
++        /// <summary>
++        /// Verifies EscapeLikePattern escapes percent wildcard.
++        /// </summary>
++        [TestMethod]
++        public void EscapeLikePattern_PercentSign_Escaped()
++        {
++            var result = SqlEndpointQueryService.EscapeLikePattern("100%");
++
++            Assert.AreEqual("100[%]", result);
++        }
++
++        /// <summary>
++        /// Verifies EscapeLikePattern escapes underscore wildcard.
++        /// </summary>
++        [TestMethod]
++        public void EscapeLikePattern_Underscore_Escaped()
++        {
++            var result = SqlEndpointQueryService.EscapeLikePattern("my_table");
++
++            Assert.AreEqual("my[_]table", result);
++        }
++
++        /// <summary>
++        /// Verifies EscapeLikePattern escapes bracket.
++        /// </summary>
++        [TestMethod]
++        public void EscapeLikePattern_Bracket_Escaped()
++        {
++            var result = SqlEndpointQueryService.EscapeLikePattern("test[1]");
++
++            Assert.AreEqual("test[[]1]", result);
++        }
++
++        /// <summary>
++        /// Verifies EscapeLikePattern handles combined wildcards.
++        /// </summary>
++        [TestMethod]
++        public void EscapeLikePattern_CombinedWildcards_AllEscaped()
++        {
++            var result = SqlEndpointQueryService.EscapeLikePattern("a%b_c[d");
++
++            Assert.AreEqual("a[%]b[_]c[[]d", result);
++        }
++
++        /// <summary>
++        /// Verifies EscapeLikePattern leaves normal text unchanged.
++        /// </summary>
++        [TestMethod]
++        public void EscapeLikePattern_NormalText_Unchanged()
++        {
++            var result = SqlEndpointQueryService.EscapeLikePattern("hello world");
++
++            Assert.AreEqual("hello world", result);
++        }
++
+         private LakehouseDetails CreateValidLakehouseDetails(string provisioningStatus = "Success")
+         {
+             return new LakehouseDetails

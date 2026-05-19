@@ -1,0 +1,53 @@
+{
+  "pr_number": "950638",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 950638: DQ 3 -  Add DQ suite parsing and DAG build integration AB#5154322",
+  "description": "## What\nDQ notebook discovery and parsing during DAG build. Discovery only — no execution wired yet.\n\n This PR makes FLT discover DQ configurations during DAG build so it knows which nodes need DQ checks later.\n\n## Changes\n\n  Table.cs — Read DQ config from catalog\n\n  Why: The Spark team writes two catalog properties on each MLV table that has DQ registered: fabric.mlv.dq.notebook.id and fabric.mlv.dq.workspace.id. FLT needs to read these to know \"does this MLV have a DQ notebook attached?\"\n\n  What it does:\n\n   - GetDqNotebookId() — reads notebook ID from table properties, returns Guid?\n   - GetDqWorkspaceId() — reads workspace ID from table properties, returns Guid?\n   - HasDqConfiguration() — returns true only if both IDs are present\n\n  ---------------------------------------------------------------------------------------------------------------------------------------\n\n  NotebookExecutionContext.cs — Parse DQ cells from notebook\n\n  Why: Once we know the DQ notebook ID, we need to fetch the notebook and find which cells contain DQ validation code for each MLV. The notebook can have multiple @fmlv.dq_suite(\"table_name\") decorators — one per MLV.\n\n  What it does:\n\n   - During FetchAndParseContentForAllMLVsAsync, detects @fmlv.dq_suite(\"dbo.my_table\") decorators using the ANTLR parser\n   - Stores a mapping: mlv_name → [cell indexes] in the dqSuiteCommand dictionary\n   - GetDqSuiteCommandIndexes(mlvName) — looks up which cells to run for a given MLV. Uses bidirectional suffix matching (e.g., dbo.table matches workspace.lakehouse.dbo.table and vice versa)\n   - DQ cells are stored without common cells — DQ scripts are self-contained\n\n  ---------------------------------------------------------------------------------------------------------------------------------------\n\n  Dag.cs — Wire DQ config during DAG build\n\n  Why: When FLT builds the DAG (discovers all MLVs from catalog), it needs to check each node for DQ config and prepare the DQ notebook context so it's available at execution time (when mwcToken is no longer available).\n\n  What it does:\n\n   - For each MLV node: calls table.GetDqNotebookId() + GetDqWorkspaceId()\n   - If both exist: sets node.DqCodeReference (notebook + workspace ID)\n   - Fetches the DQ notebook, parses it via NotebookExecutionContext, caches in Dag.NotebookExecutionContexts\n   - Try/catch: if notebook fetch fails, logs error but continues — the node will fail later at DQ hook execution time with MLV_COLUMN_DQ_CHECK_FAILED\n\n## Impact\n- Sets `DqCodeReference` on nodes during DAG build but nothing consumes it until the execution hook is wired in PR 4/5\n- Existing behavior unchanged — DQ discovery is additive\n\n## Testing\n- Build: 0 warnings, 0 errors\n- 6 new DQ parsing tests\n\n## Related\n- PBI #5154322\n- Part 3 of 5 PRs for DQ feature\n- Depends on: PR #948097 (merged), PR #949624 (merged)\n\nRelated work items: #2069784",
+  "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+  "head_sha": "25cb2993d3ecbf07bcf48c65a7544a85effffad2",
+  "merge_commit_sha": "25cb2993d3ecbf07bcf48c65a7544a85effffad2",
+  "author_email": "goyalharshit@microsoft.com",
+  "authored_date": "2026-04-23T11:11:55Z",
+  "files_changed": 6,
+  "files": [
+    {
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+      "additions": 42,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "additions": 155,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "additions": 262,
+      "deletions": 4
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/TableTests.cs",
+      "additions": 198,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs",
+      "additions": 467,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/DqSuiteCommandTests.cs",
+      "additions": 151,
+      "deletions": 0
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 72768,
+  "diff_sha256": "ac874b1b83ccde1be5d3e0d5c1f34d028f6fbcf080f9ccebb28efe3e2ae6c808",
+  "captured_at": "2026-05-19T09:03:08Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

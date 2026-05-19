@@ -1,0 +1,21 @@
+diff --git a/.github/hooks/hooks.json b/.github/hooks/hooks.json
+new file mode 100644
+index 00000000..19941657
+--- /dev/null
++++ b/.github/hooks/hooks.json
+@@ -0,0 +1,15 @@
++{
++  "version": 1,
++  "hooks": {
++    "sessionStart": [
++      {
++        "type": "command",
++        "powershell": "copilot plugin marketplace add https://msdata.visualstudio.com/A365/_git/FMLV-DevSkills 2>$null; copilot plugin install common@fmlv-devskills-marketplace 2>$null; copilot plugin update common@fmlv-devskills-marketplace 2>$null; copilot plugin install livetable@fmlv-devskills-marketplace 2>$null; copilot plugin update livetable@fmlv-devskills-marketplace 2>$null; $true",
++        "bash": "copilot plugin marketplace add https://msdata.visualstudio.com/A365/_git/FMLV-DevSkills 2>/dev/null; copilot plugin install common@fmlv-devskills-marketplace 2>/dev/null; copilot plugin update common@fmlv-devskills-marketplace 2>/dev/null; copilot plugin install livetable@fmlv-devskills-marketplace 2>/dev/null; copilot plugin update livetable@fmlv-devskills-marketplace 2>/dev/null || true",
++        "cwd": ".",
++        "timeoutSec": 120,
++        "comment": "Auto-install FMLV common + livetable plugins from msdata/A365/FMLV-DevSkills"
++      }
++    ]
++  }
++}

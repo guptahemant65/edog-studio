@@ -1,0 +1,28 @@
+{
+  "pr_number": "933822",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 933822: Expose x-ms-continuation-token in CORS for JavaScript access",
+  "description": "Add .WithExposedHeaders(\\\nx-ms-continuation-token\\) to CORS policy so browser JavaScript can read the pagination header. Without this, browsers block access to custom response headers per CORS spec. One-line change in WorkloadEndpointSetup.cs.\n\n![image.png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/933822/attachments/image.png)\n----\n#### AI description  (iteration 1)\n#### PR Classification\nAPI change to expose a response header via CORS so JavaScript clients can read the continuation token.\n\n#### PR Summary\nUpdates CORS configuration to expose the `x-ms-continuation-token` header for browser-based access.\n- `Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs`: Added `WithExposedHeaders(\"x-ms-continuation-token\")` to the CORS policy configuration.\n<!-- GitOpsUserAgent=GitOps.Apps.Server.pullrequestcopilot -->\n\nRelated work items: #2049475",
+  "base_sha": "c5b066ea2d31eab6d318738c4a41ef752145097d",
+  "head_sha": "45a07672d2b7d6c65f916850de56c380bddd33ff",
+  "merge_commit_sha": "45a07672d2b7d6c65f916850de56c380bddd33ff",
+  "author_email": "ayushsinghal@microsoft.com",
+  "authored_date": "2026-03-30T08:53:17Z",
+  "files_changed": 1,
+  "files": [
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs",
+      "additions": 2,
+      "deletions": 1
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 829,
+  "diff_sha256": "00e3483925c505b39b5943a397c9692c42641a9f952dbae35e9d6fc562ea39ca",
+  "captured_at": "2026-05-19T09:03:12Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

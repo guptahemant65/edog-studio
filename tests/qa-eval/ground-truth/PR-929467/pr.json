@@ -1,0 +1,58 @@
+{
+  "pr_number": "929467",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 929467: TokenManager - Tokens are not getting cleared after Dag iteration run gets over",
+  "description": "#### PR Summary\nThis PR fixes the issue where tokens were not being cleared after a DAG iteration completes by refactoring the logic to either delete or update tokens based on terminal status and a new feature flag. The changes include improved error handling and additional tests to validate behavior across different execution statuses.\n\nRelated work items: #2033065",
+  "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+  "head_sha": "9aa96ddeabc183619e5638b122f2564c48002b27",
+  "merge_commit_sha": "9aa96ddeabc183619e5638b122f2564c48002b27",
+  "author_email": "John.Anoop@microsoft.com",
+  "authored_date": "2026-03-22T11:27:24Z",
+  "files_changed": 7,
+  "files": [
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+      "additions": 54,
+      "deletions": 33
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
+      "additions": 9,
+      "deletions": 4
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs",
+      "additions": 3,
+      "deletions": 5
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+      "additions": 6,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/TokenManagement/TokenManager.cs",
+      "additions": 3,
+      "deletions": 2
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+      "additions": 204,
+      "deletions": 1
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs",
+      "additions": 2,
+      "deletions": 1
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 31308,
+  "diff_sha256": "cb6e95acc1da1b29084ef8573a8eb3ec1ff408e2ed1f53d6254ecc8ecc2f1950",
+  "captured_at": "2026-05-19T09:03:15Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

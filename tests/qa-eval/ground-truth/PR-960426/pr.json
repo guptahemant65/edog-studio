@@ -1,0 +1,108 @@
+{
+  "pr_number": "960426",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 960426: Align Insights APIs with latest PM specs: pagination, filters, top errors, swagger AB#5227527",
+  "description": "## Summary\nAligns 4 Insights API endpoints with PM spec (requirements-spec.md). Adds KPI deltas, pagination, top errors endpoint, feature gate, and weekly grouping.\n\n**Work Item:** AB#5227527\n\n## Changes\n\n### KPI Period-over-Period Deltas (P0)\n- `insights/summary` returns `totalRunsDeltaPct`, `successRateDeltaPct`, `avgDurationDeltaPct`, `failedRunsDeltaPct`\n- Queries both current and previous period in a single SQL scan\n\n### Pagination (P0)\n- `insights/runs` returns `InsightsRunsPageResponse` with `items[]` + `totalCount`\n- `displayName` partial match with LIKE escaping (`EscapeLikePattern`)\n\n### Top Errors Endpoint (P1 — IC-04)\n- NEW `GET /insights/errors/top` — top N error codes from `sys_node_metrics`\n- Configurable `limit` param (1-20, default 5)\n\n### Weekly Grouping\n- `insights/trends?groupBy=week` — DATEFIRST-independent formula, CONVERT style 120\n\n### Feature Gate + refreshMode Removed\n- `[FeatureGate(FLTInsightsMetrics)]` at controller class level\n- refreshMode removed from params, response, SQL — to be re-added later\n\n## API Response Samples (EDog dev mode — May 5, 2026)\n\n### GET /insights/summary?dateRange=3\n```json\n{\n  \"totalRuns\": 3,\n  \"totalRunsDeltaPct\": 0.0,\n  \"completedRuns\": 3,\n  \"successRatePct\": 100.0,\n  \"successRateDeltaPct\": 66.7,\n  \"avgDurationMin\": 6.6,\n  \"avgDurationDeltaPct\": 46.7,\n  \"failedRuns\": 0,\n  \"failedRunsDeltaPct\": -100.0,\n  \"skippedRuns\": 0,\n  \"cancelledRuns\": 0,\n  \"lastUpdatedAt\": \"2026-05-04T09:18:04Z\"\n}\n```\n\n### GET /insights/runs?pageSize=2\n```json\n{\n  \"items\": [{\n    \"iterationId\": \"8ab756dc-...\",\n    \"displayName\": \"hmglh\",\n    \"status\": \"Completed\",\n    \"durationMs\": 371937,\n    \"errorCode\": null,\n    \"totalNodes\": 1,\n    \"succeededNodes\": 1,\n    \"failedNodes\": 0,\n    \"skippedNodes\": 0\n  }],\n  \"totalCount\": 6\n}\n```\n\n### GET /insights/trends?dateRange=7\n```json\n{\n  \"dailyTrend\": [\n    {\"runDate\": \"2026-05-02\", \"completed\": 1, \"failed\": 2, \"skipped\": 0, \"cancelled\": 0},\n    {\"runDate\": \"2026-05-03\", \"completed\": 1, \"failed\": 0, \"skipped\": 0, \"cancelled\": 0},\n    {\"runDate\": \"2026-05-04\", \"completed\": 2, \"failed\": 0, \"skipped\": 0, \"cancelled\": 0}\n  ]\n}\n```\n\n### GET /insights/errors/top?dateRange=7\n```json\n{\n  \"topErrors\": [\n    {\"errorCode\": \"MLV_NOT_FOUND\", \"errorSource\": \"User\", \"count\": 1}\n  ]\n}\n```\n\n## Build & Coverage\n- **Build:** ✅ Green (5547 tests, 0 failures)\n- **Diff coverage:** ✅ 91.96% (target 90%)\n- **Review threads:** ✅ All 7 resolved\n\n## Files Changed\n**Prod:** Controller, QueryBuilder, SqlEndpointQueryService, IInsightsQueryService, ThrottlingConstants, WorkloadApp, Models (7)\n**Tests:** ControllerTests (+8), QueryBuilderTests (+1), QueryServiceTests (+11)\n**Docs:** design-spec.md, Swagger.json\n\nAB#5227527\n\nRelated work items: #2093047",
+  "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+  "head_sha": "001641bb6be6a9183bdc564beb4390321d75e41f",
+  "merge_commit_sha": "001641bb6be6a9183bdc564beb4390321d75e41f",
+  "author_email": "ayushsinghal@microsoft.com",
+  "authored_date": "2026-05-05T16:47:00Z",
+  "files_changed": 17,
+  "files": [
+    {
+      "path": "Features/5054458/design-spec.md",
+      "additions": 224,
+      "deletions": 16
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "additions": 149,
+      "deletions": 33
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+      "additions": 262,
+      "deletions": 23
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Throttling/ThrottlingConstants.cs",
+      "additions": 4,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/IInsightsQueryService.cs",
+      "additions": 31,
+      "deletions": 5
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "additions": 80,
+      "deletions": 21
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs",
+      "additions": 5,
+      "deletions": 1
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs",
+      "additions": 4,
+      "deletions": 4
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+      "additions": 23,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "additions": 42,
+      "deletions": 1
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs",
+      "additions": 20,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs",
+      "additions": 0,
+      "deletions": 4
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "additions": 175,
+      "deletions": 48
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/WorkloadApp.cs",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableInsightsControllerTests.cs",
+      "additions": 376,
+      "deletions": 34
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/InsightsQueryBuilderTests.cs",
+      "additions": 408,
+      "deletions": 3
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/TrendsTests/SqlEndpointQueryServiceTests.cs",
+      "additions": 133,
+      "deletions": 4
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 155904,
+  "diff_sha256": "d9b17ca9a0e179732a466e0b813b19216c6b2e4702266e6d872667afaada35d4",
+  "captured_at": "2026-05-19T09:03:07Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

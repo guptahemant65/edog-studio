@@ -2810,6 +2810,243 @@ def test_qa_matcher_audit_script_present() -> None:
     )
 
 
+# ── F27 P9 T4-C-prep — corpus expansion infrastructure ──────────────
+
+
+def test_qa_corpus_candidate_picker_present() -> None:
+    """T4-C-prep ships ``tests/qa-eval/pick_corpus_candidates.py`` —
+    the deterministic FLT-repo walker that discovers merge commits,
+    classifies them by change-shape, and stratified-bucket-fills a
+    selection of new gold-corpus candidates. Pin its existence + the
+    canonical symbols so a refactor surfaces here.
+    """
+    path = REPO_ROOT / "tests" / "qa-eval" / "pick_corpus_candidates.py"
+    assert path.exists(), f"T4-C-prep pick_corpus_candidates.py missing: {path}"
+    text = path.read_text(encoding="utf-8")
+    # Pin the canonical entry-points + key functions.
+    assert "def discover_candidates" in text, (
+        "pick_corpus_candidates.py must expose discover_candidates()"
+    )
+    assert "def build_manifest" in text, (
+        "pick_corpus_candidates.py must expose build_manifest()"
+    )
+    assert "_classify_change_shape" in text, (
+        "pick_corpus_candidates.py must declare _classify_change_shape()"
+    )
+    # Hard-rejects must remain explicit so docs-only / test-only PRs
+    # can't silently slip into the corpus.
+    assert "HARD_REJECT" in text, (
+        "pick_corpus_candidates.py must declare HARD_REJECT exclusions"
+    )
+
+
+def test_qa_capture_pr_fixture_script_present() -> None:
+    """T4-C-prep ships ``tests/qa-eval/capture_pr_fixture.py`` — the
+    deterministic per-PR fixture writer (pr.json + diff.patch +
+    notes.md + PENDING expected.json). NO outbound network, NO LLM
+    calls — this is offline, FREE infrastructure. Pin its existence
+    + the canonical symbols + the no-actual.json invariant.
+    """
+    path = REPO_ROOT / "tests" / "qa-eval" / "capture_pr_fixture.py"
+    assert path.exists(), f"T4-C-prep capture_pr_fixture.py missing: {path}"
+    text = path.read_text(encoding="utf-8")
+    assert "def capture" in text, "capture_pr_fixture.py must expose capture()"
+    # diff_sha256 reproducibility footer — rubber-duck recommendation.
+    assert "diff_sha256" in text, (
+        "capture_pr_fixture.py must record diff_sha256 in pr.json for reproducibility"
+    )
+    # PENDING state is the invariant — capture script must NEVER emit
+    # graded fixtures (that's curator work).
+    assert "PENDING_HUMAN_GRADING" in text, (
+        "capture_pr_fixture.py must emit expected.json with curator_state="
+        "PENDING_HUMAN_GRADING — graded fixtures are curator work, not capture work"
+    )
+    # Stable diff flags — reproducibility requires explicit flag pinning.
+    assert "--no-ext-diff" in text and "--unified=3" in text, (
+        "capture_pr_fixture.py must use stable diff flags (--no-ext-diff, --unified=3)"
+    )
+
+
+def test_qa_corpus_candidates_manifest_present() -> None:
+    """T4-C-prep landed ``tests/qa-eval/corpus_candidates.json`` — the
+    audit trail recording every discovered candidate, the selection
+    decision, and the rationale. Pin its shape + selected-count so a
+    silent change to selection (or a missing manifest after a picker
+    refactor) surfaces here.
+    """
+    import json
+    path = REPO_ROOT / "tests" / "qa-eval" / "corpus_candidates.json"
+    assert path.exists(), (
+        f"T4-C-prep corpus_candidates.json missing: {path}. "
+        "Re-run `python tests/qa-eval/pick_corpus_candidates.py` to regenerate."
+    )
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    assert manifest.get("schema_version") == "1.0", (
+        f"corpus_candidates.json must be schema 1.0; got {manifest.get('schema_version')!r}"
+    )
+    assert manifest.get("phase") == "T4-C-prep"
+    assert isinstance(manifest.get("selected"), list)
+    assert isinstance(manifest.get("rejected"), list)
+    # At least one selected entry — otherwise the picker landed without
+    # actually picking anything.
+    selected = manifest["selected"]
+    assert len(selected) >= 1, "corpus_candidates.json.selected must be non-empty"
+    # Every selected entry must carry its identification + selection metadata.
+    for entry in selected:
+        for k in ("pr_number", "merge_commit_sha", "title",
+                  "change_shape", "files_changed", "diff_size_bytes",
+                  "selected", "selection_rationale"):
+            assert k in entry, f"selected entry missing key {k!r}: {entry}"
+        assert entry["selected"] is True
+
+
+def test_qa_pending_curator_fixtures_have_minimal_shape() -> None:
+    """T4-C-prep landed N new PR-NNN/ dirs under tests/qa-eval/ground-
+    truth/ — each must have the four scorer-pipeline files (pr.json,
+    diff.patch, notes.md, expected.json) and MUST NOT have actual.json
+    or architect_plan.json (those require paid LLM capture and are
+    sentinel-flagged as half-promoted fixtures).
+    """
+    import json
+    gt = REPO_ROOT / "tests" / "qa-eval" / "ground-truth"
+    pending_dirs: list = []
+    for d in sorted(gt.iterdir()):
+        if not d.is_dir():
+            continue
+        exp = d / "expected.json"
+        if not exp.exists():
+            continue
+        try:
+            blob = json.loads(exp.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if blob.get("curator_state") == "PENDING_HUMAN_GRADING":
+            pending_dirs.append(d)
+    # At least one pending dir (we shipped 9 at T4-C-prep).
+    assert len(pending_dirs) >= 1, (
+        "At least one PENDING_HUMAN_GRADING fixture must exist after T4-C-prep; "
+        f"found {len(pending_dirs)}"
+    )
+    for d in pending_dirs:
+        # Required files.
+        for name in ("pr.json", "diff.patch", "notes.md", "expected.json"):
+            assert (d / name).exists(), (
+                f"PENDING fixture {d.name} missing required file: {name}"
+            )
+        # MUST NOT have actual.json / architect_plan.json.
+        for forbidden in ("actual.json", "architect_plan.json"):
+            assert not (d / forbidden).exists(), (
+                f"PENDING fixture {d.name} must NOT carry {forbidden} — "
+                "either grade expected.json or delete the capture artefact"
+            )
+        # pr.json reproducibility metadata.
+        pr_blob = json.loads((d / "pr.json").read_text(encoding="utf-8"))
+        for k in ("pr_number", "title", "base_sha", "head_sha",
+                  "merge_commit_sha", "files", "diff_size_bytes",
+                  "diff_sha256", "captured_at", "diff_command"):
+            assert k in pr_blob, f"PENDING fixture {d.name} pr.json missing key {k!r}"
+        # Empty scenarios.
+        exp_blob = json.loads((d / "expected.json").read_text(encoding="utf-8"))
+        assert exp_blob.get("scenarios") == [], (
+            f"PENDING fixture {d.name} expected.json must have empty scenarios "
+            f"(curator hasn't graded yet); got {len(exp_blob.get('scenarios') or [])}"
+        )
+
+
+def test_qa_score_eval_skips_pending_curator_state() -> None:
+    """T4-C-prep contract: the scorer must skip PRs in curator_state=
+    PENDING_HUMAN_GRADING from all aggregations AND list them under
+    prs_pending_grading. The headline n=6 macro numbers must remain
+    byte-stable while pending fixtures exist — otherwise we've
+    accidentally promoted pending PRs into the scored set.
+    """
+    import json
+    report_path = REPO_ROOT / "tests" / "qa-eval" / "score_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    # graded count must still be 6 — the T4-A scored set.
+    cs = report.get("corpus_status") or {}
+    assert isinstance(cs, dict) and cs, (
+        "score_report.json must carry a corpus_status block at T4-C-prep"
+    )
+    assert cs.get("graded_count") == 6, (
+        f"corpus_status.graded_count must remain 6 at T4-C-prep "
+        f"(promoting pending fixtures requires curator grading); "
+        f"got {cs.get('graded_count')!r}"
+    )
+    # Headline aggregate.pr_count must agree with graded_count.
+    assert report["aggregate"]["pr_count"] == 6, (
+        f"aggregate.pr_count must equal corpus_status.graded_count (=6); "
+        f"got {report['aggregate']['pr_count']!r}"
+    )
+    # T4-A macro numbers must remain byte-stable.
+    macro = report["aggregate"]["macro"]
+    assert abs(macro["recall"] - 0.7669) < 0.0005, (
+        f"T4-A macro_recall must remain 0.7669 +/- 0.0005 after T4-C-prep; "
+        f"got {macro['recall']!r} — pending PRs may have been promoted by accident"
+    )
+    assert abs(macro["precision_highest_stage"] - 0.666) < 0.0005
+    assert abs(macro["category_label_accuracy"] - 0.6217) < 0.0005
+    # Pending PRs must appear in prs_pending_grading + NOT in prs_scored.
+    pending = set(report.get("prs_pending_grading") or [])
+    scored = {p["pr_number"] for p in report.get("prs_scored") or []}
+    assert pending.isdisjoint(scored), (
+        f"prs_pending_grading and prs_scored must be disjoint; "
+        f"overlap: {pending & scored}"
+    )
+    # The six scored PRs are the exact T4-A set.
+    assert scored == {"955910", "960543", "966141", "975848", "976609", "977882"}, (
+        f"scored set drifted from T4-A baseline; got {scored}"
+    )
+
+
+def test_qa_category_aliases_partition_covers_valid_categories() -> None:
+    """Rubber-duck T4-C critique: every category in
+    score_eval.VALID_CATEGORIES must appear in exactly one cluster of
+    category_aliases.json. Otherwise an unknown label silently falls
+    back via _CATEGORY_CLUSTER.get(category, category) and the cluster
+    matcher silently reverts to strict matching for that label —
+    weakening comparability without a regression signal.
+    """
+    import json
+    import sys as _sys
+    qa_eval_dir = REPO_ROOT / "tests" / "qa-eval"
+    _added = False
+    if str(qa_eval_dir) not in _sys.path:
+        _sys.path.insert(0, str(qa_eval_dir))
+        _added = True
+    try:
+        import score_eval  # type: ignore[import-not-found]
+        valid_categories = set(score_eval.VALID_CATEGORIES)
+    finally:
+        if _added:
+            _sys.path.remove(str(qa_eval_dir))
+    # Load the cluster map.
+    aliases = json.loads(
+        (REPO_ROOT / "tests" / "qa-eval" / "category_aliases.json").read_text(encoding="utf-8")
+    )
+    clusters = aliases.get("clusters") or {}
+    all_members: list = []
+    for members in clusters.values():
+        all_members.extend(members)
+    members_set = set(all_members)
+    # Partition: no duplicates across clusters.
+    assert len(all_members) == len(members_set), (
+        f"category_aliases.json clusters must form a partition; duplicates: {all_members}"
+    )
+    # Coverage: every VALID_CATEGORIES member is in some cluster.
+    missing = valid_categories - members_set
+    assert not missing, (
+        f"VALID_CATEGORIES not covered by category_aliases.json clusters: {missing}. "
+        "Add them to an existing cluster or define a new singleton cluster."
+    )
+    # Cluster map must not invent labels outside VALID_CATEGORIES (otherwise
+    # the curator could ship scenarios with categories the validator rejects).
+    extra = members_set - valid_categories
+    assert not extra, (
+        f"category_aliases.json clusters contain labels not in VALID_CATEGORIES: {extra}"
+    )
+
+
 def test_qa_baseline_scores_block_carries_highest_stage_at_t1fc() -> None:
     """T1f-c extends the baseline.json `scores` block with
     `macro_precision_highest_stage`, `macro_f1_highest_stage`, and

@@ -1,0 +1,108 @@
+{
+  "pr_number": "910832",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 910832: Notebook user facing messages",
+  "description": "## 📝 PR Description\n<!-- Provide a clear and concise description of what this PR does -->\nThis PR changes the format of notebook specific user facing error messages\nAB#4898960\n\n##1st error\n   Magic error message before\n   ![image.png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/910832/attachments/image.png)\n\n   Magic error message after changes\n   ![image (2).png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/910832/attachments/image%20%282%29.png)\n\n##2nd Error\n   No pyspark MLV error before changes\n![image (3).png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/910832/attachments/image%20%283%29.png)\n\n  After changes\n![image (4).png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/910832/attachments/image%20%284%29.png)\n\n##3rd Error\nMLV_DEFINITION_CONFLICT\n\nbefore changes\n![image (5).png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/910832/attachments/image%20%285%29.png)\n\nafter changes\n![image (6).png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/910832/attachments/image%20%286%29.png)\n\n##4th Error\n| Field | Old (before PR) | New (this PR) |\n |---|---|---|\n | **Message** | `[Workspace: ..., Notebook: ...] Notebook content has been modified since last retrieval. ETag mismatch detected.` | `MLV_ETAG_CHANGED: Contents in the Notebook [Workspace: ..., Notebook:\n ...] changed after the operation started. Refresh and try again.` |\n | **Status code** | `412 PreconditionFailed` | `422 UnprocessableEntity` |\n | **ErrorCode** | *(none)* | `MLV_ETAG_CHANGED` |\n\n[MLV_ETAG_CHANGED]: Contents in the Notebook [Workspace: ..., Notebook: ...] changed after the operation started. Refresh and try again. failureType: UserError\n\n### What changes are being made?\n\n### Why are these changes needed? What problem does this solve?\n---\n\n## 🔗 Related Links\n<!-- Link to Design Documents, or related PRs -->\n- Design Document:\n- Related PRs:\n- Feature Flag path in FeatureManagement Repo:\n\n---\n\n## ✅ PR Checklist\n\n### 🚦 Readiness\n- [ ] My changes are production-ready (not WIP or exploratory).\n- [ ] I've thoroughly E2E tested my changes.\n- [ ] This PR is based on an **approved design**.\n- [ ] Feature Flag for features for critical changes\n\n### 🧪 Testing\n- [ ] Attached E2E test report in the **PR description**.\n- [ ] Added **targeted unit tests** that fail without the fix and pass with it.\n- [ ] If applicable, CSTs tests are included for critical features.\n- [ ] Devbox required for testing this PR?\n\n### 📄 ...",
+  "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+  "head_sha": "8052934fbaf4779091d0d79cb02f1c09fbc61826",
+  "merge_commit_sha": "8052934fbaf4779091d0d79cb02f1c09fbc61826",
+  "author_email": "saagnihotri@microsoft.com",
+  "authored_date": "2026-04-13T10:33:08Z",
+  "files_changed": 17,
+  "files": [
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+      "additions": 39,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+      "additions": 58,
+      "deletions": 34
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
+      "additions": 5,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+      "additions": 5,
+      "deletions": 3
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
+      "additions": 97,
+      "deletions": 7
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookParsingException.cs",
+      "additions": 0,
+      "deletions": 77
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "additions": 15,
+      "deletions": 16
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs",
+      "additions": 6,
+      "deletions": 3
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "additions": 41,
+      "deletions": 9
+    },
+    {
+      "path": "pr-division-plan.md",
+      "additions": 486,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs",
+      "additions": 40,
+      "deletions": 39
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/NotebookErrorRegistryE2ETests.cs",
+      "additions": 693,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs",
+      "additions": 106,
+      "deletions": 9
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs",
+      "additions": 126,
+      "deletions": 3
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/{NotebookParsingExceptionTests.cs => NotebookExceptionTests.cs}",
+      "additions": 16,
+      "deletions": 16
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExecutionContextTests.cs",
+      "additions": 29,
+      "deletions": 29
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookHttpTests/NotebookApiClientTests.cs",
+      "additions": 4,
+      "deletions": 3
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 184062,
+  "diff_sha256": "1480944284ab02e713cdc8eb73982a93dffdfa434753b783d80ba93aed4c87e6",
+  "captured_at": "2026-05-19T09:03:10Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

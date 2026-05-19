@@ -1,0 +1,14 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs b/Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs
+index 08822611..54e2ae59 100644
+--- a/Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs
++++ b/Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs
+@@ -71,7 +71,8 @@ namespace Microsoft.LiveTable.Service.Initialization
+                         {
+                             builder.AllowAnyOrigin()
+                                    .AllowAnyMethod()
+-                                   .AllowAnyHeader();
++                                   .AllowAnyHeader()
++                                   .WithExposedHeaders("x-ms-continuation-token");
+                         });
+                 });
+             });

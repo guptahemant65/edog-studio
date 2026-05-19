@@ -1,0 +1,28 @@
+{
+  "pr_number": "936352",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 936352: feat: Add FMLV-DevSkills plugin hook (Phase 1 - keep local skill)",
+  "description": "## Summary\n\nAdd sessionStart hook to auto-install FMLV-DevSkills plugins. Local `cst-pool-manager` skill is kept as-is for zero-impact rollout.\n\n## Changes\n\n- **Add** `.github/hooks/hooks.json` — auto-installs `common` + `livetable` plugins from FMLV-DevSkills marketplace on every Copilot CLI session\n\n## What's NOT changed\n\n- `.github/skills/cst-pool-manager/` — kept as-is (local copy takes priority over plugin)\n- `copilot-instructions.md` — unchanged\n\n## Rollout Plan\n\n1. **Phase 1 (this PR)**: Add hook only. Local skill still works. Plugin installs silently in background.\n2. **Phase 2 (follow-up PR)**: After team has picked up the plugin (~few days), remove local `.github/skills/cst-pool-manager/` so the plugin version takes over.\n\n## Zero User Impact\n\n- Local skill has higher priority than plugin skill — no behavior change after merge\n- Plugin installs automatically on first session, available from second session onwards\n\nRelated work items: #2051076",
+  "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+  "head_sha": "37c58e1f40fc42009dcc1a43fa56f97df0153eea",
+  "merge_commit_sha": "37c58e1f40fc42009dcc1a43fa56f97df0153eea",
+  "author_email": "ayushsinghal@microsoft.com",
+  "authored_date": "2026-03-30T17:44:14Z",
+  "files_changed": 1,
+  "files": [
+    {
+      "path": ".github/hooks/hooks.json",
+      "additions": 15,
+      "deletions": 0
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 1248,
+  "diff_sha256": "bb1318ee76d2a392ff859afc1cc2685eedc2ae88a00eb86ef9c6f7cdb3175dbf",
+  "captured_at": "2026-05-19T09:03:11Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

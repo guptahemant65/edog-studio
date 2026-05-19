@@ -1,0 +1,163 @@
+{
+  "pr_number": "879735",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 879735: Add cursor-based pagination for listDAGExecutionIterationIds API",
+  "description": "## Overview\nImplementation of pagination for listDAGExecutionIterationIds\n\n## Key Features\n- **Backward Compatible**: Response body unchanged; existing clients work without modification\n- **Cursor-Based**: Stable pagination immune to concurrent data changes\n- **Multi-Folder Support**: Handles nested DAGs across multiple `Index_StartTime_*` folders\n- **Filter-Aware**: Detects filter changes between pages and gracefully restarts\n- **Memory-Safe**: Paged cursor-finding prevents OOM for large execution histories\n## Feature Flag: `FLTListDagAPIPagination`\n## API Usage\n```http\n# First page\nGET .../listDAGExecutionIterationIds?historyCount=25\n\n# Response header (if more pages exist)\nx-ms-continuation-token: OTIyMzM3MjAzNTA4NDc0ODMxN18xMGQzZjFkOS1kNTAy...\n\n# Next page\nGET .../listDAGExecutionIterationIds?historyCount=25&continuationToken=OTIyMzM3MjAzNTA4NDc0ODMxN18xMGQzZjFkOS1kNTAy...\n```\n### API Validation\n#### Test 1: Baseline (Single Call)\n```\nGET .../listDAGExecutionIterationIds?historyCount=5000\n→ 200 OK | 4,492 items | 23,281 ms | x-ms-continuation-token: (none — all items returned)\n```\n\n#### Test 2: Paginated (pageSize=25, 180 API calls)\n```\nPage 1:   GET ...?historyCount=25                              → 25 items | 5,681 ms | token: ✅\nPage 2:   GET ...?historyCount=25&continuationToken=OTIy...    → 25 items | 5,689 ms | token: ✅\n  ...\nPage 179: GET ...?historyCount=25&continuationToken=OTIy...    → 25 items | 2,155 ms | token: ✅\nPage 180: GET ...?historyCount=25&continuationToken=OTIy...    → 17 items | 2,874 ms | token: (none — last page)\n```\n#### Test 3: Consistency (without vs with Pagination)\n\n| Check | Result | Detail |\n|-------|--------|--------|\n| Count match | ✅ PASS | Baseline 4,492 = Paginated 4,492 |\n| No duplicates | ✅ PASS | 0 duplicate iterationIds across 180 pages |\n| Order match | ✅ PASS | All 4,492 items in identical descending order |\n| No missing items | ✅ PASS | Every baseline item found in paginated results |\n| Last page | ✅ PASS | Page 180 returns 17 items with no continuation token |\n| Token absent on last page | ✅ PASS | No `x-ms-continuation-token` header |\n\n## Feature Flag: FLTListDagAPIPagination\n### Flag OFF (pagination disabled)\n| Client sends historyCount | Effective historyCount | Continuation Token | Response Header |\n|---|---|---|---|\n| (not sent) | **500** | **null** (ignored) | No `x-ms-continuation-token` |\n| 20 | **20** | **null** (ignored) | No `x-ms-continuation-token` |\n| 1000 | **500** (clamped) | **null** (ignored) | No `x-ms-continuation-token` |\n\n### Flag ON (pagination enabled, DefaultHistoryCount=500 for initial rollout)\n\n| Client sends historyCount | Effective historyCount | Continuation Token | Response Header |\n|---|---|---|---|\n| (not sent) | **500** (from manifest) | flows through | `x-ms-continuation-token` if more pages |\n| 20 | **20** (respected) | flows through | `x-ms-continuation-token` if more pages |\n| 1000 | **500** (clamped) | flows through | `x-ms-continuation-token` if more pages |\n\n...",
+  "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+  "head_sha": "f77df9a4ed7f6e468e8ba5a42a1b5bfdb4fd75f2",
+  "merge_commit_sha": "f77df9a4ed7f6e468e8ba5a42a1b5bfdb4fd75f2",
+  "author_email": "ayushsinghal@microsoft.com",
+  "authored_date": "2026-03-23T09:06:54Z",
+  "files_changed": 28,
+  "files": [
+    {
+      "path": ".gitignore",
+      "additions": 1,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service.EntryPoint/WorkloadParameters/ParametersManifest.json",
+      "additions": 2,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+      "additions": 36,
+      "deletions": 6
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Core/LiveTableHandler.cs",
+      "additions": 9,
+      "deletions": 5
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/DataModel/ListDagExecutionIterationsRequestFilters.cs",
+      "additions": 2,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+      "additions": 7,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadParameterNames.cs",
+      "additions": 8,
+      "deletions": 1
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+      "additions": 393,
+      "deletions": 17
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/IFileSystem.cs",
+      "additions": 27,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
+      "additions": 58,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Persistence/IDagExecutionPersistenceManager.cs",
+      "additions": 17,
+      "deletions": 5
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Store/DagExecutionStore.cs",
+      "additions": 1,
+      "deletions": 1
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Store/IDagExecutionStore.cs",
+      "additions": 8,
+      "deletions": 4
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+      "additions": 8,
+      "deletions": 0
+    },
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Utils/ContinuationTokenHelper.cs",
+      "additions": 222,
+      "deletions": 0
+    },
+    {
+      "path": "docs/design/pagination_design.md",
+      "additions": 1010,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs",
+      "additions": 259,
+      "deletions": 7
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/InMemoryMLVExecutionDefFSStub.cs",
+      "additions": 33,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/CoreTests/LiveTableHandlerAdditionalTests.cs",
+      "additions": 3,
+      "deletions": 2
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagPersistenceTests/FileSystemBasedDagExecutionPersistenceManagerTests.cs",
+      "additions": 653,
+      "deletions": 833
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagPersistenceTests/FileSystemBasedDagExecutionPersistenceManagerTests_CriticalIssues.cs",
+      "additions": 33,
+      "deletions": 33
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagPersistenceTests/FileSystemBasedDagExecutionPersistenceManagerTests_EdgeCases.cs",
+      "additions": 18,
+      "deletions": 18
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagPersistenceTests/FileSystemBasedDagExecutionPersistenceManagerTests_V1.cs",
+      "additions": 29,
+      "deletions": 29
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagPersistenceTests/InMemoryFileSystemStub.cs",
+      "additions": 39,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagPersistenceTests/InMemoryFileSystemStubForMultiMLV.cs",
+      "additions": 28,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/DagStoreTests/DagExecutionStoreCoverageTests.cs",
+      "additions": 3,
+      "deletions": 2
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/UtilsTests/ContinuationTokenHelperTests.cs",
+      "additions": 725,
+      "deletions": 0
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/WorkloadParameters/ParametersManifest.json",
+      "additions": 2,
+      "deletions": 0
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 325621,
+  "diff_sha256": "4efb07ff98c981af4a7b44fa392def6865eaed922b6bdf60f1da5755fa6c00ba",
+  "captured_at": "2026-05-19T09:03:13Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

@@ -1,0 +1,33 @@
+{
+  "pr_number": "927641",
+  "pr_url": "(ADO; reconstruct from origin: https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable)",
+  "repo": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "title": "Merged PR 927641: [Multi-Schedule][Public API][PATCH] : clear stale SelectedMLVs when mode changes away from SelectedOnly",
+  "description": "**Scenario:** User has an execution definition in SelectedOnly mode with SelectedMLVs = [\"TableA\", \"TableB\"].\n\n  They PATCH to switch to All mode:\n\n   {\n     \"currentLakehouseExecutionContext\": {\n       \"currentLakehouseExecutionMode\": \"All\"\n     }\n   }\n\n  **Before the fix:** The PATCH merge logic saw no new SelectedMlvs in the request, so it preserved the existing [\"TableA\", \"TableB\"]. Now the definition says mode=All but still carries stale MLV names. When\n  CatalogHandler runs, it checks SelectedMLVs.Any() — without checking the mode — and filters to only TableA/TableB ancestors. The user expected all MLVs but got an incomplete lineage.\n\n  **After the fix:** If the resolved mode is not SelectedOnly, we clear SelectedMLVs to an empty list, so CatalogHandler's filter never activates\n\n**With Fix :** When mode is changes from one MV to All\nIteration is executing all MVs\n![image.png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/927641/attachments/image.png)\n\nPATCH API ![image (2).png](https://dev.azure.com/powerbi/a105411b-b849-4666-89bf-3a0d2f3fdba7/_apis/git/repositories/3928e7e3-8fac-45ed-a94b-a7bf0702934b/pullRequests/927641/attachments/image%20%282%29.png)\n\nRelated work items: #2030648",
+  "base_sha": "cb474f80538df4a257a40ab2a9278a0da5f2e0b6",
+  "head_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+  "merge_commit_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+  "author_email": "sravuri@microsoft.com",
+  "authored_date": "2026-03-22T06:33:37Z",
+  "files_changed": 2,
+  "files": [
+    {
+      "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+      "additions": 10,
+      "deletions": 3
+    },
+    {
+      "path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+      "additions": 53,
+      "deletions": 4
+    }
+  ],
+  "diff_path": "diff.patch",
+  "diff_size_bytes": 6204,
+  "diff_sha256": "78fb2d819eb89022366cc1e444741f88d9d48db2f78ae7c5d738eae4e3a8864b",
+  "captured_at": "2026-05-19T09:03:16Z",
+  "captured_from": "https://powerbi@dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable",
+  "capture_tool": "tests/qa-eval/capture_pr_fixture.py",
+  "diff_command": "git diff --no-ext-diff --find-renames --find-copies --unified=3 <base_sha> <head_sha>",
+  "git_version": "git version 2.54.0.windows.1"
+}

@@ -3,6 +3,13 @@
   "verdict": "PASS",
   "floor_violations": [],
   "enforcement": "report_only",
+  "corpus_status": {
+    "graded_count": 6,
+    "pending_count": 9,
+    "ungraded_count": 0,
+    "total_count": 15,
+    "phase": "T4-C-prep"
+  },
   "span_expansion": {
     "forward_lines": 15,
     "applied_to": "actual",
@@ -37,9 +44,9 @@
       "pr_number": "955910",
       "expected_total": 12,
       "actual_total": {
-        "emitted": 10,
+        "projected": 2,
         "validated": 0,
-        "projected": 2
+        "emitted": 10
       },
       "matched_count": 7,
       "missed_expected_ids": [
@@ -58,9 +65,9 @@
       ],
       "recall": 0.5833,
       "precision": {
-        "emitted": 0.7,
+        "projected": 0.0,
         "validated": 0.0,
-        "projected": 0.0
+        "emitted": 0.7
       },
       "precision_highest_stage": 0.5833,
       "f1_validated": 0.0,
@@ -72,9 +79,9 @@
       "pr_number": "960543",
       "expected_total": 11,
       "actual_total": {
-        "emitted": 0,
+        "projected": 13,
         "validated": 0,
-        "projected": 13
+        "emitted": 0
       },
       "matched_count": 9,
       "missed_expected_ids": [
@@ -89,9 +96,9 @@
       ],
       "recall": 0.8182,
       "precision": {
-        "emitted": 0.0,
+        "projected": 0.6923,
         "validated": 0.0,
-        "projected": 0.6923
+        "emitted": 0.0
       },
       "precision_highest_stage": 0.6923,
       "f1_validated": 0.0,
@@ -103,9 +110,9 @@
       "pr_number": "966141",
       "expected_total": 4,
       "actual_total": {
-        "emitted": 3,
+        "projected": 1,
         "validated": 0,
-        "projected": 1
+        "emitted": 3
       },
       "matched_count": 3,
       "missed_expected_ids": [
@@ -116,9 +123,9 @@
       ],
       "recall": 0.75,
       "precision": {
-        "emitted": 0.6667,
+        "projected": 1.0,
         "validated": 0.0,
-        "projected": 1.0
+        "emitted": 0.6667
       },
       "precision_highest_stage": 0.75,
       "f1_validated": 0.0,
@@ -130,9 +137,9 @@
       "pr_number": "975848",
       "expected_total": 8,
       "actual_total": {
-        "emitted": 8,
+        "projected": 6,
         "validated": 0,
-        "projected": 6
+        "emitted": 8
       },
       "matched_count": 6,
       "missed_expected_ids": [
@@ -151,9 +158,9 @@
       ],
       "recall": 0.75,
       "precision": {
-        "emitted": 0.25,
+        "projected": 0.6667,
         "validated": 0.0,
-        "projected": 0.6667
+        "emitted": 0.25
       },
       "precision_highest_stage": 0.4286,
       "f1_validated": 0.0,
@@ -165,9 +172,9 @@
       "pr_number": "976609",
       "expected_total": 6,
       "actual_total": {
-        "emitted": 0,
+        "projected": 9,
         "validated": 0,
-        "projected": 9
+        "emitted": 0
       },
       "matched_count": 6,
       "missed_expected_ids": [],
@@ -178,9 +185,9 @@
       ],
       "recall": 1.0,
       "precision": {
-        "emitted": 0.0,
+        "projected": 0.6667,
         "validated": 0.0,
-        "projected": 0.6667
+        "emitted": 0.0
       },
       "precision_highest_stage": 0.6667,
       "f1_validated": 0.0,
@@ -192,9 +199,9 @@
       "pr_number": "977882",
       "expected_total": 10,
       "actual_total": {
-        "emitted": 1,
+        "projected": 7,
         "validated": 0,
-        "projected": 7
+        "emitted": 1
       },
       "matched_count": 7,
       "missed_expected_ids": [
@@ -207,9 +214,9 @@
       ],
       "recall": 0.7,
       "precision": {
-        "emitted": 0.0,
+        "projected": 1.0,
         "validated": 0.0,
-        "projected": 1.0
+        "emitted": 0.0
       },
       "precision_highest_stage": 0.875,
       "f1_validated": 0.0,
@@ -218,7 +225,17 @@
       "category_label_accuracy": 0.8571
     }
   ],
-  "prs_pending_grading": [],
+  "prs_pending_grading": [
+    "879735",
+    "910832",
+    "927641",
+    "929467",
+    "933822",
+    "934326",
+    "936352",
+    "950638",
+    "960426"
+  ],
   "prs_ungraded": [],
   "schema_errors": []
 }

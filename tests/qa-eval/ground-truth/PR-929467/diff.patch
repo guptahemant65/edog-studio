@@ -1,0 +1,519 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs
+index 509a88c7..36fbce0c 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs
+@@ -6,7 +6,6 @@ namespace Microsoft.LiveTable.Service.Controllers
+ {
+     using System;
+     using System.Collections.Generic;
+-    using System.Diagnostics.CodeAnalysis;
+     using System.Globalization;
+     using System.Linq;
+     using System.Net;
+@@ -23,13 +22,11 @@ namespace Microsoft.LiveTable.Service.Controllers
+     using Microsoft.LiveTable.Service.Core;
+     using Microsoft.LiveTable.Service.DataModel;
+     using Microsoft.LiveTable.Service.DataModel.Dag;
+-    using Microsoft.LiveTable.Service.DataModel.Dag.Execution;
+     using Microsoft.LiveTable.Service.FeatureFlightProvider;
+     using Microsoft.LiveTable.Service.Filters;
+     using Microsoft.LiveTable.Service.ReliableOperations;
+     using Microsoft.LiveTable.Service.SecurityAuditing;
+     using Microsoft.LiveTable.Service.Telemetry;
+-    using Microsoft.LiveTable.Service.Throttling.PolicyConfigProviders;
+     using Microsoft.LiveTable.Service.TokenManagement;
+     using Microsoft.LiveTable.Service.Utils;
+     using Microsoft.MWC.Workload.Client.Library.Controllers;
+@@ -67,6 +64,7 @@ namespace Microsoft.LiveTable.Service.Controllers
+         private readonly IMonikerManager monikerManager;
+         private readonly ITokenManager tokenManager;
+         private readonly ICustomLiveTableTelemetryReporter telemetryReporter;
++        private readonly IFeatureFlighter featureFlighter;
+         private readonly LiveTableHandler ltHandler = WireUp.Resolve<LiveTableHandler>();
+ 
+         /// <summary>
+@@ -75,11 +73,14 @@ namespace Microsoft.LiveTable.Service.Controllers
+         /// <param name="monikerManager">The moniker manager instance.</param>
+         /// <param name="tokenManager">The token manager instance.</param>
+         /// <param name="telemetryReporter">The custom telemetry reporter instance.</param>
+-        public LiveTableSchedulerRunController(IMonikerManager monikerManager, ITokenManager tokenManager, ICustomLiveTableTelemetryReporter telemetryReporter)
++        /// <param name="featureFlighter">The feature flighter.</param>
++        public LiveTableSchedulerRunController(
++            IMonikerManager monikerManager, ITokenManager tokenManager, ICustomLiveTableTelemetryReporter telemetryReporter, IFeatureFlighter featureFlighter)
+         {
+             this.monikerManager = monikerManager;
+             this.tokenManager = tokenManager;
+             this.telemetryReporter = telemetryReporter;
++            this.featureFlighter = featureFlighter;
+         }
+ 
+         /// <summary>
+@@ -253,7 +254,7 @@ namespace Microsoft.LiveTable.Service.Controllers
+             CancellationToken cancellationToken)
+         {
+             return await Microsoft.LiveTable.Service.Monitoring.CodeMarkers.LiveTableSchedulerRunController.GetDAGExecStatus.ExecuteAsync(async ms =>
+-           {
++            {
+                 ms.AddCustomData("WorkspaceId", workspaceId.ToString());
+                 ms.AddCustomData("ArtifactId", artifactId.ToString());
+                 ms.AddCustomData("IterationId", iterationId.ToString());
+@@ -294,37 +295,25 @@ namespace Microsoft.LiveTable.Service.Controllers
+                     var dagExecInstance = await ltHandler.GetDagExecInstanceAsync(workspaceId, artifactId, iterationId, tenantId);
+                     if (dagExecInstance != null)
+                     {
+-                        try
+-                        {
+-                            tokenManager.UpdateCachedToken(artifactId, iterationId, mwcToken);
+-                        }
+-                        catch (Exception e)
+-                        {
+-                            Tracer.LogSanitizedError(e, $"Failed while updating mwcToken for {iterationId}.");
+-                        }
+-
+                         schedulerRunStatus = SchedulerRunStatus.GetSchedulerRunStatus(dagExecInstance);
+-                        if (schedulerRunStatus != null)
+-                        {
+-                            // If DisplayName wasn't set yet (early-stage scenario), default to artifactId
+-                            if (string.IsNullOrEmpty(schedulerRunStatus.Name))
+-                            {
+-                                schedulerRunStatus.Name = DagUtils.GetDagName(artifactId);
+-                            }
+-
+-                            Tracer.LogSanitizedMessage($"DAG Status for Iteration {iterationId} found");
+-
+-                            // Setting Telemetry Context
+-                            featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
+-                            featureUsageEventMetadata = TelemetryUtils.CreateFeatureUsageEventMetadata(
+-                                            ("WorkspaceId", workspaceId.ToString()),
+-                                            ("ArtifactId", artifactId.ToString()));
+-                            return this.ResponseMessage(CreateHttpResponse(HttpStatusCode.OK, schedulerRunStatus));
+-                        }
+-                        else
++
++                        // If DisplayName wasn't set yet (early-stage scenario), default to artifactId
++                        // TODO dagExecInstance.DagExecutionMetrics should always have a name. When create it, at that single point
++                        // set it to Lakehouse ID if its not a MLV exec definition based run
++                        if (string.IsNullOrEmpty(schedulerRunStatus.Name))
+                         {
+-                            throw new Exception($"DAG Status for iteration not found for Iteration {iterationId}");
++                            schedulerRunStatus.Name = DagUtils.GetDagName(artifactId);
+                         }
++
++                        Tracer.LogSanitizedMessage($"DAG Status for Iteration {iterationId} found to be {schedulerRunStatus.Status}");
++                        UpdateOrDeleteTokenInTokenManager(tenantId, artifactId, iterationId, mwcToken, schedulerRunStatus.Status);
++
++                        // Setting Telemetry Context
++                        featureUsageEventActivityStatus = StandardizedActivityStatus.Succeeded;
++                        featureUsageEventMetadata = TelemetryUtils.CreateFeatureUsageEventMetadata(
++                                        ("WorkspaceId", workspaceId.ToString()),
++                                        ("ArtifactId", artifactId.ToString()));
++                        return this.ResponseMessage(CreateHttpResponse(HttpStatusCode.OK, schedulerRunStatus));
+                     }
+                     else
+                     {
+@@ -531,6 +520,38 @@ namespace Microsoft.LiveTable.Service.Controllers
+             throw new ArgumentException(errorMessage, paramName);
+         }
+ 
++        private void UpdateOrDeleteTokenInTokenManager(string tenantId, Guid artifactId, Guid iterationId, string mwcToken, DagExecutionStatus status)
++        {
++            // TODO this feature flight is just a defensive mechanism. To be removed ASAP once we have confidence of running this in prod for few days
++            if (featureFlighter.IsEnabled(FeatureNames.FLTTokenManagerSkipClearOnDagCompletion, Guid.TryParse(tenantId, out var tenantGuid) ? tenantGuid : null, null, null))
++            {
++                Tracer.LogSanitizedVerbose($"Feature flag {FeatureNames.FLTTokenManagerSkipClearOnDagCompletion} is enabled.");
++                try
++                {
++                    tokenManager.UpdateCachedToken(artifactId, iterationId, mwcToken);
++                }
++                catch (Exception e)
++                {
++                    Tracer.LogSanitizedError(e, $"Failed while updating mwcToken for {iterationId}.");
++                }
++            }
++            else
++            {
++                // When we see a terminal status for this Dag iteration, no need to update the Token in token manager as the execution
++                // is complete and the token can be evicted.
++                if (DagExecutionMetrics.IsInTerminalStatus(status))
++                {
++                    Tracer.LogSanitizedMessage("Dag execution is in a terminal status. Trying to delete the Token in TokenManager");
++                    tokenManager.DeleteCachedToken(artifactId, iterationId);
++                }
++                else
++                {
++                    Tracer.LogSanitizedVerbose("Dag execution is not in a terminal status. Trying to update the Token in TokenManager");
++                    tokenManager.UpdateCachedToken(artifactId, iterationId, mwcToken);
++                }
++            }
++        }
++
+         private IActionResult CreateSchedulerRunStatus(Guid workspaceId, Guid artifactId, string message, DagExecutionStatus status)
+         {
+             // TODO it is incorrect way of responding Dag exec failed in the 3 cases where its been used now. Fix me
+diff --git a/Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs b/Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs
+index 6f6ec04c..23b9975d 100644
+--- a/Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs
++++ b/Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs
+@@ -268,16 +268,21 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+             }
+         }
+ 
++        internal static bool IsInTerminalStatus(DagExecutionStatus status)
++        {
++            return (status == DagExecutionStatus.Completed)
++                || (status == DagExecutionStatus.Failed)
++                || (status == DagExecutionStatus.Skipped)
++                || (status == DagExecutionStatus.Cancelled);
++        }
++
+         /// <summary>
+         /// Checks whether the current status of the Dag execution is in any of the final status.
+         /// </summary>
+         /// <returns>True when Dag execution is done.</returns>
+         internal bool IsInTerminalStatus()
+         {
+-            return (Status == DagExecutionStatus.Completed)
+-                || (Status == DagExecutionStatus.Failed)
+-                || (Status == DagExecutionStatus.Skipped)
+-                || (Status == DagExecutionStatus.Cancelled);
++            return IsInTerminalStatus(this.Status);
+         }
+ 
+         internal bool IsInTerminalOrCancellingStatus() => IsInTerminalStatus() || (Status == DagExecutionStatus.Cancelling);
+diff --git a/Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs b/Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs
+index 479ddd56..e9b5f4b6 100644
+--- a/Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs
++++ b/Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs
+@@ -5,6 +5,8 @@
+ namespace Microsoft.LiveTable.Service.DataModel.Dag
+ {
+     using System;
++    using Microsoft.LiveTable.Service.Utils;
++    using Microsoft.ServicePlatform.Exceptions.Core;
+     using Newtonsoft.Json;
+ 
+     /// <summary>
+@@ -54,13 +56,9 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+         /// </summary>
+         /// <param name="dagExecInstance">DagExecutionInstance</param>
+         /// <returns>Dag Status Object</returns>
+-        /// <exception cref="ArgumentNullException">If the dag is null</exception>
+         public static SchedulerRunStatus GetSchedulerRunStatus(DagExecutionInstance dagExecInstance)
+         {
+-            if (dagExecInstance == null)
+-            {
+-                throw new ArgumentNullException("Dag exec instance is null. Can not extract Dag Status");
+-            }
++            Check.AssertArgumentNotNull(dagExecInstance, nameof(dagExecInstance));
+ 
+             // Mapping from Cancelling -> Running for scheduler only.
+             var dagExecutionStatus = MappingForScheduler(dagExecInstance.DagExecutionMetrics.Status);
+diff --git a/Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs b/Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs
+index 719051b0..e4b935a4 100644
+--- a/Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs
++++ b/Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs
+@@ -132,5 +132,11 @@ namespace Microsoft.LiveTable.Service.FeatureFlightProvider
+         /// Part of the Optimal Concurrency experiment.
+         /// </summary>
+         public const string FLTParallelNodeLimit20 = "FLTParallelNodeLimit20";
++
++        /// <summary>
++        /// Feature flag to control cleaning up for TokenManager on DAG completion.
++        /// Kill-switch: enable to revert to old behavior (always update, never delete). To be removed once validated in production.
++        /// </summary>
++        public const string FLTTokenManagerSkipClearOnDagCompletion = "FLTTokenManagerSkipClearOnDagCompletion";
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/TokenManagement/TokenManager.cs b/Service/Microsoft.LiveTable.Service/TokenManagement/TokenManager.cs
+index f99ecedf..c92b898a 100644
+--- a/Service/Microsoft.LiveTable.Service/TokenManagement/TokenManager.cs
++++ b/Service/Microsoft.LiveTable.Service/TokenManagement/TokenManager.cs
+@@ -183,12 +183,13 @@ namespace Microsoft.LiveTable.Service.TokenManagement
+         /// </summary>
+         /// <param name="lakehouseId">Lakehouse Id for which Token is being deleted</param>
+         /// <param name="iterationId">IterationId for which Token is being deleted</param>
+-        public void DeleteCachedToken(Guid lakehouseId, Guid iterationId)
++        public virtual void DeleteCachedToken(Guid lakehouseId, Guid iterationId)
+         {
+             string tokenKey = CreateTokenKey(lakehouseId, iterationId);
+             try
+             {
+                 tokenSemaphore.Wait();
++                Tracer.LogSanitizedMessage($"[Token Manager] Deleting token for LakehouseId: {lakehouseId}, IterationId: {iterationId}");
+                 if (this.iterationTokens.ContainsKey(tokenKey))
+                 {
+                     this.iterationTokens.TryRemove(tokenKey, out Token token);
+@@ -198,7 +199,7 @@ namespace Microsoft.LiveTable.Service.TokenManagement
+             }
+             catch (System.Exception ex)
+             {
+-                Tracer.LogSanitizedMessage($"[Token Manager] Exception occurred while deleting the token for LakehouseId: {lakehouseId}, IterationId: {iterationId}. Exception: {ex.Message} . It might result into memory leak");
++                Tracer.LogSanitizedError(ex, $"[Token Manager] Exception occurred while deleting the token for LakehouseId: {lakehouseId}, IterationId: {iterationId}.");
+             }
+             finally
+             {
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs
+index 7cc3856a..dc7493f9 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs
+@@ -71,6 +71,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         private Mock<ICatalogHandler> mockICatalogHandler;
+         private Mock<IArtifactMetadataService> mockArtifactMetadataService;
+         private Mock<TokenManager> mockITokenManager;
++        private Mock<IFeatureFlighter> mockFeatureFlighter;
+         private Mock<ISecurityAuditEventReporter> mockSecurityAuditEventReporter;
+         private Mock<IParametersProvider> mockParameterProvider;
+         private Mock<MWC.Workload.Client.Library.Providers.IWorkloadApplicationAuthorityProvider> mockIWorkloadApplicationAuthorityProvider;
+@@ -109,7 +110,14 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             mockSecurityAuditEventReporter = new Mock<ISecurityAuditEventReporter>();
+             mockCustomLiveTableTelemetryReporter = new Mock<ICustomLiveTableTelemetryReporter>();
+             var mockDagExecMetadataPersistanceManager = new Mock<IDagExecMetadataPersistanceManager>();
+-            var mockFeatureFlighter = new Mock<IFeatureFlighter>();
++            mockFeatureFlighter = new Mock<IFeatureFlighter>();
++            mockFeatureFlighter
++                .Setup(f => f.IsEnabled(
++                    FeatureNames.FLTTokenManagerSkipClearOnDagCompletion,
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>()))
++                .Returns(false);
+             WireUp.RegisterInstance(mockFeatureFlighter.Object);
+             mockLiveTableHandler = new Mock<LiveTableHandler>(
+                 mockDagExecutionStore.Object,
+@@ -149,6 +157,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 bldr.AddPlatformService(this.authenticatorFactoryMock.Object);
+                 bldr.AddPlatformService<IDagExecutionStore>(mockDagExecutionStore.Object);
+                 bldr.AddPlatformService<ICustomLiveTableTelemetryReporter>(mockCustomLiveTableTelemetryReporter.Object);
++                bldr.AddPlatformService<IFeatureFlighter>(mockFeatureFlighter.Object);
+                 bldr.UseNewtonsoftJson(options => WorkloadCustomParametersSerializationUtilities.SetCustomParameterSettings(options.SerializerSettings));
+             };
+ 
+@@ -617,6 +626,17 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         [TestMethod("LiveTableController: LiveTableController_GetDAGExecStatusAsync should use proper exception logging for token update failures")]
+         public async Task LiveTableController_GetDAGExecStatusAsync_TokenUpdateExceptionLoggingPatternAsync()
+         {
++            // Enable the kill switch flag so the UpdateCachedToken path with try-catch is exercised.
++            // When the flag is disabled (new behavior), the non-terminal path does not wrap UpdateCachedToken
++            // in try-catch, so the exception would propagate to the outer handler.
++            mockFeatureFlighter
++                .Setup(f => f.IsEnabled(
++                    FeatureNames.FLTTokenManagerSkipClearOnDagCompletion,
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>()))
++                .Returns(true);
++
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+                 using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: true))
+@@ -693,6 +713,189 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+             }
+         }
+ 
++        /// <summary>
++        /// Verifies that when the feature flag is disabled (default) and DAG is in terminal status (Completed),
++        /// the cached token is deleted and UpdateCachedToken is not called.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod("LiveTableController: GetDAGExecStatusAsync deletes cached token when DAG is completed and feature flag disabled")]
++        public async Task GetDAGExecStatusAsync_FlagDisabled_CompletedStatus_DeletesTokenAsync()
++        {
++            // Feature flag disabled by default in TestInitialize — new cleanup behavior is active
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            {
++                using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: true))
++                {
++                    var expectedDag = CreateDag1();
++                    var expectedDagExecInstance = new DagExecutionInstance(expectedDag, this.iterationId);
++                    expectedDagExecInstance.DagExecutionMetrics.StartedAt = DateTime.UtcNow;
++                    expectedDagExecInstance.DagExecutionMetrics.EndedAt = DateTime.UtcNow;
++                    expectedDagExecInstance.DagExecutionMetrics.Status = DagExecutionStatus.Completed;
++
++                    mockLiveTableHandler
++                        .Setup(handler => handler.GetDagExecInstanceAsync(this.workspaceId, this.lakehouseId, this.iterationId, this.tenantId, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                        .ReturnsAsync(expectedDagExecInstance);
++
++                    var uri = new UriBuilder(baseUri)
++                    {
++                        Path = $"{this.relativePath}/getDAGExecStatus/{this.iterationId}",
++                    }.Uri;
++                    var response = await client.GetAsync(uri);
++
++                    response.StatusCode.Should().Be(HttpStatusCode.OK);
++                    var schedulerRunStatus = JsonConvert.DeserializeObject<SchedulerRunStatus>(await response.Content.ReadAsStringAsync());
++                    Assert.AreEqual(DagExecutionStatus.Completed, schedulerRunStatus.Status);
++
++                    // Terminal status: token should be deleted, not updated
++                    mockITokenManager.Verify(
++                        x => x.UpdateCachedToken(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>()),
++                        Times.Never());
++
++                    mockITokenManager.Verify(
++                        x => x.DeleteCachedToken(It.IsAny<Guid>(), It.IsAny<Guid>()),
++                        Times.Once());
++                }
++            }
++        }
++
++        /// <summary>
++        /// Verifies that when the feature flag is disabled (default) and DAG is in non-terminal status (Running),
++        /// UpdateCachedToken is called to refresh the token.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod("LiveTableController: GetDAGExecStatusAsync updates cached token when DAG is running and feature flag disabled")]
++        public async Task GetDAGExecStatusAsync_FlagDisabled_RunningStatus_UpdatesTokenAsync()
++        {
++            // Feature flag disabled by default in TestInitialize — new cleanup behavior is active
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            {
++                using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: true))
++                {
++                    var expectedDag = CreateDag1();
++                    var expectedDagExecInstance = new DagExecutionInstance(expectedDag, this.iterationId);
++                    await expectedDagExecInstance.OnDagExecutionBeginAsync();
++
++                    mockLiveTableHandler
++                        .Setup(handler => handler.GetDagExecInstanceAsync(this.workspaceId, this.lakehouseId, this.iterationId, this.tenantId, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                        .ReturnsAsync(expectedDagExecInstance);
++
++                    var uri = new UriBuilder(baseUri)
++                    {
++                        Path = $"{this.relativePath}/getDAGExecStatus/{this.iterationId}",
++                    }.Uri;
++                    var response = await client.GetAsync(uri);
++
++                    response.StatusCode.Should().Be(HttpStatusCode.OK);
++                    var schedulerRunStatus = JsonConvert.DeserializeObject<SchedulerRunStatus>(await response.Content.ReadAsStringAsync());
++                    Assert.AreEqual(DagExecutionStatus.Running, schedulerRunStatus.Status);
++
++                    // Non-terminal status: token should be updated, not deleted
++                    mockITokenManager.Verify(
++                        x => x.UpdateCachedToken(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>()),
++                        Times.Once());
++                    mockITokenManager.Verify(
++                        x => x.DeleteCachedToken(It.IsAny<Guid>(), It.IsAny<Guid>()),
++                        Times.Never());
++                }
++            }
++        }
++
++        /// <summary>
++        /// Verifies that when the kill switch feature flag is enabled, UpdateCachedToken is called
++        /// regardless of terminal status, preserving old behavior.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod("LiveTableController: GetDAGExecStatusAsync updates token when kill switch flag is enabled even for terminal status")]
++        public async Task GetDAGExecStatusAsync_FlagEnabled_TerminalStatus_UpdatesTokenInsteadOfDeleteAsync()
++        {
++            // Enable kill switch — reverts to old behavior (always UpdateCachedToken)
++            mockFeatureFlighter
++                .Setup(f => f.IsEnabled(
++                    FeatureNames.FLTTokenManagerSkipClearOnDagCompletion,
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>()))
++                .Returns(true);
++
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            {
++                using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: true))
++                {
++                    var expectedDag = CreateDag1();
++                    var expectedDagExecInstance = new DagExecutionInstance(expectedDag, this.iterationId);
++                    expectedDagExecInstance.DagExecutionMetrics.StartedAt = DateTime.UtcNow;
++                    expectedDagExecInstance.DagExecutionMetrics.EndedAt = DateTime.UtcNow;
++                    expectedDagExecInstance.DagExecutionMetrics.Status = DagExecutionStatus.Completed;
++
++                    mockLiveTableHandler
++                        .Setup(handler => handler.GetDagExecInstanceAsync(this.workspaceId, this.lakehouseId, this.iterationId, this.tenantId, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                        .ReturnsAsync(expectedDagExecInstance);
++
++                    var uri = new UriBuilder(baseUri)
++                    {
++                        Path = $"{this.relativePath}/getDAGExecStatus/{this.iterationId}",
++                    }.Uri;
++                    var response = await client.GetAsync(uri);
++
++                    response.StatusCode.Should().Be(HttpStatusCode.OK);
++                    var schedulerRunStatus = JsonConvert.DeserializeObject<SchedulerRunStatus>(await response.Content.ReadAsStringAsync());
++                    Assert.AreEqual(DagExecutionStatus.Completed, schedulerRunStatus.Status);
++
++                    // Kill switch enabled: UpdateCachedToken should be called even for terminal status
++                    mockITokenManager.Verify(
++                        x => x.UpdateCachedToken(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>()),
++                        Times.Once());
++                }
++            }
++        }
++
++        /// <summary>
++        /// Verifies that when the kill switch flag is enabled and UpdateCachedToken throws,
++        /// the exception is caught by the try-catch wrapper and the request still succeeds.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod("LiveTableController: GetDAGExecStatusAsync handles token update exception gracefully when kill switch flag is enabled")]
++        public async Task GetDAGExecStatusAsync_FlagEnabled_UpdateTokenThrows_RequestSucceedsAsync()
++        {
++            // Enable kill switch — old behavior path has try-catch around UpdateCachedToken
++            mockFeatureFlighter
++                .Setup(f => f.IsEnabled(
++                    FeatureNames.FLTTokenManagerSkipClearOnDagCompletion,
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>(),
++                    It.IsAny<Guid?>()))
++                .Returns(true);
++
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            {
++                using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: true))
++                {
++                    var expectedDag = new Dag { Name = this.dagName };
++                    var expectedDagExecInstance = new DagExecutionInstance(expectedDag, this.iterationId);
++
++                    mockLiveTableHandler
++                        .Setup(handler => handler.GetDagExecInstanceAsync(this.workspaceId, this.lakehouseId, this.iterationId, this.tenantId, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                        .ReturnsAsync(expectedDagExecInstance);
++
++                    mockITokenManager.Setup(x => x.UpdateCachedToken(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>()))
++                        .Throws(new InvalidOperationException("Token update failed"));
++
++                    await expectedDagExecInstance.OnDagExecutionBeginAsync();
++
++                    var uri = new UriBuilder(baseUri)
++                    {
++                        Path = $"{this.relativePath}/getDAGExecStatus/{this.iterationId}",
++                    }.Uri;
++                    var response = await client.GetAsync(uri);
++
++                    // Should still succeed despite token update failure — try-catch in flag-enabled path catches it
++                    response.StatusCode.Should().Be(HttpStatusCode.OK);
++                    var schedulerRunStatus = JsonConvert.DeserializeObject<SchedulerRunStatus>(await response.Content.ReadAsStringAsync());
++                    Assert.AreEqual(DagExecutionStatus.Running, schedulerRunStatus.Status);
++                }
++            }
++        }
++
+         /// <summary>
+         /// Unit test for LiveTableController_runDAGAsync with non-empty body.
+         /// This test verifies that the run DAG API accepts a valid RunDagRequestBody
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs
+index c79eae25..0e5190f9 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs
+@@ -10,6 +10,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DataModelTests
+     using Microsoft.LiveTable.Service.DataModel.Dag;
+     using Microsoft.LiveTable.Service.FeatureFlightProvider;
+     using Microsoft.PowerBI.ServicePlatform.WireUp;
++    using Microsoft.ServicePlatform.Exceptions.Common.Runtime;
+     using Microsoft.VisualStudio.TestTools.UnitTesting;
+     using Moq;
+     using Newtonsoft.Json;
+@@ -185,7 +186,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DataModelTests
+         /// Tests that GetSchedulerRunStatus throws when dagExecInstance is null.
+         /// </summary>
+         [TestMethod]
+-        [ExpectedException(typeof(ArgumentNullException))]
++        [ExpectedException(typeof(RuntimeAssertException))]
+         public void GetSchedulerRunStatus_NullInstance_ThrowsArgumentNullException()
+         {
+             SchedulerRunStatus.GetSchedulerRunStatus(null);

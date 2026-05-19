@@ -1,0 +1,2785 @@
+diff --git a/Service/Microsoft.LiveTable.Service/Common/Constants.cs b/Service/Microsoft.LiveTable.Service/Common/Constants.cs
+index 99185d20..20c433b7 100644
+--- a/Service/Microsoft.LiveTable.Service/Common/Constants.cs
++++ b/Service/Microsoft.LiveTable.Service/Common/Constants.cs
+@@ -248,6 +248,45 @@ namespace Microsoft.LiveTable.Service.Common
+         /// </summary>
+         public const string CdfAlterNodeNamePrefix = "cdf_internal.alter_";
+ 
++        // ******************************
++        // ErrorRegistry Parameter Keys (const fields)
++        // ******************************
++
++        /// <summary>
++        /// Parameter key for cell index in notebook error messages.
++        /// </summary>
++        public const string CellIndexKey = "CellIndex";
++
++        /// <summary>
++        /// Parameter key for line number in notebook error messages.
++        /// </summary>
++        public const string LineNumberKey = "LineNumber";
++
++        /// <summary>
++        /// Parameter key for notebook ID in error messages.
++        /// </summary>
++        public const string NotebookIdKey = "NotebookId";
++
++        /// <summary>
++        /// Parameter key for notebook details in error messages.
++        /// </summary>
++        public const string NotebookDetailsKey = "NotebookDetails";
++
++        /// <summary>
++        /// Default error title for ProblemDetails responses.
++        /// </summary>
++        public const string DefaultErrorTitle = "An error occurred while processing your request.";
++
++        /// <summary>
++        /// Error title for ETag mismatch (notebook recently updated).
++        /// </summary>
++        public const string NotebookRecentlyUpdatedTitle = "Notebook recently updated";
++
++        /// <summary>
++        /// Error title for notebook validation errors (e.g., multiple MLV definitions).
++        /// </summary>
++        public const string NotebookValidationErrorTitle = "Notebook validation error";
++
+         // ******************************
+         // Non-const Fields (static readonly)
+         // ******************************
+diff --git a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs
+index 35b81f20..5d24a2c8 100644
+--- a/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs
++++ b/Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs
+@@ -229,63 +229,54 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+                     Tracer.LogSanitizedError(ex, $"Catalog error accessing latest DAG. StatusCode: {httpStatusCode}, ErrorCode: {fltErrorCode}");
+                     return CreateErrorResponse(ex.Message, httpStatusCode);
+                 }
+-                catch (NotebookParsingException ex)
+-                {
+-                    SetLineageTypeFromException(ex, featureUsageEventMetadata);
+-                    Tracer.LogSanitizedError(ex, "DAG Creation Failed due to unsupported magic command in notebook");
+-
+-                    httpStatusCode = ex.StatusCode;
+-                    fltErrorCode = ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED.ToString();
+-                    string errorType = Constants.UserError;
+-
+-                    ms.AddCustomData(Constants.ErrorTypeKey, errorType);
+-                    ms.AddCustomData("ErrorCode", fltErrorCode);
+-                    featureUsageEventMetadata.Add(Constants.ErrorTypeKey, errorType);
+-                    featureUsageEventMetadata.Add("ErrorCode", fltErrorCode);
+-
+-                    featureUsageEventActivityStatus = StandardizedActivityStatus.SucceededWithErrors;
+-
+-                    return CreateErrorResponse(ex.Message, httpStatusCode);
+-                }
+                 catch (NotebookException ex)
+                 {
+                     SetLineageTypeFromException(ex, featureUsageEventMetadata);
+                     Tracer.LogSanitizedError(ex, "DAG Creation Failed while accessing the Notebook");
+ 
+                     httpStatusCode = ex.StatusCode;
+-                    fltErrorCode = ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION.ToString();
+ 
+                     // Determine error type based on status code
+                     string errorType = NodeExecutionUtils.IsUserError(httpStatusCode)
+                         ? Constants.UserError
+                         : Constants.SystemError;
+ 
+-                    ms.AddCustomData(Constants.ErrorTypeKey, errorType);
+-                    ms.AddCustomData("ErrorCode", fltErrorCode);
+-                    featureUsageEventMetadata.Add(Constants.ErrorTypeKey, errorType);
+-                    featureUsageEventMetadata.Add("ErrorCode", fltErrorCode);
+-
+                     // Set activity status based on error type
+                     featureUsageEventActivityStatus = errorType == Constants.UserError
+                         ? StandardizedActivityStatus.SucceededWithErrors
+                         : StandardizedActivityStatus.Failed;
+ 
+-                    string message = $"Failed to get latest FMLV Lineage. Status: {httpStatusCode}, ErrorType: {errorType}";
++                    string responseMessage;
++                    string responseTitle;
+ 
+-                    // Only add Notebook and workspace ID if they are not null
+-                    if (ex.WorkspaceId.HasValue && !ex.Message.Contains(ex.WorkspaceId.ToString()))
++                    // If the exception carries a specific ErrorCode, the message is already formatted — pass it through directly
++                    if (ex.ErrorCode.HasValue)
+                     {
+-                        message = string.Join(", Notebook Workspace ID: ", message, ex.WorkspaceId);
++                        fltErrorCode = ex.ErrorCode.Value.ToString();
++                        responseTitle = GetNotebookErrorTitle(ex.ErrorCode.Value);
++                        responseMessage = ex.Message;
+                     }
+-
+-                    if (ex.NotebookId.HasValue && !ex.Message.Contains(ex.NotebookId.ToString()))
++                    else
+                     {
+-                        message = string.Join(", Notebook ID: ", message, ex.NotebookId);
++                        fltErrorCode = ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION.ToString();
++                        responseTitle = Constants.DefaultErrorTitle;
++                        var lineageErrorParams = new Dictionary<string, string>
++                        {
++                            { Constants.NotebookIdKey, ex.NotebookId?.ToString() ?? "Unknown" },
++                            { Constants.WorkspaceIdKey, ex.WorkspaceId?.ToString() ?? "Unknown" },
++                            { Constants.ErrorMessageKey, string.IsNullOrEmpty(ex.Message) ? string.Empty : ex.Message + " " },
++                        };
++                        responseMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, lineageErrorParams);
+                     }
+ 
+-                    Tracer.LogSanitizedError(string.Join(", Error: ", message, ex));
++                    ms.AddCustomData(Constants.ErrorTypeKey, errorType);
++                    ms.AddCustomData(Constants.ErrorCodeKey, fltErrorCode);
++                    featureUsageEventMetadata.Add(Constants.ErrorTypeKey, errorType);
++                    featureUsageEventMetadata.Add(Constants.ErrorCodeKey, fltErrorCode);
++
++                    Tracer.LogSanitizedError(responseMessage);
+ 
+-                    return CreateErrorResponse(string.Join(", Error: ", message, ex.Message), httpStatusCode);
++                    return CreateErrorResponse(responseTitle, responseMessage, httpStatusCode);
+                 }
+                 catch (ArgumentNullException ex)
+                 {
+@@ -2460,6 +2451,21 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+             }
+         }
+ 
++        /// <summary>
++        /// Returns a user-friendly title for notebook-related error codes.
++        /// </summary>
++        /// <param name="errorCode">The error code.</param>
++        /// <returns>A descriptive title string.</returns>
++        private static string GetNotebookErrorTitle(ErrorCode errorCode)
++        {
++            return errorCode switch
++            {
++                ErrorCode.MLV_NB_ETAG_CHANGED => Constants.NotebookRecentlyUpdatedTitle,
++                ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL => Constants.NotebookValidationErrorTitle,
++                _ => Constants.DefaultErrorTitle,
++            };
++        }
++
+         /// <summary>
+         /// Checks if the request should be throttled.
+         /// </summary>
+@@ -2495,11 +2501,16 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+         }
+ 
+         private ProblemDetails CreateProblemDetails(HttpStatusCode statusCode, string detail)
++        {
++            return CreateProblemDetails(statusCode, Constants.DefaultErrorTitle, detail);
++        }
++
++        private ProblemDetails CreateProblemDetails(HttpStatusCode statusCode, string title, string detail)
+         {
+             return new ProblemDetails
+             {
+                 Status = (int)statusCode,
+-                Title = "An error occurred while processing your request.",
++                Title = title,
+                 Detail = detail,
+                 Instance = this.HttpContext.Request.Path,
+             };
+@@ -2564,5 +2575,18 @@ namespace Microsoft.Analytics.LiveTable.Service.Controllers
+             var problemDetails = CreateProblemDetails(resultCode, exceptionMessage);
+             return this.ResponseMessage(JsonResponseHelper.CreateHttpResponseWithNewtonsoft(resultCode, problemDetails));
+         }
++
++        /// <summary>
++        /// Creates an error response with a custom title.
++        /// </summary>
++        /// <param name="title">The problem title.</param>
++        /// <param name="detail">The detailed error message.</param>
++        /// <param name="resultCode">The HTTP status code.</param>
++        /// <returns>An IActionResult representing the error response.</returns>
++        private IActionResult CreateErrorResponse(string title, string detail, HttpStatusCode resultCode)
++        {
++            var problemDetails = CreateProblemDetails(resultCode, title, detail);
++            return this.ResponseMessage(JsonResponseHelper.CreateHttpResponseWithNewtonsoft(resultCode, problemDetails));
++        }
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs
+index ac81ef96..ff431864 100644
+--- a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs
++++ b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs
+@@ -245,6 +245,11 @@ namespace Microsoft.LiveTable.Service.ErrorMapping
+         /// </summary>
+         MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION,
+ 
++        /// <summary>
++        /// Error indicating notebook content changed after operation started (ETag mismatch).
++        /// </summary>
++        MLV_NB_ETAG_CHANGED,
++
+         /// <summary>
+         /// Error indicating DAG creation failure due to presence of cell magic.
+         /// </summary>
+diff --git a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs
+index d291c2fd..333db32b 100644
+--- a/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs
++++ b/Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs
+@@ -4,6 +4,7 @@
+ 
+ namespace Microsoft.LiveTable.Service.ErrorMapping
+ {
++    using System;
+     using System.Collections.Generic;
+     using Constants = Microsoft.LiveTable.Service.Common.Constants;
+ 
+@@ -60,7 +61,8 @@ namespace Microsoft.LiveTable.Service.ErrorMapping
+                 { ErrorCode.MLV_TOO_MANY_REQUESTS, "Failed with too many requests to the server within a given timeframe. HTTP status code: 429" },
+                 { ErrorCode.MLV_SPARK_JOB_CAPACITY_THROTTLING, "To run, cancel an active Spark job through the Monitoring hub, choose a larger capacity SKU, or try again later. HTTP status code: 430" },
+                 { ErrorCode.MLV_LINEAGE_CREATION_FAILURE, "Lineage creation failed. Please retry refresh, if issue persists, reach out to support" },
+-                { ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, "Lineage creation failed due to notebook exception. Please retry refresh, if issue persists, reach out to support" },
++                { ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, $"MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook '{{{Constants.NotebookIdKey}}}' (workspace: '{{{Constants.WorkspaceIdKey}}}'). {{{Constants.ErrorMessageKey}}}Review Notebook logs and retry." },
++                { ErrorCode.MLV_NB_ETAG_CHANGED, $"MLV_NB_ETAG_CHANGED: Contents in the Notebook {{{Constants.NotebookDetailsKey}}} changed after the operation started. Refresh and try again." },
+                 { ErrorCode.MLV_FABRIC_RUNTIME_VERSION_INCOMPATIBLE, "MLV is compatible with Fabric runtime version 1.3 or higher. Please ensure you are using correct Fabric runtime" },
+                 { ErrorCode.MLV_NOT_A_MATERIALIZED_VIEW, $"Unable to refresh the materialized view {{{Constants.TableNameKey}}} due to the following error: {{{Constants.ErrorMessageKey}}}. Please recreate the materialized view to resolve the issue. If the problem persists, contact the support team for further assistance." },
+                 { ErrorCode.DELTA_TABLE_NOT_FOUND, $"The Delta table {{{Constants.TableNameKey}}} in the database {{{Constants.DatabaseNameKey}}} was not found. It may have been deleted or never created. Please verify the table name and database. If the issue persists, contact the support team for assistance." },
+@@ -113,9 +115,9 @@ namespace Microsoft.LiveTable.Service.ErrorMapping
+                 { ErrorCode.MLV_SOURCE_ENTRY_FUNCTION_REFERENCE_NOT_FOUND, "Failed to execute materialized lake view because unable to retrieve source entry function reference for the materialized lake view." },
+                 { ErrorCode.MLV_RUNTIME_ERROR, "Failed to execute materialized lake view." },
+                 { ErrorCode.MLV_OPERATION_NOT_SUPPORTED, "Operation is not supported on materialized lake view." },
+-                { ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, "Multiple materialized lake view definitions are found in a single cell in the notebook {NotebookId} where {MlvName} is defined. Split the cell so that each materialized lake view definition resides in its own dedicated cell." },
++                { ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, $"MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL: More than one materialized lake view definition exists in cell {{{Constants.CellIndexKey}}} of Notebook '{{{Constants.NotebookIdKey}}}'. Ensure only one view per cell." },
+                 { ErrorCode.FLT_TOO_MANY_REQUESTS, $"You’ve reached the request limit. Please try again later." },
+-                { ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, "Magic commands (starting with '%') are not supported in materialized lake view operations. Remove the magic command at cell {cellIndex}, line {lineNumber} in notebook {notebookId}." },
++                { ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, $"MLV_MAGIC_COMMAND_NOT_SUPPORTED: Magic commands (e.g., %pip, %run) in cell {{{Constants.CellIndexKey}}} at line {{{Constants.LineNumberKey}}} of Notebook '{{{Constants.NotebookIdKey}}}' are not supported in materialized lake view definitions. Remove or comment out magic commands and retry." },
+                 { ErrorCode.MLV_LINEAGE_NOT_FOUND, "Can't find the instance for lineage tracking. This happens when the iteration does not exist or may have been purged due to retention policies." },
+                 { ErrorCode.MLV_NOT_SUPPORTED, "This feature is not available for your tenant. Contact your administrator to enable the feature before retrying." },
+                 { ErrorCode.MLV_INVALID, "Request parameters are invalid or not in a supported format." },
+diff --git a/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs b/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs
+index a8e9fca2..6f1cc753 100644
+--- a/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs
++++ b/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs
+@@ -6,6 +6,7 @@ namespace Microsoft.LiveTable.Service.Notebook.Exceptions
+ {
+     using System;
+     using System.Net;
++    using Microsoft.LiveTable.Service.ErrorMapping;
+ 
+     /// <summary>
+     /// Exception class for notebook-related operations and errors.
+@@ -15,27 +16,63 @@ namespace Microsoft.LiveTable.Service.Notebook.Exceptions
+     public class NotebookException : Exception
+     {
+         /// <summary>
+-        /// Initializes a new instance of the <see cref="NotebookException"/> class.
++        /// Initializes a new instance of the <see cref="NotebookException"/> class with HTTP status information.
+         /// </summary>
+         /// <param name="message">The error message that explains the reason for the exception.</param>
+-        public NotebookException(string message)
++        /// <param name="statusCode">The HTTP status code associated with the error.</param>
++        /// <param name="workspaceId">The workspace ID where the error occurred.</param>
++        /// <param name="notebookId">The notebook ID where the error occurred.</param>
++        public NotebookException(string message, HttpStatusCode statusCode, Guid? workspaceId, Guid? notebookId)
+             : base(message)
+         {
++            StatusCode = statusCode;
++            WorkspaceId = workspaceId;
++            NotebookId = notebookId;
+         }
+ 
+         /// <summary>
+-        /// Initializes a new instance of the <see cref="NotebookException"/> class with HTTP status information.
++        /// Initializes a new instance of the <see cref="NotebookException"/> class with HTTP status information and an error code.
+         /// </summary>
+         /// <param name="message">The error message that explains the reason for the exception.</param>
+         /// <param name="statusCode">The HTTP status code associated with the error.</param>
+         /// <param name="workspaceId">The workspace ID where the error occurred.</param>
+         /// <param name="notebookId">The notebook ID where the error occurred.</param>
+-        public NotebookException(string message, HttpStatusCode statusCode, Guid? workspaceId, Guid? notebookId)
++        /// <param name="errorCode">The specific error code identifying the error cause.</param>
++        public NotebookException(string message, HttpStatusCode statusCode, Guid? workspaceId, Guid? notebookId, ErrorCode errorCode)
++            : this(message, statusCode, workspaceId, notebookId)
++        {
++            ErrorCode = errorCode;
++        }
++
++        /// <summary>
++        /// Initializes a new instance of the <see cref="NotebookException"/> class for parsing errors.
++        /// </summary>
++        /// <param name="message">The error message.</param>
++        /// <param name="lineNumber">The line number where the parsing error occurred.</param>
++        /// <param name="offendingSymbol">The offending symbol text that caused the parsing error.</param>
++        public NotebookException(string message, int lineNumber, string offendingSymbol)
+             : base(message)
+         {
+-            StatusCode = statusCode;
+-            WorkspaceId = workspaceId;
+-            NotebookId = notebookId;
++            StatusCode = HttpStatusCode.UnprocessableEntity;
++            LineNumber = lineNumber;
++            OffendingSymbol = offendingSymbol;
++        }
++
++        /// <summary>
++        /// Initializes a new instance of the <see cref="NotebookException"/> class for parsing errors with full context.
++        /// </summary>
++        /// <param name="message">The error message.</param>
++        /// <param name="lineNumber">The line number where the parsing error occurred.</param>
++        /// <param name="cellIndex">The cell number where the parsing error occurred.</param>
++        /// <param name="offendingSymbol">The offending symbol text that caused the parsing error.</param>
++        /// <param name="workspaceId">The workspace ID.</param>
++        /// <param name="notebookId">The notebook ID.</param>
++        public NotebookException(string message, int lineNumber, int cellIndex, string offendingSymbol, Guid workspaceId, Guid notebookId)
++            : this(message, HttpStatusCode.UnprocessableEntity, workspaceId, notebookId, ErrorMapping.ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED)
++        {
++            LineNumber = lineNumber;
++            CellIndex = cellIndex;
++            OffendingSymbol = offendingSymbol;
+         }
+ 
+         /// <summary>
+@@ -53,6 +90,28 @@ namespace Microsoft.LiveTable.Service.Notebook.Exceptions
+         /// </summary>
+         public Guid? NotebookId { get; }
+ 
++        /// <summary>
++        /// Gets the specific error code identifying the cause of this notebook error.
++        /// </summary>
++        /// <remarks>
++        /// NotebookException follows a two-tier pattern based on whether ErrorCode is set:
++        ///
++        /// 1. ErrorCode IS set (e.g., MLV_NB_ETAG_CHANGED, MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL):
++        ///    The throw site already knows the precise failure. The Message property contains a fully
++        ///    formatted, user-facing error string that can be surfaced directly — no further wrapping needed.
++        ///
++        /// 2. ErrorCode is NULL:
++        ///    The exception represents a generic notebook failure (HTTP error, timeout, unexpected response).
++        ///    The Message is a raw/technical string (e.g., "404 Not Found") that must be wrapped inside the
++        ///    MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION template to produce a user-friendly message with
++        ///    notebook ID and workspace ID context.
++        ///
++        /// Downstream consumers (e.g., NodeExecutionUtils.BuildNotebookExceptionResult) branch on
++        /// ErrorCode.HasValue to decide which path to take. This is intentional — do not replace
++        /// with a Message null/empty check, because both tiers always carry a Message.
++        /// </remarks>
++        public ErrorCode? ErrorCode { get; }
++
+         /// <summary>
+         /// Gets or sets the retry-after delay if provided by the server (for 429 responses).
+         /// </summary>
+@@ -62,5 +121,36 @@ namespace Microsoft.LiveTable.Service.Notebook.Exceptions
+         /// Gets or sets a value indicating whether the exception is retriable.
+         /// </summary>
+         public bool IsRetriable { get; set; } = false;
++
++        /// <summary>
++        /// Gets or sets the line number where a parsing error occurred.
++        /// </summary>
++        public int LineNumber { get; set; }
++
++        /// <summary>
++        /// Gets the cell index where a parsing error occurred.
++        /// </summary>
++        public int CellIndex { get; }
++
++        /// <summary>
++        /// Gets the offending symbol text that caused a parsing error.
++        /// </summary>
++        public string OffendingSymbol { get; }
++
++        /// <summary>
++        /// Checks if the parsing error is likely caused by a magic command.
++        /// Magic commands start with '%' (line magic) or '%%' (cell magic).
++        /// </summary>
++        /// <returns>True if the offending symbol indicates a magic command; otherwise, false.</returns>
++        public bool IsMagicCommand()
++        {
++            if (string.IsNullOrWhiteSpace(OffendingSymbol))
++            {
++                return false;
++            }
++
++            var trimmedSymbol = OffendingSymbol.TrimStart();
++            return trimmedSymbol.StartsWith("%");
++        }
+     }
+ }
+\ No newline at end of file
+diff --git a/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookParsingException.cs b/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookParsingException.cs
+deleted file mode 100644
+index 7b4517fb..00000000
+--- a/Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookParsingException.cs
++++ /dev/null
+@@ -1,77 +0,0 @@
+-// <copyright file="NotebookParsingException.cs" company="Microsoft">
+-// Copyright (c) Microsoft. All rights reserved.
+-// </copyright>
+-
+-namespace Microsoft.LiveTable.Service.Notebook.Exceptions
+-{
+-    using System;
+-    using System.Net;
+-
+-    /// <summary>
+-    /// Exception thrown when parsing notebook cell content fails.
+-    /// </summary>
+-    [Serializable]
+-    public class NotebookParsingException : NotebookException
+-    {
+-        /// <summary>
+-        /// Initializes a new instance of the <see cref="NotebookParsingException"/> class.
+-        /// </summary>
+-        /// <param name="message">The error message.</param>
+-        /// <param name="lineNumber">The line number where the parsing error occurred.</param>
+-        /// <param name="offendingSymbol">The offending symbol text that caused the parsing error.</param>
+-        public NotebookParsingException(string message, int lineNumber, string offendingSymbol)
+-            : base(message)
+-        {
+-            LineNumber = lineNumber;
+-            OffendingSymbol = offendingSymbol;
+-        }
+-
+-        /// <summary>
+-        /// Initializes a new instance of the <see cref="NotebookParsingException"/> class.
+-        /// </summary>
+-        /// <param name="message">The error message.</param>
+-        /// <param name="lineNumber">The line number where the parsing error occurred.</param>
+-        /// <param name="cellIndex">The cell number where the parsing error occurred.</param>
+-        /// <param name="offendingSymbol">The offending symbol text that caused the parsing error.</param>
+-        /// <param name="workspaceId">The workspace ID.</param>
+-        /// <param name="notebookId">The notebook ID.</param>
+-        public NotebookParsingException(string message, int lineNumber, int cellIndex, string offendingSymbol, Guid workspaceId, Guid notebookId)
+-            : base(message, HttpStatusCode.UnprocessableEntity, workspaceId, notebookId)
+-        {
+-            LineNumber = lineNumber;
+-            CellIndex = cellIndex;
+-            OffendingSymbol = offendingSymbol;
+-        }
+-
+-        /// <summary>
+-        /// Gets or sets the line number where the parsing error occurred.
+-        /// </summary>
+-        public int LineNumber { get; set; }
+-
+-        /// <summary>
+-        /// Gets the cell index where the parsing error occurred.
+-        /// </summary>
+-        public int CellIndex { get; }
+-
+-        /// <summary>
+-        /// Gets the offending symbol text that caused the parsing error.
+-        /// </summary>
+-        public string OffendingSymbol { get; }
+-
+-        /// <summary>
+-        /// Checks if the parsing error is likely caused by a magic command.
+-        /// Magic commands start with '%' (line magic) or '%%' (cell magic).
+-        /// </summary>
+-        /// <returns>True if the offending symbol indicates a magic command; otherwise, false.</returns>
+-        public bool IsMagicCommand()
+-        {
+-            if (string.IsNullOrWhiteSpace(OffendingSymbol))
+-            {
+-                return false;
+-            }
+-
+-            var trimmedSymbol = OffendingSymbol.TrimStart();
+-            return trimmedSymbol.StartsWith("%");
+-        }
+-    }
+-}
+\ No newline at end of file
+diff --git a/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs b/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs
+index ad8f0875..0f8d77ec 100644
+--- a/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs
++++ b/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs
+@@ -173,18 +173,18 @@ namespace Microsoft.LiveTable.Service.Notebook
+                                 // Parse the source to check whether it is a create command
+                                 commandInfo = ParseCreateCommand(source);
+                             }
+-                            catch (NotebookParsingException ex)
++                            catch (NotebookException ex) when (ex.OffendingSymbol != null)
+                             {
+-                                var errorParams = new Dictionary<string, string>
++                                var magicCommandParams = new Dictionary<string, string>
+                                 {
+-                                    { "cellIndex",  (++cellIndex).ToString() },
+-                                    { "lineNumber", ex.LineNumber.ToString() },
+-                                    { "notebookId", NotebookId.ToString() },
++                                    { Common.Constants.CellIndexKey, (cellIndex + 1).ToString() },
++                                    { Common.Constants.LineNumberKey, ex.LineNumber.ToString() },
++                                    { Common.Constants.NotebookIdKey, NotebookId.ToString() },
+                                 };
+-                                var errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, errorParams);
++                                var errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, magicCommandParams);
+ 
+                                 Tracer.LogSanitizedError(errorMessage);
+-                                throw new NotebookParsingException(errorMessage, ex.LineNumber, ++cellIndex, ex.OffendingSymbol, WorkspaceId, NotebookId);
++                                throw new NotebookException(errorMessage, ex.LineNumber, cellIndex + 1, ex.OffendingSymbol, WorkspaceId, NotebookId);
+                             }
+ 
+                             // The current index in the pysparkSources array
+@@ -197,14 +197,13 @@ namespace Microsoft.LiveTable.Service.Notebook
+                                 {
+                                     var errorParams = new Dictionary<string, string>
+                                     {
+-                                        { "NotebookId", NotebookId.ToString() },
+-                                        { "MlvName", commandInfo.MlvName ?? "unknown" },
++                                        { Common.Constants.CellIndexKey, (cellIndex + 1).ToString() },
++                                        { Common.Constants.NotebookIdKey, NotebookId.ToString() },
+                                     };
+ 
+-                                    // TODO - This error message should include all MLV names and notebook name instead of notebook Id.
+                                     var errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, errorParams);
+                                     Tracer.LogSanitizedError($"Multiple MLV definitions found in cell at index {cellIndex}. " + $"Last MLV name: {commandInfo.MlvName}. " + $"Decorator count: {commandInfo.DecoratorCount}. " + $"Notebook: {NotebookId}, Workspace: {WorkspaceId}");
+-                                    throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId);
++                                    throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);
+                                 }
+ 
+                                 // If a create command, find the MLV name and process
+@@ -500,7 +499,7 @@ namespace Microsoft.LiveTable.Service.Notebook
+                 var visitor = new FabricDecoratorExtractorVisitor();
+                 return visitor.Visit(tree);
+             }
+-            catch (NotebookParsingException ex)
++            catch (NotebookException ex) when (ex.OffendingSymbol != null)
+             {
+                 // Check if the offending symbol indicates a magic command
+                 if (ex.IsMagicCommand())
+@@ -737,26 +736,26 @@ namespace Microsoft.LiveTable.Service.Notebook
+         {
+             public void SyntaxError(IRecognizer recognizer, int offendingSymbol, int line, int charPositionInLine, string msg, RecognitionException e)
+             {
+-                throw new NotebookParsingException($"Parsing error encountered at line number {line}", line, string.Empty);
++                throw new NotebookException($"Parsing error encountered at line number {line}", line, string.Empty);
+             }
+ 
+             public void SyntaxError(IRecognizer recognizer, IToken offendingSymbol, int line, int charPositionInLine, string msg, RecognitionException e)
+             {
+                 // Extract the offending symbol text from the token
+                 var symbolText = offendingSymbol?.Text ?? string.Empty;
+-                throw new NotebookParsingException($"Parsing error encountered at line number {line}", line, symbolText);
++                throw new NotebookException($"Parsing error encountered at line number {line}", line, symbolText);
+             }
+ 
+             public void SyntaxError(TextWriter output, IRecognizer recognizer, int offendingSymbol, int line, int charPositionInLine, string msg, RecognitionException e)
+             {
+-                throw new NotebookParsingException($"Parsing error encountered at line number {line}", line, string.Empty);
++                throw new NotebookException($"Parsing error encountered at line number {line}", line, string.Empty);
+             }
+ 
+             public void SyntaxError(TextWriter output, IRecognizer recognizer, IToken offendingSymbol, int line, int charPositionInLine, string msg, RecognitionException e)
+             {
+                 // Extract the offending symbol text from the token
+                 var symbolText = offendingSymbol?.Text ?? string.Empty;
+-                throw new NotebookParsingException($"Parsing error encountered at line number {line}", line, symbolText);
++                throw new NotebookException($"Parsing error encountered at line number {line}", line, symbolText);
+             }
+         }
+     }
+diff --git a/Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs b/Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs
+index a0501657..89ad939f 100644
+--- a/Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs
++++ b/Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs
+@@ -5,6 +5,7 @@
+ namespace Microsoft.LiveTable.Service.Notebook.NotebookHttp
+ {
+     using System;
++    using System.Collections.Generic;
+     using System.Diagnostics.CodeAnalysis;
+     using System.Linq;
+     using System.Net;
+@@ -215,12 +216,14 @@ namespace Microsoft.LiveTable.Service.Notebook.NotebookHttp
+         {
+             var errorContent = await response.Content.ReadAsStringAsync();
+ 
+-            // Handle 412 Precondition Failed - ETag mismatch
++            // Handle 412 Precondition Failed from Notebook API — surface as 422 to caller (ETag mismatch)
+             if (response.StatusCode == HttpStatusCode.PreconditionFailed)
+             {
+-                var errorMessage = $"{notebookDetailsForLogging} Notebook content has been modified since last retrieval. ETag mismatch detected.";
++                var errorMessage = ErrorRegistry.GetErrorMessage(
++                    ErrorCode.MLV_NB_ETAG_CHANGED,
++                    new Dictionary<string, string> { { Constants.NotebookDetailsKey, notebookDetailsForLogging } });
+                 Tracer.LogSanitizedError(errorMessage);
+-                throw new NotebookException(errorMessage, HttpStatusCode.PreconditionFailed, workspaceId, notebookId);
++                throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, workspaceId, notebookId, ErrorCode.MLV_NB_ETAG_CHANGED);
+             }
+ 
+             // Handle 404 NotFound - Notebook has been deleted or does not exist. The Notebook API returns 404 when the artifact cannot be found in the workspace.
+diff --git a/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs b/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs
+index 898708c2..af7ae103 100644
+--- a/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs
++++ b/Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs
+@@ -19,6 +19,7 @@ namespace Microsoft.LiveTable.Service.Utils
+     using Microsoft.LiveTable.Service.SparkHttp.Model;
+     using Microsoft.LiveTable.Service.Telemetry;
+     using Microsoft.ServicePlatform.Telemetry;
++    using Constants = Microsoft.LiveTable.Service.Common.Constants;
+     using ErrorSource = Microsoft.LiveTable.Service.DataModel.GTS.ErrorSource;
+ 
+     /// <summary>
+@@ -402,14 +403,6 @@ namespace Microsoft.LiveTable.Service.Utils
+         {
+             Tracer.LogSanitizedError(exception, $"Exception occurred during MapExceptionToErrorInfo: {exception.Message}");
+ 
+-            // Special handling for NotebookParsingException
+-            // WI for SSRP2 - StatusCode wise handling
+-            // TODO: Combine the NotebookParsingException and NotebookException into one exception which consists of errorCode field internally to distinguish the exception cause.
+-            if (exception is NotebookParsingException notebookParsingException)
+-            {
+-                return (ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, notebookParsingException.Message, StandardizedActivityStatus.SucceededWithErrors);
+-            }
+-
+             if (exception is NotebookException notebookEx)
+             {
+                 // Classify based on status code: 4xx = user error, 5xx = system error
+@@ -417,7 +410,46 @@ namespace Microsoft.LiveTable.Service.Utils
+                     ? StandardizedActivityStatus.SucceededWithErrors
+                     : StandardizedActivityStatus.Failed;
+ 
+-                return (ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION), activityStatus);
++                var failureType = IsUserError(notebookEx.StatusCode) ? "UserError" : "SystemError";
++                var errorCode = notebookEx.ErrorCode ?? ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION;
++
++                // NotebookException has a two-tier error message pattern (see ErrorCode property remarks):
++                //
++                // Tier 1 — ErrorCode.HasValue == true:
++                //   The exception was thrown with an explicit ErrorCode (e.g., MLV_NB_ETAG_CHANGED).
++                //   Its Message is already a curated, user-facing string → use it as-is.
++                //
++                // Tier 2 — ErrorCode.HasValue == false (ErrorCode is null):
++                //   Generic notebook failure (HTTP error, timeout, etc.). The Message is raw/technical
++                //   (e.g., "404 Not Found") and needs wrapping in the MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION
++                //   template to add notebook ID, workspace ID, and user-friendly context.
++                //
++                // NOTE: We intentionally check ErrorCode.HasValue, NOT Message content.
++                // Both tiers always have a non-null Message (inherited from System.Exception).
++                // ErrorCode is the semantic discriminator that tells us whether the message is
++                // already user-ready or needs template wrapping.
++                string cleanMessage;
++                if (notebookEx.ErrorCode.HasValue)
++                {
++                    cleanMessage = notebookEx.Message;
++                }
++                else
++                {
++                    var lineageErrorParams = new Dictionary<string, string>
++                    {
++                        { Constants.NotebookIdKey, notebookEx.NotebookId?.ToString() ?? "Unknown" },
++                        { Constants.WorkspaceIdKey, notebookEx.WorkspaceId?.ToString() ?? "Unknown" },
++                        { Constants.ErrorMessageKey, string.IsNullOrEmpty(notebookEx.Message) ? string.Empty : notebookEx.Message + " " },
++                    };
++                    var fullMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, lineageErrorParams);
++
++                    // Strip the error code prefix (e.g., "MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: ") from the template
++                    cleanMessage = fullMessage.Substring(fullMessage.IndexOf(':') + 2);
++                }
++
++                var errorMessage = $"[{errorCode}]: {cleanMessage} failureType: {failureType}";
++
++                return (errorCode, errorMessage, activityStatus);
+             }
+ 
+             // Special handling for CatalogException - HONOR CatalogException.ErrorCode
+diff --git a/pr-division-plan.md b/pr-division-plan.md
+new file mode 100644
+index 00000000..2d6d9be0
+--- /dev/null
++++ b/pr-division-plan.md
+@@ -0,0 +1,486 @@
++# Complete Error Code Mapping — PM-Approved Lists 1–4
++
++> **Deduplication rules**: List 2 wins over List 1 (GetLineage/API). List 4 wins over List 3 (RunDag/Spark).
++> **Key files**: `ErrorCode.cs`, `ErrorRegistry.cs` in `Service\Microsoft.LiveTable.Service\ErrorMapping\`
++> **Format**: GetLineage/API = `ERROR_CODE: message`. RunDag/Spark = `[ERROR_CODE]: message failureType: {type}, <errorTrace>`
++
++---
++
++## ErrorRegistry Pattern: Caller-Side KV Pairs (Mandatory for All PRs)
++
++**Rule**: `ErrorRegistry` is a **generic template store + substitution engine only**. Do NOT add domain-specific helper methods (e.g., `GetMagicCommandNotSupportedMessage`, `GetEtagChangedMessage`) to it.
++
++**Pattern**: Callers build `Dictionary<string, string>` with the required KV pairs at the call site, then call `ErrorRegistry.GetErrorMessage(errorCode, parameters)`.
++
++```csharp
++// ✅ CORRECT: Caller builds KV pairs where the domain context lives
++var parameters = new Dictionary<string, string>
++{
++    { Constants.NotebookIdKey, notebookId },
++    { Constants.WorkspaceIdKey, workspaceId },
++    { Constants.ErrorMessageKey, errorDetail },
++};
++var message = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, parameters);
++
++// ❌ WRONG: Domain-specific helper method in ErrorRegistry
++var message = ErrorRegistry.GetLineageCreationNotebookExceptionMessage(notebookId, workspaceId, errorDetail);
++```
++
++**When the same error is constructed from multiple call sites**: Create a domain-layer helper (e.g., a static method in the relevant handler, utils, or exception class) rather than adding a method to `ErrorRegistry`. This keeps the error-building logic close to the domain context while avoiding duplication.
++
++```csharp
++// ✅ OK: Domain-layer helper for shared error construction (NOT in ErrorRegistry)
++// Place in the relevant domain namespace, e.g., Notebook, Catalog, Throttling
++internal static class NotebookErrorHelper
++{
++    internal static string BuildLineageCreationMessage(NotebookException ex)
++    {
++        var parameters = new Dictionary<string, string>
++        {
++            { Constants.NotebookIdKey, ex.NotebookId?.ToString() ?? "Unknown" },
++            { Constants.WorkspaceIdKey, ex.WorkspaceId?.ToString() ?? "Unknown" },
++            { Constants.ErrorMessageKey, string.IsNullOrEmpty(ex.Message) ? string.Empty : ex.Message + " " },
++        };
++        return ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, parameters);
++    }
++}
++```
++
++**Rationale** (from PR-Notebook review feedback):
++1. ErrorRegistry stays generic — no domain knowledge leaks in
++2. Scales across all PRs without ErrorRegistry becoming a god class
++3. Follows the established pattern already used by `CatalogHandler`, `DagExecutionHandlerV2`, and `NotebookExecutionContext`
++4. Reduces merge conflicts since PRs don't all touch ErrorRegistry's method section
++
++---
++
++## PR Tracker (ordered by status)
++
++| # | PR Name | Branch | Status | Error Codes |
++|---|---------|--------|--------|-------------|
++| 1 | PR-Notebook | `users/saagnihotri/NotebookrerrorMessages` | ✅ DONE — [PR #910832](https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/910832) | MLV_MAGIC_COMMAND_NOT_SUPPORTED, MLV_ETAG_CHANGED, MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, MLV_DEFINITION_CONFLICT |
++| 2 | PR-Cat1 | `users/saagnihotri/catalogOperationUserErrors` | 🔄 IN PROGRESS | MLV_ARTIFACT_NOT_FOUND, MLV_LAKEHOUSE_SOURCE_NOT_FOUND, MLV_NOTEBOOK_SOURCE_NOT_FOUND, MLV_LINEAGE_NOT_FOUND, MLV_INVALID_TABLE_NAME_FORMAT, MLV_CIRCULAR_DEPENDENCY |
++| 3 | PR-Access | `users/saagnihotri/error-access-denied` | ❌ TODO | MLV_ACCESS_DENIED (3 trigger paths) |
++| 4 | PR-Throttle | `users/saagnihotri/error-throttling` | ❌ TODO | MLV_TOO_MANY_REQUESTS (4 trigger paths) |
++| 5 | PR-Operation-A | `users/saagnihotri/error-operation-cancel` | ❌ TODO | MLV_TERMINAL_STATE, MLV_REFRESH_PENDING, MLV_LINEAGE_NOT_FOUND (cancel/metrics paths) |
++| 6 | PR-Operation-B | `users/saagnihotri/error-operation-lock` | ❌ TODO | MLV_OPERATION_INPROGRESS, MLV_RESOURCE_LOCKED |
++| 7 | PR-Cat2 | `users/saagnihotri/error-catalog-integrity` | ❌ TODO | MLV_DATA_CORRPUTED, MLV_ENTITY_NOT_FOUND, MLV_SOURCE_ENTITY_NOT_FOUND, MLV_STALE_METADATA, MLV_INVALID_FORMAT |
++| 8 | PR-Fallback | `users/saagnihotri/error-server-fallback` | ❌ TODO | MLV_SERVER_ERROR |
++| 9 | PR-RunDag-A | `users/saagnihotri/error-rundag-system` | ❌ TODO | 7 internal codes → [MLV_SERVER_ERROR] SystemError |
++| 10 | PR-RunDag-B | `users/saagnihotri/error-rundag-user` | ❌ TODO | MLV_ACCESS_DENIED, MLV_TOO_MANY_REQUESTS, MLV_SPARK_CAPACITY_THROTTLED, MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, MLV_ENVIRONMENT_INCOMPATIBLE, MLV_LIBRARY_NOT_AVAILABLE, MLV_DEFINITION_CONFLICT |
++| 11 | PR-RunDag-Deferred | `users/saagnihotri/error-rundag-deferred` | ❌ Blocked (awaiting PM) | MLV_SYSTEM_ERROR, MLV_INTERNAL_SERVER_ERROR, MLV_ERROR_CODE_NOT_FOUND, DELTA_TABLE_NOT_FOUND, MLV_INVALID_SYNTAX_PYSPARK |
++
++---
++
++## ✅ PR 1: PR-Notebook — DONE
++
++**Branch**: `users/saagnihotri/NotebookrerrorMessages`
++**PR**: [#910832](https://dev.azure.com/powerbi/MWC/_git/workload-fabriclivetable/pullrequest/910832)
++
++| Error Code | Status | Title | Detail (PM-approved) |
++|---|---|---|---|
++| MLV_MAGIC_COMMAND_NOT_SUPPORTED | 422 | An error occurred... | MLV_MAGIC_COMMAND_NOT_SUPPORTED: Magic commands (e.g., %pip, %run) in cell {N} at line {L} of Notebook '{id}' are not supported in materialized lake view definitions. Remove or comment out magic commands and retry. |
++| MLV_ETAG_CHANGED | 422 | Notebook recently updated | MLV_ETAG_CHANGED: Contents in the Notebook {details} changed after the operation started. Refresh and try again. |
++| MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION | 422/500 | An error occurred... | MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook '{id}' (workspace: '{wsId}'). Review Notebook logs and retry. |
++| MLV_DEFINITION_CONFLICT | 422 | Notebook validation error | MLV_DEFINITION_CONFLICT: More than one materialized lake view definition exists in cell {N} of Notebook '{id}'. Ensure only one view per cell. |
++
++**Also included**: `CreateErrorResponse`/`CreateProblemDetails` with `title` parameter, `NotebookParsingException` consolidated into `NotebookException`.
++
++---
++
++## 🔄 PR 2: PR-Cat1 — IN PROGRESS
++
++**Branch**: `users/saagnihotri/catalogOperationUserErrors`
++
++| Error Code | Status | Title (PM-approved) | Detail (PM-approved) | Trigger | Manual Test |
++|---|---|---|---|---|---|
++| MLV_ARTIFACT_NOT_FOUND | 422 | Lakehouse reference not found | MLV_ARTIFACT_NOT_FOUND: The materialized lake view references a lakehouse that no longer exists or can't be resolved. Update the view to reference an existing lakehouse and try again. | CatalogHandler.GetCatalogObjectsAsync — PowerBIEntityNotFoundError | ✅ Easy — delete source lakehouse |
++| MLV_LAKEHOUSE_SOURCE_NOT_FOUND | 422 | (default) | MLV_LAKEHOUSE_SOURCE_NOT_FOUND: The lakehouse '{name}' was not found. It may have been deleted or you don't have access. | ArtifactMetadataService (2 throw sites) | ✅ Easy — delete source lakehouse |
++| MLV_NOTEBOOK_SOURCE_NOT_FOUND | 422 | (default) | MLV_NOTEBOOK_SOURCE_NOT_FOUND: The notebook '{id}' in workspace '{wsId}' was not found. It may have been deleted or you don't have access. | NotebookApiClient — PowerBIEntityNotFoundError | ✅ Easy — delete notebook |
++| MLV_LINEAGE_NOT_FOUND | 404 | Lineage Not Found | MLV_LINEAGE_NOT_FOUND: Can't find the instance for lineage tracking. This happens when the iteration does not exist or may have been purged due to retention policies. | CatalogHandler — OneLake 404 | ⚠️ Medium — deleted lakehouse |
++| MLV_INVALID_TABLE_NAME_FORMAT | 422 | (default) | MLV_INVALID_TABLE_NAME_FORMAT: The table name '{name}' is not in a valid format. Use the format [schemaName.tableName] with exactly one period separating schema and table name. | Dag.cs + Node.cs | ⚠️ Medium — corrupted catalog |
++| MLV_CIRCULAR_DEPENDENCY | 422 | (default) | MLV_CIRCULAR_DEPENDENCY: A circular dependency was detected in the materialized lake view lineage. Review and fix the dependencies between views to remove the cycle. | Dag.cs AddEdge | ⚠️ Medium — circular MLV deps |
++
++---
++
++## ❌ PR 3: PR-Access — TODO
++
++**Branch**: `users/saagnihotri/error-access-denied`
++
++| # | Error Code | Status Code | Title | Detail (PM-approved message) | Trigger | API Endpoint | Source |
++|---|-----------|-------------|-------|------------------------------|---------|-------------|--------|
++| 1 | MLV_TOO_MANY_REQUESTS | 429-TooManyRequests | Too many requests | MLV_TOO_MANY_REQUESTS: You've reached the request limit. Wait {retryAfterSeconds} seconds and try again. | Any scheduler API when rate limiter policy blocks request (FLTAPIThrottling feature flag enabled) | POST /workloads/de-ds/scheduler/run, POST /workloads/de-ds/scheduler/run/cancel, GET /workloads/de-ds/scheduler/run/status | L2 |
++| 2 | MLV_TOO_MANY_REQUESTS | 429-TooManyRequests | Too many requests | MLV_TOO_MANY_REQUESTS: You've reached the request limit. Wait {retryAfterSeconds} seconds and try again. | Artifact-level throttling — too many requests for a Lakehouse (MLV_ARTIFACT_THROTTLED) | POST /workloads/de-ds/scheduler/run | L2 |
++| 3 | MLV_TOO_MANY_REQUESTS | 429-TooManyRequests | Too many requests | MLV_TOO_MANY_REQUESTS: You've reached the request limit. Wait {retryAfterSeconds} seconds and try again. | User-level throttling — too many requests from a user account (MLV_USER_THROTTLED) | POST /workloads/de-ds/scheduler/run | L2 |
++| 4 | MLV_TOO_MANY_REQUESTS | 429-TooManyRequests | Too many requests | MLV_TOO_MANY_REQUESTS: You've reached the request limit. Wait {retryAfterSeconds} seconds and try again. | Default fallback throttle when can't differentiate user vs artifact (FLT_TOO_MANY_REQUESTS) | (any) | L2 |
++| 5 | MLV_INVALID_FORMAT | 400-BadRequest | Invalid table or view name | MLV_INVALID_FORMAT: The table or view name, '{tableName}' isn't in a supported format. Use [schemaName.tableName] and remove any extra periods in the name. | Dag.AddNode — Table name doesn't match 'schema.tableName' pattern or contains extra periods | POST /workloads/de-ds/scheduler/run | L2 (was MLV_INVALID in L1) |
++| 6 | MLV_NOTEBOOK_SOURCE_NOT_FOUND | 404-NotFound | MLV definition not found | MLV_NOTEBOOK_SOURCE_NOT_FOUND: Couldn't find materialized lake view '{FQmlvName}' definition in Notebook. | NotebookExecutionContext.FetchAndParseContentForAllMLVsAsync — MLVCommand dictionary doesn't contain entry for MLV name. ANTLR parser scanned all cells but found no decorator matching MLV name | POST /workloads/de-ds/scheduler/run | L1 |
++| 7 | MLV_ACCESS_DENIED | 403-Forbidden | Access denied | MLV_ACCESS_DENIED: You don't have permission(s) to view the {ArtifactType} '{ArtifactID}'. Ask the owner to grant access, then try again. | LiveTableHandler.VerifyEnvironmentAccessAsync — User permissions list doesn't contain 'Read' permission. User lacks Read on attached environment | PATCH /v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/settings | L2 |
++| 8 | MLV_LINEAGE_NOT_FOUND | 404-NotFound | Lineage Not Found | MLV_LINEAGE_NOT_FOUND: Can't find the instance for lineage tracking. This happens when the iteration does not exist or may have been purged due to retention policies. | GetDAGExecMetricsAsync — Requested iteration doesn't exist or hasn't been persisted yet | GET /v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/iteration/{iterationId} | L1 |
++| 9 | MLV_LINEAGE_NOT_FOUND | 404-NotFound | Lineage Not Found | MLV_LINEAGE_NOT_FOUND: Can't find the instance for lineage tracking. This happens when the iteration does not exist or may have been purged due to retention policies. | CancelDAGAsync — Cancellation requested but iteration not found in cache after 3 retry attempts (3 seconds total) | POST /workloads/de-ds/scheduler/run/cancel | L1 |
++| 10 | MLV_OPERATION_INPROGRESS | 409-Conflict | Operation already in progress | MLV_OPERATION_INPROGRESS: Another action {operationName= cancellation/DQ report creation/ update settings} is currently running for {entityName/entityID/settings}. Wait for it to finish, then try again. | LiveTableHandler.RegisterAndExecuteReliableOperationsAsync — EnqueueExecutionIfNotQueuedAsync throws DagStoreOperationException. Same iterationId submitted multiple times concurrently | POST /workloads/de-ds/scheduler/run | L2 |
++| 11 | MLV_TERMINAL_STATE | 409-Conflict | Execution already completed | MLV_TERMINAL_STATE: The execution has already finished, so it can't be canceled. | CancelDAGAsync → OnDagCancellationBeginAsync — DAG already in terminal status (Succeeded, Failed, Cancelled, or Skipped) | POST /workloads/de-ds/scheduler/run/cancel | L2 |
++| 12 | MLV_REFRESH_PENDING | 409-Conflict | Refresh hasn't started yet | MLV_REFRESH_PENDING: The iteration exists but hasn't started processing. You can cancel once the execution begins. | CancelDAGAsync — Iteration exists but DAG object is null (execution hasn't begun) | POST /workloads/de-ds/scheduler/run/cancel | L1 |
++| 13 | MLV_STALE_METADATA | 422-UnprocessableEntity | Missing source reference | MLV_STALE_METADATA: The materialized lake view,  '{currentMv.Name}' references a source workspace, '{srcEntityWorkspaceName}' that can't be found. The source may have been renamed or removed. Update the materialized lake view to reference an existing workspace. | Dag.ReBuildDagFromCatalogTableAsync — Source entity workspace name in catalog doesn't match current workspace name from ArtifactMetadataService. Workspace rename detected, catalog metadata stale | POST /workloads/de-ds/scheduler/run | L2 |
++| 14 | MLV_STALE_METADATA | 422-UnprocessableEntity | Missing source reference | MLV_STALE_METADATA: The materialized lake view,  '{currentMv.Name}' references a source workspace, '{srcEntityWorkspaceName}' that can't be found. The source may have been renamed or removed. Update the materialized lake view to reference an existing workspace. | Dag.ReBuildDagFromCatalogTableAsync — Source table from different workspace but cross_workspace_id property missing from catalog metadata. Indicates catalog metadata needs update to support cross-workspace scenarios | POST /workloads/de-ds/scheduler/run | L2 |
++| 15 | MLV_DATA_CORRPUTED | 500-InternalServerError | System error - Data corrupted | MLV_DATA_CORRPUTED: Catalog data does not have information needed to process this request. Recreate the materialized lake view {FQ mlvName} and retry the operation. | Dag.ExtractNotebookCodeReference — source_workspace_id or source_notebook_id properties cannot be parsed as valid GUIDs | POST /workloads/de-ds/scheduler/run | L1 |
++| 16 | MLV_DATA_CORRPUTED | 500-InternalServerError | System error - Data corrupted | MLV_DATA_CORRPUTED: Catalog data does not have information needed to process this request. Recreate the materialized lake view {FQ mlvName} and retry the operation. | DataQualityReportHandler.CreateDataQualityReportAsync — Lakehouse.Properties is null | POST /v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/dataQualityReport | L1 |
++| 17 | MLV_DATA_CORRPUTED | 500-InternalServerError | System error - Data corrupted | MLV_DATA_CORRPUTED: Catalog data does not have information needed to process this request. Recreate the materialized lake view {FQ mlvName} and retry the operation. | Dag.AddNode — Table.TableType property is null or empty | POST /workloads/de-ds/scheduler/run | L1 |
++| 18 | MLV_SOURCE_ENTITY_NOT_FOUND | 422-UnprocessableEntity | Invalid configuration | MLV_SOURCE_ENTITY_NOT_FOUND: Sources for materialized lake view \<fully qualified mlv_names\> are missing or cannot be accessed. Make sure the sources exists and are accessible. | Dag.ReBuildDagFromCatalogTableAsync — Source entity referenced in dependencies not found in catalog objects list. Broken lineage relationship in catalog metadata | POST /workloads/de-ds/scheduler/run | L1 |
++| 19 | MLV_ENTITY_NOT_FOUND | 422-UnprocessableEntity | Invalid configuration | MLV_ENTITY_NOT_FOUND: The materialized lake view \<mlvName\> has incomplete source metadata and can't be processed. Update the lake view definition to include a valid source, then try again. | Dag.ExtractNotebookCodeReference — PySpark MLV missing fabric.mlv.sourceinfo property in catalog metadata. SQL MLVs return null instead of throwing | POST /workloads/de-ds/scheduler/run | L1 |
++| 20 | MLV_DATA_CORRPUTED | 500-InternalServerError | System error - Data corrupted | MLV_DATA_CORRPUTED: Catalog data does not have information needed to process this request. Recreate the materialized lake view {FQ mlvName} and retry the operation. | Dag.ExtractNotebookCodeReference — fabric.mlv.sourceinfo exists but cannot be deserialized as valid JSON | POST /workloads/de-ds/scheduler/run | L1 |
++| 21 | MLV_ETAG_CHANGED | 422-UnprocessableEntity | Notebook recently updated | MLV_ETAG_CHANGED: Contents in the Notebook, {Notebookdetails} changed after the operation started. Refresh and try again. | NotebookExecutionContext.FetchAndParseContentForAllMLVsAsync — ETag mismatch. Notebook modified between DAG submission and execution. Reliable ops request contains stale ETag | POST /workloads/de-ds/scheduler/run | L2 |
++| 22 | MLV_ACCESS_DENIED | 403-Forbidden | Access denied | MLV_ACCESS_DENIED: You don't have permission to view the {ArtifactType/sourceType} '{ArtifactName/artifactId/FQmlvName}'. Ask the owner to grant access, then try again. | NotebookExecutionContext.FetchAndParseContentForAllMLVsAsync — GetArtifactUserPermissionsAsync returns permissions list not containing 'Read'. User lacks Read on source notebook | POST /workloads/de-ds/scheduler/run | L2 |
++| 23 | MLV_DATA_CORRPUTED | 500-InternalServerError | System error - Data corrupted | MLV_DATA_CORRPUTED: Catalog data does not have information needed to process this request. Recreate the materialized lake view {FQ mlvName} and retry the operation. | Dag.AddNode — Table.Name property is null or empty string | POST /workloads/de-ds/scheduler/run | L1 |
++| 24 | MLV_ENTITY_NOT_FOUND | 422-UnprocessableEntity | Invalid configuration | MLV_ENTITY_NOT_FOUND: The materialized lake view \<mlvName\> has incomplete source metadata and can't be processed. Update the lake view definition to include a valid source, then try again. | Dag.ExtractNotebookCodeReference — fabric.mlv.sourceinfo JSON missing source_workspace_id or source_notebook_id properties | POST /workloads/de-ds/scheduler/run | L1 |
++| 25 | MLV_DATA_CORRPUTED | 422-UnprocessableEntity | Invalid configuration - Notebook | MLV_DATA_CORRPUTED: Catalog data is malformed or corrupted. Recreate the materialized lake view {FQ mlvName} and retry the operation. | Dag.ReBuildDagFromCatalogTableAsync — ArtifactMetadata.ObjectId is null or Guid.Empty for source lakehouse | POST /workloads/de-ds/scheduler/run | L1 |
++| 26 | MLV_ACCESS_DENIED | 403-Forbidden | Access denied | MLV_ACCESS_DENIED: You don't have permission to view the {ArtifactType/sourceType} '{ArtifactName/artifactId/FQmlvName}'. Ask the owner to grant access, then try again. | Dag.ReBuildDagFromCatalogTableAsync — User doesn't have Read permission on source table in different workspace. CatalogException after GetArtifactUserPermissionsAsync | POST /workloads/de-ds/scheduler/run | L2 |
++| 27 | MLV_SOURCE_ENTITY_NOT_FOUND | 422-UnprocessableEntity | Invalid configuration | MLV_SOURCE_ENTITY_NOT_FOUND: Sources for materialized lake view \<fully qualified mlv_names\> are missing or cannot be accessed. Make sure the sources exists and are accessible. | Dag.ReBuildDagFromCatalogTableAsync — Source table not found in catalog (KeyNotFoundException from GetCatalogObjectsAsync). Table may have been deleted, renamed, or shortcut target unavailable | POST /workloads/de-ds/scheduler/run | L1 |
++| 28 | MLV_ARTIFACT_NOT_FOUND | 422-UnprocessableEntity | Lakehouse reference not found | MLV_ARTIFACT_NOT_FOUND: The materialized lake view references a lakehouse that no longer exists or can't be resolved. Update the view to reference an existing lakehouse and try again.. | CatalogHandler.GetCatalogObjectsAsync — ArtifactStoreService cannot find lakehouse artifact (PowerBIEntityNotFoundError) | POST /workloads/de-ds/scheduler/run | L1 |
++| 29 | MLV_RESOURCE_LOCKED | 423-Locked | Resource locked | MLV_RESOURCE_LOCKED: This entity {entityName/entityID/settings} is currently locked by another {operationName= cancellation/DQ report creation/ update settings} operation. Try again later. | DagExecMetadataPersistanceManager.SaveDagSettingsAsync — Lock acquisition timeout (30 min default) expires | PATCH /v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/settings | L1 |
++| 30 | MLV_OPERATION_INPROGRESS | 409-Conflict | Operation already in progress | MLV_OPERATION_INPROGRESS: Another action {operationName= cancellation/DQ report creation/ update settings} is currently running for {entityName/entityID/settings}. Wait for it to finish, then try again. | DataQualityReportHandler.CreateDataQualityReportAsync — Cannot acquire lock on report state file | POST /v1/workspaces/{workspaceId}/lakehouses/{artifactId}/liveTable/dataQualityReport | L2 |
++| 31 | MLV_NOTEBOOK_SOURCE_NOT_FOUND | 422-UnprocessableEntity | MLV definition not found | MLV_NOTEBOOK_SOURCE_NOT_FOUND: Couldn't find materialized lake view '{FQmlvName}' definition in Notebook. | NotebookExecutionContext.ParseNotebookForCellsAndDefaultLakehouseInfo — Notebook JSON content property is null or empty | POST /workloads/de-ds/scheduler/run | L1 |
++| 32 | MLV_SERVER_ERROR | 500-InternalServerError | Something went wrong | MLV_SERVER_ERROR: An unexpected server error occurred. Try again or contact support if the issue persists. | General fallback for unhandled server errors | (any) | L2 |
++
++### Summary of Unique Error Codes (GetLineage/API)
++
++| Error Code | # of Trigger Scenarios | Status Code(s) |
++|------------|----------------------|----------------|
++| MLV_TOO_MANY_REQUESTS | 4 | 429 |
++| MLV_INVALID_FORMAT | 1 | 400 |
++| MLV_NOTEBOOK_SOURCE_NOT_FOUND | 2 | 404 / 422 |
++| MLV_ACCESS_DENIED | 3 | 403 |
++| MLV_LINEAGE_NOT_FOUND | 2 | 404 |
++| MLV_OPERATION_INPROGRESS | 2 | 409 |
++| MLV_TERMINAL_STATE | 1 | 409 |
++| MLV_REFRESH_PENDING | 1 | 409 |
++| MLV_STALE_METADATA | 2 | 422 |
++| MLV_DATA_CORRPUTED | 6 | 500 / 422 |
++| MLV_SOURCE_ENTITY_NOT_FOUND | 2 | 422 |
++| MLV_ENTITY_NOT_FOUND | 2 | 422 |
++| MLV_ARTIFACT_NOT_FOUND | 1 | 422 |
++| MLV_ETAG_CHANGED | 1 | 422 |
++| MLV_RESOURCE_LOCKED | 1 | 423 |
++| MLV_SERVER_ERROR | 1 | 500 |
++| **Total** | **32 scenarios** | |
++
++---
++
++## Section 2: Complete RunDag/Spark Error Code Table (Lists 3+4)
++
++Every error from Lists 3 and 4. L4 wins over L3 for duplicates. Entries only in L3 with label "NEW_SparkEngine" (no improved message) are marked **Deferred**.
++
++| # | Internal Code | Display Code | failureType | Improved Message | Source |
++|---|--------------|-------------|-------------|-----------------|--------|
++| 1 | MLV_ACCESS_DENIED | MLV_ACCESS_DENIED | UserError | [MLV_ACCESS_DENIED]: You don't have permission(s) to perform this operation. Ask the owner to grant access, then try again. failureType: UserError, \<errorTrace\> | L4 |
++| 2 | MLV_SPARK_SESSION_ACQUISITION_TIMEOUT | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 3 | MLV_SPARK_SESSION_ACQUISITION_FAILED | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 4 | MLV_SPARK_SESSION_REQUEST_SUBMISSION_FAILED | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 5 | MLV_TRANSFORM_EXECUTION_NOT_FOUND | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 6 | MLV_TOO_MANY_REQUESTS | MLV_TOO_MANY_REQUESTS | UserError | [MLV_TOO_MANY_REQUESTS]: You've reached the request limit. Wait {retryAfterSeconds} seconds and try again. failureType: UserError, \<errorTrace\> | L4 |
++| 7 | MLV_SPARK_JOB_CAPACITY_THROTTLING | MLV_SPARK_CAPACITY_THROTTLED | UserError | [MLV_SPARK_CAPACITY_THROTTLED]: You've reached the Spark capacity job limit. Upgrade to a larger capacity SKU, or wait until current jobs reach terminal state. failureType: UserError, \<errorTrace\> | L4 |
++| 8 | MLV_LINEAGE_CREATION_FAILURE | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 9 | MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION | MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION | UserError | [MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION]: Failed to create lineage due to Notebook exception. Review Notebook logs and retry. failureType: UserError, \<errorTrace\> | L4 |
++| 10 | MLV_FABRIC_RUNTIME_VERSION_INCOMPATIBLE | MLV_ENVIRONMENT_INCOMPATIBLE | UserError | [MLV_ENVIRONMENT_INCOMPATIBLE]: Environment '\<envName/envId\>' used to refresh materialized lake views uses an incompatible runtime. Update your environment to use a runtime version 1.3 or higher. failureType: UserError, \<errorTrace\> | L4 |
++| 11 | MLV_SETTINGS_RETRIEVAL_ERROR | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 12 | MLV_SETTINGS_FORMAT_ERROR | MLV_SERVER_ERROR | SystemError | [MLV_SERVER_ERROR]: An unexpected server error occurred. Try again or contact support if the issue persists. failureType: SystemError, \<errorTrace\> | L4 |
++| 13 | MLV_LIBRARY_MODULE_UNAVAILABLE | MLV_LIBRARY_NOT_AVAILABLE | UserError | [MLV_LIBRARY_NOT_AVAILABLE]: Failed to refresh materialized lake view '{FQ mlvName}' because a required Python library or module is not available in the environment. failureType: UserError, \<errorTrace\> | L4 |
++| 14 | MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL | MLV_DEFINITION_CONFLICT | UserError | [MLV_DEFINITION_CONFLICT]: More than one materialized lake view definition exist in a single cell of Notebbok. Ensure that only one view is defined in a cell. failureType: UserError, \<errorTrace\> | L4 (new) |
++| 15 | MLV_SYSTEM_ERROR | *(deferred — no improved message)* | NEW_SparkEngine | *(No PM-approved message yet)* | L3/Deferred |
++| 16 | MLV_INTERNAL_SERVER_ERROR | *(deferred — no improved message)* | NEW_SparkEngine | *(No PM-approved message yet)* | L3/Deferred |
++| 17 | MLV_ERROR_CODE_NOT_FOUND | *(deferred — no improved message)* | NEW_SparkEngine | *(No PM-approved message yet)* | L3/Deferred |
++| 18 | DELTA_TABLE_NOT_FOUND | *(deferred — no improved message)* | NEW_SparkEngine | *(No PM-approved message yet)* | L3/Deferred |
++| 19 | MLV_INVALID_SYNTAX_PYSPARK | *(deferred — no improved message)* | NEW_SparkEngine | *(No PM-approved message yet)* | L3/Deferred |
++
++### Summary of RunDag/Spark Codes
++
++| Category | Count | Display Codes |
++|----------|-------|---------------|
++| Ready (PM-approved message) | 14 | MLV_ACCESS_DENIED, MLV_SERVER_ERROR (×7), MLV_TOO_MANY_REQUESTS, MLV_SPARK_CAPACITY_THROTTLED, MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, MLV_ENVIRONMENT_INCOMPATIBLE, MLV_LIBRARY_NOT_AVAILABLE, MLV_DEFINITION_CONFLICT |
++| Deferred (NEW_SparkEngine, no improved message) | 5 | MLV_SYSTEM_ERROR, MLV_INTERNAL_SERVER_ERROR, MLV_ERROR_CODE_NOT_FOUND, DELTA_TABLE_NOT_FOUND, MLV_INVALID_SYNTAX_PYSPARK |
++
++---
++
++## Section 3: Remaining PR Details
++
++### Key Files (all under `Service\Microsoft.LiveTable.Service\`)
++
++| File | Path |
++|------|------|
++| ErrorCode enum | `ErrorMapping\ErrorCode.cs` |
++| ErrorRegistry | `ErrorMapping\ErrorRegistry.cs` |
++| Dag | `DataModel\Dag\Dag.cs` |
++| NotebookExecutionContext | `Notebook\NotebookExecutionContext.cs` |
++| LiveTableHandler | `Core\LiveTableHandler.cs` |
++| DataQualityReportHandler | `DataQuality\DataQualityReportHandler.cs` |
++| DagExecMetadataPersistanceManager | `Persistence\DagExecMetadataPersistanceManager.cs` |
++| CatalogHandler | `Catalog\CatalogHandler.cs` |
++
++---
++
++### ❌ PR 4: PR-Throttle — Throttling Errors (4 scenarios)
++
++**Branch**: `users/saagnihotri/error-throttling`
++
++**Error codes**: MLV_TOO_MANY_REQUESTS (×4)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #1 | MLV_TOO_MANY_REQUESTS | Rate limiter policy blocks request | Medium — need FLTAPIThrottling flag enabled + rapid requests |
++| 2 | §1 #2 | MLV_TOO_MANY_REQUESTS | Artifact-level throttle (MLV_ARTIFACT_THROTTLED) | Medium — hammer same lakehouse |
++| 3 | §1 #3 | MLV_TOO_MANY_REQUESTS | User-level throttle (MLV_USER_THROTTLED) | Medium — rapid requests from same user |
++| 4 | §1 #4 | MLV_TOO_MANY_REQUESTS | Default fallback throttle (FLT_TOO_MANY_REQUESTS) | Hard — need to trigger undifferentiated path |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — ensure `MLV_TOO_MANY_REQUESTS` exists
++- `ErrorMapping\ErrorRegistry.cs` — register PM-approved message with status 429-TooManyRequests
++- Throttling middleware / rate limiter code — wire error response
++
++**Manual test steps**:
++1. Enable `FLTAPIThrottling` feature flag on CST
++2. Send rapid POST /workloads/de-ds/scheduler/run requests to trigger rate limit
++3. Verify response is `429` with body containing `MLV_TOO_MANY_REQUESTS: You've reached the request limit. Wait {retryAfterSeconds} seconds and try again.`
++4. Verify `Retry-After` header is present
++
++---
++
++### (Covered in PR 2 above — see 🔄 PR-Cat1 detail)
++
++**Error codes**: MLV_SOURCE_ENTITY_NOT_FOUND (×2), MLV_ARTIFACT_NOT_FOUND (×1), MLV_STALE_METADATA (×2)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #13 | MLV_STALE_METADATA | Workspace rename detected, catalog stale | Medium — rename workspace then run dag |
++| 2 | §1 #14 | MLV_STALE_METADATA | Cross-workspace source missing cross_workspace_id | Hard — requires cross-workspace setup with old metadata |
++| 3 | §1 #18 | MLV_SOURCE_ENTITY_NOT_FOUND | Source entity not in catalog objects list (broken lineage) | Easy — delete source table then run |
++| 4 | §1 #27 | MLV_SOURCE_ENTITY_NOT_FOUND | Source table KeyNotFoundException from catalog | Easy — delete/rename source table |
++| 5 | §1 #28 | MLV_ARTIFACT_NOT_FOUND | Lakehouse artifact not found (PowerBIEntityNotFoundError) | Easy — delete lakehouse referenced by MLV |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_STALE_METADATA`, `MLV_SOURCE_ENTITY_NOT_FOUND`, `MLV_ARTIFACT_NOT_FOUND`
++- `ErrorMapping\ErrorRegistry.cs` — register all 3 error codes with PM-approved messages
++- `DataModel\Dag\Dag.cs` — wire `ReBuildDagFromCatalogTableAsync` CatalogExceptions to new error codes
++- `Catalog\CatalogHandler.cs` — wire `GetCatalogObjectsAsync` PowerBIEntityNotFoundError to MLV_ARTIFACT_NOT_FOUND
++
++**Manual test steps**:
++1. **MLV_SOURCE_ENTITY_NOT_FOUND** (#3, #4): Create MLV referencing a source table → delete the source table → POST /workloads/de-ds/scheduler/run → verify 422 with `MLV_SOURCE_ENTITY_NOT_FOUND: Sources for materialized lake view...`
++2. **MLV_ARTIFACT_NOT_FOUND** (#5): Create MLV → delete the lakehouse it references → POST /workloads/de-ds/scheduler/run → verify 422 with `MLV_ARTIFACT_NOT_FOUND: The materialized lake view references a lakehouse that no longer exists...`
++3. **MLV_STALE_METADATA** (#1): Create MLV with cross-workspace source → rename source workspace → POST /workloads/de-ds/scheduler/run → verify 422 with `MLV_STALE_METADATA: The materialized lake view...references a source workspace...`
++
++---
++
++### ❌ PR 7: PR-Cat2 — Data Integrity / Corrupted Metadata (9 scenarios)
++
++**Branch**: `users/saagnihotri/error-catalog-integrity`
++
++**Error codes**: MLV_DATA_CORRPUTED (×6), MLV_ENTITY_NOT_FOUND (×2), MLV_INVALID_FORMAT (×1)
++
++Split into two sub-PRs if needed due to size:
++
++#### PR-Cat2a: MLV_DATA_CORRPUTED in Dag.cs (4 scenarios)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #15 | MLV_DATA_CORRPUTED | ExtractNotebookCodeReference — invalid GUID in source info | Hard — need corrupted catalog metadata |
++| 2 | §1 #17 | MLV_DATA_CORRPUTED | AddNode — Table.TableType is null/empty | Hard — need corrupted catalog |
++| 3 | §1 #20 | MLV_DATA_CORRPUTED | ExtractNotebookCodeReference — sourceinfo not valid JSON | Hard — need corrupted catalog |
++| 4 | §1 #23 | MLV_DATA_CORRPUTED | AddNode — Table.Name is null/empty | Hard — need corrupted catalog |
++| 5 | §1 #25 | MLV_DATA_CORRPUTED | ReBuildDagFromCatalogTableAsync — ArtifactMetadata.ObjectId null/empty | Hard — need corrupted metadata |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_DATA_CORRPUTED`
++- `ErrorMapping\ErrorRegistry.cs` — register with both message variants (standard + malformed)
++- `DataModel\Dag\Dag.cs` — wire AddNode, ExtractNotebookCodeReference, ReBuildDagFromCatalogTableAsync to MLV_DATA_CORRPUTED
++
++**Manual test steps**: These are **Hard** to trigger manually — they require corrupted/malformed catalog data. Primary validation through **unit tests** that mock catalog responses with invalid data.
++
++#### PR-Cat2b: MLV_DATA_CORRPUTED for DQ + MLV_ENTITY_NOT_FOUND + MLV_INVALID_FORMAT (4 scenarios)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #16 | MLV_DATA_CORRPUTED | DQ Report — Lakehouse.Properties is null | Medium — misconfigure lakehouse settings |
++| 2 | §1 #19 | MLV_ENTITY_NOT_FOUND | ExtractNotebookCodeReference — missing sourceinfo property | Medium — create PySpark MLV without proper decorator |
++| 3 | §1 #24 | MLV_ENTITY_NOT_FOUND | ExtractNotebookCodeReference — sourceinfo missing workspace/notebook IDs | Medium — partial sourceinfo |
++| 4 | §1 #5 | MLV_INVALID_FORMAT | AddNode — invalid table name format | Easy — use table name with extra periods |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_ENTITY_NOT_FOUND`, `MLV_INVALID_FORMAT`
++- `ErrorMapping\ErrorRegistry.cs` — register PM-approved messages
++- `DataModel\Dag\Dag.cs` — wire AddNode validation and ExtractNotebookCodeReference
++- `DataQuality\DataQualityReportHandler.cs` — wire Lakehouse.Properties null check
++
++**Manual test steps**:
++1. **MLV_INVALID_FORMAT** (#4): In notebook, define MLV with name like `schema.name.extra` → POST /workloads/de-ds/scheduler/run → verify 400 with `MLV_INVALID_FORMAT: The table or view name...`
++2. **MLV_ENTITY_NOT_FOUND** (#2): Create PySpark MLV without proper `@materialized_view` decorator metadata → run → verify 422 with `MLV_ENTITY_NOT_FOUND: The materialized lake view...has incomplete source metadata...`
++
++---
++
++### ❌ PR 3: PR-Access — Access Denied Errors (3 scenarios)
++
++**Branch**: `users/saagnihotri/error-access-denied`
++**Error codes**: MLV_ACCESS_DENIED (×3)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #7 | MLV_ACCESS_DENIED | VerifyEnvironmentAccessAsync — no Read on environment | Easy — use user without environment access |
++| 2 | §1 #22 | MLV_ACCESS_DENIED | FetchAndParseContentForAllMLVsAsync — no Read on notebook | Easy — remove notebook read permission |
++| 3 | §1 #26 | MLV_ACCESS_DENIED | ReBuildDagFromCatalogTableAsync — no Read on cross-workspace source table | Medium — cross-workspace setup |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_ACCESS_DENIED`
++- `ErrorMapping\ErrorRegistry.cs` — register PM-approved message with 403-Forbidden
++- `Core\LiveTableHandler.cs` — wire VerifyEnvironmentAccessAsync
++- `Notebook\NotebookExecutionContext.cs` — wire FetchAndParseContentForAllMLVsAsync
++- `DataModel\Dag\Dag.cs` — wire ReBuildDagFromCatalogTableAsync CatalogException
++
++**Manual test steps**:
++1. **Environment access** (#1): Create a second user without Read on environment → PATCH .../liveTable/settings → verify 403 with `MLV_ACCESS_DENIED: You don't have permission(s) to view the...`
++2. **Notebook access** (#2): Remove user's Read permission on notebook → POST /workloads/de-ds/scheduler/run → verify 403 with `MLV_ACCESS_DENIED: You don't have permission to view the...`
++3. **Cross-workspace table** (#3): Set up cross-workspace MLV → remove Read on source table → POST /workloads/de-ds/scheduler/run → verify 403
++
++---
++
++### (Covered in PR 1 above — see ✅ PR-Notebook detail)
++
++> **Note**: MLV_ETAG_CHANGED and MLV_NOTEBOOK_SOURCE_NOT_FOUND may already be partially done via PR-A3. Verify before starting.
++
++**Error codes**: MLV_NOTEBOOK_SOURCE_NOT_FOUND (×2), MLV_ETAG_CHANGED (×1)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #6 | MLV_NOTEBOOK_SOURCE_NOT_FOUND | FetchAndParseContentForAllMLVsAsync — no cell matching MLV name | Medium — delete MLV cell from notebook |
++| 2 | §1 #31 | MLV_NOTEBOOK_SOURCE_NOT_FOUND | ParseNotebookForCellsAndDefaultLakehouseInfo — notebook content null/empty | Medium — create notebook with empty content |
++| 3 | §1 #21 | MLV_ETAG_CHANGED | FetchAndParseContentForAllMLVsAsync — ETag mismatch (notebook modified after submission) | Medium — edit notebook between submission and execution |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_NOTEBOOK_SOURCE_NOT_FOUND`, `MLV_ETAG_CHANGED`
++- `ErrorMapping\ErrorRegistry.cs` — register PM-approved messages
++- `Notebook\NotebookExecutionContext.cs` — wire both FetchAndParse and ParseNotebook errors
++
++**Manual test steps**:
++1. **MLV_NOTEBOOK_SOURCE_NOT_FOUND** (#1): Remove the MLV definition cell from notebook → POST /workloads/de-ds/scheduler/run → verify 404 with `MLV_NOTEBOOK_SOURCE_NOT_FOUND: Couldn't find materialized lake view...`
++2. **MLV_ETAG_CHANGED** (#3): Submit a refresh, then quickly edit the notebook before execution starts → verify 422 with `MLV_ETAG_CHANGED: Contents in the Notebook...changed after the operation started...`
++
++---
++
++### ❌ PR 5: PR-Operation-A — Cancel-Flow Errors (4 scenarios)
++
++**Branch**: `users/saagnihotri/error-operation-cancel`
++
++**Error codes**: MLV_OPERATION_INPROGRESS (×2), MLV_TERMINAL_STATE (×1), MLV_REFRESH_PENDING (×1), MLV_LINEAGE_NOT_FOUND (×2), MLV_RESOURCE_LOCKED (×1)
++
++Split into two sub-PRs:
++
++#### Cancel-flow errors (4 scenarios)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #11 | MLV_TERMINAL_STATE | CancelDAGAsync — DAG in terminal state | Easy — cancel already-completed execution |
++| 2 | §1 #12 | MLV_REFRESH_PENDING | CancelDAGAsync — iteration exists but DAG null | Medium — cancel before execution begins |
++| 3 | §1 #9 | MLV_LINEAGE_NOT_FOUND | CancelDAGAsync — iteration not in cache | Easy — cancel with non-existent iterationId |
++| 4 | §1 #8 | MLV_LINEAGE_NOT_FOUND | GetDAGExecMetricsAsync — iteration not found | Easy — GET with non-existent iterationId |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_TERMINAL_STATE`, `MLV_REFRESH_PENDING`, `MLV_LINEAGE_NOT_FOUND`
++- `ErrorMapping\ErrorRegistry.cs` — register PM-approved messages
++- Cancel handler / DAG manager — wire CancelDAGAsync paths
++- Metrics handler — wire GetDAGExecMetricsAsync
++
++**Manual test steps**:
++1. **MLV_TERMINAL_STATE** (#1): Run refresh to completion → POST /workloads/de-ds/scheduler/run/cancel with completed iterationId → verify 409 with `MLV_TERMINAL_STATE: The execution has already finished...`
++2. **MLV_LINEAGE_NOT_FOUND** (#3): POST /workloads/de-ds/scheduler/run/cancel with random iterationId → verify 404 with `MLV_LINEAGE_NOT_FOUND: Can't find the instance...`
++3. **MLV_LINEAGE_NOT_FOUND** (#4): GET .../liveTable/iteration/{randomId} → verify 404
++4. **MLV_REFRESH_PENDING** (#2): Submit refresh, immediately cancel before execution starts → verify 409 with `MLV_REFRESH_PENDING: The iteration exists but hasn't started processing...`
++
++### ❌ PR 6: PR-Operation-B — Lock & Duplicate Errors (3 scenarios)
++
++**Branch**: `users/saagnihotri/error-operation-lock`
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #10 | MLV_OPERATION_INPROGRESS | RegisterAndExecuteReliableOperationsAsync — duplicate iterationId | Medium — submit same iteration concurrently |
++| 2 | §1 #30 | MLV_OPERATION_INPROGRESS | DQ Report — lock on report state file | Medium — submit two DQ reports simultaneously |
++| 3 | §1 #29 | MLV_RESOURCE_LOCKED | SaveDagSettingsAsync — lock timeout | Hard — trigger 30-min lock timeout |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_OPERATION_INPROGRESS`, `MLV_RESOURCE_LOCKED`
++- `ErrorMapping\ErrorRegistry.cs` — register PM-approved messages
++- `Core\LiveTableHandler.cs` — wire RegisterAndExecuteReliableOperationsAsync
++- `DataQuality\DataQualityReportHandler.cs` — wire lock contention
++- `Persistence\DagExecMetadataPersistanceManager.cs` — wire SaveDagSettingsAsync lock timeout
++
++**Manual test steps**:
++1. **MLV_OPERATION_INPROGRESS** (#1): Submit same refresh twice concurrently → verify 409 with `MLV_OPERATION_INPROGRESS: Another action...is currently running...`
++2. **MLV_OPERATION_INPROGRESS** (#2): Submit DQ report while another is running → verify 409
++3. **MLV_RESOURCE_LOCKED** (#3): Trigger settings update while lock is held → verify 423 with `MLV_RESOURCE_LOCKED: This entity...is currently locked...`
++
++---
++
++### ❌ PR 8: PR-Fallback — Server Error Fallback (1 scenario)
++
++**Branch**: `users/saagnihotri/error-server-fallback`
++
++**Error codes**: MLV_SERVER_ERROR (×1)
++
++| # | Row | Error Code | Trigger | Test Difficulty |
++|---|-----|-----------|---------|-----------------|
++| 1 | §1 #32 | MLV_SERVER_ERROR | General unhandled server errors | Easy — already default path |
++
++**Files to change**:
++- `ErrorMapping\ErrorCode.cs` — add `MLV_SERVER_ERROR`
++- `ErrorMapping\ErrorRegistry.cs` — register with 500-InternalServerError
++- Global error handler / middleware — ensure fallback uses this code
++
++**Manual test steps**: Verify any unhandled exception returns 500 with `MLV_SERVER_ERROR: An unexpected server error occurred...`
++
++---
++
++### ❌ PR 9–11: PR-RunDag — RunDag/Spark Execution Errors (Track B — 14 ready + 5 deferred)
++
++**Branches**: `users/saagnihotri/error-rundag-system` (PR 9), `users/saagnihotri/error-rundag-user` (PR 10), `users/saagnihotri/error-rundag-deferred` (PR 11)
++
++These are Spark-side error code mappings (Lists 3+4). Separate from the API-layer errors above.
++
++#### PR-RunDag-A: System errors mapped to MLV_SERVER_ERROR (7 internal codes)
++
++| # | Internal Code | Display Code | failureType |
++|---|--------------|-------------|-------------|
++| 1 | MLV_SPARK_SESSION_ACQUISITION_TIMEOUT | MLV_SERVER_ERROR | SystemError |
++| 2 | MLV_SPARK_SESSION_ACQUISITION_FAILED | MLV_SERVER_ERROR | SystemError |
++| 3 | MLV_SPARK_SESSION_REQUEST_SUBMISSION_FAILED | MLV_SERVER_ERROR | SystemError |
++| 4 | MLV_TRANSFORM_EXECUTION_NOT_FOUND | MLV_SERVER_ERROR | SystemError |
++| 5 | MLV_LINEAGE_CREATION_FAILURE | MLV_SERVER_ERROR | SystemError |
++| 6 | MLV_SETTINGS_RETRIEVAL_ERROR | MLV_SERVER_ERROR | SystemError |
++| 7 | MLV_SETTINGS_FORMAT_ERROR | MLV_SERVER_ERROR | SystemError |
++
++**Test**: Unit tests verifying internal→display code mapping + failureType. Hard to trigger manually on CST.
++
++#### PR-RunDag-B: User-facing error codes (7 codes)
++
++| # | Internal Code | Display Code | failureType |
++|---|--------------|-------------|-------------|
++| 1 | MLV_ACCESS_DENIED | MLV_ACCESS_DENIED | UserError |
++| 2 | MLV_TOO_MANY_REQUESTS | MLV_TOO_MANY_REQUESTS | UserError |
++| 3 | MLV_SPARK_JOB_CAPACITY_THROTTLING | MLV_SPARK_CAPACITY_THROTTLED | UserError |
++| 4 | MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION | MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION | UserError |
++| 5 | MLV_FABRIC_RUNTIME_VERSION_INCOMPATIBLE | MLV_ENVIRONMENT_INCOMPATIBLE | UserError |
++| 6 | MLV_LIBRARY_MODULE_UNAVAILABLE | MLV_LIBRARY_NOT_AVAILABLE | UserError |
++| 7 | MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL | MLV_DEFINITION_CONFLICT | UserError |
++
++**Test**: #5 (MLV_ENVIRONMENT_INCOMPATIBLE) — Easy: attach environment with runtime < 1.3. #6 (MLV_LIBRARY_NOT_AVAILABLE) — Medium: reference missing Python library. #7 (MLV_DEFINITION_CONFLICT) — Easy: put 2 MLV definitions in one cell.
++
++#### PR-RunDag-Deferred: NEW_SparkEngine codes (5 codes — no PM-approved message)
++
++| # | Internal Code | Label | Status |
++|---|--------------|-------|--------|
++| 1 | MLV_SYSTEM_ERROR | NEW_SparkEngine | Awaiting PM approval |
++| 2 | MLV_INTERNAL_SERVER_ERROR | NEW_SparkEngine | Awaiting PM approval |
++| 3 | MLV_ERROR_CODE_NOT_FOUND | NEW_SparkEngine | Awaiting PM approval |
++| 4 | DELTA_TABLE_NOT_FOUND | NEW_SparkEngine | Awaiting PM approval |
++| 5 | MLV_INVALID_SYNTAX_PYSPARK | NEW_SparkEngine | Awaiting PM approval |
++
++**Action**: Send these 5 codes to PM for improved message approval before implementation.
++
++
++
++ 
+\ No newline at end of file
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs
+index 14095c87..64452355 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableControllerTests.cs
+@@ -1272,7 +1272,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 var body = await response.Content.ReadAsStringAsync();
+                 body.Should().Contain(wsId.ToString());
+                 body.Should().Contain(nbId.ToString());
+-                body.Should().Contain("pyspark disabled");
++                body.Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION");
+             }
+         }
+ 
+@@ -1741,7 +1741,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 // Should return 500 (not 422) for system error
+                 response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+                 var content = await response.Content.ReadAsStringAsync();
+-                content.Should().Contain("internal spark error");
++                content.Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION");
+                 content.Should().Contain(wsId.ToString());
+                 content.Should().Contain(nbId.ToString());
+             }
+@@ -3397,16 +3397,16 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+                 /// <summary>
+-        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookParsingException containing LineNumber.
+-        /// This test verifies that when a NotebookParsingException with a specific line number is thrown,
++        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookException containing LineNumber.
++        /// This test verifies that when a NotebookException with a specific line number is thrown,
+         /// the API returns UnprocessableContent (422) with a detailed error message including cell and line information.
+         /// </summary>
+         /// <returns>
+         /// Response with status 422 UnprocessableContent and detailed error message.
+         /// Ensures the error message includes cell index and line number details.
+         /// </returns>
+-        [TestMethod("LiveTableController: GetLatestDagAsync should return 422 with detailed error when NotebookParsingException has LineNumber")]
+-        public async Task LiveTableController_GetLatestDagAsync_NotebookParsingExceptionWithLineNumber_Returns422WithDetailedErrorAsync()
++        [TestMethod("LiveTableController: GetLatestDagAsync should return 422 with detailed error when NotebookException has LineNumber")]
++        public async Task LiveTableController_GetLatestDagAsync_NotebookExceptionWithLineNumber_Returns422WithDetailedErrorAsync()
+         {
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+@@ -3414,10 +3414,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 {
+                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
+ 
+-                    // Setup: Create NotebookParsingException with line number and cell index
++                    // Setup: Create NotebookException with line number and cell index
+                     var cellIndex = 5;
+                     var lineNumber = 12;
+-                    var notebookParsingEx = new NotebookParsingException(
++                    var notebookParsingEx = new NotebookException(
+                         $"Possible Magic command starting with '%' found at Cell Number {++cellIndex}, Line Number {lineNumber} are not supported in Lineage Creation or Refresh.",
+                         lineNumber,
+                         cellIndex,
+@@ -3450,16 +3450,16 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         /// <summary>
+-        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookParsingException without LineNumber.
+-        /// This test verifies that when a NotebookParsingException without a line number (LineNumber = 0) is thrown,
++        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookException without LineNumber.
++        /// This test verifies that when a NotebookException without a line number (LineNumber = 0) is thrown,
+         /// the API returns UnprocessableContent (422) with a generic error message indicating a possible magic command.
+         /// </summary>
+         /// <returns>
+         /// Response with status 422 UnprocessableContent and generic error message.
+         /// Ensures the error message indicates possible magic command without specific line details.
+         /// </returns>
+-        [TestMethod("LiveTableController: GetLatestDagAsync should return 422 with generic error when NotebookParsingException has no LineNumber")]
+-        public async Task LiveTableController_GetLatestDagAsync_NotebookParsingExceptionWithoutLineNumber_Returns422WithGenericErrorAsync()
++        [TestMethod("LiveTableController: GetLatestDagAsync should return 422 with generic error when NotebookException has no LineNumber")]
++        public async Task LiveTableController_GetLatestDagAsync_NotebookExceptionWithoutLineNumber_Returns422WithGenericErrorAsync()
+         {
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+@@ -3467,9 +3467,9 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 {
+                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
+ 
+-                    // Setup: Create NotebookParsingException without line number (LineNumber = 0)
++                    // Setup: Create NotebookException without line number (LineNumber = 0)
+                     var cellIndex = 3;
+-                    var notebookParsingEx = new NotebookParsingException(
++                    var notebookParsingEx = new NotebookException(
+                         $"Possible Magic command starting with '%' found at Cell Number {++cellIndex} are not supported in Lineage Creation or Refresh.",
+                         0, // No line number
+                         cellIndex,
+@@ -3504,14 +3504,14 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         /// <summary>
+-        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookParsingException at first cell.
++        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookException at first cell.
+         /// This test verifies edge case handling when parsing error occurs at cell index 0 (first cell).
+         /// </summary>
+         /// <returns>
+         /// Response with status 422 UnprocessableContent with cell 0 in error message.
+         /// </returns>
+-        [TestMethod("LiveTableController: GetLatestDagAsync should handle NotebookParsingException at first cell (cell 0)")]
+-        public async Task LiveTableController_GetLatestDagAsync_NotebookParsingExceptionAtFirstCell_Returns422Async()
++        [TestMethod("LiveTableController: GetLatestDagAsync should handle NotebookException at first cell (cell 0)")]
++        public async Task LiveTableController_GetLatestDagAsync_NotebookExceptionAtFirstCell_Returns422Async()
+         {
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+@@ -3519,10 +3519,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 {
+                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
+ 
+-                    // Setup: Create NotebookParsingException at cell 0
++                    // Setup: Create NotebookException at cell 0
+                     var cellIndex = 0;
+                     var lineNumber = 1;
+-                    var notebookParsingEx = new NotebookParsingException(
++                    var notebookParsingEx = new NotebookException(
+                         $"Possible Magic command starting with '%' found at Cell Number {++cellIndex}, Line Number {lineNumber} are not supported in Lineage Creation or Refresh.",
+                         lineNumber,
+                         cellIndex,
+@@ -3551,20 +3551,20 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         /// <summary>
+-        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookParsingException containing various magic commands.
++        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookException containing various magic commands.
+         /// This test uses DataRow to verify different magic command types are properly reported in error messages.
+         /// </summary>
+         /// <param name="magicCommand">The magic command that caused the parsing error</param>
+         /// <returns>
+         /// Response with status 422 UnprocessableContent with appropriate error message.
+         /// </returns>
+-        [TestMethod("LiveTableController: GetLatestDagAsync should handle various magic commands in NotebookParsingException")]
++        [TestMethod("LiveTableController: GetLatestDagAsync should handle various magic commands in NotebookException")]
+         [DataRow("%pip", DisplayName = "pip magic command")]
+         [DataRow("%run", DisplayName = "run magic command")]
+         [DataRow("%sql", DisplayName = "sql magic command")]
+         [DataRow("%load", DisplayName = "load magic command")]
+         [DataRow("%matplotlib", DisplayName = "matplotlib magic command")]
+-        public async Task LiveTableController_GetLatestDagAsync_NotebookParsingExceptionWithVariousMagicCommands_Returns422Async(string magicCommand)
++        public async Task LiveTableController_GetLatestDagAsync_NotebookExceptionWithVariousMagicCommands_Returns422Async(string magicCommand)
+         {
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+@@ -3574,7 +3574,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+ 
+                     var cellIndex = 2;
+                     var lineNumber = 5;
+-                    var notebookParsingEx = new NotebookParsingException(
++                    var notebookParsingEx = new NotebookException(
+                         $"Possible Magic command starting with '%' found at Cell Number {++cellIndex}, Line Number {lineNumber} are not supported in Lineage Creation or Refresh.",
+                         lineNumber,
+                         cellIndex,
+@@ -3604,14 +3604,14 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         /// <summary>
+-        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookParsingException at high cell/line numbers.
++        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookException at high cell/line numbers.
+         /// This test verifies proper handling of parsing errors at large cell and line numbers.
+         /// </summary>
+         /// <returns>
+         /// Response with status 422 UnprocessableContent with correct high numbers in error message.
+         /// </returns>
+-        [TestMethod("LiveTableController: GetLatestDagAsync should handle NotebookParsingException at high cell and line numbers")]
+-        public async Task LiveTableController_GetLatestDagAsync_NotebookParsingExceptionAtHighNumbers_Returns422Async()
++        [TestMethod("LiveTableController: GetLatestDagAsync should handle NotebookException at high cell and line numbers")]
++        public async Task LiveTableController_GetLatestDagAsync_NotebookExceptionAtHighNumbers_Returns422Async()
+         {
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+@@ -3619,10 +3619,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                 {
+                     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
+ 
+-                    // Setup: Create NotebookParsingException with high cell and line numbers
++                    // Setup: Create NotebookException with high cell and line numbers
+                     var cellIndex = 999;
+                     var lineNumber = 5000;
+-                    var notebookParsingEx = new NotebookParsingException(
++                    var notebookParsingEx = new NotebookException(
+                         $"Possible Magic command starting with '%' found at Cell Number {++cellIndex}, Line Number {lineNumber} are not supported in Lineage Creation or Refresh.",
+                         lineNumber,
+                         cellIndex,
+@@ -3651,15 +3651,15 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+         }
+ 
+         /// <summary>
+-        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookParsingException including workspace and notebook IDs.
++        /// Unit test for LiveTableController_GetLatestDagAsync with NotebookException including workspace and notebook IDs.
+         /// This test verifies that workspace and notebook IDs from the exception are properly included in the error response
+         /// for diagnostic purposes.
+         /// </summary>
+         /// <returns>
+         /// Response with status 422 UnprocessableEntity containing workspace and notebook ID information.
+         /// </returns>
+-        [TestMethod("LiveTableController: GetLatestDagAsync should include workspace and notebook IDs in NotebookParsingException error")]
+-        public async Task LiveTableController_GetLatestDagAsync_NotebookParsingException_IncludesWorkspaceAndNotebookIdsAsync()
++        [TestMethod("LiveTableController: GetLatestDagAsync should include workspace and notebook IDs in NotebookException error")]
++        public async Task LiveTableController_GetLatestDagAsync_NotebookException_IncludesWorkspaceAndNotebookIdsAsync()
+         {
+             using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
+             {
+@@ -3671,14 +3671,15 @@ namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
+                     var nbId = Guid.NewGuid();
+                     var lineNumber = 5;
+                     var cellIndex = 2;
+-                    var errorParams = new Dictionary<string, string>
+-                    {
+-                        { "cellIndex",  cellIndex.ToString() },
+-                        { "lineNumber", lineNumber.ToString() },
+-                        { "notebookId", nbId.ToString() },
+-                    };
+-                    var notebookParsingEx = new NotebookParsingException(
+-                        ErrorRegistry.GetErrorMessage(ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, errorParams),
++                    var notebookParsingEx = new NotebookException(
++                        ErrorRegistry.GetErrorMessage(
++                            ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED,
++                            new Dictionary<string, string>
++                            {
++                                { Constants.CellIndexKey, cellIndex.ToString() },
++                                { Constants.LineNumberKey, lineNumber.ToString() },
++                                { Constants.NotebookIdKey, nbId.ToString() },
++                            }),
+                         5,
+                         2,
+                         "%",
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/NotebookErrorRegistryE2ETests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/NotebookErrorRegistryE2ETests.cs
+new file mode 100644
+index 00000000..0c517091
+--- /dev/null
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/NotebookErrorRegistryE2ETests.cs
+@@ -0,0 +1,693 @@
++// <copyright file="NotebookErrorRegistryE2ETests.cs" company="Microsoft">
++// Copyright (c) Microsoft. All rights reserved.
++// </copyright>
++
++namespace Microsoft.LiveTable.Service.UnitTests.ControllerTests
++{
++    using System;
++    using System.Collections.Generic;
++    using System.Net;
++    using System.Net.Http;
++    using System.Threading;
++    using System.Threading.Tasks;
++    using FluentAssertions;
++    using Microsoft.Analytics.LiveTable.Service.Controllers;
++    using Microsoft.LiveTable.Service.Artifacts;
++    using Microsoft.LiveTable.Service.Catalog;
++    using Microsoft.LiveTable.Service.Common;
++    using Microsoft.LiveTable.Service.Core;
++    using Microsoft.LiveTable.Service.DataModel.Dag;
++    using Microsoft.LiveTable.Service.DataQuality;
++    using Microsoft.LiveTable.Service.DataQuality.StateManagement;
++    using Microsoft.LiveTable.Service.ErrorMapping;
++    using Microsoft.LiveTable.Service.FeatureFlightProvider;
++    using Microsoft.LiveTable.Service.Notebook.Exceptions;
++    using Microsoft.LiveTable.Service.Persistence;
++    using Microsoft.LiveTable.Service.ReliableOperations;
++    using Microsoft.LiveTable.Service.SecurityAuditing;
++    using Microsoft.LiveTable.Service.Store;
++    using Microsoft.LiveTable.Service.Telemetry;
++    using Microsoft.LiveTable.Service.Throttling;
++    using Microsoft.LiveTable.Service.Throttling.Services;
++    using Microsoft.LiveTable.Service.TokenManagement;
++    using Microsoft.LiveTable.Service.UnitTests.ControllerTests.Utils;
++    using Microsoft.LiveTable.Test.TestCommon;
++    using Microsoft.MWC.Workload.Client.Library.DataModel.Parameters;
++    using Microsoft.MWC.Workload.Client.Library.Http;
++    using Microsoft.MWC.Workload.Client.Library.Providers.CustomParameters;
++    using Microsoft.MWC.Workload.Client.Library.Services;
++    using Microsoft.MWC.Workload.Client.Library.Services.MonikerManager;
++    using Microsoft.PowerBI.ServicePlatform.WireUp;
++    using Microsoft.ServicePlatform.WebApi.AspNetCore.Hosting;
++    using Microsoft.ServicePlatform.WebApi.Authentication;
++    using Microsoft.VisualStudio.TestTools.UnitTesting;
++    using Moq;
++
++    /// <summary>
++    /// E2E tests for notebook-related error registry entries and controller behavior.
++    /// Validates that ErrorRegistry renders notebook error messages correctly and that
++    /// the LiveTableController returns proper HTTP responses for notebook exceptions.
++    /// </summary>
++    [TestClass]
++    [TestCategory(nameof(NotebookErrorRegistryE2ETests))]
++    public class NotebookErrorRegistryE2ETests : UnitTestBase
++    {
++        private const string ValidMwcToken = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjJFMzUzOEQ5ODBEOEFDNzZFOTFGMzlCRENDNTc0RDJGMzA0REE1MUMiLCJ4NXQiOiJMalU0MllEWXJIYnBIem05ekZkTkx6Qk5wUnciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJlZG9nLnBiaURlZGljYXRlZC53aW5kb3dzLWludC5uZXQiLCJleHAiOjE3NDEwMjczNzgsIm5iZiI6MTc0MTAyMDA4Nywib3JpZ2luYWxBdXRob3JizemF0aW9uSGVhZGVyIjoiQmVhcmVyIGV5SjBlWEFpT2lKS1YxUWlMQ0poYkdjaU9pSlNVekkxTmlJc0luZzFkQ0k2SW1zeVZUaEhOVE53UlRkU01sWmhRM2t3YWtaRGVHVmFaMlZtVVNJc0ltdHBaQ0k2SW1zeVZUaEhOVE53UlRkU01sWmhRM2t3YWtaRGVHVmFaMlZtVVNKOS5leUpoZFdRaU9pSm9kSFJ3Y3pvdkwyRnVZV3g1YzJsekxuZHBibVJ2ZDNNdGFXNTBMbTVsZ.m1PrXXlhG92vn4Cx4PlG06p3i7OPcD0tNsF-qzzZdkMr1d6Yv66njCA1PWEsCcZi2DqtdwLtZ5AlpcdgphpzmQUQckso71WjhYavUJGJaSirZt2LyyCZY4SPp7K0DmWfFE3cV2UwrMZZireOOwvATWJXdg-hxHenKl-KKdWOG6jl4z1-7uksZ68rBRFjEcj5PbQboou8JagVRz56d0_hOt9yAnvcy5o7p0Xt6WqxrOYxDfTuttBPV8EfGTQfvf2EuycQC_nSuZK_fEx7JQQUOhal2RqrQbWFFWmoz1M5pjp6A5bdJ9Xt2g9wuDqTIMFvIJYDz3CsZDhh6D1FLuA6CA";
++
++        private readonly string tenantId = Guid.NewGuid().ToString();
++        private readonly string userObjectId = "userOid";
++        private readonly string userPrincipalName = "userName";
++        private readonly string artifactObjectId = "artifactOid";
++        private Mock<IAuthenticatorFactory> authenticatorFactoryMock;
++        private Mock<LiveTableHandler> mockLiveTableHandler;
++        private Mock<IFeatureFlighter> mockFeatureFlighter = new Mock<IFeatureFlighter>();
++        private Mock<ICustomLiveTableTelemetryReporter> mockCustomLiveTableTelemetryReporter;
++        private Action<IHttpHostBuilder> deps;
++        private Guid workspaceId;
++        private Guid lakehouseId;
++        private string relativePath;
++
++        /// <inheritdoc/>
++        [TestInitialize]
++        public override async Task TestInitializeAsync()
++        {
++            WireUp.Clear();
++            await base.TestInitializeAsync();
++            this.authenticatorFactoryMock = AuthTestUtils.CreateMwcTokenV2AuthFactoryMock(tenantId, workspaceId.ToString(), userObjectId, userPrincipalName, artifactObjectId);
++
++            var mockReliableOperationExecutionManager = new Mock<IReliableOperationExecutionManager>();
++            const string moniker = "mnkr_99";
++            var monikerEntry = new MonikerEntry(moniker);
++            var monikerEvictorMock = new Mock<IMonikerEvictor>();
++            var monikerManagerMock = new Mock<IMonikerManager>();
++            var reliableOperationsManagerMock = new Mock<IReliableOperationsManager>();
++            var mockSecurityAuditContextManager = new Mock<ISecurityAuditContextManager>();
++            this.mockCustomLiveTableTelemetryReporter = new Mock<ICustomLiveTableTelemetryReporter>();
++            var mockDagExecMetadataPersistanceManager = new Mock<IDagExecMetadataPersistanceManager>();
++            var mockIWorkloadApplicationAuthorityProvider = new Mock<MWC.Workload.Client.Library.Providers.IWorkloadApplicationAuthorityProvider>();
++            var mockDagExecutionStore = new Mock<IDagExecutionStore>();
++            var mockICatalogHandler = new Mock<ICatalogHandler>();
++            var mockParametersProvider = new Mock<IParametersProvider>();
++            var mockReportStateManager = new Mock<IReportStateManager>();
++            var mockITokenManager = new Mock<TokenManager>(mockIWorkloadApplicationAuthorityProvider.Object, mockParametersProvider.Object);
++            var mockArtifactMetadataService = new Mock<IArtifactMetadataService>();
++            var mockFabricApiClient = new Mock<IFabricApiClient>();
++
++            var mockmockMLVExecutionDefPersistenceManager = new Mock<IMLVExecutionDefinitionPersistenceManager>();
++
++            mockLiveTableHandler = new Mock<LiveTableHandler>(
++               mockDagExecutionStore.Object,
++               mockReliableOperationExecutionManager.Object,
++               mockICatalogHandler.Object,
++               mockArtifactMetadataService.Object,
++               mockDagExecMetadataPersistanceManager.Object,
++               mockmockMLVExecutionDefPersistenceManager.Object);
++            var mockMLVExecutionDefHandler = new Mock<MLVExecutionDefinitionHandler>(
++                mockmockMLVExecutionDefPersistenceManager.Object);
++
++            var templateRenderer = new TemplateRenderer();
++            var mockDataQualityReportHandler = new Mock<DataQualityReportHandler>(
++                templateRenderer, mockFabricApiClient.Object, mockReportStateManager.Object);
++
++            reliableOperationsManagerMock.Setup(m => m.UnregisterOperationAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
++                                         .Returns(Task.FromResult(true));
++            mockParametersProvider.Setup(m => m.GetHostParameter<TimeSpan>("maxDagExecutionTime")).Returns(TimeSpan.FromMinutes(1));
++            mockParametersProvider.Setup(m => m.GetHostParameter<bool>("DisableFLTAuth")).Returns(true);
++
++            mockITokenManager.Setup(m => m.CalculateExpiryTime(It.IsAny<string>())).Returns(DateTime.UtcNow.AddHours(1));
++            monikerEvictorMock.Setup(me => me.MonikerEntrySnapshot).Returns(monikerEntry);
++            monikerManagerMock.Setup(mm => mm.GetMonikersSnapshotSummary()).Returns(new List<MonikerEntry> { monikerEntry });
++            monikerManagerMock.Setup(mm => mm.BeginEvictionAsync(moniker, It.IsAny<CancellationToken>())).Returns(Task.FromResult(monikerEvictorMock.Object));
++            WireUp.RegisterInstance<IFeatureFlighter>(mockFeatureFlighter.Object);
++            WireUp.RegisterInstance<IReliableOperationsManager>(reliableOperationsManagerMock.Object);
++            WireUp.RegisterInstance<LiveTableHandler>(mockLiveTableHandler.Object);
++            WireUp.RegisterInstance<DataQualityReportHandler>(mockDataQualityReportHandler.Object);
++            WireUp.RegisterInstance<IDagExecutionStore>(mockDagExecutionStore.Object);
++            WireUp.RegisterInstance<IParametersProvider>(mockParametersProvider.Object);
++            WireUp.RegisterInstance<IMonikerManager>(monikerManagerMock.Object);
++            WireUp.RegisterInstance<ITokenManager>(mockITokenManager.Object);
++            WireUp.RegisterInstance<IFabricApiClient>(mockFabricApiClient.Object);
++            WireUp.RegisterInstance(HttpClientFactoryRegistry.CreateHttpClientFactoryWithNamedClients());
++            WireUp.RegisterSingletonType<IReliableOperationExecutionManager, ReliableOperationExecutionManager>();
++            WireUp.RegisterInstance<ISecurityAuditContextManager>(mockSecurityAuditContextManager.Object);
++            WireUp.RegisterInstance<ICustomLiveTableTelemetryReporter>(this.mockCustomLiveTableTelemetryReporter.Object);
++            WireUp.RegisterInstance<MLVExecutionDefinitionHandler>(mockMLVExecutionDefHandler.Object);
++            var mockThrottlingService = new Mock<IThrottlingService>();
++            WireUp.RegisterInstance<IThrottlingService>(mockThrottlingService.Object);
++
++            this.deps = bldr =>
++            {
++                bldr.AddControllerType<LiveTableController>();
++                var mockMonikerManager = new Mock<IMonikerManager>();
++                var mockTokenManager = new Mock<ITokenManager>();
++                var mockDagExecStore = new Mock<IDagExecutionStore>();
++
++                bldr.AddPlatformService<IMonikerManager>(mockMonikerManager.Object);
++                bldr.AddPlatformService<ITokenManager>(mockTokenManager.Object);
++                bldr.AddPlatformService(this.authenticatorFactoryMock.Object);
++                bldr.AddPlatformService<IDagExecutionStore>(mockDagExecStore.Object);
++                bldr.AddPlatformService<ICustomLiveTableTelemetryReporter>(this.mockCustomLiveTableTelemetryReporter.Object);
++                bldr.UseNewtonsoftJson(options => WorkloadCustomParametersSerializationUtilities.SetCustomParameterSettings(options.SerializerSettings));
++            };
++
++            this.workspaceId = Guid.NewGuid();
++            this.lakehouseId = Guid.NewGuid();
++            this.relativePath = $"v1/workspaces/{workspaceId}/lakehouses/{lakehouseId}/liveTable";
++        }
++
++        /// <inheritdoc/>
++        [TestCleanup]
++        public override async Task TestCleanupAsync()
++        {
++            await base.TestCleanupAsync();
++        }
++
++        // ================================================
++        // ErrorRegistry Rendering Tests
++        // ================================================
++
++        /// <summary>
++        /// Tests that the NotebookException error message renders exactly with all parameters for user error.
++        /// </summary>
++        [TestMethod]
++        public void ErrorRegistry_NotebookException_ExactRenderedErrorMessage()
++        {
++            // Arrange
++            var notebookId = "nb-12345678-1234-1234-1234-123456789abc";
++            var workspaceId = "ws-12345678-1234-1234-1234-123456789abc";
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION,
++                new Dictionary<string, string>
++                {
++                    { Constants.NotebookIdKey, notebookId },
++                    { Constants.WorkspaceIdKey, workspaceId },
++                    { Constants.ErrorMessageKey, string.Empty },
++                });
++
++            // Assert
++            var expected = $"MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook '{notebookId}' (workspace: '{workspaceId}'). Review Notebook logs and retry.";
++            Assert.AreEqual(expected, result);
++        }
++
++        /// <summary>
++        /// Tests that the NotebookException error message renders exactly with SystemError failure type.
++        /// </summary>
++        [TestMethod]
++        public void ErrorRegistry_NotebookException_SystemError_ExactRenderedErrorMessage()
++        {
++            // Arrange
++            var notebookId = Guid.NewGuid().ToString();
++            var workspaceId = Guid.NewGuid().ToString();
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION,
++                new Dictionary<string, string>
++                {
++                    { Constants.NotebookIdKey, notebookId },
++                    { Constants.WorkspaceIdKey, workspaceId },
++                    { Constants.ErrorMessageKey, string.Empty },
++                });
++
++            // Assert
++            Assert.IsFalse(result.Contains("failureType"), "API-level message should not contain failureType");
++            Assert.IsTrue(result.StartsWith("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION:"), "Should start with bare error code");
++        }
++
++        /// <summary>
++        /// Tests that the NotebookException template contains raw placeholders when no parameters are provided.
++        /// </summary>
++        [TestMethod]
++        public void ErrorRegistry_NotebookException_WithoutParameters_ContainsRawPlaceholders()
++        {
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION);
++
++            // Assert
++            Assert.IsTrue(result.Contains("{NotebookId}"), "Should contain raw NotebookId placeholder");
++            Assert.IsTrue(result.Contains("{WorkspaceId}"), "Should contain raw WorkspaceId placeholder");
++            Assert.IsFalse(result.Contains("{FailureType}"), "Should NOT contain FailureType placeholder (removed from template)");
++        }
++
++        /// <summary>
++        /// Tests that the MLV_NB_ETAG_CHANGED error message renders exactly with parameters.
++        /// </summary>
++        [TestMethod]
++        public void ErrorRegistry_MLVEtagChanged_ExactRenderedErrorMessage()
++        {
++            // Arrange
++            var notebookDetails = "[Workspace: ws-123, Notebook: nb-456]";
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_NB_ETAG_CHANGED,
++                new Dictionary<string, string> { { Constants.NotebookDetailsKey, notebookDetails } });
++
++            // Assert
++            var expected = $"MLV_NB_ETAG_CHANGED: Contents in the Notebook {notebookDetails} changed after the operation started. Refresh and try again.";
++            Assert.AreEqual(expected, result);
++        }
++
++        /// <summary>
++        /// Tests that the MLV_NB_ETAG_CHANGED template contains raw placeholder when no parameters are provided.
++        /// </summary>
++        [TestMethod]
++        public void ErrorRegistry_MLVEtagChanged_WithoutParameters_ContainsRawPlaceholder()
++        {
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_NB_ETAG_CHANGED);
++
++            // Assert
++            Assert.IsTrue(result.Contains("{NotebookDetails}"), "Should contain raw NotebookDetails placeholder");
++        }
++
++        // ================================================
++        // Controller Integration Tests
++        // ================================================
++
++        /// <summary>
++        /// Tests that GetLatestDag returns 422 with the exact magic command error message.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_MagicCommandNotSupported_Returns422WithExactMessage_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var nbId = Guid.NewGuid();
++                var wsId = Guid.NewGuid();
++                var errorMessage = ErrorRegistry.GetErrorMessage(
++                    ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED,
++                    new Dictionary<string, string>
++                    {
++                        { Constants.CellIndexKey, "3" },
++                        { Constants.LineNumberKey, "5" },
++                        { Constants.NotebookIdKey, nbId.ToString() },
++                    });
++                var nbParsingEx = new NotebookException(errorMessage, 5, 3, "%pip", wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbParsingEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain("MLV_MAGIC_COMMAND_NOT_SUPPORTED");
++                body.Should().Contain("cell 3");
++                body.Should().Contain("line 5");
++            }
++        }
++
++        /// <summary>
++        /// Tests that magic command error message is distinct from notebook exception error message.
++        /// </summary>
++        [TestMethod]
++        public void GetLatestDag_MagicCommand_DistinctFromNotebookException()
++        {
++            var magicCommandMsg = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED,
++                new Dictionary<string, string>
++                {
++                    { Constants.CellIndexKey, "1" },
++                    { Constants.LineNumberKey, "1" },
++                    { Constants.NotebookIdKey, Guid.NewGuid().ToString() },
++                });
++            var notebookExMsg = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION,
++                new Dictionary<string, string>
++                {
++                    { Constants.NotebookIdKey, Guid.NewGuid().ToString() },
++                    { Constants.WorkspaceIdKey, Guid.NewGuid().ToString() },
++                    { Constants.ErrorMessageKey, string.Empty },
++                });
++
++            Assert.AreNotEqual(magicCommandMsg, notebookExMsg, "Magic command and notebook exception messages should be distinct");
++            Assert.IsTrue(magicCommandMsg.Contains("MLV_MAGIC_COMMAND_NOT_SUPPORTED"));
++            Assert.IsTrue(notebookExMsg.Contains("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION"));
++        }
++
++        /// <summary>
++        /// Tests that GetLatestDag returns the exact notebook exception message for user errors.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_NotebookExceptionUserError_ReturnsExactNotebookExceptionMessage_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var nbEx = new NotebookException("notebook error", HttpStatusCode.UnprocessableEntity, wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION");
++                body.Should().Contain(nbId.ToString());
++                body.Should().Contain(wsId.ToString());
++                body.Should().NotContain("failureType", "API-level response should not contain failureType");
++            }
++        }
++
++        /// <summary>
++        /// Tests that GetLatestDag returns the exact notebook exception message for system errors.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_NotebookExceptionSystemError_ReturnsExactNotebookExceptionMessageWithSystemError_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var nbEx = new NotebookException("internal error", HttpStatusCode.InternalServerError, wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION");
++                body.Should().NotContain("failureType", "API-level response should not contain failureType");
++            }
++        }
++
++        /// <summary>
++        /// Tests that GetLatestDag renders Unknown when NotebookId is null in the exception.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_NotebookExceptionNullNotebookId_RendersUnknownInMessage_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var nbEx = new NotebookException("error with null ids", HttpStatusCode.UnprocessableEntity, null, null);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain("Unknown");
++            }
++        }
++
++        /// <summary>
++        /// Tests that GetLatestDag notebook exception message contains both notebook and workspace IDs.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_NotebookException_ErrorMessageContainsNotebookAndWorkspaceIds_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var nbEx = new NotebookException("test error", HttpStatusCode.BadRequest, wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                var body = await response.Content.ReadAsStringAsync();
++                body.Should().Contain(nbId.ToString(), "Response should contain notebook ID");
++                body.Should().Contain(wsId.ToString(), "Response should contain workspace ID");
++            }
++        }
++
++        /// <summary>
++        /// Tests that notebook exception error message is distinct from catalog exception error message.
++        /// </summary>
++        [TestMethod]
++        public void GetLatestDag_NotebookException_DistinctFromCatalogException()
++        {
++            var notebookMsg = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION,
++                new Dictionary<string, string>
++                {
++                    { Constants.NotebookIdKey, Guid.NewGuid().ToString() },
++                    { Constants.WorkspaceIdKey, Guid.NewGuid().ToString() },
++                    { Constants.ErrorMessageKey, string.Empty },
++                });
++
++            Assert.IsTrue(notebookMsg.Contains("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION"), "Should have notebook error code prefix");
++            Assert.IsFalse(notebookMsg.Contains("catalog"), "Notebook message should not reference catalog");
++        }
++
++        // ================================================
++        // Controller Response Title & Detail Tests
++        // ================================================
++
++        /// <summary>
++        /// Tests that ETag mismatch returns custom title "Notebook recently updated" and
++        /// detail containing [MLV_NB_ETAG_CHANGED] without double-wrapping.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_ETagMismatch_ReturnsCustomTitleAndDirectDetail_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var etagMessage = ErrorRegistry.GetErrorMessage(
++                    ErrorCode.MLV_NB_ETAG_CHANGED,
++                    new Dictionary<string, string> { { Constants.NotebookDetailsKey, $"[Workspace: {wsId}, Notebook: {nbId}]" } });
++                var nbEx = new NotebookException(etagMessage, HttpStatusCode.UnprocessableEntity, wsId, nbId, ErrorCode.MLV_NB_ETAG_CHANGED);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
++                var body = await response.Content.ReadAsStringAsync();
++                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
++
++                Assert.AreEqual("Notebook recently updated", result["title"].ToString(), "Title should be 'Notebook recently updated' for ETag mismatch");
++                result["detail"].ToString().Should().Contain("MLV_NB_ETAG_CHANGED", "Detail should contain ETag error code");
++                result["detail"].ToString().Should().Contain("changed after the operation started", "Detail should contain ETag-specific message");
++                result["detail"].ToString().Should().NotContain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION", "Detail should NOT be double-wrapped");
++            }
++        }
++
++        /// <summary>
++        /// Tests that multiple MLV definition conflict returns custom title "Notebook validation error" and
++        /// detail containing [MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL] without double-wrapping.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_MultipleDefinitionConflict_ReturnsCustomTitleAndDirectDetail_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var conflictParams = new Dictionary<string, string>
++                {
++                    { Constants.CellIndexKey, "3" },
++                    { Constants.NotebookIdKey, nbId.ToString() },
++                };
++                var conflictMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, conflictParams);
++                var nbEx = new NotebookException(conflictMessage, HttpStatusCode.UnprocessableEntity, wsId, nbId, ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
++                var body = await response.Content.ReadAsStringAsync();
++                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
++
++                Assert.AreEqual("Notebook validation error", result["title"].ToString(), "Title should be 'Notebook validation error' for definition conflict");
++                result["detail"].ToString().Should().Contain("MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL", "Detail should contain definition conflict error code");
++                result["detail"].ToString().Should().Contain(nbId.ToString(), "Detail should contain notebook ID");
++                result["detail"].ToString().Should().Contain("cell 3", "Detail should contain cell index");
++                result["detail"].ToString().Should().NotContain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION", "Detail should NOT be double-wrapped");
++            }
++        }
++
++        /// <summary>
++        /// Tests that a generic NotebookException (no ErrorCode) returns default title and
++        /// detail wrapped in [MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION] with original error message.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_GenericNotebookException_ReturnsDefaultTitleAndWrappedDetail_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var nbEx = new NotebookException("No PySpark-based cell found for the MLV dbo.customer11", HttpStatusCode.UnprocessableEntity, wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
++                var body = await response.Content.ReadAsStringAsync();
++                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
++
++                Assert.AreEqual("An error occurred while processing your request.", result["title"].ToString(), "Title should be default for generic NotebookException");
++                result["detail"].ToString().Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION", "Detail should contain error code");
++                result["detail"].ToString().Should().Contain("No PySpark-based cell found for the MLV dbo.customer11", "Detail should contain original error message");
++                result["detail"].ToString().Should().Contain(nbId.ToString(), "Detail should contain notebook ID");
++                result["detail"].ToString().Should().Contain(wsId.ToString(), "Detail should contain workspace ID");
++                result["detail"].ToString().Should().NotContain("failureType", "API-level response should not contain failureType");
++            }
++        }
++
++        /// <summary>
++        /// Tests that a generic NotebookException with null IDs and empty message
++        /// covers the alternate branches: NotebookId null → "Unknown",
++        /// WorkspaceId null → "Unknown", empty message → string.Empty.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_GenericNotebookExceptionWithNullIdsAndEmptyMessage_CoversAlternateBranches_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var nbEx = new NotebookException(string.Empty, HttpStatusCode.InternalServerError, null, null);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
++                var body = await response.Content.ReadAsStringAsync();
++                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
++
++                Assert.AreEqual("An error occurred while processing your request.", result["title"].ToString(), "Title should be default for generic NotebookException");
++                result["detail"].ToString().Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION", "Detail should contain error code");
++                result["detail"].ToString().Should().Contain("Unknown", "Detail should contain 'Unknown' for null IDs");
++            }
++        }
++
++        /// <summary>
++        /// Tests that a 5xx NotebookException returns default title with SystemError failure type.
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_SystemErrorNotebookException_ReturnsDefaultTitleAndSystemError_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var nbEx = new NotebookException("internal server error from notebook API", HttpStatusCode.InternalServerError, wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
++                var body = await response.Content.ReadAsStringAsync();
++                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
++
++                Assert.AreEqual("An error occurred while processing your request.", result["title"].ToString(), "Title should be default for system error");
++                result["detail"].ToString().Should().Contain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION", "Detail should contain error code");
++                result["detail"].ToString().Should().Contain("internal server error from notebook API", "Detail should contain original error");
++                result["detail"].ToString().Should().NotContain("failureType", "API-level response should not contain failureType");
++            }
++        }
++
++        /// <summary>
++        /// Tests that magic command error returns default title and detail with [MLV_MAGIC_COMMAND_NOT_SUPPORTED].
++        /// </summary>
++        /// <returns>A Task.</returns>
++        [TestMethod]
++        public async Task GetLatestDag_MagicCommand_ReturnsDefaultTitleAndMagicCommandDetail_Async()
++        {
++            using (TestWebServer.StartEndpoint(this.deps, out Uri baseUri))
++            using (var client = ControllerTestUtils.GetDefaultHttpClientForMoniker("moniker", tenantId, isSchedulerCall: false))
++            {
++                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("MwcToken", ValidMwcToken);
++                var wsId = Guid.NewGuid();
++                var nbId = Guid.NewGuid();
++                var magicMessage = ErrorRegistry.GetErrorMessage(
++                    ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED,
++                    new Dictionary<string, string>
++                    {
++                        { Constants.CellIndexKey, "9" },
++                        { Constants.LineNumberKey, "1" },
++                        { Constants.NotebookIdKey, nbId.ToString() },
++                    });
++                var nbEx = new NotebookException(magicMessage, 1, 9, "%pip", wsId, nbId);
++
++                mockLiveTableHandler
++                    .Setup(h => h.GetDagWithLineageTypeFromCatalogAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
++                    .ThrowsAsync(nbEx);
++
++                var uri = new UriBuilder(baseUri) { Path = $"{relativePath}/getLatestDag" }.Uri;
++                var response = await client.GetAsync(uri);
++
++                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
++                var body = await response.Content.ReadAsStringAsync();
++                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(body);
++
++                Assert.AreEqual("An error occurred while processing your request.", result["title"].ToString(), "Title should be default for magic command");
++                result["detail"].ToString().Should().Contain("MLV_MAGIC_COMMAND_NOT_SUPPORTED", "Detail should contain magic command error code");
++                result["detail"].ToString().Should().Contain("cell 9", "Detail should contain cell index");
++                result["detail"].ToString().Should().Contain(nbId.ToString(), "Detail should contain notebook ID");
++                result["detail"].ToString().Should().NotContain("MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION", "Detail should NOT be wrapped");
++            }
++        }
++    }
++}
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs
+index 1e7b9b99..72d63544 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagExecutionHandlerV2Tests.cs
+@@ -8,6 +8,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+     using System.Collections.Concurrent;
+     using System.Collections.Generic;
+     using System.Linq;
++    using System.Net;
+     using System.Reflection;
+     using System.Threading;
+     using System.Threading.Tasks;
+@@ -645,23 +646,119 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Tests that MapExceptionToErrorInfo handles NotebookException with special error code.
++        /// Tests that MapExceptionToErrorInfo handles NotebookException without a specific ErrorCode
++        /// by falling back to the generic notebook exception template.
+         /// </summary>
+         [TestMethod]
+         public void MapExceptionToErrorInfo_NotebookException_ReturnsNotebookSpecificError()
+         {
+             // Arrange
+-            var notebookException = new NotebookException("Notebook execution failed");
++            var notebookException = new NotebookException("Notebook execution failed", HttpStatusCode.InternalServerError, null, null);
+ 
+             // Act
+             var result = NodeExecutionUtils.MapExceptionToErrorInfo(notebookException);
+ 
+             // Assert
+             Assert.AreEqual(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, result.errorCode);
+-            Assert.AreEqual(ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION), result.errorMessage);
++            Assert.IsTrue(result.errorMessage.Contains("[MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION]"), "Should contain error code prefix");
++            Assert.IsTrue(result.errorMessage.Contains("Notebook execution failed"), "Should contain original exception message");
+             Assert.AreEqual(StandardizedActivityStatus.Failed, result.activityStatus);
+         }
+ 
++        /// <summary>
++        /// Tests that MapExceptionToErrorInfo uses NotebookId and WorkspaceId ToString()
++        /// paths when they are non-null, and handles empty message by producing string.Empty.
++        /// </summary>
++        [TestMethod]
++        public void MapExceptionToErrorInfo_NotebookExceptionWithIdsAndEmptyMessage_CoversAllBranches()
++        {
++            // Arrange — non-null IDs and empty message to cover the alternate branches:
++            //   NotebookId?.ToString() (non-null path), WorkspaceId?.ToString() (non-null path),
++            //   string.IsNullOrEmpty(Message) ? string.Empty (true path)
++            var workspaceId = Guid.NewGuid();
++            var notebookId = Guid.NewGuid();
++            var notebookException = new NotebookException(
++                string.Empty,
++                System.Net.HttpStatusCode.InternalServerError,
++                workspaceId,
++                notebookId);
++
++            // Act
++            var result = NodeExecutionUtils.MapExceptionToErrorInfo(notebookException);
++
++            // Assert
++            Assert.AreEqual(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, result.errorCode);
++            Assert.IsTrue(result.errorMessage.Contains(notebookId.ToString()), "Should contain notebook ID from ToString()");
++            Assert.IsTrue(result.errorMessage.Contains(workspaceId.ToString()), "Should contain workspace ID from ToString()");
++            Assert.IsFalse(result.errorMessage.Contains("Unknown"), "Should not contain 'Unknown' when IDs are provided");
++            Assert.AreEqual(StandardizedActivityStatus.Failed, result.activityStatus, "500 should be classified as system error");
++        }
++
++        /// <summary>
++        /// Tests that MapExceptionToErrorInfo uses the exception message directly when
++        /// NotebookException carries a specific ErrorCode (e.g., MLV_NB_ETAG_CHANGED),
++        /// instead of wrapping it in the generic notebook exception template.
++        /// </summary>
++        [TestMethod]
++        public void MapExceptionToErrorInfo_NotebookExceptionWithSpecificErrorCode_UsesExceptionMessageDirectly()
++        {
++            // Arrange
++            var workspaceId = Guid.NewGuid();
++            var notebookId = Guid.NewGuid();
++            var etagMessage = ErrorRegistry.GetErrorMessage(
++                ErrorCode.MLV_NB_ETAG_CHANGED,
++                new Dictionary<string, string> { { Constants.NotebookDetailsKey, $"notebook '{notebookId}' (workspace: '{workspaceId}')" } });
++            var notebookException = new NotebookException(
++                etagMessage,
++                System.Net.HttpStatusCode.UnprocessableEntity,
++                workspaceId,
++                notebookId,
++                ErrorCode.MLV_NB_ETAG_CHANGED);
++
++            // Act
++            var result = NodeExecutionUtils.MapExceptionToErrorInfo(notebookException);
++
++            // Assert - should use MLV_NB_ETAG_CHANGED, not MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION
++            Assert.AreEqual(ErrorCode.MLV_NB_ETAG_CHANGED, result.errorCode);
++            Assert.IsTrue(result.errorMessage.Contains("[MLV_NB_ETAG_CHANGED]"), "Should contain the specific error code, not the generic notebook one");
++            Assert.IsTrue(result.errorMessage.Contains("Contents in the Notebook"), "Should contain the etag-specific message");
++            Assert.IsFalse(result.errorMessage.Contains("Failed to create lineage due to Notebook exception"), "Should NOT contain the generic notebook exception template text");
++            Assert.AreEqual(StandardizedActivityStatus.SucceededWithErrors, result.activityStatus, "422 should be classified as user error");
++        }
++
++        /// <summary>
++        /// Tests that MapExceptionToErrorInfo uses the exception message directly for
++        /// MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL error code.
++        /// </summary>
++        [TestMethod]
++        public void MapExceptionToErrorInfo_NotebookExceptionWithMultipleDefinitionConflict_UsesExceptionMessageDirectly()
++        {
++            // Arrange
++            var workspaceId = Guid.NewGuid();
++            var notebookId = Guid.NewGuid();
++            var errorParams = new Dictionary<string, string>
++            {
++                { Constants.CellIndexKey, "3" },
++                { Constants.NotebookIdKey, notebookId.ToString() },
++            };
++            var conflictMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, errorParams);
++            var notebookException = new NotebookException(
++                conflictMessage,
++                System.Net.HttpStatusCode.UnprocessableEntity,
++                workspaceId,
++                notebookId,
++                ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);
++
++            // Act
++            var result = NodeExecutionUtils.MapExceptionToErrorInfo(notebookException);
++
++            // Assert
++            Assert.AreEqual(ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, result.errorCode);
++            Assert.IsTrue(result.errorMessage.Contains("[MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL]"), "Should contain the specific error code");
++            Assert.IsTrue(result.errorMessage.Contains("More than one materialized lake view definition"), "Should contain the specific conflict message");
++            Assert.IsFalse(result.errorMessage.Contains("Failed to create lineage due to Notebook exception"), "Should NOT contain the generic notebook exception template text");
++        }
++
+         /// <summary>
+         /// Tests that MapExceptionToErrorInfo handles generic exceptions with standard error code and registry message.
+         /// </summary>
+@@ -2520,12 +2617,12 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         }
+ 
+         /// <summary>
+-        /// Tests that DAG execution correctly handles NotebookParsingException when a magic command is present in notebook cells.
++        /// Tests that DAG execution correctly handles NotebookException when a magic command is present in notebook cells.
+         /// Verifies that the exception is properly propagated with cell and line number information.
+         /// </summary>
+         /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
+         [TestMethod]
+-        public async Task ExecuteAsync_WithMagicCommandInNotebook_ShouldThrowNotebookParsingExceptionAsync()
++        public async Task ExecuteAsync_WithMagicCommandInNotebook_ShouldThrowNotebookExceptionAsync()
+         {
+             // Arrange
+             Guid workspaceId = Guid.Parse("f5c6ce7a-62cb-3386-8433-0b93ccf8ff7a");
+@@ -2557,7 +2654,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+                 .Setup(p => p.GetWorkspaceInfoAsync(It.IsAny<string>(), ArtifactType.Workspace, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(workspaceInfo);
+ 
+-            // Setup mock notebook cells with a magic command that should trigger NotebookParsingException
++            // Setup mock notebook cells with a magic command that should trigger NotebookException
+             var mockNotebookCellsWithMagic = CreateMockNotebookCellsWithMagicCommand();
+             mockNotebookApiClient
+                 .Setup(c => c.GetNotebookContentAsStringAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+@@ -2584,8 +2681,8 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+             // Act
+             await dagExecutionHandlerV2.ExecuteAsync(metadata, CancellationToken.None);
+ 
+-            // Assert - DAG should be marked as failed due to NotebookParsingException
+-            Assert.AreEqual(DagExecutionStatus.Failed, dagExecInstance.DagExecutionMetrics.Status, "DAG should be marked as Failed when NotebookParsingException is thrown");
++            // Assert - DAG should be marked as failed due to NotebookException
++            Assert.AreEqual(DagExecutionStatus.Failed, dagExecInstance.DagExecutionMetrics.Status, "DAG should be marked as Failed when NotebookException is thrown");
+             dagExecInstance.DagExecutionMetrics.ErrorCode.Should().Be(ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED.ToString());
+             dagExecInstance.DagExecutionMetrics.ErrorMessage.Should().Contain("cell 2");
+             dagExecInstance.DagExecutionMetrics.ErrorMessage.Should().Contain("line 1");
+@@ -6571,7 +6668,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+         {
+             // Source with magic command that should trigger parsing error
+             var source1 = "print('This is a pyspark notebook')";
+-            var source2 = "%pip install pandas"; // Magic command that should trigger NotebookParsingException
++            var source2 = "%pip install pandas"; // Magic command that should trigger NotebookException
+             var source3 = "@Fabric.materialized_lake_view(name='db1.tableA')\\ndef func1():\\n    return spark.sql('SELECT 1')";
+ 
+             var notebookContent = $@"{{
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs
+index b79d73ab..e92a0ed6 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/ErrorMappingTests/ErrorRegistryTests.cs
+@@ -635,13 +635,13 @@ namespace Microsoft.LiveTable.Service.UnitTests.ErrorMappingTests
+             // Arrange
+             var errorCode = ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL;
+             var notebookId = Guid.NewGuid().ToString();
+-            var mlvName = "test_table";
++            var cellIndex = "3";
+             var parameters = new Dictionary<string, string>
+             {
++                { "CellIndex", cellIndex },
+                 { "NotebookId", notebookId },
+-                { "MlvName", mlvName },
+             };
+-            var expectedMessage = $"Multiple materialized lake view definitions are found in a single cell in the notebook {notebookId} where {mlvName} is defined. Split the cell so that each materialized lake view definition resides in its own dedicated cell.";
++            var expectedMessage = $"MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL: More than one materialized lake view definition exists in cell {cellIndex} of Notebook '{notebookId}'. Ensure only one view per cell.";
+ 
+             // Act
+             var result = ErrorRegistry.GetErrorMessage(errorCode, parameters);
+@@ -825,5 +825,128 @@ namespace Microsoft.LiveTable.Service.UnitTests.ErrorMappingTests
+             // Assert
+             Assert.AreEqual(expectedMessage, result);
+         }
++
++        /// <summary>
++        /// Tests that GetErrorMessage for MLV_MAGIC_COMMAND_NOT_SUPPORTED returns a correctly formatted message with KV parameters.
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_MagicCommandNotSupported_ReturnsFormattedMessage()
++        {
++            // Arrange
++            var notebookId = Guid.NewGuid().ToString();
++            var parameters = new Dictionary<string, string>
++            {
++                { "CellIndex", "3" },
++                { "LineNumber", "5" },
++                { "NotebookId", notebookId },
++            };
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, parameters);
++
++            // Assert
++            Assert.AreEqual($"MLV_MAGIC_COMMAND_NOT_SUPPORTED: Magic commands (e.g., %pip, %run) in cell 3 at line 5 of Notebook '{notebookId}' are not supported in materialized lake view definitions. Remove or comment out magic commands and retry.", result);
++        }
++
++        /// <summary>
++        /// Tests that GetErrorMessage for MLV_NB_ETAG_CHANGED returns a correctly formatted message with KV parameters.
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_EtagChanged_ReturnsFormattedMessage()
++        {
++            // Arrange
++            var notebookDetails = "[Workspace: ws-123, Notebook: nb-456]";
++            var parameters = new Dictionary<string, string>
++            {
++                { "NotebookDetails", notebookDetails },
++            };
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_NB_ETAG_CHANGED, parameters);
++
++            // Assert
++            Assert.AreEqual($"MLV_NB_ETAG_CHANGED: Contents in the Notebook {notebookDetails} changed after the operation started. Refresh and try again.", result);
++        }
++
++        /// <summary>
++        /// Tests that GetErrorMessage for MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION returns a correctly formatted message (no brackets, no failureType).
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_LineageCreationNotebookException_ReturnsCleanFormattedMessage()
++        {
++            // Arrange
++            var notebookId = Guid.NewGuid().ToString();
++            var workspaceId = Guid.NewGuid().ToString();
++            var parameters = new Dictionary<string, string>
++            {
++                { "NotebookId", notebookId },
++                { "WorkspaceId", workspaceId },
++                { "ErrorMessage", string.Empty },
++            };
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, parameters);
++
++            // Assert
++            Assert.AreEqual($"MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook '{notebookId}' (workspace: '{workspaceId}'). Review Notebook logs and retry.", result);
++        }
++
++        /// <summary>
++        /// Tests that GetErrorMessage for MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION with error detail includes it in the message.
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_LineageCreationNotebookException_WithErrorDetail_ReturnsFormattedMessage()
++        {
++            // Arrange
++            var notebookId = Guid.NewGuid().ToString();
++            var workspaceId = Guid.NewGuid().ToString();
++            var parameters = new Dictionary<string, string>
++            {
++                { "NotebookId", notebookId },
++                { "WorkspaceId", workspaceId },
++                { "ErrorMessage", "Some detail. " },
++            };
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, parameters);
++
++            // Assert
++            Assert.AreEqual($"MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook '{notebookId}' (workspace: '{workspaceId}'). Some detail. Review Notebook logs and retry.", result);
++        }
++
++        /// <summary>
++        /// Tests that GetErrorMessage for MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION handles Unknown values.
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_LineageCreationNotebookException_UnknownIds_ReturnsFormattedMessage()
++        {
++            // Arrange
++            var parameters = new Dictionary<string, string>
++            {
++                { "NotebookId", "Unknown" },
++                { "WorkspaceId", "Unknown" },
++                { "ErrorMessage", string.Empty },
++            };
++
++            // Act
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, parameters);
++
++            // Assert
++            Assert.IsTrue(result.Contains("'Unknown'"), "Message should contain Unknown for notebook ID");
++            Assert.IsTrue(result.Contains("(workspace: 'Unknown')"), "Message should contain Unknown for workspace ID");
++        }
++
++        /// <summary>
++        /// Tests that MLV_NB_ETAG_CHANGED without parameters returns raw placeholder.
++        /// </summary>
++        [TestMethod]
++        public void GetErrorMessage_EtagChanged_WithoutParameters_ContainsRawPlaceholder()
++        {
++            // Arrange
++            var result = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_NB_ETAG_CHANGED);
++
++            // Assert
++            Assert.IsTrue(result.Contains("{NotebookDetails}"), "Should contain raw placeholder when no parameters provided");
++        }
+     }
+ }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookParsingExceptionTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExceptionTests.cs
+similarity index 75%
+rename from test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookParsingExceptionTests.cs
+rename to test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExceptionTests.cs
+index e697c7c5..26025db6 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookParsingExceptionTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExceptionTests.cs
+@@ -1,4 +1,4 @@
+-// <copyright file="NotebookParsingExceptionTests.cs" company="Microsoft">
++// <copyright file="NotebookExceptionTests.cs" company="Microsoft">
+ // Copyright (c) Microsoft. All rights reserved.
+ // </copyright>
+ 
+@@ -11,14 +11,14 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+     using Microsoft.VisualStudio.TestTools.UnitTesting;
+ 
+     /// <summary>
+-    /// Unit tests for <see cref="NotebookParsingException"/>.
++    /// Unit tests for <see cref="NotebookException"/>.
+     /// </summary>
+     [TestClass]
+     [ExcludeFromCodeCoverage]
+-    public class NotebookParsingExceptionTests
++    public class NotebookExceptionTests
+     {
+         /// <summary>
+-        /// Tests the three-parameter constructor.
++        /// Tests the parsing error constructor with message, line number and offending symbol.
+         /// </summary>
+         [TestMethod]
+         public void Constructor_WithMessageLineNumberAndOffendingSymbol_SetsProperties()
+@@ -29,7 +29,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+             var offendingSymbol = "SELECT";
+ 
+             // Act
+-            var ex = new NotebookParsingException(message, lineNumber, offendingSymbol);
++            var ex = new NotebookException(message, lineNumber, offendingSymbol);
+ 
+             // Assert
+             Assert.AreEqual(message, ex.Message);
+@@ -38,10 +38,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         }
+ 
+         /// <summary>
+-        /// Tests the six-parameter constructor with workspace and notebook IDs.
++        /// Tests the parsing error constructor with all parameters.
+         /// </summary>
+         [TestMethod]
+-        public void Constructor_WithAllParameters_SetsAllProperties()
++        public void Constructor_WithAllParsingParameters_SetsAllProperties()
+         {
+             // Arrange
+             var message = "Parse error at cell";
+@@ -52,7 +52,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+             var notebookId = Guid.NewGuid();
+ 
+             // Act
+-            var ex = new NotebookParsingException(message, lineNumber, cellIndex, offendingSymbol, workspaceId, notebookId);
++            var ex = new NotebookException(message, lineNumber, cellIndex, offendingSymbol, workspaceId, notebookId);
+ 
+             // Assert
+             Assert.AreEqual(message, ex.Message);
+@@ -70,7 +70,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         [TestMethod]
+         public void IsMagicCommand_WithPercentSymbol_ReturnsTrue()
+         {
+-            var ex = new NotebookParsingException("error", 1, "%run something");
++            var ex = new NotebookException("error", 1, "%run something");
+             Assert.IsTrue(ex.IsMagicCommand());
+         }
+ 
+@@ -78,9 +78,9 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         /// Tests IsMagicCommand returns true for cell magic symbol.
+         /// </summary>
+         [TestMethod]
+-        public void IsMagicCommand_WithDoublePe‌rcentSymbol_ReturnsTrue()
++        public void IsMagicCommand_WithDoublePercentSymbol_ReturnsTrue()
+         {
+-            var ex = new NotebookParsingException("error", 1, "%%python");
++            var ex = new NotebookException("error", 1, "%%python");
+             Assert.IsTrue(ex.IsMagicCommand());
+         }
+ 
+@@ -90,7 +90,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         [TestMethod]
+         public void IsMagicCommand_WithLeadingWhitespace_ReturnsTrue()
+         {
+-            var ex = new NotebookParsingException("error", 1, "   %magic");
++            var ex = new NotebookException("error", 1, "   %magic");
+             Assert.IsTrue(ex.IsMagicCommand());
+         }
+ 
+@@ -100,7 +100,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         [TestMethod]
+         public void IsMagicCommand_WithNonMagicSymbol_ReturnsFalse()
+         {
+-            var ex = new NotebookParsingException("error", 1, "SELECT");
++            var ex = new NotebookException("error", 1, "SELECT");
+             Assert.IsFalse(ex.IsMagicCommand());
+         }
+ 
+@@ -110,7 +110,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         [TestMethod]
+         public void IsMagicCommand_WithNullSymbol_ReturnsFalse()
+         {
+-            var ex = new NotebookParsingException("error", 1, null);
++            var ex = new NotebookException("error", 1, null);
+             Assert.IsFalse(ex.IsMagicCommand());
+         }
+ 
+@@ -120,7 +120,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         [TestMethod]
+         public void IsMagicCommand_WithEmptySymbol_ReturnsFalse()
+         {
+-            var ex = new NotebookParsingException("error", 1, string.Empty);
++            var ex = new NotebookException("error", 1, string.Empty);
+             Assert.IsFalse(ex.IsMagicCommand());
+         }
+ 
+@@ -130,7 +130,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
+         [TestMethod]
+         public void IsMagicCommand_WithWhitespaceOnlySymbol_ReturnsFalse()
+         {
+-            var ex = new NotebookParsingException("error", 1, "   ");
++            var ex = new NotebookException("error", 1, "   ");
+             Assert.IsFalse(ex.IsMagicCommand());
+         }
+     }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExecutionContextTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExecutionContextTests.cs
+index 3904bcb0..eb6a7b34 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExecutionContextTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookExecutionContextTests.cs
+@@ -1983,11 +1983,11 @@ def malformed_function():
+                 // Verify it catches mixed syntax decorators
+                 // Verify it catches mixed syntax decorators with new error message format
+                 Assert.IsTrue(
+-                    ex.Message.Contains("Multiple materialized lake view definitions are found in a single cell in the notebook"),
++                    ex.Message.Contains("More than one materialized lake view definition exists in cell"),
+                     "Error message should mention multiple MLV definitions");
+                 Assert.IsTrue(
+-                    ex.Message.Contains("where") && ex.Message.Contains("is defined"),
+-                    "Error message should include MLV name");
++                    ex.Message.Contains("Ensure only one view per cell"),
++                    "Error message should include resolution guidance");
+ 
+                 throw; // Re-throw for ExpectedException attribute
+             }
+@@ -2235,7 +2235,7 @@ def heavily_decorated_function():
+             catch (NotebookException ex)
+             {
+                 Assert.IsTrue(
+-                    ex.Message.Contains("Multiple materialized lake view definitions"),
++                    ex.Message.Contains("More than one materialized lake view definition"),
+                     "Error message should mention multiple MLV definitions");
+                 Assert.AreEqual(
+                     System.Net.HttpStatusCode.UnprocessableEntity,
+@@ -2333,7 +2333,7 @@ def heavily_decorated_function():
+             catch (NotebookException ex)
+             {
+                 Assert.IsTrue(
+-                    ex.Message.Contains("Multiple materialized lake view definitions"),
++                    ex.Message.Contains("More than one materialized lake view definition"),
+                     "Error message should mention multiple MLV definitions");
+                 Assert.IsTrue(
+                     ex.Message.Contains(testNotebookId.ToString()),
+@@ -2706,8 +2706,8 @@ def new_format_function():
+                     ex.Message.Contains(notebookId.ToString()),
+                     $"Error message should contain notebook ID {notebookId}");
+                 Assert.IsTrue(
+-                    ex.Message.Contains("duplicate2"),
+-                    "Error message should contain the last MLV name");
++                    ex.Message.Contains("More than one materialized lake view definition"),
++                    "Error message should indicate multiple definitions");
+ 
+                 throw;
+             }
+@@ -2770,7 +2770,7 @@ def create_table():
+             Assert.IsInstanceOfType(
+                 exception.InnerException, typeof(NotebookException), "InnerException should be NotebookException");
+ 
+-            var notebookException = (NotebookParsingException)exception.InnerException;
++            var notebookException = (NotebookException)exception.InnerException;
+ 
+             // Verify line number is mentioned (line 6 is where %pip appears in the source)
+             Assert.IsTrue(
+@@ -2818,7 +2818,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithLineMagic, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(exception.Message.Contains("cell 1"), "Exception should include cell number");
+@@ -2923,7 +2923,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithMagic, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(exception.Message.Contains("Magic command"), "Exception should mention magic command");
+@@ -2966,7 +2966,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithSqlMagic, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(
+@@ -3015,7 +3015,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithMagicAtLine5, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(
+@@ -3147,7 +3147,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithMixedMagic, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(exception.Message.Contains("cell 2"), "Should fail on second cell");
+@@ -3217,7 +3217,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithUnparsableMagic, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(
+@@ -3300,7 +3300,7 @@ def create_table():
+                 .ReturnsAsync(new NotebookContentResponse(cellsWithMagicInCell3, ETag));
+ 
+             // Act & Assert
+-            var exception = await Assert.ThrowsExceptionAsync<NotebookParsingException>(
++            var exception = await Assert.ThrowsExceptionAsync<NotebookException>(
+                 async () => await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync("mwcToken"));
+ 
+             Assert.IsTrue(exception.Message.Contains("cell 4"), "Should report cell index 3");
+@@ -3338,10 +3338,10 @@ def create_table():
+ 
+         /// <summary>
+         /// Tests AntlrErrorListener SyntaxError with int offending symbol overload (lexer error path).
+-        /// Should throw NotebookParsingException with correct line number and empty offending symbol.
++        /// Should throw NotebookException with correct line number and empty offending symbol.
+         /// </summary>
+         [TestMethod]
+-        public void AntlrErrorListener_SyntaxErrorWithIntOverload_ShouldThrowNotebookParsingException()
++        public void AntlrErrorListener_SyntaxErrorWithIntOverload_ShouldThrowNotebookException()
+         {
+             // Arrange - create AntlrErrorListener via reflection (internal class)
+             var listenerType = typeof(NotebookExecutionContext).GetNestedType("AntlrErrorListener", BindingFlags.NonPublic);
+@@ -3375,15 +3375,15 @@ def create_table():
+             // Act & Assert
+             var ex = Assert.ThrowsException<TargetInvocationException>(
+                 () => syntaxErrorMethod.Invoke(listener, new object[] { null, 0, 7, 15, "lexer error", null }));
+-            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookParsingException));
+-            var parsingEx = (NotebookParsingException)ex.InnerException;
++            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookException));
++            var parsingEx = (NotebookException)ex.InnerException;
+             Assert.AreEqual(7, parsingEx.LineNumber);
+             Assert.AreEqual(string.Empty, parsingEx.OffendingSymbol);
+         }
+ 
+         /// <summary>
+         /// Tests AntlrErrorListener SyntaxError with IToken overload passing null token.
+-        /// Should throw NotebookParsingException with empty offending symbol when token is null.
++        /// Should throw NotebookException with empty offending symbol when token is null.
+         /// </summary>
+         [TestMethod]
+         public void AntlrErrorListener_SyntaxErrorWithNullIToken_ShouldThrowWithEmptySymbol()
+@@ -3420,18 +3420,18 @@ def create_table():
+             // Act & Assert - pass null for IToken
+             var ex = Assert.ThrowsException<TargetInvocationException>(
+                 () => syntaxErrorMethod.Invoke(listener, new object[] { null, null, 3, 5, "parser error", null }));
+-            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookParsingException));
+-            var parsingEx = (NotebookParsingException)ex.InnerException;
++            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookException));
++            var parsingEx = (NotebookException)ex.InnerException;
+             Assert.AreEqual(3, parsingEx.LineNumber);
+             Assert.AreEqual(string.Empty, parsingEx.OffendingSymbol);
+         }
+ 
+         /// <summary>
+         /// Tests AntlrErrorListener SyntaxError with TextWriter and int overload (lexer error with output).
+-        /// Should throw NotebookParsingException.
++        /// Should throw NotebookException.
+         /// </summary>
+         [TestMethod]
+-        public void AntlrErrorListener_SyntaxErrorWithTextWriterAndInt_ShouldThrowNotebookParsingException()
++        public void AntlrErrorListener_SyntaxErrorWithTextWriterAndInt_ShouldThrowNotebookException()
+         {
+             // Arrange
+             var listenerType = typeof(NotebookExecutionContext).GetNestedType("AntlrErrorListener", BindingFlags.NonPublic);
+@@ -3465,15 +3465,15 @@ def create_table():
+             // Act & Assert
+             var ex = Assert.ThrowsException<TargetInvocationException>(
+                 () => syntaxErrorMethod.Invoke(listener, new object[] { TextWriter.Null, null, 0, 10, 20, "lexer error with output", null }));
+-            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookParsingException));
+-            var parsingEx = (NotebookParsingException)ex.InnerException;
++            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookException));
++            var parsingEx = (NotebookException)ex.InnerException;
+             Assert.AreEqual(10, parsingEx.LineNumber);
+             Assert.AreEqual(string.Empty, parsingEx.OffendingSymbol);
+         }
+ 
+         /// <summary>
+         /// Tests AntlrErrorListener SyntaxError with TextWriter and null IToken overload.
+-        /// Should throw NotebookParsingException using empty string for offending symbol.
++        /// Should throw NotebookException using empty string for offending symbol.
+         /// </summary>
+         [TestMethod]
+         public void AntlrErrorListener_SyntaxErrorWithTextWriterAndNullIToken_ShouldThrowWithEmptySymbol()
+@@ -3510,8 +3510,8 @@ def create_table():
+             // Act & Assert - pass null for IToken
+             var ex = Assert.ThrowsException<TargetInvocationException>(
+                 () => syntaxErrorMethod.Invoke(listener, new object[] { TextWriter.Null, null, null, 4, 8, "parser error with output", null }));
+-            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookParsingException));
+-            var parsingEx = (NotebookParsingException)ex.InnerException;
++            Assert.IsInstanceOfType(ex.InnerException, typeof(NotebookException));
++            var parsingEx = (NotebookException)ex.InnerException;
+             Assert.AreEqual(4, parsingEx.LineNumber);
+             Assert.AreEqual(string.Empty, parsingEx.OffendingSymbol);
+         }
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookHttpTests/NotebookApiClientTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookHttpTests/NotebookApiClientTests.cs
+index 2fd44583..c9da7708 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookHttpTests/NotebookApiClientTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/NotebookHttpTests/NotebookApiClientTests.cs
+@@ -301,7 +301,7 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests.NotebookHttpTests
+         }
+ 
+         /// <summary>
+-        /// Tests GetNotebookContentAsync returns PreconditionFailed status code when ETag changes for reliable ops request.
++        /// Tests GetNotebookContentAsync returns UnprocessableEntity status code when ETag changes for reliable ops request.
+         /// </summary>
+         /// <returns>A Task</returns>
+         [TestMethod]
+@@ -317,9 +317,10 @@ namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests.NotebookHttpTests
+                 async () => await notebookApiClient.GetNotebookContentAsync(testWorkspaceId, testNotebookId, expectedMwcToken, "newETag"));
+ 
+             // Assert
+-            Assert.AreEqual(HttpStatusCode.PreconditionFailed, exception.StatusCode);
++            Assert.AreEqual(HttpStatusCode.UnprocessableEntity, exception.StatusCode);
+             Assert.IsFalse(exception.IsRetriable);
+-            Assert.IsTrue(exception.Message.Contains("Notebook content has been modified since last retrieval. ETag mismatch detected."));
++            Assert.IsTrue(exception.Message.Contains("MLV_NB_ETAG_CHANGED"));
++            Assert.IsTrue(exception.Message.Contains("changed after the operation started"));
+         }
+ 
+         /// <summary>

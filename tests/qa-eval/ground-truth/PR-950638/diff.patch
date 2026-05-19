@@ -1,0 +1,1486 @@
+diff --git a/Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs b/Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs
+index 03a08e0a..1d965b32 100644
+--- a/Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs
++++ b/Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs
+@@ -165,5 +165,47 @@ namespace Microsoft.LiveTable.Service.DataModel.Catalog
+             // Default to SQL if not specified
+             return Constants.SQLLanguage;
+         }
++
++        /// <summary>
++        /// Gets the DQ notebook artifact ID from catalog table properties.
++        /// </summary>
++        /// <returns>The DQ notebook ID if present and valid, null otherwise.</returns>
++        public Guid? GetDqNotebookId()
++        {
++            if (this.Properties != null
++                && this.Properties.TryGetValue(Constants.DqNotebookIdCatalogPropertyKey, out var value)
++                && Guid.TryParse(value, out var notebookId))
++            {
++                return notebookId;
++            }
++
++            return null;
++        }
++
++        /// <summary>
++        /// Gets the DQ notebook workspace ID from catalog table properties.
++        /// </summary>
++        /// <returns>The DQ workspace ID if present and valid, null otherwise.</returns>
++        public Guid? GetDqWorkspaceId()
++        {
++            if (this.Properties != null
++                && this.Properties.TryGetValue(Constants.DqWorkspaceIdCatalogPropertyKey, out var value)
++                && Guid.TryParse(value, out var workspaceId))
++            {
++                return workspaceId;
++            }
++
++            return null;
++        }
++
++        /// <summary>
++        /// Determines whether this table has a complete DQ configuration.
++        /// Both notebook ID and workspace ID must be present.
++        /// </summary>
++        /// <returns>True if both DQ notebook ID and workspace ID are configured.</returns>
++        public bool HasDqConfiguration()
++        {
++            return GetDqNotebookId() != null && GetDqWorkspaceId() != null;
++        }
+     }
+ }
+diff --git a/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs b/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs
+index 1d8c9114..82aa094e 100644
+--- a/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs
++++ b/Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs
+@@ -9,6 +9,7 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+     using System.Collections.Generic;
+     using System.Linq;
+     using System.Net;
++    using System.Runtime.CompilerServices;
+     using System.Threading;
+     using System.Threading.Tasks;
+     using Microsoft.LiveTable.Service.Catalog.Exceptions;
+@@ -174,6 +175,34 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                     var notebookExecutionContext = await ProcessPySparkTableAsync(node.Name, node.CodeReference, node.ExternalWorkspaceName ?? WorkspaceName, node.ExternalLakehouseName ?? LakehouseName, mwcToken, ct);
+                     node.RestoreRefreshCodeContext(notebookExecutionContext);
+                 }
++
++                // Restore DQ notebook context for nodes with DQ configuration.
++                // After deserialization, NotebookExecutionContexts is empty, so the DQ notebook
++                // must be re-fetched to make it available for RunDqChecksIfApplicableAsync at execution time.
++                if (this.IsDqFeatureEnabled() && node.DqCodeReference != null && !NotebookExecutionContexts.ContainsKey(node.DqCodeReference.NotebookID))
++                {
++                    var dqNotebookContext = new NotebookExecutionContext(node.DqCodeReference.NotebookWorkspaceID, node.DqCodeReference.NotebookID);
++                    await dqNotebookContext.FetchAndParseContentForAllMLVsAsync(mwcToken, node.DqCodeReference.ETag, ct);
++                    NotebookExecutionContexts.TryAdd(node.DqCodeReference.NotebookID, dqNotebookContext);
++                    Tracer.LogSanitizedMessage($"Restored DQ notebook context for node '{node.Name}' with notebook {node.DqCodeReference.NotebookID}");
++                }
++            }
++
++            // DQ context validation summary after restore
++            if (this.IsDqFeatureEnabled())
++            {
++                var dqNodes = Nodes.Where(n => n.DqCodeReference != null).ToList();
++                if (dqNodes.Count > 0)
++                {
++                    var contextKeys = NotebookExecutionContexts.Keys.ToArray();
++                    Tracer.LogSanitizedMessage($"[DQ Restore Summary] DAG has {dqNodes.Count} DQ-configured node(s). NotebookExecutionContexts has {contextKeys.Length} entry(ies): [{string.Join(", ", contextKeys)}]");
++                    foreach (var dqNode in dqNodes)
++                    {
++                        bool contextFound = NotebookExecutionContexts.TryGetValue(dqNode.DqCodeReference.NotebookID, out var ctx);
++                        var dqIndexes = contextFound ? ctx.GetDqSuiteCommandIndexes(dqNode.Name) : null;
++                        Tracer.LogSanitizedMessage($"[DQ Restore Summary] Node '{dqNode.Name}': DqNotebookId={dqNode.DqCodeReference.NotebookID}, ContextFound={contextFound}, ContextHash={(contextFound ? RuntimeHelpers.GetHashCode(ctx).ToString() : "N/A")}, DqSuiteMatch={(dqIndexes != null ? $"{dqIndexes.Length} indexes" : "null")}");
++                    }
++                }
+             }
+         }
+ 
+@@ -422,6 +451,109 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+             return node.Name;
+         }
+ 
++        /// <summary>
++        /// Checks whether the DQ checks feature flag is enabled for the current tenant/capacity/workspace.
++        /// </summary>
++        /// <returns>True if DQ checks are enabled.</returns>
++        private bool IsDqFeatureEnabled()
++        {
++            if (capacityContext == null
++                || !Guid.TryParse(capacityContext.TenantId, out Guid tenantId)
++                || !Guid.TryParse(capacityContext.CustomerCapacityObjectId, out Guid capacityId))
++            {
++                return false;
++            }
++
++            return featureFlighter.IsEnabled(
++                FeatureNames.FLTEnableDqChecks,
++                tenantId,
++                capacityId,
++                this.WorkspaceId);
++        }
++
++        /// <summary>
++        /// Discovers and configures DQ (Data Quality) checks for an MLV node.
++        /// Reads DQ notebook/workspace IDs from catalog properties, validates the feature flag,
++        /// fetches and caches the DQ notebook content, and sets the node's DqCodeReference.
++        /// If discovery fails (e.g., notebook fetch error), gracefully clears DqCodeReference
++        /// so the node executes without DQ checks.
++        /// </summary>
++        /// <param name="tableObject">The catalog table object containing DQ properties.</param>
++        /// <param name="tableType">The type of the table (must be MLV for DQ to apply).</param>
++        /// <param name="isFaulted">Whether the node is in a faulted state (skip DQ if true).</param>
++        /// <param name="nodeId">The ID of the node in the DAG.</param>
++        /// <param name="mwcToken">The MWC auth token for notebook API calls.</param>
++        /// <param name="ct">Cancellation token.</param>
++        /// <returns>A task representing the async operation.</returns>
++        private async Task DiscoverDqConfigurationAsync(Table tableObject, string tableType, bool isFaulted, Guid nodeId, string mwcToken, CancellationToken ct)
++        {
++            // Log DQ property presence for diagnostics — helps verify catalog has DQ configuration
++            if (TableTypeUtils.IsMaterializedLakeView(tableType) && !isFaulted)
++            {
++                bool hasDqNotebookId = tableObject.Properties?.ContainsKey(Constants.DqNotebookIdCatalogPropertyKey) == true;
++                bool hasDqWorkspaceId = tableObject.Properties?.ContainsKey(Constants.DqWorkspaceIdCatalogPropertyKey) == true;
++                Tracer.LogSanitizedVerbose(
++                    $"[DQ Diagnostics] MLV '{tableObject.Name}': " +
++                    $"{Constants.DqNotebookIdCatalogPropertyKey}={hasDqNotebookId}, " +
++                    $"{Constants.DqWorkspaceIdCatalogPropertyKey}={hasDqWorkspaceId}, " +
++                    $"HasDqConfiguration={tableObject.HasDqConfiguration()}");
++            }
++
++            // Catalog properties (fabric.mlv.dq.notebook.id, fabric.mlv.dq.workspace.id) are mandatory for DQ.
++            Guid? resolvedDqNotebookId = tableObject.GetDqNotebookId();
++            Guid? resolvedDqWorkspaceId = tableObject.GetDqWorkspaceId();
++
++            bool hasDqConfig = resolvedDqNotebookId.HasValue && resolvedDqWorkspaceId.HasValue;
++
++            // Gate 0: Feature flag must be enabled for DQ discovery. When off, skip entirely — zero overhead.
++            bool isDqEnabled = hasDqConfig && this.IsDqFeatureEnabled();
++
++            if (!isDqEnabled || !TableTypeUtils.IsMaterializedLakeView(tableType) || isFaulted)
++            {
++                return;
++            }
++
++            Node nodeForDq = GetNode(nodeId);
++            if (nodeForDq == null)
++            {
++                return;
++            }
++
++            var dqWorkspaceId = resolvedDqWorkspaceId.Value;
++            var dqNotebookId = resolvedDqNotebookId.Value;
++
++            nodeForDq.DqCodeReference = new NotebookBasedCodeReference(dqWorkspaceId, dqNotebookId);
++
++            // Ensure the DQ notebook is fetched, parsed, and cached in NotebookExecutionContexts.
++            // During node execution, RunDqChecksIfApplicableAsync looks up this context by NotebookID
++            // instead of re-fetching (mwcToken is not available at execution time).
++            // If the DQ notebook is the same as the MLV notebook, it's already cached by ProcessPySparkTableAsync.
++            if (!NotebookExecutionContexts.ContainsKey(dqNotebookId))
++            {
++                try
++                {
++                    var dqNotebookContext = new NotebookExecutionContext(dqWorkspaceId, dqNotebookId);
++                    await dqNotebookContext.FetchAndParseContentForAllMLVsAsync(mwcToken, cancellationToken: ct);
++                    NotebookExecutionContexts.TryAdd(dqNotebookId, dqNotebookContext);
++                    Tracer.LogSanitizedMessage($"Fetched and cached DQ notebook {dqNotebookId} in workspace {dqWorkspaceId} for node '{tableObject.Name}'");
++                }
++                catch (NotebookException)
++                {
++                    // Notebook validation errors (e.g., multiple MLV definitions in a single cell)
++                    // are structural issues that must fail the DAG build — same as source notebook errors.
++                    throw;
++                }
++                catch (Exception dqFetchEx)
++                {
++                    Tracer.LogSanitizedWarning($"Failed to fetch DQ notebook {dqNotebookId} for node '{tableObject.Name}': {dqFetchEx}. DQ checks will be skipped for this node.");
++                    nodeForDq.DqCodeReference = null;
++                    return;
++                }
++            }
++
++            Tracer.LogSanitizedMessage($"Configured DQ code reference for node '{tableObject.Name}' with notebook {dqNotebookId} in workspace {dqWorkspaceId} (source: catalog)");
++        }
++
+         /// <summary>
+         /// Determines whether a lakehouse should be traversed (and its MLVs marked executable) in FullLineage mode.
+         /// </summary>
+@@ -740,6 +872,8 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+ 
+                 Guid nodeId = AddNode(tableObject.Name, tableType, kind, tableObject.WorkspaceId, tableObject.LakehouseId, tableObject.WorkspaceName, tableObject.LakehouseName, codeReference, notebookExecutionContext, tableObject.IsShortcut, abfsPath, format, errorMessage, isFaulted, tableObject.GetLastRefreshTime(), showExtendedLineage || executeEvenWhileCrossLH, fltErrorCode);
+ 
++                await this.DiscoverDqConfigurationAsync(tableObject, tableType, isFaulted, nodeId, mwcToken, ct);
++
+                 // For SelectedOnly mode: mark non-selected MLVs as non-executable
+                 if (selectedMlvNames != null && !selectedMlvNames.Contains(tableObject.Name))
+                 {
+@@ -892,11 +1026,26 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                     Tracer.LogSanitizedMessage($"Added DeleteWithoutHints warning to node {currentNode.Name} with {deleteWithoutHintsSources.Count} source entities");
+                 }
+             }
++
++            // DQ context validation summary: verify all DQ-configured nodes have valid contexts
++            var dqNodes = Nodes.Where(n => n.DqCodeReference != null).ToList();
++            if (dqNodes.Count > 0)
++            {
++                var contextKeys = NotebookExecutionContexts.Keys.ToArray();
++                Tracer.LogSanitizedMessage($"[DQ Build Summary] DAG has {dqNodes.Count} DQ-configured node(s). NotebookExecutionContexts has {contextKeys.Length} entry(ies): [{string.Join(", ", contextKeys)}]");
++                foreach (var dqNode in dqNodes)
++                {
++                    bool contextFound = NotebookExecutionContexts.TryGetValue(dqNode.DqCodeReference.NotebookID, out var ctx);
++                    var dqIndexes = contextFound ? ctx.GetDqSuiteCommandIndexes(dqNode.Name) : null;
++                    Tracer.LogSanitizedMessage($"[DQ Build Summary] Node '{dqNode.Name}': DqNotebookId={dqNode.DqCodeReference.NotebookID}, ContextFound={contextFound}, ContextHash={(contextFound ? RuntimeHelpers.GetHashCode(ctx).ToString() : "N/A")}, DqSuiteMatch={(dqIndexes != null ? $"{dqIndexes.Length} indexes" : "null")}");
++                }
++            }
+         }
+ 
+         private async Task<NotebookExecutionContext> ProcessPySparkTableAsync(string nodeName, NotebookBasedCodeReference codeReference, string workspaceName, string lakehouseName, string mwcToken, CancellationToken ct = default)
+         {
+             NotebookExecutionContext notebookExecutionContext;
++            bool wasCreatedNew;
+ 
+             // Check if we already have the notebookExecutionContext for the given notebookId, if not we will go ahead and create one
+             if (!NotebookExecutionContexts.ContainsKey(codeReference.NotebookID))
+@@ -906,14 +1055,20 @@ namespace Microsoft.LiveTable.Service.DataModel.Dag
+                 // Update the data structures consisting the Notebook content as well as the indexes of commands associated with the MLV Create command
+                 await notebookExecutionContext.FetchAndParseContentForAllMLVsAsync(mwcToken, codeReference.ETag, ct);
+                 NotebookExecutionContexts.TryAdd(codeReference.NotebookID, notebookExecutionContext);
++                wasCreatedNew = true;
+             }
+             else
+             {
+                 NotebookExecutionContexts.TryGetValue(codeReference.NotebookID, out notebookExecutionContext);
++                wasCreatedNew = false;
+             }
+ 
+             Check.AssertArgumentNotNull(notebookExecutionContext, nameof(notebookExecutionContext));
+ 
++            // Diagnostic: log the context identity and DQ suite state for tracing
++            var dqCheck = notebookExecutionContext.GetDqSuiteCommandIndexes(nodeName);
++            Tracer.LogSanitizedMessage($"ProcessPySparkTableAsync '{nodeName}': WasCreatedNew={wasCreatedNew}, NotebookId={notebookExecutionContext.NotebookId}, ContextHash={RuntimeHelpers.GetHashCode(notebookExecutionContext)}, DqSuiteForNode={(dqCheck != null ? $"{dqCheck.Length} indexes" : "null")}");
++
+             int[] cellIndexArray = notebookExecutionContext.GetMLVCommandIndexes(string.Format("{0}.{1}.{2}", workspaceName, lakehouseName, nodeName));
+ 
+             if (cellIndexArray == null)
+diff --git a/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs b/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs
+index 9d42bd90..e0ca61ef 100644
+--- a/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs
++++ b/Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs
+@@ -1,4 +1,4 @@
+-﻿// <copyright file="NotebookExecutionContext.cs" company="Microsoft">
++// <copyright file="NotebookExecutionContext.cs" company="Microsoft">
+ // Copyright (c) Microsoft. All rights reserved.
+ // </copyright>
+ 
+@@ -40,6 +40,7 @@ namespace Microsoft.LiveTable.Service.Notebook
+ 
+         private readonly INotebookClientFactory notebookClientFactory;
+         private readonly ConcurrentDictionary<string, int[]> mlvCommand;
++        private readonly ConcurrentDictionary<string, int[]> dqSuiteCommand;
+         private bool disposed = false;
+         private string[] notebookContent;
+         private DefaultLakehouseInfo defaultLakehouseInfo;
+@@ -68,6 +69,7 @@ namespace Microsoft.LiveTable.Service.Notebook
+             }
+ 
+             mlvCommand = new ConcurrentDictionary<string, int[]>();
++            dqSuiteCommand = new ConcurrentDictionary<string, int[]>();
+             notebookContent = new string[0];
+             defaultLakehouseInfo = null;
+         }
+@@ -190,6 +192,16 @@ namespace Microsoft.LiveTable.Service.Notebook
+                             // The current index in the pysparkSources array
+                             int pysparkIndex = pysparkSources.Count;
+ 
++                            // Cell classification diagnostics — helps trace why DQ cells may not be detected
++                            if (commandInfo == null)
++                            {
++                                Tracer.LogSanitizedWarning($"[Cell Diagnostics] Notebook {NotebookId} cell {cellIndex} (pysparkIndex {pysparkIndex}): ANTLR parse returned null (parse error). Source length: {source.Length}");
++                            }
++                            else if (commandInfo.IsDqSuiteCommand)
++                            {
++                                Tracer.LogSanitizedMessage($"[Cell Diagnostics] Notebook {NotebookId} cell {cellIndex} (pysparkIndex {pysparkIndex}): DQ suite detected, DqMlvName='{commandInfo.DqSuiteMlvName ?? "(null)"}'");
++                            }
++
+                             if (commandInfo != null && commandInfo.IsCreateCommand)
+                             {
+                                 // Check if multiple MLV decorators were detected in this single cell
+@@ -206,6 +218,20 @@ namespace Microsoft.LiveTable.Service.Notebook
+                                     throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);
+                                 }
+ 
++                                // Check if a MLV create and DQ suite decorator coexist in the same cell
++                                if (commandInfo.IsDqSuiteCommand)
++                                {
++                                    var errorParams = new Dictionary<string, string>
++                                    {
++                                        { Common.Constants.CellIndexKey, (cellIndex + 1).ToString() },
++                                        { Common.Constants.NotebookIdKey, NotebookId.ToString() },
++                                    };
++
++                                    var errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, errorParams);
++                                    Tracer.LogSanitizedError($"MLV create and @fmlv.dq_suite decorators found in same cell at index {cellIndex}. " + $"MLV name: {commandInfo.MlvName}, DQ MLV name: {commandInfo.DqSuiteMlvName}. " + $"Notebook: {NotebookId}, Workspace: {WorkspaceId}");
++                                    throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);
++                                }
++
+                                 // If a create command, find the MLV name and process
+                                 if (!string.IsNullOrEmpty(commandInfo.MlvName))
+                                 {
+@@ -270,6 +296,29 @@ namespace Microsoft.LiveTable.Service.Notebook
+                                     continue;
+                                 }
+                             }
++                            else if (commandInfo != null && commandInfo.IsDqSuiteCommand && !string.IsNullOrEmpty(commandInfo.DqSuiteMlvName))
++                            {
++                                // Check if multiple DQ suite decorators were detected in this single cell
++                                if (commandInfo.DqSuiteDecoratorCount > 1)
++                                {
++                                    var errorParams = new Dictionary<string, string>
++                                    {
++                                        { Common.Constants.CellIndexKey, (cellIndex + 1).ToString() },
++                                        { Common.Constants.NotebookIdKey, NotebookId.ToString() },
++                                    };
++
++                                    var errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, errorParams);
++                                    Tracer.LogSanitizedError($"Multiple @fmlv.dq_suite decorators found in cell at index {cellIndex}. " + $"Last DQ MLV name: {commandInfo.DqSuiteMlvName}. " + $"DQ decorator count: {commandInfo.DqSuiteDecoratorCount}. " + $"Notebook: {NotebookId}, Workspace: {WorkspaceId}");
++                                    throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);
++                                }
++
++                                // DQ suite cell — track only the DQ cell index (no common cells needed).
++                                // DQ cells are self-contained with their own imports and validation logic.
++                                var dqMlvName = commandInfo.DqSuiteMlvName;
++                                var dqIndexes = new int[] { pysparkIndex };
++                                dqSuiteCommand.TryAdd(dqMlvName.ToLowerInvariant(), dqIndexes);
++                                Tracer.LogSanitizedMessage($"Found @fmlv.dq_suite command for MLV '{dqMlvName}' at PySpark index {pysparkIndex}");
++                            }
+                             else
+                             {
+                                 // If not a create command, append the PySpark index to the common list
+@@ -286,7 +335,7 @@ namespace Microsoft.LiveTable.Service.Notebook
+                 // Update the NotebookContent array
+                 this.notebookContent = pysparkSources.ToArray();
+ 
+-                Tracer.LogSanitizedMessage($"Updated NotebookContent with {notebookContent.Length} PySpark cells and found {mlvCommand.Count} MLV create commands from notebook {NotebookId} in workspace {WorkspaceId}");
++                Tracer.LogSanitizedMessage($"Updated NotebookContent with {notebookContent.Length} PySpark cells, found {mlvCommand.Count} MLV create commands and {dqSuiteCommand.Count} DQ suite commands from notebook {NotebookId} in workspace {WorkspaceId}");
+             }
+             catch (Exception ex)
+             {
+@@ -337,6 +386,102 @@ namespace Microsoft.LiveTable.Service.Notebook
+             this.defaultLakehouseInfo = defaultLakehouseInfo;
+         }
+ 
++        /// <summary>
++        /// Get Notebook Content indexes to execute for the DQ suite associated with the given MLV.
++        /// Matching strategy (in order):
++        ///   1. Exact match on lowered name.
++        ///   2. Strip leading segments from the query name (handles query longer than key,
++        ///      e.g., query "workspace.lakehouse.dbo.table" matches key "dbo.table").
++        ///   3. Strip leading segments from each dictionary key (handles key longer than query,
++        ///      e.g., query "dbo.table" matches key "workspace.lakehouse.dbo.table").
++        /// </summary>
++        /// <param name="mlvName">MLV name (may be fully-qualified or partial).</param>
++        /// <returns>Notebook Content indexes for the DQ suite cell, or null if not found.</returns>
++        public virtual int[] GetDqSuiteCommandIndexes(string mlvName)
++        {
++            ThrowIfDisposed();
++            if (string.IsNullOrWhiteSpace(mlvName))
++            {
++                return null;
++            }
++
++            string lowerName = mlvName.ToLowerInvariant();
++
++            // Strategy 1: exact match (e.g., "dbo.empty_mlv")
++            if (dqSuiteCommand.TryGetValue(lowerName, out int[] indexes))
++            {
++                return indexes;
++            }
++
++            // Strategy 2: strip leading segments from the query name.
++            // Handles: query is longer than key (e.g., query "workspace.lakehouse.dbo.table" → key "dbo.table").
++            string remaining = lowerName;
++            while (true)
++            {
++                int dotIndex = remaining.IndexOf('.');
++                if (dotIndex < 0 || dotIndex >= remaining.Length - 1)
++                {
++                    break;
++                }
++
++                remaining = remaining.Substring(dotIndex + 1);
++                if (dqSuiteCommand.TryGetValue(remaining, out indexes))
++                {
++                    Tracer.LogSanitizedMessage($"DQ suite matched '{mlvName}' using query-suffix '{remaining}'");
++                    return indexes;
++                }
++            }
++
++            // Strategy 3: strip leading segments from each dictionary key.
++            // Handles: key is longer than query (e.g., query "dbo.table" → key "workspace.lakehouse.dbo.table").
++            // Use longest matching key for determinism (most-specific match wins).
++            string bestKey = null;
++            int[] bestIndexes = null;
++            int matchCount = 0;
++
++            foreach (var kvp in dqSuiteCommand)
++            {
++                string keySuffix = kvp.Key;
++                while (true)
++                {
++                    int dotIndex = keySuffix.IndexOf('.');
++                    if (dotIndex < 0 || dotIndex >= keySuffix.Length - 1)
++                    {
++                        break;
++                    }
++
++                    keySuffix = keySuffix.Substring(dotIndex + 1);
++                    if (keySuffix.Equals(lowerName, StringComparison.Ordinal))
++                    {
++                        matchCount++;
++                        if (bestKey == null || kvp.Key.Length > bestKey.Length)
++                        {
++                            bestKey = kvp.Key;
++                            bestIndexes = kvp.Value;
++                        }
++
++                        break;
++                    }
++                }
++            }
++
++            if (bestIndexes != null)
++            {
++                if (matchCount > 1)
++                {
++                    Tracer.LogSanitizedWarning($"DQ suite found {matchCount} ambiguous suffix matches for '{mlvName}'. Using longest key '{bestKey}' for deterministic selection.");
++                }
++
++                Tracer.LogSanitizedMessage($"DQ suite matched '{mlvName}' using key-suffix from key '{bestKey}'");
++                return bestIndexes;
++            }
++
++            // No match found — log available keys for diagnostics
++            var availableKeys = dqSuiteCommand.Keys.ToArray();
++            Tracer.LogSanitizedWarning($"GetDqSuiteCommandIndexes: no match for '{mlvName}' (lowered: '{lowerName}'). Dictionary has {availableKeys.Length} key(s): [{string.Join(", ", availableKeys)}]");
++            return null;
++        }
++
+         /// <summary>
+         /// Get Notebook Content indexes to execute for MLV creation.
+         /// </summary>
+@@ -370,6 +515,7 @@ namespace Microsoft.LiveTable.Service.Notebook
+                 {
+                     // Clear collections
+                     mlvCommand?.Clear();
++                    dqSuiteCommand?.Clear();
+                     notebookContent = null;
+                 }
+ 
+@@ -507,12 +653,12 @@ namespace Microsoft.LiveTable.Service.Notebook
+                     throw;
+                 }
+ 
+-                Tracer.LogSanitizedWarning($"Failed to parse command at line {ex.LineNumber}, Found Offending symbol: {ex.OffendingSymbol} : {ex.Message}");
++                Tracer.LogSanitizedWarning($"Failed to parse command at line {ex.LineNumber}, Found Offending symbol: {ex.OffendingSymbol} : {ex.Message}. Source length: {source.Length}, preview: {source.Substring(0, Math.Min(100, source.Length))}");
+                 return null;
+             }
+             catch (Exception ex)
+             {
+-                Tracer.LogSanitizedWarning($"Failed to parse command: {ex.Message}");
++                Tracer.LogSanitizedWarning($"Failed to parse command: {ex.GetType().Name}: {ex.Message}. Source length: {source.Length}, preview: {source.Substring(0, Math.Min(100, source.Length))}");
+                 return null;
+             }
+         }
+@@ -565,6 +711,21 @@ namespace Microsoft.LiveTable.Service.Notebook
+             /// Gets or sets the count of MLV decorators found in the cell.
+             /// </summary>
+             public int DecoratorCount { get; set; } = 0;
++
++            /// <summary>
++            /// Gets or sets a value indicating whether the source contains a DQ suite decorator (@fmlv.dq_suite).
++            /// </summary>
++            public bool IsDqSuiteCommand { get; set; }
++
++            /// <summary>
++            /// Gets or sets the count of DQ suite decorators found in the cell.
++            /// </summary>
++            public int DqSuiteDecoratorCount { get; set; } = 0;
++
++            /// <summary>
++            /// Gets or sets the MLV name referenced by the DQ suite decorator.
++            /// </summary>
++            public string DqSuiteMlvName { get; set; }
+         }
+ 
+         /// <summary>
+@@ -614,6 +775,25 @@ namespace Microsoft.LiveTable.Service.Notebook
+                             Tracer.LogSanitizedWarning("Found @Fabric.materialized_lake_view or @fmlv.materialized_lake_view decorator but could not extract table name");
+                         }
+                     }
++                    else if (IsDqSuiteDecorator(decoratorName))
++                    {
++                        Tracer.LogSanitizedMessage($"Found @fmlv.dq_suite decorator in AST");
++
++                        var mlvName = ExtractDqSuiteMlvNameFromArguments(context);
++
++                        result.IsDqSuiteCommand = true;
++                        result.DqSuiteDecoratorCount++;
++                        result.DqSuiteMlvName = mlvName;
++
++                        if (!string.IsNullOrEmpty(mlvName))
++                        {
++                            Tracer.LogSanitizedMessage($"Extracted DQ suite MLV name from AST: '{mlvName}'");
++                        }
++                        else
++                        {
++                            Tracer.LogSanitizedWarning("Found @fmlv.dq_suite decorator but could not extract MLV name");
++                        }
++                    }
+                 }
+                 catch (Exception ex)
+                 {
+@@ -654,6 +834,84 @@ namespace Microsoft.LiveTable.Service.Notebook
+                 return decoratorName.Equals(Constants.OldPysparkMLVDecoratorName) || decoratorName.Equals(Constants.NewPysparkMLVDecoratorName);
+             }
+ 
++            /// <summary>
++            /// Checks if the decorator name matches @fmlv.dq_suite.
++            /// </summary>
++            /// <param name="decoratorName">The decorator name</param>
++            /// <returns>True if it matches the DQ suite decorator</returns>
++            private bool IsDqSuiteDecorator(string decoratorName)
++            {
++                if (string.IsNullOrWhiteSpace(decoratorName))
++                {
++                    return false;
++                }
++
++                return decoratorName.Equals(Constants.DqSuiteDecoratorName, StringComparison.OrdinalIgnoreCase);
++            }
++
++            /// <summary>
++            /// Extracts the MLV name from the @fmlv.dq_suite decorator arguments.
++            /// Supports both keyword form: @fmlv.dq_suite(mlv_name="name")
++            /// and positional form: @fmlv.dq_suite("name").
++            /// </summary>
++            /// <param name="context">The decorator context</param>
++            /// <returns>The MLV name or null if not found</returns>
++            private string ExtractDqSuiteMlvNameFromArguments(Python3Parser.DecoratorContext context)
++            {
++                try
++                {
++                    if (context.arglist() != null)
++                    {
++                        var arguments = context.arglist().argument();
++
++                        // First pass: look for keyword argument mlv_name="..."
++                        foreach (var arg in arguments)
++                        {
++                            if (arg.test() != null && arg.test().Length >= 2)
++                            {
++                                var nameTest = arg.test()[0].GetText();
++                                if (nameTest.Equals(Constants.DqSuiteMlvNameKey, StringComparison.OrdinalIgnoreCase))
++                                {
++                                    var valueTest = arg.test()[1];
++                                    if (valueTest is Python3Parser.TestContext testContext)
++                                    {
++                                        Tracer.LogSanitizedMessage($"Extracted DQ suite mlv_name from keyword argument");
++                                        return ExtractStringLiteralValue(testContext);
++                                    }
++                                }
++                            }
++                        }
++
++                        // Second pass: fall back to first positional argument @fmlv.dq_suite("name")
++                        if (arguments.Length > 0)
++                        {
++                            var firstArg = arguments[0];
++                            if (firstArg.test() != null && firstArg.test().Length == 1)
++                            {
++                                var positionalValue = ExtractStringLiteralValue(firstArg.test()[0]);
++                                if (!string.IsNullOrEmpty(positionalValue))
++                                {
++                                    Tracer.LogSanitizedMessage($"Extracted DQ suite mlv_name from first positional argument: '{positionalValue}'");
++                                    return positionalValue;
++                                }
++                            }
++                        }
++
++                        Tracer.LogSanitizedWarning($"@fmlv.dq_suite has {arguments.Length} argument(s) but could not extract mlv_name. Args: {string.Join(", ", arguments.Select(a => a.GetText()))}");
++                    }
++                    else
++                    {
++                        Tracer.LogSanitizedWarning("@fmlv.dq_suite has no arglist — mlv_name is required");
++                    }
++                }
++                catch (Exception ex)
++                {
++                    Tracer.LogSanitizedWarning($"Failed to extract MLV name from @fmlv.dq_suite arguments: {ex.Message}");
++                }
++
++                return null;
++            }
++
+             /// <summary>
+             /// Extracts the table name from the decorator arguments.
+             /// </summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/TableTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/TableTests.cs
+index a26dbabf..393dbd2b 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/TableTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/CatalogTests/TableTests.cs
+@@ -184,5 +184,203 @@ namespace Microsoft.LiveTable.Service.UnitTests.CatalogTests
+             Assert.AreEqual(resultInvariant.Value, resultFrench.Value, "Results should be identical across Invariant and French cultures");
+             Assert.AreEqual(resultInvariant.Value, resultArabic.Value, "Results should be identical across Invariant and Arabic cultures");
+         }
++
++        /// <summary>
++        /// Test that GetDqNotebookId returns the parsed Guid when the property is present and valid.
++        /// </summary>
++        [TestMethod]
++        public void GetDqNotebookId_ValidGuid_ReturnsParsedGuid()
++        {
++            var expectedId = Guid.NewGuid();
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqNotebookIdCatalogPropertyKey, expectedId.ToString() },
++                },
++            };
++
++            var result = table.GetDqNotebookId();
++
++            Assert.IsNotNull(result);
++            Assert.AreEqual(expectedId, result.Value);
++        }
++
++        /// <summary>
++        /// Test that GetDqNotebookId returns null when Properties is null.
++        /// </summary>
++        [TestMethod]
++        public void GetDqNotebookId_NullProperties_ReturnsNull()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = null,
++            };
++
++            Assert.IsNull(table.GetDqNotebookId());
++        }
++
++        /// <summary>
++        /// Test that GetDqNotebookId returns null when the property key is missing.
++        /// </summary>
++        [TestMethod]
++        public void GetDqNotebookId_MissingProperty_ReturnsNull()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>(),
++            };
++
++            Assert.IsNull(table.GetDqNotebookId());
++        }
++
++        /// <summary>
++        /// Test that GetDqNotebookId returns null for an invalid (non-Guid) value.
++        /// </summary>
++        [TestMethod]
++        public void GetDqNotebookId_InvalidGuid_ReturnsNull()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqNotebookIdCatalogPropertyKey, "not-a-guid" },
++                },
++            };
++
++            Assert.IsNull(table.GetDqNotebookId());
++        }
++
++        /// <summary>
++        /// Test that GetDqWorkspaceId returns the parsed Guid when the property is present and valid.
++        /// </summary>
++        [TestMethod]
++        public void GetDqWorkspaceId_ValidGuid_ReturnsParsedGuid()
++        {
++            var expectedId = Guid.NewGuid();
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqWorkspaceIdCatalogPropertyKey, expectedId.ToString() },
++                },
++            };
++
++            var result = table.GetDqWorkspaceId();
++
++            Assert.IsNotNull(result);
++            Assert.AreEqual(expectedId, result.Value);
++        }
++
++        /// <summary>
++        /// Test that GetDqWorkspaceId returns null when Properties is null.
++        /// </summary>
++        [TestMethod]
++        public void GetDqWorkspaceId_NullProperties_ReturnsNull()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = null,
++            };
++
++            Assert.IsNull(table.GetDqWorkspaceId());
++        }
++
++        /// <summary>
++        /// Test that GetDqWorkspaceId returns null when the property key is missing.
++        /// </summary>
++        [TestMethod]
++        public void GetDqWorkspaceId_MissingProperty_ReturnsNull()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>(),
++            };
++
++            Assert.IsNull(table.GetDqWorkspaceId());
++        }
++
++        /// <summary>
++        /// Test that GetDqWorkspaceId returns null for an invalid (non-Guid) value.
++        /// </summary>
++        [TestMethod]
++        public void GetDqWorkspaceId_InvalidGuid_ReturnsNull()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqWorkspaceIdCatalogPropertyKey, "not-a-guid" },
++                },
++            };
++
++            Assert.IsNull(table.GetDqWorkspaceId());
++        }
++
++        /// <summary>
++        /// Test that HasDqConfiguration returns true when both notebook ID and workspace ID are configured.
++        /// </summary>
++        [TestMethod]
++        public void HasDqConfiguration_BothPresent_ReturnsTrue()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqNotebookIdCatalogPropertyKey, Guid.NewGuid().ToString() },
++                    { Constants.DqWorkspaceIdCatalogPropertyKey, Guid.NewGuid().ToString() },
++                },
++            };
++
++            Assert.IsTrue(table.HasDqConfiguration());
++        }
++
++        /// <summary>
++        /// Test that HasDqConfiguration returns false when only notebook ID is present.
++        /// </summary>
++        [TestMethod]
++        public void HasDqConfiguration_OnlyNotebookId_ReturnsFalse()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqNotebookIdCatalogPropertyKey, Guid.NewGuid().ToString() },
++                },
++            };
++
++            Assert.IsFalse(table.HasDqConfiguration());
++        }
++
++        /// <summary>
++        /// Test that HasDqConfiguration returns false when only workspace ID is present.
++        /// </summary>
++        [TestMethod]
++        public void HasDqConfiguration_OnlyWorkspaceId_ReturnsFalse()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = new Dictionary<string, string>
++                {
++                    { Constants.DqWorkspaceIdCatalogPropertyKey, Guid.NewGuid().ToString() },
++                },
++            };
++
++            Assert.IsFalse(table.HasDqConfiguration());
++        }
++
++        /// <summary>
++        /// Test that HasDqConfiguration returns false when Properties is null.
++        /// </summary>
++        [TestMethod]
++        public void HasDqConfiguration_NullProperties_ReturnsFalse()
++        {
++            var table = new Table("test.table", TableType.MATERIALIZED_LAKE_VIEW.ToString(), new List<string>())
++            {
++                Properties = null,
++            };
++
++            Assert.IsFalse(table.HasDqConfiguration());
++        }
+     }
+ }
+\ No newline at end of file
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs
+index 656bff33..c96881a1 100644
+--- a/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs
++++ b/test/Microsoft.LiveTable.Service.UnitTests/DagTests/DagUnitTests.cs
+@@ -41,6 +41,9 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+     [TestClass]
+     public class DagUnitTests
+     {
++        private static readonly Guid DqTestNotebookId = Guid.Parse("93d27559-812d-4672-9911-9b863ccf00b9");
++        private static readonly Guid DqTestWorkspaceId = Guid.Parse("f5c7ce7b-62cb-4386-8433-0b93ccf8ff8b");
++
+         private Mock<IFeatureFlighter> mockFeatureFlighter;
+         private Mock<INotebookClientFactory> mockNotebookClientFactory;
+         private Mock<INotebookClient> mockNotebookClient;
+@@ -2885,6 +2888,242 @@ namespace Microsoft.LiveTable.Service.UnitTests.DagTests
+             Assert.AreEqual(0, dag.NotebookExecutionContexts.Count, "SQL-only DAG should have no notebook contexts");
+         }
+ 
++        /// <summary>
++        /// When DQ feature flag is enabled and catalog has DQ properties,
++        /// the node should have a DqCodeReference with the correct notebook and workspace IDs.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WithDqEnabled_SetsDqCodeReferenceOnMlvNodeAsync()
++        {
++            // Arrange
++            EnableDqFeatureFlag();
++            var tables = CreateSqlMlvWithDqProperties("db1.mlvWithDq");
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var mlvNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.mlvWithDq");
++            Assert.IsNotNull(mlvNode, "MLV node should exist in DAG");
++            Assert.IsNotNull(mlvNode.DqCodeReference, "DqCodeReference should be set when DQ is enabled and properties are present");
++            Assert.AreEqual(DqTestNotebookId, mlvNode.DqCodeReference.NotebookID, "DQ notebook ID should match catalog property");
++            Assert.AreEqual(DqTestWorkspaceId, mlvNode.DqCodeReference.NotebookWorkspaceID, "DQ workspace ID should match catalog property");
++        }
++
++        /// <summary>
++        /// When DQ feature flag is enabled, the DQ notebook should be fetched and
++        /// cached in NotebookExecutionContexts during DAG build.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WithDqEnabled_CachesDqNotebookContextAsync()
++        {
++            // Arrange
++            EnableDqFeatureFlag();
++            var tables = CreateSqlMlvWithDqProperties("db1.mlvCached");
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            Assert.IsTrue(
++                dag.NotebookExecutionContexts.ContainsKey(DqTestNotebookId),
++                "DQ notebook should be cached in NotebookExecutionContexts");
++        }
++
++        /// <summary>
++        /// When DQ feature flag is disabled, no DqCodeReference should be set even if
++        /// catalog has DQ properties. This verifies Gate 0 (feature flag check).
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WithDqDisabled_DoesNotSetDqCodeReferenceAsync()
++        {
++            // Arrange: DQ flag disabled (default — not enabling it)
++            var tables = CreateSqlMlvWithDqProperties("db1.mlvNoDq");
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var mlvNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.mlvNoDq");
++            Assert.IsNotNull(mlvNode, "MLV node should exist in DAG");
++            Assert.IsNull(mlvNode.DqCodeReference, "DqCodeReference should be null when DQ feature flag is disabled");
++        }
++
++        /// <summary>
++        /// When catalog does not have DQ properties (no fabric.mlv.dq.notebook.id or
++        /// fabric.mlv.dq.workspace.id), no DqCodeReference should be set regardless of feature flag.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WithoutDqProperties_DoesNotSetDqCodeReferenceAsync()
++        {
++            // Arrange
++            EnableDqFeatureFlag();
++            var tables = CreateSqlMlvWithoutDqProperties("db1.mlvNoDqProps");
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var mlvNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.mlvNoDqProps");
++            Assert.IsNotNull(mlvNode, "MLV node should exist in DAG");
++            Assert.IsNull(mlvNode.DqCodeReference, "DqCodeReference should be null when catalog lacks DQ properties");
++        }
++
++        /// <summary>
++        /// When DQ notebook fetch fails, DqCodeReference should be cleared (set to null)
++        /// and the node should still be added to the DAG (graceful degradation).
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WhenDqNotebookFetchFails_ClearsDqCodeReferenceAsync()
++        {
++            // Arrange
++            EnableDqFeatureFlag();
++            var tables = CreateSqlMlvWithDqProperties("db1.mlvFetchFail");
++
++            // Override: DQ notebook fetch throws
++            this.mockNotebookClient
++                .Setup(c => c.GetNotebookContentAsStringAsync(
++                    DqTestWorkspaceId, DqTestNotebookId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Throws(new InvalidOperationException("Notebook not found"));
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var mlvNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.mlvFetchFail");
++            Assert.IsNotNull(mlvNode, "MLV node should exist in DAG even when DQ fetch fails");
++            Assert.IsNull(mlvNode.DqCodeReference, "DqCodeReference should be cleared when DQ notebook fetch fails");
++        }
++
++        /// <summary>
++        /// When the DQ notebook has a structural validation error (e.g., multiple MLV definitions
++        /// in a single cell), the NotebookException should propagate and fail the DAG build —
++        /// same behavior as source notebook validation errors.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WhenDqNotebookHasValidationError_FailsDagBuildAsync()
++        {
++            // Arrange
++            EnableDqFeatureFlag();
++            var tables = CreateSqlMlvWithDqProperties("db1.mlvValidationFail");
++
++            // Override: DQ notebook fetch throws NotebookException (structural error)
++            this.mockNotebookClient
++                .Setup(c => c.GetNotebookContentAsStringAsync(
++                    DqTestWorkspaceId, DqTestNotebookId, It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .Throws(new NotebookException(
++                    "MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL: More than one materialized lake view definition exists in cell 5",
++                    System.Net.HttpStatusCode.UnprocessableEntity,
++                    DqTestWorkspaceId,
++                    DqTestNotebookId,
++                    ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL));
++
++            // Act & Assert — DAG build should throw NotebookException
++            await Assert.ThrowsExceptionAsync<NotebookException>(async () =>
++            {
++                await Dag.CreateFromCatalogTablesAsync(
++                    Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++            });
++        }
++
++        /// <summary>
++        /// Non-MLV tables (MANAGED type) should never get DqCodeReference even if they
++        /// somehow have DQ properties in catalog.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_NonMlvTable_DoesNotSetDqCodeReferenceAsync()
++        {
++            // Arrange
++            EnableDqFeatureFlag();
++            var tables = CreateManagedTableWithDqProperties();
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var managedNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.managedTable");
++            Assert.IsNotNull(managedNode, "Managed table node should exist in DAG");
++            Assert.IsNull(managedNode.DqCodeReference, "DqCodeReference should not be set on non-MLV tables");
++        }
++
++        /// <summary>
++        /// When DQ notebook is the same as the MLV source notebook (PySpark), it should already be
++        /// cached by ProcessPySparkTableAsync and not re-fetched.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WithSharedDqAndSourceNotebook_ReusesCachedContextAsync()
++        {
++            // Arrange: PySpark MLV where DQ notebook ID == source notebook ID
++            EnableDqFeatureFlag();
++
++            // Setup notebook content with a cell matching the PySpark MLV name
++            this.mockNotebookClient
++                .Setup(c => c.GetNotebookContentAsStringAsync(
++                    It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
++                .ReturnsAsync(new NotebookContentResponse(
++                    this.CreateMockNotebookCellsWithSpecificMLVName("db1.mlvSharedNb", Example.GetArtifactId().ToString(), "LakehouseName", Example.GetWorkSpaceId().ToString()),
++                    "ETag1"));
++
++            var sourceNotebookId = Guid.Parse("38c54e59-821c-46f1-b50c-cfcb22483ef3");
++            var sourceWorkspaceId = Guid.Parse("f5c7ce7b-62cb-4386-8433-0b93ccf8ff8b");
++            var tables = CreatePySparkMlvWithSharedDqNotebook("db1.mlvSharedNb", sourceNotebookId, sourceWorkspaceId);
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var mlvNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.mlvSharedNb");
++            Assert.IsNotNull(mlvNode, "MLV node should exist");
++            Assert.IsNotNull(mlvNode.DqCodeReference, "DqCodeReference should be set");
++            Assert.AreEqual(sourceNotebookId, mlvNode.DqCodeReference.NotebookID);
++        }
++
++        /// <summary>
++        /// When only one of the two DQ properties is present (notebook ID but not workspace ID),
++        /// DQ is not configured and DqCodeReference should not be set.
++        /// </summary>
++        /// <returns>A <see cref="Task"/> representing the asynchronous unit test.</returns>
++        [TestMethod]
++        [TestCategory("DqTests")]
++        public async Task DagBuild_WithPartialDqProperties_DoesNotSetDqCodeReferenceAsync()
++        {
++            // Arrange: MLV with only notebook ID but no workspace ID
++            EnableDqFeatureFlag();
++            var tables = CreateSqlMlvWithPartialDqProperties("db1.mlvPartialDq");
++
++            // Act
++            var dag = await Dag.CreateFromCatalogTablesAsync(
++                Example.GetWorkSpaceId(), Example.GetArtifactId(), "ws1", "LakehouseName", tables, "mwcToken");
++
++            // Assert
++            var mlvNode = dag.Nodes.FirstOrDefault(n => n.Name == "db1.mlvPartialDq");
++            Assert.IsNotNull(mlvNode, "MLV node should exist in DAG");
++            Assert.IsNull(mlvNode.DqCodeReference, "DqCodeReference should be null when only one DQ property is present");
++        }
++
+         private static void AssertMLVNode(
+             Node tableNode,
+             string expectedName,
+@@ -3946,6 +4185,234 @@ def table2():
+             return notebookContent;
+         }
+ 
++        // --- DQ Discovery Test Helpers ---
++        private List<Table> CreateSqlMlvWithDqProperties(string mlvName)
++        {
++            string mlvJson = CreateSqlMlvJson(
++                mlvName,
++                new Dictionary<string, string>
++                {
++                    { "fabric.mlv.dq.notebook.id", DqTestNotebookId.ToString() },
++                    { "fabric.mlv.dq.workspace.id", DqTestWorkspaceId.ToString() },
++                });
++
++            string sourceJson = CreateManagedTableJson("db1.sourceTable");
++            return DeserializeDqTestTables(mlvJson, sourceJson);
++        }
++
++        private List<Table> CreateSqlMlvWithoutDqProperties(string mlvName)
++        {
++            string mlvJson = CreateSqlMlvJson(mlvName, new Dictionary<string, string>());
++            string sourceJson = CreateManagedTableJson("db1.sourceTable");
++            return DeserializeDqTestTables(mlvJson, sourceJson);
++        }
++
++        private List<Table> CreateSqlMlvWithPartialDqProperties(string mlvName)
++        {
++            string mlvJson = CreateSqlMlvJson(
++                mlvName,
++                new Dictionary<string, string>
++                {
++                    { "fabric.mlv.dq.notebook.id", DqTestNotebookId.ToString() },
++                });
++
++            string sourceJson = CreateManagedTableJson("db1.sourceTable");
++            return DeserializeDqTestTables(mlvJson, sourceJson);
++        }
++
++        private List<Table> CreateManagedTableWithDqProperties()
++        {
++            string managedJson = $@"
++            {{
++                ""metadataVersion"": """",
++                ""name"": ""db1.managedTable"",
++                ""namespace"": [],
++                ""tableType"": ""MANAGED"",
++                ""storage"": {{ ""compressed"": false, ""locationUri"": ""<abfss_path>"", ""properties"": {{}} }},
++                ""allColumns"": [],
++                ""provider"": ""delta"",
++                ""owner"": """",
++                ""partitionColumnNames"": [],
++                ""createTime"": 1727729312,
++                ""lastAccessTime"": -1,
++                ""createVersion"": """",
++                ""properties"": {{
++                    ""fabric.mlv.dq.notebook.id"": ""{DqTestNotebookId}"",
++                    ""fabric.mlv.dq.workspace.id"": ""{DqTestWorkspaceId}""
++                }},
++                ""viewText"": ""CREATE TABLE db1.managedTable (id INT)"",
++                ""comment"": """",
++                ""unsupportedFeatures"": [],
++                ""tracksPartitionsInCatalog"": false,
++                ""schemaPreservesCase"": true,
++                ""ignoredProperties"": {{}},
++                ""viewOriginalText"": """",
++                ""sourceEntities"": null
++            }}";
++
++            return DeserializeDqTestTables(managedJson);
++        }
++
++        private List<Table> CreatePySparkMlvWithSharedDqNotebook(string mlvName, Guid sourceNotebookId, Guid sourceWorkspaceId)
++        {
++            var properties = new Dictionary<string, string>
++            {
++                { "fabric.mlv.source.language", "Pyspark" },
++                { "fabric.mlv.sourceinfo", $"{{\"source_notebook_id\":\"{sourceNotebookId}\",\"source_workspace_id\":\"{sourceWorkspaceId}\",\"source_entry_function\":\"\"}}" },
++                { "fabric.mlv.pyspark.sourceinfo.version", "v1" },
++                { "fabric.mlv.pyspark.source.logicalplanhash", "<Hash>" },
++                { "fabric.mlv.sparkversion", "3.5" },
++                { "fabric.mlv.dq.notebook.id", sourceNotebookId.ToString() },
++                { "fabric.mlv.dq.workspace.id", sourceWorkspaceId.ToString() },
++            };
++
++            var propsJson = string.Join(",\n", properties.Select(kvp =>
++                $"                        \"{kvp.Key}\": \"{kvp.Value.Replace("\"", "\\\"")}\""));
++
++            string mlvJson = $@"
++            {{
++                ""metadataVersion"": """",
++                ""name"": ""{mlvName}"",
++                ""namespace"": [],
++                ""tableType"": ""MATERIALIZED_LAKE_VIEW"",
++                ""storage"": {{ ""compressed"": false, ""locationUri"": ""abfss://test@onelake.dfs.pbidedicated.windows.net/artifact/Tables/{mlvName}"", ""properties"": {{}} }},
++                ""allColumns"": [],
++                ""provider"": ""delta"",
++                ""owner"": """",
++                ""partitionColumnNames"": [],
++                ""createTime"": 1727729312,
++                ""lastAccessTime"": -1,
++                ""createVersion"": """",
++                ""properties"": {{
++{propsJson}
++                }},
++                ""viewText"": """",
++                ""comment"": """",
++                ""unsupportedFeatures"": [],
++                ""tracksPartitionsInCatalog"": false,
++                ""schemaPreservesCase"": true,
++                ""ignoredProperties"": {{}},
++                ""viewOriginalText"": """",
++                ""sourceEntities"": []
++            }}";
++
++            return DeserializeDqTestTables(mlvJson);
++        }
++
++        private string CreateSqlMlvJson(string name, Dictionary<string, string> extraProperties)
++        {
++            var allProperties = new Dictionary<string, string>
++            {
++                { "fabric.mlv.source.language", "SQL" },
++                { "fabric.mlv.sourceinfo", "{\"source_notebook_id\":\"38c54e59-821c-46f1-b50c-cfcb22483ef3\",\"source_workspace_id\":\"f5c7ce7b-62cb-4386-8433-0b93ccf8ff8b\"}" },
++            };
++
++            foreach (var kvp in extraProperties)
++            {
++                allProperties[kvp.Key] = kvp.Value;
++            }
++
++            var propsJson = string.Join(",\n", allProperties.Select(kvp =>
++                $"                        \"{kvp.Key}\": \"{kvp.Value.Replace("\"", "\\\"")}\""));
++
++            return $@"
++            {{
++                ""metadataVersion"": """",
++                ""name"": ""{name}"",
++                ""namespace"": [],
++                ""tableType"": ""MATERIALIZED_LAKE_VIEW"",
++                ""storage"": {{ ""compressed"": false, ""locationUri"": ""<abfss_path>"", ""properties"": {{}} }},
++                ""allColumns"": [],
++                ""provider"": ""delta"",
++                ""owner"": """",
++                ""partitionColumnNames"": [],
++                ""createTime"": 1727729312,
++                ""lastAccessTime"": -1,
++                ""createVersion"": """",
++                ""properties"": {{
++{propsJson}
++                }},
++                ""viewText"": ""INSERT OVERWRITE TABLE testlakehouse.{name} SELECT * FROM testlakehouse.sourceTable"",
++                ""comment"": """",
++                ""unsupportedFeatures"": [],
++                ""tracksPartitionsInCatalog"": false,
++                ""schemaPreservesCase"": true,
++                ""ignoredProperties"": {{}},
++                ""viewOriginalText"": ""INSERT OVERWRITE TABLE {name} SELECT * FROM sourceTable"",
++                ""sourceEntities"": [
++                    {{
++                        ""namespace"": {{
++                            ""workspaceName"": ""ws1"",
++                            ""artifactName"": ""LakehouseName"",
++                            ""schemaName"": ""db1""
++                        }},
++                        ""tableName"": ""sourceTable"",
++                        ""properties"": {{ ""key1"": ""value1"" }},
++                        ""lastVersionProcessed"": ""1""
++                    }}
++                ]
++            }}";
++        }
++
++        private string CreateManagedTableJson(string name)
++        {
++            return $@"
++            {{
++                ""metadataVersion"": """",
++                ""name"": ""{name}"",
++                ""namespace"": [],
++                ""tableType"": ""MANAGED"",
++                ""storage"": {{ ""compressed"": false, ""locationUri"": ""<abfss_path>"", ""properties"": {{}} }},
++                ""allColumns"": [],
++                ""provider"": ""delta"",
++                ""owner"": """",
++                ""partitionColumnNames"": [],
++                ""createTime"": 1727729312,
++                ""lastAccessTime"": -1,
++                ""createVersion"": """",
++                ""properties"": {{}},
++                ""viewText"": ""CREATE TABLE {name} (id INT)"",
++                ""comment"": """",
++                ""unsupportedFeatures"": [],
++                ""tracksPartitionsInCatalog"": false,
++                ""schemaPreservesCase"": true,
++                ""ignoredProperties"": {{}},
++                ""viewOriginalText"": """",
++                ""sourceEntities"": null
++            }}";
++        }
++
++        private List<Table> DeserializeDqTestTables(params string[] jsonStrings)
++        {
++            var wsId = Example.GetWorkSpaceId();
++            var lhId = Example.GetArtifactId();
++            var options = new JsonSerializerOptions
++            {
++                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
++                PropertyNameCaseInsensitive = true,
++            };
++
++            var tables = new List<Table>();
++            foreach (var json in jsonStrings)
++            {
++                var table = JsonSerializer.Deserialize<Table>(json, options);
++                table.WorkspaceName = "ws1";
++                table.LakehouseName = "LakehouseName";
++                table.WorkspaceId = wsId;
++                table.LakehouseId = lhId;
++                tables.Add(table);
++            }
++
++            return tables;
++        }
++
++        private void EnableDqFeatureFlag()
++        {
++            this.mockFeatureFlighter
++                .Setup(f => f.IsEnabled(FeatureNames.FLTEnableDqChecks, It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<Guid>()))
++                .Returns(true);
++        }
++
+         /// <summary>
+         /// Gets Exemplary Catalog Data
+         /// </summary>
+diff --git a/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/DqSuiteCommandTests.cs b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/DqSuiteCommandTests.cs
+new file mode 100644
+index 00000000..b57f836e
+--- /dev/null
++++ b/test/Microsoft.LiveTable.Service.UnitTests/NotebookTests/DqSuiteCommandTests.cs
+@@ -0,0 +1,151 @@
++// <copyright file="DqSuiteCommandTests.cs" company="Microsoft">
++// Copyright (c) Microsoft. All rights reserved.
++// </copyright>
++
++namespace Microsoft.LiveTable.Service.UnitTests.NotebookTests
++{
++    using System;
++    using System.Collections.Concurrent;
++    using System.Diagnostics.CodeAnalysis;
++    using System.Reflection;
++    using Microsoft.LiveTable.Service.Notebook;
++    using Microsoft.VisualStudio.TestTools.UnitTesting;
++
++    /// <summary>
++    /// Unit tests for <see cref="NotebookExecutionContext.GetDqSuiteCommandIndexes"/>.
++    /// Uses reflection to populate the internal dqSuiteCommand dictionary
++    /// without requiring full notebook parsing infrastructure.
++    /// </summary>
++    [ExcludeFromCodeCoverage]
++    [TestClass]
++    [TestCategory("DqTests")]
++    public class DqSuiteCommandTests : IDisposable
++    {
++        private NotebookExecutionContext context;
++
++        /// <summary>
++        /// Sets up a NotebookExecutionContext and populates the dqSuiteCommand
++        /// dictionary via reflection with known test entries.
++        /// </summary>
++        [TestInitialize]
++        public void TestInitialize()
++        {
++            context = new NotebookExecutionContext(Guid.NewGuid(), Guid.NewGuid());
++
++            var field = typeof(NotebookExecutionContext).GetField(
++                "dqSuiteCommand", BindingFlags.NonPublic | BindingFlags.Instance);
++            Assert.IsNotNull(field, "dqSuiteCommand field not found");
++
++            var dict = (ConcurrentDictionary<string, int[]>)field.GetValue(context);
++
++            // Keys are always stored lowercase by the production code
++            dict.TryAdd("dbo.sales", new[] { 0, 2 });
++            dict.TryAdd("schema1.lakehouse1.dbo.orders", new[] { 1, 3 });
++        }
++
++        /// <summary>
++        /// Cleans up after each test.
++        /// </summary>
++        [TestCleanup]
++        public void TestCleanup()
++        {
++            context?.Dispose();
++        }
++
++        /// <summary>
++        /// Exact match returns the expected indexes.
++        /// </summary>
++        [TestMethod]
++        public void GetDqSuiteCommandIndexes_ExactMatch_ReturnsIndexes()
++        {
++            var indexes = context.GetDqSuiteCommandIndexes("dbo.sales");
++
++            Assert.IsNotNull(indexes);
++            Assert.AreEqual(2, indexes.Length);
++            Assert.AreEqual(0, indexes[0]);
++            Assert.AreEqual(2, indexes[1]);
++        }
++
++        /// <summary>
++        /// When query is longer than key, suffix matching strips leading segments.
++        /// Query "workspace.lakehouse.dbo.sales" matches key "dbo.sales".
++        /// </summary>
++        [TestMethod]
++        public void GetDqSuiteCommandIndexes_QueryLongerThanKey_MatchesBySuffix()
++        {
++            var indexes = context.GetDqSuiteCommandIndexes("workspace.lakehouse.dbo.sales");
++
++            Assert.IsNotNull(indexes);
++            Assert.AreEqual(2, indexes.Length);
++        }
++
++        /// <summary>
++        /// When key is longer than query, suffix matching strips leading segments from the key.
++        /// Query "dbo.orders" matches key "schema1.lakehouse1.dbo.orders".
++        /// </summary>
++        [TestMethod]
++        public void GetDqSuiteCommandIndexes_KeyLongerThanQuery_MatchesBySuffix()
++        {
++            var indexes = context.GetDqSuiteCommandIndexes("dbo.orders");
++
++            Assert.IsNotNull(indexes);
++            Assert.AreEqual(2, indexes.Length);
++            Assert.AreEqual(1, indexes[0]);
++            Assert.AreEqual(3, indexes[1]);
++        }
++
++        /// <summary>
++        /// Returns null when no match is found.
++        /// </summary>
++        [TestMethod]
++        public void GetDqSuiteCommandIndexes_NoMatch_ReturnsNull()
++        {
++            var indexes = context.GetDqSuiteCommandIndexes("nonexistent.table");
++
++            Assert.IsNull(indexes);
++        }
++
++        /// <summary>
++        /// Returns null when input is null.
++        /// </summary>
++        [TestMethod]
++        public void GetDqSuiteCommandIndexes_NullInput_ReturnsNull()
++        {
++            var indexes = context.GetDqSuiteCommandIndexes(null);
++
++            Assert.IsNull(indexes);
++        }
++
++        /// <summary>
++        /// Matching is case-insensitive: "DBO.Sales" matches stored key "dbo.sales".
++        /// </summary>
++        [TestMethod]
++        public void GetDqSuiteCommandIndexes_CaseInsensitive_Matches()
++        {
++            var indexes = context.GetDqSuiteCommandIndexes("DBO.Sales");
++
++            Assert.IsNotNull(indexes);
++            Assert.AreEqual(2, indexes.Length);
++        }
++
++        /// <inheritdoc/>
++        public void Dispose()
++        {
++            Dispose(true);
++            GC.SuppressFinalize(this);
++        }
++
++        /// <summary>
++        /// Releases managed resources.
++        /// </summary>
++        /// <param name="disposing">True if called from Dispose.</param>
++        protected virtual void Dispose(bool disposing)
++        {
++            if (disposing)
++            {
++                context?.Dispose();
++                context = null;
++            }
++        }
++    }
++}
