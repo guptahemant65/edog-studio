@@ -52,6 +52,25 @@ namespace Microsoft.LiveTable.Service.DevMode
             var requestHeaders = RedactRequestHeaders(request.Headers, request.Content?.Headers);
             var correlationId = ExtractCorrelationId(request.Headers);
 
+            // Capture request body preview + size for POST/PUT/PATCH
+            string requestBodyPreview = null;
+            long requestSizeBytes = 0;
+            try
+            {
+                if (request.Content != null)
+                {
+                    requestSizeBytes = request.Content.Headers.ContentLength ?? 0;
+                    var ct = request.Content.Headers.ContentType;
+                    if (ct != null && (ct.MediaType?.Contains("json") == true || ct.MediaType?.Contains("text") == true))
+                    {
+                        var body = await request.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        requestSizeBytes = requestSizeBytes > 0 ? requestSizeBytes : System.Text.Encoding.UTF8.GetByteCount(body);
+                        requestBodyPreview = body.Length > MaxBodyPreviewBytes ? body.Substring(0, MaxBodyPreviewBytes) : body;
+                    }
+                }
+            }
+            catch { /* non-fatal */ }
+
             // F27 P5 Stage 2: consult the QA HTTP fault store. When a chaos
             // rule matches the outbound URI we either synthesize a fake
             // error response, inject a delay before forwarding, or throw a
@@ -74,6 +93,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     method, url, statusCode: 0, durationMs: 0,
                     requestHeaders: requestHeaders, responseHeaders: null,
                     responseBodyPreview: null, correlationId: correlationId,
+                    requestBodyPreview: requestBodyPreview,
+                    requestSizeBytes: requestSizeBytes, responseSizeBytes: 0,
                     chaosFault: chaosFault, synthesized: true);
 
                 throw new TaskCanceledException(
@@ -113,11 +134,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var statusCode = (int)response.StatusCode;
                 var responseHeaders = CaptureHeaders(response.Headers, response.Content?.Headers);
                 var bodyPreview = await CaptureBodyPreview(response.Content).ConfigureAwait(false);
+                var responseSizeBytes = response.Content?.Headers.ContentLength ?? 0;
 
                 PublishHttpEvent(
                     method, url, statusCode,
                     Math.Round(sw.Elapsed.TotalMilliseconds, 2),
                     requestHeaders, responseHeaders, bodyPreview, correlationId,
+                    requestBodyPreview, requestSizeBytes, responseSizeBytes,
                     chaosFault: chaosFault, synthesized: synthesized);
             }
             catch (Exception ex)
@@ -166,6 +189,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             Dictionary<string, string> responseHeaders,
             string responseBodyPreview,
             string correlationId,
+            string requestBodyPreview,
+            long requestSizeBytes,
+            long responseSizeBytes,
             HttpFaultEntry chaosFault,
             bool synthesized)
         {
@@ -182,6 +208,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         requestHeaders,
                         responseHeaders,
                         responseBodyPreview,
+                        requestBodyPreview,
+                        requestSizeBytes,
+                        responseSizeBytes,
                         httpClientName = _httpClientName,
                         correlationId,
                         chaos = new
@@ -204,6 +233,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         requestHeaders,
                         responseHeaders,
                         responseBodyPreview,
+                        requestBodyPreview,
+                        requestSizeBytes,
+                        responseSizeBytes,
                         httpClientName = _httpClientName,
                         correlationId,
                     });

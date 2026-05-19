@@ -45,6 +45,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     @event = "OboExchange",
                     provider = "TokenManager",
+                    tokenType = "OBO",
                     audience = "TridentLake",
                     tenantId = tenantId.ToString(),
                     durationMs = sw.ElapsedMilliseconds,
@@ -61,6 +62,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     @event = "OboExchange",
                     provider = "TokenManager",
+                    tokenType = "OBO",
                     audience = "TridentLake",
                     tenantId = tenantId.ToString(),
                     durationMs = sw.ElapsedMilliseconds,
@@ -90,6 +92,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     @event = "TokenAcquired",
                     provider = "TokenManager",
+                    tokenType = "MWC",
                     method = "GetTokenAsync",
                     lakehouseId = lakehouseId.ToString(),
                     iterationId = iterationId.ToString(),
@@ -117,6 +120,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     @event = "TokenAcquired",
                     provider = "TokenManager",
+                    tokenType = "MWC",
                     method = "GetTokenAsync",
                     lakehouseId = lakehouseId.ToString(),
                     iterationId = iterationId.ToString(),
@@ -141,6 +145,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 PublishEvent(new
                 {
                     @event = "TokenCached",
+                    tokenType = "MWC",
                     lakehouseId = lakehouseId.ToString(),
                     iterationId = iterationId.ToString(),
                     success = false,
@@ -153,6 +158,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             PublishEvent(new
             {
                 @event = "TokenCached",
+                tokenType = "MWC",
                 lakehouseId = lakehouseId.ToString(),
                 iterationId = iterationId.ToString(),
                 success = true,
@@ -175,6 +181,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 PublishEvent(new
                 {
                     @event = "TokenRefreshAttempt",
+                    tokenType = "MWC",
                     lakehouseId = lakehouseId.ToString(),
                     iterationId = iterationId.ToString(),
                     refreshed = result,
@@ -187,6 +194,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 PublishEvent(new
                 {
                     @event = "TokenRefreshAttempt",
+                    tokenType = "MWC",
                     lakehouseId = lakehouseId.ToString(),
                     iterationId = iterationId.ToString(),
                     refreshed = false,
@@ -209,6 +217,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 PublishEvent(new
                 {
                     @event = "TokenEvicted",
+                    tokenType = "MWC",
                     lakehouseId = lakehouseId.ToString(),
                     iterationId = iterationId.ToString(),
                     success = false,
@@ -221,6 +230,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             PublishEvent(new
             {
                 @event = "TokenEvicted",
+                tokenType = "MWC",
                 lakehouseId = lakehouseId.ToString(),
                 iterationId = iterationId.ToString(),
                 success = true,

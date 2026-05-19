@@ -60,6 +60,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     operationName,
                     durationMs = durationMetricValue,
+                    reliabilityMetric = reliablityMetricValue,
                     result,
                     dimensions,
                     correlationId,
