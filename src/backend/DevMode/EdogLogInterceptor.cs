@@ -27,6 +27,48 @@ namespace Microsoft.LiveTable.Service.DevMode
             @"(?:\[IterationId\s+|\bIterationId[=: ]+)([0-9a-fA-F-]{36})\b",
             RegexOptions.Compiled);
 
+        // Strategy 2: Extract node name from log messages
+        // Matches: "for Node silver.mlv_noref", "metrics for silver.mlv_noref",
+        //          "Updated in-memory node metrics for silver.mlv_incr_join"
+        private static readonly Regex NodeNameRegex = new Regex(
+            @"(?:for Node |metrics for |node metrics for |Node name: )([a-zA-Z_][a-zA-Z0-9_./-]+)",
+            RegexOptions.Compiled);
+
+        // Strategy 3: Extract artifactId (lakehouse ID) from URL paths in messages
+        // Matches: "/lakehouses/2b3c9fa5-3199-4256-9c65-93fc8e3b6c45"
+        //          "/artifacts/2b3c9fa5-3199-4256-9c65-93fc8e3b6c45"
+        private static readonly Regex ArtifactInUrlRegex = new Regex(
+            @"(?:/lakehouses/|/artifacts/)([0-9a-fA-F-]{36})",
+            RegexOptions.Compiled);
+
+        // Strategy 1: rootActivityId → iterationId reverse index
+        // When a telemetry event carries correlationId = "rootId|iterationId",
+        // we cache that mapping so log entries with the same rootActivityId
+        // can inherit the iterationId.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string>
+            _rootActivityToIteration = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Called by EdogTelemetryInterceptor to register a rootActivityId → iterationId
+        /// mapping whenever a telemetry event with a correlationId is processed.
+        /// </summary>
+        public static void RegisterRootActivityMapping(string correlationId, string iterationId)
+        {
+            if (string.IsNullOrEmpty(correlationId) || string.IsNullOrEmpty(iterationId)) return;
+            // Extract rootActivityId from correlation: "rootId|iterationId" or "rootId-iterationId"
+            var pipeIdx = correlationId.IndexOf('|');
+            if (pipeIdx > 0)
+            {
+                _rootActivityToIteration[correlationId.Substring(0, pipeIdx)] = iterationId;
+            }
+            else if (correlationId.Length >= 73 && correlationId[36] == '-')
+            {
+                _rootActivityToIteration[correlationId.Substring(0, 36)] = iterationId;
+            }
+            // Cap at 500 entries (FIFO is complex for ConcurrentDictionary — just let it grow slowly)
+            // In practice, a session has <50 distinct rootActivityIds
+        }
+
         // Error dedup: suppress duplicate errors within a 2-second window (storm protection)
         private const int ErrorDedupWindowMs = 2000;
         private const int ErrorMessageKeyLength = 120;
@@ -112,16 +154,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var entry = new LogEntry(timestamp, level, message, component, rootActivityId, eventId, customData);
                 entry.CodeMarkerName = MonitoredScope.CurrentCodeMarkerName;
 
-                // Extract IterationId. FLT propagates IterationId through MonitoredScope.CustomData
-                // (see NodeExecutor.cs, DagExecutionHandlerV2.cs, controllers, hooks — they all call
-                // ms.AddCustomData(Constants.IterationIdKey, iterationId.ToString())). That custom data
-                // flows into TestLogEvent.CustomData, so it's the most reliable source — every Tracer
-                // call inside a DAG scope carries it, even when the message body doesn't mention it.
-                // Fall back to scraping the message body (covers logs from non-MonitoredScope sites).
+                // Extract IterationId using 3-strategy enrichment.
+                // Strategy 1 (Definite): CustomData["IterationId"] from MonitoredScope
+                // Strategy 2 (Strong): Regex match in message body
+                // Strategy 3 (Strong): rootActivityId → iterationId reverse index
                 string extractedIterationId = null;
+                string iterationIdSource = null;
+
                 if (customData.TryGetValue("IterationId", out var iidFromCustom) && IsValidGuid(iidFromCustom))
                 {
                     extractedIterationId = iidFromCustom;
+                    iterationIdSource = "customData";
                 }
                 else
                 {
@@ -129,12 +172,33 @@ namespace Microsoft.LiveTable.Service.DevMode
                     if (iterMatch.Success)
                     {
                         extractedIterationId = iterMatch.Groups[1].Value;
+                        iterationIdSource = "regex";
+                    }
+                    else if (_rootActivityToIteration.TryGetValue(rootActivityId, out var chainedIterId))
+                    {
+                        extractedIterationId = chainedIterId;
+                        iterationIdSource = "rootActivityId-chain";
                     }
                 }
 
                 if (!string.IsNullOrEmpty(extractedIterationId))
                 {
                     entry.IterationId = extractedIterationId;
+                    entry.IterationIdSource = iterationIdSource;
+                }
+
+                // Extract NodeName from message (Strategy 2 for cross-tab linking)
+                var nodeMatch = NodeNameRegex.Match(message);
+                if (nodeMatch.Success)
+                {
+                    entry.NodeName = nodeMatch.Groups[1].Value.Trim();
+                }
+
+                // Extract ArtifactId from URL patterns (Strategy 3 for request chain grouping)
+                var artMatch = ArtifactInUrlRegex.Match(message);
+                if (artMatch.Success)
+                {
+                    entry.ArtifactId = artMatch.Groups[1].Value;
                 }
 
                 this.edogLogServer.AddLog(entry);

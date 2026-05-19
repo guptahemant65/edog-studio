@@ -43,6 +43,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         public string IterationId { get; set; }
 
         public string CodeMarkerName { get; set; }
+
+        /// <summary>Node name extracted from message body (e.g. "silver.mlv_noref").</summary>
+        public string NodeName { get; set; }
+
+        /// <summary>Artifact/lakehouse ID extracted from URL patterns in message body.</summary>
+        public string ArtifactId { get; set; }
+
+        /// <summary>How the IterationId was determined: "customData", "regex", "rootActivityId-chain", null if not set.</summary>
+        public string IterationIdSource { get; set; }
     }
 
     /// <summary>

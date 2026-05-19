@@ -119,6 +119,15 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
+                // Register rootActivityId → iterationId mapping for log enrichment.
+                // This allows log entries that share the same rootActivityId to inherit
+                // the iterationId even when MonitoredScope.CustomData doesn't propagate.
+                if (!string.IsNullOrEmpty(telemetryEvent.IterationId))
+                {
+                    EdogLogInterceptor.RegisterRootActivityMapping(
+                        effectiveCorrelationId, telemetryEvent.IterationId);
+                }
+
                 // Forward to EdogLogServer
                 this.edogLogServer.AddTelemetry(telemetryEvent);
 
