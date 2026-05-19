@@ -248,7 +248,14 @@ class EdogLogViewer {
     this.runtimeView.registerTab('perf', this.perfTab);
 
     // Initialize logs enhancements (breakpoints, bookmarks, error clustering)
-    if (this.logsEnhancements) this.logsEnhancements.init();
+    if (this.logsEnhancements) {
+      this.logsEnhancements.init();
+      // Wire the ClusterEngine from ErrorIntelligence into LogsEnhancements
+      // so the cluster UI renders grouped errors.
+      if (this.errorIntel && this.errorIntel.clusterEngine) {
+        this.logsEnhancements.setClusterEngine(this.errorIntel.clusterEngine);
+      }
+    }
 
     // Expose globals for deploy phase sync
     window.edogTopBar = this.topbar;
@@ -586,9 +593,18 @@ class EdogLogViewer {
         this.state.addLog(data);
         this.autoDetector.processLog(data);
         this.anomaly.processLog(data);
+        if (this.errorIntel) this.errorIntel.addToCluster(data);
         this.extractEndpointFromLog(data);
         this.extractComponentFromLog(data);
         this.extractIterationIdFromLog(data);
+        // Throttle cluster refresh — rebuild at most once per second
+        if (this.logsEnhancements && !this._clusterRefreshPending) {
+          this._clusterRefreshPending = true;
+          setTimeout(() => {
+            this._clusterRefreshPending = false;
+            if (this.logsEnhancements) this.logsEnhancements.refreshClusters();
+          }, 1000);
+        }
         this.renderer.scheduleRender();
       } else if (type === 'telemetry') {
         this.state.addTelemetry(data);
