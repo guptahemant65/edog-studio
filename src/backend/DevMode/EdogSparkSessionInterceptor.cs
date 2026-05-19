@@ -108,7 +108,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 hitOrMiss: sw.Elapsed.TotalMilliseconds < 100 ? "Hit" : "Miss",
                 durationMs: sw.Elapsed.TotalMilliseconds);
 
-            return client;
+            // Wrap the returned ISparkClient so every method call emits rich events
+            return new EdogSparkClientWrapper(client, trackingId, iterationId.ToString());
         }
     }
 }
