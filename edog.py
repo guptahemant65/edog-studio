@@ -1734,16 +1734,21 @@ def apply_log_viewer_files(repo_root):
                 shutil.copy2(src_file, target)
                 created_files.append(f"{target.name} (updated)")
 
-    # Also copy edog-logs.html to build output dirs so the server can find it at runtime
+    # Also copy edog-logs.html and edog-flt-components.json to build output dirs
+    # so the server can find them at runtime (AppDomain.CurrentDomain.BaseDirectory)
     html_src = src_dir / "edog-logs.html"
-    if html_src.exists():
-        entry_point = repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
-        bin_dir = entry_point / "bin"
-        if bin_dir.exists():
-            for dll in bin_dir.rglob("Microsoft.LiveTable.Service.EntryPoint.dll"):
-                out_devmode = dll.parent / "DevMode"
-                out_devmode.mkdir(parents=True, exist_ok=True)
+    components_src = repo_root / SERVICE_PATH / "DevMode" / "edog-flt-components.json"
+    entry_point = repo_root / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
+    bin_dir = entry_point / "bin"
+
+    if bin_dir.exists():
+        for dll in bin_dir.rglob("Microsoft.LiveTable.Service.EntryPoint.dll"):
+            out_devmode = dll.parent / "DevMode"
+            out_devmode.mkdir(parents=True, exist_ok=True)
+            if html_src.exists():
                 shutil.copy2(html_src, out_devmode / "edog-logs.html")
+            if components_src.exists():
+                shutil.copy2(components_src, out_devmode / "edog-flt-components.json")
 
     if created_files:
         return "applied", created_files
