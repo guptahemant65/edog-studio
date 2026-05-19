@@ -418,6 +418,10 @@
   border-left-color: var(--status-failed);
 }
 
+.tl-card.tl-card--warning {
+  border-left-color: var(--level-warning);
+}
+
 .tl-card.tl-card--long {
   border-left-color: var(--level-warning);
 }
@@ -497,6 +501,11 @@
   background: var(--tl-red-dim);
 }
 
+.tl-badge--warning {
+  color: var(--level-warning);
+  background: var(--tl-amber-dim);
+}
+
 .tl-badge--long {
   color: var(--level-warning);
   background: var(--tl-amber-dim);
@@ -550,6 +559,10 @@
 
 .tl-dur-bar-fill--failed {
   background: var(--status-failed);
+}
+
+.tl-dur-bar-fill--warning {
+  background: var(--level-warning);
 }
 
 .tl-dur-bar-fill--long {

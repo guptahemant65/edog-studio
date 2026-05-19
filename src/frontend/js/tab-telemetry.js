@@ -188,19 +188,23 @@ class TelemetryTab {
     const status =
       rawStatus === 'succeeded'  ? 'succeeded' :
       rawStatus === 'failed' || rawStatus === 'failedwithremote' ? 'failed' :
-      rawStatus === 'succeededwitherrors' ? 'failed' :
+      rawStatus === 'succeededwitherrors' ? 'warning' :
       rawStatus === 'running' || rawStatus === 'inprogress' || rawStatus === 'pending' ? 'running' :
       rawStatus === 'cancelled' || rawStatus === 'interrupted' ? 'cancelled' :
-      rawStatus ? rawStatus : 'unknown';
+      rawStatus ? 'unknown' : 'unknown';
 
-    const durationMs  = data.durationMs || 0;
+    const durationMs  = typeof data.durationMs === 'number' && data.durationMs >= 0 ? data.durationMs : 0;
     const durationSec = durationMs / 1000;
 
     let error = null;
     if (status === 'failed') {
       error = data.resultCode
-        ? 'Failed with result code ' + data.resultCode
+        ? 'System error: ' + data.resultCode
         : 'Operation failed';
+    } else if (status === 'warning') {
+      error = data.resultCode
+        ? 'User error: ' + data.resultCode
+        : 'Completed with user-attributed errors';
     }
 
     return {
@@ -352,6 +356,7 @@ class TelemetryTab {
       { status: 'all',       label: 'All' },
       { status: 'running',   label: 'Running' },
       { status: 'succeeded', label: 'Succeeded' },
+      { status: 'warning',   label: 'User Error' },
       { status: 'failed',    label: 'Failed' }
     ];
     pillDefs.forEach(p => {
@@ -601,6 +606,7 @@ class TelemetryTab {
   _buildCardHTML(a) {
     const isRunning = a.status === 'running';
     const isFailed  = a.status === 'failed';
+    const isWarning = a.status === 'warning';
     const isLong    = a.isLongRunning || a.durationSec > TelemetryTab.LONG_THRESHOLD_SEC;
 
     // Status badge
@@ -610,6 +616,8 @@ class TelemetryTab {
         '<span class="tl-badge-dot"></span> Running</span>';
     } else if (isFailed) {
       badgeHTML = '<span class="tl-badge tl-badge--failed">\u2717 Failed</span>';
+    } else if (isWarning) {
+      badgeHTML = '<span class="tl-badge tl-badge--warning">\u26A0 User Error</span>';
     } else if (isLong) {
       badgeHTML = '<span class="tl-badge tl-badge--long">\u26A0 Succeeded</span>';
     } else {
@@ -627,10 +635,11 @@ class TelemetryTab {
     const estimated = sparkAvg > 0 ? sparkAvg * 1.5 : 30;
     const pct = Math.min(100, (elapsed / Math.max(estimated, 0.01)) * 100);
     let fillClass = 'tl-dur-bar-fill tl-dur-bar-fill--running';
-    if (!isRunning && !isFailed) fillClass = isLong
+    if (!isRunning && !isFailed && !isWarning) fillClass = isLong
       ? 'tl-dur-bar-fill tl-dur-bar-fill--long'
       : 'tl-dur-bar-fill tl-dur-bar-fill--succeeded';
     else if (isFailed) fillClass = 'tl-dur-bar-fill tl-dur-bar-fill--failed';
+    else if (isWarning) fillClass = 'tl-dur-bar-fill tl-dur-bar-fill--warning';
 
     // Meta tags
     let metaHTML = '';
@@ -657,8 +666,9 @@ class TelemetryTab {
     const cardClass = [
       'tl-card',
       isRunning ? 'tl-card--running' : '',
-      !isRunning && !isFailed && !isLong ? 'tl-card--succeeded' : '',
+      !isRunning && !isFailed && !isWarning && !isLong ? 'tl-card--succeeded' : '',
       isFailed ? 'tl-card--failed' : '',
+      isWarning ? 'tl-card--warning' : '',
       isLong && !isRunning ? 'tl-card--long' : '',
       a.id === this._selectedId ? 'tl-card--selected' : ''
     ].filter(Boolean).join(' ');
@@ -753,6 +763,7 @@ class TelemetryTab {
     const body   = detail.querySelector('.tl-detail-body');
     const isRunning = a.status === 'running';
     const isFailed  = a.status === 'failed';
+    const isWarning = a.status === 'warning';
     const isLong    = a.isLongRunning || a.durationSec > TelemetryTab.LONG_THRESHOLD_SEC;
 
     // Title
@@ -764,6 +775,7 @@ class TelemetryTab {
     let statusText  = 'Succeeded';
     if (isRunning) { statusColor = 'var(--accent)'; statusText = 'Running'; }
     else if (isFailed) { statusColor = 'var(--status-failed)'; statusText = 'Failed'; }
+    else if (isWarning) { statusColor = 'var(--level-warning)'; statusText = 'User Error'; }
     else if (isLong) { statusColor = 'var(--level-warning)'; statusText = 'Succeeded (long-running)'; }
     statusEl.style.color = statusColor;
     statusEl.textContent = statusText;
