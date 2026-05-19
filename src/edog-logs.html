@@ -37742,21 +37742,10 @@ class SignalRManager {
       this.connection = builder.build();
       this.setStatus('connecting');
 
-      // Wire up server-to-client handlers
-      // NOTE: Legacy LogEntry/TelemetryEvent group broadcasts removed from
-      // backend (commit a61218a). Kept as no-ops for safety; the topic
-      // stream (SubscribeToTopic) is the sole live delivery path.
-      this.connection.on('LogEntry', (entry) => {
-        if (this.onMessage) {
-          this.onMessage('log', entry);
-        }
-      });
-
-      this.connection.on('TelemetryEvent', (event) => {
-        if (this.onMessage) {
-          this.onMessage('telemetry', event);
-        }
-      });
+      // NOTE: Legacy LogEntry/TelemetryEvent group broadcasts were removed
+      // from backend (commit a61218a). These handlers are dead code — the
+      // sole delivery path is the Phase 3 topic stream (SubscribeToTopic).
+      // Kept temporarily as a safety net; will be removed in a future cleanup.
 
       // Reconnection lifecycle
       this.connection.onreconnecting(() => {
@@ -91982,39 +91971,25 @@ class EdogLogViewer {
     
     // Set up WebSocket callbacks
     this.ws.onStatusChange = this.updateConnectionStatus;
-    this.ws.onMessage = this.handleWebSocketMessage;
     this.ws.onBatch = this.handleWebSocketBatch;
     this.ws.onSummary = this.handleWebSocketSummary;
 
-    // Subscribe to log + telemetry topic streams for live delivery.
-    // The legacy LogEntry/TelemetryEvent group broadcasts were removed
-    // from the backend — the Phase 3 topic stream is the sole live path.
-    // The stream delivers a snapshot (ring buffer history) then live events.
-    // _initialDataLoaded tracks whether REST already loaded the snapshot
-    // so we can skip stream-delivered duplicates.
-    this._initialDataLoaded = false;
-    this._onLiveLog = (envelope) => {
+    // ── Single source of truth for logs + telemetry ──
+    // The Phase 3 topic stream (SubscribeToTopic) delivers:
+    //   Phase 1: Snapshot (ring buffer history)
+    //   Phase 2: Live events as they arrive
+    // This replaces BOTH the legacy SendAsync("LogEntry") broadcast AND
+    // the REST /api/logs fetch. One path. No dedup needed.
+    this._onStreamLog = (envelope) => {
       const data = envelope && envelope.data ? envelope.data : envelope;
-      if (!data) return;
-      // If REST already loaded the snapshot, skip stream items with
-      // timestamps at or before the newest REST-loaded entry.
-      if (this._logCutoffTs && data.timestamp) {
-        var ts = typeof data.timestamp === 'string' ? new Date(data.timestamp).getTime() : data.timestamp;
-        if (ts <= this._logCutoffTs) return;
-      }
-      this.handleWebSocketMessage('log', data);
+      if (data) this.handleWebSocketMessage('log', data);
     };
-    this._onLiveTelemetry = (envelope) => {
+    this._onStreamTelemetry = (envelope) => {
       const data = envelope && envelope.data ? envelope.data : envelope;
-      if (!data) return;
-      if (this._telemetryCutoffTs && data.timestamp) {
-        var ts = typeof data.timestamp === 'string' ? new Date(data.timestamp).getTime() : data.timestamp;
-        if (ts <= this._telemetryCutoffTs) return;
-      }
-      this.handleWebSocketMessage('telemetry', data);
+      if (data) this.handleWebSocketMessage('telemetry', data);
     };
-    this.ws.on('log', this._onLiveLog);
-    this.ws.on('telemetry', this._onLiveTelemetry);
+    this.ws.on('log', this._onStreamLog);
+    this.ws.on('telemetry', this._onStreamTelemetry);
     this.ws.subscribeTopic('log');
     this.ws.subscribeTopic('telemetry');
   }
@@ -92036,20 +92011,11 @@ class EdogLogViewer {
     this.runtimeView.registerTab('logs', {
       activate: () => {
         this.renderer.containerReady = false;
+        this.renderer.flush();
+        this.renderer.scheduleRender();
 
-        // If buffer is empty but service is running, fetch logs from REST + ensure SignalR
-        const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
-        if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
-          this.loadInitialData().then(() => {
-            this.renderer.flush();
-            this.renderer.scheduleRender();
-          });
-        } else {
-          this.renderer.flush();
-          this.renderer.scheduleRender();
-        }
-
-        // Ensure SignalR is connected
+        // Ensure SignalR is connected (covers edge case where page loaded
+        // before FLT started and user navigated to logs tab later)
         if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
           this.ws.connect();
         }
@@ -92498,75 +92464,16 @@ class EdogLogViewer {
   }
   
   loadInitialData = async () => {
-    // Guard against concurrent/duplicate calls — each call is a full
-    // snapshot replace so running twice doubles every entry.
-    if (this._loadingInitialData) return;
-    this._loadingInitialData = true;
     try {
       // Refresh API client config so tokens/phase are current after deploy
       await this.apiClient.fetchConfig();
 
-      // Load logs — full snapshot replace (clear first to prevent duplicates
-      // when loadInitialData is called from multiple code paths on startup).
-      const logsResponse = await fetch('/api/logs');
-      if (logsResponse.ok) {
-        const logs = await logsResponse.json();
-        logs.reverse(); // API returns newest-first; reverse to push oldest-first into RingBuffer
-        this.state.logBuffer.clear();
-        this.state.stats.totalLogs = 0;
-        this.state.stats.error = 0;
-        this.state.stats.warning = 0;
-        this.state.stats.information = 0;
-        this.state.stats.verbose = 0;
-        logs.forEach(log => {
-          try {
-            this.state.logBuffer.push(log);
-            this.state.stats.totalLogs++;
-            const level = (log.level || '').toLowerCase();
-            if (level && this.state.stats[level] !== undefined) this.state.stats[level]++;
-            this.extractEndpointFromLog(log);
-            this.extractComponentFromLog(log);
-            this.extractIterationIdFromLog(log);
-          } catch (err) {
-            console.error('[load] Failed to process log entry:', err);
-          }
-        });
-        // Set cutoff so topic-stream snapshot items older than this are skipped.
-        if (logs.length > 0) {
-          var last = logs[logs.length - 1];
-          this._logCutoffTs = last.timestamp
-            ? (typeof last.timestamp === 'string' ? new Date(last.timestamp).getTime() : last.timestamp)
-            : 0;
-        }
-      }
-      
-      // Load telemetry — full snapshot replace
-      const telemetryResponse = await fetch('/api/telemetry');
-      if (telemetryResponse.ok) {
-        const events = await telemetryResponse.json();
-        events.reverse();
-        this.state.telemetryBuffer.clear();
-        this.state.stats.totalEvents = 0;
-        this.state.stats.succeeded = 0;
-        this.state.stats.failed = 0;
-        events.forEach(event => {
-          this.state.telemetryBuffer.push(event);
-          this.state.stats.totalEvents++;
-          const status = (event.activityStatus || '').toLowerCase();
-          if (status === 'succeeded') this.state.stats.succeeded++;
-          else if (status === 'failed') this.state.stats.failed++;
-          this.extractEndpointFromTelemetry(event);
-          this.extractIterationIdFromTelemetry(event);
-        });
-        if (events.length > 0) {
-          var lastEvt = events[events.length - 1];
-          this._telemetryCutoffTs = lastEvt.timestamp
-            ? (typeof lastEvt.timestamp === 'string' ? new Date(lastEvt.timestamp).getTime() : lastEvt.timestamp)
-            : 0;
-        }
-      }
-      
-      // Override stats with server values
+      // Logs and telemetry are NOT fetched here. The sole delivery path is
+      // the Phase 3 topic stream (SubscribeToTopic), which delivers both
+      // the historical snapshot and live events through a single channel.
+      // See constructor: ws.subscribeTopic('log') / ws.subscribeTopic('telemetry').
+
+      // Load server-side stats (pre-computed aggregates)
       const statsResponse = await fetch('/api/stats');
       if (statsResponse.ok) {
         const stats = await statsResponse.json();
@@ -92590,13 +92497,11 @@ class EdogLogViewer {
       // Deferred smart processing (non-blocking chunks)
       this.deferredSmartProcessing();
 
-      // Force a render so loaded logs appear in the UI
+      // Force a render so any stream-delivered logs appear in the UI
       this.renderer.scheduleRender();
       
     } catch (error) {
       console.error('Failed to load initial data:', error);
-    } finally {
-      this._loadingInitialData = false;
     }
   }
   
@@ -92690,19 +92595,11 @@ class EdogLogViewer {
         this.sidebar.setActiveSubTab(this.runtimeView._activeTab);
       }
 
-      // If current tab is logs, ensure data is loaded
+      // If current tab is logs, just render — data arrives via topic stream
       if (this.runtimeView._activeTab === 'logs') {
         this.renderer.containerReady = false;
-        const hasLogs = this.state.logBuffer && this.state.logBuffer.length > 0;
-        if (!hasLogs && this.ws && this.ws._port && this.ws._port !== 5555) {
-          this.loadInitialData().then(() => {
-            this.renderer.flush();
-            this.renderer.scheduleRender();
-          });
-        } else {
-          this.renderer.flush();
-          this.renderer.scheduleRender();
-        }
+        this.renderer.flush();
+        this.renderer.scheduleRender();
         if (this.ws && this.ws.status !== 'connected' && this.ws._port) {
           this.ws.connect();
         }
