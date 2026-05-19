@@ -54393,27 +54393,56 @@ class SparkSessionsTab {
   _onCreated(d) {
     const sid = d.sessionTrackingId;
     if (!sid) return;
-    const now = Date.now();
-    const s = this._getOrCreateSession(sid);
-    s.iterationId = d.iterationId || s.iterationId;
-    s.tenantId = d.tenantId || s.tenantId;
-    s.workspaceId = d.workspaceId || s.workspaceId;
-    s.workspaceName = d.workspaceName || s.workspaceName;
-    s.artifactId = d.artifactId || s.artifactId;
-    s.artifactName = d.artifactName || s.artifactName;
-    s.startedAt = now;
-    s.createdDurationMs = typeof d.durationMs === "number" ? d.durationMs : 0;
-    s.warm = (s.createdDurationMs || 0) < 100;
-    s.createError = d.error || null;
-    s._sessionRawEvents.push({ at: now, kind: "Created", data: d });
-    this._recomputeStatus(s);
-    this._pruneOldest();
+    // Don't create a session card yet — the GTS session doesn't exist until
+    // TransformSubmitted returns with a gtsSessionId. Store factory metadata
+    // so _onSubmitted can merge it when the real session is confirmed.
+    if (!this._pendingCreated) this._pendingCreated = new Map();
+    this._pendingCreated.set(sid, {
+      iterationId: d.iterationId,
+      tenantId: d.tenantId,
+      workspaceId: d.workspaceId,
+      workspaceName: d.workspaceName,
+      artifactId: d.artifactId,
+      artifactName: d.artifactName,
+      createdDurationMs: typeof d.durationMs === "number" ? d.durationMs : 0,
+      warm: (typeof d.durationMs === "number" ? d.durationMs : 0) < 100,
+      createError: d.error || null,
+      createdAt: Date.now(),
+      rawEvent: d,
+    });
+    // If factory failed, show the error immediately as a session
+    if (d.error) {
+      const s = this._getOrCreateSession(sid);
+      this._mergePendingCreated(s, sid);
+      s._sessionRawEvents.push({ at: Date.now(), kind: "Created", data: d });
+      this._recomputeStatus(s);
+    }
+  }
+
+  /** Merge pending Created metadata into session when first TransformSubmitted arrives */
+  _mergePendingCreated(s, sid) {
+    if (!this._pendingCreated || !this._pendingCreated.has(sid)) return;
+    const p = this._pendingCreated.get(sid);
+    s.iterationId = p.iterationId || s.iterationId;
+    s.tenantId = p.tenantId || s.tenantId;
+    s.workspaceId = p.workspaceId || s.workspaceId;
+    s.workspaceName = p.workspaceName || s.workspaceName;
+    s.artifactId = p.artifactId || s.artifactId;
+    s.artifactName = p.artifactName || s.artifactName;
+    s.createdDurationMs = p.createdDurationMs;
+    s.warm = p.warm;
+    s.createError = p.createError;
+    s.startedAt = p.createdAt;
+    s._sessionRawEvents.push({ at: p.createdAt, kind: "Created", data: p.rawEvent });
+    this._pendingCreated.delete(sid);
   }
 
   _onSubmitted(d) {
     const sid = d.sessionTrackingId;
     if (!sid) return;
     const s = this._getOrCreateSession(sid);
+    // Merge factory metadata from Created event (if we haven't already)
+    this._mergePendingCreated(s, sid);
     const t = this._getOrCreateTransform(s, d.transformationId);
     const now = Date.now();
     t.name = d.nodeName || t.name;
