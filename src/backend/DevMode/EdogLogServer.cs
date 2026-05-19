@@ -188,11 +188,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Publish to TopicRouter (for ChannelReader streaming — Phase 3 frontend)
             EdogTopicRouter.Publish("log", entry);
 
-            // Also broadcast via SignalR groups (for current JS client compatibility)
-            if (hubContext != null)
-            {
-                _ = hubContext.Clients.Group("log").SendAsync("LogEntry", entry);
-            }
+            // Legacy SignalR group broadcast removed — the Phase 3 topic stream
+            // (SubscribeToTopic) is now the sole delivery path. The old path via
+            // hubContext.Clients.Group("log").SendAsync("LogEntry", entry) caused
+            // duplicate log entries in the viewer because both the legacy handler
+            // and the topic stream delivered the same event.
         }
         catch (Exception ex)
         {
@@ -216,11 +216,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // Publish to TopicRouter (for ChannelReader streaming — Phase 3 frontend)
             EdogTopicRouter.Publish("telemetry", telemetryEvent);
 
-            // Also broadcast via SignalR groups (for current JS client compatibility)
-            if (hubContext != null)
-            {
-                _ = hubContext.Clients.Group("telemetry").SendAsync("TelemetryEvent", telemetryEvent);
-            }
+            // Legacy SignalR group broadcast removed — same reason as AddLog.
         }
         catch (Exception ex)
         {
