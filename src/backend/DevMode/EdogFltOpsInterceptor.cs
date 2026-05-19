@@ -165,6 +165,108 @@ namespace Microsoft.LiveTable.Service.DevMode
                 throw;
             }
         }
+        /// <inheritdoc/>
+        public async Task<RefreshTriggerResponse> UpdateFMLVRefreshTriggerAsync(
+            Guid tenantId,
+            Guid workspaceId,
+            Guid lakehouseId,
+            Guid triggerId,
+            RefreshTriggerRequest refreshTriggerReq,
+            string mwcToken,
+            CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var result = await _inner.UpdateFMLVRefreshTriggerAsync(
+                    tenantId, workspaceId, lakehouseId, triggerId,
+                    refreshTriggerReq, mwcToken, cancellationToken).ConfigureAwait(false);
+                sw.Stop();
+
+                FltOpsEventHelper.PublishEvent(new
+                {
+                    @event = "RefreshTriggerUpdated",
+                    operation = "RefreshTrigger",
+                    action = "Update",
+                    workspaceId = workspaceId.ToString(),
+                    lakehouseId = lakehouseId.ToString(),
+                    triggerId = triggerId.ToString(),
+                    durationMs = sw.ElapsedMilliseconds,
+                    success = true,
+                });
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+
+                FltOpsEventHelper.PublishEvent(new
+                {
+                    @event = "RefreshTriggerUpdateFailed",
+                    operation = "RefreshTrigger",
+                    action = "Update",
+                    workspaceId = workspaceId.ToString(),
+                    lakehouseId = lakehouseId.ToString(),
+                    triggerId = triggerId.ToString(),
+                    durationMs = sw.ElapsedMilliseconds,
+                    success = false,
+                    errorType = ex.GetType().Name,
+                });
+
+                throw;
+            }
+        }
+
+        /// <inheritdoc/>
+        public async Task DeleteFMLVRefreshTriggerAsync(
+            Guid tenantId,
+            Guid workspaceId,
+            Guid lakehouseId,
+            Guid triggerId,
+            string mwcToken,
+            CancellationToken cancellationToken)
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                await _inner.DeleteFMLVRefreshTriggerAsync(
+                    tenantId, workspaceId, lakehouseId, triggerId,
+                    mwcToken, cancellationToken).ConfigureAwait(false);
+                sw.Stop();
+
+                FltOpsEventHelper.PublishEvent(new
+                {
+                    @event = "RefreshTriggerDeleted",
+                    operation = "RefreshTrigger",
+                    action = "Delete",
+                    workspaceId = workspaceId.ToString(),
+                    lakehouseId = lakehouseId.ToString(),
+                    triggerId = triggerId.ToString(),
+                    durationMs = sw.ElapsedMilliseconds,
+                    success = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+
+                FltOpsEventHelper.PublishEvent(new
+                {
+                    @event = "RefreshTriggerDeleteFailed",
+                    operation = "RefreshTrigger",
+                    action = "Delete",
+                    workspaceId = workspaceId.ToString(),
+                    lakehouseId = lakehouseId.ToString(),
+                    triggerId = triggerId.ToString(),
+                    durationMs = sw.ElapsedMilliseconds,
+                    success = false,
+                    errorType = ex.GetType().Name,
+                });
+
+                throw;
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────

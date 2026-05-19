@@ -233,6 +233,32 @@ namespace Microsoft.LiveTable.Service.DevMode
             return result;
         }
 
+        /// <inheritdoc/>
+        public async Task CreateFileWithContentIfNotExistsAsync(string path, string content, CancellationToken cancellationToken = default)
+        {
+            var sw = Stopwatch.StartNew();
+            await _inner.CreateFileWithContentIfNotExistsAsync(path, content, cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+
+            var contentSize = content != null ? System.Text.Encoding.UTF8.GetByteCount(content) : 0;
+            var preview = TruncatePreview(content);
+            var truncated = content != null && content.Length > MaxContentPreviewBytes;
+
+            PublishEvent("CreateFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: content != null, contentPreview: preview, ttlSeconds: 0, previewTruncated: truncated);
+        }
+
+        /// <inheritdoc/>
+        public async Task WriteFileBytesAsync(string path, byte[] bytes, CancellationToken cancellationToken = default)
+        {
+            var sw = Stopwatch.StartNew();
+            await _inner.WriteFileBytesAsync(path, bytes, cancellationToken).ConfigureAwait(false);
+            sw.Stop();
+
+            var contentSize = bytes?.Length ?? 0;
+
+            PublishEvent("WriteFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: bytes != null, contentPreview: null, ttlSeconds: 0);
+        }
+
         /// <summary>
         /// Truncates a string preview to 4KB. Returns null if input is null.
         /// </summary>
