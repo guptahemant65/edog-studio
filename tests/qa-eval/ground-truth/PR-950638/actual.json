@@ -1,0 +1,366 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T12:15:05.0079178\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "950638",
+  "counts": {
+    "emitted": 19,
+    "validated": 15,
+    "projected": 15
+  },
+  "scenarios": [
+    {
+      "id": "sc-1",
+      "topic": "catalog table DQ property parsing",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+          "side": "right",
+          "lines": [
+            169
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-2",
+      "topic": "catalog table DQ property parsing",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+          "side": "right",
+          "lines": [
+            185
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-3",
+      "topic": "catalog DQ completeness contract",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+          "side": "right",
+          "lines": [
+            201
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-6",
+      "topic": "dag restore notebook caching",
+      "category": "HappyPath",
+      "verb": "EventPresent",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            179
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-7",
+      "topic": "dag cache reuse",
+      "category": "Performance",
+      "verb": "EventCount",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            526
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-8",
+      "topic": "dag DQ fetch failure handling",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            549
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-9",
+      "topic": "dag DQ fetch failure handling",
+      "category": "ErrorPath",
+      "verb": "EventPresent",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            549
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-10",
+      "topic": "notebook DQ decorator parsing",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            778
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            851
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            314
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-12",
+      "topic": "notebook execution indexing",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            314
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-13",
+      "topic": "notebook cell validation",
+      "category": "ErrorPath",
+      "verb": "EventPresent",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            221
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-15",
+      "topic": "notebook dq suite lookup",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            389
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-16",
+      "topic": "notebook dq suite lookup",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            417
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-17",
+      "topic": "notebook dq suite lookup",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            438
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-18",
+      "topic": "notebook dq suite lookup",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            403
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-19",
+      "topic": "notebook dq suite lookup",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            476
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-4",
+      "topic": "dag DQ discovery eligibility",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            454
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            474
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            874
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-5",
+      "topic": "dag build notebook caching",
+      "category": "HappyPath",
+      "verb": "EventPresent",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            526
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+          "side": "right",
+          "lines": [
+            874
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-11",
+      "topic": "notebook DQ decorator parsing",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            778
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            851
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            314
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-14",
+      "topic": "notebook cell validation",
+      "category": "ErrorPath",
+      "verb": "EventPresent",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            298
+          ]
+        }
+      ]
+    }
+  ]
+}

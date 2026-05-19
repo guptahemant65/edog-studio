@@ -1,0 +1,309 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T12:09:05.6744771\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "910832",
+  "counts": {
+    "emitted": 8,
+    "validated": 6,
+    "projected": 6
+  },
+  "scenarios": [
+    {
+      "id": "sk-2",
+      "topic": "Notebook parsing and controller error mapping",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            120
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            178
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
+          "side": "right",
+          "lines": [
+            70
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            253
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "Notebook exception wrapping",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            64
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            261
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            2513
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "Notebook exception wrapping",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            64
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            265
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            261
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-6",
+      "topic": "Notebook exception wrapping",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            64
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            266
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            261
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-7",
+      "topic": "Notebook exception wrapping",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            64
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            267
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            261
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-8",
+      "topic": "RunDag notebook error mapping",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
+          "side": "right",
+          "lines": [
+            95
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            429
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            435
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+          "side": "right",
+          "lines": [
+            447
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-1",
+      "topic": "Notebook HTTP error mapping",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs",
+          "side": "right",
+          "lines": [
+            220
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            65
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+          "side": "right",
+          "lines": [
+            283
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            2463
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            2513
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            253
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "Notebook validation and ProblemDetails title selection",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+          "side": "right",
+          "lines": [
+            118
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+          "side": "right",
+          "lines": [
+            198
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+          "side": "right",
+          "lines": [
+            288
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            2464
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            2513
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            253
+          ]
+        }
+      ]
+    }
+  ]
+}

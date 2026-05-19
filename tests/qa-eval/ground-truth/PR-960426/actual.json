@@ -1,0 +1,632 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T12:02:53.4100116\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "960426",
+  "counts": {
+    "emitted": 26,
+    "validated": 11,
+    "projected": 11
+  },
+  "scenarios": [
+    {
+      "id": "sk-2",
+      "topic": "Summary period comparison",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-11",
+      "topic": "Runs response contract",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+          "side": "right",
+          "lines": [
+            16
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            452
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-12",
+      "topic": "Runs pagination",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+          "side": "right",
+          "lines": [
+            20
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            452
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-16",
+      "topic": "Run row contract",
+      "category": "HappyPath",
+      "verb": "EventAbsent",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs",
+          "side": "right",
+          "lines": [
+            39
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-17",
+      "topic": "Runs table readiness",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+          "side": "right",
+          "lines": [
+            16
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+          "side": "right",
+          "lines": [
+            20
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            271
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-18",
+      "topic": "Trends aggregation",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            349
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            121
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-19",
+      "topic": "Trends validation",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            349
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-20",
+      "topic": "Trends response contract",
+      "category": "HappyPath",
+      "verb": "EventAbsent",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs",
+          "side": "right",
+          "lines": [
+            19
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-21",
+      "topic": "Top errors endpoint",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            391
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs",
+          "side": "right",
+          "lines": [
+            16
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-25",
+      "topic": "Top errors table readiness",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            434
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs",
+          "side": "right",
+          "lines": [
+            16
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-26",
+      "topic": "Controller throttling",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            503
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-1",
+      "topic": "Controller feature gating",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            58
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "Summary response contract",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+          "side": "right",
+          "lines": [
+            25
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "Summary response contract",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+          "side": "right",
+          "lines": [
+            31
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "Summary delta math",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+          "side": "right",
+          "lines": [
+            42
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-6",
+      "topic": "Summary delta math",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+          "side": "right",
+          "lines": [
+            53
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-7",
+      "topic": "Summary delta math",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            146
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+          "side": "right",
+          "lines": [
+            64
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-8",
+      "topic": "Summary response contract",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            54
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+          "side": "right",
+          "lines": [
+            86
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-9",
+      "topic": "Summary delta guards",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-10",
+      "topic": "Summary delta guards",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            378
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-13",
+      "topic": "Runs filtering",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            452
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            85
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-14",
+      "topic": "Runs filtering",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            452
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            85
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-15",
+      "topic": "Run row contract",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+          "side": "right",
+          "lines": [
+            452
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            85
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs",
+          "side": "right",
+          "lines": [
+            44
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-22",
+      "topic": "Top errors validation",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+          "side": "right",
+          "lines": [
+            434
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            145
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-23",
+      "topic": "Top errors source data",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            145
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-24",
+      "topic": "Top errors row contract",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+          "side": "right",
+          "lines": [
+            145
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs",
+          "side": "right",
+          "lines": [
+            19
+          ]
+        }
+      ]
+    }
+  ]
+}

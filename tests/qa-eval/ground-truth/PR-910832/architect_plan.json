@@ -1,377 +1,412 @@
 {
   "schema_version": "1.0",
-  "captured_at": "2026-05-19T10:49:46.3918263\u002B00:00",
+  "captured_at": "2026-05-19T12:08:54.5513001\u002B00:00",
   "pipeline": "v2_architect_editor",
   "pr_number": "910832",
   "zone_id": "PR-910832-full-diff",
-  "zone_summary": "Notebook-specific error handling now emits structured notebook error codes, formatted detail messages, and specialized ProblemDetails titles for ETag and notebook-validation failures; generic notebook failures are wrapped with notebook/workspace context, and RunDag/Spark mapping now preserves explicit notebook error codes instead of collapsing everything to the generic notebook exception code.",
+  "zone_summary": "Notebook-related failures now carry curated error-code-specific messages/titles, ETag conflicts are remapped to a dedicated 422 notebook error, parsing/validation failures are funneled through NotebookException, and RunDag error mapping now preserves specific notebook codes or wraps generic notebook exceptions via a documented two-tier contract.",
   "plan_outcome": "testable",
   "counts": {
-    "behavioral_changes": 9,
-    "grounding_evidence": 18,
-    "scenario_sketches": 9
+    "behavioral_changes": 8,
+    "grounding_evidence": 22,
+    "scenario_sketches": 8
   },
   "behavioral_changes": [
     {
-      "summary": "Magic-command parsing failures now surface as MLV_MAGIC_COMMAND_NOT_SUPPORTED with notebook ID, 1-based cell index, and line number filled into the user-facing detail.",
+      "summary": "Notebook API 412 ETag conflicts now surface as a coded notebook exception with HTTP 422 semantics, an MLV_NB_ETAG_CHANGED detail template, and the ProblemDetails title \u0022Notebook recently updated\u0022.",
       "evidence_refs": [
         "ev-1",
-        "ev-2"
-      ]
-    },
-    {
-      "summary": "Multiple MLV definitions in a single notebook cell now surface as MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL with the offending 1-based cell index and notebook ID in the detail.",
-      "evidence_refs": [
+        "ev-2",
         "ev-3",
-        "ev-4"
-      ]
-    },
-    {
-      "summary": "Notebook API ETag mismatches are now normalized from upstream 412 to a 422 notebook error carrying the dedicated MLV_NB_ETAG_CHANGED code and detail template.",
-      "evidence_refs": [
+        "ev-4",
         "ev-5",
-        "ev-6",
-        "ev-7"
+        "ev-9"
       ]
     },
     {
-      "summary": "ProblemDetails responses now use the title \u0022Notebook recently updated\u0022 when the notebook error code is MLV_NB_ETAG_CHANGED.",
+      "summary": "Magic-command parsing failures now produce a user-facing MLV_MAGIC_COMMAND_NOT_SUPPORTED message that includes cell index, line number, and notebook id, and they flow through the explicit-error-code notebook path.",
       "evidence_refs": [
+        "ev-6",
+        "ev-7",
         "ev-8",
-        "ev-9",
-        "ev-17",
-        "ev-18"
+        "ev-9"
       ]
     },
     {
-      "summary": "ProblemDetails responses now use the title \u0022Notebook validation error\u0022 when the notebook error code is MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL.",
+      "summary": "Multiple materialized-view definitions in one notebook cell now produce a cell-specific MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL detail and use the ProblemDetails title \u0022Notebook validation error\u0022.",
       "evidence_refs": [
         "ev-10",
         "ev-11",
-        "ev-17",
-        "ev-18"
-      ]
-    },
-    {
-      "summary": "Notebook exceptions without an explicit ErrorCode are now wrapped through the MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION template so controller responses include notebook/workspace context instead of raw exception text.",
-      "evidence_refs": [
         "ev-12",
-        "ev-13"
+        "ev-13",
+        "ev-5",
+        "ev-9"
       ]
     },
     {
-      "summary": "RunDag/Spark exception mapping now preserves explicit notebook ErrorCode values and already-formatted notebook messages instead of always returning MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION.",
+      "summary": "Notebook exceptions without an explicit ErrorCode are now wrapped in the MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION template instead of returning raw exception text directly.",
       "evidence_refs": [
         "ev-14",
-        "ev-16"
+        "ev-22",
+        "ev-5"
       ]
     },
     {
-      "summary": "RunDag/Spark exception mapping now wraps generic notebook failures into a bracketed [MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION]: ... failureType: ... message using the notebook template detail without duplicating the code prefix.",
+      "summary": "When a generic notebook exception has no NotebookId, the wrapped notebook-exception message now substitutes \u0022Unknown\u0022 for the notebook placeholder.",
       "evidence_refs": [
-        "ev-12",
-        "ev-15",
-        "ev-16"
-      ]
-    },
-    {
-      "summary": "NotebookException now carries a documented two-tier contract: downstream consumers must branch on ErrorCode.HasValue, not Message emptiness, to choose passthrough versus template wrapping.",
-      "evidence_refs": [
-        "ev-16",
-        "ev-13",
         "ev-14",
         "ev-15"
+      ]
+    },
+    {
+      "summary": "When a generic notebook exception has no WorkspaceId, the wrapped notebook-exception message now substitutes \u0022Unknown\u0022 for the workspace placeholder.",
+      "evidence_refs": [
+        "ev-14",
+        "ev-16"
+      ]
+    },
+    {
+      "summary": "When a generic notebook exception has an empty/raw missing Message, the wrapper now inserts an empty string instead of propagating null/blank content into the user-facing detail.",
+      "evidence_refs": [
+        "ev-14",
+        "ev-17"
+      ]
+    },
+    {
+      "summary": "RunDag notebook error mapping now follows a two-tier ErrorCode contract: coded notebook exceptions pass through their specific code/message, uncoded notebook exceptions are wrapped, and the returned text is formatted as \u0060[ErrorCode]: ... failureType: ...\u0060.",
+      "evidence_refs": [
+        "ev-18",
+        "ev-19",
+        "ev-20",
+        "ev-21"
       ]
     }
   ],
   "grounding_evidence": [
     {
       "evidence_id": "ev-1",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "ErrorRegistry.cs@@-113,9 \u002B115,9",
-      "new_line": 117,
-      "excerpt": "{ ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, $\u0022MLV_MAGIC_COMMAND_NOT_SUPPORTED: Magic commands (e.g., %pip, %run) in cell {{{Constants.CellIndexKey}}} at line {{{Constants.LineNumberKey}}} of Notebook \u0027{{{Constants.NotebookIdKey}}}\u0027 are not supported in materialized lake view definitions. Remove or comment out magic commands and retry.\u0022 },",
-      "reason": "Defines the new user-facing detail template for notebook magic-command failures."
+      "hunk_id": "@@ -215,12 \u002B216,14 @@",
+      "new_line": 220,
+      "excerpt": "if (response.StatusCode == HttpStatusCode.PreconditionFailed)\n{\n    var errorMessage = ErrorRegistry.GetErrorMessage(\n        ErrorCode.MLV_NB_ETAG_CHANGED,\n        new Dictionary\u003Cstring, string\u003E { { Constants.NotebookDetailsKey, notebookDetailsForLogging } });\n    ...\n    throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, workspaceId, notebookId, ErrorCode.MLV_NB_ETAG_CHANGED);\n}",
+      "reason": "This is the source of the ETag-specific remap from Notebook API 412 to a 422 notebook exception with an explicit error code."
     },
     {
       "evidence_id": "ev-2",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
-      "side": "right",
-      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "NotebookExecutionContext.cs@@-173,18 \u002B173,18",
-      "new_line": 176,
-      "excerpt": "catch (NotebookException ex) when (ex.OffendingSymbol != null)\n{\n    var magicCommandParams = new Dictionary\u003Cstring, string\u003E\n    {\n        { Common.Constants.CellIndexKey, (cellIndex \u002B 1).ToString() },\n        { Common.Constants.LineNumberKey, ex.LineNumber.ToString() },\n        { Common.Constants.NotebookIdKey, NotebookId.ToString() },\n    };\n    var errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, magicCommandParams);\n    throw new NotebookException(errorMessage, ex.LineNumber, cellIndex \u002B 1, ex.OffendingSymbol, WorkspaceId, NotebookId);\n}",
-      "reason": "Populates the template from parse context and rethrows a NotebookException carrying the formatted magic-command message."
-    },
-    {
-      "evidence_id": "ev-3",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "ErrorRegistry.cs@@-113,9 \u002B115,9",
-      "new_line": 115,
-      "excerpt": "{ ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, $\u0022MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL: More than one materialized lake view definition exists in cell {{{Constants.CellIndexKey}}} of Notebook \u0027{{{Constants.NotebookIdKey}}}\u0027. Ensure only one view per cell.\u0022 },",
-      "reason": "Defines the new detail contract for the single-cell multiple-definition notebook validation error."
+      "hunk_id": "@@ -60,7 \u002B61,8 @@",
+      "new_line": 65,
+      "excerpt": "{ ErrorCode.MLV_NB_ETAG_CHANGED, $\u0022MLV_NB_ETAG_CHANGED: Contents in the Notebook {{{Constants.NotebookDetailsKey}}} changed after the operation started. Refresh and try again.\u0022 },",
+      "reason": "Defines the user-visible detail string for the new ETag notebook error."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -248,6 \u002B248,45 @@",
+      "new_line": 283,
+      "excerpt": "public const string NotebookRecentlyUpdatedTitle = \u0022Notebook recently updated\u0022;",
+      "reason": "Defines the new ProblemDetails title used for notebook ETag conflicts."
     },
     {
       "evidence_id": "ev-4",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "NotebookExecutionContext.cs@@-173,18 \u002B173,18",
-      "new_line": 199,
-      "excerpt": "var errorParams = new Dictionary\u003Cstring, string\u003E\n{\n    { Common.Constants.CellIndexKey, (cellIndex \u002B 1).ToString() },\n    { Common.Constants.NotebookIdKey, NotebookId.ToString() },\n};\nvar errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, errorParams);\nthrow new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);",
-      "reason": "Turns the multi-definition detection branch into a coded NotebookException with the new cell-index-aware detail."
+      "hunk_id": "@@ -2460,6 \u002B2451,21 @@",
+      "new_line": 2463,
+      "excerpt": "ErrorCode.MLV_NB_ETAG_CHANGED =\u003E Constants.NotebookRecentlyUpdatedTitle,",
+      "reason": "Maps the ETag notebook error code to the user-facing title."
     },
     {
       "evidence_id": "ev-5",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorCode.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "ErrorCode.cs@@-245,6 \u002B245,11",
-      "new_line": 249,
-      "excerpt": "/// Error indicating notebook content changed after operation started (ETag mismatch).\nMLV_NB_ETAG_CHANGED,",
-      "reason": "Adds a dedicated notebook error code for ETag mismatch handling."
+      "hunk_id": "@@ -2495,11 \u002B2501,16 @@",
+      "new_line": 2513,
+      "excerpt": "Title = title,",
+      "reason": "Makes ProblemDetails emit the caller-selected title instead of always using the old fixed default."
     },
     {
       "evidence_id": "ev-6",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "ErrorRegistry.cs@@-60,7 \u002B61,8",
-      "new_line": 65,
-      "excerpt": "{ ErrorCode.MLV_NB_ETAG_CHANGED, $\u0022MLV_NB_ETAG_CHANGED: Contents in the Notebook {{{Constants.NotebookDetailsKey}}} changed after the operation started. Refresh and try again.\u0022 },",
-      "reason": "Defines the new ETag-mismatch detail text surfaced to callers."
+      "hunk_id": "@@ -113,9 \u002B115,9 @@",
+      "new_line": 120,
+      "excerpt": "{ ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, $\u0022MLV_MAGIC_COMMAND_NOT_SUPPORTED: Magic commands (e.g., %pip, %run) in cell {{{Constants.CellIndexKey}}} at line {{{Constants.LineNumberKey}}} of Notebook \u0027{{{Constants.NotebookIdKey}}}\u0027 are not supported in materialized lake view definitions. Remove or comment out magic commands and retry.\u0022 },",
+      "reason": "Defines the new placeholder-rich user-facing detail for magic-command parsing failures."
     },
     {
       "evidence_id": "ev-7",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookHttp/NotebookApiClient.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "NotebookApiClient.cs@@-215,12 \u002B216,14",
-      "new_line": 219,
-      "excerpt": "if (response.StatusCode == HttpStatusCode.PreconditionFailed)\n{\n    var errorMessage = ErrorRegistry.GetErrorMessage(\n        ErrorCode.MLV_NB_ETAG_CHANGED,\n        new Dictionary\u003Cstring, string\u003E { { Constants.NotebookDetailsKey, notebookDetailsForLogging } });\n    throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, workspaceId, notebookId, ErrorCode.MLV_NB_ETAG_CHANGED);\n}",
-      "reason": "Reclassifies notebook API 412 responses into 422 UnprocessableEntity NotebookException instances with the dedicated ETag error code."
+      "hunk_id": "@@ -173,18 \u002B173,18 @@",
+      "new_line": 178,
+      "excerpt": "var magicCommandParams = new Dictionary\u003Cstring, string\u003E\n{\n    { Common.Constants.CellIndexKey, (cellIndex \u002B 1).ToString() },\n    { Common.Constants.LineNumberKey, ex.LineNumber.ToString() },\n    { Common.Constants.NotebookIdKey, NotebookId.ToString() },\n};\nvar errorMessage = ErrorMapping.ErrorRegistry.GetErrorMessage(ErrorMapping.ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED, magicCommandParams);\n...\nthrow new NotebookException(errorMessage, ex.LineNumber, cellIndex \u002B 1, ex.OffendingSymbol, WorkspaceId, NotebookId);",
+      "reason": "Populates the new magic-command message with cell/line/notebook values and rethrows it as a notebook exception carrying parsing context."
     },
     {
       "evidence_id": "ev-8",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "Constants.cs@@-248,6 \u002B248,45",
-      "new_line": 280,
-      "excerpt": "public const string NotebookRecentlyUpdatedTitle = \u0022Notebook recently updated\u0022;",
-      "reason": "Introduces the concrete title string used for ETag notebook errors."
+      "hunk_id": "@@ -15,27 \u002B16,63 @@",
+      "new_line": 70,
+      "excerpt": ": this(message, HttpStatusCode.UnprocessableEntity, workspaceId, notebookId, ErrorMapping.ErrorCode.MLV_MAGIC_COMMAND_NOT_SUPPORTED)",
+      "reason": "The parsing-context constructor stamps magic-command failures with an explicit notebook error code, enabling pass-through handling downstream."
     },
     {
       "evidence_id": "ev-9",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "LiveTableController.cs@@-2460,6 \u002B2451,21",
-      "new_line": 2460,
-      "excerpt": "ErrorCode.MLV_NB_ETAG_CHANGED =\u003E Constants.NotebookRecentlyUpdatedTitle,",
-      "reason": "Maps the ETag notebook error code to the specialized ProblemDetails title."
+      "hunk_id": "@@ -229,63 \u002B229,54 @@",
+      "new_line": 253,
+      "excerpt": "if (ex.ErrorCode.HasValue)\n{\n    fltErrorCode = ex.ErrorCode.Value.ToString();\n    responseTitle = GetNotebookErrorTitle(ex.ErrorCode.Value);\n    responseMessage = ex.Message;\n}\n...\nreturn CreateErrorResponse(responseTitle, responseMessage, httpStatusCode);",
+      "reason": "Controller behavior now passes through preformatted coded notebook errors and pairs them with an error-code-specific title."
     },
     {
       "evidence_id": "ev-10",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
-      "side": "right",
-      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "Constants.cs@@-248,6 \u002B248,45",
-      "new_line": 285,
-      "excerpt": "public const string NotebookValidationErrorTitle = \u0022Notebook validation error\u0022;",
-      "reason": "Introduces the concrete title string used for notebook validation failures."
-    },
-    {
-      "evidence_id": "ev-11",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
-      "side": "right",
-      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "LiveTableController.cs@@-2460,6 \u002B2451,21",
-      "new_line": 2461,
-      "excerpt": "ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL =\u003E Constants.NotebookValidationErrorTitle,",
-      "reason": "Maps the multiple-definition notebook error code to the specialized validation ProblemDetails title."
-    },
-    {
-      "evidence_id": "ev-12",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "ErrorRegistry.cs@@-60,7 \u002B61,8",
-      "new_line": 64,
-      "excerpt": "{ ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, $\u0022MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook \u0027{{{Constants.NotebookIdKey}}}\u0027 (workspace: \u0027{{{Constants.WorkspaceIdKey}}}\u0027). {{{Constants.ErrorMessageKey}}}Review Notebook logs and retry.\u0022 },",
-      "reason": "Defines the new generic notebook-exception template including notebook, workspace, and appended raw error detail."
+      "hunk_id": "@@ -113,9 \u002B115,9 @@",
+      "new_line": 118,
+      "excerpt": "{ ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL, $\u0022MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL: More than one materialized lake view definition exists in cell {{{Constants.CellIndexKey}}} of Notebook \u0027{{{Constants.NotebookIdKey}}}\u0027. Ensure only one view per cell.\u0022 },",
+      "reason": "Defines the new detail text for the single-cell multiple-definition validation failure."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -173,18 \u002B173,18 @@",
+      "new_line": 198,
+      "excerpt": "var errorParams = new Dictionary\u003Cstring, string\u003E\n{\n    { Common.Constants.CellIndexKey, (cellIndex \u002B 1).ToString() },\n    { Common.Constants.NotebookIdKey, NotebookId.ToString() },\n};\n...\nthrow new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL);",
+      "reason": "This is where the controller-visible multiple-definition error becomes cell-specific and gains an explicit error code."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Common/Constants.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -248,6 \u002B248,45 @@",
+      "new_line": 288,
+      "excerpt": "public const string NotebookValidationErrorTitle = \u0022Notebook validation error\u0022;",
+      "reason": "Defines the new ProblemDetails title for notebook validation failures."
     },
     {
       "evidence_id": "ev-13",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "LiveTableController.cs@@-229,63 \u002B229,54",
-      "new_line": 259,
-      "excerpt": "else\n{\n    fltErrorCode = ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION.ToString();\n    responseTitle = Constants.DefaultErrorTitle;\n    var lineageErrorParams = new Dictionary\u003Cstring, string\u003E\n    {\n        { Constants.NotebookIdKey, ex.NotebookId?.ToString() ?? \u0022Unknown\u0022 },\n        { Constants.WorkspaceIdKey, ex.WorkspaceId?.ToString() ?? \u0022Unknown\u0022 },\n        { Constants.ErrorMessageKey, string.IsNullOrEmpty(ex.Message) ? string.Empty : ex.Message \u002B \u0022 \u0022 },\n    };\n    responseMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, lineageErrorParams);\n}\n...\nreturn CreateErrorResponse(responseTitle, responseMessage, httpStatusCode);",
-      "reason": "Shows the controller\u2019s generic-notebook branch now templating raw notebook failures before returning the HTTP error response."
+      "hunk_id": "@@ -2460,6 \u002B2451,21 @@",
+      "new_line": 2464,
+      "excerpt": "ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL =\u003E Constants.NotebookValidationErrorTitle,",
+      "reason": "Maps the multiple-definition notebook error code to the notebook-validation ProblemDetails title."
     },
     {
       "evidence_id": "ev-14",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/ErrorMapping/ErrorRegistry.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "NodeExecutionUtils.cs@@-402,14 \u002B403,46",
-      "new_line": 417,
-      "excerpt": "var failureType = IsUserError(notebookEx.StatusCode) ? \u0022UserError\u0022 : \u0022SystemError\u0022;\nvar errorCode = notebookEx.ErrorCode ?? ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION;\n...\nif (notebookEx.ErrorCode.HasValue)\n{\n    cleanMessage = notebookEx.Message;\n}",
-      "reason": "RunDag/Spark mapping now preserves explicit notebook error codes and uses the preformatted notebook message as-is when ErrorCode is present."
+      "hunk_id": "@@ -60,7 \u002B61,8 @@",
+      "new_line": 64,
+      "excerpt": "{ ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, $\u0022MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION: Failed to create lineage due to Notebook exception in notebook \u0027{{{Constants.NotebookIdKey}}}\u0027 (workspace: \u0027{{{Constants.WorkspaceIdKey}}}\u0027). {{{Constants.ErrorMessageKey}}}Review Notebook logs and retry.\u0022 },",
+      "reason": "Defines the new wrapper template for generic notebook exceptions."
     },
     {
       "evidence_id": "ev-15",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "NodeExecutionUtils.cs@@-402,14 \u002B403,46",
-      "new_line": 434,
-      "excerpt": "else\n{\n    var lineageErrorParams = new Dictionary\u003Cstring, string\u003E\n    {\n        { Constants.NotebookIdKey, notebookEx.NotebookId?.ToString() ?? \u0022Unknown\u0022 },\n        { Constants.WorkspaceIdKey, notebookEx.WorkspaceId?.ToString() ?? \u0022Unknown\u0022 },\n        { Constants.ErrorMessageKey, string.IsNullOrEmpty(notebookEx.Message) ? string.Empty : notebookEx.Message \u002B \u0022 \u0022 },\n    };\n    var fullMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, lineageErrorParams);\n    cleanMessage = fullMessage.Substring(fullMessage.IndexOf(\u0027:\u0027) \u002B 2);\n}\nvar errorMessage = $\u0022[{errorCode}]: {cleanMessage} failureType: {failureType}\u0022;",
-      "reason": "Shows the generic-notebook RunDag branch wrapping technical notebook failures with the registry template, stripping the prefix, then producing the bracketed Spark error format."
+      "hunk_id": "@@ -229,63 \u002B229,54 @@",
+      "new_line": 265,
+      "excerpt": "{ Constants.NotebookIdKey, ex.NotebookId?.ToString() ?? \u0022Unknown\u0022 },",
+      "reason": "Adds a null fallback for NotebookId when building the generic notebook exception message."
     },
     {
       "evidence_id": "ev-16",
-      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "NotebookException.cs@@-15,27 \u002B16,63",
-      "new_line": 96,
-      "excerpt": "/// \u003Cremarks\u003E\n/// NotebookException follows a two-tier pattern based on whether ErrorCode is set:\n///\n/// 1. ErrorCode IS set ... The Message property contains a fully formatted, user-facing error string that can be surfaced directly \u2014 no further wrapping needed.\n///\n/// 2. ErrorCode is NULL ... The Message is a raw/technical string ... that must be wrapped inside the MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION template ...\n///\n/// Downstream consumers ... branch on ErrorCode.HasValue to decide which path to take. This is intentional \u2014 do not replace with a Message null/empty check, because both tiers always carry a Message.\n/// \u003C/remarks\u003E\npublic ErrorCode? ErrorCode { get; }",
-      "reason": "Documents the newly added contract that ErrorCode presence, not Message emptiness, chooses passthrough versus template wrapping."
+      "hunk_id": "@@ -229,63 \u002B229,54 @@",
+      "new_line": 266,
+      "excerpt": "{ Constants.WorkspaceIdKey, ex.WorkspaceId?.ToString() ?? \u0022Unknown\u0022 },",
+      "reason": "Adds a null fallback for WorkspaceId when building the generic notebook exception message."
     },
     {
       "evidence_id": "ev-17",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "LiveTableController.cs@@-229,63 \u002B229,54",
-      "new_line": 253,
-      "excerpt": "if (ex.ErrorCode.HasValue)\n{\n    fltErrorCode = ex.ErrorCode.Value.ToString();\n    responseTitle = GetNotebookErrorTitle(ex.ErrorCode.Value);\n    responseMessage = ex.Message;\n}\n...\nreturn CreateErrorResponse(responseTitle, responseMessage, httpStatusCode);",
-      "reason": "Shows that HTTP notebook responses now pass through a specialized title and the already-formatted detail when the exception carries a specific notebook ErrorCode."
+      "hunk_id": "@@ -229,63 \u002B229,54 @@",
+      "new_line": 267,
+      "excerpt": "{ Constants.ErrorMessageKey, string.IsNullOrEmpty(ex.Message) ? string.Empty : ex.Message \u002B \u0022 \u0022 },",
+      "reason": "Guards the wrapper against empty/raw missing exception text when constructing the generic notebook detail."
     },
     {
       "evidence_id": "ev-18",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/Exceptions/NotebookException.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -15,27 \u002B16,63 @@",
+      "new_line": 95,
+      "excerpt": "/// \u003Cremarks\u003E\n/// NotebookException follows a two-tier pattern based on whether ErrorCode is set:\n///\n/// 1. ErrorCode IS set ... The Message property contains a fully\n///    formatted, user-facing error string that can be surfaced directly.\n///\n/// 2. ErrorCode is NULL ... The Message is a raw/technical string ... that must be wrapped inside the\n///    MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION template ...\n///\n/// Downstream consumers ... branch on ErrorCode.HasValue ... do not replace\n/// with a Message null/empty check ...\n/// \u003C/remarks\u003E",
+      "reason": "This added remarks block is a contract comment describing the branching rule downstream code must honor."
+    },
+    {
+      "evidence_id": "ev-19",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -402,14 \u002B403,6 @@",
+      "new_line": 429,
+      "excerpt": "if (notebookEx.ErrorCode.HasValue)\n{\n    cleanMessage = notebookEx.Message;\n}",
+      "reason": "Implements the pass-through branch for notebook exceptions that already carry a specific user-facing error code/message."
+    },
+    {
+      "evidence_id": "ev-20",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -402,14 \u002B403,6 @@",
+      "new_line": 435,
+      "excerpt": "var lineageErrorParams = new Dictionary\u003Cstring, string\u003E\n{\n    { Constants.NotebookIdKey, notebookEx.NotebookId?.ToString() ?? \u0022Unknown\u0022 },\n    { Constants.WorkspaceIdKey, notebookEx.WorkspaceId?.ToString() ?? \u0022Unknown\u0022 },\n    { Constants.ErrorMessageKey, string.IsNullOrEmpty(notebookEx.Message) ? string.Empty : notebookEx.Message \u002B \u0022 \u0022 },\n};\nvar fullMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, lineageErrorParams);\n...\ncleanMessage = fullMessage.Substring(fullMessage.IndexOf(\u0027:\u0027) \u002B 2);",
+      "reason": "Implements the uncoded-exception wrapper path and strips the registry prefix before RunDag reformats the message."
+    },
+    {
+      "evidence_id": "ev-21",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/NodeExecutionUtils.cs",
+      "side": "right",
+      "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
+      "hunk_id": "@@ -402,14 \u002B403,6 @@",
+      "new_line": 447,
+      "excerpt": "var errorMessage = $\u0022[{errorCode}]: {cleanMessage} failureType: {failureType}\u0022;",
+      "reason": "Defines the new RunDag notebook error output format with resolved code and failureType suffix."
+    },
+    {
+      "evidence_id": "ev-22",
       "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
       "side": "right",
       "base_sha": "4e185f32a16b14b647664f20f73728c278ff03ed",
-      "hunk_id": "LiveTableController.cs@@-2495,11 \u002B2501,16",
-      "new_line": 2506,
-      "excerpt": "private ProblemDetails CreateProblemDetails(HttpStatusCode statusCode, string title, string detail)\n{\n    return new ProblemDetails\n    {\n        Status = (int)statusCode,\n        Title = title,\n        Detail = detail,\n        Instance = this.HttpContext.Request.Path,\n    };\n}",
-      "reason": "Enables the specialized notebook title strings to flow into the returned ProblemDetails payload instead of always using the default title."
+      "hunk_id": "@@ -229,63 \u002B229,54 @@",
+      "new_line": 261,
+      "excerpt": "fltErrorCode = ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION.ToString();\nresponseTitle = Constants.DefaultErrorTitle;\nvar lineageErrorParams = new Dictionary\u003Cstring, string\u003E\n{\n    { Constants.NotebookIdKey, ex.NotebookId?.ToString() ?? \u0022Unknown\u0022 },\n    { Constants.WorkspaceIdKey, ex.WorkspaceId?.ToString() ?? \u0022Unknown\u0022 },\n    { Constants.ErrorMessageKey, string.IsNullOrEmpty(ex.Message) ? string.Empty : ex.Message \u002B \u0022 \u0022 },\n};\nresponseMessage = ErrorRegistry.GetErrorMessage(ErrorCode.MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION, lineageErrorParams);",
+      "reason": "This branch is the controller-side wrapper for generic notebook exceptions that lack a specific ErrorCode."
     }
   ],
   "scenario_sketches": [
     {
       "sketch_id": "sk-1",
-      "title": "Magic-command notebook parse errors include notebook, cell, and line context in MLV_MAGIC_COMMAND_NOT_SUPPORTED",
+      "title": "ETag mismatch returns 422 notebook-recently-updated problem details",
       "category": "ErrorPath",
       "technique": "ErrorPath",
-      "rationale": "Exercise a notebook cell containing a magic command and assert the surfaced detail uses the new MLV_MAGIC_COMMAND_NOT_SUPPORTED template with resolved notebook ID, 1-based cell index, and line number.",
+      "rationale": "Drive the Notebook API path with a 412 PreconditionFailed response and assert the surfaced error uses 422 semantics, the MLV_NB_ETAG_CHANGED detail template, and the custom title \u0022Notebook recently updated\u0022.",
       "evidence_refs": [
         "ev-1",
-        "ev-2"
+        "ev-2",
+        "ev-3",
+        "ev-4",
+        "ev-5",
+        "ev-9"
       ]
     },
     {
       "sketch_id": "sk-2",
-      "title": "Multiple materialized-view definitions in one cell surface MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL with 1-based cell index",
+      "title": "Magic command parse failures mention cell, line, and notebook id",
       "category": "ErrorPath",
       "technique": "ErrorPath",
-      "rationale": "Feed a single notebook cell containing more than one MLV definition and assert the thrown/returned detail names the notebook, the offending 1-based cell number, and the dedicated conflict code.",
+      "rationale": "Feed notebook content containing a \u0060%\u0060 magic command and verify the resulting notebook error detail contains the MLV_MAGIC_COMMAND_NOT_SUPPORTED prefix plus the resolved cell index, line number, and notebook identifier.",
       "evidence_refs": [
-        "ev-3",
-        "ev-4"
+        "ev-6",
+        "ev-7",
+        "ev-8",
+        "ev-9"
       ]
     },
     {
       "sketch_id": "sk-3",
-      "title": "Notebook API 412 ETag mismatches are normalized to 422 MLV_NB_ETAG_CHANGED responses",
+      "title": "Multiple MLV definitions in one cell return notebook-validation title and cell-specific detail",
       "category": "ErrorPath",
       "technique": "ErrorPath",
-      "rationale": "Mock the notebook API returning PreconditionFailed and verify callers observe UnprocessableEntity with the new MLV_NB_ETAG_CHANGED detail rather than the old 412 passthrough wording.",
+      "rationale": "Build a notebook cell with more than one MLV definition and assert the surfaced response uses the single-cell conflict template and the \u0022Notebook validation error\u0022 ProblemDetails title.",
       "evidence_refs": [
+        "ev-10",
+        "ev-11",
+        "ev-12",
+        "ev-13",
         "ev-5",
-        "ev-6",
-        "ev-7"
+        "ev-9"
       ]
     },
     {
       "sketch_id": "sk-4",
-      "title": "ETag notebook errors use the ProblemDetails title \u0027Notebook recently updated\u0027",
+      "title": "Generic notebook exceptions are wrapped with notebook and workspace context",
       "category": "ErrorPath",
-      "technique": "RegressionGuard",
-      "rationale": "Drive an MLV_NB_ETAG_CHANGED notebook exception through the controller and assert the ProblemDetails title is the specialized ETag title, not the default error title.",
+      "technique": "ErrorPath",
+      "rationale": "Throw a NotebookException without ErrorCode but with notebook/workspace ids and a raw message, then verify the returned detail is the MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION template rather than the raw exception string.",
       "evidence_refs": [
-        "ev-8",
-        "ev-9",
-        "ev-17",
-        "ev-18"
+        "ev-14",
+        "ev-22",
+        "ev-5"
       ]
     },
     {
       "sketch_id": "sk-5",
-      "title": "Single-cell definition conflicts use the ProblemDetails title \u0027Notebook validation error\u0027",
-      "category": "ErrorPath",
-      "technique": "RegressionGuard",
-      "rationale": "Drive an MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL notebook exception through the controller and assert the ProblemDetails title is the validation-specific title, not the default error title.",
+      "title": "Missing notebook id falls back to \u0027Unknown\u0027 in wrapped notebook errors",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Use an uncoded NotebookException whose NotebookId is null and verify the generic notebook wrapper substitutes \u0060Unknown\u0060 in the notebook slot instead of emitting an empty/null identifier.",
       "evidence_refs": [
-        "ev-10",
-        "ev-11",
-        "ev-17",
-        "ev-18"
+        "ev-14",
+        "ev-15",
+        "ev-22"
       ]
     },
     {
       "sketch_id": "sk-6",
-      "title": "Generic notebook exceptions without ErrorCode are wrapped with notebook and workspace context in controller responses",
-      "category": "ErrorPath",
-      "technique": "ErrorPath",
-      "rationale": "Construct a NotebookException with status/workspace/notebook IDs but no ErrorCode and assert the controller response detail is generated from MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION with the raw message appended and the default title retained.",
+      "title": "Missing workspace id falls back to \u0027Unknown\u0027 in wrapped notebook errors",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Use an uncoded NotebookException whose WorkspaceId is null and verify the generic notebook wrapper substitutes \u0060Unknown\u0060 in the workspace slot.",
       "evidence_refs": [
-        "ev-12",
-        "ev-13"
+        "ev-14",
+        "ev-16",
+        "ev-22"
       ]
     },
     {
       "sketch_id": "sk-7",
-      "title": "RunDag preserves explicit notebook error codes and passthrough messages when NotebookException.ErrorCode is set",
-      "category": "ErrorPath",
-      "technique": "ErrorPath",
-      "rationale": "Map a NotebookException that carries an explicit ErrorCode and a curated message, then assert MapExceptionToErrorInfo returns that specific code and a bracketed message using the original notebook message rather than rewrapping it as MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION.",
+      "title": "Empty notebook exception text does not inject blank raw-message content into the wrapper",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Use an uncoded NotebookException with an empty Message and verify the wrapped detail omits raw-message insertion rather than surfacing \u0060null\u0060, duplicate spacing, or an extra fragment before \u0060Review Notebook logs and retry.\u0060",
       "evidence_refs": [
         "ev-14",
-        "ev-16"
+        "ev-17",
+        "ev-22"
       ]
     },
     {
       "sketch_id": "sk-8",
-      "title": "RunDag wraps generic notebook failures into bracketed MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION messages with failureType",
-      "category": "ErrorPath",
-      "technique": "ErrorPath",
-      "rationale": "Map a NotebookException without ErrorCode and assert the resulting Spark/RunDag message is \u0060[MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION]: ... failureType: ...\u0060, includes notebook/workspace context, and does not duplicate the code prefix in the detail body.",
-      "evidence_refs": [
-        "ev-12",
-        "ev-15",
-        "ev-16"
-      ]
-    },
-    {
-      "sketch_id": "sk-9",
-      "title": "ErrorCode.HasValue, not non-empty Message, selects notebook passthrough versus template wrapping",
+      "title": "RunDag notebook error formatting keys off ErrorCode presence, not message text",
       "category": "EdgeCase",
       "technique": "TruthTable",
-      "rationale": "Use two NotebookException instances that both have non-empty Message values\u2014one with ErrorCode and one without\u2014and assert downstream mapping/controller logic takes opposite branches based solely on ErrorCode.HasValue, per the new documented contract.",
+      "rationale": "Exercise MapExceptionToErrorInfo with two rows: one NotebookException carrying ErrorCode (must preserve its specific message/code) and one without ErrorCode (must wrap via MLV_LINEAGE_CREATION_NOTEBOOK_EXCEPTION), and assert both rows emit the \u0060[code]: ... failureType: ...\u0060 format described by the new contract comment.",
       "evidence_refs": [
-        "ev-16",
-        "ev-13",
-        "ev-14",
-        "ev-15"
+        "ev-18",
+        "ev-19",
+        "ev-20",
+        "ev-21"
       ]
     }
   ]

@@ -1,0 +1,461 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T12:14:47.4235055\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "950638",
+  "zone_id": "PR-950638-full-diff",
+  "zone_summary": "DQ discovery is added to DAG build: catalog properties now expose DQ notebook/workspace IDs, DAG creation wires and caches DQ notebook contexts, and notebook parsing/lookup now understands @fmlv.dq_suite cells plus their validation rules.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 7,
+    "grounding_evidence": 19,
+    "scenario_sketches": 19
+  },
+  "behavioral_changes": [
+    {
+      "summary": "Catalog Table now exposes DQ notebook/workspace GUID parsing from table properties and reports a complete DQ configuration only when both IDs resolve.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "DAG creation now feature-gates DQ discovery, wires eligible MLV nodes with DqCodeReference from catalog metadata, and invokes that discovery during node creation.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5",
+        "ev-8"
+      ]
+    },
+    {
+      "summary": "DAG build and restore now materialize DQ notebook contexts into NotebookExecutionContexts, including reuse of existing cache entries and rehydration after deserialization.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-9"
+      ]
+    },
+    {
+      "summary": "DQ notebook fetch/parsing failures now split into graceful skip for generic exceptions versus hard DAG-build failure for NotebookException.",
+      "evidence_refs": [
+        "ev-7"
+      ]
+    },
+    {
+      "summary": "Notebook parsing now recognizes @fmlv.dq_suite decorators, extracts the target MLV name from keyword or positional arguments, and records self-contained DQ cell indexes.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-11",
+        "ev-14"
+      ]
+    },
+    {
+      "summary": "DQ suite lookup now supports exact/case-insensitive matching plus suffix matching in both directions, with deterministic longest-key selection for longer-key matches.",
+      "evidence_refs": [
+        "ev-15",
+        "ev-16",
+        "ev-17"
+      ]
+    },
+    {
+      "summary": "Notebook parsing and lookup now reject invalid DQ cell shapes and return null for blank or unmatched DQ lookups.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-13",
+        "ev-18",
+        "ev-19"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "tablecs-hunk-165",
+      "new_line": 169,
+      "excerpt": "/// Gets the DQ notebook artifact ID from catalog table properties. ... public Guid? GetDqNotebookId() { if (this.Properties != null \u0026\u0026 this.Properties.TryGetValue(Constants.DqNotebookIdCatalogPropertyKey, out var value) \u0026\u0026 Guid.TryParse(value, out var notebookId)) { return notebookId; } return null; }",
+      "reason": "New public method parses the DQ notebook catalog property as a Guid and explicitly falls back to null when properties are absent or invalid."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "tablecs-hunk-165",
+      "new_line": 185,
+      "excerpt": "/// Gets the DQ notebook workspace ID from catalog table properties. ... public Guid? GetDqWorkspaceId() { if (this.Properties != null \u0026\u0026 this.Properties.TryGetValue(Constants.DqWorkspaceIdCatalogPropertyKey, out var value) \u0026\u0026 Guid.TryParse(value, out var workspaceId)) { return workspaceId; } return null; }",
+      "reason": "Adds a parallel workspace-id accessor with the same valid/missing/invalid parsing contract as the notebook-id accessor."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Catalog/Table.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "tablecs-hunk-165",
+      "new_line": 201,
+      "excerpt": "/// Determines whether this table has a complete DQ configuration. /// Both notebook ID and workspace ID must be present. ... public bool HasDqConfiguration() { return GetDqNotebookId() != null \u0026\u0026 GetDqWorkspaceId() != null; }",
+      "reason": "Defines the completeness contract for DQ configuration: both GUID-bearing catalog properties must resolve."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "dagcs-hunk-451",
+      "new_line": 454,
+      "excerpt": "private bool IsDqFeatureEnabled() { if (capacityContext == null || !Guid.TryParse(capacityContext.TenantId, out Guid tenantId) || !Guid.TryParse(capacityContext.CustomerCapacityObjectId, out Guid capacityId)) { return false; } return featureFlighter.IsEnabled(FeatureNames.FLTEnableDqChecks, tenantId, capacityId, this.WorkspaceId); }",
+      "reason": "Introduces the feature-flag gate that must pass before any DQ discovery is applied during DAG work."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "dagcs-hunk-451",
+      "new_line": 474,
+      "excerpt": "/// Discovers and configures DQ (Data Quality) checks for an MLV node. ... Guid? resolvedDqNotebookId = tableObject.GetDqNotebookId(); Guid? resolvedDqWorkspaceId = tableObject.GetDqWorkspaceId(); bool hasDqConfig = resolvedDqNotebookId.HasValue \u0026\u0026 resolvedDqWorkspaceId.HasValue; bool isDqEnabled = hasDqConfig \u0026\u0026 this.IsDqFeatureEnabled(); if (!isDqEnabled || !TableTypeUtils.IsMaterializedLakeView(tableType) || isFaulted) { return; } ... nodeForDq.DqCodeReference = new NotebookBasedCodeReference(dqWorkspaceId, dqNotebookId);",
+      "reason": "This block defines DQ eligibility for DAG nodes and wires the discovered catalog notebook/workspace IDs into Node.DqCodeReference only for eligible MLV nodes."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "dagcs-hunk-451",
+      "new_line": 526,
+      "excerpt": "// Ensure the DQ notebook is fetched, parsed, and cached in NotebookExecutionContexts. ... // If the DQ notebook is the same as the MLV notebook, it\u0027s already cached by ProcessPySparkTableAsync. if (!NotebookExecutionContexts.ContainsKey(dqNotebookId)) { var dqNotebookContext = new NotebookExecutionContext(dqWorkspaceId, dqNotebookId); await dqNotebookContext.FetchAndParseContentForAllMLVsAsync(mwcToken, cancellationToken: ct); NotebookExecutionContexts.TryAdd(dqNotebookId, dqNotebookContext); }",
+      "reason": "Adds the fetch-and-cache behavior for DQ notebooks and the guard that reuses an already-cached context instead of refetching."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "dagcs-hunk-451",
+      "new_line": 549,
+      "excerpt": "catch (NotebookException) { throw; } catch (Exception dqFetchEx) { Tracer.LogSanitizedWarning(...); nodeForDq.DqCodeReference = null; return; }",
+      "reason": "Establishes different failure semantics: structural notebook problems are fatal, but generic fetch errors downgrade to skipping DQ for that node."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "dagcs-hunk-872",
+      "new_line": 874,
+      "excerpt": "await this.DiscoverDqConfigurationAsync(tableObject, tableType, isFaulted, nodeId, mwcToken, ct);",
+      "reason": "Hooks DQ discovery into the main DAG-build loop so every newly added node is evaluated for DQ metadata."
+    },
+    {
+      "evidence_id": "ev-9",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/Dag.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "dagcs-hunk-175",
+      "new_line": 179,
+      "excerpt": "// Restore DQ notebook context for nodes with DQ configuration. ... if (this.IsDqFeatureEnabled() \u0026\u0026 node.DqCodeReference != null \u0026\u0026 !NotebookExecutionContexts.ContainsKey(node.DqCodeReference.NotebookID)) { var dqNotebookContext = new NotebookExecutionContext(node.DqCodeReference.NotebookWorkspaceID, node.DqCodeReference.NotebookID); await dqNotebookContext.FetchAndParseContentForAllMLVsAsync(mwcToken, node.DqCodeReference.ETag, ct); NotebookExecutionContexts.TryAdd(node.DqCodeReference.NotebookID, dqNotebookContext); }",
+      "reason": "Adds a restore-time path that rehydrates missing DQ notebook contexts after DAG deserialization."
+    },
+    {
+      "evidence_id": "ev-10",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-775",
+      "new_line": 778,
+      "excerpt": "else if (IsDqSuiteDecorator(decoratorName)) { var mlvName = ExtractDqSuiteMlvNameFromArguments(context); result.IsDqSuiteCommand = true; result.DqSuiteDecoratorCount\u002B\u002B; result.DqSuiteMlvName = mlvName; }",
+      "reason": "The parser now classifies @fmlv.dq_suite decorators and captures the referenced MLV name into command metadata."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-834",
+      "new_line": 851,
+      "excerpt": "/// Extracts the MLV name from the @fmlv.dq_suite decorator arguments. /// Supports both keyword form: @fmlv.dq_suite(mlv_name=\u0022name\u0022) /// and positional form: @fmlv.dq_suite(\u0022name\u0022). ... // First pass: look for keyword argument mlv_name=\u0022...\u0022 ... // Second pass: fall back to first positional argument",
+      "reason": "Adds a documented contract and implementation for both supported dq_suite argument shapes."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-218",
+      "new_line": 221,
+      "excerpt": "// Check if a MLV create and DQ suite decorator coexist in the same cell if (commandInfo.IsDqSuiteCommand) { ... throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL); }",
+      "reason": "Introduces a structural validation error when a single cell mixes a create command with a dq_suite decorator."
+    },
+    {
+      "evidence_id": "ev-13",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-296",
+      "new_line": 298,
+      "excerpt": "// Check if multiple DQ suite decorators were detected in this single cell if (commandInfo.DqSuiteDecoratorCount \u003E 1) { ... throw new NotebookException(errorMessage, HttpStatusCode.UnprocessableEntity, WorkspaceId, NotebookId, ErrorMapping.ErrorCode.MLV_MULTIPLE_DEFINITION_CONFLICT_SINGLE_CELL); }",
+      "reason": "Adds a second structural validation rule: one cell may not declare multiple dq_suite decorators."
+    },
+    {
+      "evidence_id": "ev-14",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-296",
+      "new_line": 314,
+      "excerpt": "// DQ suite cell \u2014 track only the DQ cell index (no common cells needed). // DQ cells are self-contained with their own imports and validation logic. var dqIndexes = new int[] { pysparkIndex }; dqSuiteCommand.TryAdd(dqMlvName.ToLowerInvariant(), dqIndexes);",
+      "reason": "Defines the DQ execution-shape contract: DQ suites are stored as only their own cell index, without prepending common cells."
+    },
+    {
+      "evidence_id": "ev-15",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-386",
+      "new_line": 389,
+      "excerpt": "/// Get Notebook Content indexes to execute for the DQ suite associated with the given MLV. /// Matching strategy (in order): 1. Exact match on lowered name. ... public virtual int[] GetDqSuiteCommandIndexes(string mlvName) { ... string lowerName = mlvName.ToLowerInvariant(); if (dqSuiteCommand.TryGetValue(lowerName, out int[] indexes)) { return indexes; } }",
+      "reason": "Documents and implements exact, lowered-name lookup, making exact DQ lookup case-insensitive."
+    },
+    {
+      "evidence_id": "ev-16",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-386",
+      "new_line": 417,
+      "excerpt": "// Strategy 2: strip leading segments from the query name. ... string remaining = lowerName; while (true) { int dotIndex = remaining.IndexOf(\u0027.\u0027); ... remaining = remaining.Substring(dotIndex \u002B 1); if (dqSuiteCommand.TryGetValue(remaining, out indexes)) { return indexes; } }",
+      "reason": "Adds suffix matching for the case where the lookup name is more qualified than the stored dqSuite key."
+    },
+    {
+      "evidence_id": "ev-17",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-386",
+      "new_line": 438,
+      "excerpt": "// Strategy 3: strip leading segments from each dictionary key. ... string bestKey = null; int[] bestIndexes = null; int matchCount = 0; foreach (var kvp in dqSuiteCommand) { ... if (keySuffix.Equals(lowerName, StringComparison.Ordinal)) { matchCount\u002B\u002B; if (bestKey == null || kvp.Key.Length \u003E bestKey.Length) { bestKey = kvp.Key; bestIndexes = kvp.Value; } break; } } if (bestIndexes != null) { ... return bestIndexes; }",
+      "reason": "Adds reverse-direction suffix matching when stored keys are more qualified than the lookup name, and makes ambiguous matches deterministic by picking the longest key."
+    },
+    {
+      "evidence_id": "ev-18",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-386",
+      "new_line": 403,
+      "excerpt": "if (string.IsNullOrWhiteSpace(mlvName)) { return null; }",
+      "reason": "Introduces a defensive guard for blank DQ lookup inputs."
+    },
+    {
+      "evidence_id": "ev-19",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Notebook/NotebookExecutionContext.cs",
+      "side": "right",
+      "base_sha": "9bcb3060d40f70dc3388303215ca15b86df8934c",
+      "hunk_id": "nbctx-hunk-386",
+      "new_line": 476,
+      "excerpt": "var availableKeys = dqSuiteCommand.Keys.ToArray(); Tracer.LogSanitizedWarning(...); return null;",
+      "reason": "Defines the no-match outcome for DQ lookup: unmatched names return null after exhausting all matching strategies."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sc-1",
+      "title": "GetDqNotebookId parses a valid DQ notebook GUID and yields null for missing or invalid catalog values",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "The new notebook-id accessor has clear valid/missing/invalid partitions that should be locked down as a public Table contract.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "sketch_id": "sc-2",
+      "title": "GetDqWorkspaceId parses a valid DQ workspace GUID and yields null for missing or invalid catalog values",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Workspace-id parsing is a separate accessor and caller contract from notebook-id parsing.",
+      "evidence_refs": [
+        "ev-2"
+      ]
+    },
+    {
+      "sketch_id": "sc-3",
+      "title": "HasDqConfiguration is true only when both notebook and workspace IDs are present",
+      "category": "EdgeCase",
+      "technique": "TruthTable",
+      "rationale": "Completeness is explicitly defined as the conjunction of both IDs, so partial and null-property cases need their own boundary rows.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sc-4",
+      "title": "Eligible MLV nodes receive DqCodeReference, while feature-disabled, partial-config, or non-MLV nodes do not",
+      "category": "EdgeCase",
+      "technique": "TruthTable",
+      "rationale": "DQ discovery is guarded by multiple eligibility conditions that jointly define when DAG nodes should be wired for DQ.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5",
+        "ev-8"
+      ]
+    },
+    {
+      "sketch_id": "sc-5",
+      "title": "DQ discovery fetches and caches a notebook context during DAG build for a configured node",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Beyond setting DqCodeReference, DAG build now has a second observable effect: populating NotebookExecutionContexts for later execution.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-8"
+      ]
+    },
+    {
+      "sketch_id": "sc-6",
+      "title": "Restoring a deserialized DAG rehydrates missing DQ notebook contexts from DqCodeReference",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "The restore path is a distinct pipeline branch from initial DAG build and must rebuild missing DQ execution context.",
+      "evidence_refs": [
+        "ev-9"
+      ]
+    },
+    {
+      "sketch_id": "sc-7",
+      "title": "If the DQ notebook is already cached, discovery reuses the existing context instead of refetching it",
+      "category": "Performance",
+      "technique": "RegressionGuard",
+      "rationale": "The ContainsKey guard is an independently revertable cache-reuse invariant, especially when source and DQ notebooks share the same ID.",
+      "evidence_refs": [
+        "ev-6"
+      ]
+    },
+    {
+      "sketch_id": "sc-8",
+      "title": "Generic DQ notebook fetch failures clear DqCodeReference and keep DAG creation moving",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Generic exceptions are intentionally downgraded to a skip path rather than failing the whole DAG build.",
+      "evidence_refs": [
+        "ev-7"
+      ]
+    },
+    {
+      "sketch_id": "sc-9",
+      "title": "NotebookException from DQ notebook parsing aborts DAG creation instead of being downgraded",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Structural notebook validation errors are explicitly rethrown, so they need a separate failure-path contract from generic fetch errors.",
+      "evidence_refs": [
+        "ev-7"
+      ]
+    },
+    {
+      "sketch_id": "sc-10",
+      "title": "Keyword-form @fmlv.dq_suite(mlv_name=\u0022...\u0022) resolves the referenced MLV into a DQ suite mapping",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Keyword-form argument extraction is a distinct supported caller shape documented in the new contract comment.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-11",
+        "ev-14"
+      ]
+    },
+    {
+      "sketch_id": "sc-11",
+      "title": "Positional-form @fmlv.dq_suite(\u0022...\u0022) resolves the referenced MLV into a DQ suite mapping",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Positional-form argument extraction is a second supported caller shape and can regress independently of keyword support.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-11",
+        "ev-14"
+      ]
+    },
+    {
+      "sketch_id": "sc-12",
+      "title": "DQ suite mappings contain only the DQ cell index and do not prepend common-cell indexes",
+      "category": "HappyPath",
+      "technique": "RegressionGuard",
+      "rationale": "The new dqSuite storage contract explicitly differs from MLV execution indexing and is independently revertable.",
+      "evidence_refs": [
+        "ev-14"
+      ]
+    },
+    {
+      "sketch_id": "sc-13",
+      "title": "A notebook cell containing both an MLV create decorator and dq_suite is rejected as a structural conflict",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Mixed create-plus-DQ cells now throw a hard structural validation error and deserve their own malformed-input test.",
+      "evidence_refs": [
+        "ev-12"
+      ]
+    },
+    {
+      "sketch_id": "sc-14",
+      "title": "A notebook cell containing multiple dq_suite decorators is rejected as a structural conflict",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Multiple dq_suite decorators in one cell are a separate malformed shape from create-plus-DQ coexistence.",
+      "evidence_refs": [
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sc-15",
+      "title": "GetDqSuiteCommandIndexes resolves exact names and exact names that differ only by case",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "The lookup method lowers the query name before exact dictionary lookup, making case-insensitive exact resolution part of the new contract.",
+      "evidence_refs": [
+        "ev-15"
+      ]
+    },
+    {
+      "sketch_id": "sc-16",
+      "title": "A fully qualified lookup name can match a shorter stored DQ key by stripping leading query segments",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Strategy 2 adds a new fallback path for callers that pass workspace/lakehouse-qualified names against shorter stored keys.",
+      "evidence_refs": [
+        "ev-16"
+      ]
+    },
+    {
+      "sketch_id": "sc-17",
+      "title": "A shorter lookup name can match a longer stored DQ key, with the longest suffix match winning when multiple keys qualify",
+      "category": "EdgeCase",
+      "technique": "RegressionGuard",
+      "rationale": "Strategy 3 and longest-key selection are separate reverse-direction lookup guarantees from query-side suffix stripping.",
+      "evidence_refs": [
+        "ev-17"
+      ]
+    },
+    {
+      "sketch_id": "sc-18",
+      "title": "Blank DQ lookup names return null immediately",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "The new null-or-whitespace guard is defensive code and should be locked down explicitly.",
+      "evidence_refs": [
+        "ev-18"
+      ]
+    },
+    {
+      "sketch_id": "sc-19",
+      "title": "Unmatched DQ lookup names return null after exhausting all matching strategies",
+      "category": "EdgeCase",
+      "technique": "EquivalencePartition",
+      "rationale": "No-match behavior is a distinct observable outcome from blank-input guarding and from successful suffix matches.",
+      "evidence_refs": [
+        "ev-19"
+      ]
+    }
+  ]
+}

@@ -859,7 +859,10 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 sw.Stop();
                 result.ArchitectElapsedMs = sw.ElapsedMilliseconds;
-                result.Errors.Add(ErrorCodeArchitectNetworkError + " — " + ex.GetType().Name + ": " + Truncate(ex.Message, 240));
+                var detail = ex.InnerException != null
+                    ? ex.GetType().Name + ": " + Truncate(ex.Message, 180) + " | inner=" + ex.InnerException.GetType().Name + ": " + Truncate(ex.InnerException.Message, 180)
+                    : ex.GetType().Name + ": " + Truncate(ex.Message, 360);
+                result.Errors.Add(ErrorCodeArchitectNetworkError + " — " + detail);
                 return result;
             }
 
@@ -1079,6 +1082,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 },
                 reasoning = new { effort = ArchitectReasoningEffort },
                 max_output_tokens = ArchitectMaxOutputTokens,
+                stream = true,
                 text = new
                 {
                     format = new
@@ -1316,6 +1320,18 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         // ── HTTP call ──────────────────────────────────────────────────
 
+        /// <summary>
+        /// POSTs <paramref name="requestBody"/> to /openai/responses. Auto-detects
+        /// streaming mode by sniffing the body for <c>"stream":true</c>. Non-streaming
+        /// is a single buffered read. Streaming switches to <c>ResponseHeadersRead</c>
+        /// and parses the Server-Sent-Events feed, returning the JSON payload of the
+        /// terminal <c>response.completed</c> / <c>response.failed</c> / <c>response.incomplete</c>
+        /// event so the existing <see cref="TryExtractMessageText"/> parser keeps
+        /// working byte-for-byte. Streaming exists so Azure's idle-connection timeout
+        /// (~4-5 min) does not drop the socket while gpt-5.4 reasons silently — large
+        /// (≈80KB) diffs that previously failed at 260-310s with HttpRequestException
+        /// now stream incremental reasoning events that act as keepalives.
+        /// </summary>
         private static async Task<(bool isSuccess, string body, int statusCode)> CallResponsesApiAsync(
             HttpClient httpClient,
             string endpoint,
@@ -1326,17 +1342,133 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             var url = $"{endpoint.TrimEnd('/')}/openai/responses?api-version={apiVersion}";
 
+            var isStream = requestBody != null && requestBody.IndexOf("\"stream\":true", StringComparison.Ordinal) >= 0;
+
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.Add("api-key", apiKey);
             request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
 
-            var response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
+            var completionOption = isStream
+                ? HttpCompletionOption.ResponseHeadersRead
+                : HttpCompletionOption.ResponseContentRead;
+
+            var response = await httpClient.SendAsync(request, completionOption, ct).ConfigureAwait(false);
             using (response)
             {
-                var body = response.Content == null
-                    ? string.Empty
-                    : await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-                return (response.IsSuccessStatusCode, body, (int)response.StatusCode);
+                if (!isStream || !response.IsSuccessStatusCode)
+                {
+                    var body = response.Content == null
+                        ? string.Empty
+                        : await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    return (response.IsSuccessStatusCode, body, (int)response.StatusCode);
+                }
+
+                var finalBody = await ReadSseTerminalPayloadAsync(response, ct).ConfigureAwait(false);
+                return (true, finalBody, (int)response.StatusCode);
+            }
+        }
+
+        /// <summary>
+        /// Reads the SSE stream from a successful streaming Responses call and returns
+        /// the JSON payload of the terminal event's <c>response</c> field. Terminal
+        /// events: <c>response.completed</c>, <c>response.failed</c>, <c>response.incomplete</c>.
+        /// If the stream ends without a terminal event, returns the last partial response
+        /// envelope we saw (status will surface as non-'completed' upstream). Throws on
+        /// underlying I/O failures so the caller's catch block can record them.
+        /// </summary>
+        private static async Task<string> ReadSseTerminalPayloadAsync(HttpResponseMessage response, CancellationToken ct)
+        {
+            var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            using var reader = new System.IO.StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 8192, leaveOpen: false);
+
+            string lastResponsePayload = null;
+            var dataBuffer = new StringBuilder();
+            string currentEvent = null;
+
+            while (true)
+            {
+                var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+                if (line == null)
+                {
+                    break;
+                }
+
+                if (line.Length == 0)
+                {
+                    if (dataBuffer.Length > 0)
+                    {
+                        var dataJson = dataBuffer.ToString();
+                        dataBuffer.Clear();
+
+                        var (responsePayload, isTerminal) = TryExtractResponseFromSseEvent(currentEvent, dataJson);
+                        if (responsePayload != null)
+                        {
+                            lastResponsePayload = responsePayload;
+                            if (isTerminal)
+                            {
+                                return responsePayload;
+                            }
+                        }
+                    }
+                    currentEvent = null;
+                    continue;
+                }
+
+                if (line.StartsWith("event:", StringComparison.Ordinal))
+                {
+                    currentEvent = line.Substring(6).Trim();
+                }
+                else if (line.StartsWith("data:", StringComparison.Ordinal))
+                {
+                    if (dataBuffer.Length > 0) dataBuffer.Append('\n');
+                    dataBuffer.Append(line.Substring(5).TrimStart());
+                }
+            }
+
+            return lastResponsePayload ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Extracts the <c>response</c> envelope from one SSE event's data JSON. Returns
+        /// (payload, isTerminal) where isTerminal is true for response.completed /
+        /// response.failed / response.incomplete events. Returns (null, false) when the
+        /// event has no response envelope (delta events, heartbeats).
+        /// </summary>
+        private static (string payload, bool isTerminal) TryExtractResponseFromSseEvent(string eventName, string dataJson)
+        {
+            if (string.IsNullOrWhiteSpace(dataJson) || dataJson == "[DONE]")
+            {
+                return (null, false);
+            }
+
+            JsonDocument doc;
+            try
+            {
+                doc = JsonDocument.Parse(dataJson);
+            }
+            catch
+            {
+                return (null, false);
+            }
+
+            using (doc)
+            {
+                var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object)
+                {
+                    return (null, false);
+                }
+
+                if (!root.TryGetProperty("response", out var responseEl) || responseEl.ValueKind != JsonValueKind.Object)
+                {
+                    return (null, false);
+                }
+
+                var isTerminal = string.Equals(eventName, "response.completed", StringComparison.Ordinal)
+                    || string.Equals(eventName, "response.failed", StringComparison.Ordinal)
+                    || string.Equals(eventName, "response.incomplete", StringComparison.Ordinal);
+
+                return (responseEl.GetRawText(), isTerminal);
             }
         }
 

@@ -1,0 +1,647 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T12:02:29.8235791\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "960426",
+  "zone_id": "PR-960426-full-diff",
+  "zone_summary": "Insights endpoints now add summary delta/current-period fields, paginated runs with partial-match filtering and errorMessage, weekly trends grouping, a standalone top-errors endpoint, 404 feature gating, and fail-open throttling.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 10,
+    "grounding_evidence": 26,
+    "scenario_sketches": 26
+  },
+  "behavioral_changes": [
+    {
+      "summary": "When the Insights feature flag is disabled, the controller now returns 404 Not Found instead of NotImplemented.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "summary": "The summary endpoint now computes a same-length previous period, queries current\u002Bprevious metrics in one scan, and exposes completedRuns, lastUpdatedAt, and four delta fields with guards for missing/zero previous-period data.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3",
+        "ev-4",
+        "ev-5",
+        "ev-6",
+        "ev-7",
+        "ev-8",
+        "ev-9",
+        "ev-10"
+      ]
+    },
+    {
+      "summary": "The runs endpoint now returns a paginated envelope with items and totalCount, including an empty envelope when system tables are not ready.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12",
+        "ev-13",
+        "ev-17"
+      ]
+    },
+    {
+      "summary": "The runs displayName filter changed from exact match to escaped SQL LIKE partial matching.",
+      "evidence_refs": [
+        "ev-13",
+        "ev-14"
+      ]
+    },
+    {
+      "summary": "Run rows now include errorMessage and no longer expose refreshMode.",
+      "evidence_refs": [
+        "ev-14",
+        "ev-15",
+        "ev-16"
+      ]
+    },
+    {
+      "summary": "The trends endpoint now accepts validated groupBy values and supports weekly aggregation using a DATEFIRST-independent Monday date key.",
+      "evidence_refs": [
+        "ev-18",
+        "ev-19"
+      ]
+    },
+    {
+      "summary": "The trends response no longer embeds topErrors.",
+      "evidence_refs": [
+        "ev-20"
+      ]
+    },
+    {
+      "summary": "A new GET /insights/errors/top endpoint returns a topErrors wrapper, clamps limit before querying, and falls back to an empty response when tables are not ready.",
+      "evidence_refs": [
+        "ev-21",
+        "ev-22",
+        "ev-24"
+      ]
+    },
+    {
+      "summary": "Top-errors data is now sourced from per-node metrics and grouped by errorCode plus errorSource, so entries carry source classification and can distinguish same-code errors from different sources.",
+      "evidence_refs": [
+        "ev-23",
+        "ev-25"
+      ]
+    },
+    {
+      "summary": "If throttling resolution/checking throws, the controller now skips throttling instead of failing the request.",
+      "evidence_refs": [
+        "ev-26"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -54,11 \u002B54,7 @@",
+      "new_line": 58,
+      "excerpt": "[FeatureGate(FeatureNames.FLTInsightsMetrics, HttpStatusCode.NotFound, \u0022Insights feature is not yet enabled in this environment.\u0022)]",
+      "reason": "Feature-gated requests now map the disabled state to HTTP 404."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -137,7 \u002B141,14 @@",
+      "new_line": 146,
+      "excerpt": "var start = DateTime.Parse(startDate);\nvar end = DateTime.Parse(endDate);\nvar periodDays = (end - start).Days \u002B 1;\nvar prevStartDate = start.AddDays(-periodDays).ToString(\u0022yyyy-MM-dd\u0022);\n\nvar response = await this.QueryService.GetSummaryAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, prevStartDate, cancellationToken);",
+      "reason": "The controller now derives a same-length previous-period window and passes it into summary querying."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -31,30 \u002B31,43 @@",
+      "new_line": 54,
+      "excerpt": "SUM(CASE WHEN run_date \u003E= @startDate AND status = \u0027{StatusCompleted}\u0027 THEN 1 ELSE 0 END) AS completedRuns,\nAVG(CASE WHEN run_date \u003E= @startDate THEN CAST(duration_ms AS FLOAT) END) AS avgDurationMs,\nMAX(CASE WHEN run_date \u003E= @startDate THEN written_at END) AS lastUpdatedAt,\nCOUNT(CASE WHEN run_date \u003C @startDate THEN 1 END) AS prevTotalRuns,\nSUM(CASE WHEN run_date \u003C @startDate AND status = \u0027{StatusCompleted}\u0027 THEN 1 ELSE 0 END) AS prevCompletedRuns,\nSUM(CASE WHEN run_date \u003C @startDate AND status = \u0027{StatusFailed}\u0027 THEN 1 ELSE 0 END) AS prevFailedRuns,\nAVG(CASE WHEN run_date \u003C @startDate THEN CAST(duration_ms AS FLOAT) END) AS prevAvgDurationMs\n...\nWHERE run_date \u003E= @prevStartDate AND run_date \u003C= @endDate\u0022;",
+      "reason": "Summary SQL now returns current-period completed/lastUpdatedAt values plus prior-period aggregates in a single scan."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -17,24 \u002B18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 25,
+      "excerpt": "[JsonProperty(\u0022totalRunsDeltaPct\u0022)]\npublic double? TotalRunsDeltaPct { get; set; }",
+      "reason": "The summary contract now exposes totalRunsDeltaPct."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -17,24 \u002B18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 31,
+      "excerpt": "[JsonProperty(\u0022completedRuns\u0022)]\npublic int CompletedRuns { get; set; }",
+      "reason": "The summary contract now exposes completedRuns."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -17,24 \u002B18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 42,
+      "excerpt": "[JsonProperty(\u0022successRateDeltaPct\u0022)]\npublic double? SuccessRateDeltaPct { get; set; }",
+      "reason": "The summary contract now exposes successRateDeltaPct."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -17,24 \u002B18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 53,
+      "excerpt": "[JsonProperty(\u0022avgDurationDeltaPct\u0022)]\npublic double? AvgDurationDeltaPct { get; set; }",
+      "reason": "The summary contract now exposes avgDurationDeltaPct."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -17,24 \u002B18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 64,
+      "excerpt": "[JsonProperty(\u0022failedRunsDeltaPct\u0022)]\npublic double? FailedRunsDeltaPct { get; set; }",
+      "reason": "The summary contract now exposes failedRunsDeltaPct."
+    },
+    {
+      "evidence_id": "ev-9",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsSummaryResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -17,24 \u002B18,58 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 86,
+      "excerpt": "[JsonProperty(\u0022lastUpdatedAt\u0022)]\npublic DateTime? LastUpdatedAt { get; set; }",
+      "reason": "The summary contract now exposes lastUpdatedAt."
+    },
+    {
+      "evidence_id": "ev-10",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -374,11 \u002B376,36 @@ namespace Microsoft.LiveTable.Service.Trends",
+      "new_line": 378,
+      "excerpt": "string lastUpdatedAtStr = await GetStringOrNullAsync(reader, \u0022lastUpdatedAt\u0022, cancellationToken);\n\nresponse.CompletedRuns = completedRuns;\nresponse.SuccessRatePct = response.TotalRuns \u003E 0 ? Math.Round((double)completedRuns / response.TotalRuns * 100, 1) : 0;\nresponse.AvgDurationMin = Math.Round(avgDurMs / 60000.0, 1);\nresponse.LastUpdatedAt = DateTime.TryParse(lastUpdatedAtStr, out var lua) ? lua : null;\n...\nif (prevTotalRuns \u003E 0)\n{\n    response.TotalRunsDeltaPct = ComputeDeltaPct(response.TotalRuns, prevTotalRuns);\n    double prevSuccessRate = Math.Round((double)prevCompletedRuns / prevTotalRuns * 100, 1);\n    response.SuccessRateDeltaPct = Math.Round(response.SuccessRatePct - prevSuccessRate, 1);\n    response.FailedRunsDeltaPct = ComputeDeltaPct(response.FailedRuns, prevFailedRuns);\n    double prevAvgDurMin = Math.Round(prevAvgDurMs / 60000.0, 1);\n    response.AvgDurationDeltaPct = prevAvgDurMin \u003E 0 ? ComputeDeltaPct(response.AvgDurationMin, prevAvgDurMin) : null;\n}",
+      "reason": "Query-service mapping computes the new summary fields and contains the null/divide-by-zero guards for delta calculation."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -0,0 \u002B1,23 @@",
+      "new_line": 16,
+      "excerpt": "[JsonProperty(\u0022items\u0022)]\npublic IList\u003CInsightsRunResponse\u003E Items { get; set; } = new List\u003CInsightsRunResponse\u003E();",
+      "reason": "The runs response is now wrapped under an items array property."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunsPageResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -0,0 \u002B1,23 @@",
+      "new_line": 20,
+      "excerpt": "[JsonProperty(\u0022totalCount\u0022)]\npublic int TotalCount { get; set; }",
+      "reason": "The runs response now carries totalCount for pagination."
+    },
+    {
+      "evidence_id": "ev-13",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/SqlEndpointQueryService.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -419,45 \u002B446,58 @@ namespace Microsoft.LiveTable.Service.Trends",
+      "new_line": 452,
+      "excerpt": "string displayNameParam = displayName != null ? $\u0022%{EscapeLikePattern(displayName)}%\u0022 : null;\n\nvar response = new InsightsRunsPageResponse();\n...\nawait using var countCmd = new SqlCommand(InsightsQueryBuilder.BuildRunsCountQuery(statusCount), connection);\n...\nresponse.TotalCount = countResult != null \u0026\u0026 countResult != DBNull.Value ? (int)Convert.ToInt64(countResult) : 0;\n...\nresponse.Items.Add(new InsightsRunResponse\n{\n    ...\n    ErrorMessage = await GetStringOrNullAsync(reader, \u0022error_message\u0022, cancellationToken),\n    ...\n});",
+      "reason": "Runs querying now escapes LIKE input, computes a filtered totalCount, and populates paged items in the new wrapper response."
+    },
+    {
+      "evidence_id": "ev-14",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -67,47 \u002B80,93 @@ WHERE run_date \u003E= @startDate AND run_date \u003C= @endDate\u0022;",
+      "new_line": 85,
+      "excerpt": "SELECT\n    iteration_id, display_name, status, started_at, ended_at, duration_ms,\n    error_code, error_message, error_source, total_nodes,\n    succeeded_nodes, failed_nodes, skipped_nodes\n...\nAND (@displayName IS NULL OR display_name LIKE @displayName)",
+      "reason": "Runs SQL now projects error_message and switches displayName filtering to SQL LIKE instead of exact equality."
+    },
+    {
+      "evidence_id": "ev-15",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -36,14 \u002B36,14 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 44,
+      "excerpt": "[JsonProperty(\u0022errorMessage\u0022)]\npublic string ErrorMessage { get; set; }",
+      "reason": "Each run row now exposes errorMessage in the serialized contract."
+    },
+    {
+      "evidence_id": "ev-16",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsRunResponse.cs",
+      "side": "left",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -36,14 \u002B36,14 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 39,
+      "excerpt": "/// \u003Csummary\u003EGets or sets the refresh mode (Full/Optimal).\u003C/summary\u003E\n[JsonProperty(\u0022refreshMode\u0022)]\npublic string RefreshMode { get; set; }",
+      "reason": "The serialized refreshMode member was removed from run responses."
+    },
+    {
+      "evidence_id": "ev-17",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -249,15 \u002B260,15 @@",
+      "new_line": 271,
+      "excerpt": "catch (InsightsTableNotReadyException)\n{\n    ...\n    return Ok(new InsightsRunsPageResponse());\n}",
+      "reason": "The table-not-ready path for runs now returns an empty page envelope instead of an empty bare list."
+    },
+    {
+      "evidence_id": "ev-18",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -332,7 \u002B345,14 @@",
+      "new_line": 349,
+      "excerpt": "if (!InsightsQueryBuilder.ValidGroupByValues.Any(v =\u003E string.Equals(v, groupBy, StringComparison.OrdinalIgnoreCase)))\n{\n    resultCode = HttpStatusCode.BadRequest;\n    return BadRequest(new { error = $\u0022Invalid groupBy \u0027{groupBy}\u0027. Valid values: {string.Join(\u0022, \u0022, InsightsQueryBuilder.ValidGroupByValues)}\u0022 });\n}\n\nvar response = await this.QueryService.GetTrendsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, groupBy, cancellationToken);",
+      "reason": "The controller now accepts a groupBy query value, rejects invalid values, and forwards valid ones to trends querying."
+    },
+    {
+      "evidence_id": "ev-19",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -67,47 \u002B80,93 @@ WHERE run_date \u003E= @startDate AND run_date \u003C= @endDate\u0022;",
+      "new_line": 121,
+      "excerpt": "if (string.Equals(groupBy, \u0022week\u0022, StringComparison.OrdinalIgnoreCase))\n{\n    dateExpression = \u0022CONVERT(VARCHAR(10), DATEADD(DAY, 1 - (((DATEPART(dw, run_date) \u002B @@DATEFIRST - 2) % 7) \u002B 1), CAST(run_date AS DATE)), 120)\u0022;\n}\n...\nSELECT\n    {dateExpression} AS run_date,\n...\nGROUP BY {dateExpression}",
+      "reason": "Weekly trends now group by a DATEFIRST-independent Monday-of-week expression rendered as yyyy-MM-dd."
+    },
+    {
+      "evidence_id": "ev-20",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTrendsResponse.cs",
+      "side": "left",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -15,9 \u002B15,5 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 19,
+      "excerpt": "/// \u003Csummary\u003EGets or sets the top error codes by count.\u003C/summary\u003E\n[JsonProperty(\u0022topErrors\u0022)]\npublic IList\u003CErrorCountEntry\u003E TopErrors { get; set; } = new List\u003CErrorCountEntry\u003E();",
+      "reason": "The topErrors array was removed from the trends response contract."
+    },
+    {
+      "evidence_id": "ev-21",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -360,6 \u002B380,93 @@",
+      "new_line": 391,
+      "excerpt": "[HttpGet(\u0022errors/top\u0022)]\n[RequiresPermissionFilter(Permissions.ReadAll)]\n[ProducesResponseType(StatusCodes.Status200OK, Type = typeof(InsightsTopErrorsResponse))]\npublic async Task\u003CIActionResult\u003E GetTopErrorsAsync(",
+      "reason": "A new GET /insights/errors/top endpoint is exposed and returns InsightsTopErrorsResponse."
+    },
+    {
+      "evidence_id": "ev-22",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -360,6 \u002B380,93 @@",
+      "new_line": 434,
+      "excerpt": "int clampedLimit = InsightsQueryBuilder.ClampTopErrorsLimit(limit);\n\nvar response = await this.QueryService.GetTopErrorsAsync(tenantId, workspaceId, artifactId, mwcToken, startDate, endDate, clampedLimit, cancellationToken);\n...\ncatch (InsightsTableNotReadyException)\n{\n    ...\n    return Ok(new InsightsTopErrorsResponse());\n}",
+      "reason": "The new endpoint clamps limit before querying and returns an empty wrapper when system tables are not ready."
+    },
+    {
+      "evidence_id": "ev-23",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/InsightsQueryBuilder.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -67,47 \u002B80,93 @@ WHERE run_date \u003E= @startDate AND run_date \u003C= @endDate\u0022;",
+      "new_line": 145,
+      "excerpt": "limit = ClampTopErrorsLimit(limit);\nreturn $@\u0022\nSELECT TOP {limit} error_code, error_source, COUNT(*) AS count\nFROM {NodeMetricsTable}\nWHERE error_code IS NOT NULL AND error_code != \u0027\u0027 AND run_date \u003E= @startDate AND run_date \u003C= @endDate\nGROUP BY error_code, error_source\nORDER BY count DESC\u0022;\n...\ninternal static int ClampTopErrorsLimit(int limit) =\u003E Math.Clamp(limit, 1, MaxTopErrorsLimit);",
+      "reason": "Top-errors SQL now pulls from per-node metrics, includes error_source, groups by code\u002Bsource, and enforces a 1..20 limit."
+    },
+    {
+      "evidence_id": "ev-24",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/InsightsTopErrorsResponse.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -0,0 \u002B1,20 @@",
+      "new_line": 16,
+      "excerpt": "[JsonProperty(\u0022topErrors\u0022)]\npublic IList\u003CErrorCountEntry\u003E TopErrors { get; set; } = new List\u003CErrorCountEntry\u003E();",
+      "reason": "The new top-errors endpoint returns a topErrors array wrapper."
+    },
+    {
+      "evidence_id": "ev-25",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Trends/Models/ErrorCountEntry.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -7,7 \u002B7,7 @@ namespace Microsoft.LiveTable.Service.Trends.Models",
+      "new_line": 19,
+      "excerpt": "[JsonProperty(\u0022errorSource\u0022)]\npublic string ErrorSource { get; set; }",
+      "reason": "Each top-error row now exposes errorSource."
+    },
+    {
+      "evidence_id": "ev-26",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableInsightsController.cs",
+      "side": "right",
+      "base_sha": "5e9949a7b43d282d5f5ac983df115ce0f2670a7e",
+      "hunk_id": "@@ -374,24 \u002B481,33 @@",
+      "new_line": 503,
+      "excerpt": "catch (Exception ex)\n{\n    // Fail open \u2014 skip throttling when resolution fails (e.g., IWorkloadContext unavailable).\n    Tracer.LogSanitizedWarning(\u0022[Insights] Throttling check failed. Skipping throttling. Error: {0}\u0022, ex.Message);\n    return null;\n}",
+      "reason": "Unexpected throttling-check failures now fail open instead of blocking the request path."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "Feature-disabled Insights requests return 404",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Exercise any Insights route with the feature flag off and assert the controller surfaces NotFound, not NotImplemented.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "Summary computes prevStartDate as the same-length window immediately before the requested period",
+      "category": "HappyPath",
+      "technique": "Counterfactual",
+      "rationale": "Call summary with explicit start/end dates and verify the controller passes a previous-period start date shifted back by exactly the inclusive period length.",
+      "evidence_refs": [
+        "ev-2"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "Summary returns totalRunsDeltaPct as current-vs-previous percent change",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Mock current and previous totals with non-zero previous runs and assert totalRunsDeltaPct is populated from the period-over-period change.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3",
+        "ev-4",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Summary returns completedRuns for the current period",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Verify the summary payload includes completedRuns and that it reflects completed statuses from the current window.",
+      "evidence_refs": [
+        "ev-3",
+        "ev-5",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Summary returns successRateDeltaPct as a percentage-point difference",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Use different current/previous completed ratios and assert successRateDeltaPct equals current successRatePct minus previous successRatePct, not a percent-change formula.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3",
+        "ev-6",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-6",
+      "title": "Summary returns avgDurationDeltaPct from previous-period average minutes",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Feed non-zero current and previous average durations and assert avgDurationDeltaPct is present and based on rounded minute averages.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3",
+        "ev-7",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-7",
+      "title": "Summary returns failedRunsDeltaPct as current-vs-previous percent change",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Use differing failed-run counts across periods and assert failedRunsDeltaPct is emitted as a delta field.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3",
+        "ev-8",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-8",
+      "title": "Summary returns lastUpdatedAt from the latest written_at in the current period",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Verify lastUpdatedAt is serialized and matches the most recent metrics-write timestamp returned by the query.",
+      "evidence_refs": [
+        "ev-3",
+        "ev-9",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-9",
+      "title": "Summary leaves delta fields null when the previous period has no runs",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Use prevTotalRuns=0 and assert the delta properties stay null instead of computing against missing prior data.",
+      "evidence_refs": [
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-10",
+      "title": "Summary leaves avgDurationDeltaPct null when previous average duration is zero",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Use a previous period with runs but zero average duration and assert avgDurationDeltaPct stays null rather than dividing by zero.",
+      "evidence_refs": [
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-11",
+      "title": "Runs response is wrapped under items[] instead of returning a bare array",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Assert GET /insights/runs returns an object with an items array containing run rows.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-12",
+      "title": "Runs response totalCount reports all filtered matches across pages",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Request a page smaller than the match set and assert totalCount reflects the full filtered result count, not the current page size.",
+      "evidence_refs": [
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-13",
+      "title": "Runs displayName filter performs substring matching via LIKE",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Use a partial displayName token and assert matching runs are returned even when the full name is longer than the query string.",
+      "evidence_refs": [
+        "ev-13",
+        "ev-14"
+      ]
+    },
+    {
+      "sketch_id": "sk-14",
+      "title": "Runs displayName filter escapes %, _, and [ so wildcard characters are matched literally",
+      "category": "EdgeCase",
+      "technique": "EquivalencePartition",
+      "rationale": "Search with displayName text containing SQL LIKE metacharacters and assert only literal matches are returned.",
+      "evidence_refs": [
+        "ev-13",
+        "ev-14"
+      ]
+    },
+    {
+      "sketch_id": "sk-15",
+      "title": "Run rows include errorMessage for failed runs",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Verify a failed run row serializes errorMessage alongside other error fields.",
+      "evidence_refs": [
+        "ev-13",
+        "ev-14",
+        "ev-15"
+      ]
+    },
+    {
+      "sketch_id": "sk-16",
+      "title": "Run rows no longer serialize refreshMode",
+      "category": "HappyPath",
+      "technique": "RegressionGuard",
+      "rationale": "Assert serialized /insights/runs items omit refreshMode so the response matches the new contract.",
+      "evidence_refs": [
+        "ev-16"
+      ]
+    },
+    {
+      "sketch_id": "sk-17",
+      "title": "Runs returns an empty paginated envelope when system tables are not ready",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Force InsightsTableNotReadyException and assert the controller returns 200 with empty items and totalCount defaulting to zero.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12",
+        "ev-17"
+      ]
+    },
+    {
+      "sketch_id": "sk-18",
+      "title": "Trends groupBy=week returns Monday week buckets with stable yyyy-MM-dd keys",
+      "category": "HappyPath",
+      "technique": "Counterfactual",
+      "rationale": "Verify weekly grouping collapses daily rows into Monday-based week buckets and is insensitive to SQL DATEFIRST settings.",
+      "evidence_refs": [
+        "ev-18",
+        "ev-19"
+      ]
+    },
+    {
+      "sketch_id": "sk-19",
+      "title": "Trends rejects unsupported groupBy values with 400",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Pass an invalid groupBy value and assert BadRequest includes the allowed value list.",
+      "evidence_refs": [
+        "ev-18"
+      ]
+    },
+    {
+      "sketch_id": "sk-20",
+      "title": "Trends response no longer includes topErrors",
+      "category": "HappyPath",
+      "technique": "RegressionGuard",
+      "rationale": "Assert GET /insights/trends serializes only trend data and does not include a topErrors property.",
+      "evidence_refs": [
+        "ev-20"
+      ]
+    },
+    {
+      "sketch_id": "sk-21",
+      "title": "GET /insights/errors/top returns a topErrors payload",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Call the new route and assert a 200 response with the new topErrors wrapper contract.",
+      "evidence_refs": [
+        "ev-21",
+        "ev-24"
+      ]
+    },
+    {
+      "sketch_id": "sk-22",
+      "title": "Top-errors limit defaults to 5 and clamps into the 1..20 range",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Cover omitted, below-min, and above-max limit values and assert the query path uses the clamped value.",
+      "evidence_refs": [
+        "ev-22",
+        "ev-23"
+      ]
+    },
+    {
+      "sketch_id": "sk-23",
+      "title": "Top-errors counts are sourced per failed node rather than per DAG run",
+      "category": "HappyPath",
+      "technique": "Counterfactual",
+      "rationale": "Use a single DAG with multiple failed nodes carrying different errors and assert each node-level failure contributes to topErrors.",
+      "evidence_refs": [
+        "ev-23"
+      ]
+    },
+    {
+      "sketch_id": "sk-24",
+      "title": "Top-errors entries include errorSource and keep same-code different-source errors distinct",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Verify rows expose errorSource and that identical errorCode values from different sources are represented separately rather than merged.",
+      "evidence_refs": [
+        "ev-23",
+        "ev-25"
+      ]
+    },
+    {
+      "sketch_id": "sk-25",
+      "title": "Top-errors returns an empty wrapper when system tables are not ready",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Force InsightsTableNotReadyException in the new endpoint and assert 200 with an empty topErrors array.",
+      "evidence_refs": [
+        "ev-22",
+        "ev-24"
+      ]
+    },
+    {
+      "sketch_id": "sk-26",
+      "title": "Insights requests fail open when throttling resolution throws",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Make throttling resolution/checking throw and assert the request continues instead of failing on the throttling branch.",
+      "evidence_refs": [
+        "ev-26"
+      ]
+    }
+  ]
+}
