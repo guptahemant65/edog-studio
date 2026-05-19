@@ -8,6 +8,7 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Collections.Generic;
     using System.Net.Http;
     using System.Reflection;
     using System.Text;
@@ -52,11 +53,12 @@ namespace Microsoft.LiveTable.Service.DevMode
                     string audience = null;
                     string expiryUtc = null;
                     string issuedUtc = null;
+                    Dictionary<string, object> claims = null;
 
                     if (scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase) &&
                         !string.IsNullOrEmpty(authHeader.Parameter))
                     {
-                        DecodeJwtMetadata(authHeader.Parameter, out audience, out expiryUtc, out issuedUtc);
+                        DecodeJwtMetadata(authHeader.Parameter, out audience, out expiryUtc, out issuedUtc, out claims);
                     }
 
                     // STEP 3: Publish to "token" topic — non-blocking, thread-safe
@@ -69,6 +71,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         issuedUtc,
                         httpClientName = _httpClientName,
                         endpoint = request.RequestUri?.PathAndQuery,
+                        claims,
                     });
                 }
             }
@@ -94,15 +97,17 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>
-        /// Decodes JWT payload (2nd base64url segment) to extract audience and expiry.
-        /// SECURITY: Only reads metadata claims — aud, exp, iat. Raw token is never stored.
+        /// Decodes JWT payload (2nd base64url segment) to extract audience, expiry, and all claims.
+        /// SECURITY: Only reads metadata claims. Raw token is never stored.
         /// </summary>
         private static void DecodeJwtMetadata(
-            string token, out string audience, out string expiryUtc, out string issuedUtc)
+            string token, out string audience, out string expiryUtc, out string issuedUtc,
+            out Dictionary<string, object> claims)
         {
             audience = null;
             expiryUtc = null;
             issuedUtc = null;
+            claims = null;
 
             try
             {
@@ -114,6 +119,21 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 using var doc = JsonDocument.Parse(payloadBytes);
                 var root = doc.RootElement;
+
+                // Extract all claims into a dictionary for the frontend JWT panel
+                claims = new Dictionary<string, object>();
+                foreach (var prop in root.EnumerateObject())
+                {
+                    claims[prop.Name] = prop.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => prop.Value.GetString(),
+                        JsonValueKind.Number => prop.Value.TryGetInt64(out var l) ? (object)l : prop.Value.GetDouble(),
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        JsonValueKind.Array => prop.Value.ToString(),
+                        _ => prop.Value.ToString(),
+                    };
+                }
 
                 // "aud" can be a string or an array of strings
                 if (root.TryGetProperty("aud", out var aud))

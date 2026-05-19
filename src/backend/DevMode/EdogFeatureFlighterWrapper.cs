@@ -29,6 +29,13 @@ namespace Microsoft.LiveTable.Service.DevMode
     {
         private readonly IFeatureFlighter _inner;
 
+        // Dedup: suppress repeated (flagName + result) events within a time window.
+        // FLT calls IsEnabled() hundreds of times per second during DAG execution.
+        // Without throttling, a single DAG run can flood the topic with 10K+ events.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _lastPublished =
+            new System.Collections.Concurrent.ConcurrentDictionary<string, long>(StringComparer.Ordinal);
+        private const long DedupWindowTicks = 2 * TimeSpan.TicksPerSecond; // 2 second window
+
         /// <summary>
         /// Initializes a new instance of the <see cref="EdogFeatureFlighterWrapper"/> class.
         /// </summary>
@@ -63,18 +70,37 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             sw.Stop();
 
-            var eventData = new
-            {
-                flagName = featureName,
-                tenantId = tenantId?.ToString(),
-                capacityId = capacityId?.ToString(),
-                workspaceId = workspaceId?.ToString(),
-                result,
-                durationMs = sw.Elapsed.TotalMilliseconds,
-                overridden,
-            };
+            // Dedup: only publish if (flagName + result) changed or window expired
+            var dedupKey = featureName + (result ? ":T" : ":F");
+            var now = DateTime.UtcNow.Ticks;
+            var shouldPublish = true;
 
-            EdogTopicRouter.Publish("flag", eventData);
+            if (_lastPublished.TryGetValue(dedupKey, out var lastTick))
+            {
+                if ((now - lastTick) < DedupWindowTicks)
+                    shouldPublish = false;
+            }
+
+            // Always publish when result flips (override applied/removed)
+            if (overridden) shouldPublish = true;
+
+            if (shouldPublish)
+            {
+                _lastPublished[dedupKey] = now;
+
+                var eventData = new
+                {
+                    flagName = featureName,
+                    tenantId = tenantId?.ToString(),
+                    capacityId = capacityId?.ToString(),
+                    workspaceId = workspaceId?.ToString(),
+                    result,
+                    durationMs = sw.Elapsed.TotalMilliseconds,
+                    overridden,
+                };
+
+                EdogTopicRouter.Publish("flag", eventData);
+            }
 
             return result;
         }

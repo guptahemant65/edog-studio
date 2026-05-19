@@ -39,6 +39,8 @@ class FeatureFlagsTab {
     this._nextId = 0;
     this._acFocusIdx = -1;
     this._isActive = false;
+    this._renderPending = false;
+    this._pendingNewEv = null;
 
     // Bound handler for SignalR events
     this._onEvent = this._onEvent.bind(this);
@@ -52,6 +54,7 @@ class FeatureFlagsTab {
 
   /** Called by RuntimeView when tab becomes active. */
   activate() {
+    if (this._isActive) return; // idempotent guard
     this._isActive = true;
     if (this._signalr) {
       this._signalr.on('flag', this._onEvent);
@@ -101,7 +104,6 @@ class FeatureFlagsTab {
     this._evals.push(ev);
     if (this._evals.length > this._maxEvents) {
       const evicted = this._evals.splice(0, this._evals.length - this._maxEvents);
-      // Clean _lastResult for flags no longer present in _evals
       for (const old of evicted) {
         if (!this._evals.some(e => e.flagName === old.flagName)) {
           delete this._lastResult[old.flagName];
@@ -109,18 +111,28 @@ class FeatureFlagsTab {
       }
     }
 
-    // Update UI
-    if (this._summaryMode) {
-      this._renderSummary();
-    } else {
-      this._applyFilters();
-      // Animate new row
+    // Only render when tab is visible — batch via rAF to avoid per-event reflow
+    if (!this._isActive) return;
+
+    if (!this._renderPending) {
+      this._renderPending = true;
+      this._pendingNewEv = ev;
       requestAnimationFrame(() => {
-        const row = this._scrollEl.querySelector('[data-eid="' + ev.id + '"]');
-        if (row) {
-          row.classList.add('new');
-          if (ev.changed) row.classList.add('flash');
-          this._scrollEl.scrollTop = this._scrollEl.scrollHeight;
+        this._renderPending = false;
+        const pendingEv = this._pendingNewEv;
+        this._pendingNewEv = null;
+        if (this._summaryMode) {
+          this._renderSummary();
+        } else {
+          this._applyFilters();
+          if (pendingEv) {
+            const row = this._scrollEl.querySelector('[data-eid="' + pendingEv.id + '"]');
+            if (row) {
+              row.classList.add('new');
+              if (pendingEv.changed) row.classList.add('flash');
+              this._scrollEl.scrollTop = this._scrollEl.scrollHeight;
+            }
+          }
         }
       });
     }

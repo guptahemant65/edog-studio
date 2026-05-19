@@ -90,7 +90,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             await _inner.CreateDirIfNotExistsAsync(path, metadata, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
-            PublishEvent("Write", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
+            PublishEvent("CreateDir", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
         }
 
         /// <inheritdoc/>
@@ -103,8 +103,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             var contentSize = content != null ? System.Text.Encoding.UTF8.GetByteCount(content) : 0;
             var preview = TruncatePreview(content);
             var ttl = timeToExpire != default ? (long)timeToExpire.TotalSeconds : 0;
+            var truncated = content != null && content.Length > MaxContentPreviewBytes;
 
-            PublishEvent("Write", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: content != null, contentPreview: preview, ttlSeconds: ttl);
+            PublishEvent("WriteFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: content != null, contentPreview: preview, ttlSeconds: ttl, previewTruncated: truncated);
         }
 
         /// <inheritdoc/>
@@ -116,8 +117,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var contentSize = result != null ? System.Text.Encoding.UTF8.GetByteCount(result) : 0;
             var preview = TruncatePreview(result);
+            var truncated = result != null && result.Length > MaxContentPreviewBytes;
 
-            PublishEvent("Read", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: result != null, contentPreview: preview, ttlSeconds: 0);
+            PublishEvent("Read", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: contentSize, hasContent: result != null, contentPreview: preview, ttlSeconds: 0, previewTruncated: truncated);
             return result;
         }
 
@@ -130,7 +132,7 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             var ttl = timeToExpire != default ? (long)timeToExpire.TotalSeconds : 0;
 
-            PublishEvent("Write", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: ttl);
+            PublishEvent("CreateFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: ttl, operationResult: result);
             return result;
         }
 
@@ -141,7 +143,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             await _inner.RenameFileAsync(srcPath, destinationPath, metadata, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
-            PublishEvent("Write", srcPath + " → " + destinationPath, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
+            PublishEvent("Rename", srcPath + " \u2192 " + destinationPath, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
         }
 
         /// <inheritdoc/>
@@ -151,7 +153,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             var result = await _inner.DeleteFileIfExistsAsync(path, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
-            PublishEvent("Delete", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
+            PublishEvent("DeleteFile", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0, operationResult: result);
             return result;
         }
 
@@ -162,7 +164,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             var result = await _inner.DeleteDirIfExistsAsync(path, cancellationToken).ConfigureAwait(false);
             sw.Stop();
 
-            PublishEvent("Delete", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0);
+            PublishEvent("DeleteDir", path, sw.Elapsed.TotalMilliseconds, contentSizeBytes: 0, hasContent: false, contentPreview: null, ttlSeconds: 0, operationResult: result);
             return result;
         }
 
@@ -245,7 +247,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// Publishes a FileOpEvent to the "fileop" topic. Never throws.
         /// </summary>
-        private void PublishEvent(string operation, string path, double durationMs, long contentSizeBytes, bool hasContent, string contentPreview, long ttlSeconds)
+        private void PublishEvent(
+            string operation, string path, double durationMs,
+            long contentSizeBytes, bool hasContent, string contentPreview,
+            long ttlSeconds, bool? operationResult = null, bool previewTruncated = false)
         {
             try
             {
@@ -257,7 +262,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     durationMs,
                     hasContent,
                     contentPreview,
+                    previewTruncated,
                     ttlSeconds,
+                    operationResult,
                     iterationId = _iterationId,
                 };
 

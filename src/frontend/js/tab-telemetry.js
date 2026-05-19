@@ -111,7 +111,9 @@ class TelemetryTab {
   _onEvent = (envelope) => {
     const data  = envelope.data || envelope;
     const seqId = envelope.sequenceId;
-    const ts    = envelope.timestamp;
+    // Prefer the operation start time from the TelemetryEvent over the
+    // envelope publish time — more accurate for long-running operations.
+    const ts    = data.timestamp || envelope.timestamp;
 
     const activity = this._mapEvent(data, seqId, ts);
 
