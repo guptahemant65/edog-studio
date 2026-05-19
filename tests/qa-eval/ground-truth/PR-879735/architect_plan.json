@@ -1,0 +1,338 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T13:11:56.2332785\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "879735",
+  "zone_id": "PR-879735-full-diff",
+  "zone_summary": "Feature-flagged cursor pagination for listDAGExecutionIterationIds, including continuation-header contract, optional/default page sizing, filter-bound tokens, stable global ordering, and bounded deep scans.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 8,
+    "grounding_evidence": 14,
+    "scenario_sketches": 11
+  },
+  "behavioral_changes": [
+    {
+      "summary": "The controller now treats historyCount as optional under FLTListDagAPIPagination and sources missing values from the new DefaultHistoryCount workload parameter.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2"
+      ]
+    },
+    {
+      "summary": "Effective historyCount is clamped to 500, and pagination-disabled requests null out any supplied continuationToken before querying storage.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "Successful paginated calls expose the next-page cursor in the x-ms-continuation-token header, and the Swagger contract now advertises that response header.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5"
+      ]
+    },
+    {
+      "summary": "Continuation tokens are decoded from reverseEpoch/IterationId/filterHash cursors; malformed tokens and filter changes now raise ArgumentException that the controller maps to HTTP 400.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-7",
+        "ev-12",
+        "ev-13"
+      ]
+    },
+    {
+      "summary": "Storage reads now page after a cursor with SDK continuation support, counting only status-matching files so sparse status filters can still produce full pages.",
+      "evidence_refs": [
+        "ev-8",
+        "ev-9",
+        "ev-14"
+      ]
+    },
+    {
+      "summary": "Deep cursor scans are bounded to 200 storage batches and fail fast with a user-facing \u0027narrow your search criteria\u0027 message instead of scanning indefinitely.",
+      "evidence_refs": [
+        "ev-10"
+      ]
+    },
+    {
+      "summary": "Aggregated results are globally sorted by StartedAt then IterationId, cursor-filtered after the global sort, and use an N\u002B1 extra record to decide whether to mint the next continuation token.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12"
+      ]
+    },
+    {
+      "summary": "Filter hashes normalize status and MLV-ID ordering so logically equivalent filter sets continue the same pagination stream.",
+      "evidence_refs": [
+        "ev-13"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service.EntryPoint/WorkloadParameters/ParametersManifest.json",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -117,6 \u002B117,8 @@",
+      "new_line": 121,
+      "excerpt": "\u0022DefaultHistoryCount\u0022: 500,",
+      "reason": "Adds the host-configured default page size used when historyCount is omitted and pagination is enabled."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -407,12 \u002B410,27 @@",
+      "new_line": 423,
+      "excerpt": "int effectiveHistoryCount = historyCount ?? (isPaginationEnabled ? this.parametersProvider.GetHostParameter\u003Cint\u003E(WorkloadParameterNames.DefaultHistoryCount) : MaxHistoryCount);",
+      "reason": "Makes historyCount optional and resolves the effective page size from the new workload parameter when the feature flag is on."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -407,12 \u002B410,27 @@",
+      "new_line": 426,
+      "excerpt": "if (!isPaginationEnabled) { continuationToken = null; } ... effectiveHistoryCount = Math.Clamp(effectiveHistoryCount, 1, MaxHistoryCount);",
+      "reason": "Defines the flag-off compatibility path and the new upper-bound clamp for requested page size."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -422,12 \u002B440,18 @@",
+      "new_line": 447,
+      "excerpt": "if (isPaginationEnabled \u0026\u0026 !string.IsNullOrEmpty(nextContinuationToken)) { Response.Headers.Append(\u0022x-ms-continuation-token\u0022, nextContinuationToken); }",
+      "reason": "Adds the observable HTTP response header that carries the next-page cursor."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -263,6 \u002B263,14 @@",
+      "new_line": 266,
+      "excerpt": "\u0022x-ms-continuation-token\u0022: { \u0022description\u0022: \u0022Continuation token for retrieving the next page of results. Absent when no more pages exist.\u0022 }",
+      "reason": "Extends the published API schema with the new continuation response header contract."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -212,36 \u002B228,80 @@",
+      "new_line": 239,
+      "excerpt": "if (!string.IsNullOrEmpty(...ContinuationToken)) { if (ContinuationTokenHelper.TryDecode(...)) { if (ContinuationTokenHelper.ValidateFilterHash(...)) { ... } else { throw new ArgumentException(\u0022Search criteria have changed. Please refresh to see updated results.\u0022); } } else { throw new ArgumentException(\u0022Page data is no longer available. Please refresh to reload.\u0022); } }",
+      "reason": "Implements continuation-token parsing plus explicit failures for stale-filter and malformed-token cases."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -436,6 \u002B460,12 @@",
+      "new_line": 466,
+      "excerpt": "catch (ArgumentException ex) { ... resultCode = HttpStatusCode.BadRequest; return CreateErrorResponse(ex.Message, resultCode); }",
+      "reason": "Maps the new token-validation failures to HTTP 400 instead of letting them bubble as generic server errors."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -1479,14 \u002B1667,52 @@",
+      "new_line": 1714,
+      "excerpt": "bool hasStatusFilter = listDagExecutionIterationsRequestFilters.Statuses?.Count \u003E 0; int fetchLimit = hasStatusFilter ? MaxFetchPerFolder : historyCount \u002B 1;",
+      "reason": "First-page listing now over-fetches when status filters are present so sparse matches can still fill a page."
+    },
+    {
+      "evidence_id": "ev-9",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -1430,20 \u002B1490,25 @@",
+      "new_line": 1588,
+      "excerpt": "var (batchPaths, nextToken) = await fs.ListWithContinuationAsync(folderPath, MaxFetchPerFolder, storageContinuationToken, cancellationToken); ... if (hasStatusFilter \u0026\u0026 !statusSet.Contains(status)) { continue; } ... if (matchingCount \u003E= neededCount) { return filesAfterCursor; }",
+      "reason": "Subsequent-page scans now use paged storage listing and count only matching statuses toward the next page threshold."
+    },
+    {
+      "evidence_id": "ev-10",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -1430,20 \u002B1490,25 @@",
+      "new_line": 1580,
+      "excerpt": "if (\u002B\u002BbatchCount \u003E MaxCursorScanBatches) { throw new InvalidOperationException(\u0022Too many records to search through. Please narrow your search criteria and try again.\u0022); }",
+      "reason": "Adds the defensive cap that stops deep cursor scans after 200 storage batches."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -1688,5 \u002B1968,101 @@",
+      "new_line": 1993,
+      "excerpt": "var sortedIterations = dagExecutionIterations.OrderByDescending(d =\u003E d.StartedAt).ThenByDescending(d =\u003E d.IterationId.ToString()).ToList(); ... var itemsWithExtra = filteredIterations.Take(historyCount \u002B 1).ToList(); ... nextContinuationToken = ContinuationTokenHelper.Encode(lastItem.StartedAt.Value, lastItem.IterationId, filterHash);",
+      "reason": "Defines the global ordering, page slicing, and next-token generation semantics for pagination."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/ContinuationTokenHelper.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -0,0 \u002B1,222 @@",
+      "new_line": 40,
+      "excerpt": "string rawToken = string.Join(Separator.ToString(), reverseEpoch, iterationId, filterHash ?? string.Empty);",
+      "reason": "The token payload now carries both reverseEpoch and IterationId, enabling deterministic page boundaries for same-timestamp items."
+    },
+    {
+      "evidence_id": "ev-13",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Utils/ContinuationTokenHelper.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -0,0 \u002B1,222 @@",
+      "new_line": 121,
+      "excerpt": "filters.Statuses.OrderBy(s =\u003E s.ToString()) ... filters.MlvExecutionDefinitionIds.OrderBy(g =\u003E g).Select(g =\u003E g.ToString().ToLowerInvariant())",
+      "reason": "Normalizes collection-valued filters before hashing so equivalent filter sets produce the same continuation-token hash."
+    },
+    {
+      "evidence_id": "ev-14",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
+      "side": "right",
+      "base_sha": "f29e7569f12c4224a00c74bc4e5d6066d56d43e7",
+      "hunk_id": "@@ -303,6 \u002B303,64 @@",
+      "new_line": 323,
+      "excerpt": "await foreach (Page\u003CPathItem\u003E page in pageable.AsPages(continuationToken: ..., pageSizeHint: effectiveMaxCount)) { ... nextContinuationToken = page.ContinuationToken; if (paths.Count \u003E= effectiveMaxCount) { break; } }",
+      "reason": "Adds resumable SDK-backed listing support that the pagination scan depends on for deep folders."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "Paginating across multiple folders returns globally descending, non-overlapping pages",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Create interleaved execution histories across multiple Index_StartTime_* folders, walk page 1/page 2/... with continuation tokens, and assert the combined traversal returns each item exactly once in global StartedAt-descending order.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-14"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "Responses emit x-ms-continuation-token only when more pages exist, and omit it on the last page",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Validate the new response-header contract by asserting a continuation header on a non-terminal page, no header on the final page, and Swagger exposure of the header name/description.",
+      "evidence_refs": [
+        "ev-4",
+        "ev-5",
+        "ev-11"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "Omitted historyCount uses DefaultHistoryCount when pagination is enabled",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Stub the parameters provider to a recognizable value and verify that an enabled request with no historyCount passes that workload-configured page size downstream.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "historyCount above 500 is clamped before downstream pagination work",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Exercise below-cap, at-cap, and above-cap values so the test locks in the new 500 maximum, especially the observable 1000\u2192500 case.",
+      "evidence_refs": [
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "With FLTListDagAPIPagination off, continuationToken is ignored and no continuation header is returned",
+      "category": "EdgeCase",
+      "technique": "TruthTable",
+      "rationale": "Hold the handler/store capable of returning a next token, disable the feature flag, and verify the controller clears the incoming token and suppresses the outgoing header for backward compatibility.",
+      "evidence_refs": [
+        "ev-3",
+        "ev-4"
+      ]
+    },
+    {
+      "sketch_id": "sk-6",
+      "title": "Malformed continuation tokens return 400 with the reload guidance message",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Pass an undecodable token and assert the persistence layer rejects it with the reload message that the controller surfaces as BadRequest.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-7"
+      ]
+    },
+    {
+      "sketch_id": "sk-7",
+      "title": "Changing filters between pages returns 400 with the search-criteria-changed message",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Fetch a first page, then reuse its token while changing status/time/MLV filters and verify the filter-hash mismatch path returns the explicit refresh message as HTTP 400.",
+      "evidence_refs": [
+        "ev-6",
+        "ev-7",
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-8",
+      "title": "Equivalent status and MLV filters in different query orders keep the same continuation-token hash",
+      "category": "EdgeCase",
+      "technique": "EquivalencePartition",
+      "rationale": "Use the same logical filter sets in different list orders and prove the helper/controller treat them as equivalent rather than spuriously rejecting the next page.",
+      "evidence_refs": [
+        "ev-13"
+      ]
+    },
+    {
+      "sketch_id": "sk-9",
+      "title": "Sparse status filters still fill pages and emit a next token",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Arrange many non-matching files with only occasional matching statuses so the first-page and after-cursor fetch paths must over-scan to return historyCount matching items and a continuation token.",
+      "evidence_refs": [
+        "ev-8",
+        "ev-9",
+        "ev-11"
+      ]
+    },
+    {
+      "sketch_id": "sk-10",
+      "title": "Same-timestamp iterations page by IterationId descending without duplicates across the page boundary",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Place multiple iterations with identical StartedAt around the cutoff so the test proves the IterationId tie-breaker controls both order and the next-page cursor boundary.",
+      "evidence_refs": [
+        "ev-11",
+        "ev-12"
+      ]
+    },
+    {
+      "sketch_id": "sk-11",
+      "title": "Cursor scanning aborts after 200 storage batches with the narrow-search-criteria failure",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Mock repeated low-yield or empty paged listings with continuation tokens and assert the defensive batch cap throws the explicit narrowing guidance instead of scanning unboundedly.",
+      "evidence_refs": [
+        "ev-10",
+        "ev-9"
+      ]
+    }
+  ]
+}

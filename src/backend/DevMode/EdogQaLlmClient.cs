@@ -114,8 +114,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Stable cache key for the Editor's system+schema prefix.</summary>
         internal const string PromptCacheKeyEditor = "edog-qa-editor-v2";
 
-        /// <summary>Architect budget. Reasoning tokens are charged against this; 128,000 keeps headroom for dense schema/error-handling PRs near the 80KB diff cap where 96K previously returned status=incomplete (see F27 P9 T4-C capture report).</summary>
-        internal const int ArchitectMaxOutputTokens = 128000;
+        /// <summary>Architect budget. Reasoning tokens are charged against this. 192K is the
+        /// T4-D-followup bump — 128K returned status=incomplete on PR-879735 (326KB diff
+        /// truncated to 80KB; densest reasoning load in the corpus). 192K leaves ~100K for
+        /// reasoning above the ~90K input prompt + 80KB diff envelope.</summary>
+        internal const int ArchitectMaxOutputTokens = 192000;
 
         /// <summary>Editor budget. Editor is not a reasoning model, so 16K is well above the ~2K visible scenario JSON ceiling.</summary>
         internal const int EditorMaxOutputTokens = 32000;

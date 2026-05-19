@@ -288,7 +288,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 hasStrictJsonSchema = body.Contains("\"type\":\"json_schema\"", StringComparison.Ordinal)
                     && body.Contains("\"strict\":true", StringComparison.Ordinal),
                 hasReasoningEffortHigh = body.Contains("\"effort\":\"high\"", StringComparison.Ordinal),
-                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":128000", StringComparison.Ordinal),
+                hasMaxOutputTokens = body.Contains("\"max_output_tokens\":192000", StringComparison.Ordinal),
                 hasPromptCacheKey = body.Contains("\"prompt_cache_key\":\"" + EdogQaLlmClient.PromptCacheKeyArchitect + "\"", StringComparison.Ordinal),
                 modelMentioned = body.Contains("\"model\":\"gpt-5.4\"", StringComparison.Ordinal),
                 schemaNamePinned = body.Contains("\"name\":\"" + EdogQaLlmClient.ArchitectSchemaName + "\"", StringComparison.Ordinal),

@@ -749,11 +749,9 @@ def test_qa_llm_client_architect_editor_split_present() -> None:
     assert 'EditorReasoningEffort = "low"' in src, (
         "Editor must default to reasoning.effort=low (spec §3.1)."
     )
-    assert "ArchitectMaxOutputTokens = 128000" in src, (
-        "Architect must allow ≥128000 max_output_tokens (T4-D streaming + dense-diff bump). "
-        "Original NO_SCENARIOS_GENERATED was an 8192 starved budget; T2 lifted to 96K; "
-        "T4-D large-PR captures (PR-960426/PR-879735) showed 96K returns status=incomplete "
-        "on dense schema diffs near the 80KB cap, so the budget is now 128K."
+    assert "ArchitectMaxOutputTokens = 192000" in src, (
+        "Architect must allow ≥192000 max_output_tokens (T4-D followup; 128K returned "
+        "status=incomplete on PR-879735's 80KB-truncated diff — densest in corpus)."
     )
 
 
@@ -883,8 +881,7 @@ def test_llm_client_architect_request_shape(harness_environment, built_harness) 
     assert shape["hasStrictJsonSchema"] is True, shape
     assert shape["hasReasoningEffortHigh"] is True, shape
     assert shape["hasMaxOutputTokens"] is True, (
-        "Architect must request max_output_tokens=128000 (T4-D streaming + density bump). "
-        "Undersizing causes NO_SCENARIOS_GENERATED / status=incomplete on dense diffs. shape=" + repr(shape)
+        "Architect must request max_output_tokens=192000 (T4-D + PR-879735 unblock). shape=" + repr(shape)
     )
     assert shape["hasPromptCacheKey"] is True, shape
     assert shape["modelMentioned"] is True, shape

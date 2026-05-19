@@ -1,0 +1,273 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T13:12:13.6734941\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "879735",
+  "counts": {
+    "emitted": 11,
+    "validated": 11,
+    "projected": 11
+  },
+  "scenarios": [
+    {
+      "id": "sk-1",
+      "topic": "Controller / persistence pagination",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1993
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/Fs/OnelakeBasedFileSystem.cs",
+          "side": "right",
+          "lines": [
+            323
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-2",
+      "topic": "HTTP contract / Swagger",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            447
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Swagger/Swagger.json",
+          "side": "right",
+          "lines": [
+            266
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1993
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "Controller parameter binding / workload defaults",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service.EntryPoint/WorkloadParameters/ParametersManifest.json",
+          "side": "right",
+          "lines": [
+            121
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            423
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "Controller validation / page sizing",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            426
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "Controller compatibility path",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            426
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            447
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-6",
+      "topic": "Pagination token validation",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            239
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            466
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-7",
+      "topic": "Pagination token validation / filter hash",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            239
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableController.cs",
+          "side": "right",
+          "lines": [
+            466
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/ContinuationTokenHelper.cs",
+          "side": "right",
+          "lines": [
+            121
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-8",
+      "topic": "Continuation token hashing",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/ContinuationTokenHelper.cs",
+          "side": "right",
+          "lines": [
+            121
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-9",
+      "topic": "Storage scan / sparse filter handling",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1714
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1588
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1993
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-10",
+      "topic": "Global sort / cursor boundary",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1993
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Utils/ContinuationTokenHelper.cs",
+          "side": "right",
+          "lines": [
+            40
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-11",
+      "topic": "Storage scan guardrails",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1580
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Persistence/FileSystemBasedDagExecutionPersistenceManager.cs",
+          "side": "right",
+          "lines": [
+            1588
+          ]
+        }
+      ]
+    }
+  ]
+}
