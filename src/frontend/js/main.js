@@ -671,6 +671,13 @@ class EdogLogViewer {
     if (status === 'connected') {
       this.sidebar.setPhase('connected');
       if (this.runtimeView) this.runtimeView.setPhase('connected');
+      // Clear log/telemetry buffers — the topic stream will deliver a fresh
+      // snapshot followed by live events. Without this clear, a reconnect
+      // would duplicate entries (old buffer + new snapshot = 2x).
+      this.state.logBuffer.clear();
+      this.state.filterIndex.clear();
+      this.state.telemetryBuffer.clear();
+      this.renderer.scheduleRender();
     }
   }
   

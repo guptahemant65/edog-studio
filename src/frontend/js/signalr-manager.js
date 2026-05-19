@@ -236,13 +236,16 @@ class SignalRManager {
   disconnect = () => {
     this._closing = true;
     if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
-    // Dispose active streams before killing connection
-    for (const [, stream] of this._activeStreams) {
+    // Dispose active streams (tied to the old connection) and move their
+    // topics to pending so they re-subscribe on the next connect().
+    for (const [topic, stream] of this._activeStreams) {
       try { stream.dispose(); } catch (_) { /* already closed */ }
+      this._pendingTopics.add(topic);
     }
     this._activeStreams.clear();
-    this._pendingTopics.clear();
-    this._listeners.clear();
+    // Move active stream topics back to pending so they re-subscribe on
+    // the next connect(). Do NOT clear _listeners — they outlive connections.
+    // Do NOT clear _pendingTopics — callers may have queued topics.
     if (this.connection) {
       this.connection.stop().catch(() => {});
       this.connection = null;

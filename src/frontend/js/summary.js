@@ -224,28 +224,62 @@ class ExecutionSummary {
     }
 
     container.innerHTML = `
-      <div class="exec-summary-grid">
-        <div class="exec-metrics">
-          <h3>Key Metrics</h3>
-          <div class="exec-metric-row"><span class="exec-metric-label">Status</span><span class="exec-metric-value ${statusClass}">${statusIcon} ${this.esc(data.metrics.status)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Duration</span><span class="exec-metric-value">${this.esc(data.metrics.duration)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Started</span><span class="exec-metric-value">${this.esc(data.metrics.started)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Refresh</span><span class="exec-metric-value">${this.esc(data.metrics.refreshMode)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Nodes</span><span class="exec-metric-value">${nodesSucceeded}/${data.nodes.length} ✅</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Errors</span><span class="exec-metric-value ${data.metrics.errorCount > 0 ? 'error' : ''}">${data.metrics.errorCount}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Parallel</span><span class="exec-metric-value">${this.esc(data.metrics.parallelLimit)}</span></div>
+      <div class="exec-section collapsed">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Key Metrics</span>
+          <span class="exec-section-badge ${statusClass}">${statusIcon} ${this.esc(data.metrics.status)}</span>
         </div>
-        <div class="node-table">
-          <h3>Node Breakdown</h3>
-          ${nodesHtml}
+        <div class="exec-section-body">
+          <div class="exec-metrics">
+            <div class="exec-metric-row"><span class="exec-metric-label">Duration</span><span class="exec-metric-value">${this.esc(data.metrics.duration)}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Started</span><span class="exec-metric-value">${this.esc(data.metrics.started)}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Refresh</span><span class="exec-metric-value">${this.esc(data.metrics.refreshMode)}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Nodes</span><span class="exec-metric-value">${nodesSucceeded}/${data.nodes.length}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Errors</span><span class="exec-metric-value ${data.metrics.errorCount > 0 ? 'error' : ''}">${data.metrics.errorCount}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Parallel</span><span class="exec-metric-value">${this.esc(data.metrics.parallelLimit)}</span></div>
+          </div>
         </div>
       </div>
-      ${data.errors.length > 0 ? `<div class="exec-errors"><h3>Errors</h3>${errorsHtml}</div>` : ''}
-      <div class="exec-timeline">
-        <h3>Key Moments Timeline</h3>
-        ${timelineHtml}
+      <div class="exec-section collapsed">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Node Breakdown</span>
+          <span class="exec-section-badge">${nodesSucceeded}/${data.nodes.length} nodes</span>
+        </div>
+        <div class="exec-section-body">
+          <div class="node-table">${nodesHtml}</div>
+        </div>
+      </div>
+      ${data.errors.length > 0 ? `
+      <div class="exec-section">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Errors</span>
+          <span class="exec-section-badge error">${data.metrics.errorCount}</span>
+        </div>
+        <div class="exec-section-body">
+          <div class="exec-errors">${errorsHtml}</div>
+        </div>
+      </div>` : ''}
+      <div class="exec-section collapsed">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Key Moments Timeline</span>
+          <span class="exec-section-badge">${data.timeline.length} events</span>
+        </div>
+        <div class="exec-section-body">
+          <div class="exec-timeline">${timelineHtml}</div>
+        </div>
       </div>
     `;
+
+    // Wire collapsible toggles
+    container.querySelectorAll('[data-action="toggle-section"]').forEach(head => {
+      head.addEventListener('click', () => {
+        head.parentElement.classList.toggle('collapsed');
+      });
+    });
   }
 
   clearSummary = () => {

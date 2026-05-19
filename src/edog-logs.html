@@ -37919,13 +37919,16 @@ class SignalRManager {
   disconnect = () => {
     this._closing = true;
     if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
-    // Dispose active streams before killing connection
-    for (const [, stream] of this._activeStreams) {
+    // Dispose active streams (tied to the old connection) and move their
+    // topics to pending so they re-subscribe on the next connect().
+    for (const [topic, stream] of this._activeStreams) {
       try { stream.dispose(); } catch (_) { /* already closed */ }
+      this._pendingTopics.add(topic);
     }
     this._activeStreams.clear();
-    this._pendingTopics.clear();
-    this._listeners.clear();
+    // Move active stream topics back to pending so they re-subscribe on
+    // the next connect(). Do NOT clear _listeners — they outlive connections.
+    // Do NOT clear _pendingTopics — callers may have queued topics.
     if (this.connection) {
       this.connection.stop().catch(() => {});
       this.connection = null;
@@ -42432,28 +42435,62 @@ class ExecutionSummary {
     }
 
     container.innerHTML = `
-      <div class="exec-summary-grid">
-        <div class="exec-metrics">
-          <h3>Key Metrics</h3>
-          <div class="exec-metric-row"><span class="exec-metric-label">Status</span><span class="exec-metric-value ${statusClass}">${statusIcon} ${this.esc(data.metrics.status)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Duration</span><span class="exec-metric-value">${this.esc(data.metrics.duration)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Started</span><span class="exec-metric-value">${this.esc(data.metrics.started)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Refresh</span><span class="exec-metric-value">${this.esc(data.metrics.refreshMode)}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Nodes</span><span class="exec-metric-value">${nodesSucceeded}/${data.nodes.length} ✅</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Errors</span><span class="exec-metric-value ${data.metrics.errorCount > 0 ? 'error' : ''}">${data.metrics.errorCount}</span></div>
-          <div class="exec-metric-row"><span class="exec-metric-label">Parallel</span><span class="exec-metric-value">${this.esc(data.metrics.parallelLimit)}</span></div>
+      <div class="exec-section collapsed">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Key Metrics</span>
+          <span class="exec-section-badge ${statusClass}">${statusIcon} ${this.esc(data.metrics.status)}</span>
         </div>
-        <div class="node-table">
-          <h3>Node Breakdown</h3>
-          ${nodesHtml}
+        <div class="exec-section-body">
+          <div class="exec-metrics">
+            <div class="exec-metric-row"><span class="exec-metric-label">Duration</span><span class="exec-metric-value">${this.esc(data.metrics.duration)}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Started</span><span class="exec-metric-value">${this.esc(data.metrics.started)}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Refresh</span><span class="exec-metric-value">${this.esc(data.metrics.refreshMode)}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Nodes</span><span class="exec-metric-value">${nodesSucceeded}/${data.nodes.length}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Errors</span><span class="exec-metric-value ${data.metrics.errorCount > 0 ? 'error' : ''}">${data.metrics.errorCount}</span></div>
+            <div class="exec-metric-row"><span class="exec-metric-label">Parallel</span><span class="exec-metric-value">${this.esc(data.metrics.parallelLimit)}</span></div>
+          </div>
         </div>
       </div>
-      ${data.errors.length > 0 ? `<div class="exec-errors"><h3>Errors</h3>${errorsHtml}</div>` : ''}
-      <div class="exec-timeline">
-        <h3>Key Moments Timeline</h3>
-        ${timelineHtml}
+      <div class="exec-section collapsed">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Node Breakdown</span>
+          <span class="exec-section-badge">${nodesSucceeded}/${data.nodes.length} nodes</span>
+        </div>
+        <div class="exec-section-body">
+          <div class="node-table">${nodesHtml}</div>
+        </div>
+      </div>
+      ${data.errors.length > 0 ? `
+      <div class="exec-section">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Errors</span>
+          <span class="exec-section-badge error">${data.metrics.errorCount}</span>
+        </div>
+        <div class="exec-section-body">
+          <div class="exec-errors">${errorsHtml}</div>
+        </div>
+      </div>` : ''}
+      <div class="exec-section collapsed">
+        <div class="exec-section-head" data-action="toggle-section">
+          <svg class="exec-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <span class="exec-section-title">Key Moments Timeline</span>
+          <span class="exec-section-badge">${data.timeline.length} events</span>
+        </div>
+        <div class="exec-section-body">
+          <div class="exec-timeline">${timelineHtml}</div>
+        </div>
       </div>
     `;
+
+    // Wire collapsible toggles
+    container.querySelectorAll('[data-action="toggle-section"]').forEach(head => {
+      head.addEventListener('click', () => {
+        head.parentElement.classList.toggle('collapsed');
+      });
+    });
   }
 
   clearSummary = () => {
@@ -92488,6 +92525,13 @@ class EdogLogViewer {
     if (status === 'connected') {
       this.sidebar.setPhase('connected');
       if (this.runtimeView) this.runtimeView.setPhase('connected');
+      // Clear log/telemetry buffers — the topic stream will deliver a fresh
+      // snapshot followed by live events. Without this clear, a reconnect
+      // would duplicate entries (old buffer + new snapshot = 2x).
+      this.state.logBuffer.clear();
+      this.state.filterIndex.clear();
+      this.state.telemetryBuffer.clear();
+      this.renderer.scheduleRender();
     }
   }
   
