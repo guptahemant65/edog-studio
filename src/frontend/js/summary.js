@@ -133,8 +133,9 @@ class ExecutionSummary {
     const errorMap = new Map();
     logs.filter(l => l.level === 'Error').forEach(log => {
       const msg = log.message || '';
-      const codeMatch = msg.match(/\b(MLV_\w+|ERR_\w+|ERROR_\w+)\b/);
-      const code = codeMatch ? codeMatch[1] : 'UNKNOWN_ERROR';
+      const codeMatch = msg.match(/\b(MLV_\w+|FLT_\w+|SPARK_\w+|ERR_\w+|ERROR_\w+)\b/);
+      if (!codeMatch) return; // Skip platform errors without known FLT codes
+      const code = codeMatch[1];
       const existing = errorMap.get(code) || { code, message: msg.substring(0, 120), count: 0, node: '' };
       existing.count++;
       // Try to extract node name from context

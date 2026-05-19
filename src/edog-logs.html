@@ -42197,8 +42197,9 @@ class ExecutionSummary {
     const errorMap = new Map();
     logs.filter(l => l.level === 'Error').forEach(log => {
       const msg = log.message || '';
-      const codeMatch = msg.match(/\b(MLV_\w+|ERR_\w+|ERROR_\w+)\b/);
-      const code = codeMatch ? codeMatch[1] : 'UNKNOWN_ERROR';
+      const codeMatch = msg.match(/\b(MLV_\w+|FLT_\w+|SPARK_\w+|ERR_\w+|ERROR_\w+)\b/);
+      if (!codeMatch) return; // Skip platform errors without known FLT codes
+      const code = codeMatch[1];
       const existing = errorMap.get(code) || { code, message: msg.substring(0, 120), count: 0, node: '' };
       existing.count++;
       // Try to extract node name from context
@@ -42455,13 +42456,17 @@ class AutoDetector {
         }
       }
 
-      // Detect errors
+      // Detect errors — only flag errors that have a known FLT error code.
+      // Previously tagged ALL error-level logs as UNKNOWN_ERROR, causing noise
+      // from platform/infrastructure errors that aren't DAG failures.
       if ((entry.level || '').toLowerCase() === 'error') {
         const errorCodeMatch = msg.match(/\b(MLV_\w+|FLT_\w+|SPARK_\w+)\b/);
-        const errorCode = errorCodeMatch ? errorCodeMatch[1] : 'UNKNOWN_ERROR';
-        exec.errors.push({ code: errorCode, message: msg.substring(0, 200), timestamp: entry.timestamp, node: this.inferNodeFromContext(msg) });
-        exec.failedNodes = Math.max(exec.failedNodes, exec.errors.length > 0 ? 1 : 0);
-        if (this.onErrorDetected) this.onErrorDetected(exec, exec.errors[exec.errors.length - 1]);
+        if (errorCodeMatch) {
+          const errorCode = errorCodeMatch[1];
+          exec.errors.push({ code: errorCode, message: msg.substring(0, 200), timestamp: entry.timestamp, node: this.inferNodeFromContext(msg) });
+          exec.failedNodes = Math.max(exec.failedNodes, exec.errors.length > 0 ? 1 : 0);
+          if (this.onErrorDetected) this.onErrorDetected(exec, exec.errors[exec.errors.length - 1]);
+        }
       }
 
       // Auto-set as active execution (most recent one wins)

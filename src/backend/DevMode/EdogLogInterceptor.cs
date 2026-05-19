@@ -117,11 +117,14 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                 var isFlt = this.IsFltComponent(component);
 
-                // Noise filter: non-FLT Info/Verbose logs are dropped when allowlist is active
+                // Noise filter: non-FLT logs are dropped when allowlist is active.
+                // Previously only dropped Info/Verbose — but platform ERROR/WARNING
+                // from WCL relay, security audit, telemetry internals etc. are noise
+                // for FLT developers. Only pass non-FLT errors if they mention FLT
+                // error codes (MLV_, FLT_, SPARK_) as those are cross-cutting.
                 if (this.hasAllowlist && !isFlt)
                 {
-                    var upperLevel = level.ToUpperInvariant();
-                    if (upperLevel != "ERROR" && upperLevel != "WARNING")
+                    if (!message.Contains("MLV_") && !message.Contains("FLT_") && !message.Contains("SPARK_"))
                     {
                         return;
                     }

@@ -127,13 +127,17 @@ class AutoDetector {
         }
       }
 
-      // Detect errors
+      // Detect errors — only flag errors that have a known FLT error code.
+      // Previously tagged ALL error-level logs as UNKNOWN_ERROR, causing noise
+      // from platform/infrastructure errors that aren't DAG failures.
       if ((entry.level || '').toLowerCase() === 'error') {
         const errorCodeMatch = msg.match(/\b(MLV_\w+|FLT_\w+|SPARK_\w+)\b/);
-        const errorCode = errorCodeMatch ? errorCodeMatch[1] : 'UNKNOWN_ERROR';
-        exec.errors.push({ code: errorCode, message: msg.substring(0, 200), timestamp: entry.timestamp, node: this.inferNodeFromContext(msg) });
-        exec.failedNodes = Math.max(exec.failedNodes, exec.errors.length > 0 ? 1 : 0);
-        if (this.onErrorDetected) this.onErrorDetected(exec, exec.errors[exec.errors.length - 1]);
+        if (errorCodeMatch) {
+          const errorCode = errorCodeMatch[1];
+          exec.errors.push({ code: errorCode, message: msg.substring(0, 200), timestamp: entry.timestamp, node: this.inferNodeFromContext(msg) });
+          exec.failedNodes = Math.max(exec.failedNodes, exec.errors.length > 0 ? 1 : 0);
+          if (this.onErrorDetected) this.onErrorDetected(exec, exec.errors[exec.errors.length - 1]);
+        }
       }
 
       // Auto-set as active execution (most recent one wins)
