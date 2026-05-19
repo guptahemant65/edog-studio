@@ -381,10 +381,17 @@ class Renderer {
     }
     // When LIVE, suppress manual-scroll renders (prevent feedback loop)
     if (this.state.streamMode === 'LIVE') return;
-    // PAUSED: user is scrolling manually — render the viewport
-    if (!this.renderScheduled) {
-      this.renderScheduled = true;
-      requestAnimationFrame(() => this.flush());
+    // PAUSED: user is scrolling manually — render the viewport directly.
+    // We bypass flush() here because flush() short-circuits in PAUSED mode
+    // (to freeze the DOM against new-log churn). Scroll events MUST reposition
+    // rows for the current scrollTop, otherwise pooled rows stay translated
+    // to their last (auto-scrolled bottom) position and leave a void above.
+    if (!this._scrollRenderScheduled) {
+      this._scrollRenderScheduled = true;
+      requestAnimationFrame(() => {
+        this._scrollRenderScheduled = false;
+        this._renderVirtualScroll();
+      });
     }
   }
 
