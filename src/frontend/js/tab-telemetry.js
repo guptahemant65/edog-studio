@@ -187,10 +187,11 @@ class TelemetryTab {
     const rawStatus = (data.activityStatus || '').toLowerCase();
     const status =
       rawStatus === 'succeeded'  ? 'succeeded' :
-      rawStatus === 'failed'     ? 'failed' :
-      rawStatus === 'running' || rawStatus === 'inprogress' ? 'running' :
-      rawStatus === 'cancelled'  ? 'failed' :
-      rawStatus || 'succeeded';
+      rawStatus === 'failed' || rawStatus === 'failedwithremote' ? 'failed' :
+      rawStatus === 'succeededwitherrors' ? 'failed' :
+      rawStatus === 'running' || rawStatus === 'inprogress' || rawStatus === 'pending' ? 'running' :
+      rawStatus === 'cancelled' || rawStatus === 'interrupted' ? 'cancelled' :
+      rawStatus ? rawStatus : 'unknown';
 
     const durationMs  = data.durationMs || 0;
     const durationSec = durationMs / 1000;
