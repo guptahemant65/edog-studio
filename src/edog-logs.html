@@ -54606,6 +54606,7 @@ class SparkSessionsTab {
     s.createError = d.error || "Unknown factory error";
     s.errorType = d.errorType || null;
     s.errorStack = d.stackTrace || null;
+    s.lastState = "Failed";
     s.disposed = true;
     s.disposedAt = Date.now();
     s._sessionRawEvents.push({ at: Date.now(), kind: "Error", data: d });
@@ -54813,6 +54814,8 @@ class SparkSessionsTab {
   }
 
   _recomputeStatus(s) {
+    // Factory-level error → always failed (no transforms will arrive)
+    if (s.createError) { s.status = "failed"; return; }
     const txs = s.transforms;
     if (txs.length === 0) {
       s.status = s.disposed ? this._statusFromLastState(s.lastState) : "running";
