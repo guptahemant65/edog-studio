@@ -81,6 +81,7 @@ class SystemFilesTab {
   // ── Lifecycle ──
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('fileop', this._onEvent);
@@ -584,7 +585,7 @@ class SystemFilesTab {
 
   _renderOpPills() {
     const counts = { All: this._events.length, Read: 0, Write: 0, Delete: 0 };
-    this._events.forEach(op => { if (counts[op.operation] !== undefined) counts[op.operation]++; });
+    this._events.forEach(op => { if (counts[op.opCategory] !== undefined) counts[op.opCategory]++; });
 
     const types = ['All', 'Read', 'Write', 'Delete'];
     this._dom.opPills.innerHTML = types.map(t => {

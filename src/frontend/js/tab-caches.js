@@ -53,6 +53,7 @@ class CachesTab {
   // ── Lifecycle ──
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('cache', this._onCacheEvent);

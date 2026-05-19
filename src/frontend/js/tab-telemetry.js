@@ -69,6 +69,7 @@ class TelemetryTab {
      ═══════════════════════════════════════════════════════════════ */
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('telemetry', this._onEvent);

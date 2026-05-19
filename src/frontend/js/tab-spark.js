@@ -86,6 +86,10 @@ class SparkSessionsTab {
     if (this._searchDebounce) { clearTimeout(this._searchDebounce); this._searchDebounce = 0; }
 
     this._hideTooltip();
+    if (this._tooltipEl && this._tooltipEl.parentNode) {
+      this._tooltipEl.parentNode.removeChild(this._tooltipEl);
+      this._tooltipEl = null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -683,7 +687,7 @@ class SparkSessionsTab {
     const failedTxf = s.transforms.find((t) => t.terminalState === "Failed");
 
     const warmBadge = s.warm
-      ? `<span class="sp-warm-badge" data-tt="Warm reuse (${this._fmtDuration(s.createdDurationMs || 0)})">⚡ Warm</span>`
+      ? `<span class="sp-warm-badge" data-tt="Warm reuse (${this._fmtDuration(s.createdDurationMs || 0)})">● Warm</span>`
       : s.createdDurationMs >= 100
         ? `<span class="sp-warm-badge cold" data-tt="Cold start (${this._fmtDuration(s.createdDurationMs)})">Cold</span>`
         : "";

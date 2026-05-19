@@ -101,6 +101,7 @@ class TokensTab {
   // ═══════ LIFECYCLE ═══════
 
   activate() {
+    if (this._isActive) return;
     this._isActive = true;
     if (this._signalr) {
       this._signalr.on('token', this._onEvent);

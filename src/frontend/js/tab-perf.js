@@ -60,6 +60,7 @@ class PerfMarkersTab {
 
   /** Called when the tab becomes visible. Subscribe to perf topic. */
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('perf', this._onEvent);
@@ -87,16 +88,18 @@ class PerfMarkersTab {
    */
   _onEvent(event) {
     if (!event) return;
+    // SignalR envelope: { topic, sequenceId, timestamp, data: {...} }
+    const data = event.data || event;
 
-    const opName = event.operationName || event.operation || 'Unknown';
-    const durMs = typeof event.durationMs === 'number' ? event.durationMs : 0;
-    const ts = event.timestamp ? new Date(event.timestamp) : new Date();
-    const corrId = event.correlationId || '';
-    const ns = (event.dimensions && event.dimensions.namespace) || '';
-    const opType = (event.dimensions && event.dimensions.operationType) || '';
-    const result = event.result || '';
-    const iterationId = event.iterationId || '';
-    const reliabilityMetric = typeof event.reliabilityMetric === 'number' ? event.reliabilityMetric : null;
+    const opName = data.operationName || data.operation || 'Unknown';
+    const durMs = typeof data.durationMs === 'number' ? data.durationMs : 0;
+    const ts = (event.timestamp || data.timestamp) ? new Date(event.timestamp || data.timestamp) : new Date();
+    const corrId = data.correlationId || '';
+    const ns = (data.dimensions && data.dimensions.namespace) || '';
+    const opType = (data.dimensions && data.dimensions.operationType) || '';
+    const result = data.result || '';
+    const iterationId = data.iterationId || '';
+    const reliabilityMetric = typeof data.reliabilityMetric === 'number' ? data.reliabilityMetric : null;
 
     // Update rolling stats for this operation
     if (!this._opStats.has(opName)) {

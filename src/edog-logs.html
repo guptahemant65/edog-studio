@@ -51597,6 +51597,7 @@ class TelemetryTab {
      ═══════════════════════════════════════════════════════════════ */
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('telemetry', this._onEvent);
@@ -52807,6 +52808,7 @@ class SystemFilesTab {
   // ── Lifecycle ──
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('fileop', this._onEvent);
@@ -53310,7 +53312,7 @@ class SystemFilesTab {
 
   _renderOpPills() {
     const counts = { All: this._events.length, Read: 0, Write: 0, Delete: 0 };
-    this._events.forEach(op => { if (counts[op.operation] !== undefined) counts[op.operation]++; });
+    this._events.forEach(op => { if (counts[op.opCategory] !== undefined) counts[op.opCategory]++; });
 
     const types = ['All', 'Read', 'Write', 'Delete'];
     this._dom.opPills.innerHTML = types.map(t => {
@@ -54129,6 +54131,10 @@ class SparkSessionsTab {
     if (this._searchDebounce) { clearTimeout(this._searchDebounce); this._searchDebounce = 0; }
 
     this._hideTooltip();
+    if (this._tooltipEl && this._tooltipEl.parentNode) {
+      this._tooltipEl.parentNode.removeChild(this._tooltipEl);
+      this._tooltipEl = null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -54726,7 +54732,7 @@ class SparkSessionsTab {
     const failedTxf = s.transforms.find((t) => t.terminalState === "Failed");
 
     const warmBadge = s.warm
-      ? `<span class="sp-warm-badge" data-tt="Warm reuse (${this._fmtDuration(s.createdDurationMs || 0)})">⚡ Warm</span>`
+      ? `<span class="sp-warm-badge" data-tt="Warm reuse (${this._fmtDuration(s.createdDurationMs || 0)})">● Warm</span>`
       : s.createdDurationMs >= 100
         ? `<span class="sp-warm-badge cold" data-tt="Cold start (${this._fmtDuration(s.createdDurationMs)})">Cold</span>`
         : "";
@@ -55708,6 +55714,7 @@ class TokensTab {
   // ═══════ LIFECYCLE ═══════
 
   activate() {
+    if (this._isActive) return;
     this._isActive = true;
     if (this._signalr) {
       this._signalr.on('token', this._onEvent);
@@ -56651,6 +56658,7 @@ class CachesTab {
   // ── Lifecycle ──
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('cache', this._onCacheEvent);
@@ -57595,6 +57603,7 @@ class HttpPipelineTab {
 
   /** Called when tab becomes visible. Subscribe to `http` topic. */
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('http', this._onEvent);
@@ -57647,7 +57656,8 @@ class HttpPipelineTab {
       this._events.shift();
     }
     this._events.push(entry);
-    this._scheduleRender();
+    // Re-apply filters so new event appears even when filters are active.
+    this._applyFilters();
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -58924,6 +58934,7 @@ class RetriesTab {
   // ═══════════════════════════════════════════
 
   activate() {
+    if (this._isActive) return;
     this._isActive = true;
     if (this._signalr) {
       this._signalr.on('retry', this._onEvent);
@@ -62914,6 +62925,7 @@ class DiRegistryTab {
      ───────────────────────────────────────────── */
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('di', this._onEvent);
@@ -62938,16 +62950,18 @@ class DiRegistryTab {
 
   _handleEvent(event) {
     if (!event) return;
+    // SignalR envelope: { topic, sequenceId, timestamp, data: {...} }
+    const d = event.data || event;
 
     // Normalise from SignalR schema to internal format
     const reg = {
       id: this._nextId++,
-      service: event.serviceType || '',
-      impl: event.implementationType || '',
-      lifetime: event.lifetime || 'Singleton',
-      edog: !!event.isEdogIntercepted,
-      original: event.originalImplementation || '',
-      phase: event.registrationPhase || '',
+      service: d.serviceType || '',
+      impl: d.implementationType || '',
+      lifetime: d.lifetime || 'Singleton',
+      edog: !!d.isEdogIntercepted,
+      original: d.originalImplementation || '',
+      phase: d.registrationPhase || '',
     };
 
     // Deduplicate by service type + implementation
@@ -63766,6 +63780,7 @@ class PerfMarkersTab {
 
   /** Called when the tab becomes visible. Subscribe to perf topic. */
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('perf', this._onEvent);
@@ -63793,16 +63808,18 @@ class PerfMarkersTab {
    */
   _onEvent(event) {
     if (!event) return;
+    // SignalR envelope: { topic, sequenceId, timestamp, data: {...} }
+    const data = event.data || event;
 
-    const opName = event.operationName || event.operation || 'Unknown';
-    const durMs = typeof event.durationMs === 'number' ? event.durationMs : 0;
-    const ts = event.timestamp ? new Date(event.timestamp) : new Date();
-    const corrId = event.correlationId || '';
-    const ns = (event.dimensions && event.dimensions.namespace) || '';
-    const opType = (event.dimensions && event.dimensions.operationType) || '';
-    const result = event.result || '';
-    const iterationId = event.iterationId || '';
-    const reliabilityMetric = typeof event.reliabilityMetric === 'number' ? event.reliabilityMetric : null;
+    const opName = data.operationName || data.operation || 'Unknown';
+    const durMs = typeof data.durationMs === 'number' ? data.durationMs : 0;
+    const ts = (event.timestamp || data.timestamp) ? new Date(event.timestamp || data.timestamp) : new Date();
+    const corrId = data.correlationId || '';
+    const ns = (data.dimensions && data.dimensions.namespace) || '';
+    const opType = (data.dimensions && data.dimensions.operationType) || '';
+    const result = data.result || '';
+    const iterationId = data.iterationId || '';
+    const reliabilityMetric = typeof data.reliabilityMetric === 'number' ? data.reliabilityMetric : null;
 
     // Update rolling stats for this operation
     if (!this._opStats.has(opName)) {

@@ -44,6 +44,7 @@ class DiRegistryTab {
      ───────────────────────────────────────────── */
 
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('di', this._onEvent);
@@ -68,16 +69,18 @@ class DiRegistryTab {
 
   _handleEvent(event) {
     if (!event) return;
+    // SignalR envelope: { topic, sequenceId, timestamp, data: {...} }
+    const d = event.data || event;
 
     // Normalise from SignalR schema to internal format
     const reg = {
       id: this._nextId++,
-      service: event.serviceType || '',
-      impl: event.implementationType || '',
-      lifetime: event.lifetime || 'Singleton',
-      edog: !!event.isEdogIntercepted,
-      original: event.originalImplementation || '',
-      phase: event.registrationPhase || '',
+      service: d.serviceType || '',
+      impl: d.implementationType || '',
+      lifetime: d.lifetime || 'Singleton',
+      edog: !!d.isEdogIntercepted,
+      original: d.originalImplementation || '',
+      phase: d.registrationPhase || '',
     };
 
     // Deduplicate by service type + implementation

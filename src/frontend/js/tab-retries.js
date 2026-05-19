@@ -55,6 +55,7 @@ class RetriesTab {
   // ═══════════════════════════════════════════
 
   activate() {
+    if (this._isActive) return;
     this._isActive = true;
     if (this._signalr) {
       this._signalr.on('retry', this._onEvent);

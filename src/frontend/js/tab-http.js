@@ -58,6 +58,7 @@ class HttpPipelineTab {
 
   /** Called when tab becomes visible. Subscribe to `http` topic. */
   activate() {
+    if (this._active) return;
     this._active = true;
     if (this._signalr) {
       this._signalr.on('http', this._onEvent);
@@ -110,7 +111,8 @@ class HttpPipelineTab {
       this._events.shift();
     }
     this._events.push(entry);
-    this._scheduleRender();
+    // Re-apply filters so new event appears even when filters are active.
+    this._applyFilters();
   }
 
   // ═══════════════════════════════════════════════════════════════════
