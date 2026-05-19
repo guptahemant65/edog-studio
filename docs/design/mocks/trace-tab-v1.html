@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EDOG Studio — Trace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f8f9fc;--bg-2:#ffffff;--bg-3:#f1f3f9;--bg-4:#e8ebf3;
+  --surface:#ffffff;--surface-2:#fbfcfe;
+  --line:#e5e7ef;--line-2:#eef0f6;--line-strong:#d4d8e4;
+  --text:#1a1d27;--text-2:#555a6b;--text-3:#8b91a3;--text-4:#b4b9c9;
+  --accent:#6d5cff;--accent-2:#8b7dff;--accent-soft:rgba(109,92,255,0.10);
+  --green:#18a058;--amber:#e5940c;--red:#e5453b;--blue:#2d7ff9;
+  --purple:#a855f7;--teal:#0d9488;--cyan:#06b6d4;--grey:#94a3b8;
+  --shadow-ambient:0 1px 2px rgba(15,17,23,0.04);
+  --shadow-key:0 2px 8px rgba(15,17,23,0.06);
+  --shadow-card:var(--shadow-ambient),var(--shadow-key);
+  --shadow-lift:0 1px 2px rgba(15,17,23,0.05),0 8px 24px rgba(15,17,23,0.10);
+  --shadow-panel:0 2px 4px rgba(15,17,23,0.05),0 24px 64px rgba(15,17,23,0.14);
+  --r4:4px;--r6:6px;--r8:8px;--r10:10px;--r12:12px;--r14:14px;--r16:16px;--r100:100px;
+  --transition:160ms cubic-bezier(0.4,0,0.2,1);
+  --spring:cubic-bezier(0.34,1.56,0.64,1);
+  --ease-out:cubic-bezier(0.22,1,0.36,1);
+  --font-ui:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --header-h:32px;--tabbar-h:40px;--toolbar-h:48px;--footer-h:32px;--sidebar-w:48px;
+}
+[data-theme="dark"]{
+  --bg:#0d0f14;--bg-2:#13161d;--bg-3:#181b24;--bg-4:#1f2330;
+  --surface:#161922;--surface-2:#1c2029;
+  --line:#252938;--line-2:#1f2330;--line-strong:#323748;
+  --text:#e6e8ef;--text-2:#a3a8b8;--text-3:#6e7488;--text-4:#4a5067;
+  --accent:#8b7dff;--accent-2:#a89dff;--accent-soft:rgba(139,125,255,0.15);
+  --shadow-ambient:0 1px 2px rgba(0,0,0,0.3);
+  --shadow-key:0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lift:0 1px 2px rgba(0,0,0,0.3),0 8px 24px rgba(0,0,0,0.5);
+  --shadow-panel:0 2px 4px rgba(0,0,0,0.3),0 24px 64px rgba(0,0,0,0.6);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font-ui);font-size:13px;line-height:1.5;color:var(--text);background:var(--bg);
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select{font:inherit;color:inherit}
+.mono{font-family:var(--font-mono);font-feature-settings:"calt" 0}
+.app{display:grid;grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:var(--header-h) var(--tabbar-h) var(--toolbar-h) 1fr var(--footer-h);height:100vh}
+.sidebar{grid-row:1/-1;background:var(--bg-2);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding-top:8px;gap:4px}
+.sidebar-icon{width:36px;height:36px;border-radius:var(--r8);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:var(--transition);position:relative}
+.sidebar-icon:hover{background:var(--bg-3);color:var(--text)}
+.sidebar-icon.active{background:var(--accent-soft);color:var(--accent)}
+.sidebar-icon.active::before{content:"";position:absolute;left:-1px;top:8px;bottom:8px;width:2px;background:var(--accent);border-radius:0 2px 2px 0}
+.sidebar-spacer{flex:1}
+.connbar{grid-column:2;background:var(--bg-2);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;gap:10px;font-size:11.5px;color:var(--text-2)}
+.conn-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(24,160,88,0.18);animation:liveDot 2.4s var(--ease-out) infinite}
+.conn-pill{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r100);background:var(--bg-3);font-family:var(--font-mono);font-size:11px;color:var(--text-2)}
+.conn-spacer{flex:1}
+.conn-meta{display:flex;align-items:center;gap:14px;color:var(--text-3)}
+.conn-meta span{display:inline-flex;align-items:center;gap:5px}
+.tabbar{grid-column:2;background:var(--bg-2);border-bottom:1px solid var(--line);display:flex;align-items:stretch;padding:0 8px;position:relative}
+.tab{display:flex;align-items:center;gap:7px;padding:0 14px;color:var(--text-2);font-weight:500;font-size:12.5px;position:relative;border-radius:var(--r6) var(--r6) 0 0;transition:var(--transition)}
+.tab:hover{color:var(--text);background:var(--bg-3)}
+.tab.active{color:var(--text);background:var(--bg)}
+.tab.active::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent);border-radius:1px}
+.tab .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.tab-caret{margin-left:4px;opacity:0.6}
+.toolbar{grid-column:2;background:var(--bg);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:10px}
+.iter-btn{display:flex;align-items:center;gap:8px;padding:7px 12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r8);box-shadow:var(--shadow-ambient);transition:var(--transition);min-width:280px;text-align:left}
+.iter-btn:hover{border-color:var(--line-strong);box-shadow:var(--shadow-card)}
+.iter-btn .iter-id{font-family:var(--font-mono);font-size:11.5px;color:var(--text);font-weight:500}
+.iter-btn .iter-meta{font-size:11px;color:var(--text-3);margin-left:auto;display:flex;align-items:center;gap:8px}
+.iter-status{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.pills{display:flex;gap:4px;padding:3px;background:var(--bg-3);border-radius:var(--r10)}
+.pill{padding:5px 11px;border-radius:var(--r8);font-size:12px;font-weight:500;color:var(--text-2);transition:var(--transition);display:inline-flex;align-items:center;gap:6px}
+.pill:hover{color:var(--text)}
+.pill.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-ambient)}
+.pill .count{font-family:var(--font-mono);font-size:10.5px;color:var(--text-3);background:var(--bg-4);padding:1px 6px;border-radius:var(--r100)}
+.pill.active .count{background:var(--accent-soft);color:var(--accent)}
+.search{display:flex;align-items:center;gap:8px;padding:6px 11px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r8);min-width:240px;transition:var(--transition)}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.search input{flex:1;background:none;border:none;outline:none;font-size:12.5px;color:var(--text)}
+.search input::placeholder{color:var(--text-4)}
+.search kbd{font-family:var(--font-mono);font-size:10px;padding:1px 6px;background:var(--bg-3);border:1px solid var(--line);border-radius:var(--r4);color:var(--text-3)}
+.toolbar-spacer{flex:1}
+.live-toggle{display:flex;align-items:center;gap:7px;padding:6px 11px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r8);font-size:12px;color:var(--text-2)}
+.live-toggle .ld{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(24,160,88,0.18);animation:liveDot 2s infinite}
+.gear-btn{width:32px;height:32px;border-radius:var(--r8);display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:var(--transition)}
+.gear-btn:hover{background:var(--bg-3);color:var(--text)}
+.content{grid-column:2;display:grid;grid-template-columns:1fr auto;overflow:hidden;background:var(--bg)}
+.main{display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.narrative{padding:14px 20px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:14px;animation:fadeInUp 320ms var(--ease-out)}
+.narr-icon{width:32px;height:32px;border-radius:var(--r8);background:linear-gradient(135deg,var(--accent-soft),rgba(109,92,255,0.04));color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.narr-body{flex:1;min-width:0}
+.narr-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.narr-text{font-size:13.5px;line-height:1.55;color:var(--text)}
+.narr-text .ref{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;background:var(--bg-3);border:1px solid var(--line);border-radius:var(--r6);font-family:var(--font-mono);font-size:11.5px;color:var(--accent);cursor:pointer;transition:var(--transition);font-weight:500}
+.narr-text .ref:hover{background:var(--accent-soft);border-color:var(--accent);transform:translateY(-1px)}
+.narr-text .ref.red{color:var(--red)}
+.narr-text .ref.amber{color:var(--amber)}
+.narr-text strong{font-weight:600}
+.tree-wrap{flex:1;overflow-y:auto;overflow-x:hidden;padding:18px 20px 40px}
+.chain{background:var(--surface);border:1px solid var(--line);border-radius:var(--r12);margin-bottom:14px;box-shadow:var(--shadow-card);overflow:hidden;animation:fadeInUp 360ms var(--ease-out) both;position:relative}
+.chain.failed{border-left:3px solid var(--red)}
+.chain.warn{border-left:3px solid var(--amber)}
+.chain.ok{border-left:3px solid var(--green)}
+.chain-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line-2);background:var(--surface-2);cursor:pointer;user-select:none;transition:var(--transition)}
+.chain-head:hover{background:var(--bg-3)}
+.caret{width:16px;height:16px;color:var(--text-3);transition:transform 200ms var(--ease-out);flex-shrink:0}
+.chain.collapsed .caret{transform:rotate(-90deg)}
+.chain.collapsed .chain-body{display:none}
+.chain-title{font-weight:600;font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px}
+.kind-pill{font-family:var(--font-mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:var(--r4);text-transform:uppercase;letter-spacing:0.04em}
+.kind-sql{background:rgba(45,127,249,0.10);color:var(--blue)}
+.kind-pyspark{background:rgba(168,85,247,0.10);color:var(--purple)}
+.chain-meta{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--text-3);font-family:var(--font-mono)}
+.status-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:2px 8px;border-radius:var(--r100);font-family:var(--font-ui)}
+.status-badge.ok{background:rgba(24,160,88,0.12);color:var(--green)}
+.status-badge.failed{background:rgba(229,69,59,0.12);color:var(--red)}
+.status-badge.retry{background:rgba(229,148,12,0.12);color:var(--amber)}
+.status-badge .dt{width:6px;height:6px;border-radius:50%;background:currentColor}
+.chain-body{padding:8px 0 12px 0;position:relative}
+.rail{position:absolute;left:36px;top:14px;bottom:14px;width:1px;background:linear-gradient(to bottom,var(--line) 0%,var(--line) 100%);z-index:0}
+.event{display:flex;align-items:flex-start;gap:12px;padding:7px 14px 7px 14px;position:relative;z-index:1;cursor:pointer;transition:background var(--transition)}
+.event:hover{background:var(--bg-3)}
+.event.selected{background:var(--accent-soft)}
+.event.pulse{animation:pulseHighlight 900ms var(--ease-out)}
+.event-dot-wrap{width:24px;display:flex;justify-content:center;flex-shrink:0;position:relative}
+.event-dot{width:14px;height:14px;border-radius:50%;background:var(--surface);border:2px solid currentColor;display:flex;align-items:center;justify-content:center;position:relative;z-index:2}
+.event-dot.solid{background:currentColor;border-color:currentColor}
+.event-dot.solid::after{content:"";width:6px;height:6px;border-radius:50%;background:var(--surface)}
+.event[data-src="spark"]{color:var(--purple)}
+.event[data-src="http"]{color:var(--blue)}
+.event[data-src="token"]{color:var(--green)}
+.event[data-src="retry"]{color:var(--amber)}
+.event[data-src="error"]{color:var(--red)}
+.event[data-src="dag"]{color:var(--teal)}
+.event[data-src="cache"]{color:var(--cyan)}
+.event[data-src="telemetry"]{color:var(--grey)}
+.event[data-src="flag"]{color:var(--text-3)}
+.event-body{flex:1;min-width:0}
+.event-row1{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.event-type{font-weight:600;color:var(--text)}
+.event-fields{color:var(--text-2);font-family:var(--font-mono);font-size:11.5px;display:flex;gap:10px;flex-wrap:wrap;margin-top:3px}
+.field-k{color:var(--text-4)}
+.field-v{color:var(--text)}
+.event-ts{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-3);flex-shrink:0;display:flex;align-items:center;gap:8px}
+.event-dur{padding:1px 6px;background:var(--bg-3);border-radius:var(--r4);color:var(--text-2);font-size:10.5px}
+.link-row{display:flex;align-items:center;gap:8px;padding:2px 14px 2px 28px;font-size:10.5px;color:var(--text-3);font-family:var(--font-mono)}
+.link-arrow{width:22px;display:flex;justify-content:center;color:var(--text-4)}
+.link-delta{padding:1px 6px;background:var(--bg-3);border-radius:var(--r4);color:var(--text-2);font-weight:500}
+.link-key{display:inline-flex;align-items:center;gap:5px;color:var(--text-3)}
+.link-key .conf{font-family:var(--font-ui);font-size:10px;font-weight:600;padding:0 6px;border-radius:var(--r4);text-transform:uppercase;letter-spacing:0.03em}
+.conf-definite{background:rgba(24,160,88,0.12);color:var(--green)}
+.conf-strong{background:rgba(45,127,249,0.12);color:var(--blue)}
+.conf-inferred{background:rgba(229,148,12,0.14);color:var(--amber)}
+.inferred-link{margin:6px 14px 8px 28px;padding:10px 12px;background:linear-gradient(90deg,rgba(229,148,12,0.06),transparent);border:1px dashed var(--amber);border-radius:var(--r8);display:flex;align-items:flex-start;gap:10px;font-size:11.5px;color:var(--text-2);position:relative}
+.inferred-link::before{content:"";position:absolute;left:-15px;top:50%;width:14px;height:1px;background:repeating-linear-gradient(90deg,var(--amber) 0,var(--amber) 3px,transparent 3px,transparent 6px)}
+.inferred-link svg{color:var(--amber);flex-shrink:0;margin-top:1px}
+.inferred-link strong{color:var(--text);font-weight:600}
+.inferred-link .qualify{color:var(--amber);font-weight:600;font-style:italic}
+.gap-note{margin:4px 14px 4px 28px;padding:6px 10px;background:var(--bg-3);border-radius:var(--r6);font-size:11px;color:var(--text-3);font-style:italic;display:flex;align-items:center;gap:7px}
+.gap-note svg{color:var(--text-4);flex-shrink:0}
+.unlinked-section{margin-top:18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r12);box-shadow:var(--shadow-card);overflow:hidden}
+.unlinked-head{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;background:var(--surface-2);border-bottom:1px solid var(--line-2)}
+.unlinked-head:hover{background:var(--bg-3)}
+.unlinked-title{font-weight:600;font-size:12.5px;color:var(--text-2)}
+.unlinked-sub{font-size:11px;color:var(--text-3);font-style:italic;margin-left:4px}
+.unlinked-count{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-3);background:var(--bg-3);padding:2px 8px;border-radius:var(--r100)}
+.unlinked.collapsed .unlinked-body{display:none}
+.unlinked.collapsed .caret{transform:rotate(-90deg)}
+.unlinked-body{padding:6px 0 10px}
+.detail-panel{width:min(620px,46vw);background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;animation:slideLeft 280ms var(--ease-out);box-shadow:-12px 0 40px rgba(15,17,23,0.08)}
+.detail-panel.hidden{display:none}
+.detail-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px}
+.detail-icon-wrap{width:32px;height:32px;border-radius:var(--r8);display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--bg-3)}
+.detail-meta{flex:1;min-width:0}
+.detail-type{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em}
+.detail-name{font-size:15px;font-weight:600;color:var(--text);margin-top:2px}
+.detail-sub{font-size:11.5px;color:var(--text-3);margin-top:3px;font-family:var(--font-mono)}
+.detail-close{width:28px;height:28px;border-radius:var(--r6);color:var(--text-3);display:flex;align-items:center;justify-content:center;transition:var(--transition)}
+.detail-close:hover{background:var(--bg-3);color:var(--text)}
+.detail-tabs{display:flex;padding:0 18px;border-bottom:1px solid var(--line);gap:2px}
+.dtab{padding:9px 12px;font-size:12px;font-weight:500;color:var(--text-3);position:relative;transition:var(--transition)}
+.dtab:hover{color:var(--text)}
+.dtab.active{color:var(--text)}
+.dtab.active::after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--accent);border-radius:1px}
+.detail-body{flex:1;overflow-y:auto;padding:14px 18px}
+.field-group{margin-bottom:16px}
+.field-group-title{font-size:10.5px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px}
+.field-list{display:grid;grid-template-columns:140px 1fr;gap:6px 14px;font-size:12px;line-height:1.55}
+.field-list dt{color:var(--text-3);font-family:var(--font-mono);font-size:11.5px}
+.field-list dd{color:var(--text);font-family:var(--font-mono);font-size:11.5px;word-break:break-all}
+.field-list dd .v-string{color:var(--green)}
+.field-list dd .v-num{color:var(--blue)}
+.field-list dd .v-bool{color:var(--purple)}
+.field-list dd .v-null{color:var(--text-4);font-style:italic}
+.json-block{background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r8);padding:10px 12px;font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--text-2);overflow-x:auto;white-space:pre}
+.related-list{display:flex;flex-direction:column;gap:6px}
+.related-item{display:flex;align-items:center;gap:9px;padding:8px 10px;background:var(--bg-3);border:1px solid var(--line-2);border-radius:var(--r8);font-size:12px;cursor:pointer;transition:var(--transition)}
+.related-item:hover{background:var(--accent-soft);border-color:var(--accent)}
+.footer{grid-column:2;background:var(--bg-2);border-top:1px solid var(--line);display:flex;align-items:center;padding:0 14px;gap:14px;font-size:11px;color:var(--text-3)}
+.footer kbd{font-family:var(--font-mono);font-size:10px;padding:1px 6px;background:var(--bg-3);border:1px solid var(--line);border-radius:var(--r4);color:var(--text-2);min-width:18px;text-align:center;display:inline-block}
+.footer-spacer{flex:1}
+.popover{position:absolute;top:calc(var(--toolbar-h) + 4px);left:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r12);box-shadow:var(--shadow-panel);padding:6px;min-width:380px;z-index:50;animation:dialogIn 200ms var(--ease-out)}
+.popover.hidden{display:none}
+.pop-search{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--line-2);margin-bottom:4px}
+.pop-search input{flex:1;background:none;border:none;outline:none;font-size:12.5px}
+.pop-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r8);cursor:pointer;transition:var(--transition)}
+.pop-item:hover{background:var(--bg-3)}
+.pop-item.active{background:var(--accent-soft)}
+.pop-item .pi-id{font-family:var(--font-mono);font-size:11.5px;color:var(--text);font-weight:500}
+.pop-item .pi-meta{font-size:11px;color:var(--text-3);margin-left:auto}
+.pop-item-status{width:7px;height:7px;border-radius:50%}
+.s-running{background:var(--blue);box-shadow:0 0 0 3px rgba(45,127,249,0.18);animation:liveDot 2s infinite}
+.s-completed{background:var(--green)}
+.s-failed{background:var(--red)}
+.scrim{position:fixed;inset:0;background:rgba(15,17,23,0.36);backdrop-filter:blur(4px);z-index:40;animation:fadeIn 200ms var(--ease-out)}
+.scrim.hidden{display:none}
+.settings-panel{position:fixed;top:calc(var(--header-h) + var(--tabbar-h) + 12px);right:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r12);box-shadow:var(--shadow-panel);padding:14px;width:280px;z-index:60;animation:dialogIn 220ms var(--ease-out)}
+.settings-panel.hidden{display:none}
+.settings-title{font-size:13px;font-weight:600;margin-bottom:10px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line-2);font-size:12.5px;color:var(--text-2)}
+.settings-row:last-child{border-bottom:none}
+.theme-toggle{display:flex;background:var(--bg-3);padding:2px;border-radius:var(--r8);gap:2px}
+.theme-toggle button{padding:4px 10px;font-size:11.5px;color:var(--text-3);border-radius:var(--r6);font-weight:500}
+.theme-toggle button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-ambient)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes dialogIn{from{opacity:0;transform:translateY(-4px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes scaleSpring{0%{transform:scale(0.92)}55%{transform:scale(1.04)}100%{transform:scale(1)}}
+@keyframes checkPop{0%{transform:scale(0)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+@keyframes pulseAccent{0%,100%{box-shadow:0 0 0 0 var(--accent-soft)}50%{box-shadow:0 0 0 6px transparent}}
+@keyframes pulseHighlight{0%{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}100%{background:transparent;box-shadow:inset 3px 0 0 transparent}}
+@keyframes liveDot{0%,100%{box-shadow:0 0 0 3px rgba(24,160,88,0.18)}50%{box-shadow:0 0 0 5px rgba(24,160,88,0.05)}}
+@keyframes flowDash{to{stroke-dashoffset:-12}}
+@keyframes slideLeft{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideRight{from{transform:translateX(-20px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes chainExpand{from{max-height:0;opacity:0}to{max-height:2000px;opacity:1}}
+@keyframes tabPulse{0%,100%{opacity:1}50%{opacity:0.6}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes drift{from{transform:translateY(0)}to{transform:translateY(-3px)}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 0 var(--accent-soft))}50%{filter:drop-shadow(0 0 6px var(--accent-soft))}}
+@keyframes wobble{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+@keyframes bounceIn{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+@keyframes fadeOut{from{opacity:1}to{opacity:0}}
+@keyframes slideUp{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes dotPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.15);opacity:0.7}}
+@keyframes arrowFlow{0%{stroke-dashoffset:0}100%{stroke-dashoffset:-20}}
+@keyframes shake{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-1px)}20%,40%,60%,80%{transform:translateX(1px)}}
+@keyframes ringPulse{0%{box-shadow:0 0 0 0 var(--accent-soft)}100%{box-shadow:0 0 0 8px transparent}}
+@keyframes flashRed{0%,100%{background:transparent}50%{background:rgba(229,69,59,0.10)}}
+@keyframes typeIn{from{width:0}to{width:100%}}
+@keyframes confettiDrop{0%{transform:translateY(-8px) rotate(0);opacity:0}40%{opacity:1}100%{transform:translateY(40px) rotate(180deg);opacity:0}}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(2px)}}
+.tree-wrap::-webkit-scrollbar,.detail-body::-webkit-scrollbar{width:8px;height:8px}
+.tree-wrap::-webkit-scrollbar-thumb,.detail-body::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:4px}
+.tree-wrap::-webkit-scrollbar-thumb:hover,.detail-body::-webkit-scrollbar-thumb:hover{background:var(--text-4)}
+.tree-wrap::-webkit-scrollbar-track,.detail-body::-webkit-scrollbar-track{background:transparent}
+.icon-16{width:16px;height:16px;flex-shrink:0}
+.icon-14{width:14px;height:14px;flex-shrink:0}
+.icon-12{width:12px;height:12px;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <button class="sidebar-icon" title="Workspaces"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
+    <button class="sidebar-icon active" title="Runtime"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="6,4 20,12 6,20" fill="currentColor" stroke="none"/></svg></button>
+    <button class="sidebar-icon" title="DAG"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.5 8 L11 16 M16.5 8 L13 16"/></svg></button>
+    <button class="sidebar-icon" title="History"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+    <div class="sidebar-spacer"></div>
+    <button class="sidebar-icon" title="Settings"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </aside>
+  <div class="connbar">
+    <span class="conn-dot"></span>
+    <span style="font-weight:500;color:var(--text)">Connected</span>
+    <span class="conn-pill">localhost:5555</span>
+    <span class="conn-pill">FLT v0.247.3</span>
+    <span class="conn-pill">.NET 8 · DevMode</span>
+    <div class="conn-spacer"></div>
+    <div class="conn-meta">
+      <span><svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg> uptime 14m 22s</span>
+      <span><svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg> 1,247 events</span>
+    </div>
+  </div>
+  <nav class="tabbar">
+    <button class="tab"><svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Logs</button>
+    <button class="tab"><svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Telemetry</button>
+    <button class="tab"><svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>System Files</button>
+    <button class="tab"><svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>Spark Sessions</button>
+    <button class="tab active"><span class="dot"></span>Trace</button>
+    <button class="tab"><svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>Internals<svg class="icon-12 tab-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+  </nav>
+  <div class="toolbar">
+    <button class="iter-btn" id="iter-btn">
+      <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--accent)"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/><path d="M12 7v5l3 2"/></svg>
+      <span class="iter-id">3fa85f64-5717-4562-b3fc-2c963f66afa6</span>
+      <span class="iter-meta">
+        <span class="iter-status"></span>
+        <span>2m 38s</span>
+        <svg class="icon-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      </span>
+    </button>
+    <div class="popover hidden" id="iter-pop">
+      <div class="pop-search">
+        <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-3)"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input placeholder="Search iterations…" />
+      </div>
+      <div class="pop-item active" data-iter="3fa85f64"><span class="pop-item-status s-completed"></span><span class="pi-id">3fa85f64-…f66afa6</span><span class="pi-meta">just now · 2m 38s · 5 nodes</span></div>
+      <div class="pop-item" data-iter="9b2c1d77"><span class="pop-item-status s-running"></span><span class="pi-id">9b2c1d77-…a91b34cd</span><span class="pi-meta">running · 0m 47s · 5 nodes</span></div>
+      <div class="pop-item" data-iter="7e44a892"><span class="pop-item-status s-failed"></span><span class="pi-id">7e44a892-…d12f88ee</span><span class="pi-meta">4m ago · 1m 02s · 3 nodes</span></div>
+      <div class="pop-item" data-iter="5c11ff03"><span class="pop-item-status s-completed"></span><span class="pi-id">5c11ff03-…b7e22a01</span><span class="pi-meta">12m ago · 2m 11s · 5 nodes</span></div>
+      <div class="pop-item" data-iter="2a99e1bb"><span class="pop-item-status s-completed"></span><span class="pi-id">2a99e1bb-…cc4477dd</span><span class="pi-meta">31m ago · 1m 56s · 4 nodes</span></div>
+    </div>
+    <div class="pills" id="filter-pills">
+      <button class="pill active" data-filter="all">All <span class="count">42</span></button>
+      <button class="pill" data-filter="errors">Errors <span class="count">1</span></button>
+      <button class="pill" data-filter="retries">Retries <span class="count">4</span></button>
+      <button class="pill" data-filter="throttling">Throttling <span class="count">3</span></button>
+    </div>
+    <div class="search">
+      <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--text-3)"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search-input" placeholder="Search events, fields, IDs…" />
+      <kbd>/</kbd>
+    </div>
+    <div class="toolbar-spacer"></div>
+    <button class="live-toggle"><span class="ld"></span>Live</button>
+    <button class="gear-btn" id="gear-btn"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+  </div>
+  <div class="content">
+    <main class="main">
+      <div class="narrative">
+        <div class="narr-icon"><svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <div class="narr-body">
+          <div class="narr-title">Iteration Summary · Inferred</div>
+          <div class="narr-text">
+            Iteration <button class="ref" data-target="evt-dag-start">3fa8…afa6</button> ran <strong>5 nodes</strong> in <strong>2m 38s</strong>. Node <button class="ref red" data-target="evt-join-failed">orders.join_dim</button> failed with <button class="ref red" data-target="evt-join-failed">AnalysisException</button> (<strong>user SQL error</strong>) — retried and succeeded. Node <button class="ref amber" data-target="evt-inv-429-1">inventory_refresh</button> was throttled <button class="ref amber" data-target="evt-inv-429-1"><strong>3 times</strong> (429)</button> before acquiring a Spark session.
+          </div>
+        </div>
+      </div>
+      <div class="tree-wrap" id="tree-wrap"></div>
+    </main>
+    <aside class="detail-panel hidden" id="detail-panel">
+      <div class="detail-head">
+        <div class="detail-icon-wrap" id="d-icon"></div>
+        <div class="detail-meta">
+          <div class="detail-type" id="d-type">Event Type</div>
+          <div class="detail-name" id="d-name">Event Name</div>
+          <div class="detail-sub" id="d-sub">timestamp · correlation</div>
+        </div>
+        <button class="detail-close" id="d-close"><svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="detail-tabs">
+        <button class="dtab active">Fields</button>
+        <button class="dtab">Raw JSON</button>
+        <button class="dtab">Related</button>
+      </div>
+      <div class="detail-body" id="d-body"></div>
+    </aside>
+  </div>
+  <div class="footer">
+    <span><kbd>j</kbd><kbd>k</kbd> navigate</span>
+    <span><kbd>↵</kbd> expand</span>
+    <span><kbd>Esc</kbd> close</span>
+    <span><kbd>/</kbd> search</span>
+    <div class="footer-spacer"></div>
+    <span style="color:var(--text-4)">Trace v0.1 · light · vanilla JS · 0 deps</span>
+  </div>
+</div>
+<div class="settings-panel hidden" id="settings-panel">
+  <div class="settings-title">Settings</div>
+  <div class="settings-row">
+    <span>Theme</span>
+    <div class="theme-toggle" id="theme-toggle">
+      <button class="active" data-theme="light">Light</button>
+      <button data-theme="dark">Dark</button>
+    </div>
+  </div>
+  <div class="settings-row"><span>Show inferred links</span><span style="color:var(--green);font-weight:600">On</span></div>
+  <div class="settings-row"><span>Show unlinked events</span><span style="color:var(--green);font-weight:600">On</span></div>
+  <div class="settings-row"><span>Auto-scroll on new event</span><span style="color:var(--text-3);font-weight:600">Off</span></div>
+  <div class="settings-row"><span style="color:var(--text-3);font-style:italic;font-size:11.5px">Inferred links are dashed and labeled "likely" — never claimed as causation.</span></div>
+</div>
+<script>
+(function(){
+'use strict';
+
+const ITER_ID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
+const ITER_SHORT = '3fa8…afa6';
+const T0 = new Date('2026-05-19T14:22:07.142Z').getTime();
+const fmt = (offsetMs) => {
+  const d = new Date(T0 + offsetMs);
+  return d.toISOString().slice(11,23) + 'Z';
+};
+const relT = (offsetMs) => {
+  const s = Math.floor(offsetMs/1000), ms = offsetMs%1000;
+  return '+' + (s>0?s+'.':'0.') + String(ms).padStart(3,'0').slice(0,3) + 's';
+};
+
+const CHAINS = [
+  {
+    id: 'c0', kind: 'dag', status: 'ok', node: 'iteration root',
+    title: 'Iteration lifecycle', subtitle: 'DAG-level events',
+    events: [
+      {id:'evt-dag-start', src:'dag', type:'DagIterationStarted', t:0, dur:null, fields:{iterationId:ITER_SHORT,nodeCount:5,initiator:'user:hemant',definitionVersion:'v47'}, link:null},
+    ],
+  },
+  {
+    id: 'c1', kind: 'sql', status: 'ok', node: 'raw_orders',
+    title: 'raw_orders', subtitle: 'Clean run · 1.2M rows · 18.4s',
+    events: [
+      {id:'evt-c1-create', src:'spark', type:'SparkSessionCreated', t:412, dur:null, fields:{sessionId:'sess-a14f',pool:'shared-04',kind:'sql'}, link:null},
+      {id:'evt-c1-submit', src:'spark', type:'SparkJobSubmitted', t:1247, dur:null, fields:{transformationId:'tr-0001',livyId:'liv-7711',jobName:'raw_orders'}, link:{from:'evt-c1-create',delta:835,key:'sessionId match',conf:'definite'}},
+      {id:'evt-c1-poll1', src:'spark', type:'SparkJobPolled', t:1402, dur:155, fields:{transformationId:'tr-0001',state:'NotStarted'}, link:{from:'evt-c1-submit',delta:155,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c1-poll2', src:'spark', type:'SparkJobPolled', t:2890, dur:1488, fields:{transformationId:'tr-0001',state:'InProgress'}, link:{from:'evt-c1-poll1',delta:1488,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c1-poll3', src:'spark', type:'SparkJobPolled', t:11240, dur:8350, fields:{transformationId:'tr-0001',state:'Executing'}, link:{from:'evt-c1-poll2',delta:8350,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c1-poll4', src:'spark', type:'SparkJobPolled', t:18102, dur:6862, fields:{transformationId:'tr-0001',state:'CleanUp'}, link:{from:'evt-c1-poll3',delta:6862,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c1-done', src:'dag', type:'SparkJobCompleted', t:19412, dur:1310, fields:{transformationId:'tr-0001',result:'Succeeded',rowsWritten:1247893,bytesWritten:'248 MB',duration:'18.4s'}, link:{from:'evt-c1-poll4',delta:1310,key:'transformationId match',conf:'definite'}},
+    ],
+  },
+  {
+    id: 'c2', kind: 'sql', status: 'failed', node: 'orders.join_dim',
+    title: 'orders.join_dim', subtitle: 'User error · retried 1× · 487K rows · 34.2s',
+    events: [
+      {id:'evt-c2-submit', src:'spark', type:'SparkJobSubmitted', t:20104, dur:null, fields:{transformationId:'tr-0002',livyId:'liv-7712',jobName:'orders_join_dim'}, link:{from:'evt-c1-done',delta:692,key:'iteration sequence',conf:'strong'}},
+      {id:'evt-c2-poll1', src:'spark', type:'SparkJobPolled', t:20289, dur:185, fields:{transformationId:'tr-0002',state:'InProgress'}, link:{from:'evt-c2-submit',delta:185,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c2-poll2', src:'spark', type:'SparkJobPolled', t:23512, dur:3223, fields:{transformationId:'tr-0002',state:'Executing'}, link:{from:'evt-c2-poll1',delta:3223,key:'transformationId match',conf:'definite'}},
+      {id:'evt-join-failed', src:'error', type:'SparkJobCompleted · Failed', t:25890, dur:2378, fields:{transformationId:'tr-0002',result:'Failed',errorCode:'MLV_SPARK_TRANSFORM_EXECUTION_FAILED',errorSource:'User',exceptionType:'org.apache.spark.sql.AnalysisException',message:'Column \'dim.customer_key\' cannot be resolved'}, link:{from:'evt-c2-poll2',delta:2378,key:'transformationId match',conf:'definite'},failed:true,gap:'No HTTP error observed before this failure — error originated inside Spark execution.'},
+      {id:'evt-c2-retry', src:'retry', type:'RetryScheduled', t:25912, dur:null, fields:{transformationId:'tr-0002',attempt:'1/3',isThrottle:false,reason:'TransientUserError',backoffMs:1500}, link:{from:'evt-join-failed',delta:22,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c2-resubmit', src:'spark', type:'SparkJobSubmitted (retry)', t:27445, dur:null, fields:{transformationId:'tr-0002',livyId:'liv-7715',attempt:'2/3'}, link:{from:'evt-c2-retry',delta:1533,key:'retry follow-up',conf:'definite'}},
+      {id:'evt-c2-poll3', src:'spark', type:'SparkJobPolled', t:27602, dur:157, fields:{transformationId:'tr-0002',state:'Executing'}, link:{from:'evt-c2-resubmit',delta:157,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c2-done', src:'dag', type:'SparkJobCompleted · Succeeded', t:54312, dur:26710, fields:{transformationId:'tr-0002',result:'Succeeded',rowsWritten:487201,bytesWritten:'94 MB',attemptsUsed:2}, link:{from:'evt-c2-poll3',delta:26710,key:'transformationId match',conf:'definite'}},
+    ],
+  },
+  {
+    id: 'c3', kind: 'pyspark', status: 'warn', node: 'inventory_refresh',
+    title: 'inventory_refresh', subtitle: 'Throttled 3× · then succeeded · 1m 12s',
+    events: [
+      {id:'evt-c3-submit', src:'spark', type:'SparkJobSubmitted', t:55104, dur:null, fields:{transformationId:'tr-0003',livyId:'liv-7716',jobName:'inventory_refresh',kind:'pyspark'}, link:{from:'evt-c2-done',delta:792,key:'iteration sequence',conf:'strong'}},
+      {id:'evt-inv-429-1', src:'http', type:'HttpResponseReceived · 429', t:55402, dur:298, fields:{requestId:'req-aa01',url:'/livy/sessions',statusCode:429,retryAfterMs:12000,server:'mwc-eastus'}, link:{from:'evt-c3-submit',delta:298,key:'requestId match',conf:'definite'},failed:true},
+      {id:'evt-c3-retry1', src:'retry', type:'RetryScheduled', t:55421, dur:null, fields:{requestId:'req-aa01',attempt:'1/5',isThrottle:true,retryAfterMs:12000}, link:{from:'evt-inv-429-1',delta:19,key:'requestId match',conf:'definite'}},
+      {id:'evt-tok-refresh', src:'token', type:'TokenRefreshAttempt', t:79604, dur:412, fields:{tokenType:'MWC',audience:'fabric-livy',expiringIn:'87s',result:'Success'}, link:null, inferredTarget:'evt-c3-retry2'},
+      {id:'evt-inv-429-2', src:'http', type:'HttpResponseReceived · 429', t:67902, dur:182, fields:{requestId:'req-aa02',url:'/livy/sessions',statusCode:429,retryAfterMs:18000}, link:{from:'evt-c3-retry1',delta:12481,key:'retry follow-up',conf:'definite'},failed:true},
+      {id:'evt-c3-retry2', src:'retry', type:'RetryScheduled', t:67925, dur:null, fields:{requestId:'req-aa02',attempt:'2/5',isThrottle:true,retryAfterMs:18000}, link:{from:'evt-inv-429-2',delta:23,key:'requestId match',conf:'definite'},inferredFrom:'evt-tok-refresh'},
+      {id:'evt-inv-429-3', src:'http', type:'HttpResponseReceived · 429', t:86412, dur:201, fields:{requestId:'req-aa03',url:'/livy/sessions',statusCode:429,retryAfterMs:24000}, link:{from:'evt-c3-retry2',delta:18487,key:'retry follow-up',conf:'definite'},failed:true},
+      {id:'evt-c3-retry3', src:'retry', type:'RetryScheduled', t:86434, dur:null, fields:{requestId:'req-aa03',attempt:'3/5',isThrottle:true,retryAfterMs:24000}, link:{from:'evt-inv-429-3',delta:22,key:'requestId match',conf:'definite'}},
+      {id:'evt-inv-200', src:'http', type:'HttpResponseReceived · 200', t:110892, dur:421, fields:{requestId:'req-aa04',url:'/livy/sessions',statusCode:200,sessionId:'sess-b22e'}, link:{from:'evt-c3-retry3',delta:24458,key:'retry follow-up',conf:'definite'}},
+      {id:'evt-c3-resubmit', src:'spark', type:'SparkJobSubmitted (retry)', t:111104, dur:null, fields:{transformationId:'tr-0003',livyId:'liv-7720',attempt:'4/5'}, link:{from:'evt-inv-200',delta:212,key:'session acquired',conf:'definite'}},
+      {id:'evt-c3-poll', src:'spark', type:'SparkJobPolled', t:111302, dur:198, fields:{transformationId:'tr-0003',state:'Executing'}, link:{from:'evt-c3-resubmit',delta:198,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c3-done', src:'dag', type:'SparkJobCompleted · Succeeded', t:127612, dur:16310, fields:{transformationId:'tr-0003',result:'Succeeded',rowsWritten:892014,bytesWritten:'176 MB',attemptsUsed:4}, link:{from:'evt-c3-poll',delta:16310,key:'transformationId match',conf:'definite'}},
+    ],
+  },
+  {
+    id: 'c4', kind: 'sql', status: 'ok', node: 'dim_warehouse',
+    title: 'dim_warehouse', subtitle: 'Clean run · 14K rows · 8.1s',
+    events: [
+      {id:'evt-c4-submit', src:'spark', type:'SparkJobSubmitted', t:128402, dur:null, fields:{transformationId:'tr-0004',livyId:'liv-7721'}, link:{from:'evt-c3-done',delta:790,key:'iteration sequence',conf:'strong'}},
+      {id:'evt-c4-poll', src:'spark', type:'SparkJobPolled', t:128611, dur:209, fields:{transformationId:'tr-0004',state:'Executing'}, link:{from:'evt-c4-submit',delta:209,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c4-done', src:'dag', type:'SparkJobCompleted · Succeeded', t:136502, dur:7891, fields:{transformationId:'tr-0004',result:'Succeeded',rowsWritten:14201,bytesWritten:'3.2 MB'}, link:{from:'evt-c4-poll',delta:7891,key:'transformationId match',conf:'definite'}},
+    ],
+  },
+  {
+    id: 'c5', kind: 'sql', status: 'ok', node: 'fact_sales',
+    title: 'fact_sales', subtitle: 'Clean run · 2.8M rows · 21.6s',
+    events: [
+      {id:'evt-c5-submit', src:'spark', type:'SparkJobSubmitted', t:137204, dur:null, fields:{transformationId:'tr-0005',livyId:'liv-7722'}, link:{from:'evt-c4-done',delta:702,key:'iteration sequence',conf:'strong'}},
+      {id:'evt-c5-poll', src:'spark', type:'SparkJobPolled', t:137389, dur:185, fields:{transformationId:'tr-0005',state:'Executing'}, link:{from:'evt-c5-submit',delta:185,key:'transformationId match',conf:'definite'}},
+      {id:'evt-c5-done', src:'dag', type:'SparkJobCompleted · Succeeded', t:158612, dur:21223, fields:{transformationId:'tr-0005',result:'Succeeded',rowsWritten:2841902,bytesWritten:'612 MB'}, link:{from:'evt-c5-poll',delta:21223,key:'transformationId match',conf:'definite'}},
+      {id:'evt-dag-done', src:'dag', type:'DagIterationCompleted', t:158942, dur:330, fields:{iterationId:ITER_SHORT,result:'Succeeded',nodesCompleted:5,totalDuration:'2m 38s'}, link:{from:'evt-c5-done',delta:330,key:'iteration close',conf:'definite'}},
+    ],
+  },
+];
+
+const UNLINKED = [
+  {id:'evt-u-cache', src:'cache', type:'CacheGet · Hit', t:8412, dur:2, fields:{handler:'CatalogHandler',key:'ws-abc/lakehouse-xyz/catalog',hit:true,sizeBytes:14208,ttlRemainingS:3214}, why:'Independent infra cache lookup — no matching correlationId in any chain.'},
+  {id:'evt-u-flag', src:'flag', type:'FeatureFlagEvaluation', t:14201, dur:1, fields:{name:'Workload.MLV.SparkSessionPooling',value:true,evaluator:'EcsFeatureFlags',ringSampled:'Prod-EastUS-Ring2'}, why:'Flag fetched once at startup; not tied to any job lifecycle.'},
+];
+
+const SRC_META = {
+  spark: {label:'Spark', color:'var(--purple)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="13,2 3,14 12,14 11,22 21,10 12,10"/></svg>'},
+  http:  {label:'HTTP', color:'var(--blue)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>'},
+  token: {label:'Token', color:'var(--green)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>'},
+  retry: {label:'Retry', color:'var(--amber)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg>'},
+  error: {label:'Error', color:'var(--red)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>'},
+  dag:   {label:'DAG', color:'var(--teal)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.5 8 L11 16 M16.5 8 L13 16"/></svg>'},
+  cache: {label:'Cache', color:'var(--cyan)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg>'},
+  telemetry:{label:'Telemetry', color:'var(--grey)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>'},
+  flag:  {label:'Flag', color:'var(--text-3)', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V4h13l-2 4 2 4H4"/></svg>'},
+};
+
+const ALL_EVENTS = [];
+CHAINS.forEach(c => c.events.forEach(e => { e.chainId = c.id; ALL_EVENTS.push(e); }));
+UNLINKED.forEach(e => { e.chainId = 'unlinked'; ALL_EVENTS.push(e); });
+
+let selectedId = null;
+let navIndex = 0;
+const navList = ALL_EVENTS.map(e => e.id);
+
+function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstElementChild; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+
+function renderChain(c) {
+  const head = `
+    <div class="chain-head" data-toggle="${c.id}">
+      <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      <div class="chain-title">
+        <span>${esc(c.title)}</span>
+        ${c.kind==='dag' ? '' : `<span class="kind-pill kind-${c.kind}">${c.kind}</span>`}
+        <span class="status-badge ${c.status}"><span class="dt"></span>${c.status==='ok'?'Succeeded':c.status==='failed'?'Failed → Recovered':'Throttled → Succeeded'}</span>
+      </div>
+      <div class="chain-meta">
+        <span>${c.subtitle}</span>
+      </div>
+    </div>`;
+
+  let body = '<div class="chain-body"><div class="rail"></div>';
+  c.events.forEach((e, i) => {
+    if (e.link) {
+      body += `<div class="link-row">
+        <div class="link-arrow"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12l7 7 7-7"/></svg></div>
+        <span class="link-delta">+${(e.link.delta/1000).toFixed(e.link.delta<1000?3:1)}s</span>
+        <span class="link-key">${esc(e.link.key)} · <span class="conf conf-${e.link.conf}">${e.link.conf}</span></span>
+      </div>`;
+    }
+    if (e.inferredFrom) {
+      body += `<div class="inferred-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 5l7 7-7 7"/><path d="M5 12h11"/></svg>
+        <div><strong>↪ Likely related</strong> to <button class="ref amber" data-target="evt-tok-refresh">TokenRefreshAttempt</button> at T+24.2s · <span class="qualify">inferred from timing</span> — no explicit correlationId match, but throttling stopped 412ms after token refresh succeeded.</div>
+      </div>`;
+    }
+    const fieldStr = Object.entries(e.fields).slice(0,4).map(([k,v]) =>
+      `<span><span class="field-k">${esc(k)}:</span> <span class="field-v">${esc(typeof v==='string'?v.length>40?v.slice(0,40)+'…':v:v)}</span></span>`
+    ).join('');
+    body += `<div class="event" data-id="${e.id}" data-src="${e.src}">
+      <div class="event-dot-wrap"><div class="event-dot ${e.failed?'solid':''}"></div></div>
+      <div class="event-body">
+        <div class="event-row1">
+          <span class="event-type">${esc(e.type)}</span>
+        </div>
+        <div class="event-fields">${fieldStr}</div>
+      </div>
+      <div class="event-ts">
+        ${e.dur?`<span class="event-dur">${e.dur<1000?e.dur+'ms':(e.dur/1000).toFixed(1)+'s'}</span>`:''}
+        <span>${relT(e.t)}</span>
+      </div>
+    </div>`;
+    if (e.gap) {
+      body += `<div class="gap-note"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>${esc(e.gap)}</div>`;
+    }
+  });
+  body += '</div>';
+
+  return `<section class="chain ${c.status}" data-chain="${c.id}">${head}${body}</section>`;
+}
+
+function renderUnlinked() {
+  let inner = '<div class="unlinked-body">';
+  UNLINKED.forEach(e => {
+    const fieldStr = Object.entries(e.fields).slice(0,4).map(([k,v]) =>
+      `<span><span class="field-k">${esc(k)}:</span> <span class="field-v">${esc(typeof v==='string'?v.length>40?v.slice(0,40)+'…':v:v)}</span></span>`
+    ).join('');
+    inner += `<div class="event" data-id="${e.id}" data-src="${e.src}">
+      <div class="event-dot-wrap"><div class="event-dot"></div></div>
+      <div class="event-body">
+        <div class="event-row1"><span class="event-type">${esc(e.type)}</span></div>
+        <div class="event-fields">${fieldStr}</div>
+      </div>
+      <div class="event-ts"><span>${relT(e.t)}</span></div>
+    </div>
+    <div class="gap-note" style="margin-left:28px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>${esc(e.why)}</div>`;
+  });
+  inner += '</div>';
+  return `<section class="unlinked-section" id="unlinked-section">
+    <div class="unlinked-head" data-toggle="unlinked">
+      <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+      <span class="unlinked-title">Other events</span>
+      <span class="unlinked-sub">unlinked · same iteration window · no causal connection found</span>
+      <span class="unlinked-count">${UNLINKED.length}</span>
+    </div>
+    ${inner}
+  </section>`;
+}
+
+function renderTree(){
+  const w = document.getElementById('tree-wrap');
+  w.innerHTML = CHAINS.map(renderChain).join('') + renderUnlinked();
+  w.querySelectorAll('.chain-head').forEach(h => h.addEventListener('click', () => {
+    h.parentElement.classList.toggle('collapsed');
+  }));
+  w.querySelector('.unlinked-head').addEventListener('click', e => {
+    e.currentTarget.parentElement.classList.toggle('collapsed');
+  });
+  w.querySelectorAll('.event').forEach(ev => ev.addEventListener('click', () => openDetail(ev.dataset.id)));
+  w.querySelectorAll('.ref').forEach(r => r.addEventListener('click', (e) => {
+    e.stopPropagation();
+    scrollToEvent(r.dataset.target);
+  }));
+}
+
+function findEvent(id){ return ALL_EVENTS.find(e => e.id === id); }
+function chainOf(id){ const e = findEvent(id); return CHAINS.find(c=>c.id===e.chainId); }
+
+function openDetail(id){
+  const e = findEvent(id);
+  if (!e) return;
+  selectedId = id;
+  navIndex = navList.indexOf(id);
+  document.querySelectorAll('.event').forEach(n => n.classList.toggle('selected', n.dataset.id === id));
+  const panel = document.getElementById('detail-panel');
+  panel.classList.remove('hidden');
+  const meta = SRC_META[e.src];
+  document.getElementById('d-icon').innerHTML = `<div style="color:${meta.color};width:16px;height:16px">${meta.icon}</div>`;
+  document.getElementById('d-type').textContent = meta.label.toUpperCase() + ' EVENT';
+  document.getElementById('d-name').textContent = e.type;
+  document.getElementById('d-sub').textContent = fmt(e.t) + ' · ' + relT(e.t) + ' from iteration start';
+
+  const groups = [];
+  groups.push({title:'Identity', fields:{eventId:e.id, iterationId:ITER_SHORT, chainId:e.chainId}});
+  groups.push({title:'Payload', fields:e.fields});
+  const ts = new Date(T0+e.t).toISOString();
+  groups.push({title:'Timing', fields:{timestamp:ts, offsetFromStart:relT(e.t), duration:e.dur?e.dur+'ms':'(instant)'}});
+
+  let html = '';
+  groups.forEach(g => {
+    html += `<div class="field-group"><div class="field-group-title">${esc(g.title)}</div><dl class="field-list">`;
+    Object.entries(g.fields).forEach(([k,v]) => {
+      const cls = typeof v === 'number' ? 'v-num' : typeof v === 'boolean' ? 'v-bool' : v == null ? 'v-null' : 'v-string';
+      html += `<dt>${esc(k)}</dt><dd><span class="${cls}">${esc(v==null?'null':v)}</span></dd>`;
+    });
+    html += `</dl></div>`;
+  });
+  if (e.link) {
+    html += `<div class="field-group"><div class="field-group-title">Causal Link</div>
+      <dl class="field-list">
+        <dt>parent</dt><dd><span class="v-string">${esc(e.link.from)}</span></dd>
+        <dt>delta</dt><dd><span class="v-num">${e.link.delta}ms</span></dd>
+        <dt>correlation key</dt><dd><span class="v-string">${esc(e.link.key)}</span></dd>
+        <dt>confidence</dt><dd><span class="conf conf-${e.link.conf}" style="display:inline-block">${e.link.conf}</span></dd>
+      </dl></div>`;
+  }
+  if (e.inferredFrom) {
+    html += `<div class="field-group"><div class="field-group-title">Inferred Link <span style="color:var(--amber);font-style:italic;text-transform:none;letter-spacing:0">(no proof — timing only)</span></div>
+      <dl class="field-list">
+        <dt>likely from</dt><dd><span class="v-string">${esc(e.inferredFrom)}</span></dd>
+        <dt>basis</dt><dd><span class="v-string">temporal proximity + behavioral change</span></dd>
+        <dt>confidence</dt><dd><span class="conf conf-inferred" style="display:inline-block">inferred</span></dd>
+      </dl></div>`;
+  }
+  html += `<div class="field-group"><div class="field-group-title">Raw JSON</div><div class="json-block">${esc(JSON.stringify({type:e.type,t:fmt(e.t),iterationId:ITER_ID,chainId:e.chainId,...e.fields,...(e.link?{causedBy:e.link}:{})},null,2))}</div></div>`;
+  document.getElementById('d-body').innerHTML = html;
+}
+
+function closeDetail(){
+  document.getElementById('detail-panel').classList.add('hidden');
+  document.querySelectorAll('.event').forEach(n => n.classList.remove('selected'));
+  selectedId = null;
+}
+
+function scrollToEvent(id){
+  const node = document.querySelector(`.event[data-id="${id}"]`);
+  if (!node) return;
+  const chain = node.closest('.chain, .unlinked-section');
+  if (chain && chain.classList.contains('collapsed')) chain.classList.remove('collapsed');
+  node.scrollIntoView({behavior:'smooth', block:'center'});
+  node.classList.remove('pulse'); void node.offsetWidth; node.classList.add('pulse');
+  setTimeout(() => openDetail(id), 240);
+}
+
+document.getElementById('d-close').addEventListener('click', closeDetail);
+document.querySelectorAll('.narr-text .ref').forEach(r => r.addEventListener('click', () => scrollToEvent(r.dataset.target)));
+
+const iterBtn = document.getElementById('iter-btn');
+const iterPop = document.getElementById('iter-pop');
+iterBtn.addEventListener('click', e => { e.stopPropagation(); iterPop.classList.toggle('hidden'); });
+document.addEventListener('click', e => { if (!iterPop.contains(e.target) && e.target!==iterBtn) iterPop.classList.add('hidden'); });
+iterPop.querySelectorAll('.pop-item').forEach(it => it.addEventListener('click', () => {
+  iterPop.querySelectorAll('.pop-item').forEach(x=>x.classList.remove('active'));
+  it.classList.add('active');
+  iterPop.classList.add('hidden');
+}));
+
+document.querySelectorAll('#filter-pills .pill').forEach(p => p.addEventListener('click', () => {
+  document.querySelectorAll('#filter-pills .pill').forEach(x => x.classList.remove('active'));
+  p.classList.add('active');
+  const f = p.dataset.filter;
+  document.querySelectorAll('.event').forEach(ev => {
+    if (f === 'all') { ev.style.display = ''; return; }
+    const src = ev.dataset.src;
+    if (f === 'errors' && (src === 'error' || ev.querySelector('.event-type').textContent.includes('Failed'))) ev.style.display = '';
+    else if (f === 'retries' && src === 'retry') ev.style.display = '';
+    else if (f === 'throttling' && (src === 'http' && ev.querySelector('.event-type').textContent.includes('429'))) ev.style.display = '';
+    else ev.style.display = 'none';
+  });
+}));
+
+const gear = document.getElementById('gear-btn');
+const settings = document.getElementById('settings-panel');
+gear.addEventListener('click', e => { e.stopPropagation(); settings.classList.toggle('hidden'); });
+document.addEventListener('click', e => { if (!settings.contains(e.target) && e.target!==gear && !gear.contains(e.target)) settings.classList.add('hidden'); });
+
+document.querySelectorAll('#theme-toggle button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#theme-toggle button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.documentElement.setAttribute('data-theme', b.dataset.theme);
+}));
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+    return;
+  }
+  if (document.activeElement.tagName === 'INPUT') return;
+  if (e.key === 'Escape') { closeDetail(); settings.classList.add('hidden'); iterPop.classList.add('hidden'); return; }
+  if (e.key === 'j') { navIndex = Math.min(navList.length-1, navIndex+1); openDetail(navList[navIndex]); scrollToEvent(navList[navIndex]); }
+  if (e.key === 'k') { navIndex = Math.max(0, navIndex-1); openDetail(navList[navIndex]); scrollToEvent(navList[navIndex]); }
+  if (e.key === 'Enter' && selectedId) { openDetail(selectedId); }
+});
+
+const searchInput = document.getElementById('search-input');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  document.querySelectorAll('.event').forEach(ev => {
+    if (!q) { ev.style.display = ''; return; }
+    const text = ev.textContent.toLowerCase();
+    ev.style.display = text.includes(q) ? '' : 'none';
+  });
+});
+
+renderTree();
+})();
+</script>
+</body>
+</html>
