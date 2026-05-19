@@ -2936,6 +2936,95 @@ def _kill_stale_flt_processes_cli():
         print(f"   ⚠️  Stale-process sweep failed (continuing): {e}")
 
 
+def _parse_dotenv_file(env_path):
+    """Hand-rolled .env parser — no python-dotenv dependency.
+
+    Returns a dict of {KEY: VALUE} read from ``env_path``. Supports:
+      * Blank lines and ``#`` comments (full-line only).
+      * ``KEY=VALUE`` and ``export KEY=VALUE`` forms.
+      * Single- or double-quoted values; quotes are stripped.
+      * Trailing whitespace on values is stripped (unquoted only).
+
+    Deliberately does NOT support: variable interpolation, multi-line
+    values, escape sequences. The .env files this loader targets are
+    Azure OpenAI credentials — flat KEY=VALUE pairs. Anything fancier
+    invites silent drift from what FLT actually sees.
+
+    Returns empty dict if the file is missing.
+    """
+    result = {}
+    if not env_path.exists():
+        return result
+    try:
+        text = env_path.read_text(encoding="utf-8")
+    except OSError:
+        return result
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        eq = line.find("=")
+        if eq <= 0:
+            continue
+        key = line[:eq].strip()
+        value = line[eq + 1:]
+        # Strip surrounding quotes if matched (single or double); else trim whitespace.
+        value = (
+            value[1:-1]
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"')
+            else value.strip()
+        )
+        if key:
+            result[key] = value
+    return result
+
+
+def _build_flt_subprocess_env(repo_root_path, base_env=None):
+    """Build the env dict for the FLT subprocess.
+
+    Layering (last write wins):
+      1. Current process environment (so PATH, USERPROFILE, etc. survive).
+      2. ``.env`` from ``repo_root_path`` (Azure OpenAI credentials etc.).
+      3. PRO → base aliases when base is unset (Editor's fallback chain
+         in EdogQaLlmClient.ReadEditorConfigFromEnv does not include PRO,
+         so the alias makes the same endpoint reachable to both Architect
+         and Editor probes when EDITOR_* vars are absent).
+
+    ``base_env`` defaults to ``os.environ`` but is parameterised so the
+    unit test can inject a known starting state.
+    """
+    if base_env is None:
+        base_env = os.environ
+    env = dict(base_env)
+
+    dotenv_path = repo_root_path / ".env"
+    dotenv = _parse_dotenv_file(dotenv_path)
+    # .env wins over shell only for keys the shell doesn't already define.
+    # Rationale: a user who exports AZURE_OPENAI_ENDPOINT in their shell
+    # is overriding the repo .env on purpose.
+    for k, v in dotenv.items():
+        env.setdefault(k, v)
+
+    # PRO → base alias: the V2 Editor role looks up AZURE_OPENAI_ENDPOINT /
+    # AZURE_OPENAI_API_KEY directly (no PRO fallback in its chain). When
+    # the .env only carries the PRO variant, the Editor probe would 401.
+    # Aliasing closes that gap without surprising anyone who has set the
+    # base vars explicitly.
+    pro_to_base = {
+        "AZURE_OPENAI_ENDPOINT": "AZURE_OPENAI_PRO_ENDPOINT",
+        "AZURE_OPENAI_API_KEY": "AZURE_OPENAI_PRO_API_KEY",
+        "AZURE_OPENAI_API_VERSION": "AZURE_OPENAI_PRO_API_VERSION",
+        "AZURE_OPENAI_DEPLOYMENT": "AZURE_OPENAI_PRO_DEPLOYMENT",
+    }
+    for base_key, pro_key in pro_to_base.items():
+        if not env.get(base_key) and env.get(pro_key):
+            env[base_key] = env[pro_key]
+
+    return env
+
+
 def start_flt_service(repo_root):
     """
     Start the FLT service using dotnet run.
@@ -2972,6 +3061,20 @@ def start_flt_service(repo_root):
 
         # Step 2: Run the service from the EntryPoint directory (required for WorkloadParameters)
         print("   🚀 Launching service...")
+
+        # Build subprocess env with .env merged in + PRO→base aliasing so the
+        # QA Testing Tool's V2 capability probe finds AZURE_OPENAI_* vars.
+        # Without this, the FLT child process only sees vars from the shell
+        # that launched edog.py — and the .env file in the repo root never
+        # made it down, so every V2 probe silently failed.
+        edog_studio_root = Path(__file__).parent.resolve()
+        flt_env = _build_flt_subprocess_env(edog_studio_root)
+        aoai_keys_visible = sum(1 for k in flt_env if k.startswith("AZURE_OPENAI_") and flt_env[k])
+        if aoai_keys_visible > 0:
+            print(f"   🔑 AZURE_OPENAI_* keys propagated to FLT process: {aoai_keys_visible}")
+        else:
+            print("   ⚠️  No AZURE_OPENAI_* keys visible — QA Testing V2 will fall back to legacy.")
+
         process = subprocess.Popen(
             ["dotnet", "run", "--no-build"],
             stdout=subprocess.PIPE,
@@ -2979,6 +3082,7 @@ def start_flt_service(repo_root):
             text=True,
             bufsize=1,
             cwd=str(entrypoint),  # Run from EntryPoint dir so it finds WorkloadParameters
+            env=flt_env,
         )
 
         FLT_SERVICE_PROCESS = process
