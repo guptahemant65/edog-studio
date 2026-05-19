@@ -399,12 +399,19 @@ def test_qa_feature_flags_llm_v2_kill_switch_exists() -> None:
     assert 'EnvVarLlmV2 = "EDOG_QA_LLM_V2"' in src, (
         'EdogQaFeatureFlags must declare EnvVarLlmV2 = "EDOG_QA_LLM_V2" — the kill switch from F27 P9 §8.'
     )
-    # The three-state rollout (off | shadow | on) is non-negotiable: a
-    # boolean flag would skip the mandatory shadow phase and is forbidden
-    # by §8.
+    # The four-state rollout (off | auto | shadow | on) is non-negotiable: a
+    # boolean flag would skip the mandatory shadow phase, and missing Auto
+    # would re-open the silent-legacy-fallback hole that F27 P9 closed.
     assert "enum LlmV2Mode" in src, "LlmV2Mode enum must exist."
-    for required in ("Off", "Shadow", "On"):
+    for required in ("Off", "Auto", "Shadow", "On"):
         assert required in src, f"LlmV2Mode must declare {required}."
+    # Default must be Auto so unset env still prefers V2 (with transparent
+    # legacy fallback). Off-by-default was the prod gate that left every
+    # studio session silently shipping degraded scenarios.
+    assert "LlmV2Mode.Auto;" in src or "return LlmV2Mode.Auto;" in src, (
+        "ParseLlmV2 must default to Auto so unset env opts into V2 with "
+        "transparent legacy fallback."
+    )
 
 
 def test_qa_capability_probe_declares_required_error_codes() -> None:
@@ -1411,20 +1418,66 @@ def test_orchestrator_external_cancellation_throws_oce(harness_environment, buil
 
 
 def test_codeanalyzer_wirein_branches_on_llmv2_flag() -> None:
-    """T1c-b wire-in: the analyzer must read EdogQaFeatureFlags.LlmV2,
-    consult EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2 as a hard
-    gate, and branch on LlmV2Mode.On / Shadow / (else=Off). Shadow
-    must use a linked CTS so its fire-and-forget cannot outlive the
-    caller's cancellation.
+    """T4-D follow-up wire-in: the analyzer must read EdogQaFeatureFlags.LlmV2,
+    await EdogQaCapabilityProbe.WaitForResultAsync as an awaitable gate
+    (not the synchronous IsAzureOpenAiReadyForV2 boolean which raced the
+    first-run probe), and branch on LlmV2Mode.On / Auto / Shadow / Off.
+    Shadow must use a linked CTS so its fire-and-forget cannot outlive
+    the caller's cancellation, and Auto must fall through to legacy with
+    a loud LEGACY_LLM_FALLBACK warning when the probe is not ready.
     """
     src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs").read_text(encoding="utf-8")
     assert "EdogQaFeatureFlags.LlmV2" in src, "must read the V2 flag"
-    assert "EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2" in src, "capability probe must hard-gate"
+    assert "EdogQaCapabilityProbe.WaitForResultAsync" in src, (
+        "analyzer must await the dual probe via WaitForResultAsync — the "
+        "old IsAzureOpenAiReadyForV2 boolean races first-run startup and "
+        "silently demotes to legacy."
+    )
     assert "LlmV2Mode.On" in src
+    assert "LlmV2Mode.Auto" in src
     assert "LlmV2Mode.Shadow" in src
     assert "LlmV2Mode.Off" in src
-    assert "RunV2OrchestratorAsync" in src, "On / Shadow must delegate to V2"
+    assert "RunV2OrchestratorAsync" in src, "On / Auto / Shadow must delegate to V2"
     assert "CreateLinkedTokenSource" in src, "shadow must use a linked CTS"
+    assert "LEGACY_LLM_FALLBACK" in src, (
+        "Auto+probe-fail must emit a loud LEGACY_LLM_FALLBACK warning so "
+        "users see in the QA panel that they got degraded output."
+    )
+    assert "LLM_NOT_READY" in src, (
+        "Mode=On with probe-fail must raise the typed LLM_NOT_READY error "
+        "so the hub surfaces an actionable diagnostic instead of an empty "
+        "scenarios list."
+    )
+
+
+def test_registrar_kicks_capability_probe_at_boot() -> None:
+    """T4-D follow-up: EdogDevModeRegistrar.RegisterQaServices must call
+    EdogQaCapabilityProbe.EnsureStarted so the dual probe is in flight
+    by the time the first analysis lands. Without this kick, every cold
+    start would fall to legacy because WaitForResultAsync's 10s window
+    expires before any probe is scheduled."""
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogDevModeRegistrar.cs").read_text(encoding="utf-8")
+    assert "EdogQaCapabilityProbe.EnsureStarted" in src, (
+        "Registrar must kick the V2 capability probe at QA-service registration."
+    )
+
+
+def test_v2_orchestrator_signals_legacy_fallback_when_config_missing() -> None:
+    """T4-D follow-up: RunV2OrchestratorAsync used to return an empty
+    List<Scenario> when Architect/Editor configs were missing — strictly
+    worse than legacy output. It now either returns null (Auto callers
+    interpret as "invoke legacy") or throws LlmProviderException with
+    kind Configuration (On callers honour the strict opt-in).
+    """
+    src = (REPO_ROOT / "src" / "backend" / "DevMode" / "EdogQaCodeAnalyzer.cs").read_text(encoding="utf-8")
+    assert "allowLegacyFallback" in src, (
+        "RunV2OrchestratorAsync must take an allowLegacyFallback parameter "
+        "so On and Auto callers can diverge cleanly."
+    )
+    assert "LlmProviderErrorKind.Configuration" in src, (
+        "Config-missing path must throw LlmProviderException(Configuration) "
+        "for strict-On callers instead of returning empty scenarios."
+    )
 
 
 def test_codeanalyzer_v2_wirein_uses_orchestrator_and_validator() -> None:

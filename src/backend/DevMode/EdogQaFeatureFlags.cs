@@ -18,14 +18,20 @@ namespace Microsoft.LiveTable.Service.DevMode
     // that experimental codepaths can ship behind a kill switch and be
     // rolled out incrementally:
     //
-    //   off    → legacy code path serves users (default)
-    //   shadow → new code path runs alongside legacy and logs diffs;
-    //            legacy still serves user-visible results
-    //   on     → new code path serves users; legacy is dormant
+    //   off    → legacy code path serves users (explicit opt-out; no warning)
+    //   auto   → prefer V2 when capability probe passes; transparent legacy
+    //            fallback with a LEGACY_LLM_FALLBACK warning when probe
+    //            fails. THIS IS THE NEW DEFAULT (unset env var).
+    //   shadow → legacy serves users; V2 runs in shadow only when probe
+    //            passes; diffs logged
+    //   on     → require V2; hard-fail with LLM_NOT_READY if probe fails.
+    //            Use for CI / strict-mode operators who want to surface
+    //            misconfiguration immediately.
     //
-    // The shadow → on transition is the gated rollout pattern from F27 P9
-    // §8 — never flip directly from off to on for a critical user-facing
-    // pipeline.
+    // Auto is the gate that closes the original F27 P9 deployment hole:
+    // before this, unset defaulted to Off and the studio silently ran the
+    // legacy provider even when V2 was fully functional. Now unset prefers
+    // V2 transparently with a visible fallback signal.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
@@ -37,9 +43,10 @@ namespace Microsoft.LiveTable.Service.DevMode
         // ── Env-var names ──────────────────────────────────────────────
 
         /// <summary>
-        /// F27 P9 kill switch for the production-grade LLM scenario
-        /// generation pipeline. Accepts <c>off</c> (default) / <c>shadow</c>
-        /// / <c>on</c>. See <see cref="LlmV2Mode"/>.
+        /// F27 P9 rollout switch for the production-grade LLM scenario
+        /// generation pipeline. Accepts <c>off</c> / <c>auto</c> (default,
+        /// also the unset value) / <c>shadow</c> / <c>on</c>. See
+        /// <see cref="LlmV2Mode"/>.
         /// </summary>
         internal const string EnvVarLlmV2 = "EDOG_QA_LLM_V2";
 
@@ -47,10 +54,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>
         /// Rollout mode for the F27 P9 production-grade LLM scenario
-        /// generation pipeline. Defaults to <see cref="LlmV2Mode.Off"/>
-        /// (legacy <see cref="EdogQaLlmProvider"/> serves users) until the
-        /// capability probe + eval harness gate (P9 §8 T1 exit criteria)
-        /// has passed.
+        /// generation pipeline. Defaults to <see cref="LlmV2Mode.Auto"/>
+        /// (prefer V2 when the capability probe passes, transparent legacy
+        /// fallback with a LEGACY_LLM_FALLBACK warning when it fails).
         /// </summary>
         internal static LlmV2Mode LlmV2 => _llmV2.Value;
 
@@ -61,13 +67,15 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         internal static LlmV2Mode ParseLlmV2(string raw)
         {
-            if (string.IsNullOrWhiteSpace(raw)) return LlmV2Mode.Off;
+            if (string.IsNullOrWhiteSpace(raw)) return LlmV2Mode.Auto;
             var v = raw.Trim().ToLowerInvariant();
             return v switch
             {
                 "on" or "1" or "true" or "enabled" => LlmV2Mode.On,
                 "shadow" => LlmV2Mode.Shadow,
-                _ => LlmV2Mode.Off,
+                "off" or "0" or "false" or "disabled" => LlmV2Mode.Off,
+                "auto" => LlmV2Mode.Auto,
+                _ => LlmV2Mode.Auto,
             };
         }
     }
@@ -75,13 +83,16 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// <summary>Rollout mode for the F27 P9 LLM pipeline. See <see cref="EdogQaFeatureFlags.LlmV2"/>.</summary>
     internal enum LlmV2Mode
     {
-        /// <summary>Legacy <see cref="EdogQaLlmProvider"/> serves users (default).</summary>
+        /// <summary>Explicit opt-out: legacy <see cref="EdogQaLlmProvider"/> serves users, no probe-failure warning.</summary>
         Off = 0,
 
-        /// <summary>New pipeline runs alongside legacy; legacy still serves users; diffs are logged.</summary>
+        /// <summary>Legacy serves users; V2 runs in shadow when capability probe passes; diffs logged.</summary>
         Shadow = 1,
 
-        /// <summary>New pipeline serves users; legacy is dormant.</summary>
+        /// <summary>Require V2: hard-fail with LLM_NOT_READY if capability probe fails. Strict mode.</summary>
         On = 2,
+
+        /// <summary>Default. Prefer V2 when probe passes; transparent legacy fallback with LEGACY_LLM_FALLBACK warning otherwise.</summary>
+        Auto = 3,
     }
 }

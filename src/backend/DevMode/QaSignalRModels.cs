@@ -514,6 +514,26 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Catalog of chaos fault types currently supported. Empty when HttpChaosSupported is false.</summary>
         public List<string> SupportedChaosFaults { get; set; } = new();
+
+        // ── V2 LLM readiness (F27 P9 T4-D follow-up) ────────────────
+
+        /// <summary>True when both Architect and Editor probes passed and V2 pipeline is live.</summary>
+        public bool LlmV2Ready { get; set; }
+
+        /// <summary>True when the Architect probe (gpt-5.4 default) passed all required capabilities.</summary>
+        public bool ArchitectReady { get; set; }
+
+        /// <summary>True when the Editor probe (gpt-5.4-mini default) passed all required capabilities.</summary>
+        public bool EditorReady { get; set; }
+
+        /// <summary>Human-readable diagnostic of the V2 readiness state, including which role failed and why.</summary>
+        public string LlmV2Reason { get; set; }
+
+        /// <summary>UTC timestamp the dual probe completed (or null if it has not finished yet).</summary>
+        public DateTimeOffset? LlmV2ProbedAt { get; set; }
+
+        /// <summary>Effective mode after probe gating — one of "off" | "auto" | "shadow" | "on".</summary>
+        public string LlmV2RequestedMode { get; set; }
     }
 
     /// <summary>

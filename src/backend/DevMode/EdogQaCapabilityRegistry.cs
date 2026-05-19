@@ -230,6 +230,28 @@ namespace Microsoft.LiveTable.Service.DevMode
                     ? new List<string>(SupportedHttpFaults)
                     : new List<string>(),
             };
+
+            // F27 P9 T4-D follow-up: surface V2 LLM readiness so the QA
+            // panel can render a green/orange pill instead of letting
+            // users discover after a slow analysis that they got legacy.
+            var dual = EdogQaCapabilityProbe.LastDualResult;
+            report.LlmV2RequestedMode = EdogQaFeatureFlags.LlmV2.ToString().ToLowerInvariant();
+            if (dual != null)
+            {
+                report.LlmV2Ready = dual.IsReady;
+                report.ArchitectReady = dual.Architect?.IsReady == true;
+                report.EditorReady = dual.Editor?.IsReady == true;
+                report.LlmV2Reason = dual.Reason;
+                report.LlmV2ProbedAt = dual.ProbedAt;
+            }
+            else
+            {
+                report.LlmV2Ready = false;
+                report.ArchitectReady = false;
+                report.EditorReady = false;
+                report.LlmV2Reason = "Capability probe has not completed yet — check again in a few seconds.";
+                report.LlmV2ProbedAt = null;
+            }
             return report;
         }
     }

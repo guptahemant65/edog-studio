@@ -65,6 +65,13 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Generic transport / connection failure.</summary>
         Network = 5,
+
+        /// <summary>
+        /// Configuration is missing or incomplete (endpoint, api-key,
+        /// deployment, or capability not satisfied by the probe). The
+        /// service never made it onto the wire. Not retryable.
+        /// </summary>
+        Configuration = 6,
     }
 
     /// <summary>
@@ -110,6 +117,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     case LlmProviderErrorKind.Timeout: return "LLM_PROVIDER_TIMEOUT";
                     case LlmProviderErrorKind.Parse: return "LLM_PROVIDER_PARSE";
                     case LlmProviderErrorKind.Network: return "LLM_PROVIDER_NETWORK";
+                    case LlmProviderErrorKind.Configuration: return "LLM_NOT_READY";
                     default: return "LLM_PROVIDER_UNKNOWN";
                 }
             }

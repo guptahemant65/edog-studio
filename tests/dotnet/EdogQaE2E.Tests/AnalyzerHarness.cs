@@ -25,6 +25,13 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
     {
         public static async Task<int> RunAsync(CancellationToken ct)
         {
+            // Golden-path harness uses FakeLlmProvider — the V2 (Architect+Editor)
+            // pipeline would never trigger anyway because it requires a real
+            // Azure OpenAI endpoint. Pin the flag to Off so the new Auto-default
+            // doesn't add llm_v2_fallback_to_legacy to degradationFlags
+            // (the probe never starts in this hermetic harness).
+            Environment.SetEnvironmentVariable("EDOG_QA_LLM_V2", "off");
+
             var diff = FixtureScenarios.ReadPrDiffFixture();
             var prContext = FixtureScenarios.InsightsBaselinePrContext();
             var goldenScenarios = FixtureScenarios.InsightsBaselineGolden();

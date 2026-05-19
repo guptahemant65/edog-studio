@@ -27,24 +27,31 @@ namespace Microsoft.LiveTable.Service.DevMode
     //   3. JSON Schema strict-mode constrained decoding (AOAI_JSON_SCHEMA_STRICT_UNSUPPORTED)
     //   4. Reasoning effort parameter accepted          (AOAI_REASONING_UNSUPPORTED)
     //
-    // Different tenants / regions / SKUs expose different subsets. We
-    // refuse to flip <see cref="EdogQaFeatureFlags.LlmV2"/> from
-    // <see cref="LlmV2Mode.Off"/> to <see cref="LlmV2Mode.Shadow"/> or
-    // <see cref="LlmV2Mode.On"/> unless all four are confirmed.
+    // Different tenants / regions / SKUs expose different subsets. The V2
+    // pipeline uses TWO deployments (Architect + Editor) with different
+    // capability requirements:
+    //   • Architect — reasoning-capable. Needs all four.
+    //   • Editor    — formatter, no reasoning required. Needs only (1)–(3).
     //
-    // The probe runs at most once per process and the result is cached.
-    // <see cref="IsAzureOpenAiReadyForV2"/> is the single boolean the
-    // orchestrator + hub consult before honouring the feature flag.
+    // <see cref="IsAzureOpenAiReadyForV2"/> is true only when BOTH probes
+    // confirm the required capabilities for their respective role.
     //
-    // ── Implementation status (T1a) ───────────────────────────────────
-    // ProbeAsync now performs a real handshake against Azure OpenAI:
+    // ── Awaitable lifecycle (F27 P9 T4-followup) ───────────────────────
+    // <see cref="EnsureStarted"/> kicks off the dual probe at host startup
+    // (called from the registrar). <see cref="WaitForResultAsync"/> lets
+    // the first analyzer request bound a wait on the probe completing —
+    // first-run-after-cold-start no longer falls into legacy just because
+    // the probe hadn't finished yet.
+    //
+    // ── Implementation status ─────────────────────────────────────────
+    // ProbeOnceAsync performs a real handshake against Azure OpenAI:
     //   • POST {endpoint}/openai/responses?api-version=… with strict
     //     json_schema constrained decoding + reasoning.effort=low.
     //   • HTTP 200 + status="completed" + parseable {"ok":true} payload
     //     promotes ResponsesApiAvailable + JsonSchemaStrictSupported.
     //   • Presence of usage.output_tokens_details.reasoning_tokens
-    //     promotes ReasoningSupported.
-    //   • All four ⇒ IsReady=true.
+    //     promotes ReasoningSupported (skipped for Editor role).
+    //   • All required-for-role ⇒ IsReady=true.
     //
     // Network + config failures map to stable error codes (below) so
     // the orchestrator can render an actionable inline error and the
@@ -90,6 +97,16 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         // ── Probe inputs ───────────────────────────────────────────────
 
+        /// <summary>Role being probed. Editor does not require reasoning capability.</summary>
+        internal enum ProbeRole
+        {
+            /// <summary>Architect — reasoning-capable model. All four capabilities required.</summary>
+            Architect = 0,
+
+            /// <summary>Editor — formatter, no reasoning needed. Capabilities 1–3 required.</summary>
+            Editor = 1,
+        }
+
         /// <summary>Explicit probe configuration. Production callers use the env-driven overload; tests inject a <see cref="ProbeConfig"/> directly.</summary>
         internal sealed class ProbeConfig
         {
@@ -100,6 +117,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string Deployment { get; set; }
 
             public string ApiVersion { get; set; }
+
+            /// <summary>
+            /// Role being probed. Defaults to <see cref="ProbeRole.Architect"/> for
+            /// backwards compatibility with single-config callers (tests, legacy
+            /// <see cref="ProbeAsync(HttpClient, CancellationToken)"/>).
+            /// </summary>
+            public ProbeRole Role { get; set; } = ProbeRole.Architect;
         }
 
         // ── Result type ────────────────────────────────────────────────
@@ -107,8 +131,11 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Outcome of a single probe attempt.</summary>
         internal sealed class ProbeResult
         {
-            /// <summary>True only when all four capabilities below are confirmed.</summary>
+            /// <summary>True only when all required-for-role capabilities are confirmed (see <see cref="Role"/>).</summary>
             public bool IsReady { get; set; }
+
+            /// <summary>Role probed (Architect = needs reasoning, Editor = does not).</summary>
+            public ProbeRole Role { get; set; } = ProbeRole.Architect;
 
             /// <summary>Deployment name probed.</summary>
             public string Deployment { get; set; }
@@ -125,7 +152,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// <summary>True if a strict json_schema request was honoured (output matched schema).</summary>
             public bool JsonSchemaStrictSupported { get; set; }
 
-            /// <summary>True if usage.output_tokens_details.reasoning_tokens was reported.</summary>
+            /// <summary>True if usage.output_tokens_details.reasoning_tokens was reported. Required for Architect role only.</summary>
             public bool ReasoningSupported { get; set; }
 
             /// <summary>Largest <c>max_output_tokens</c> the deployment accepted without rejection.</summary>
@@ -141,28 +168,103 @@ namespace Microsoft.LiveTable.Service.DevMode
             public long ElapsedMilliseconds { get; set; }
         }
 
+        /// <summary>Outcome of the combined dual probe (Architect + Editor).</summary>
+        internal sealed class DualProbeResult
+        {
+            /// <summary>Probe outcome for the Architect deployment (reasoning-capable).</summary>
+            public ProbeResult Architect { get; set; }
+
+            /// <summary>Probe outcome for the Editor deployment (formatter, no reasoning required).</summary>
+            public ProbeResult Editor { get; set; }
+
+            /// <summary>True only when BOTH probes confirm their required-for-role capabilities.</summary>
+            public bool IsReady { get; set; }
+
+            /// <summary>Wall-clock time when the dual probe completed.</summary>
+            public DateTimeOffset ProbedAt { get; set; }
+
+            /// <summary>Total wall-clock time for both probes, milliseconds.</summary>
+            public long ElapsedMilliseconds { get; set; }
+
+            /// <summary>
+            /// Combined error codes, prefixed with the role they originated from.
+            /// Empty when <see cref="IsReady"/> is true.
+            /// </summary>
+            public List<string> Errors { get; set; } = new();
+
+            /// <summary>
+            /// Human-readable one-line reason summarising the dual outcome.
+            /// Suitable for the QA panel readiness pill. Never null.
+            /// </summary>
+            public string Reason { get; set; } = string.Empty;
+        }
+
+        /// <summary>Lifecycle state of the dual probe. Mirrors what the QA panel renders.</summary>
+        internal enum ProbeState
+        {
+            /// <summary>Probe has not been kicked off yet (process just started).</summary>
+            NotStarted = 0,
+
+            /// <summary><see cref="EnsureStarted"/> has been called; dual probe is in flight.</summary>
+            InProgress = 1,
+
+            /// <summary>Dual probe completed; both Architect + Editor confirmed ready.</summary>
+            Ready = 2,
+
+            /// <summary>Dual probe completed; at least one role is not ready (see <see cref="LastDualResult"/>.Errors).</summary>
+            Failed = 3,
+        }
+
         // ── Cache ──────────────────────────────────────────────────────
 
+        // ── Legacy single-result cache (kept for back-compat with ProbeAsync) ──
         private static ProbeResult _cached;
         private static readonly SemaphoreSlim _gate = new(1, 1);
 
-        /// <summary>The cached probe result if <see cref="ProbeAsync"/> has run; otherwise null.</summary>
+        // ── Dual-probe lifecycle (F27 P9 T4-followup) ──────────────────
+        private static DualProbeResult _dualCached;
+        private static Task<DualProbeResult> _dualTask;
+        private static readonly object _dualGate = new();
+
+        /// <summary>The cached single-config probe result if <see cref="ProbeAsync"/> has run; otherwise null.</summary>
         internal static ProbeResult LastResult => Volatile.Read(ref _cached);
 
-        /// <summary>
-        /// True only when the probe has run AND all four required capabilities
-        /// are confirmed. Until the probe runs (or while it returns false), the
-        /// hub MUST treat <see cref="EdogQaFeatureFlags.LlmV2"/> as
-        /// <see cref="LlmV2Mode.Off"/> regardless of the env var value.
-        /// </summary>
-        internal static bool IsAzureOpenAiReadyForV2 => Volatile.Read(ref _cached)?.IsReady == true;
+        /// <summary>The cached dual probe result if <see cref="EnsureStarted"/> has been called and completed; otherwise null.</summary>
+        internal static DualProbeResult LastDualResult => Volatile.Read(ref _dualCached);
 
         /// <summary>
-        /// Clears the cached result. Tests only — production must not call this.
+        /// True only when the dual probe has completed AND both Architect + Editor
+        /// roles confirm their required-for-role capabilities. Until then (probe
+        /// not started, in-flight, or failed), the orchestrator MUST treat
+        /// <see cref="EdogQaFeatureFlags.LlmV2"/> with appropriate fallback
+        /// semantics (see <see cref="LlmV2Mode"/>).
+        /// </summary>
+        internal static bool IsAzureOpenAiReadyForV2 => Volatile.Read(ref _dualCached)?.IsReady == true;
+
+        /// <summary>Current dual-probe lifecycle state.</summary>
+        internal static ProbeState State
+        {
+            get
+            {
+                var t = Volatile.Read(ref _dualTask);
+                if (t == null) return ProbeState.NotStarted;
+                if (!t.IsCompleted) return ProbeState.InProgress;
+                var d = Volatile.Read(ref _dualCached);
+                return d?.IsReady == true ? ProbeState.Ready : ProbeState.Failed;
+            }
+        }
+
+        /// <summary>
+        /// Clears the cached results. Tests only — production must not call this.
         /// </summary>
         internal static void ResetForTest()
         {
-            Volatile.Write(ref _cached, null);
+            lock (_dualGate)
+            {
+                Volatile.Write(ref _cached, null);
+                Volatile.Write(ref _dualCached, null);
+                Volatile.Write(ref _dualTask, null);
+            }
         }
 
         // ── Production entry point (env-driven, cached) ────────────────
@@ -220,6 +322,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             var result = new ProbeResult
             {
                 IsReady = false,
+                Role = cfg.Role,
                 Deployment = deployment,
                 EndpointHost = SafeHost(endpoint),
                 ApiVersion = apiVersion,
@@ -289,14 +392,185 @@ namespace Microsoft.LiveTable.Service.DevMode
                     return result;
                 }
 
+                // Editor role does NOT require reasoning capability — gpt-5.4-mini
+                // (the default Editor deployment) intentionally has no reasoning
+                // and its job is pure formatting under strict json_schema.
+                var requireReasoning = cfg.Role == ProbeRole.Architect;
                 result.IsReady =
                     result.ResponsesApiAvailable
                     && result.JsonSchemaStrictSupported
-                    && result.ReasoningSupported
+                    && (!requireReasoning || result.ReasoningSupported)
                     && result.MaxOutputTokensVerified > 0;
 
                 return result;
             }
+        }
+
+        // ── Dual probe (production) ───────────────────────────────────
+
+        /// <summary>
+        /// Kicks off the dual probe (Architect + Editor) if it has not been
+        /// started yet. Idempotent and thread-safe — multiple calls share
+        /// the same in-flight task. Returns immediately; callers that need
+        /// the result use <see cref="WaitForResultAsync"/>.
+        /// </summary>
+        /// <param name="httpClient">Shared HttpClient — supplied by the registrar.</param>
+        /// <param name="ct">Cancellation token (typically host shutdown).</param>
+        internal static Task<DualProbeResult> EnsureStarted(HttpClient httpClient, CancellationToken ct)
+        {
+            if (httpClient == null) throw new ArgumentNullException(nameof(httpClient));
+            var existing = Volatile.Read(ref _dualTask);
+            if (existing != null) return existing;
+
+            lock (_dualGate)
+            {
+                existing = Volatile.Read(ref _dualTask);
+                if (existing != null) return existing;
+
+                var t = Task.Run(() => ProbeAllAsync(httpClient, ct), ct);
+                Volatile.Write(ref _dualTask, t);
+                return t;
+            }
+        }
+
+        /// <summary>
+        /// Awaits the dual probe up to <paramref name="timeout"/>. Returns the
+        /// completed <see cref="DualProbeResult"/>, or null if the timeout
+        /// elapsed before the probe finished (the probe is NOT cancelled —
+        /// it continues running and a subsequent call may observe the result).
+        /// Callers MUST call <see cref="EnsureStarted"/> first.
+        /// </summary>
+        internal static async Task<DualProbeResult> WaitForResultAsync(TimeSpan timeout, CancellationToken ct)
+        {
+            var t = Volatile.Read(ref _dualTask);
+            if (t == null) return null;
+            if (t.IsCompleted) return t.Result;
+
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var delay = Task.Delay(timeout, linked.Token);
+            var winner = await Task.WhenAny(t, delay).ConfigureAwait(false);
+            if (winner == delay) return null;
+            linked.Cancel();
+            return t.Result;
+        }
+
+        /// <summary>
+        /// Runs the dual probe end-to-end. Reads Architect + Editor configs
+        /// from environment (with the precedence documented on
+        /// <see cref="EdogQaLlmClient.ReadArchitectConfigFromEnv"/> /
+        /// <see cref="EdogQaLlmClient.ReadEditorConfigFromEnv"/>), invokes
+        /// <see cref="ProbeOnceAsync"/> for each, and combines into a
+        /// <see cref="DualProbeResult"/>. Both probes run sequentially —
+        /// running in parallel against a small set of Azure capacities
+        /// invites 429s; cost of two probes is &lt; $0.001 either way.
+        /// </summary>
+        private static async Task<DualProbeResult> ProbeAllAsync(HttpClient httpClient, CancellationToken ct)
+        {
+            var sw = Stopwatch.StartNew();
+            var dual = new DualProbeResult
+            {
+                ProbedAt = DateTimeOffset.UtcNow,
+            };
+
+            try
+            {
+                var architectCfg = ReadArchitectProbeConfigFromEnv();
+                dual.Architect = await ProbeOnceAsync(httpClient, architectCfg, ct).ConfigureAwait(false);
+
+                var editorCfg = ReadEditorProbeConfigFromEnv();
+                dual.Editor = await ProbeOnceAsync(httpClient, editorCfg, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                dual.Errors.Add(ErrorCodeNetworkError + " — dual probe threw: " + ex.GetType().Name + ": " + Truncate(ex.Message, 200));
+            }
+            finally
+            {
+                sw.Stop();
+                dual.ElapsedMilliseconds = sw.ElapsedMilliseconds;
+            }
+
+            var aReady = dual.Architect?.IsReady == true;
+            var eReady = dual.Editor?.IsReady == true;
+            dual.IsReady = aReady && eReady;
+
+            if (dual.Architect?.Errors != null)
+            {
+                foreach (var e in dual.Architect.Errors) dual.Errors.Add("ARCHITECT: " + e);
+            }
+            if (dual.Editor?.Errors != null)
+            {
+                foreach (var e in dual.Editor.Errors) dual.Errors.Add("EDITOR: " + e);
+            }
+
+            dual.Reason = BuildDualReason(dual);
+            Volatile.Write(ref _dualCached, dual);
+            return dual;
+        }
+
+        private static string BuildDualReason(DualProbeResult dual)
+        {
+            if (dual.IsReady)
+            {
+                return $"V2 ready — Architect={dual.Architect.Deployment} Editor={dual.Editor.Deployment} ({dual.ElapsedMilliseconds}ms).";
+            }
+            var aReady = dual.Architect?.IsReady == true;
+            var eReady = dual.Editor?.IsReady == true;
+            if (!aReady && !eReady) return "V2 unavailable — both Architect and Editor probes failed (see errors).";
+            if (!aReady) return "V2 unavailable — Architect probe failed (Editor OK).";
+            return "V2 unavailable — Editor probe failed (Architect OK).";
+        }
+
+        private static ProbeConfig ReadArchitectProbeConfigFromEnv()
+        {
+            return new ProbeConfig
+            {
+                Role = ProbeRole.Architect,
+                Endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_ARCHITECT_ENDPOINT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_ENDPOINT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+                    ?? string.Empty,
+                ApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_ARCHITECT_API_KEY")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_API_KEY")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")
+                    ?? string.Empty,
+                Deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_ARCHITECT_DEPLOYMENT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_DEPLOYMENT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+                    ?? EdogQaLlmClient.DefaultArchitectDeployment,
+                ApiVersion = Environment.GetEnvironmentVariable("AZURE_OPENAI_ARCHITECT_API_VERSION")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_PRO_API_VERSION")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION")
+                    ?? EdogQaLlmClient.DefaultApiVersion,
+            };
+        }
+
+        private static ProbeConfig ReadEditorProbeConfigFromEnv()
+        {
+            // Editor's fallback chain does NOT include PRO — see
+            // EdogQaLlmClient.ReadEditorConfigFromEnv. The launcher
+            // (edog.py) aliases PRO → base on subprocess env so the
+            // Editor reaches the same endpoint when EDITOR_* are unset.
+            return new ProbeConfig
+            {
+                Role = ProbeRole.Editor,
+                Endpoint = Environment.GetEnvironmentVariable("AZURE_OPENAI_EDITOR_ENDPOINT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")
+                    ?? string.Empty,
+                ApiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_EDITOR_API_KEY")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")
+                    ?? string.Empty,
+                Deployment = Environment.GetEnvironmentVariable("AZURE_OPENAI_EDITOR_DEPLOYMENT")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_DEPLOYMENT")
+                    ?? EdogQaLlmClient.DefaultEditorDeployment,
+                ApiVersion = Environment.GetEnvironmentVariable("AZURE_OPENAI_EDITOR_API_VERSION")
+                    ?? Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION")
+                    ?? EdogQaLlmClient.DefaultApiVersion,
+            };
         }
 
         // ── Helpers ────────────────────────────────────────────────────

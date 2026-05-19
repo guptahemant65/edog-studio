@@ -86,7 +86,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                     transformationId = transformationId.ToString(),
                     nodeName = node?.Name ?? string.Empty,
                     nodeKind = node?.Kind ?? string.Empty,
-                    nodeId = node?.NodeId?.ToString() ?? string.Empty,
+                    nodeId = node?.NodeId.ToString() ?? string.Empty,
                     refreshMode = refreshMode.ToString(),
                     state = result.State.ToString(),
                     gtsSessionId = sessionId,

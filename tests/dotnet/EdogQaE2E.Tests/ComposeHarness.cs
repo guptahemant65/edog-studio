@@ -26,6 +26,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
     {
         public static async Task<int> RunAsync(CancellationToken ct)
         {
+            // Hermetic harness — pin EDOG_QA_LLM_V2=off so the new Auto
+            // default doesn't add llm_v2_fallback_to_legacy to the analyzer
+            // degradation flags (the V2 probe never starts in this context).
+            Environment.SetEnvironmentVariable("EDOG_QA_LLM_V2", "off");
+
             var diff = FixtureScenarios.ReadPrDiffFixture();
             var prContext = FixtureScenarios.InsightsBaselinePrContext();
             var goldenScenarios = FixtureScenarios.InsightsBaselineGolden();

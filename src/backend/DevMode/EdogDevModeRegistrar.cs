@@ -540,6 +540,39 @@ namespace Microsoft.LiveTable.Service.DevMode
                 EdogQaServiceLocator.CodeAnalyzer = codeAnalyzer;
 
                 Console.WriteLine("[EDOG] ✓ QA Testing engines registered");
+
+                // F27 P9 T4-D follow-up: kick the V2 capability probe so
+                // EDOG_QA_LLM_V2=auto (the new default) has a probe result
+                // ready by the time the first analyzer call happens. The
+                // probe POSTs once to Azure OpenAI's Responses API for the
+                // Architect (gpt-5.4) and Editor (gpt-5.4-mini) configs —
+                // total cost ≈ $0.001 per FLT process start. Without this
+                // kick, every cold-start analysis would fall to legacy
+                // because WaitForResultAsync would time out at 10s.
+                try
+                {
+                    var probeHttpClient = new System.Net.Http.HttpClient
+                    {
+                        Timeout = TimeSpan.FromSeconds(30),
+                    };
+                    var probeTask = EdogQaCapabilityProbe.EnsureStarted(probeHttpClient, System.Threading.CancellationToken.None);
+                    _ = probeTask.ContinueWith(t =>
+                    {
+                        if (t.IsCompletedSuccessfully && t.Result != null)
+                        {
+                            var verdict = t.Result.IsReady ? "READY" : "DEGRADED";
+                            Console.WriteLine($"[EDOG] ✓ QA V2 capability probe {verdict} — {t.Result.Reason}");
+                        }
+                        else if (t.IsFaulted)
+                        {
+                            Console.WriteLine($"[EDOG] ✗ QA V2 capability probe faulted: {t.Exception?.GetBaseException().Message}");
+                        }
+                    }, System.Threading.Tasks.TaskScheduler.Default);
+                }
+                catch (Exception probeEx)
+                {
+                    Console.WriteLine($"[EDOG] ✗ QA V2 capability probe kick failed: {probeEx.Message}");
+                }
             }
             catch (Exception ex)
             {

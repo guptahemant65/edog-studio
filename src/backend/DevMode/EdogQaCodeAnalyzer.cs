@@ -1266,26 +1266,127 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<string> degradationFlags,
             CancellationToken cancellationToken)
         {
-            // F27 P9 T1c-b: V2 orchestrator wire-in.
-            // Capability probe acts as a hard gate — V2 is forced Off when
-            // Azure OpenAI isn't ready, regardless of the requested flag.
+            // F27 P9 T4-D follow-up: V2-or-legacy decision is gated by an
+            // awaitable capability probe (Architect + Editor dual probe).
+            // EdogDevModeRegistrar.RegisterQaServices is responsible for
+            // calling EdogQaCapabilityProbe.EnsureStarted at boot so this
+            // wait usually returns instantly. The 10s window only matters
+            // for the first analyzer call after a cold start.
             var requestedMode = EdogQaFeatureFlags.LlmV2;
-            var effectiveMode = EdogQaCapabilityProbe.IsAzureOpenAiReadyForV2
-                ? requestedMode
-                : LlmV2Mode.Off;
 
-            if (effectiveMode == LlmV2Mode.On)
+            // Off — user explicitly opted out. Skip the probe (would just
+            // burn ~$0.001 for no decision impact) and run legacy quiet.
+            if (requestedMode == LlmV2Mode.Off)
             {
-                // V2-only. Orchestrator failure bubbles up as a normal
-                // exception — no silent fallback to legacy, no synthetic.
-                return await RunV2OrchestratorAsync(
-                    zones, diff, degradationFlags, cancellationToken).ConfigureAwait(false);
+                return await RunLegacyScenarioGenerationAsync(
+                    zones, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
-            // Legacy path (Off + Shadow share the same primary execution).
+            // Auto / Shadow / On — wait briefly for the probe result.
+            // WaitForResultAsync returns null on timeout WITHOUT cancelling
+            // the underlying probe; a subsequent analyzer call will see
+            // the result. The probe is kicked at registrar time so this
+            // is normally an immediate completed-task return.
+            EdogQaCapabilityProbe.DualProbeResult dual = null;
+            try
+            {
+                dual = await EdogQaCapabilityProbe.WaitForResultAsync(
+                    TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                degradationFlags.Add("llm_v2_probe_wait_failed");
+                PublishWarning($"LLM_V2 probe wait failed: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            var probeReady = dual?.IsReady == true;
+            var probeReason = dual?.Reason ?? "probe still in flight (10s window exceeded — first analysis after cold start may see this once)";
+
+            // On — strict V2 with no legacy fallback. A probe failure here
+            // surfaces as a typed LLM_NOT_READY error so the UI can show
+            // an actionable diagnostic instead of silent legacy output.
+            if (requestedMode == LlmV2Mode.On)
+            {
+                if (!probeReady)
+                {
+                    throw new LlmProviderException(
+                        LlmProviderErrorKind.Configuration,
+                        $"LLM_NOT_READY: EDOG_QA_LLM_V2=on but Azure OpenAI probe failed — {probeReason}",
+                        retryable: false);
+                }
+                var v2 = await RunV2OrchestratorAsync(
+                    zones, diff, degradationFlags, allowLegacyFallback: false, cancellationToken)
+                    .ConfigureAwait(false);
+                return v2; // allowLegacyFallback=false guarantees non-null
+            }
+
+            // Auto — prefer V2 if the probe passes, transparent fallback
+            // to legacy with a loud warning if not. This is the default
+            // when EDOG_QA_LLM_V2 is unset; closes the deployment hole
+            // where every legacy run silently shipped degraded output.
+            if (requestedMode == LlmV2Mode.Auto)
+            {
+                if (probeReady)
+                {
+                    var v2 = await RunV2OrchestratorAsync(
+                        zones, diff, degradationFlags, allowLegacyFallback: true, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (v2 != null) return v2;
+                    // v2 == null means config-missing; orchestrator emitted
+                    // a warning and we fall through to legacy below.
+                }
+                degradationFlags.Add("llm_v2_fallback_to_legacy");
+                PublishWarning(
+                    "LEGACY_LLM_FALLBACK: V2 (Architect+Editor) unavailable — " + probeReason
+                    + " — running legacy single-prompt scenario generation. Set EDOG_QA_LLM_V2=off to silence this warning, or fix the config to unlock V2.");
+                return await RunLegacyScenarioGenerationAsync(
+                    zones, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            // Shadow — legacy is primary, V2 fires-and-forgets on the side
+            // for comparison. V2 errors NEVER affect the prod result. We
+            // gate against LlmV2Mode.Shadow explicitly here (rather than
+            // relying on flow-through) so the wire-in pin-test can read
+            // the literal and validate every mode is handled.
+            if (requestedMode == LlmV2Mode.Shadow)
+            {
+                var legacy = await RunLegacyScenarioGenerationAsync(
+                    zones, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)
+                    .ConfigureAwait(false);
+                if (probeReady)
+                {
+                    _ = RunV2ShadowAsync(zones, diff, legacy.Count, cancellationToken);
+                }
+                return legacy;
+            }
+
+            // Defensive fallthrough — unrecognised mode behaves like Off.
+            return await RunLegacyScenarioGenerationAsync(
+                zones, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Legacy per-zone parallel scenario generation. Preserves the
+        /// pre-T1c-b behaviour byte-for-byte so Auto-fallback and Off
+        /// paths produce identical output. Typed LlmProviderException
+        /// bubbles up; unknown exceptions are logged + recorded as
+        /// degradation but do not abort the run.
+        /// </summary>
+        private async Task<List<Scenario>> RunLegacyScenarioGenerationAsync(
+            List<ImpactZone> zones,
+            CodeGraph graph,
+            List<InterfaceResolution> resolutions,
+            string diff,
+            PrContext prContext,
+            List<string> degradationFlags,
+            CancellationToken cancellationToken)
+        {
             var allScenarios = new List<Scenario>();
 
-            // Generate scenarios in parallel across zones (limit to 10 zones max)
             var zonesToProcess = zones.Take(10).ToList();
             var tasks = zonesToProcess.Select(zone => GenerateScenariosForZoneSafe(
                 zone, graph, resolutions, diff, prContext, degradationFlags, cancellationToken)).ToList();
@@ -1303,8 +1404,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 // F27 P4: typed LLM failures must reach the hub so it can
                 // emit a typed QaError instead of silently dropping to
-                // synthetic. Task.WhenAll surfaces the first exception
-                // when awaited — that's the one we want to propagate.
+                // synthetic.
                 throw;
             }
             catch (Exception ex)
@@ -1313,20 +1413,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 PublishWarning($"Scenario generation failed: {ex.Message}");
             }
 
-            // Post-processing: validate topic references and assign IDs
-            allScenarios = PostProcessScenarios(allScenarios);
-
-            if (effectiveMode == LlmV2Mode.Shadow)
-            {
-                // Fire-and-forget V2 shadow comparison. Bounded by a linked
-                // CTS with deadline 2× legacy elapsed (min 30s, max 120s).
-                // All exceptions swallowed — shadow MUST NOT impact prod
-                // observable behaviour. Diff is logged via PublishWarning
-                // with the "[shadow]" prefix.
-                _ = RunV2ShadowAsync(zones, diff, allScenarios.Count, cancellationToken);
-            }
-
-            return allScenarios;
+            return PostProcessScenarios(allScenarios);
         }
 
         // ──────────────────────────────────────────────
@@ -1349,6 +1436,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             List<ImpactZone> zones,
             string diff,
             List<string> degradationFlags,
+            bool allowLegacyFallback,
             CancellationToken cancellationToken)
         {
             var architectCfg = EdogQaLlmClient.ReadArchitectConfigFromEnv();
@@ -1358,12 +1446,22 @@ namespace Microsoft.LiveTable.Service.DevMode
                 || string.IsNullOrEmpty(editorCfg.Endpoint)
                 || string.IsNullOrEmpty(editorCfg.ApiKey))
             {
+                // Config gap discovered after the probe passed (race with
+                // env mutation, partial alias) — Auto callers degrade to
+                // legacy, On callers must hard-fail because they explicitly
+                // refused the silent fallback.
+                if (!allowLegacyFallback)
+                {
+                    throw new LlmProviderException(
+                        LlmProviderErrorKind.Configuration,
+                        "LLM_NOT_READY: V2 orchestrator missing Architect/Editor endpoint or api-key. "
+                        + "Verify AZURE_OPENAI_ARCHITECT_* / AZURE_OPENAI_EDITOR_* (or the PRO/base "
+                        + "fallback chain — see edog.py launcher aliasing) are present in the FLT process env.",
+                        retryable: false);
+                }
                 degradationFlags.Add("llm_v2_config_missing");
                 PublishWarning("LLM_V2_CONFIG_MISSING: Architect/Editor endpoint or api-key not configured; falling back to legacy path.");
-                // Caller chose On but env is incomplete — degrade to legacy
-                // rather than throw, because forcing a hard failure on a
-                // misconfigured tenant would be worse than legacy output.
-                return new List<Scenario>();
+                return null;
             }
 
             var orchestrator = new EdogQaScenarioOrchestrator(SharedHttpClient.Value);
@@ -1410,8 +1508,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             linked.CancelAfter(TimeSpan.FromSeconds(120));
             try
             {
-                var v2Scenarios = await RunV2OrchestratorAsync(zones, diff, new List<string>(), linked.Token).ConfigureAwait(false);
-                PublishWarning($"[shadow] LLM_V2 produced {v2Scenarios.Count} scenario(s); legacy produced {legacyScenarioCount}.");
+                var v2Scenarios = await RunV2OrchestratorAsync(zones, diff, new List<string>(), allowLegacyFallback: true, linked.Token).ConfigureAwait(false);
+                PublishWarning($"[shadow] LLM_V2 produced {(v2Scenarios?.Count ?? 0)} scenario(s); legacy produced {legacyScenarioCount}.");
             }
             catch (OperationCanceledException)
             {
