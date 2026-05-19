@@ -37406,6 +37406,15 @@ class RingBuffer {
     return this.buffer[idx];
   }
 
+  // Returns the i-th live entry by logical position: 0 is the oldest
+  // currently-retained entry, count-1 is the newest. Mirrors forEach's
+  // index semantics so cluster/logs code can iterate without callbacks.
+  getByIndex(i) {
+    if (i < 0 || i >= this.count) return undefined;
+    const idx = (this.head - this.count + i + this.capacity) % this.capacity;
+    return this.buffer[idx];
+  }
+
   get oldestSeq() { return this.totalPushed - this.count; }
   get newestSeq() { return this.totalPushed - 1; }
 
@@ -43079,19 +43088,18 @@ class ClusterEngine {
 
   /**
    * Full rebuild from ring buffer. Called on init or when buffer wraps.
-   * @param {object} buffer — RingBuffer with .count and .getByIndex(i)
+   * @param {object} buffer — RingBuffer with .forEach(fn) iteration
    */
   rebuildFromBuffer(buffer) {
     this._buffer = buffer;
     this._clusters.clear();
     this._codeIndex.clear();
 
-    for (let i = 0; i < buffer.count; i++) {
-      const entry = buffer.getByIndex(i);
-      if (!entry) continue;
-      if (!this._isClusterableLevel(entry.level)) continue;
+    buffer.forEach((entry) => {
+      if (!entry) return;
+      if (!this._isClusterableLevel(entry.level)) return;
       this._ingestEntry(entry);
-    }
+    });
 
     this._recomputeAllTrends();
     this._version++;
@@ -50736,11 +50744,9 @@ class LogsEnhancements {
 
     // Count matches
     if (regex && this._state && this._state.logBuffer) {
-      const buf = this._state.logBuffer;
-      for (let i = 0; i < buf.count; i++) {
-        const entry = buf.getByIndex(i);
+      this._state.logBuffer.forEach((entry) => {
         if (entry && regex.test(entry.message || '')) bp.matchCount++;
-      }
+      });
     }
 
     this._breakpoints.set(id, bp);
@@ -50785,14 +50791,15 @@ class LogsEnhancements {
     const buf = this._state.logBuffer;
     if (!buf) return;
 
-    for (let i = 0; i < buf.count; i++) {
-      const entry = buf.getByIndex(i);
-      if (entry && bp.regex.test(entry.message || '')) {
-        this._scrollToSeq(entry.seq);
-        this._flashRow(entry.seq, bp.color);
-        break;
+    let found = false;
+    buf.forEach((entry, seq) => {
+      if (found || !entry) return;
+      if (bp.regex.test(entry.message || '')) {
+        this._scrollToSeq(seq);
+        this._flashRow(seq, bp.color);
+        found = true;
       }
-    }
+    });
   }
 
   /**
@@ -51861,11 +51868,9 @@ class LogsEnhancements {
     } else {
       // Legacy fallback: scan all entries
       const entries = [];
-      const buf = this._state.logBuffer;
-      for (let i = 0; i < buf.count; i++) {
-        const entry = buf.getByIndex(i);
+      this._state.logBuffer.forEach((entry) => {
         if (entry) entries.push(entry);
-      }
+      });
       this.detectClusters(entries);
     }
   }
@@ -89273,6 +89278,10 @@ class QaPanel {
       this._renderLlmPill({ state: 'refreshing' });
     }
     conn.invoke('QaGetCapabilities').then((report) => {
+      // Log the full report so the user can diagnose why V2 isn't
+      // ready (e.g., missing AZURE_OPENAI_* env vars, deployment
+      // not found) without having to hover the pill.
+      console.info('[qa-panel] QaGetCapabilities ←', report);
       this._renderLlmPill(report);
       // If the probe was mid-flight, poll once more after 4s. The
       // dual probe normally takes < 2s on a healthy tenant.

@@ -22,19 +22,18 @@ class ClusterEngine {
 
   /**
    * Full rebuild from ring buffer. Called on init or when buffer wraps.
-   * @param {object} buffer — RingBuffer with .count and .getByIndex(i)
+   * @param {object} buffer — RingBuffer with .forEach(fn) iteration
    */
   rebuildFromBuffer(buffer) {
     this._buffer = buffer;
     this._clusters.clear();
     this._codeIndex.clear();
 
-    for (let i = 0; i < buffer.count; i++) {
-      const entry = buffer.getByIndex(i);
-      if (!entry) continue;
-      if (!this._isClusterableLevel(entry.level)) continue;
+    buffer.forEach((entry) => {
+      if (!entry) return;
+      if (!this._isClusterableLevel(entry.level)) return;
       this._ingestEntry(entry);
-    }
+    });
 
     this._recomputeAllTrends();
     this._version++;

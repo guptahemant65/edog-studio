@@ -102,11 +102,9 @@ class LogsEnhancements {
 
     // Count matches
     if (regex && this._state && this._state.logBuffer) {
-      const buf = this._state.logBuffer;
-      for (let i = 0; i < buf.count; i++) {
-        const entry = buf.getByIndex(i);
+      this._state.logBuffer.forEach((entry) => {
         if (entry && regex.test(entry.message || '')) bp.matchCount++;
-      }
+      });
     }
 
     this._breakpoints.set(id, bp);
@@ -151,14 +149,15 @@ class LogsEnhancements {
     const buf = this._state.logBuffer;
     if (!buf) return;
 
-    for (let i = 0; i < buf.count; i++) {
-      const entry = buf.getByIndex(i);
-      if (entry && bp.regex.test(entry.message || '')) {
-        this._scrollToSeq(entry.seq);
-        this._flashRow(entry.seq, bp.color);
-        break;
+    let found = false;
+    buf.forEach((entry, seq) => {
+      if (found || !entry) return;
+      if (bp.regex.test(entry.message || '')) {
+        this._scrollToSeq(seq);
+        this._flashRow(seq, bp.color);
+        found = true;
       }
-    }
+    });
   }
 
   /**
@@ -1227,11 +1226,9 @@ class LogsEnhancements {
     } else {
       // Legacy fallback: scan all entries
       const entries = [];
-      const buf = this._state.logBuffer;
-      for (let i = 0; i < buf.count; i++) {
-        const entry = buf.getByIndex(i);
+      this._state.logBuffer.forEach((entry) => {
         if (entry) entries.push(entry);
-      }
+      });
       this.detectClusters(entries);
     }
   }
