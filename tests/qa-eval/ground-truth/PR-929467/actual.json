@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T09:48:09.6153047\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "929467",
+  "counts": {
+    "emitted": 5,
+    "validated": 3,
+    "projected": 3
+  },
+  "scenarios": [
+    {
+      "id": "sk-2",
+      "topic": "Controller token management",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            307
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            547
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+          "side": "right",
+          "lines": [
+            790
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": "Controller token management",
+      "category": "ErrorPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            526
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+          "side": "right",
+          "lines": [
+            872
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": "SchedulerRunStatus validation",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs",
+          "side": "right",
+          "lines": [
+            61
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs",
+          "side": "right",
+          "lines": [
+            189
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-1",
+      "topic": "Controller token management",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            307
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            542
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
+          "side": "right",
+          "lines": [
+            270
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+          "side": "right",
+          "lines": [
+            746
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "Controller token management",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "emitted",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            307
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+          "side": "right",
+          "lines": [
+            526
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+          "side": "right",
+          "lines": [
+            135
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+          "side": "right",
+          "lines": [
+            835
+          ]
+        }
+      ]
+    }
+  ]
+}

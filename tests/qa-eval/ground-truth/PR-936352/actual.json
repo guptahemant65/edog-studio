@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T10:42:18.7005496\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "936352",
+  "counts": {
+    "emitted": 5,
+    "validated": 5,
+    "projected": 5
+  },
+  "scenarios": [
+    {
+      "id": "sk-1",
+      "topic": ".github/hooks/hooks.json",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            4
+          ]
+        },
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            7
+          ]
+        },
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-2",
+      "topic": ".github/hooks/hooks.json",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            4
+          ]
+        },
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            7
+          ]
+        },
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": ".github/hooks/hooks.json",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            7
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-4",
+      "topic": ".github/hooks/hooks.json",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            8
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-5",
+      "topic": ".github/hooks/hooks.json",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": ".github/hooks/hooks.json",
+          "side": "right",
+          "lines": [
+            10
+          ]
+        }
+      ]
+    }
+  ]
+}

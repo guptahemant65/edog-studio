@@ -134,10 +134,10 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             // wedge the capture indefinitely.
             using var httpClient = new HttpClient
             {
-                Timeout = TimeSpan.FromMinutes(10),
+                Timeout = TimeSpan.FromMinutes(25),
             };
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            linkedCts.CancelAfter(TimeSpan.FromMinutes(12));
+            linkedCts.CancelAfter(TimeSpan.FromMinutes(28));
 
             // ── Architect ─────────────────────────────────────────────
             var archResult = await EdogQaLlmClient

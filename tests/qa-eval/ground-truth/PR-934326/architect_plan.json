@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T09:37:25.4502386\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "934326",
+  "zone_id": "PR-934326-full-diff",
+  "zone_summary": "Dependency-only edit in central package management: Scriban version is bumped from 6.2.0 to 7.0.0 in Directory.Packages.props, with no accompanying source, schema, API-contract, SQL, or test changes in this zone.",
+  "plan_outcome": "no_testable_changes",
+  "counts": {
+    "behavioral_changes": 0,
+    "grounding_evidence": 1,
+    "scenario_sketches": 0
+  },
+  "behavioral_changes": [],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Directory.Packages.props",
+      "side": "right",
+      "base_sha": "fcbba54071d6b452c3a97f4e0f75bd5b06665224",
+      "hunk_id": "Directory.Packages.props@@-37,7\u002B37,7",
+      "new_line": 40,
+      "excerpt": "\u003CPackageVersion Include=\u0022Scriban\u0022 Version=\u00227.0.0\u0022 /\u003E",
+      "reason": "This zone only changes a package version in dependency configuration. It does not itself add or modify an application-visible behavior, contract, schema field, guard, branch, or error path that can be directly specified as a targeted test scenario from the diff alone."
+    }
+  ],
+  "scenario_sketches": []
+}

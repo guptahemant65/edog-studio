@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T09:47:59.8658091\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "929467",
+  "zone_id": "PR-929467-full-diff",
+  "zone_summary": "GetDAGExecStatus now routes token-cache handling through a feature-flagged helper: delete cached tokens for terminal DAG states when the kill switch is off, keep updating tokens for non-terminal states or when the kill switch is on, and assert null SchedulerRunStatus input with a different exception type.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 5,
+    "grounding_evidence": 12,
+    "scenario_sketches": 5
+  },
+  "behavioral_changes": [
+    {
+      "summary": "When FLTTokenManagerSkipClearOnDagCompletion is disabled, scheduler-status reads now evict cached tokens for terminal DAG executions instead of refreshing them.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-3",
+        "ev-5",
+        "ev-8"
+      ]
+    },
+    {
+      "summary": "When the kill switch is disabled and the DAG is still non-terminal, scheduler-status reads continue refreshing the cached token instead of deleting it.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-4",
+        "ev-9"
+      ]
+    },
+    {
+      "summary": "When FLTTokenManagerSkipClearOnDagCompletion is enabled, scheduler-status reads preserve the legacy behavior and update the cached token even for terminal DAG executions.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-6",
+        "ev-10"
+      ]
+    },
+    {
+      "summary": "On the kill-switch-enabled path, UpdateCachedToken failures are caught and logged locally so GetDAGExecStatus can still return success.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-11"
+      ]
+    },
+    {
+      "summary": "SchedulerRunStatus.GetSchedulerRunStatus now enforces non-null input via Check.AssertArgumentNotNull, changing the null-input exception contract to RuntimeAssertException.",
+      "evidence_refs": [
+        "ev-7",
+        "ev-12"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -294,37 \u002B295,25 @@",
+      "new_line": 307,
+      "excerpt": "Tracer.LogSanitizedMessage($\u0022DAG Status for Iteration {iterationId} found to be {schedulerRunStatus.Status}\u0022);\nUpdateOrDeleteTokenInTokenManager(tenantId, artifactId, iterationId, mwcToken, schedulerRunStatus.Status);",
+      "reason": "The scheduler-status endpoint now delegates token handling to a status-aware helper after computing the DAG status."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -531,6 \u002B520,38 @@",
+      "new_line": 526,
+      "excerpt": "if (featureFlighter.IsEnabled(FeatureNames.FLTTokenManagerSkipClearOnDagCompletion, Guid.TryParse(tenantId, out var tenantGuid) ? tenantGuid : null, null, null))\n{\n    Tracer.LogSanitizedVerbose($\u0022Feature flag {FeatureNames.FLTTokenManagerSkipClearOnDagCompletion} is enabled.\u0022);\n    try\n    {\n        tokenManager.UpdateCachedToken(artifactId, iterationId, mwcToken);\n    }\n    catch (Exception e)\n    {\n        Tracer.LogSanitizedError(e, $\u0022Failed while updating mwcToken for {iterationId}.\u0022);\n    }\n}",
+      "reason": "The kill-switch branch explicitly preserves update behavior and wraps token updates in a local try/catch."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -531,6 \u002B520,38 @@",
+      "new_line": 542,
+      "excerpt": "if (DagExecutionMetrics.IsInTerminalStatus(status))\n{\n    Tracer.LogSanitizedMessage(\u0022Dag execution is in a terminal status. Trying to delete the Token in TokenManager\u0022);\n    tokenManager.DeleteCachedToken(artifactId, iterationId);\n}",
+      "reason": "With the kill switch off, terminal DAG statuses now trigger token eviction."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Controllers/LiveTableSchedulerRunController.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -531,6 \u002B520,38 @@",
+      "new_line": 547,
+      "excerpt": "else\n{\n    Tracer.LogSanitizedVerbose(\u0022Dag execution is not in a terminal status. Trying to update the Token in TokenManager\u0022);\n    tokenManager.UpdateCachedToken(artifactId, iterationId, mwcToken);\n}",
+      "reason": "With the kill switch off, non-terminal DAG statuses still refresh the cached token."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/DagExecutionMetrics.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -268,16 \u002B268,21 @@",
+      "new_line": 270,
+      "excerpt": "internal static bool IsInTerminalStatus(DagExecutionStatus status)\n{\n    return (status == DagExecutionStatus.Completed)\n        || (status == DagExecutionStatus.Failed)\n        || (status == DagExecutionStatus.Skipped)\n        || (status == DagExecutionStatus.Cancelled);\n}",
+      "reason": "This helper defines the terminal-status partition used by the new delete-vs-update branch."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/FeatureFlightProvider/FeatureNames.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -132,5 \u002B132,11 @@",
+      "new_line": 135,
+      "excerpt": "/// Feature flag to control cleaning up for TokenManager on DAG completion.\n/// Kill-switch: enable to revert to old behavior (always update, never delete). To be removed once validated in production.\npublic const string FLTTokenManagerSkipClearOnDagCompletion = \u0022FLTTokenManagerSkipClearOnDagCompletion\u0022;",
+      "reason": "Contract-bearing comment documents the feature flag semantics and the legacy behavior it restores."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/DataModel/Dag/SchedulerRunStatus.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -54,13 \u002B56,9 @@",
+      "new_line": 61,
+      "excerpt": "Check.AssertArgumentNotNull(dagExecInstance, nameof(dagExecInstance));",
+      "reason": "Null input validation now uses the platform assert helper instead of throwing ArgumentNullException directly."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -693,6 \u002B713,189 @@",
+      "new_line": 746,
+      "excerpt": "mockITokenManager.Verify(\n    x =\u003E x.UpdateCachedToken(It.IsAny\u003CGuid\u003E(), It.IsAny\u003CGuid\u003E(), It.IsAny\u003Cstring\u003E()),\n    Times.Never());\n\nmockITokenManager.Verify(\n    x =\u003E x.DeleteCachedToken(It.IsAny\u003CGuid\u003E(), It.IsAny\u003CGuid\u003E()),\n    Times.Once());",
+      "reason": "Added unit test locks in delete-on-terminal behavior when the kill switch is disabled."
+    },
+    {
+      "evidence_id": "ev-9",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -693,6 \u002B713,189 @@",
+      "new_line": 790,
+      "excerpt": "mockITokenManager.Verify(\n    x =\u003E x.UpdateCachedToken(It.IsAny\u003CGuid\u003E(), It.IsAny\u003CGuid\u003E(), It.IsAny\u003Cstring\u003E()),\n    Times.Once());\nmockITokenManager.Verify(\n    x =\u003E x.DeleteCachedToken(It.IsAny\u003CGuid\u003E(), It.IsAny\u003CGuid\u003E()),\n    Times.Never());",
+      "reason": "Added unit test locks in update-on-nonterminal behavior when the kill switch is disabled."
+    },
+    {
+      "evidence_id": "ev-10",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -693,6 \u002B713,189 @@",
+      "new_line": 835,
+      "excerpt": "mockFeatureFlighter\n    .Setup(f =\u003E f.IsEnabled(\n        FeatureNames.FLTTokenManagerSkipClearOnDagCompletion,\n        It.IsAny\u003CGuid?\u003E(),\n        It.IsAny\u003CGuid?\u003E(),\n        It.IsAny\u003CGuid?\u003E()))\n    .Returns(true);\n...\nmockITokenManager.Verify(\n    x =\u003E x.UpdateCachedToken(It.IsAny\u003CGuid\u003E(), It.IsAny\u003CGuid\u003E(), It.IsAny\u003Cstring\u003E()),\n    Times.Once());",
+      "reason": "Added unit test locks in the kill-switch behavior that keeps updating tokens even for terminal status."
+    },
+    {
+      "evidence_id": "ev-11",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ControllerTests/LiveTableSchedulerRunControllerTests.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -693,6 \u002B713,189 @@",
+      "new_line": 872,
+      "excerpt": "mockITokenManager.Setup(x =\u003E x.UpdateCachedToken(It.IsAny\u003CGuid\u003E(), It.IsAny\u003CGuid\u003E(), It.IsAny\u003Cstring\u003E()))\n    .Throws(new InvalidOperationException(\u0022Token update failed\u0022));\n...\nresponse.StatusCode.Should().Be(HttpStatusCode.OK);\nvar schedulerRunStatus = JsonConvert.DeserializeObject\u003CSchedulerRunStatus\u003E(await response.Content.ReadAsStringAsync());\nAssert.AreEqual(DagExecutionStatus.Running, schedulerRunStatus.Status);",
+      "reason": "Added unit test proves token-update exceptions are swallowed on the kill-switch path and the request still succeeds."
+    },
+    {
+      "evidence_id": "ev-12",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/DataModelTests/SchedulerRunStatusTests.cs",
+      "side": "right",
+      "base_sha": "0e1b7d224a45055764b5a309de05d80b58b3f56f",
+      "hunk_id": "@@ -185,7 \u002B186,7 @@",
+      "new_line": 189,
+      "excerpt": "[ExpectedException(typeof(RuntimeAssertException))]",
+      "reason": "The existing null-input test was flipped to expect RuntimeAssertException, locking in the new exception contract."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "Deletes cached tokens for terminal DAG statuses when the kill switch is off",
+      "category": "Regression",
+      "technique": "EquivalencePartition",
+      "rationale": "Cover the terminal-status partition defined by Completed/Failed/Skipped/Cancelled and verify GetDAGExecStatus deletes the cached token instead of updating it when the new cleanup behavior is active.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-3",
+        "ev-5",
+        "ev-8"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "Refreshes cached tokens for non-terminal DAG executions when the kill switch is off",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Lock the non-terminal branch so a running DAG still refreshes its cached token and does not get evicted prematurely.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-4",
+        "ev-9"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "Keeps legacy token updates for terminal DAG executions when the kill switch is on",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Toggle the feature flag to the opposite state and verify terminal executions revert to the documented old behavior of updating instead of deleting.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-6",
+        "ev-10"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Returns success when UpdateCachedToken throws on the kill-switch path",
+      "category": "ErrorPath",
+      "technique": "ErrorPath",
+      "rationale": "Inject an UpdateCachedToken failure while the feature flag is enabled and verify the local catch preserves the 200/OK scheduler-status response.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-11"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "Throws RuntimeAssertException for null dagExecInstance in GetSchedulerRunStatus",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "The implementation now uses Check.AssertArgumentNotNull and the existing test expectation was flipped, so the null-input failure type should be locked to RuntimeAssertException.",
+      "evidence_refs": [
+        "ev-7",
+        "ev-12"
+      ]
+    }
+  ]
+}

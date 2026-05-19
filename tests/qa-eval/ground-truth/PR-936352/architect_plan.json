@@ -1,0 +1,188 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T10:42:09.2129673\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "936352",
+  "zone_id": "PR-936352-full-diff",
+  "zone_summary": "Adds a new Copilot CLI sessionStart hook that bootstraps FMLV-DevSkills marketplace plugins (\u0060common\u0060 and \u0060livetable\u0060) for both PowerShell and Bash, while suppressing hook failures and bounding execution to 120 seconds.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 5,
+    "grounding_evidence": 8,
+    "scenario_sketches": 5
+  },
+  "behavioral_changes": [
+    {
+      "summary": "Each Copilot CLI session now bootstraps the \u0060common\u0060 plugin from the FMLV-DevSkills marketplace via the new \u0060sessionStart\u0060 hook on both PowerShell and Bash.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-4"
+      ]
+    },
+    {
+      "summary": "Each Copilot CLI session now bootstraps the \u0060livetable\u0060 plugin from the FMLV-DevSkills marketplace via the new \u0060sessionStart\u0060 hook on both PowerShell and Bash.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-3",
+        "ev-5"
+      ]
+    },
+    {
+      "summary": "The PowerShell hook path is intentionally non-blocking on plugin bootstrap failures by suppressing stderr and forcing a successful result.",
+      "evidence_refs": [
+        "ev-6"
+      ]
+    },
+    {
+      "summary": "The Bash hook path is intentionally non-blocking on plugin bootstrap failures by suppressing stderr and forcing a successful result.",
+      "evidence_refs": [
+        "ev-7"
+      ]
+    },
+    {
+      "summary": "Hook execution is capped at 120 seconds so plugin bootstrap work cannot run indefinitely during session startup.",
+      "evidence_refs": [
+        "ev-8"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 4,
+      "excerpt": "\u0022sessionStart\u0022: [",
+      "reason": "Registers the new command hook to run at Copilot CLI session start."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 7,
+      "excerpt": "copilot plugin marketplace add ...; copilot plugin install common@fmlv-devskills-marketplace ...; copilot plugin update common@fmlv-devskills-marketplace",
+      "reason": "PowerShell hook bootstraps marketplace access and ensures the \u0060common\u0060 plugin is installed and updated."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 7,
+      "excerpt": "copilot plugin install livetable@fmlv-devskills-marketplace ...; copilot plugin update livetable@fmlv-devskills-marketplace",
+      "reason": "PowerShell hook ensures the \u0060livetable\u0060 plugin is installed and updated."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 8,
+      "excerpt": "copilot plugin marketplace add ...; copilot plugin install common@fmlv-devskills-marketplace ...; copilot plugin update common@fmlv-devskills-marketplace",
+      "reason": "Bash hook bootstraps marketplace access and ensures the \u0060common\u0060 plugin is installed and updated."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 8,
+      "excerpt": "copilot plugin install livetable@fmlv-devskills-marketplace ...; copilot plugin update livetable@fmlv-devskills-marketplace",
+      "reason": "Bash hook ensures the \u0060livetable\u0060 plugin is installed and updated."
+    },
+    {
+      "evidence_id": "ev-6",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 7,
+      "excerpt": "2\u003E$null; ... 2\u003E$null; $true",
+      "reason": "PowerShell command redirects stderr away and ends with \u0060$true\u0060, making hook failures non-fatal to session startup."
+    },
+    {
+      "evidence_id": "ev-7",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 8,
+      "excerpt": "2\u003E/dev/null; ... 2\u003E/dev/null || true",
+      "reason": "Bash command redirects stderr away and forces a successful overall exit with \u0060|| true\u0060, making hook failures non-fatal to session startup."
+    },
+    {
+      "evidence_id": "ev-8",
+      "repo_relative_path": ".github/hooks/hooks.json",
+      "side": "right",
+      "base_sha": "cea71b50354966db250a6987e443f2c2945a212d",
+      "hunk_id": "@@ -0,0 \u002B1,15 @@",
+      "new_line": 10,
+      "excerpt": "\u0022timeoutSec\u0022: 120",
+      "reason": "Adds an explicit upper bound for hook runtime during session start."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "sessionStart bootstraps the \u0060common\u0060 plugin from FMLV-DevSkills on both shell variants",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Cover a clean environment in both PowerShell and Bash and verify the new session-start hook adds the marketplace and leaves \u0060common@fmlv-devskills-marketplace\u0060 installed or updated.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-4"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "sessionStart bootstraps the \u0060livetable\u0060 plugin from FMLV-DevSkills on both shell variants",
+      "category": "HappyPath",
+      "technique": "EquivalencePartition",
+      "rationale": "Cover a clean environment in both PowerShell and Bash and verify the new session-start hook leaves \u0060livetable@fmlv-devskills-marketplace\u0060 installed or updated.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-3",
+        "ev-5"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "PowerShell sessionStart hook stays successful when marketplace or plugin commands fail",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Exercise failures in the PowerShell bootstrap commands and assert the hook still completes successfully without surfacing stderr because the command redirects errors and ends with \u0060$true\u0060.",
+      "evidence_refs": [
+        "ev-6"
+      ]
+    },
+    {
+      "sketch_id": "sk-4",
+      "title": "Bash sessionStart hook stays successful when marketplace or plugin commands fail",
+      "category": "EdgeCase",
+      "technique": "ErrorPath",
+      "rationale": "Exercise failures in the Bash bootstrap commands and assert the hook still completes successfully without surfacing stderr because the command redirects errors and ends with \u0060|| true\u0060.",
+      "evidence_refs": [
+        "ev-7"
+      ]
+    },
+    {
+      "sketch_id": "sk-5",
+      "title": "sessionStart plugin bootstrap respects the 120-second timeout boundary",
+      "category": "EdgeCase",
+      "technique": "BoundaryTriplet",
+      "rationale": "Validate the new timeout contract with durations just under, at, and over 120 seconds so a stalled plugin bootstrap cannot hold session startup indefinitely.",
+      "evidence_refs": [
+        "ev-8"
+      ]
+    }
+  ]
+}

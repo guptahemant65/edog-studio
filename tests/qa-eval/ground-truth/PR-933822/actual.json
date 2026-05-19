@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T09:42:55.4462510\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "933822",
+  "counts": {
+    "emitted": 1,
+    "validated": 1,
+    "projected": 1
+  },
+  "scenarios": [
+    {
+      "id": "sk-1",
+      "topic": "CORS policy",
+      "category": "HappyPath",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs",
+          "side": "right",
+          "lines": [
+            75
+          ]
+        }
+      ]
+    }
+  ]
+}

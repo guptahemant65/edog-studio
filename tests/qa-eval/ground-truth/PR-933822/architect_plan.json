@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T09:42:50.9900170\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "933822",
+  "zone_id": "PR-933822-full-diff",
+  "zone_summary": "CORS policy now exposes the x-ms-continuation-token response header so browser JavaScript can read pagination tokens from cross-origin responses.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 1,
+    "grounding_evidence": 1,
+    "scenario_sketches": 1
+  },
+  "behavioral_changes": [
+    {
+      "summary": "The service CORS policy now emits exposure metadata for the x-ms-continuation-token header, allowing browser-based clients to access that pagination header from cross-origin responses.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Initialization/WorkloadEndpointSetup.cs",
+      "side": "right",
+      "base_sha": "c5b066ea2d31eab6d318738c4a41ef752145097d",
+      "hunk_id": "@@ -71,7 \u002B71,8 @@ namespace Microsoft.LiveTable.Service.Initialization",
+      "new_line": 75,
+      "excerpt": ".AllowAnyHeader()\n.WithExposedHeaders(\u0022x-ms-continuation-token\u0022);",
+      "reason": "Adds x-ms-continuation-token to the ASP.NET Core CORS exposed-header allowlist, which drives the Access-Control-Expose-Headers response contract for browser callers."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "Cross-origin responses expose x-ms-continuation-token through the CORS policy",
+      "category": "HappyPath",
+      "technique": "HappyPath",
+      "rationale": "Verify that a request matching the configured CORS policy produces an Access-Control-Expose-Headers value containing x-ms-continuation-token, establishing that browser JavaScript can read the pagination continuation header.",
+      "evidence_refs": [
+        "ev-1"
+      ]
+    }
+  ]
+}

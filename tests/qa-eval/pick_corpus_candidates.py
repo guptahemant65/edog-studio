@@ -192,7 +192,19 @@ def _classify_change_shape(files: list[FileChange]) -> str:
     # Docs / generated / dependency PRs — heavily downranked.
     if frac(lambda p: p.endswith((".md", ".txt", ".html")) or "/docs/" in p) >= 0.6:
         return "docs"
-    if frac(lambda p: p.endswith((".swagger.json", "swagger.json", ".csproj"))) >= 0.6:
+    # Config / dependency files: package version files, build config, CI/workflow JSON.
+    # Dependabot PRs and CI-only PRs land here. Catches Directory.Packages.props,
+    # Directory.Build.props, *.csproj, swagger contracts, and anything under .github/.
+    def _is_config(p: str) -> bool:
+        name = p.rsplit("/", 1)[-1]
+        if name.startswith("directory."):
+            return True
+        return (
+            p.endswith((".swagger.json", "swagger.json", ".csproj", ".props", ".targets", ".sln"))
+            or p.startswith(".github/")
+            or "/.github/" in p
+        )
+    if frac(_is_config) >= 0.6:
         return "generated_or_config"
     if frac(lambda p: "test" in p or p.endswith("tests.cs")) >= 0.6:
         return "test_only"

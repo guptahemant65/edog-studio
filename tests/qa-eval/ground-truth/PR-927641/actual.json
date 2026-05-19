@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T10:45:05.7578248\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "927641",
+  "counts": {
+    "emitted": 3,
+    "validated": 3,
+    "projected": 3
+  },
+  "scenarios": [
+    {
+      "id": "sk-1",
+      "topic": "MLV execution definition patch merge",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+          "side": "right",
+          "lines": [
+            86
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+          "side": "right",
+          "lines": [
+            569
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-2",
+      "topic": "MLV execution definition patch merge",
+      "category": "Regression",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+          "side": "right",
+          "lines": [
+            86
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+          "side": "right",
+          "lines": [
+            595
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sk-3",
+      "topic": "MLV execution definition patch merge",
+      "category": "EdgeCase",
+      "verb": "FieldMatch",
+      "stage": "projected",
+      "grounding_changed_lines": [
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+          "side": "right",
+          "lines": [
+            83
+          ]
+        },
+        {
+          "path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+          "side": "right",
+          "lines": [
+            86
+          ]
+        },
+        {
+          "path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+          "side": "right",
+          "lines": [
+            621
+          ]
+        }
+      ]
+    }
+  ]
+}

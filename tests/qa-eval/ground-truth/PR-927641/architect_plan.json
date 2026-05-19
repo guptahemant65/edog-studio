@@ -1,0 +1,126 @@
+{
+  "schema_version": "1.0",
+  "captured_at": "2026-05-19T10:44:59.0688264\u002B00:00",
+  "pipeline": "v2_architect_editor",
+  "pr_number": "927641",
+  "zone_id": "PR-927641-full-diff",
+  "zone_summary": "Patch-merge logic for MLV execution definitions now clears carried-over SelectedMLVs when a definition leaves SelectedOnly, while explicitly preserving SelectedMLVs for CurrentLakehouse cases that still depend on them.",
+  "plan_outcome": "testable",
+  "counts": {
+    "behavioral_changes": 3,
+    "grounding_evidence": 5,
+    "scenario_sketches": 3
+  },
+  "behavioral_changes": [
+    {
+      "summary": "When a PATCH resolves an execution definition from SelectedOnly to CurrentLakehouse/All, stale SelectedMLVs are now cleared instead of being preserved from the existing definition.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "summary": "When a PATCH resolves an execution definition from SelectedOnly to FullLineage, stale SelectedMLVs are now cleared instead of being preserved from the existing definition.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-4"
+      ]
+    },
+    {
+      "summary": "The new clearing logic is intentionally scoped: CurrentLakehouse definitions keep their existing SelectedMLVs on a no-op/non-mode-changing PATCH because CatalogHandler still uses them for recursive ancestor traversal.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-5"
+      ]
+    }
+  ],
+  "grounding_evidence": [
+    {
+      "evidence_id": "ev-1",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+      "side": "right",
+      "base_sha": "cb474f80538df4a257a40ab2a9278a0da5f2e0b6",
+      "hunk_id": "@@ -78,9 \u002B79,15 @@",
+      "new_line": 83,
+      "excerpt": "// Clear stale SelectedMLVs only when mode transitions away from SelectedOnly.\n// CurrentLakehouse mode legitimately uses SelectedMLVs for recursive ancestor\n// traversal (CatalogHandler.cs:349), so blanket clearing would break that.",
+      "reason": "Contract-bearing comments narrow the fix\u0027s scope: only SelectedOnly-\u003Enon-SelectedOnly transitions should clear, and CurrentLakehouse must retain SelectedMLVs."
+    },
+    {
+      "evidence_id": "ev-2",
+      "repo_relative_path": "Service/Microsoft.LiveTable.Service/Contracts/Api/MLVExecutionDefinitionPublicPatchRequest.cs",
+      "side": "right",
+      "base_sha": "cb474f80538df4a257a40ab2a9278a0da5f2e0b6",
+      "hunk_id": "@@ -78,9 \u002B79,15 @@",
+      "new_line": 86,
+      "excerpt": "SelectedMLVs = existing.ExecutionMode == ExecutionMode.SelectedOnly \u0026\u0026 executionMode != ExecutionMode.SelectedOnly\n    ? new List\u003Cstring\u003E()\n    : this.CurrentLakehouseExecutionContext?.SelectedMlvs?.Count \u003E 0\n        ? this.CurrentLakehouseExecutionContext.SelectedMlvs\n        : existing.SelectedMLVs,",
+      "reason": "This new branch is the behavioral change: it clears SelectedMLVs only when leaving SelectedOnly, and otherwise preserves request-supplied or existing values."
+    },
+    {
+      "evidence_id": "ev-3",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+      "side": "right",
+      "base_sha": "cb474f80538df4a257a40ab2a9278a0da5f2e0b6",
+      "hunk_id": "@@ -566,8 \u002B566,59 @@",
+      "new_line": 569,
+      "excerpt": "[TestMethod(\u0022ToInternalPatchRequest: Switching from Selected to All mode clears stale SelectedMLVs\u0022)]\n...\nresult.ExecutionMode.Should().Be(ExecutionMode.CurrentLakehouse);\nresult.SelectedMLVs.Should().BeEmpty(\n    \u0022SelectedMLVs should be cleared when mode changes away from SelectedOnly to prevent stale filtering in CatalogHandler\u0022);",
+      "reason": "Regression test contract for the CurrentLakehouse/All transition: the expected outcome flipped from preserving SelectedMLVs to clearing them."
+    },
+    {
+      "evidence_id": "ev-4",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+      "side": "right",
+      "base_sha": "cb474f80538df4a257a40ab2a9278a0da5f2e0b6",
+      "hunk_id": "@@ -566,8 \u002B566,59 @@",
+      "new_line": 595,
+      "excerpt": "[TestMethod(\u0022ToInternalPatchRequest: Switching from Selected to FullLineage mode clears stale SelectedMLVs\u0022)]\n...\nresult.ExecutionMode.Should().Be(ExecutionMode.FullLineage);\nresult.SelectedMLVs.Should().BeEmpty(\n    \u0022SelectedMLVs should be cleared when transitioning from SelectedOnly to FullLineage\u0022);",
+      "reason": "New regression test locks the generalized behavior that leaving SelectedOnly for FullLineage must also clear stale SelectedMLVs."
+    },
+    {
+      "evidence_id": "ev-5",
+      "repo_relative_path": "test/Microsoft.LiveTable.Service.UnitTests/ContractTests/MLVExecutionDefinitionPublicModelTests.cs",
+      "side": "right",
+      "base_sha": "cb474f80538df4a257a40ab2a9278a0da5f2e0b6",
+      "hunk_id": "@@ -566,8 \u002B566,59 @@",
+      "new_line": 621,
+      "excerpt": "[TestMethod(\u0022ToInternalPatchRequest: CurrentLakehouse with existing SelectedMLVs preserves them on no-op PATCH\u0022)]\n...\nresult.ExecutionMode.Should().Be(ExecutionMode.CurrentLakehouse);\nresult.SelectedMLVs.Should().BeEquivalentTo(\n    new List\u003Cstring\u003E { \u0022schema.mlv1\u0022, \u0022schema.mlv2\u0022 },\n    \u0022CurrentLakehouse SelectedMLVs must be preserved \u2014 CatalogHandler uses them for recursive ancestor traversal\u0022);",
+      "reason": "New test guards the counter-case: the fix must not blanket-clear CurrentLakehouse SelectedMLVs on patches that do not change away from that mode."
+    }
+  ],
+  "scenario_sketches": [
+    {
+      "sketch_id": "sk-1",
+      "title": "SelectedOnly -\u003E CurrentLakehouse/All PATCH clears stale SelectedMLVs",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Start with an existing definition in SelectedOnly containing SelectedMLVs, PATCH only CurrentLakehouseExecutionMode=All, and assert the internal model resolves to CurrentLakehouse with an empty SelectedMLVs list so stale CatalogHandler filtering cannot survive the mode switch.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-3"
+      ]
+    },
+    {
+      "sketch_id": "sk-2",
+      "title": "SelectedOnly -\u003E FullLineage PATCH clears stale SelectedMLVs",
+      "category": "Regression",
+      "technique": "RegressionGuard",
+      "rationale": "Start with an existing definition in SelectedOnly containing SelectedMLVs, PATCH ExtendedLineageExecutionMode=All, and assert the internal model resolves to FullLineage with SelectedMLVs cleared, proving the fix applies to non-SelectedOnly targets beyond CurrentLakehouse.",
+      "evidence_refs": [
+        "ev-2",
+        "ev-4"
+      ]
+    },
+    {
+      "sketch_id": "sk-3",
+      "title": "No-op CurrentLakehouse PATCH preserves existing SelectedMLVs",
+      "category": "EdgeCase",
+      "technique": "Counterfactual",
+      "rationale": "Use an existing CurrentLakehouse definition that already has SelectedMLVs, PATCH an unrelated field such as DisplayName, and assert SelectedMLVs are preserved. This guards against over-broad clearing and matches the new contract comment that CurrentLakehouse still relies on SelectedMLVs for recursive ancestor traversal.",
+      "evidence_refs": [
+        "ev-1",
+        "ev-2",
+        "ev-5"
+      ]
+    }
+  ]
+}

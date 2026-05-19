@@ -40,7 +40,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 return 2;
             }
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(30));
             try
             {
                 return args[0] switch

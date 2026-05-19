@@ -114,8 +114,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Stable cache key for the Editor's system+schema prefix.</summary>
         internal const string PromptCacheKeyEditor = "edog-qa-editor-v2";
 
-        /// <summary>Architect budget. Reasoning tokens are charged against this; 65,536 leaves comfortable headroom for both reasoning and the ≤2K visible plan output.</summary>
-        internal const int ArchitectMaxOutputTokens = 96000;
+        /// <summary>Architect budget. Reasoning tokens are charged against this; 128,000 keeps headroom for dense schema/error-handling PRs near the 80KB diff cap where 96K previously returned status=incomplete (see F27 P9 T4-C capture report).</summary>
+        internal const int ArchitectMaxOutputTokens = 128000;
 
         /// <summary>Editor budget. Editor is not a reasoning model, so 16K is well above the ~2K visible scenario JSON ceiling.</summary>
         internal const int EditorMaxOutputTokens = 32000;
@@ -1179,6 +1179,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "the strict schema. Each scenario MUST reference grounding-evidence IDs from the Architect's plan "
             + "ONLY — you are forbidden from introducing new file/line citations. If a sketch needs an evidence "
             + "anchor that is not in the plan, omit that scenario rather than fabricating one. "
+            + "TITLE LENGTH HARD CAP: every scenario title MUST be ≤120 characters (downstream validator rejects with EDITOR_SCHEMA_VIOLATION). Aim for ≤100 chars; if a sketch implies a longer title, compress it to a concise behavioural summary before emitting. "
             + "EXPECTATION TOPIC VOCABULARY (CLOSED SET — pick exactly one of these per expectation, "
             + "lowercase, no other values accepted; downstream validator quarantines unknown topics): "
             + "http, token, flag, perf, spark, log, telemetry, retry, cache, fileop, catalog, dag, "
