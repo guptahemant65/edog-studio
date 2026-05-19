@@ -287,11 +287,42 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         private static void RegisterCacheInterceptor()
         {
-            // EdogCacheInterceptor is now a static utility class.
-            // Cache events are published via EdogCacheInterceptor.RecordCacheEvent()
-            // which can be called from any component. No DI wrapping needed.
+            // EdogCacheInterceptor itself is a static utility — events are published via
+            // EdogCacheInterceptor.RecordCacheEvent() and need no DI wrapping. We do,
+            // however, register two cache *sources* here:
+            //   1. IDagExecutionStore decorator → real Get/Set/Evict events for the
+            //      in-memory DAG execution cache.
+            //   2. TokenBucketRateLimiterCache log-stream observer → REUSED/CREATED/
+            //      EVICTED events parsed out of FLT's existing verbose logs (the
+            //      cache is a static singleton and cannot be replaced via DI).
             Console.WriteLine("[EDOG] ✓ Cache interceptor ready (static utility)");
             EdogInterceptorRegistry.Record("Cache", EdogInterceptorRegistry.RegistrationStatus.Ok);
+
+            RegisterDagExecutionStoreWrapper();
+            RegisterRateLimiterCacheObserver();
+        }
+
+        private static void RegisterDagExecutionStoreWrapper()
+        {
+            TryWrap<Microsoft.LiveTable.Service.Store.IDagExecutionStore>(
+                "DagExecutionStoreCache",
+                inner => inner is EdogDagExecutionStoreWrapper,
+                inner => new EdogDagExecutionStoreWrapper(inner));
+        }
+
+        private static void RegisterRateLimiterCacheObserver()
+        {
+            const string name = "RateLimiterCacheObserver";
+            try
+            {
+                EdogRateLimiterCacheObserver.Start();
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Ok);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[EDOG] ✗ {name} failed: {ex.Message}");
+                EdogInterceptorRegistry.Record(name, EdogInterceptorRegistry.RegistrationStatus.Failed, ex.Message);
+            }
         }
 
         private static void RegisterSparkSessionInterceptor()
