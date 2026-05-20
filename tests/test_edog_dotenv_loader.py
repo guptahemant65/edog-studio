@@ -169,3 +169,19 @@ def test_start_flt_service_passes_env_to_popen(edog):
     assert "env=flt_env" in src, (
         "subprocess.Popen for FLT must pass env=flt_env so the child sees AZURE_OPENAI_* keys."
     )
+
+
+def test_dev_server_deploy_uses_build_flt_subprocess_env():
+    """Source-grep pin: scripts/dev-server.py is the OTHER launcher that
+    spawns FLT (via the studio's Deploy button). It MUST also use the
+    same _build_flt_subprocess_env helper, otherwise the .env file's
+    AZURE_OPENAI_* keys never reach the FLT process for the most-used
+    launch path. This pin catches future regressions where someone
+    edits dev-server.py and reverts to plain dict(os.environ)."""
+    dev_server = PROJECT_DIR / "scripts" / "dev-server.py"
+    src = dev_server.read_text(encoding="utf-8")
+    assert "_build_flt_subprocess_env(" in src, (
+        "scripts/dev-server.py must build the FLT subprocess env via "
+        "edog._build_flt_subprocess_env so the studio Deploy path "
+        "propagates the repo .env to the FLT child process."
+    )

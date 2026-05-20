@@ -2382,11 +2382,48 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             config = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
             flt_repo = config.get("flt_repo_path", "")
             entrypoint = Path(flt_repo) / "Service" / "Microsoft.LiveTable.Service.EntryPoint"
-            env = dict(os.environ)
+
+            # Layer the repo .env onto os.environ + alias PRO→base so the
+            # QA Testing Tool's V2 capability probe finds AZURE_OPENAI_*
+            # vars in the FLT process. Without this the .env file sits on
+            # disk but never reaches FLT through this launch path — the
+            # studio "Deploy" button bypasses edog.py's start_flt_service.
+            # Logic lives in edog._build_flt_subprocess_env so both
+            # launchers share one source of truth.
+            sys.path.insert(0, str(PROJECT_DIR))
+            try:
+                from edog import _build_flt_subprocess_env
+                env = _build_flt_subprocess_env(PROJECT_DIR, base_env=os.environ)
+            except Exception as env_load_err:
+                _deploy_log(
+                    f"Could not load .env for FLT subprocess ({env_load_err}); "
+                    "QA V2 LLM will fall back to legacy.",
+                    "warn",
+                )
+                env = dict(os.environ)
+            finally:
+                if str(PROJECT_DIR) in sys.path:
+                    sys.path.remove(str(PROJECT_DIR))
+
             env["EDOG_STUDIO_PORT"] = str(FLT_INTERNAL_PORT)
             # F11/architecture.md §3.7: per-session token gates the override
             # control plane on FLT. Without this env var, FLT returns 503.
             env["EDOG_CONTROL_TOKEN"] = EDOG_CONTROL_TOKEN
+
+            aoai_keys_visible = sum(
+                1 for k in env if k.startswith("AZURE_OPENAI_") and env[k]
+            )
+            if aoai_keys_visible > 0:
+                _deploy_log(
+                    f"AZURE_OPENAI_* env vars propagated to FLT process: {aoai_keys_visible}",
+                    "info",
+                )
+            else:
+                _deploy_log(
+                    "No AZURE_OPENAI_* env vars visible to FLT process — "
+                    "QA V2 LLM will fall back to legacy single-prompt path.",
+                    "warn",
+                )
 
             # Zero-popup auth: inject Silent CBA token into workload-dev-mode.json
             # so DevConnection uses it directly instead of opening a browser
