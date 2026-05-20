@@ -234,6 +234,18 @@ class ExecutionPipeline {
       if (this._destroyed) return;
       if (this._state.status === 'failed') return;
 
+      // Skip "Assign Capacity" (step 1) if capacityId was already bound
+      // at workspace creation (step 0). Re-assigning a capacity that's
+      // already set returns an error from the Fabric API.
+      if (i === 1 && context.capacityId && this._state.artifacts.workspaceId) {
+        this._state.steps[1].status = 'succeeded';
+        this._state.steps[1].skipped = true;
+        this._state.steps[1].timing = { startedAt: Date.now(), completedAt: Date.now(), elapsedMs: 0 };
+        this._log(1, 'info', 'Skipped — capacity bound at workspace creation');
+        this._render();
+        continue;
+      }
+
       var success = await this._executeStep(i, context);
       if (!success) {
         this._stopTimer();
