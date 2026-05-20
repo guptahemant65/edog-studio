@@ -1,11 +1,14 @@
 /**
- * DagNode — SVG node component for the DAG canvas.
+ * DagNode — HTML div-based node component for the DAG canvas.
  *
- * Renders as SVG <g> with <foreignObject> for rich HTML node body.
+ * Renders as <div class="iw-nd"> with absolute positioning inside .iw-dag-world.
  * 3 node types: sql-table, sql-mlv, pyspark-mlv with distinct icons/badges.
- * Supports drag, select, rename, type/schema change, delete.
+ * Supports drag, select, type/schema change, delete.
  *
- * CSS prefix: .iw-
+ * Previously SVG <g> + <foreignObject>; rewritten to plain HTML divs to fix
+ * foreignObject rendering quirks and match the dag-canvas mock.
+ *
+ * CSS prefix: .iw-nd / .iw-pt
  * @author Pixel — EDOG Studio hivemind
  */
 
@@ -14,13 +17,10 @@
    ═══════════════════════════════════════════════════════════════════ */
 
 var DAG_NODE_TYPES = {
-  'sql-table':   { icon: '\u25C6', badge: 'TBL', badgeClass: 'iw-badge-table' },
-  'sql-mlv':     { icon: '\u25B8', badge: 'MLV', badgeClass: 'iw-badge-mlv' },
-  'pyspark-mlv': { icon: '\u25CF', badge: 'PY',  badgeClass: 'iw-badge-pyspark' }
+  'sql-table':   { icon: '\u25C7', badge: 'TBL', iconCls: 't', badgeCls: 't' },
+  'sql-mlv':     { icon: '\u25C6', badge: 'MLV', iconCls: 'm', badgeCls: 'm' },
+  'pyspark-mlv': { icon: '\u25C7', badge: 'PY',  iconCls: 'p', badgeCls: 'p' }
 };
-
-var DAG_NODE_SVG_NS = 'http://www.w3.org/2000/svg';
-var DAG_NODE_XHTML_NS = 'http://www.w3.org/1999/xhtml';
 
 /* ═══════════════════════════════════════════════════════════════════
    DAG NODE
@@ -31,13 +31,14 @@ class DagNode {
   /**
    * @param {object} options
    * @param {object} options.data        — DagNodeData object
-   * @param {SVGGElement} options.parentGroup — parent SVG <g> to append to
+   * @param {HTMLElement} options.parentGroup — parent .iw-dag-world to append to
+   *                                            (kept as `parentGroup` for API compatibility)
    * @param {object} options.eventBus    — WizardEventBus instance
    * @param {object} [options.schemas]   — enabled schemas {dbo: true, ...}
    * @param {Function} [options.onSelect]         — node clicked
-   * @param {Function} [options.onDelete]         — delete button clicked
+   * @param {Function} [options.onDelete]         — delete requested (unused; popover owns delete)
    * @param {Function} [options.onDragStart]      — drag begins
-   * @param {Function} [options.onDragMove]       — drag moves {clientX, clientY, startX, startY}
+   * @param {Function} [options.onDragMove]       — drag moves
    * @param {Function} [options.onDragEnd]        — drag ends
    * @param {Function} [options.onPortMouseDown]  — port mousedown (connection start)
    * @param {Function} [options.onPortMouseEnter] — port mouseenter (connection snap)
@@ -51,6 +52,7 @@ class DagNode {
     this._schemas = options.schemas || {};
     this._selected = false;
     this._dragState = null;
+    this._visible = true;
 
     /* ─── Callbacks ─── */
     this._onSelect = options.onSelect || null;
@@ -61,21 +63,8 @@ class DagNode {
     this._onPortMouseDown = options.onPortMouseDown || null;
     this._onPortMouseEnter = options.onPortMouseEnter || null;
 
-    /* ─── Build SVG structure ─── */
-    this._groupEl = document.createElementNS(DAG_NODE_SVG_NS, 'g');
-    this._groupEl.setAttribute('class', 'iw-dag-node');
-    this._groupEl.setAttribute('data-node-id', this._data.id);
-    this._groupEl.setAttribute(
-      'transform',
-      'translate(' + this._data.x + ', ' + this._data.y + ')'
-    );
-    this._groupEl.setAttribute('role', 'button');
-    this._groupEl.setAttribute('tabindex', '0');
-    this._updateAriaLabel();
-
-    this._buildOutline();
-    this._buildForeignObject();
-    this._buildPorts();
+    /* ─── Build HTML structure ─── */
+    this._buildElement();
     this._attachListeners();
 
     /* ─── Append to parent ─── */
@@ -85,9 +74,9 @@ class DagNode {
 
     /* ─── Enter animation ─── */
     this._groupEl.classList.add('iw-node--entering');
-    var enterGroup = this._groupEl;
+    var enterEl = this._groupEl;
     setTimeout(function() {
-      if (enterGroup) enterGroup.classList.remove('iw-node--entering');
+      if (enterEl) enterEl.classList.remove('iw-node--entering');
     }, 250);
 
     /* ─── Bound handlers (stored for cleanup) ─── */
@@ -99,12 +88,12 @@ class DagNode {
      PUBLIC API
      ═══════════════════════════════════════════════════════════════ */
 
-  /** @returns {SVGGElement} The root <g> element */
+  /** @returns {HTMLDivElement} The root node element */
   getElement() {
     return this._groupEl;
   }
 
-  /** @returns {SVGGElement|null} The root <g> element (alias for animation) */
+  /** @returns {HTMLDivElement} The root node element (alias for animation helpers) */
   getGroupEl() {
     return this._groupEl;
   }
@@ -125,16 +114,18 @@ class DagNode {
     };
   }
 
-  /** Update node position (for drag/layout) */
+  /** Update node position (canvas/world space px) */
   setPosition(x, y) {
     this._data.x = x;
     this._data.y = y;
-    this._groupEl.setAttribute('transform', 'translate(' + x + ', ' + y + ')');
+    if (this._groupEl) {
+      this._groupEl.style.left = x + 'px';
+      this._groupEl.style.top = y + 'px';
+    }
   }
 
   /**
    * Show or hide this node for viewport culling.
-   * Hidden nodes have display:none on their group element.
    * @param {boolean} visible
    */
   setVisible(visible) {
@@ -153,11 +144,12 @@ class DagNode {
   /** Select/deselect this node visually */
   setSelected(selected) {
     this._selected = !!selected;
+    if (!this._groupEl) return;
     if (this._selected) {
-      this._groupEl.classList.add('iw-dag-node-selected');
+      this._groupEl.classList.add('iw-nd-selected');
       this._groupEl.setAttribute('aria-pressed', 'true');
     } else {
-      this._groupEl.classList.remove('iw-dag-node-selected');
+      this._groupEl.classList.remove('iw-nd-selected');
       this._groupEl.setAttribute('aria-pressed', 'false');
     }
   }
@@ -183,14 +175,16 @@ class DagNode {
     if (!info) return;
 
     this._data.type = type;
-
+    if (this._groupEl) {
+      this._groupEl.setAttribute('data-type', type);
+    }
     if (this._iconEl) {
       this._iconEl.textContent = info.icon;
+      this._iconEl.className = 'iw-nd-ico ' + info.iconCls;
     }
     if (this._badgeEl) {
       this._badgeEl.textContent = info.badge;
-      // Remove all badge classes, then add the correct one
-      this._badgeEl.className = 'iw-dag-node-badge ' + info.badgeClass;
+      this._badgeEl.className = 'iw-nd-badge ' + info.badgeCls;
     }
     this._updateAriaLabel();
   }
@@ -198,8 +192,12 @@ class DagNode {
   /** Change node schema */
   setSchema(schema) {
     this._data.schema = schema;
+    if (this._groupEl) {
+      this._groupEl.setAttribute('data-schema', schema);
+    }
     if (this._schemaEl) {
       this._schemaEl.textContent = schema;
+      this._schemaEl.setAttribute('data-s', schema);
     }
     this._updateAriaLabel();
   }
@@ -211,7 +209,7 @@ class DagNode {
     if (data.schema !== undefined) this.setSchema(data.schema);
   }
 
-  /** Get input port center position in canvas space */
+  /** Get input port center position in canvas/world space */
   getInputPortPosition() {
     return {
       x: this._data.x + this._data.width / 2,
@@ -219,7 +217,7 @@ class DagNode {
     };
   }
 
-  /** Get output port center position in canvas space */
+  /** Get output port center position in canvas/world space */
   getOutputPortPosition() {
     return {
       x: this._data.x + this._data.width / 2,
@@ -229,32 +227,29 @@ class DagNode {
 
   /** Show/hide connection ports */
   showPorts(visible) {
+    if (!this._groupEl) return;
     if (visible) {
-      this._groupEl.classList.add('iw-dag-node-ports-visible');
+      this._groupEl.classList.add('iw-nd-show-ports');
     } else {
-      this._groupEl.classList.remove('iw-dag-node-ports-visible');
+      this._groupEl.classList.remove('iw-nd-show-ports');
     }
   }
 
-  /** Destroy — animate out then remove SVG element, clean up listeners */
+  /** Destroy — animate out, remove DOM, clean up listeners */
   destroy() {
-    var self = this;
-
-    // Remove drag listeners from document if active
     document.removeEventListener('mousemove', this._boundDragMove);
     document.removeEventListener('mouseup', this._boundDragEnd);
 
-    var group = this._groupEl;
-    if (group) {
-      group.classList.add('iw-node--exiting');
+    var el = this._groupEl;
+    if (el) {
+      el.classList.add('iw-node--exiting');
       setTimeout(function() {
-        if (group && group.parentNode) {
-          group.parentNode.removeChild(group);
+        if (el && el.parentNode) {
+          el.parentNode.removeChild(el);
         }
       }, 180);
     }
 
-    // Null out references (allow GC; DOM removal is deferred)
     this._groupEl = null;
     this._data = null;
     this._eventBus = null;
@@ -269,8 +264,7 @@ class DagNode {
     this._iconEl = null;
     this._badgeEl = null;
     this._schemaEl = null;
-    this._seqEl = null;
-    this._outlineEl = null;
+    this._barEl = null;
     this._portIn = null;
     this._portOut = null;
     this._boundDragMove = null;
@@ -282,7 +276,6 @@ class DagNode {
      BUILD HELPERS (private)
      ═══════════════════════════════════════════════════════════════ */
 
-  /** Update ARIA label from current data */
   _updateAriaLabel() {
     if (!this._groupEl || !this._data) return;
     var typeLabel = this._data.type.replace(/-/g, ' ');
@@ -290,112 +283,87 @@ class DagNode {
       typeLabel + ': ' + this._data.name + ' \u2014 ' + this._data.schema + ' schema');
   }
 
-  /** Build the selection/hover outline rect */
-  _buildOutline() {
-    var rect = document.createElementNS(DAG_NODE_SVG_NS, 'rect');
-    rect.setAttribute('class', 'iw-dag-node-outline');
-    rect.setAttribute('x', '0');
-    rect.setAttribute('y', '0');
-    rect.setAttribute('width', String(this._data.width));
-    rect.setAttribute('height', String(this._data.height));
-    rect.setAttribute('rx', '6');
-    rect.setAttribute('ry', '6');
-    this._outlineEl = rect;
-    this._groupEl.appendChild(rect);
-  }
+  _buildElement() {
+    var d = this._data;
+    var typeInfo = DAG_NODE_TYPES[d.type] || DAG_NODE_TYPES['sql-table'];
 
-  /** Build the foreignObject with rich HTML node body */
-  _buildForeignObject() {
-    var typeInfo = DAG_NODE_TYPES[this._data.type] || DAG_NODE_TYPES['sql-table'];
-    var w = this._data.width;
-    var h = this._data.height;
+    /* Root */
+    var root = document.createElement('div');
+    root.className = 'iw-nd';
+    root.setAttribute('data-node-id', d.id);
+    root.setAttribute('data-schema', d.schema);
+    root.setAttribute('data-type', d.type);
+    root.setAttribute('role', 'button');
+    root.setAttribute('tabindex', '0');
+    root.style.left = d.x + 'px';
+    root.style.top = d.y + 'px';
+    root.style.width = d.width + 'px';
+    root.style.height = d.height + 'px';
+    this._groupEl = root;
+    this._updateAriaLabel();
 
-    var fo = document.createElementNS(DAG_NODE_SVG_NS, 'foreignObject');
-    fo.setAttribute('x', '0');
-    fo.setAttribute('y', '0');
-    fo.setAttribute('width', String(w));
-    fo.setAttribute('height', String(h));
+    /* Schema color bar */
+    var bar = document.createElement('div');
+    bar.className = 'iw-nd-bar';
+    this._barEl = bar;
+    root.appendChild(bar);
 
-    /* ─── XHTML body ─── */
-    var body = document.createElementNS(DAG_NODE_XHTML_NS, 'div');
-    body.setAttribute('class', 'iw-dag-node-body');
+    /* Body */
+    var body = document.createElement('div');
+    body.className = 'iw-nd-body';
 
-    /* Header row: icon | badge | name | delete */
-    var header = document.createElementNS(DAG_NODE_XHTML_NS, 'div');
-    header.setAttribute('class', 'iw-dag-node-header');
+    /* Header: icon + name */
+    var hdr = document.createElement('div');
+    hdr.className = 'iw-nd-hdr';
 
-    var icon = document.createElementNS(DAG_NODE_XHTML_NS, 'span');
-    icon.setAttribute('class', 'iw-dag-node-icon');
+    var icon = document.createElement('span');
+    icon.className = 'iw-nd-ico ' + typeInfo.iconCls;
     icon.textContent = typeInfo.icon;
     this._iconEl = icon;
 
-    var badge = document.createElementNS(DAG_NODE_XHTML_NS, 'span');
-    badge.setAttribute('class', 'iw-dag-node-badge ' + typeInfo.badgeClass);
+    var name = document.createElement('span');
+    name.className = 'iw-nd-name';
+    name.setAttribute('title', d.name);
+    name.textContent = d.name;
+    this._nameEl = name;
+
+    hdr.appendChild(icon);
+    hdr.appendChild(name);
+
+    /* Meta: type badge + schema */
+    var meta = document.createElement('div');
+    meta.className = 'iw-nd-meta';
+
+    var badge = document.createElement('span');
+    badge.className = 'iw-nd-badge ' + typeInfo.badgeCls;
     badge.textContent = typeInfo.badge;
     this._badgeEl = badge;
 
-    var name = document.createElementNS(DAG_NODE_XHTML_NS, 'span');
-    name.setAttribute('class', 'iw-dag-node-name');
-    name.setAttribute('title', this._data.name);
-    name.textContent = this._data.name;
-    this._nameEl = name;
+    var schemaEl = document.createElement('span');
+    schemaEl.className = 'iw-nd-schema';
+    schemaEl.setAttribute('data-s', d.schema);
+    schemaEl.textContent = d.schema;
+    this._schemaEl = schemaEl;
 
-    var del = document.createElementNS(DAG_NODE_XHTML_NS, 'button');
-    del.setAttribute('class', 'iw-dag-node-delete');
-    del.setAttribute('title', 'Remove node');
-    del.textContent = '\u2715';
-    this._deleteEl = del;
+    meta.appendChild(badge);
+    meta.appendChild(schemaEl);
 
-    header.appendChild(icon);
-    header.appendChild(badge);
-    header.appendChild(name);
-    header.appendChild(del);
-
-    /* Meta row: schema | sequence */
-    var meta = document.createElementNS(DAG_NODE_XHTML_NS, 'div');
-    meta.setAttribute('class', 'iw-dag-node-meta');
-
-    var schema = document.createElementNS(DAG_NODE_XHTML_NS, 'span');
-    schema.setAttribute('class', 'iw-dag-node-schema');
-    schema.textContent = this._data.schema;
-    this._schemaEl = schema;
-
-    var seq = document.createElementNS(DAG_NODE_XHTML_NS, 'span');
-    seq.setAttribute('class', 'iw-dag-node-seq');
-    seq.textContent = '#' + this._data.sequenceNumber;
-    this._seqEl = seq;
-
-    meta.appendChild(schema);
-    meta.appendChild(seq);
-
-    body.appendChild(header);
+    body.appendChild(hdr);
     body.appendChild(meta);
-    fo.appendChild(body);
-    this._groupEl.appendChild(fo);
-  }
+    root.appendChild(body);
 
-  /** Build input and output connection ports */
-  _buildPorts() {
-    var cx = this._data.width / 2;
-    var portR = 6;
-
-    /* Input port — top center */
-    var portIn = document.createElementNS(DAG_NODE_SVG_NS, 'circle');
-    portIn.setAttribute('class', 'iw-dag-port iw-dag-port-in');
-    portIn.setAttribute('cx', String(cx));
-    portIn.setAttribute('cy', '0');
-    portIn.setAttribute('r', String(portR));
+    /* Ports */
+    var portIn = document.createElement('div');
+    portIn.className = 'iw-nd-port iw-pt-in';
+    portIn.setAttribute('data-port', 'in');
     this._portIn = portIn;
-    this._groupEl.appendChild(portIn);
+    root.appendChild(portIn);
 
-    /* Output port — bottom center */
-    var portOut = document.createElementNS(DAG_NODE_SVG_NS, 'circle');
-    portOut.setAttribute('class', 'iw-dag-port iw-dag-port-out');
-    portOut.setAttribute('cx', String(cx));
-    portOut.setAttribute('cy', String(this._data.height));
-    portOut.setAttribute('r', String(portR));
+    var portOut = document.createElement('div');
+    portOut.className = 'iw-nd-port iw-pt-out';
+    portOut.setAttribute('data-port', 'out');
     this._portOut = portOut;
-    this._groupEl.appendChild(portOut);
+    root.appendChild(portOut);
   }
 
   /* ═══════════════════════════════════════════════════════════════
@@ -404,19 +372,18 @@ class DagNode {
 
   _attachListeners() {
     var self = this;
+    var root = this._groupEl;
 
-    /* ─── Node click → select ─── */
-    this._groupEl.addEventListener('click', function(e) {
-      // Ignore clicks on delete button or ports
-      if (e.target === self._deleteEl) return;
+    /* Click → select (suppress if click was a port) */
+    root.addEventListener('click', function(e) {
       if (e.target === self._portIn || e.target === self._portOut) return;
       if (self._onSelect) {
         self._onSelect(self, e);
       }
     });
 
-    /* ─── Keyboard: Enter/Space → select ─── */
-    this._groupEl.addEventListener('keydown', function(e) {
+    /* Keyboard: Enter/Space → select */
+    root.addEventListener('keydown', function(e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         if (self._onSelect) {
@@ -425,23 +392,13 @@ class DagNode {
       }
     });
 
-    /* ─── Delete button ─── */
-    this._deleteEl.addEventListener('click', function(e) {
-      e.stopPropagation();
-      if (self._onDelete) {
-        self._onDelete(self, e);
-      }
-    });
-
-    /* ─── Drag start on header ─── */
-    this._groupEl.addEventListener('mousedown', function(e) {
-      // Only left button
+    /* Drag start on body */
+    root.addEventListener('mousedown', function(e) {
       if (e.button !== 0) return;
-      // Ignore if clicking ports or delete
-      if (e.target === self._deleteEl) return;
       if (e.target === self._portIn || e.target === self._portOut) return;
 
       e.preventDefault();
+      e.stopPropagation();
 
       self._dragState = {
         startX: e.clientX,
@@ -458,9 +415,10 @@ class DagNode {
       }
     });
 
-    /* ─── Port mousedown → start connection ─── */
+    /* Port mousedown → start connection */
     this._portIn.addEventListener('mousedown', function(e) {
       e.stopPropagation();
+      e.preventDefault();
       if (self._onPortMouseDown) {
         var pos = self.getInputPortPosition();
         self._onPortMouseDown({ nodeId: self._data.id, x: pos.x, y: pos.y });
@@ -469,39 +427,39 @@ class DagNode {
 
     this._portOut.addEventListener('mousedown', function(e) {
       e.stopPropagation();
+      e.preventDefault();
       if (self._onPortMouseDown) {
         var pos = self.getOutputPortPosition();
         self._onPortMouseDown({ nodeId: self._data.id, x: pos.x, y: pos.y });
       }
     });
 
-    /* ─── Port hover → connection snap ─── */
+    /* Port hover → connection snap */
     this._portIn.addEventListener('mouseenter', function(e) {
       if (self._onPortMouseEnter) {
-        self._onPortMouseEnter(self, 'in', e);
+        var pos = self.getInputPortPosition();
+        self._onPortMouseEnter({ nodeId: self._data.id, side: 'in', x: pos.x, y: pos.y }, e);
       }
     });
 
     this._portOut.addEventListener('mouseenter', function(e) {
       if (self._onPortMouseEnter) {
-        self._onPortMouseEnter(self, 'out', e);
+        var pos = self.getOutputPortPosition();
+        self._onPortMouseEnter({ nodeId: self._data.id, side: 'out', x: pos.x, y: pos.y }, e);
       }
     });
 
-    /* ─── Hover → show ports ─── */
-    this._groupEl.addEventListener('mouseenter', function() {
+    /* Hover → show ports (CSS handles the visibility) */
+    root.addEventListener('mouseenter', function() {
       self.showPorts(true);
     });
-
-    this._groupEl.addEventListener('mouseleave', function() {
-      // Keep ports visible if node is selected
+    root.addEventListener('mouseleave', function() {
       if (!self._selected) {
         self.showPorts(false);
       }
     });
   }
 
-  /* ─── Drag move (document-level) ─── */
   _handleDragMove(e) {
     if (!this._dragState) return;
     if (this._onDragMove) {
@@ -516,7 +474,6 @@ class DagNode {
     }
   }
 
-  /* ─── Drag end (document-level) ─── */
   _handleDragEnd(e) {
     document.removeEventListener('mousemove', this._boundDragMove);
     document.removeEventListener('mouseup', this._boundDragEnd);

@@ -1,20 +1,22 @@
 /**
- * DagCanvas — Central SVG canvas for the DAG builder.
+ * DagCanvas — Central HTML+SVG canvas for the DAG builder.
  *
  * Orchestrates DagNode instances, ConnectionManager, viewport transforms (pan/zoom),
  * and node interactions (add, remove, select, drag, connect).
  *
- * SVG structure:
- *   <svg class="iw-dag-svg">
- *     <defs>
- *       <pattern id="iw-dag-grid" ...> ... </pattern>
- *     </defs>
- *     <rect class="iw-dag-grid-bg" ... />
- *     <g class="iw-dag-root" transform="translate(panX,panY) scale(zoom)">
- *       <g class="iw-dag-connections"> ... paths ... </g>
- *       <g class="iw-dag-nodes"> ... node groups ... </g>
- *     </g>
- *   </svg>
+ * DOM structure (HTML div nodes + SVG overlay for connections):
+ *   <div class="iw-dag-viewport" tabindex="0">           ← overflow:hidden, captures events
+ *     <div class="iw-dag-grid"></div>                    ← CSS radial-gradient dot grid
+ *     <div class="iw-dag-world">                          ← transform: translate+scale
+ *       <svg class="iw-dag-connections">...</svg>         ← bezier paths in canvas space
+ *       <div class="iw-nd" ...></div>                     ← HTML node 1
+ *       <div class="iw-nd" ...></div>                     ← HTML node 2
+ *       <div class="iw-dag-marquee"></div>                ← optional selection rect
+ *     </div>
+ *   </div>
+ *
+ * Previously rendered as a root <svg> with <foreignObject> nodes; rewritten to
+ * native HTML divs to avoid foreignObject rendering quirks.
  *
  * @author Pixel — EDOG Studio hivemind
  */
@@ -135,7 +137,14 @@ class DagCanvas {
     this._connectionMgr = null;
     this._layoutEngine = new AutoLayoutEngine();
 
-    // SVG elements
+    // DOM elements (HTML div canvas + SVG connection overlay)
+    this._viewportEl = null;       // .iw-dag-viewport (event target, overflow:hidden)
+    this._gridEl = null;           // .iw-dag-grid (decorative dot grid)
+    this._worldEl = null;          // .iw-dag-world (transform container)
+    this._connectionsSvg = null;   // <svg> overlay inside world for bezier paths
+    // Back-compat aliases — older code referenced these names. They now point
+    // to the equivalent HTML elements so the rest of the class can keep using
+    // the same property names without rewriting every helper.
     this._svgEl = null;
     this._rootGroup = null;
     this._nodesGroup = null;
@@ -177,7 +186,7 @@ class DagCanvas {
     this._boundResize = function() { self._debouncedResize(); };
 
     // Build
-    this._buildSVG();
+    this._buildViewport();
     this._buildZoomControls();
     this._bindEvents();
   }
@@ -816,6 +825,10 @@ class DagCanvas {
     }
 
     // Null references
+    this._viewportEl = null;
+    this._gridEl = null;
+    this._worldEl = null;
+    this._connectionsSvg = null;
     this._svgEl = null;
     this._rootGroup = null;
     this._nodesGroup = null;
@@ -829,68 +842,56 @@ class DagCanvas {
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     PRIVATE — SVG Construction
+     PRIVATE — DOM Construction
      ═══════════════════════════════════════════════════════════════ */
 
-  _buildSVG() {
+  _buildViewport() {
     var self = this;
-    var ns = DAG_CANVAS_SVG_NS;
 
-    // Create SVG root
-    this._svgEl = document.createElementNS(ns, 'svg');
-    this._svgEl.setAttribute('class', 'iw-dag-svg');
-    this._svgEl.setAttribute('xmlns', ns);
-    this._svgEl.setAttribute('tabindex', '0');
-    this._svgEl.setAttribute('role', 'application');
-    this._svgEl.setAttribute('aria-label', 'DAG canvas \u2014 0 nodes, 0 connections');
+    // Viewport — overflow:hidden, captures all canvas-level events
+    var viewport = document.createElement('div');
+    viewport.className = 'iw-dag-viewport';
+    viewport.setAttribute('tabindex', '0');
+    viewport.setAttribute('role', 'application');
+    viewport.setAttribute('aria-label', 'DAG canvas \u2014 0 nodes, 0 connections');
+    this._viewportEl = viewport;
 
-    // Defs — grid pattern
-    var defs = document.createElementNS(ns, 'defs');
-    var pattern = document.createElementNS(ns, 'pattern');
-    pattern.setAttribute('id', 'iw-dag-grid');
-    pattern.setAttribute('width', '20');
-    pattern.setAttribute('height', '20');
-    pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+    // Grid — CSS radial-gradient dots, fixed (does not pan/zoom with content
+    // — same behavior as the previous SVG implementation)
+    var grid = document.createElement('div');
+    grid.className = 'iw-dag-grid';
+    this._gridEl = grid;
+    viewport.appendChild(grid);
 
-    var patternPath = document.createElementNS(ns, 'path');
-    patternPath.setAttribute('d', 'M 20 0 L 0 0 0 20');
-    patternPath.setAttribute('fill', 'none');
-    patternPath.setAttribute('stroke', 'var(--border)');
-    patternPath.setAttribute('stroke-width', '0.5');
-    patternPath.setAttribute('opacity', '0.3');
-    pattern.appendChild(patternPath);
-    defs.appendChild(pattern);
-    this._svgEl.appendChild(defs);
+    // World — transform container; pan/zoom is a CSS transform on this element
+    var world = document.createElement('div');
+    world.className = 'iw-dag-world';
+    this._worldEl = world;
+    viewport.appendChild(world);
 
-    // Grid background rect (does NOT transform with pan/zoom)
-    var gridBg = document.createElementNS(ns, 'rect');
-    gridBg.setAttribute('class', 'iw-dag-grid-bg');
-    gridBg.setAttribute('width', '100%');
-    gridBg.setAttribute('height', '100%');
-    gridBg.setAttribute('fill', 'url(#iw-dag-grid)');
-    this._svgEl.appendChild(gridBg);
+    // Connection overlay SVG — sits inside world, transforms with nodes,
+    // pointer-events disabled at root so it doesn't block node interactions
+    var svgNs = DAG_CANVAS_SVG_NS;
+    var connSvg = document.createElementNS(svgNs, 'svg');
+    connSvg.setAttribute('class', 'iw-dag-connections');
+    connSvg.setAttribute('xmlns', svgNs);
+    // Large fixed canvas — overflow:visible in CSS allows paths to render outside
+    connSvg.setAttribute('width', '10000');
+    connSvg.setAttribute('height', '10000');
+    this._connectionsSvg = connSvg;
+    world.appendChild(connSvg);
 
-    // Root transform group
-    this._rootGroup = document.createElementNS(ns, 'g');
-    this._rootGroup.setAttribute('class', 'iw-dag-root');
+    // Back-compat aliases — the rest of the class still uses these names
+    this._svgEl = viewport;
+    this._rootGroup = world;
+    this._nodesGroup = world;
+    this._connectionsGroup = connSvg;
 
-    // Connections layer (below nodes)
-    this._connectionsGroup = document.createElementNS(ns, 'g');
-    this._connectionsGroup.setAttribute('class', 'iw-dag-connections');
-    this._rootGroup.appendChild(this._connectionsGroup);
-
-    // Nodes layer
-    this._nodesGroup = document.createElementNS(ns, 'g');
-    this._nodesGroup.setAttribute('class', 'iw-dag-nodes');
-    this._rootGroup.appendChild(this._nodesGroup);
-
-    this._svgEl.appendChild(this._rootGroup);
-
-    // Instantiate ConnectionManager
-    // Bridge method names: ConnectionManager expects getOutputPort()/getInputPort()
-    // but DagNode exposes getOutputPortPosition()/getInputPortPosition()
+    // Instantiate ConnectionManager — paths render inside the overlay SVG.
+    // ConnectionManager expects getOutputPort()/getInputPort(); DagNode exposes
+    // getOutputPortPosition()/getInputPortPosition() — adapt via a thin shim.
     this._connectionMgr = new ConnectionManager({
-      connectionLayer: this._connectionsGroup,
+      connectionLayer: connSvg,
       eventBus: this._eventBus,
       getNodeById: function(nodeId) {
         var node = self._nodes[nodeId];
@@ -902,8 +903,7 @@ class DagCanvas {
       }
     });
 
-    // Append to container
-    this._containerEl.appendChild(this._svgEl);
+    this._containerEl.appendChild(viewport);
   }
 
   /**
@@ -990,8 +990,12 @@ class DagCanvas {
    */
   _onContextMenu(e) {
     // Only show menu when right-clicking on empty canvas (background/grid)
-    var isBackground = e.target === this._svgEl ||
-                       e.target.classList.contains('iw-dag-grid-bg');
+    // Background = anything that isn't a node or a connection path.
+    // The grid div, world div, viewport, and the connections SVG itself all count.
+    var isBackground = e.target === this._viewportEl ||
+                       e.target === this._worldEl ||
+                       e.target === this._gridEl ||
+                       e.target === this._connectionsSvg;
     if (!isBackground) return;
 
     e.preventDefault();
@@ -1144,8 +1148,10 @@ class DagCanvas {
   _onMouseDown(event) {
     // Only pan on middle-click, or left-click directly on SVG/grid background
     var isMiddle = event.button === 1;
-    var isBackground = event.target === this._svgEl ||
-                       event.target.classList.contains('iw-dag-grid-bg');
+    var isBackground = event.target === this._viewportEl ||
+                       event.target === this._worldEl ||
+                       event.target === this._gridEl ||
+                       event.target === this._connectionsSvg;
 
     if (isMiddle) {
       // Middle-click always pans
@@ -1366,10 +1372,10 @@ class DagCanvas {
     var w = Math.abs(endCanvas.x - startCanvas.x);
     var h = Math.abs(endCanvas.y - startCanvas.y);
 
-    this._marqueeEl.setAttribute('x', String(x));
-    this._marqueeEl.setAttribute('y', String(y));
-    this._marqueeEl.setAttribute('width', String(w));
-    this._marqueeEl.setAttribute('height', String(h));
+    this._marqueeEl.style.left = x + 'px';
+    this._marqueeEl.style.top = y + 'px';
+    this._marqueeEl.style.width = w + 'px';
+    this._marqueeEl.style.height = h + 'px';
   }
 
   _onMarqueeUp(event) {
@@ -1428,15 +1434,18 @@ class DagCanvas {
 
   _createMarqueeRect() {
     if (this._marqueeEl) return;
-    var ns = DAG_CANVAS_SVG_NS;
-    this._marqueeEl = document.createElementNS(ns, 'rect');
-    this._marqueeEl.setAttribute('class', 'iw-dag-marquee');
-    this._marqueeEl.setAttribute('x', '0');
-    this._marqueeEl.setAttribute('y', '0');
-    this._marqueeEl.setAttribute('width', '0');
-    this._marqueeEl.setAttribute('height', '0');
-    // Append to root group (above nodes layer)
-    this._rootGroup.appendChild(this._marqueeEl);
+    // Marquee is an HTML div positioned in canvas space inside the world,
+    // so pan/zoom transforms apply automatically.
+    var rect = document.createElement('div');
+    rect.className = 'iw-dag-marquee';
+    rect.style.position = 'absolute';
+    rect.style.left = '0px';
+    rect.style.top = '0px';
+    rect.style.width = '0px';
+    rect.style.height = '0px';
+    rect.style.pointerEvents = 'none';
+    this._marqueeEl = rect;
+    this._worldEl.appendChild(rect);
   }
 
   _removeMarqueeRect() {
@@ -1513,19 +1522,19 @@ class DagCanvas {
      ═══════════════════════════════════════════════════════════════ */
 
   _applyViewportTransform() {
-    if (!this._rootGroup) return;
-    this._rootGroup.setAttribute('transform',
-      'translate(' + this._viewport.panX + ', ' + this._viewport.panY + ') scale(' + this._viewport.zoom + ')');
+    if (!this._worldEl) return;
+    this._worldEl.style.transform =
+      'translate(' + this._viewport.panX + 'px, ' + this._viewport.panY + 'px) scale(' + this._viewport.zoom + ')';
   }
 
   /**
-   * Convert screen coordinates to canvas space.
+   * Convert screen coordinates to canvas/world space.
    * @param {number} clientX
    * @param {number} clientY
    * @returns {{ x: number, y: number }}
    */
   _screenToCanvas(clientX, clientY) {
-    var rect = this._svgEl.getBoundingClientRect();
+    var rect = this._viewportEl.getBoundingClientRect();
     var relX = clientX - rect.left;
     var relY = clientY - rect.top;
     return {

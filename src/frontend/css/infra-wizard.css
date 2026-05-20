@@ -782,9 +782,11 @@
   pointer-events: none;
 }
 
-/* Auto-layout transition */
+/* Auto-layout transition — covers both SVG transform and HTML left/top */
 .iw-node--animating {
-  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+              left 400ms cubic-bezier(0.22, 1, 0.36, 1),
+              top  400ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Connection draw animation */
@@ -3291,3 +3293,246 @@
     transition: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DAG CANVAS — HTML div nodes + SVG connection overlay (F16 rewrite)
+   ═══════════════════════════════════════════════════════════════════
+
+   New canvas structure replacing the SVG-with-foreignObject approach:
+     .iw-dag-viewport     ← overflow:hidden, event target
+       .iw-dag-grid       ← CSS radial-gradient dot grid (fixed)
+       .iw-dag-world      ← transform container (pan/zoom)
+         .iw-dag-connections   ← SVG overlay for bezier paths
+         .iw-nd                ← HTML node 1
+         .iw-nd                ← HTML node 2
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Schema palette — inlined hex per the F16 dag-canvas mock (no design
+   tokens for bronze/silver/gold yet in variables.css) */
+.iw-dag-viewport {
+  --iw-schema-bronze: #b87333;
+  --iw-schema-silver: #7b8794;
+  --iw-schema-gold:   #c5a038;
+  --iw-schema-dbo:    var(--text-muted, #8e95a5);
+  --iw-type-table:    #2d7ff9;
+  --iw-type-mlv:      var(--accent, #6d5cff);
+  --iw-type-pyspark:  #e5940c;
+
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2, #f8f9fb);
+  cursor: default;
+  outline: none;
+}
+.iw-dag-viewport.panning { cursor: grabbing; }
+.iw-dag-viewport.connecting { cursor: crosshair; }
+.iw-dag-viewport:focus-visible {
+  outline: 2px solid var(--accent, #6d5cff);
+  outline-offset: -2px;
+}
+
+.iw-dag-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(0,0,0,0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+  transition: opacity 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.iw-dag-grid.off { opacity: 0; }
+
+[data-theme="dark"] .iw-dag-grid {
+  background-image: radial-gradient(circle, rgba(255,255,255,0.10) 1px, transparent 1px);
+}
+
+.iw-dag-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* Connection overlay SVG — sits inside .iw-dag-world, transforms with nodes.
+   pointer-events:none on the SVG, re-enabled on paths via the existing
+   .iw-dag-connection-* rules in this file. */
+svg.iw-dag-connections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── Node ──────────────────────────────────────────────────────── */
+.iw-nd {
+  position: absolute;
+  width: 180px;
+  background: var(--surface, #ffffff);
+  border-radius: var(--radius-lg, 10px);
+  border: 1.5px solid var(--border-bright, rgba(0,0,0,0.12));
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.04));
+  cursor: pointer;
+  user-select: none;
+  transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+.iw-nd:hover {
+  border-color: rgba(0,0,0,0.18);
+  box-shadow: var(--shadow-md, 0 2px 8px rgba(0,0,0,0.06));
+  z-index: 2;
+}
+.iw-nd.iw-nd-selected {
+  border-color: var(--accent, #6d5cff);
+  box-shadow: 0 0 0 3px var(--accent-glow, rgba(109,92,255,0.15)),
+              var(--shadow-md, 0 2px 8px rgba(0,0,0,0.06));
+  z-index: 3;
+}
+.iw-nd.dragging {
+  box-shadow: var(--shadow-xl, 0 12px 40px rgba(0,0,0,0.10));
+  z-index: 100;
+  opacity: 0.92;
+}
+
+/* Schema color bar — 3px strip at top, hidden until hover/select */
+.iw-nd-bar {
+  position: absolute;
+  top: -1px;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  background: var(--iw-schema-dbo);
+}
+.iw-nd:hover .iw-nd-bar,
+.iw-nd.iw-nd-selected .iw-nd-bar { opacity: 1; }
+.iw-nd[data-schema="bronze"] .iw-nd-bar { background: var(--iw-schema-bronze); }
+.iw-nd[data-schema="silver"] .iw-nd-bar { background: var(--iw-schema-silver); }
+.iw-nd[data-schema="gold"]   .iw-nd-bar { background: var(--iw-schema-gold); }
+.iw-nd[data-schema="dbo"]    .iw-nd-bar { background: var(--iw-schema-dbo); }
+
+.iw-nd-body {
+  padding: 12px 16px;
+  pointer-events: none;
+}
+.iw-nd-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.iw-nd-ico {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm, 4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.iw-nd-ico.t {
+  background: rgba(45,127,249,0.08);
+  color: var(--iw-type-table);
+}
+.iw-nd-ico.m {
+  background: rgba(109,92,255,0.08);
+  color: var(--iw-type-mlv);
+}
+.iw-nd-ico.p {
+  background: rgba(229,148,12,0.08);
+  color: var(--iw-type-pyspark);
+}
+.iw-nd-name {
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--text, #1a1d23);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.iw-nd-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.iw-nd-badge {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-full, 100px);
+  letter-spacing: 0.04em;
+}
+.iw-nd-badge.t { background: rgba(45,127,249,0.08);  color: var(--iw-type-table); }
+.iw-nd-badge.m { background: rgba(109,92,255,0.08);  color: var(--iw-type-mlv); }
+.iw-nd-badge.p { background: rgba(229,148,12,0.08);  color: var(--iw-type-pyspark); }
+
+.iw-nd-schema {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-full, 100px);
+  letter-spacing: 0.04em;
+}
+.iw-nd-schema[data-s="bronze"] { background: rgba(184,115,51,0.10);  color: var(--iw-schema-bronze); }
+.iw-nd-schema[data-s="silver"] { background: rgba(123,135,148,0.12); color: var(--iw-schema-silver); }
+.iw-nd-schema[data-s="gold"]   { background: rgba(197,160,56,0.12);  color: var(--iw-schema-gold); }
+.iw-nd-schema[data-s="dbo"]    { background: rgba(90,96,112,0.08);   color: var(--text-muted, #8e95a5); }
+
+/* ─── Ports ─────────────────────────────────────────────────────── */
+.iw-nd-port {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface, #ffffff);
+  border: 2px solid var(--text-muted, #8e95a5);
+  cursor: crosshair;
+  z-index: 10;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 200ms cubic-bezier(0.34,1.56,0.64,1),
+              transform 200ms cubic-bezier(0.34,1.56,0.64,1),
+              border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              background 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.iw-pt-in  { top: -6px;    left: 50%; margin-left: -6px; }
+.iw-pt-out { bottom: -6px; left: 50%; margin-left: -6px; }
+
+.iw-nd:hover .iw-nd-port,
+.iw-nd.iw-nd-selected .iw-nd-port,
+.iw-nd.iw-nd-show-ports .iw-nd-port {
+  opacity: 1;
+  transform: scale(1);
+}
+.iw-nd-port:hover {
+  border-color: var(--accent, #6d5cff);
+  background: var(--accent-dim, rgba(109,92,255,0.07));
+  transform: scale(1.3) !important;
+  box-shadow: 0 0 0 4px var(--accent-glow, rgba(109,92,255,0.15));
+}
+
+/* Marquee — now an HTML div inside .iw-dag-world (canvas space) */
+.iw-dag-world > .iw-dag-marquee {
+  background: rgba(109, 92, 255, 0.08);
+  border: 1.5px dashed var(--accent, #6d5cff);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 50;
+}
+
+
