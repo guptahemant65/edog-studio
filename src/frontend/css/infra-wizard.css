@@ -27,8 +27,24 @@
   100% { transform: scale(1); }
 }
 @keyframes iw-pulse-accent {
-  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow, rgba(109,92,255,0.15)); }
-  50%      { box-shadow: 0 0 0 6px transparent; }
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 var(--accent-glow, rgba(109,92,255,0.15)),
+      0 2px 8px -2px var(--accent-glow, rgba(109,92,255,0.15));
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px transparent,
+      0 2px 12px -2px var(--accent-glow, rgba(109,92,255,0.20));
+  }
+}
+@keyframes iw-conn-fill {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes iw-title-shimmer {
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -200% 50%; }
 }
 @keyframes iw-slide-left {
   from { opacity: 0; transform: translateX(60px); }
@@ -94,64 +110,119 @@
   justify-content: space-between;
   padding: var(--sp-4, 16px) var(--sp-6, 24px);
   border-bottom: 1px solid var(--border, rgba(0,0,0,0.06));
-  background: var(--surface, #ffffff);
+  background:
+    linear-gradient(180deg,
+      var(--accent-dim, rgba(109,92,255,0.07)) 0%,
+      rgba(255,255,255,0) 60%),
+    var(--surface, #ffffff);
   flex-shrink: 0;
-  min-height: 56px;
+  min-height: 60px;
   cursor: default;
   user-select: none;
   position: relative;
+  isolation: isolate;
 }
-.iw-drag-hint {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--surface-3, #ebedf0);
+/* Crisp accent line across the top of the dialog */
+.iw-header::before {
+  content: '';
   position: absolute;
-  top: 8px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
+  width: calc(100% - var(--sp-12, 48px));
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--accent, #6d5cff) 18%,
+    var(--accent, #6d5cff) 82%,
+    transparent 100%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+.iw-drag-hint {
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-bright, rgba(0,0,0,0.12));
+  opacity: 0.45;
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  transition: opacity 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+}
+.iw-header:hover .iw-drag-hint { opacity: 0.7; }
+.iw-dialog.dragging .iw-drag-hint {
+  opacity: 1;
+  background: var(--accent, #6d5cff);
 }
 .iw-title {
   font-size: var(--text-lg, 15px);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   display: flex;
   align-items: center;
-  gap: var(--sp-2, 8px);
+  gap: var(--sp-3, 12px);
+  color: var(--text, #1a1d23);
 }
+/* Icon becomes a small accent "badge" — distinguishes the wizard as a brand mark */
 .iw-title svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   color: var(--accent, #6d5cff);
   flex-shrink: 0;
+  padding: 6px;
+  box-sizing: content-box;
+  border-radius: var(--r-md, 6px);
+  background: var(--accent-dim, rgba(109,92,255,0.07));
+  box-shadow:
+    inset 0 0 0 1px var(--accent-glow, rgba(109,92,255,0.15)),
+    0 1px 2px rgba(0,0,0,0.04);
+  transition: transform 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
 }
+.iw-header:hover .iw-title svg { transform: rotate(-4deg) scale(1.04); }
 .iw-close-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: var(--r-md, 6px);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-muted, #8e95a5);
   font-size: 16px;
+  line-height: 1;
   cursor: pointer;
-  border: none;
-  background: none;
-  transition: all 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  border: 1px solid transparent;
+  background: transparent;
+  transition:
+    background-color 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    color 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    border-color 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    transform 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
 }
 .iw-close-btn:hover {
-  background: var(--surface-3, #ebedf0);
+  background: var(--surface-2, #f8f9fb);
+  border-color: var(--border, rgba(0,0,0,0.06));
   color: var(--text, #1a1d23);
+}
+.iw-close-btn:active { transform: scale(0.94); }
+.iw-close-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-glow, rgba(109,92,255,0.15));
 }
 
 /* ─── Stepper ─── */
 .iw-stepper {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: var(--sp-5, 20px) var(--sp-8, 32px);
+  padding: var(--sp-6, 24px) var(--sp-8, 32px) var(--sp-5, 20px);
   gap: 0;
-  background: var(--surface, #ffffff);
+  background:
+    radial-gradient(ellipse 60% 100% at 50% 0%,
+      var(--surface-2, #f8f9fb) 0%,
+      var(--surface, #ffffff) 70%);
   border-bottom: 1px solid var(--border, rgba(0,0,0,0.06));
   flex-shrink: 0;
 }
@@ -159,6 +230,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 8px;
 }
 .iw-step-item {
   display: flex;
@@ -167,79 +239,136 @@
   cursor: default;
 }
 .iw-step-circle {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: var(--text-sm, 12px);
   font-weight: 600;
-  border: 2px solid var(--surface-3, #ebedf0);
+  font-variant-numeric: tabular-nums;
+  border: 1.5px solid var(--border-bright, rgba(0,0,0,0.12));
   color: var(--text-muted, #8e95a5);
   background: var(--surface, #ffffff);
-  transition: all 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  box-shadow: inset 0 0 0 3px var(--surface, #ffffff);
+  transition:
+    background-color 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    border-color 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    color 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    box-shadow 300ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+    transform 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
   position: relative;
   flex-shrink: 0;
 }
 .iw-step-circle .iw-step-check { display: none; }
+
+/* ── Completed step: filled green with crisp checkmark ── */
 .iw-step-item.completed .iw-step-circle {
   border-color: var(--status-ok, #18a058);
-  background: var(--status-ok, #18a058);
+  background: linear-gradient(140deg,
+    color-mix(in oklab, var(--status-ok, #18a058) 92%, white 8%) 0%,
+    var(--status-ok, #18a058) 100%);
   color: white;
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255,255,255,0.18),
+    0 2px 6px -1px color-mix(in oklab, var(--status-ok, #18a058) 35%, transparent);
   cursor: pointer;
 }
 .iw-step-item.completed .iw-step-circle:hover {
-  transform: scale(1.1);
+  transform: scale(1.08);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255,255,255,0.2),
+    0 4px 10px -2px color-mix(in oklab, var(--status-ok, #18a058) 45%, transparent);
 }
 .iw-step-item.completed .iw-step-circle .iw-step-num { display: none; }
 .iw-step-item.completed .iw-step-circle .iw-step-check {
   display: block;
-  animation: iw-check-pop 300ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.10);
+  transform-origin: center;
+  animation: iw-check-pop 360ms var(--spring, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
 }
+
+/* ── Active step: accent border, subtle pulse glow ── */
 .iw-step-item.active .iw-step-circle {
   border-color: var(--accent, #6d5cff);
   color: var(--accent, #6d5cff);
-  background: var(--accent-dim, rgba(109,92,255,0.07));
-  animation: iw-pulse-accent 2s ease-in-out infinite;
+  background: var(--surface, #ffffff);
+  box-shadow:
+    inset 0 0 0 3px var(--surface, #ffffff),
+    inset 0 0 0 5px var(--accent-dim, rgba(109,92,255,0.07)),
+    0 0 0 0 var(--accent-glow, rgba(109,92,255,0.15));
+  animation: iw-pulse-accent 2.4s ease-in-out infinite;
+  transform: scale(1.06);
 }
+
+/* ── Future steps: muted, disabled feel ── */
+.iw-step-item:not(.active):not(.completed) .iw-step-circle {
+  border-style: dashed;
+  border-color: var(--surface-3, #ebedf0);
+  background: var(--surface-2, #f8f9fb);
+  color: var(--text-muted, #8e95a5);
+  opacity: 0.75;
+}
+
+/* ── Step labels ── */
 .iw-step-label {
   font-size: var(--text-xs, 10px);
   color: var(--text-muted, #8e95a5);
-  margin-top: 4px;
   text-align: center;
   font-weight: 500;
-  letter-spacing: 0.02em;
-  transition: color 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+              font-weight 150ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
 }
-.iw-step-item.active ~ .iw-step-label,
 .iw-step-group:has(.iw-step-item.active) .iw-step-label {
   color: var(--accent, #6d5cff);
-  font-weight: 600;
+  font-weight: 700;
 }
 .iw-step-group:has(.iw-step-item.completed) .iw-step-label {
   color: var(--status-ok, #18a058);
+  font-weight: 600;
 }
+
+/* ── Connectors: animate fill left-to-right as steps complete ── */
 .iw-step-connector {
-  width: 56px;
+  width: 72px;
   height: 2px;
   background: var(--surface-3, #ebedf0);
-  margin: 0 var(--sp-1, 4px);
+  margin: 16px var(--sp-2, 8px) 0;   /* vertical-align with circles (32/2 = 16) */
   position: relative;
   overflow: hidden;
-  border-radius: 1px;
+  border-radius: 2px;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 .iw-step-connector .iw-conn-fill {
   position: absolute;
   inset: 0;
-  background: var(--status-ok, #18a058);
+  background: linear-gradient(90deg,
+    var(--status-ok, #18a058) 0%,
+    color-mix(in oklab, var(--status-ok, #18a058) 85%, white 15%) 100%);
   transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 500ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  transform-origin: left center;
+  transition: transform 480ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  border-radius: 2px;
 }
 .iw-step-connector.filled .iw-conn-fill {
   transform: scaleX(1);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .iw-step-item.active .iw-step-circle { animation: none; }
+  .iw-step-circle,
+  .iw-step-connector .iw-conn-fill,
+  .iw-step-label,
+  .iw-close-btn,
+  .iw-title svg { transition: none; }
 }
 
 /* ─── Page Container ─── */

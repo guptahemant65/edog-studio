@@ -369,22 +369,19 @@ def _load_session() -> dict:
         return {}
 
 
-def _map_path(fabric_path: str) -> str:
+def _map_path(fabric_path: str, method: str = "GET") -> str:
     """Map browser path to redirect host path.
 
     Most v1 paths forward as-is — they work on the redirect host.
-    Only top-level /workspaces needs rewriting to /metadata/workspaces
-    because /v1/workspaces returns 401 on the redirect host.
+    Only top-level GET /workspaces needs rewriting to /metadata/workspaces
+    because /v1/workspaces returns 401 on the redirect host for listing.
+    POST /workspaces (create) must go to /v1/workspaces.
     """
-    # Top-level workspace listing → use metadata endpoint (has capacityObjectId)
-    if fabric_path == "/workspaces" or fabric_path.startswith("/workspaces?"):
+    # Top-level workspace listing (GET only) → use metadata endpoint
+    if method == "GET" and (fabric_path == "/workspaces" or fabric_path.startswith("/workspaces?")):
         return fabric_path.replace("/workspaces", "/metadata/workspaces", 1)
 
-    # Everything else: forward v1 path as-is — the redirect host handles them
-    # /workspaces/{id}/items → /v1/workspaces/{id}/items  (already correct)
-    # /workspaces/{id}/lakehouses → /v1/workspaces/{id}/lakehouses
-    # /workspaces/{id}/lakehouses/{id}/tables → /v1/workspaces/{id}/lakehouses/{id}/tables
-    # PATCH /workspaces/{id} → PATCH /v1/workspaces/{id}
+    # Everything else: forward v1 path as-is
     return "/v1" + fabric_path
 
 
@@ -2847,7 +2844,7 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
 
         # /api/fabric/workspaces/{id}/items → /workspaces/{id}/items
         fabric_path = self.path[len("/api/fabric") :]
-        target_path = _map_path(fabric_path)
+        target_path = _map_path(fabric_path, method)
         is_workspace_list = "/metadata/workspaces" in target_path and "/" not in target_path.split(
             "/metadata/workspaces"
         )[1].lstrip("/")
