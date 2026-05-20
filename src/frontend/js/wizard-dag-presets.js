@@ -253,6 +253,18 @@ class DagPresets {
     this._schemas = schemas || this._schemas;
   }
 
+  /**
+   * Re-assert overlay visibility based on current canvas state.
+   * Called from DagCanvasPage.activate() to guarantee the overlay shows
+   * on first visit (and on re-entry when the canvas is empty) regardless
+   * of construction-time state — the constructor runs while the page is
+   * detached and hidden, so any class set then may not survive layout
+   * changes that happen between construction and the page becoming visible.
+   */
+  refreshVisibility() {
+    this._updateVisibility();
+  }
+
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;

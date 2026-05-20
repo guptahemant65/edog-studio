@@ -142,6 +142,14 @@ class DagCanvasPage {
 
     this._palette.updateNodeCount(this._canvas.getNodeCount());
 
+    // Re-assert preset overlay visibility every time the page activates.
+    // The overlay's `--visible` class is set during construction, but the
+    // page is detached and hidden then — this guarantees the class is
+    // present (or correctly absent) once the page is actually visible.
+    if (this._presets) {
+      this._presets.refreshVisibility();
+    }
+
     // Auto-expand code panel and refresh preview when nodes exist
     if (this._canvas.getNodeCount() > 0) {
       this._codePanel.expand();
