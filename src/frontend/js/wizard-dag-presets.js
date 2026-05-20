@@ -16,19 +16,18 @@
 
 var DAG_PRESETS_DATA = [
   {
-    id: 'simple-chain',
-    title: 'Simple Chain',
-    subtitle: 'Hello World of DAGs.',
+    id: 'single-source-mlv',
+    title: 'Single Source MLV',
+    subtitle: 'One table, one view — quickest FLT setup.',
     nodeCount: 2,
-    badge: 'Beginner',
+    badge: 'Quick Start',
     build: function(canvas, schemas) {
       var s = _dagPresetsPickSchema(schemas, 'source');
       var t = _dagPresetsPickSchema(schemas, 'target');
-      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'orders', schema: s.schema });
-      var n2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'orders_view', schema: t.schema });
+      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'raw_data', schema: s.schema });
+      var n2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'data_view', schema: t.schema });
       canvas.addConnection(n1.id, n2.id);
     },
-    // SVG path data for mini topology preview
     svg: function() {
       return '<circle cx="30" cy="30" r="8" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
         + '<circle cx="90" cy="30" r="8" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
@@ -36,73 +35,38 @@ var DAG_PRESETS_DATA = [
     }
   },
   {
-    id: 'fan-out',
-    title: 'Fan-Out',
-    subtitle: 'One source, many views.',
+    id: 'multi-fact',
+    title: 'Multi-Fact Aggregation',
+    subtitle: 'Multiple source tables feeding one aggregated view.',
     nodeCount: 4,
-    badge: 'Beginner',
+    badge: 'Common',
     build: function(canvas, schemas) {
       var s = _dagPresetsPickSchema(schemas, 'source');
       var t = _dagPresetsPickSchema(schemas, 'target');
-      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'customers', schema: s.schema });
-      var n2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'customers_active', schema: t.schema });
-      var n3 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'customers_churned', schema: t.schema });
-      var n4 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'customers_summary', schema: t.schema });
-      canvas.addConnection(n1.id, n2.id);
-      canvas.addConnection(n1.id, n3.id);
+      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'orders', schema: s.schema });
+      var n2 = canvas.addNode('sql-table', null, { name: s.prefix + 'customers', schema: s.schema });
+      var n3 = canvas.addNode('sql-table', null, { name: s.prefix + 'products', schema: s.schema });
+      var n4 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'sales_report', schema: t.schema });
       canvas.addConnection(n1.id, n4.id);
-    },
-    svg: function() {
-      return '<circle cx="20" cy="30" r="7" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
-        + '<circle cx="90" cy="12" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="90" cy="30" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="90" cy="48" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<line x1="27" y1="28" x2="84" y2="12" class="iw-dag-presets-line"/>'
-        + '<line x1="27" y1="30" x2="84" y2="30" class="iw-dag-presets-line"/>'
-        + '<line x1="27" y1="32" x2="84" y2="48" class="iw-dag-presets-line"/>';
-    }
-  },
-  {
-    id: 'diamond',
-    title: 'Diamond',
-    subtitle: 'Converging pipeline.',
-    nodeCount: 5,
-    badge: 'Intermediate',
-    build: function(canvas, schemas) {
-      var s = _dagPresetsPickSchema(schemas, 'source');
-      var t = _dagPresetsPickSchema(schemas, 'target');
-      var n1 = canvas.addNode('sql-table', null, { name: s.prefix + 'sales', schema: s.schema });
-      var n2 = canvas.addNode('sql-table', null, { name: s.prefix + 'inventory', schema: s.schema });
-      var n3 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'sales_clean', schema: t.schema });
-      var n4 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'inventory_clean', schema: t.schema });
-      var n5 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'merged_report', schema: t.schema });
-      canvas.addConnection(n1.id, n3.id);
       canvas.addConnection(n2.id, n4.id);
-      canvas.addConnection(n3.id, n5.id);
-      canvas.addConnection(n4.id, n5.id);
-      canvas.addConnection(n1.id, n4.id);
-      canvas.addConnection(n2.id, n3.id);
+      canvas.addConnection(n3.id, n4.id);
     },
     svg: function() {
-      return '<circle cx="15" cy="16" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
-        + '<circle cx="15" cy="44" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
-        + '<circle cx="55" cy="16" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="55" cy="44" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="100" cy="30" r="7" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<line x1="21" y1="16" x2="49" y2="16" class="iw-dag-presets-line"/>'
-        + '<line x1="21" y1="44" x2="49" y2="44" class="iw-dag-presets-line"/>'
-        + '<line x1="61" y1="18" x2="93" y2="28" class="iw-dag-presets-line"/>'
-        + '<line x1="61" y1="42" x2="93" y2="32" class="iw-dag-presets-line"/>'
-        + '<line x1="21" y1="20" x2="49" y2="40" class="iw-dag-presets-line iw-dag-presets-line--cross"/>'
-        + '<line x1="21" y1="40" x2="49" y2="20" class="iw-dag-presets-line iw-dag-presets-line--cross"/>';
+      return '<circle cx="20" cy="12" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="20" cy="30" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="20" cy="48" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="95" cy="30" r="8" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<line x1="26" y1="14" x2="87" y2="28" class="iw-dag-presets-line"/>'
+        + '<line x1="26" y1="30" x2="87" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="26" y1="46" x2="87" y2="32" class="iw-dag-presets-line"/>';
     }
   },
   {
     id: 'medallion',
-    title: 'Medallion Pipeline',
-    subtitle: 'Bronze \u2192 Silver \u2192 Gold.',
+    title: 'Medallion (Bronze \u2192 Silver \u2192 Gold)',
+    subtitle: 'Industry-standard lakehouse pattern with 3 layers.',
     nodeCount: 7,
-    badge: 'Intermediate',
+    badge: 'Best Practice',
     build: function(canvas, schemas) {
       var hasMedallion = schemas.bronze || schemas.silver || schemas.gold;
       var bSchema = hasMedallion ? 'bronze' : 'dbo';
@@ -118,7 +82,7 @@ var DAG_PRESETS_DATA = [
       var s1 = canvas.addNode('sql-mlv', null, { name: sPre + 'orders_clean', schema: sSchema });
       var s2 = canvas.addNode('sql-mlv', null, { name: sPre + 'customers_clean', schema: sSchema });
       var s3 = canvas.addNode('sql-mlv', null, { name: sPre + 'products_clean', schema: sSchema });
-      var g1 = canvas.addNode('pyspark-mlv', null, { name: gPre + 'analytics_gold', schema: gSchema });
+      var g1 = canvas.addNode('pyspark-mlv', null, { name: gPre + 'analytics_summary', schema: gSchema });
 
       canvas.addConnection(b1.id, s1.id);
       canvas.addConnection(b2.id, s2.id);
@@ -144,50 +108,87 @@ var DAG_PRESETS_DATA = [
     }
   },
   {
-    id: 'full-pipeline',
-    title: 'Full Pipeline',
-    subtitle: 'Production-grade topology.',
-    nodeCount: 8,
+    id: 'incremental-refresh',
+    title: 'Incremental Refresh Pipeline',
+    subtitle: 'Source \u2192 staging \u2192 incremental MLV \u2192 serving.',
+    nodeCount: 4,
     badge: 'Advanced',
     build: function(canvas, schemas) {
-      var s = _dagPresetsPickSchema(schemas, 'source');
-      var t = _dagPresetsPickSchema(schemas, 'target');
+      var hasMedallion = schemas.bronze || schemas.silver || schemas.gold;
+      var bSchema = hasMedallion ? 'bronze' : 'dbo';
+      var sSchema = hasMedallion ? 'silver' : 'dbo';
+      var gSchema = hasMedallion ? 'gold' : 'dbo';
 
-      var t1 = canvas.addNode('sql-table', null, { name: s.prefix + 'events', schema: s.schema });
-      var t2 = canvas.addNode('sql-table', null, { name: s.prefix + 'users', schema: s.schema });
-      var t3 = canvas.addNode('sql-table', null, { name: s.prefix + 'products', schema: s.schema });
-      var m1 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'events_enriched', schema: t.schema });
-      var m2 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'user_profiles', schema: t.schema });
-      var m3 = canvas.addNode('sql-mlv', null, { name: t.prefix + 'product_catalog', schema: t.schema });
-      var p1 = canvas.addNode('pyspark-mlv', null, { name: t.prefix + 'recommendations', schema: t.schema });
-      var p2 = canvas.addNode('pyspark-mlv', null, { name: t.prefix + 'anomaly_detect', schema: t.schema });
+      var n1 = canvas.addNode('sql-table', null, { name: 'raw_events', schema: bSchema });
+      var n2 = canvas.addNode('sql-mlv', null, { name: 'events_deduped', schema: sSchema });
+      var n3 = canvas.addNode('sql-mlv', null, { name: 'events_enriched', schema: sSchema });
+      var n4 = canvas.addNode('pyspark-mlv', null, { name: 'events_serving', schema: gSchema });
+
+      canvas.addConnection(n1.id, n2.id);
+      canvas.addConnection(n2.id, n3.id);
+      canvas.addConnection(n3.id, n4.id);
+    },
+    svg: function() {
+      return '<circle cx="10" cy="30" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="40" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="70" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="105" cy="30" r="7" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<line x1="16" y1="30" x2="35" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="45" y1="30" x2="65" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="75" y1="30" x2="98" y2="30" class="iw-dag-presets-line"/>';
+    }
+  },
+  {
+    id: 'multi-domain',
+    title: 'Multi-Domain Lakehouse',
+    subtitle: 'Sales + Inventory + Finance domains merging into unified gold.',
+    nodeCount: 9,
+    badge: 'Production',
+    build: function(canvas, schemas) {
+      var hasMedallion = schemas.bronze || schemas.silver || schemas.gold;
+      var bSchema = hasMedallion ? 'bronze' : 'dbo';
+      var sSchema = hasMedallion ? 'silver' : 'dbo';
+      var gSchema = hasMedallion ? 'gold' : 'dbo';
+
+      var t1 = canvas.addNode('sql-table', null, { name: 'raw_sales', schema: bSchema });
+      var t2 = canvas.addNode('sql-table', null, { name: 'raw_inventory', schema: bSchema });
+      var t3 = canvas.addNode('sql-table', null, { name: 'raw_finance', schema: bSchema });
+      var m1 = canvas.addNode('sql-mlv', null, { name: 'sales_clean', schema: sSchema });
+      var m2 = canvas.addNode('sql-mlv', null, { name: 'inventory_clean', schema: sSchema });
+      var m3 = canvas.addNode('sql-mlv', null, { name: 'finance_clean', schema: sSchema });
+      var p1 = canvas.addNode('pyspark-mlv', null, { name: 'revenue_metrics', schema: gSchema });
+      var p2 = canvas.addNode('pyspark-mlv', null, { name: 'supply_chain_kpi', schema: gSchema });
+      var p3 = canvas.addNode('sql-mlv', null, { name: 'executive_dashboard', schema: gSchema });
 
       canvas.addConnection(t1.id, m1.id);
       canvas.addConnection(t2.id, m2.id);
       canvas.addConnection(t3.id, m3.id);
       canvas.addConnection(m1.id, p1.id);
-      canvas.addConnection(m2.id, p1.id);
+      canvas.addConnection(m2.id, p2.id);
       canvas.addConnection(m3.id, p1.id);
       canvas.addConnection(m1.id, p2.id);
-      canvas.addConnection(m2.id, p2.id);
+      canvas.addConnection(p1.id, p3.id);
+      canvas.addConnection(p2.id, p3.id);
     },
     svg: function() {
-      return '<circle cx="8" cy="10" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
-        + '<circle cx="8" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
-        + '<circle cx="8" cy="50" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
-        + '<circle cx="45" cy="10" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="45" cy="30" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="45" cy="50" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
-        + '<circle cx="95" cy="18" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
-        + '<circle cx="95" cy="42" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
-        + '<line x1="13" y1="10" x2="40" y2="10" class="iw-dag-presets-line"/>'
-        + '<line x1="13" y1="30" x2="40" y2="30" class="iw-dag-presets-line"/>'
-        + '<line x1="13" y1="50" x2="40" y2="50" class="iw-dag-presets-line"/>'
-        + '<line x1="50" y1="12" x2="89" y2="17" class="iw-dag-presets-line"/>'
-        + '<line x1="50" y1="30" x2="89" y2="19" class="iw-dag-presets-line"/>'
-        + '<line x1="50" y1="48" x2="89" y2="20" class="iw-dag-presets-line"/>'
-        + '<line x1="50" y1="12" x2="89" y2="40" class="iw-dag-presets-line iw-dag-presets-line--cross"/>'
-        + '<line x1="50" y1="30" x2="89" y2="42" class="iw-dag-presets-line iw-dag-presets-line--cross"/>';
+      return '<circle cx="8" cy="10" r="4" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="8" cy="30" r="4" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="8" cy="50" r="4" class="iw-dag-presets-dot iw-dag-presets-dot--source"/>'
+        + '<circle cx="40" cy="10" r="4" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="40" cy="30" r="4" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="40" cy="50" r="4" class="iw-dag-presets-dot iw-dag-presets-dot--target"/>'
+        + '<circle cx="75" cy="15" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<circle cx="75" cy="45" r="5" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<circle cx="108" cy="30" r="6" class="iw-dag-presets-dot iw-dag-presets-dot--gold"/>'
+        + '<line x1="12" y1="10" x2="36" y2="10" class="iw-dag-presets-line"/>'
+        + '<line x1="12" y1="30" x2="36" y2="30" class="iw-dag-presets-line"/>'
+        + '<line x1="12" y1="50" x2="36" y2="50" class="iw-dag-presets-line"/>'
+        + '<line x1="44" y1="12" x2="70" y2="15" class="iw-dag-presets-line"/>'
+        + '<line x1="44" y1="30" x2="70" y2="44" class="iw-dag-presets-line"/>'
+        + '<line x1="44" y1="48" x2="70" y2="17" class="iw-dag-presets-line iw-dag-presets-line--cross"/>'
+        + '<line x1="44" y1="12" x2="70" y2="43" class="iw-dag-presets-line iw-dag-presets-line--cross"/>'
+        + '<line x1="80" y1="17" x2="102" y2="28" class="iw-dag-presets-line"/>'
+        + '<line x1="80" y1="43" x2="102" y2="32" class="iw-dag-presets-line"/>';
     }
   }
 ];
