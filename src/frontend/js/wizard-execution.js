@@ -928,7 +928,12 @@ class ExecutionPipeline {
 
   _createElement() {
     var el = document.createElement('div');
-    el.className = 'iw-page iw-execution-page';
+    // NOTE: Do NOT stamp `iw-page` here. The wizard already wraps this in a
+    // `.iw-page` container (`#iw-page-4`). Adding `iw-page` to this nested
+    // root inherits `opacity:0; position:absolute; pointer-events:none` from
+    // the base `.iw-page` rule and never receives `.active`, leaving the
+    // deploy page invisible. Same trap as DagCanvasPage (see wizard-dag-canvas-page.js:26).
+    el.className = 'iw-execution-page';
 
     // Header
     var header = document.createElement('div');

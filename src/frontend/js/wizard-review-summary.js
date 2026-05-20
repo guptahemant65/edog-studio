@@ -21,7 +21,12 @@ class ReviewSummaryPage {
     this._validationResult = null;
 
     this._rootEl = document.createElement('div');
-    this._rootEl.className = 'iw-page iw-review-page';
+    // NOTE: Do NOT stamp `iw-page` here. The wizard already wraps this in a
+    // `.iw-page` container (`#iw-page-3`). Adding `iw-page` to this nested
+    // root inherits `opacity:0; position:absolute; pointer-events:none` from
+    // the base `.iw-page` rule and never receives `.active`, leaving the
+    // review page invisible. Same trap as DagCanvasPage (see wizard-dag-canvas-page.js:26).
+    this._rootEl.className = 'iw-review-page';
 
     this._leftCol = document.createElement('div');
     this._leftCol.className = 'iw-review-left';

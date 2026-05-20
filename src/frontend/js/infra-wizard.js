@@ -832,7 +832,7 @@ class InfraWizardDialog {
     var self = this;
     // Show confirmation overlay before proceeding to execution
     var confirmEl = document.createElement('div');
-    confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.className = 'iw-confirm-overlay iw-confirm-overlay--lockin';
     confirmEl.setAttribute('role', 'alertdialog');
     confirmEl.setAttribute('aria-modal', 'true');
     confirmEl.setAttribute('aria-labelledby', 'iw-lockin-title');

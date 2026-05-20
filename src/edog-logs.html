@@ -17227,45 +17227,52 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 
 /* ═══════════════════════════════════════════════════════════════════
    CONFIRMATION OVERLAY (D7 Lock In & Create)
+   Overrides the lighter close-confirmation overlay defined earlier
+   (line ~699). Both rules share the .iw-confirm-overlay class; the
+   Lock-In dialog adds .iw-confirm-overlay--lockin for higher
+   specificity so the dark backdrop wins regardless of CSS load order.
    ═══════════════════════════════════════════════════════════════════ */
 
-.iw-confirm-overlay {
+.iw-confirm-overlay.iw-confirm-overlay--lockin,
+.iw-confirm-overlay:has(.iw-confirm-panel) {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  border-radius: var(--r-l);
+  border-radius: var(--r-xl, 14px);
 }
 
 .iw-confirm-panel {
-  background: var(--s1);
-  border: 1px solid var(--s4);
-  border-radius: var(--r-m);
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, rgba(0,0,0,0.08));
+  border-radius: var(--radius-lg, 10px);
+  box-shadow: var(--shadow-lg, 0 4px 16px rgba(0,0,0,0.12));
   padding: 32px;
-  max-width: 400px;
+  max-width: 420px;
   width: 90%;
   text-align: center;
 }
 
 .iw-confirm-icon {
   font-size: 28px;
-  color: var(--accent);
+  color: var(--accent, #6d5cff);
   margin-bottom: 12px;
 }
 
-.iw-confirm-title {
+.iw-confirm-panel .iw-confirm-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text, #1a1d23);
   margin-bottom: 12px;
 }
 
 .iw-confirm-body {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-dim, #5a6070);
   margin-bottom: 12px;
 }
 
@@ -17274,19 +17281,19 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   margin: 0 0 16px 24px;
   padding: 0;
   list-style: disc;
-  color: var(--text-muted);
+  color: var(--text-dim, #5a6070);
   font-size: 13px;
   line-height: 1.7;
 }
 
 .iw-confirm-footer-text {
   font-size: 12px;
-  color: var(--text-muted);
-  opacity: 0.7;
+  color: var(--text-muted, #8e95a5);
+  opacity: 0.9;
   margin-bottom: 20px;
 }
 
-.iw-confirm-actions {
+.iw-confirm-panel .iw-confirm-actions {
   display: flex;
   gap: 12px;
   justify-content: center;
@@ -76112,7 +76119,7 @@ class InfraWizardDialog {
     var self = this;
     // Show confirmation overlay before proceeding to execution
     var confirmEl = document.createElement('div');
-    confirmEl.className = 'iw-confirm-overlay';
+    confirmEl.className = 'iw-confirm-overlay iw-confirm-overlay--lockin';
     confirmEl.setAttribute('role', 'alertdialog');
     confirmEl.setAttribute('aria-modal', 'true');
     confirmEl.setAttribute('aria-labelledby', 'iw-lockin-title');
