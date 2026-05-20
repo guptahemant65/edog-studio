@@ -353,6 +353,18 @@ class FabricApiClient {
   }
 
   /**
+   * Create a new Fabric capacity. The server injects adminsUpns from the
+   * authenticated user and mode=1; the caller only supplies UI-facing fields.
+   * @param {string} displayName - Capacity display name.
+   * @param {string} sku - SKU code (e.g. "P3", "F2").
+   * @param {string} region - Azure region code (e.g. "westus2").
+   * @returns {Promise<object>} Created capacity metadata.
+   */
+  async createCapacity(displayName, sku, region) {
+    return this._fabricPost('/capacities', { displayName: displayName, sku: sku, region: region });
+  }
+
+  /**
    * Create a new notebook inside a workspace.
    * @param {string} workspaceId - Parent workspace GUID.
    * @param {string} name - Display name for the new notebook.

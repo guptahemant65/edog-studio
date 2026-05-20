@@ -1218,10 +1218,10 @@ class InfraSetupPage {
           '</select>' +
           '<span class="iw-select-arrow">\u25BE</span>' +
         '</div>' +
-        '<div class="iw-coming-soon-link">' +
+        '<button type="button" class="iw-create-cap-btn" id="iw-create-cap-btn">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
           '<span>Create New Capacity</span>' +
-          '<span class="iw-coming-soon-badge">Coming Soon</span>' +
-        '</div>' +
+        '</button>' +
         '<div class="iw-form-error" id="iw-cap-error"></div>' +
       '</div>' +
 
@@ -1309,6 +1309,30 @@ class InfraSetupPage {
     if (randBtn) {
       randBtn.addEventListener('click', function() { self.randomize(); });
     }
+
+    // Create-capacity button
+    var createCapBtn = this._containerEl.querySelector('#iw-create-cap-btn');
+    if (createCapBtn) {
+      createCapBtn.addEventListener('click', function() { self._showCreateCapacityDialog(); });
+    }
+  }
+
+  _showCreateCapacityDialog() {
+    var self = this;
+    var existing = this._capacities || [];
+    var dlg = new InfraCapacityCreateDialog(this._api, { existingCapacities: existing });
+    dlg.onComplete = function(newCap) {
+      // Prepend the new capacity to the list and select it
+      var caps = self._capacities || [];
+      caps.unshift(newCap);
+      self._capacities = caps;
+      self._renderCapacityOptions();
+      self._capSelect.value = newCap.id;
+      self._fields.capacity.value = newCap.id;
+      self._fields.capacity.touched = true;
+      self._validateField('capacity');
+    };
+    dlg.open();
   }
 
   /* --- Cascade --- */
@@ -1471,6 +1495,302 @@ class InfraSetupPage {
       html = '<option value="" disabled selected>No capacities available</option>';
     }
     this._capSelect.innerHTML = html;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   InfraCapacityCreateDialog — mini-modal for creating a Fabric capacity
+   ═══════════════════════════════════════════════════════════════════ */
+var IW_CAP_SKUS = [
+  { sku: 'F2',   vcores: 1,    memory: '1 GB' },
+  { sku: 'F4',   vcores: 1,    memory: '2 GB' },
+  { sku: 'F8',   vcores: 1,    memory: '3 GB' },
+  { sku: 'F16',  vcores: 2,    memory: '5 GB' },
+  { sku: 'F32',  vcores: 4,    memory: '10 GB' },
+  { sku: 'F64',  vcores: 8,    memory: '25 GB' },
+  { sku: 'P1',   vcores: 8,    memory: '25 GB' },
+  { sku: 'P2',   vcores: 16,   memory: '50 GB' },
+  { sku: 'P3',   vcores: 32,   memory: '100 GB' },
+  { sku: 'P4',   vcores: 64,   memory: '200 GB' }
+];
+
+var IW_CAP_REGIONS = [
+  { code: 'westus2',       label: 'West US 2' },
+  { code: 'eastus',        label: 'East US' },
+  { code: 'northeurope',   label: 'North Europe' },
+  { code: 'westeurope',    label: 'West Europe' },
+  { code: 'southeastasia', label: 'Southeast Asia' }
+];
+
+function iwGenerateCapacityName() {
+  var chars = 'abcdefghjkmnpqrstuvwxyz';
+  var s = '';
+  for (var i = 0; i < 2; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+  return 'fmlv_cap_' + s;
+}
+
+class InfraCapacityCreateDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._existing = opts.existingCapacities || [];
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._skuSelect = null;
+    this._regionSelect = null;
+    this._createBtn = null;
+    this._errorBanner = null;
+    this._state = 'idle'; // idle | creating | success | failed
+    this.onComplete = null;
+    this.onClose = null;
+    this._boundKeydown = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._nameInput.select();
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    if (this._state === 'creating') return;
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && this._state === 'idle' && !this._createBtn.disabled) this._submit();
+  }
+
+  _detectDefaultRegion() {
+    // Match an existing capacity's region (display name or code) to our list
+    for (var i = 0; i < this._existing.length; i++) {
+      var r = (this._existing[i].region || '').toLowerCase().replace(/\s+/g, '');
+      for (var j = 0; j < IW_CAP_REGIONS.length; j++) {
+        var entry = IW_CAP_REGIONS[j];
+        if (r === entry.code || r === entry.label.toLowerCase().replace(/\s+/g, '')) {
+          return entry.code;
+        }
+      }
+    }
+    return 'westus2';
+  }
+
+  _build() {
+    var self = this;
+
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'iw-cap-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'iw-cap-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Create capacity');
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'iw-cap-header';
+    header.innerHTML =
+      '<div class="iw-cap-header-icon">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
+      '</div>' +
+      '<div class="iw-cap-title">Create Capacity</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'iw-cap-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner (hidden)
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'iw-cap-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'iw-cap-body';
+    this._dialogEl.appendChild(body);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'iw-cap-field';
+    nameField.innerHTML =
+      '<div class="iw-cap-label">CAPACITY NAME</div>' +
+      '<input class="iw-cap-input mono" type="text" maxlength="63" spellcheck="false">';
+    body.appendChild(nameField);
+    this._nameInput = nameField.querySelector('input');
+    this._nameInput.value = iwGenerateCapacityName();
+    this._nameInput.addEventListener('input', function() {
+      // Capacity names: letters, digits, underscores, hyphens
+      self._nameInput.value = self._nameInput.value.replace(/[^a-zA-Z0-9_-]/g, '');
+      self._updateCreateBtn();
+    });
+
+    // SKU field
+    var skuField = document.createElement('div');
+    skuField.className = 'iw-cap-field';
+    var skuOptions = '';
+    for (var i = 0; i < IW_CAP_SKUS.length; i++) {
+      var s = IW_CAP_SKUS[i];
+      var sel = s.sku === 'P3' ? ' selected' : '';
+      skuOptions += '<option value="' + s.sku + '"' + sel + '>' +
+        s.sku + ' \u2014 ' + s.vcores + ' vCores, ' + s.memory + '</option>';
+    }
+    skuField.innerHTML =
+      '<div class="iw-cap-label">SKU</div>' +
+      '<div class="iw-cap-select-wrap">' +
+        '<select class="iw-cap-select">' + skuOptions + '</select>' +
+        '<span class="iw-cap-select-arrow">\u25BE</span>' +
+      '</div>';
+    body.appendChild(skuField);
+    this._skuSelect = skuField.querySelector('select');
+
+    // Region field
+    var regionField = document.createElement('div');
+    regionField.className = 'iw-cap-field';
+    var defaultRegion = this._detectDefaultRegion();
+    var regionOptions = '';
+    for (var k = 0; k < IW_CAP_REGIONS.length; k++) {
+      var r = IW_CAP_REGIONS[k];
+      var rsel = r.code === defaultRegion ? ' selected' : '';
+      regionOptions += '<option value="' + r.code + '"' + rsel + '>' + r.label + '</option>';
+    }
+    regionField.innerHTML =
+      '<div class="iw-cap-label">REGION</div>' +
+      '<div class="iw-cap-select-wrap">' +
+        '<select class="iw-cap-select">' + regionOptions + '</select>' +
+        '<span class="iw-cap-select-arrow">\u25BE</span>' +
+      '</div>';
+    body.appendChild(regionField);
+    this._regionSelect = regionField.querySelector('select');
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'iw-cap-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'iw-cap-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._createBtn = document.createElement('button');
+    this._createBtn.className = 'iw-cap-btn iw-cap-btn-primary ready';
+    this._createBtn.textContent = 'Create Capacity';
+    this._createBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._createBtn);
+    this._dialogEl.appendChild(footer);
+  }
+
+  _updateCreateBtn() {
+    var name = (this._nameInput.value || '').trim();
+    var ready = name.length >= 3 && this._state === 'idle';
+    this._createBtn.disabled = !ready;
+    if (ready) this._createBtn.classList.add('ready');
+    else this._createBtn.classList.remove('ready');
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var name = (this._nameInput.value || '').trim();
+    if (name.length < 3) return;
+    var sku = this._skuSelect.value;
+    var region = this._regionSelect.value;
+
+    var self = this;
+    this._state = 'creating';
+    this._createBtn.disabled = true;
+    this._createBtn.classList.remove('ready');
+    this._createBtn.innerHTML = '<span class="iw-cap-spinner"></span>Creating\u2026';
+    this._nameInput.disabled = true;
+    this._skuSelect.disabled = true;
+    this._regionSelect.disabled = true;
+    this._errorBanner.style.display = 'none';
+
+    this._api.createCapacity(name, sku, region).then(function(result) {
+      self._state = 'success';
+      var newCap = self._normalizeCapacity(result, name, sku, region);
+      self._showSuccess(newCap);
+    }).catch(function(err) {
+      self._showError(err && err.message ? err.message : 'Capacity creation failed');
+    });
+  }
+
+  _normalizeCapacity(raw, name, sku, region) {
+    // Server may return Fabric public API shape ({id, displayName, sku, region})
+    // or Power BI internal shape (capacityObjectId / metadata.configuration.*).
+    // Normalize to {id, displayName, sku, region, state}.
+    var r = raw || {};
+    var id = r.id || r.capacityObjectId || r.objectId || '';
+    if (!id && r.metadata) id = r.metadata.capacityObjectId || '';
+    var cfg = (r.metadata && r.metadata.configuration) || {};
+    return {
+      id: id,
+      displayName: r.displayName || cfg.displayName || name,
+      sku: r.sku || cfg.sku || sku,
+      region: r.region || cfg.region || region,
+      state: r.state || 'Active'
+    };
+  }
+
+  _showSuccess(newCap) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.iw-cap-body');
+    var footer = this._dialogEl.querySelector('.iw-cap-footer');
+    body.innerHTML =
+      '<div class="iw-cap-success">' +
+        '<div class="iw-cap-success-icon">\u2713</div>' +
+        '<div class="iw-cap-success-name">' + this._esc(newCap.displayName) + '</div>' +
+        '<div class="iw-cap-success-sub">' +
+          this._esc(newCap.sku) + ' \u2014 ' + this._esc(newCap.region) +
+        '</div>' +
+      '</div>';
+    footer.style.display = 'none';
+
+    setTimeout(function() {
+      if (!self._overlayEl) return;
+      document.removeEventListener('keydown', self._boundKeydown);
+      self._overlayEl.remove();
+      self._overlayEl = null;
+      if (self.onComplete) self.onComplete(newCap);
+    }, 1500);
+  }
+
+  _showError(msg) {
+    var self = this;
+    this._state = 'idle';
+    this._nameInput.disabled = false;
+    this._skuSelect.disabled = false;
+    this._regionSelect.disabled = false;
+    this._createBtn.innerHTML = 'Create Capacity';
+    this._updateCreateBtn();
+
+    this._errorBanner.style.display = '';
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
 

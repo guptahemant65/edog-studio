@@ -2732,6 +2732,9 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._json_response(404, {"error": "not_found", "message": f"No handler for DELETE {self.path}"})
 
     def do_POST(self):
+        if self.path == "/api/fabric/capacities":
+            self._serve_create_capacity()
+            return
         if self.path.startswith("/api/fabric/"):
             self._proxy_fabric("POST")
         elif self.path == "/api/edog/auth":
@@ -2884,6 +2887,106 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
                         _exposed.append(hdr)
                 if _exposed:
                     self.send_header("Access-Control-Expose-Headers", ", ".join(_exposed))
+                self.end_headers()
+                self.wfile.write(resp_body)
+        except urllib.error.HTTPError as e:
+            resp_body = e.read()
+            self.send_response(e.code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.end_headers()
+            self.wfile.write(resp_body)
+        except Exception as e:
+            self._send_json(502, {"error": "proxy_error", "message": str(e)})
+
+    def _serve_create_capacity(self):
+        """POST /api/fabric/capacities — create a new Fabric capacity.
+
+        Body in: { displayName, sku, region }
+        Body sent to redirect host POST /capacities/new:
+            { displayName, adminsUpns: [upn], sku, region, mode: 1 }
+
+        UPN is resolved from edog-config.json (set during bearer auth) or
+        extracted from the bearer token's `upn` JWT claim as a fallback.
+        Capacity-admin headers are required on the redirect host.
+        """
+        bearer, _ = _read_cache(BEARER_CACHE)
+        if not bearer:
+            bearer = _ensure_bearer()
+        if not bearer:
+            self._send_json(401, {"error": "no_bearer_token", "message": "Bearer token not cached"})
+            return
+
+        content_len = int(self.headers.get("Content-Length", 0))
+        if content_len <= 0:
+            self._send_json(400, {"error": "bad_request", "message": "Empty body"})
+            return
+        try:
+            payload = json.loads(self.rfile.read(content_len).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as e:
+            self._send_json(400, {"error": "bad_request", "message": f"Invalid JSON: {e}"})
+            return
+
+        display_name = (payload.get("displayName") or "").strip()
+        sku = (payload.get("sku") or "").strip()
+        region = (payload.get("region") or "").strip()
+        if not display_name or not sku or not region:
+            self._send_json(
+                400,
+                {"error": "bad_request", "message": "displayName, sku, and region are required"},
+            )
+            return
+
+        upn = ""
+        try:
+            if CONFIG_PATH.exists():
+                upn = (json.loads(CONFIG_PATH.read_text()).get("username") or "").strip()
+        except (OSError, ValueError):
+            upn = ""
+        if not upn:
+            try:
+                payload_b64 = bearer.split(".")[1]
+                payload_b64 += "=" * (-len(payload_b64) % 4)
+                claims = json.loads(base64.b64decode(payload_b64).decode("utf-8", "replace"))
+                upn = (claims.get("upn") or claims.get("preferred_username") or "").strip()
+            except (IndexError, ValueError, UnicodeDecodeError):
+                upn = ""
+        if not upn:
+            self._send_json(
+                400,
+                {"error": "no_upn", "message": "Could not determine user UPN for adminsUpns"},
+            )
+            return
+
+        body_out = json.dumps(
+            {
+                "displayName": display_name,
+                "adminsUpns": [upn],
+                "sku": sku,
+                "region": region,
+                "mode": 1,
+            }
+        ).encode("utf-8")
+
+        url = REDIRECT_HOST + "/capacities/new"
+        headers = {
+            "Authorization": f"Bearer {bearer}",
+            "Content-Type": "application/json",
+            "x-powerbi-hostenv": "Power BI Web App",
+            "x-powerbi-user-admin": "true",
+            "origin": "https://powerbi-df.analysis-df.windows.net",
+            "referer": "https://powerbi-df.analysis-df.windows.net/",
+        }
+        print(f"  [PROXY] POST /capacities/new (sku={sku}, region={region}, admin={upn})")
+
+        try:
+            ctx = ssl.create_default_context()
+            req = urllib.request.Request(url, data=body_out, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+                resp_body = resp.read()
+                self.send_response(resp.status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(resp_body)))
                 self.end_headers()
                 self.wfile.write(resp_body)
         except urllib.error.HTTPError as e:

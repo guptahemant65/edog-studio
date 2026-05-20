@@ -15051,6 +15051,257 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   letter-spacing: 0.06em;
 }
 
+/* ─── Create-capacity inline button ─── */
+.iw-create-cap-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--sp-2, 8px);
+  padding: 4px 10px 4px 8px;
+  background: transparent;
+  border: 1px dashed var(--border, rgba(0,0,0,0.18));
+  border-radius: var(--r-full, 100px);
+  color: var(--accent, #6d5cff);
+  font-size: var(--text-xs, 11px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms, border-color 150ms, color 150ms;
+}
+.iw-create-cap-btn:hover {
+  background: var(--accent-dim, rgba(109,92,255,0.08));
+  border-color: var(--accent, #6d5cff);
+  border-style: solid;
+}
+.iw-create-cap-btn:focus-visible {
+  outline: 2px solid var(--accent, #6d5cff);
+  outline-offset: 2px;
+}
+.iw-create-cap-btn svg { flex-shrink: 0; }
+
+/* ─── Create Capacity Dialog (mini-modal) ─── */
+.iw-cap-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 9100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: iw-cap-fadeIn 180ms ease;
+}
+@keyframes iw-cap-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes iw-cap-dialogIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.iw-cap-dialog {
+  background: var(--surface, #fff);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+  width: 440px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: iw-cap-dialogIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+.iw-cap-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2, 8px);
+  padding: 20px 24px 0;
+}
+.iw-cap-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--accent-dim, rgba(109,92,255,0.08));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent, #6d5cff);
+  flex-shrink: 0;
+}
+.iw-cap-header-icon svg { width: 20px; height: 20px; }
+.iw-cap-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text, #1a1d23);
+  flex: 1;
+}
+.iw-cap-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #8e95a5);
+  cursor: pointer;
+  border-radius: var(--radius-sm, 4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 150ms, color 150ms;
+}
+.iw-cap-close:hover {
+  background: var(--surface-hover, rgba(0,0,0,0.04));
+  color: var(--text, #1a1d23);
+}
+.iw-cap-body { padding: 16px 24px 0; }
+.iw-cap-field { margin-bottom: 16px; }
+.iw-cap-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted, #8e95a5);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.iw-cap-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border, rgba(0,0,0,0.12));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface, #fff);
+  color: var(--text, #1a1d23);
+  font-size: 13px;
+  transition: border-color 150ms, box-shadow 150ms;
+  box-sizing: border-box;
+}
+.iw-cap-input.mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.iw-cap-input:focus {
+  outline: none;
+  border-color: var(--accent, #6d5cff);
+  box-shadow: 0 0 0 3px var(--accent-dim, rgba(109,92,255,0.15));
+}
+.iw-cap-input:disabled { opacity: 0.6; cursor: not-allowed; }
+.iw-cap-select-wrap { position: relative; }
+.iw-cap-select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 10px 32px 10px 12px;
+  border: 1.5px solid var(--border, rgba(0,0,0,0.12));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface, #fff);
+  color: var(--text, #1a1d23);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+.iw-cap-select:focus {
+  outline: none;
+  border-color: var(--accent, #6d5cff);
+  box-shadow: 0 0 0 3px var(--accent-dim, rgba(109,92,255,0.15));
+}
+.iw-cap-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.iw-cap-select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted, #8e95a5);
+  pointer-events: none;
+  font-size: 11px;
+}
+.iw-cap-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2, 8px);
+  padding: 16px 24px 20px;
+}
+.iw-cap-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border, rgba(0,0,0,0.12));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface, #fff);
+  color: var(--text, #1a1d23);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 150ms, filter 150ms;
+}
+.iw-cap-btn:hover { background: var(--surface-hover, rgba(0,0,0,0.03)); }
+.iw-cap-btn-primary {
+  background: var(--accent, #6d5cff);
+  color: #fff;
+  border-color: var(--accent, #6d5cff);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.iw-cap-btn-primary:hover { filter: brightness(1.08); background: var(--accent, #6d5cff); }
+.iw-cap-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+.iw-cap-btn-primary.ready { box-shadow: 0 2px 8px rgba(109,92,255,0.25); }
+.iw-cap-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: iw-cap-spin 720ms linear infinite;
+}
+@keyframes iw-cap-spin { to { transform: rotate(360deg); } }
+.iw-cap-banner {
+  margin: 12px 24px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2, 8px);
+}
+.iw-cap-banner.error {
+  background: rgba(239,68,68,0.08);
+  color: #c1322f;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+.iw-cap-banner button {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 11px;
+  cursor: pointer;
+}
+.iw-cap-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 0 8px;
+  animation: iw-cap-dialogIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.iw-cap-success-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent, #6d5cff);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.iw-cap-success-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text, #1a1d23);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  margin-bottom: 4px;
+}
+.iw-cap-success-sub {
+  font-size: 12px;
+  color: var(--text-muted, #8e95a5);
+}
+
 /* ─── Theme Cards (Page 2) ─── */
 .iw-theme-grid {
   display: grid;
@@ -38855,6 +39106,18 @@ class FabricApiClient {
    */
   async listCapacities() {
     return this._fabricGet('/capacities');
+  }
+
+  /**
+   * Create a new Fabric capacity. The server injects adminsUpns from the
+   * authenticated user and mode=1; the caller only supplies UI-facing fields.
+   * @param {string} displayName - Capacity display name.
+   * @param {string} sku - SKU code (e.g. "P3", "F2").
+   * @param {string} region - Azure region code (e.g. "westus2").
+   * @returns {Promise<object>} Created capacity metadata.
+   */
+  async createCapacity(displayName, sku, region) {
+    return this._fabricPost('/capacities', { displayName: displayName, sku: sku, region: region });
   }
 
   /**
@@ -76675,10 +76938,10 @@ class InfraSetupPage {
           '</select>' +
           '<span class="iw-select-arrow">\u25BE</span>' +
         '</div>' +
-        '<div class="iw-coming-soon-link">' +
+        '<button type="button" class="iw-create-cap-btn" id="iw-create-cap-btn">' +
+          '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
           '<span>Create New Capacity</span>' +
-          '<span class="iw-coming-soon-badge">Coming Soon</span>' +
-        '</div>' +
+        '</button>' +
         '<div class="iw-form-error" id="iw-cap-error"></div>' +
       '</div>' +
 
@@ -76766,6 +77029,30 @@ class InfraSetupPage {
     if (randBtn) {
       randBtn.addEventListener('click', function() { self.randomize(); });
     }
+
+    // Create-capacity button
+    var createCapBtn = this._containerEl.querySelector('#iw-create-cap-btn');
+    if (createCapBtn) {
+      createCapBtn.addEventListener('click', function() { self._showCreateCapacityDialog(); });
+    }
+  }
+
+  _showCreateCapacityDialog() {
+    var self = this;
+    var existing = this._capacities || [];
+    var dlg = new InfraCapacityCreateDialog(this._api, { existingCapacities: existing });
+    dlg.onComplete = function(newCap) {
+      // Prepend the new capacity to the list and select it
+      var caps = self._capacities || [];
+      caps.unshift(newCap);
+      self._capacities = caps;
+      self._renderCapacityOptions();
+      self._capSelect.value = newCap.id;
+      self._fields.capacity.value = newCap.id;
+      self._fields.capacity.touched = true;
+      self._validateField('capacity');
+    };
+    dlg.open();
   }
 
   /* --- Cascade --- */
@@ -76928,6 +77215,302 @@ class InfraSetupPage {
       html = '<option value="" disabled selected>No capacities available</option>';
     }
     this._capSelect.innerHTML = html;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   InfraCapacityCreateDialog — mini-modal for creating a Fabric capacity
+   ═══════════════════════════════════════════════════════════════════ */
+var IW_CAP_SKUS = [
+  { sku: 'F2',   vcores: 1,    memory: '1 GB' },
+  { sku: 'F4',   vcores: 1,    memory: '2 GB' },
+  { sku: 'F8',   vcores: 1,    memory: '3 GB' },
+  { sku: 'F16',  vcores: 2,    memory: '5 GB' },
+  { sku: 'F32',  vcores: 4,    memory: '10 GB' },
+  { sku: 'F64',  vcores: 8,    memory: '25 GB' },
+  { sku: 'P1',   vcores: 8,    memory: '25 GB' },
+  { sku: 'P2',   vcores: 16,   memory: '50 GB' },
+  { sku: 'P3',   vcores: 32,   memory: '100 GB' },
+  { sku: 'P4',   vcores: 64,   memory: '200 GB' }
+];
+
+var IW_CAP_REGIONS = [
+  { code: 'westus2',       label: 'West US 2' },
+  { code: 'eastus',        label: 'East US' },
+  { code: 'northeurope',   label: 'North Europe' },
+  { code: 'westeurope',    label: 'West Europe' },
+  { code: 'southeastasia', label: 'Southeast Asia' }
+];
+
+function iwGenerateCapacityName() {
+  var chars = 'abcdefghjkmnpqrstuvwxyz';
+  var s = '';
+  for (var i = 0; i < 2; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+  return 'fmlv_cap_' + s;
+}
+
+class InfraCapacityCreateDialog {
+  constructor(apiClient, options) {
+    var opts = options || {};
+    this._api = apiClient;
+    this._existing = opts.existingCapacities || [];
+    this._overlayEl = null;
+    this._dialogEl = null;
+    this._nameInput = null;
+    this._skuSelect = null;
+    this._regionSelect = null;
+    this._createBtn = null;
+    this._errorBanner = null;
+    this._state = 'idle'; // idle | creating | success | failed
+    this.onComplete = null;
+    this.onClose = null;
+    this._boundKeydown = null;
+  }
+
+  open() {
+    if (this._overlayEl) return;
+    this._build();
+    document.body.appendChild(this._overlayEl);
+    this._nameInput.focus();
+    this._nameInput.select();
+    this._boundKeydown = this._onKeydown.bind(this);
+    document.addEventListener('keydown', this._boundKeydown);
+  }
+
+  close() {
+    if (!this._overlayEl) return;
+    if (this._state === 'creating') return;
+    document.removeEventListener('keydown', this._boundKeydown);
+    this._overlayEl.remove();
+    this._overlayEl = null;
+    if (this.onClose) this.onClose();
+  }
+
+  _onKeydown(e) {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Enter' && this._state === 'idle' && !this._createBtn.disabled) this._submit();
+  }
+
+  _detectDefaultRegion() {
+    // Match an existing capacity's region (display name or code) to our list
+    for (var i = 0; i < this._existing.length; i++) {
+      var r = (this._existing[i].region || '').toLowerCase().replace(/\s+/g, '');
+      for (var j = 0; j < IW_CAP_REGIONS.length; j++) {
+        var entry = IW_CAP_REGIONS[j];
+        if (r === entry.code || r === entry.label.toLowerCase().replace(/\s+/g, '')) {
+          return entry.code;
+        }
+      }
+    }
+    return 'westus2';
+  }
+
+  _build() {
+    var self = this;
+
+    this._overlayEl = document.createElement('div');
+    this._overlayEl.className = 'iw-cap-overlay';
+    this._overlayEl.addEventListener('click', function(e) {
+      if (e.target === self._overlayEl) self.close();
+    });
+
+    this._dialogEl = document.createElement('div');
+    this._dialogEl.className = 'iw-cap-dialog';
+    this._dialogEl.setAttribute('role', 'dialog');
+    this._dialogEl.setAttribute('aria-label', 'Create capacity');
+    this._overlayEl.appendChild(this._dialogEl);
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'iw-cap-header';
+    header.innerHTML =
+      '<div class="iw-cap-header-icon">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>' +
+      '</div>' +
+      '<div class="iw-cap-title">Create Capacity</div>';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'iw-cap-close';
+    closeBtn.innerHTML = '\u2715';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.addEventListener('click', function() { self.close(); });
+    header.appendChild(closeBtn);
+    this._dialogEl.appendChild(header);
+
+    // Error banner (hidden)
+    this._errorBanner = document.createElement('div');
+    this._errorBanner.className = 'iw-cap-banner error';
+    this._errorBanner.style.display = 'none';
+    this._dialogEl.appendChild(this._errorBanner);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'iw-cap-body';
+    this._dialogEl.appendChild(body);
+
+    // Name field
+    var nameField = document.createElement('div');
+    nameField.className = 'iw-cap-field';
+    nameField.innerHTML =
+      '<div class="iw-cap-label">CAPACITY NAME</div>' +
+      '<input class="iw-cap-input mono" type="text" maxlength="63" spellcheck="false">';
+    body.appendChild(nameField);
+    this._nameInput = nameField.querySelector('input');
+    this._nameInput.value = iwGenerateCapacityName();
+    this._nameInput.addEventListener('input', function() {
+      // Capacity names: letters, digits, underscores, hyphens
+      self._nameInput.value = self._nameInput.value.replace(/[^a-zA-Z0-9_-]/g, '');
+      self._updateCreateBtn();
+    });
+
+    // SKU field
+    var skuField = document.createElement('div');
+    skuField.className = 'iw-cap-field';
+    var skuOptions = '';
+    for (var i = 0; i < IW_CAP_SKUS.length; i++) {
+      var s = IW_CAP_SKUS[i];
+      var sel = s.sku === 'P3' ? ' selected' : '';
+      skuOptions += '<option value="' + s.sku + '"' + sel + '>' +
+        s.sku + ' \u2014 ' + s.vcores + ' vCores, ' + s.memory + '</option>';
+    }
+    skuField.innerHTML =
+      '<div class="iw-cap-label">SKU</div>' +
+      '<div class="iw-cap-select-wrap">' +
+        '<select class="iw-cap-select">' + skuOptions + '</select>' +
+        '<span class="iw-cap-select-arrow">\u25BE</span>' +
+      '</div>';
+    body.appendChild(skuField);
+    this._skuSelect = skuField.querySelector('select');
+
+    // Region field
+    var regionField = document.createElement('div');
+    regionField.className = 'iw-cap-field';
+    var defaultRegion = this._detectDefaultRegion();
+    var regionOptions = '';
+    for (var k = 0; k < IW_CAP_REGIONS.length; k++) {
+      var r = IW_CAP_REGIONS[k];
+      var rsel = r.code === defaultRegion ? ' selected' : '';
+      regionOptions += '<option value="' + r.code + '"' + rsel + '>' + r.label + '</option>';
+    }
+    regionField.innerHTML =
+      '<div class="iw-cap-label">REGION</div>' +
+      '<div class="iw-cap-select-wrap">' +
+        '<select class="iw-cap-select">' + regionOptions + '</select>' +
+        '<span class="iw-cap-select-arrow">\u25BE</span>' +
+      '</div>';
+    body.appendChild(regionField);
+    this._regionSelect = regionField.querySelector('select');
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'iw-cap-footer';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.className = 'iw-cap-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function() { self.close(); });
+    footer.appendChild(cancelBtn);
+    this._createBtn = document.createElement('button');
+    this._createBtn.className = 'iw-cap-btn iw-cap-btn-primary ready';
+    this._createBtn.textContent = 'Create Capacity';
+    this._createBtn.addEventListener('click', function() { self._submit(); });
+    footer.appendChild(this._createBtn);
+    this._dialogEl.appendChild(footer);
+  }
+
+  _updateCreateBtn() {
+    var name = (this._nameInput.value || '').trim();
+    var ready = name.length >= 3 && this._state === 'idle';
+    this._createBtn.disabled = !ready;
+    if (ready) this._createBtn.classList.add('ready');
+    else this._createBtn.classList.remove('ready');
+  }
+
+  _submit() {
+    if (this._state !== 'idle') return;
+    var name = (this._nameInput.value || '').trim();
+    if (name.length < 3) return;
+    var sku = this._skuSelect.value;
+    var region = this._regionSelect.value;
+
+    var self = this;
+    this._state = 'creating';
+    this._createBtn.disabled = true;
+    this._createBtn.classList.remove('ready');
+    this._createBtn.innerHTML = '<span class="iw-cap-spinner"></span>Creating\u2026';
+    this._nameInput.disabled = true;
+    this._skuSelect.disabled = true;
+    this._regionSelect.disabled = true;
+    this._errorBanner.style.display = 'none';
+
+    this._api.createCapacity(name, sku, region).then(function(result) {
+      self._state = 'success';
+      var newCap = self._normalizeCapacity(result, name, sku, region);
+      self._showSuccess(newCap);
+    }).catch(function(err) {
+      self._showError(err && err.message ? err.message : 'Capacity creation failed');
+    });
+  }
+
+  _normalizeCapacity(raw, name, sku, region) {
+    // Server may return Fabric public API shape ({id, displayName, sku, region})
+    // or Power BI internal shape (capacityObjectId / metadata.configuration.*).
+    // Normalize to {id, displayName, sku, region, state}.
+    var r = raw || {};
+    var id = r.id || r.capacityObjectId || r.objectId || '';
+    if (!id && r.metadata) id = r.metadata.capacityObjectId || '';
+    var cfg = (r.metadata && r.metadata.configuration) || {};
+    return {
+      id: id,
+      displayName: r.displayName || cfg.displayName || name,
+      sku: r.sku || cfg.sku || sku,
+      region: r.region || cfg.region || region,
+      state: r.state || 'Active'
+    };
+  }
+
+  _showSuccess(newCap) {
+    var self = this;
+    var body = this._dialogEl.querySelector('.iw-cap-body');
+    var footer = this._dialogEl.querySelector('.iw-cap-footer');
+    body.innerHTML =
+      '<div class="iw-cap-success">' +
+        '<div class="iw-cap-success-icon">\u2713</div>' +
+        '<div class="iw-cap-success-name">' + this._esc(newCap.displayName) + '</div>' +
+        '<div class="iw-cap-success-sub">' +
+          this._esc(newCap.sku) + ' \u2014 ' + this._esc(newCap.region) +
+        '</div>' +
+      '</div>';
+    footer.style.display = 'none';
+
+    setTimeout(function() {
+      if (!self._overlayEl) return;
+      document.removeEventListener('keydown', self._boundKeydown);
+      self._overlayEl.remove();
+      self._overlayEl = null;
+      if (self.onComplete) self.onComplete(newCap);
+    }, 1500);
+  }
+
+  _showError(msg) {
+    var self = this;
+    this._state = 'idle';
+    this._nameInput.disabled = false;
+    this._skuSelect.disabled = false;
+    this._regionSelect.disabled = false;
+    this._createBtn.innerHTML = 'Create Capacity';
+    this._updateCreateBtn();
+
+    this._errorBanner.style.display = '';
+    this._errorBanner.innerHTML = '<span>\u2715 ' + this._esc(msg) + '</span>';
+    var retryBtn = document.createElement('button');
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', function() { self._submit(); });
+    this._errorBanner.appendChild(retryBtn);
+  }
+
+  _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 }
 
