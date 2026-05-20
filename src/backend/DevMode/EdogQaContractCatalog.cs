@@ -113,6 +113,23 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
+    /// Matcher topic catalog entry with field-level hash for staleness.
+    /// </summary>
+    public sealed class MatcherTopicCatalog
+    {
+        public string TopicHash { get; set; }
+        public Dictionary<string, string> Fields { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Holds the assembled matcher topic hashes for the catalog.
+    /// </summary>
+    public sealed class MatcherTopics
+    {
+        public Dictionary<string, MatcherTopicCatalog> Topics { get; set; } = new();
+    }
+
+    /// <summary>
     /// Assembles the per-zone contract catalog from multiple providers.
     /// </summary>
     internal sealed class EdogQaContractCatalog

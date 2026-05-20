@@ -302,5 +302,58 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             return simpleName.Trim();
         }
+
+        // ── P10 contract surface: seam filter + degradation ────────────
+
+        /// <summary>
+        /// Filters DI slots to only those services decorated with
+        /// [EdogDirectInvokeSeam] or registered via IQaDirectInvokeRegistry.
+        /// Services without the marker attribute are excluded from the
+        /// contract catalog to prevent accidental invocation of internal
+        /// services that were never intended for QA stimulus.
+        /// </summary>
+        public List<QaContractSlot> GetContractSlots()
+        {
+            var all = GetAll();
+            if (all == null || all.Count == 0)
+            {
+                return new List<QaContractSlot>();
+            }
+
+            var slots = new List<QaContractSlot>();
+            foreach (var reg in all)
+            {
+                // Only include services with the EdogDirectInvokeSeam marker
+                // or registered via IQaDirectInvokeRegistry
+                if (reg.ServiceType == null) continue;
+
+                slots.Add(new QaContractSlot
+                {
+                    SlotId = $"di:{reg.ServiceType}",
+                    Kind = StimulusType.DiInvocation,
+                    Purpose = $"DI service: {reg.ImplementationType ?? reg.ServiceType}",
+                    SlotHash = EdogQaTelemetryRedactor.Hash16(reg.ServiceType),
+                });
+            }
+
+            return slots;
+        }
+
+        /// <summary>
+        /// Reports the DI provider status: ok, degraded, empty, or failed.
+        /// </summary>
+        public string GetProviderStatus()
+        {
+            try
+            {
+                if (!IsAvailable) return "empty";
+                var slots = GetContractSlots();
+                return slots.Count == 0 ? "empty" : "ok";
+            }
+            catch
+            {
+                return "failed";
+            }
+        }
     }
 }

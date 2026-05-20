@@ -705,5 +705,41 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             public List<UsageInfo> QuickFixes { get; set; }
         }
+
+        // ── P10 contract surface: anonymous type member discovery ───
+
+        /// <summary>
+        /// Scans source files for anonymous-type member names used in topic
+        /// router publish calls. These provide the field names for matcher
+        /// topic.field enums in the contract schema.
+        ///
+        /// Pattern detected:
+        ///   new { field1 = ..., field2 = ... }
+        /// within a method that publishes to a topic buffer.
+        /// </summary>
+        public Dictionary<string, List<string>> DiscoverAnonymousTypeMembers(string sourceRoot)
+        {
+            // Placeholder for Roslyn AnonymousObjectCreationExpression scan:
+            // var anonMembers = root.DescendantNodes()
+            //     .OfType<AnonymousObjectCreationExpressionSyntax>()
+            //     .SelectMany(node => node.Initializers)
+            //     .Select(init => init.NameEquals?.Name.Identifier.Text);
+            return new Dictionary<string, List<string>>();
+        }
+
+        /// <summary>
+        /// Computes a stable hash of all topic field names for staleness detection.
+        /// </summary>
+        public Dictionary<string, string> ComputeTopicFieldHashes(string sourceRoot)
+        {
+            var members = DiscoverAnonymousTypeMembers(sourceRoot);
+            var hashes = new Dictionary<string, string>();
+            foreach (var (topic, fields) in members)
+            {
+                var joined = string.Join("|", fields.OrderBy(f => f, StringComparer.Ordinal));
+                hashes[topic] = EdogQaTelemetryRedactor.Hash16(joined);
+            }
+            return hashes;
+        }
     }
 }
