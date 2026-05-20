@@ -40,6 +40,9 @@
 // Test seam: ArchitectStageDelegate + EditorStageDelegate allow the
 // harness to inject canned LlmClientResults without any HTTP traffic.
 
+#nullable disable
+#pragma warning disable // DevMode-only file — suppress all warnings
+
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
@@ -181,6 +184,9 @@ namespace Microsoft.LiveTable.Service.DevMode
             /// tests that need to assert the un-repaired baseline.
             /// </summary>
             public bool EnableRepairLoop { get; set; } = true;
+
+            /// <summary>Optional revisioned options provider captured once per run for prompt/config stability.</summary>
+            public IQaContractOptionsProvider OptionsProvider { get; set; }
         }
 
         // ── Input ──────────────────────────────────────────────────────
@@ -283,6 +289,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             /// <summary>Wire-stable failure code if the repair pass itself failed (parse, schema, binding, or stage exception). Empty on success.</summary>
             public string RepairFailureCode { get; set; } = string.Empty;
+
+            /// <summary>Contract-options revision snapshot captured for this run.</summary>
+            public long OptionsRevision { get; set; }
         }
 
         public sealed class DedupDuplicate
@@ -327,6 +336,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             public string BudgetGateReason { get; set; } = string.Empty;
 
             public string PricingSource { get; set; } = string.Empty;
+
+            public long OptionsRevision { get; set; }
         }
 
         // ── Progress events ────────────────────────────────────────────
@@ -415,6 +426,16 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (config.EditorOverride == null && config.Editor == null) throw new ArgumentException("Editor config required when no EditorOverride is supplied", nameof(config));
 
             var result = new OrchestratorResult { PricingSource = config.Pricing.Source ?? string.Empty };
+            var optionsSnapshot = config.OptionsProvider?.CaptureSnapshot();
+            result.OptionsRevision = optionsSnapshot?.Revision ?? 0;
+            if (optionsSnapshot != null)
+            {
+                EdogQaTelemetry.EmitContractEvent(
+                    EdogQaTelemetry.EventFeatureFlagSnapshot,
+                    "orchestrator",
+                    optionsSnapshot.Revision.ToString(),
+                    $"enabled={optionsSnapshot.Enabled};fewShot={optionsSnapshot.FewShotEnabled};disabledKinds={string.Join(",", optionsSnapshot.DisabledKinds != null ? optionsSnapshot.DisabledKinds : (IEnumerable<string>)Array.Empty<string>())}");
+            }
 
             // Empty zones short-circuit cleanly.
             if (zones.Count == 0)
@@ -453,7 +474,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 var idx = i;
                 var zone = zones[i];
                 tasks[i] = ProcessZoneAsync(
-                    idx, zone, config, progress, semaphore,
+                    idx, zone, config, result.OptionsRevision, progress, semaphore,
                     batchStopwatch, deadlineTicks, maxBudgetMicroUsd,
                     refAccumulate: () => Volatile.Read(ref accumulatedMicroUsd),
                     addAccumulate: spent => Interlocked.Add(ref accumulatedMicroUsd, spent),
@@ -661,6 +682,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             int zoneInputIndex,
             ZoneInput zoneInput,
             OrchestratorConfig config,
+            long optionsRevision,
             IProgress<OrchestratorEvent> progress,
             SemaphoreSlim semaphore,
             Stopwatch batchStopwatch,
@@ -677,6 +699,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 ZoneInputIndex = zoneInputIndex,
                 ZoneId = zoneInput?.ZoneId ?? string.Empty,
+                OptionsRevision = optionsRevision,
             };
             var zoneStopwatch = Stopwatch.StartNew();
             // T1e: per-zone running tally of how much we've BOOKED into
@@ -1074,7 +1097,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
                     var feedback = new EdogQaLlmClient.EditorRepairContext
                     {
-                        QuarantinedScenarios = BuildRepairItemsFromQuarantined(zr.Quarantined),
+                        QuarantinedScenarios = BuildRepairItemsFromQuarantined(
+                            zr.Quarantined,
+                            ComputeReachabilityCap(zr.Accepted.Count, zr.Quarantined.Count)),
                     };
 
                     EdogQaLlmClient.LlmClientResult repairResult = null;
@@ -1137,24 +1162,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                             // occurrence) so the validator's empty-hash
                             // contract failure never silently swallows
                             // distinct work.
-                            if (repairValidation.Accepted != null && repairValidation.Accepted.Count > 0)
-                            {
-                                var seenHashes = new HashSet<string>(StringComparer.Ordinal);
-                                foreach (var existing in zr.Accepted)
-                                {
-                                    if (!string.IsNullOrEmpty(existing?.SemanticHash))
-                                        seenHashes.Add(existing.SemanticHash);
-                                }
-                                foreach (var ra in repairValidation.Accepted)
-                                {
-                                    if (ra == null) continue;
-                                    if (!string.IsNullOrEmpty(ra.SemanticHash) && !seenHashes.Add(ra.SemanticHash))
-                                    {
-                                        continue;
-                                    }
-                                    zr.Accepted.Add(ra);
-                                }
-                            }
+                            MergeAcceptedRepairs(zr.Accepted, repairValidation.Accepted);
 
                             // Repair-quarantined entries are APPENDED to
                             // the existing quarantined list so the
@@ -1164,7 +1172,47 @@ namespace Microsoft.LiveTable.Service.DevMode
                             if (repairValidation.Quarantined != null && repairValidation.Quarantined.Count > 0)
                             {
                                 zr.Quarantined.AddRange(repairValidation.Quarantined);
+
+                                var (escalationResult, escalationValidation, escalationDispatched) = await RunSingleScenarioEscalationAsync(
+                                    config,
+                                    architectResult.Plan,
+                                    zoneCtx,
+                                    repairValidation.Quarantined,
+                                    zoneInput.UnifiedDiff ?? zoneInput.RedactedDiff ?? string.Empty,
+                                    ct).ConfigureAwait(false);
+                                if (escalationDispatched)
+                                {
+                                    zr.RepairAttempts = Math.Max(zr.RepairAttempts, 2);
+                                    zr.RepairBranch = "validator_quarantine_attempt3";
+                                }
+                                if (escalationResult != null)
+                                {
+                                    zr.RepairInputTokens += escalationResult.EditorInputTokens;
+                                    zr.RepairOutputTokens += escalationResult.EditorOutputTokens;
+                                    zr.InputTokens += escalationResult.EditorInputTokens;
+                                    zr.OutputTokens += escalationResult.EditorOutputTokens;
+                                }
+                                if (escalationResult != null && escalationResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
+                                {
+                                    var firstEscalationError = escalationResult.Errors != null && escalationResult.Errors.Count > 0
+                                        ? StableCodePrefix(escalationResult.Errors[0])
+                                        : "EDITOR_REPAIR_ESCALATION_FAILED";
+                                    zr.RepairFailureCode = firstEscalationError;
+                                    zr.Errors.AddRange(escalationResult.Errors ?? new());
+                                }
+                                else if (escalationValidation != null)
+                                {
+                                    zr.RepairAcceptedCount += escalationValidation.Accepted?.Count ?? 0;
+                                    zr.RepairQuarantinedCount += escalationValidation.Quarantined?.Count ?? 0;
+                                    MergeAcceptedRepairs(zr.Accepted, escalationValidation.Accepted);
+                                    if (escalationValidation.Quarantined != null && escalationValidation.Quarantined.Count > 0)
+                                    {
+                                        zr.Quarantined.AddRange(escalationValidation.Quarantined);
+                                    }
+                                }
                             }
+
+                            ReorderAcceptedByOriginalIndex(zr.Accepted);
                         }
                     }
                 }
@@ -1241,13 +1289,16 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// structured diagnostic data, not prose instructions.
         /// </summary>
         private static List<EdogQaLlmClient.RepairFeedbackItem> BuildRepairItemsFromQuarantined(
-            List<EdogQaScenarioValidator.QuarantinedScenario> quarantined)
+            List<EdogQaScenarioValidator.QuarantinedScenario> quarantined,
+            int takeLimit = int.MaxValue)
         {
             var items = new List<EdogQaLlmClient.RepairFeedbackItem>();
             if (quarantined == null) return items;
-            foreach (var q in quarantined)
+            foreach (var q in quarantined
+                .Where(x => x != null)
+                .OrderBy(x => x.Scenario?.OriginalIndex ?? int.MaxValue)
+                .Take(Math.Max(1, takeLimit)))
             {
-                if (q == null) continue;
                 var reasons = new List<EdogQaLlmClient.RepairFeedbackReason>();
                 if (q.Reasons != null)
                 {
@@ -1267,10 +1318,106 @@ namespace Microsoft.LiveTable.Service.DevMode
                 {
                     ScenarioId = q.Scenario?.Id ?? string.Empty,
                     Title = q.Scenario?.Title ?? string.Empty,
+                    OriginalIndex = q.Scenario?.OriginalIndex,
                     Reasons = reasons,
                 });
             }
             return items;
+        }
+
+        private async Task<(EdogQaLlmClient.LlmClientResult repairResult, EdogQaScenarioValidator.ValidationResult validation, bool dispatched)> RunSingleScenarioEscalationAsync(
+            OrchestratorConfig config,
+            EdogQaLlmClient.ArchitectPlan plan,
+            EdogQaLlmClient.ZoneContext zoneCtx,
+            List<EdogQaScenarioValidator.QuarantinedScenario> quarantined,
+            string unifiedDiff,
+            CancellationToken ct)
+        {
+            if (!config.EnableRepairLoop || quarantined == null || quarantined.Count == 0)
+            {
+                return (null, null, false);
+            }
+
+            var feedback = new EdogQaLlmClient.EditorRepairContext
+            {
+                SingleScenarioOnly = true,
+                QuarantinedScenarios = BuildRepairItemsFromQuarantined(quarantined, 1),
+            };
+            if (feedback.QuarantinedScenarios.Count == 0)
+            {
+                return (null, null, false);
+            }
+
+            EdogQaTelemetry.EmitContractEvent(
+                EdogQaTelemetry.EventRepairEscalation,
+                zoneCtx?.ZoneId ?? string.Empty,
+                "attempt3",
+                "Escalating to single-scenario repair.");
+
+            var (repairResult, dispatched) = await TryCallEditorRepairAsync(config, plan, zoneCtx, feedback, ct).ConfigureAwait(false);
+            if (!dispatched || repairResult == null || repairResult.Status == EdogQaLlmClient.LlmClientStatus.Failed)
+            {
+                return (repairResult, null, dispatched);
+            }
+
+            var validation = EdogQaScenarioValidator.Validate(
+                plan,
+                repairResult.Scenarios ?? new List<EdogQaLlmClient.GeneratedScenario>(),
+                unifiedDiff,
+                config.Validation);
+            return (repairResult, validation, dispatched);
+        }
+
+        private static int ComputeReachabilityCap(int acceptedCount, int quarantinedCount)
+        {
+            var total = Math.Max(acceptedCount + quarantinedCount, quarantinedCount);
+            return Math.Min(8, Math.Max(1, (int)Math.Ceiling(total * 0.35)));
+        }
+
+        private static void MergeAcceptedRepairs(
+            List<EdogQaScenarioValidator.AcceptedScenario> target,
+            List<EdogQaScenarioValidator.AcceptedScenario> repairs)
+        {
+            if (target == null || repairs == null || repairs.Count == 0)
+            {
+                return;
+            }
+
+            var seenHashes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var existing in target)
+            {
+                if (!string.IsNullOrEmpty(existing?.SemanticHash))
+                {
+                    seenHashes.Add(existing.SemanticHash);
+                }
+            }
+
+            foreach (var repair in repairs)
+            {
+                if (repair == null) continue;
+                if (!string.IsNullOrEmpty(repair.SemanticHash) && !seenHashes.Add(repair.SemanticHash))
+                {
+                    continue;
+                }
+                target.Add(repair);
+            }
+        }
+
+        private static void ReorderAcceptedByOriginalIndex(List<EdogQaScenarioValidator.AcceptedScenario> accepted)
+        {
+            if (accepted == null || accepted.Count < 2)
+            {
+                return;
+            }
+
+            accepted.Sort((left, right) =>
+            {
+                var leftIndex = left?.Scenario?.OriginalIndex ?? int.MaxValue;
+                var rightIndex = right?.Scenario?.OriginalIndex ?? int.MaxValue;
+                var cmp = leftIndex.CompareTo(rightIndex);
+                if (cmp != 0) return cmp;
+                return string.CompareOrdinal(left?.Scenario?.Id ?? string.Empty, right?.Scenario?.Id ?? string.Empty);
+            });
         }
 
         private static double ComputeCost(ZoneResult zr, PricingTable pricing)

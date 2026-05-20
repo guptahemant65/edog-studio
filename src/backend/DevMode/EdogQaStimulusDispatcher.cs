@@ -57,8 +57,25 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// </summary>
     public sealed class EdogQaStimulusDispatcher
     {
+        private const string ClientName = "edog-stimulus";
+        private const string ControlTokenHeaderName = "X-EDOG-Control-Token";
+        private const int CaptureBufferBytes = 65_536; // 64KB
+
+        private static readonly IReadOnlyDictionary<StimulusType, int> ContractDispatchTimeoutsMs
+            = new Dictionary<StimulusType, int>
+            {
+                [StimulusType.HttpRequest] = 10_000,
+                [StimulusType.DiInvocation] = 5_000,
+                [StimulusType.SignalRBroadcast] = 5_000,
+                [StimulusType.FileEvent] = 10_000,
+                [StimulusType.TimerTick] = 15_000,
+                [StimulusType.DagTrigger] = 30_000,
+            };
+
         private readonly Dictionary<StimulusType, IStimulusHandler> _handlers;
+        private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger _logger;
+        private readonly int _fltPort;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EdogQaStimulusDispatcher"/> class.
@@ -69,6 +86,8 @@ namespace Microsoft.LiveTable.Service.DevMode
             int fltPort,
             ILogger logger)
         {
+            _httpClientFactory = httpClientFactory;
+            _fltPort = fltPort;
             _logger = logger;
 
             var handlers = new IStimulusHandler[]
@@ -142,6 +161,453 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public Task<StimulusResult> ExecuteAsync(Stimulus stimulus, CancellationToken ct)
             => ExecuteAsync(stimulus, timeoutMs: 30_000, ct);
+
+        /// <summary>Fetches the P10 QA dispatch capability document.</summary>
+        internal async Task<object> GetCapabilitiesAsync(CancellationToken ct)
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                BuildQaUri("/devmode/qa/capabilities"));
+
+            return await SendContractRequestAsync(request, timeoutMs: 5_000, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>Dispatches a P10 sync stimulus for DiInvocation, SignalRBroadcast, FileEvent, or TimerTick.</summary>
+        internal async Task<object> DispatchSyncAsync(Stimulus stimulus, string controlToken, CancellationToken ct)
+        {
+            if (stimulus == null)
+            {
+                return CreateErrorEnvelope("Stimulus is null.");
+            }
+
+            if (stimulus.Type != StimulusType.DiInvocation
+                && stimulus.Type != StimulusType.SignalRBroadcast
+                && stimulus.Type != StimulusType.FileEvent
+                && stimulus.Type != StimulusType.TimerTick)
+            {
+                return CreateErrorEnvelope(
+                    "/devmode/qa/dispatch supports DiInvocation, SignalRBroadcast, FileEvent, and TimerTick stimuli only.");
+            }
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                BuildQaUri("/devmode/qa/dispatch"))
+            {
+                Content = CreateJsonContent(stimulus),
+            };
+
+            ApplyControlTokenHeader(request, controlToken);
+            return await SendContractRequestAsync(request, GetContractTimeoutMs(stimulus), ct).ConfigureAwait(false);
+        }
+
+        /// <summary>Dispatches an async DAG stimulus and returns the correlationId.</summary>
+        internal async Task<string> DispatchDagAsync(Stimulus stimulus, string controlToken, CancellationToken ct)
+        {
+            if (stimulus == null)
+            {
+                throw new ArgumentNullException(nameof(stimulus));
+            }
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                BuildQaUri("/devmode/qa/dispatch/dag"))
+            {
+                Content = CreateJsonContent(stimulus),
+            };
+
+            ApplyControlTokenHeader(request, controlToken);
+            var envelope = await SendContractRequestAsync(request, GetContractTimeoutMs(stimulus), ct).ConfigureAwait(false);
+            return envelope?.CorrelationId;
+        }
+
+        /// <summary>Polls the async DAG dispatch status by correlationId.</summary>
+        internal async Task<object> PollDagAsync(string correlationId, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(correlationId))
+            {
+                return CreateErrorEnvelope("correlationId is required.");
+            }
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                BuildQaUri($"/devmode/qa/dispatch/dag/{Uri.EscapeDataString(correlationId)}"));
+
+            return await SendContractRequestAsync(request, ContractDispatchTimeoutsMs[StimulusType.DagTrigger], ct).ConfigureAwait(false);
+        }
+
+        /// <summary>Cancels an in-flight async DAG dispatch.</summary>
+        internal async Task CancelDagAsync(string correlationId, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(correlationId))
+            {
+                return;
+            }
+
+            using var request = new HttpRequestMessage(
+                HttpMethod.Delete,
+                BuildQaUri($"/devmode/qa/dispatch/dag/{Uri.EscapeDataString(correlationId)}"));
+
+            var envelope = await SendContractRequestAsync(
+                request,
+                ContractDispatchTimeoutsMs[StimulusType.DagTrigger],
+                ct).ConfigureAwait(false);
+
+            if (envelope != null && !envelope.Success && !string.IsNullOrWhiteSpace(envelope.Error))
+            {
+                throw new InvalidOperationException(envelope.Error);
+            }
+        }
+
+        private Uri BuildQaUri(string path)
+        {
+            return new Uri($"http://localhost:{_fltPort}{(path?.StartsWith("/") == true ? string.Empty : "/")}{path}");
+        }
+
+        private static void ApplyControlTokenHeader(HttpRequestMessage request, string controlToken)
+        {
+            if (request == null || string.IsNullOrWhiteSpace(controlToken))
+            {
+                return;
+            }
+
+            request.Headers.Remove(ControlTokenHeaderName);
+            request.Headers.TryAddWithoutValidation(ControlTokenHeaderName, controlToken);
+        }
+
+        private static StringContent CreateJsonContent(object payload)
+        {
+            return new StringContent(
+                JsonSerializer.Serialize(payload),
+                Encoding.UTF8,
+                "application/json");
+        }
+
+        private int GetContractTimeoutMs(Stimulus stimulus)
+        {
+            if (stimulus != null && ContractDispatchTimeoutsMs.TryGetValue(stimulus.Type, out var timeoutMs))
+            {
+                return timeoutMs;
+            }
+
+            return 10_000;
+        }
+
+        private async Task<ContractDispatchEnvelope> SendContractRequestAsync(
+            HttpRequestMessage request,
+            int timeoutMs,
+            CancellationToken ct)
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(timeoutMs);
+
+            try
+            {
+                var client = _httpClientFactory.CreateClient(ClientName);
+                using var response = await client.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    timeoutCts.Token).ConfigureAwait(false);
+
+                return await ParseContractResponseAsync(response, timeoutMs, timeoutCts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return CreateTimeoutEnvelope(timeoutMs);
+            }
+        }
+
+        private async Task<ContractDispatchEnvelope> ParseContractResponseAsync(
+            HttpResponseMessage response,
+            int timeoutMs,
+            CancellationToken ct)
+        {
+            var envelope = new ContractDispatchEnvelope
+            {
+                Success = response.IsSuccessStatusCode,
+                StatusCode = (int)response.StatusCode,
+            };
+
+            var body = await ReadContentPreviewAsync(response.Content, ct).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    envelope.Verdict = ScenarioVerdict.Inconclusive.ToString();
+                    envelope.Error = $"Dispatch endpoint returned HTTP {(int)response.StatusCode}.";
+                }
+
+                return envelope;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                envelope.Payload = ExtractValue(root);
+                envelope.Success = ReadBool(root, "success") ?? envelope.Success;
+                envelope.Verdict = ReadString(root, "verdict")
+                    ?? ReadString(root, "status")
+                    ?? (envelope.Success ? null : ScenarioVerdict.Inconclusive.ToString());
+                envelope.CorrelationId = ReadString(root, "correlationId")
+                    ?? ReadString(root, "dispatchId");
+                envelope.Error = ReadString(root, "error")
+                    ?? ReadString(root, "message")
+                    ?? ReadString(root, "detail");
+                envelope.CaptureBuffer = ParseCaptureBuffer(root);
+                return envelope;
+            }
+            catch (JsonException)
+            {
+                envelope.Payload = body;
+                envelope.Error = envelope.Success
+                    ? null
+                    : $"Dispatch endpoint returned HTTP {(int)response.StatusCode}.";
+                envelope.Verdict ??= envelope.Success ? null : ScenarioVerdict.Inconclusive.ToString();
+                return envelope;
+            }
+        }
+
+        private static ContractDispatchEnvelope CreateTimeoutEnvelope(int timeoutMs)
+        {
+            return new ContractDispatchEnvelope
+            {
+                Success = false,
+                Verdict = ScenarioVerdict.Inconclusive.ToString(),
+                Error = $"Dispatch timed out after {timeoutMs}ms and was normalized to {ScenarioVerdict.Inconclusive}.",
+            };
+        }
+
+        private static ContractDispatchEnvelope CreateErrorEnvelope(string message)
+        {
+            return new ContractDispatchEnvelope
+            {
+                Success = false,
+                Verdict = ScenarioVerdict.Inconclusive.ToString(),
+                Error = message,
+            };
+        }
+
+        private static async Task<string> ReadContentPreviewAsync(HttpContent content, CancellationToken ct)
+        {
+            if (content == null)
+            {
+                return null;
+            }
+
+            using var stream = await content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            var buffer = new byte[CaptureBufferBytes];
+            var offset = 0;
+            while (offset < buffer.Length)
+            {
+                var read = await stream.ReadAsync(buffer, offset, buffer.Length - offset, ct).ConfigureAwait(false);
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                offset += read;
+            }
+
+            return Encoding.UTF8.GetString(buffer, 0, offset);
+        }
+
+        private static string ReadString(JsonElement root, string propertyName)
+        {
+            var match = FindProperty(root, propertyName);
+            if (match == null)
+            {
+                return null;
+            }
+
+            return match.Value.ValueKind switch
+            {
+                JsonValueKind.String => match.Value.GetString(),
+                JsonValueKind.Number => match.Value.ToString(),
+                JsonValueKind.True => bool.TrueString,
+                JsonValueKind.False => bool.FalseString,
+                _ => null,
+            };
+        }
+
+        private static bool? ReadBool(JsonElement root, string propertyName)
+        {
+            var match = FindProperty(root, propertyName);
+            if (match == null)
+            {
+                return null;
+            }
+
+            return match.Value.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.String when bool.TryParse(match.Value.GetString(), out var parsed) => parsed,
+                _ => null,
+            };
+        }
+
+        private static JsonElement? FindProperty(JsonElement root, string propertyName)
+        {
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    if (string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return property.Value;
+                    }
+
+                    var nested = FindProperty(property.Value, propertyName);
+                    if (nested != null)
+                    {
+                        return nested;
+                    }
+                }
+            }
+            else if (root.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in root.EnumerateArray())
+                {
+                    var nested = FindProperty(item, propertyName);
+                    if (nested != null)
+                    {
+                        return nested;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static List<TopicEvent> ParseCaptureBuffer(JsonElement root)
+        {
+            var match = FindProperty(root, "captureBuffer") ?? FindProperty(root, "capturedEvents");
+            return match == null ? new List<TopicEvent>() : ParseCaptureBufferValue(match.Value);
+        }
+
+        private static List<TopicEvent> ParseCaptureBufferValue(JsonElement value)
+        {
+            var events = new List<TopicEvent>();
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Array:
+                    foreach (var item in value.EnumerateArray())
+                    {
+                        var evt = DeserializeTopicEvent(item);
+                        if (evt != null)
+                        {
+                            events.Add(evt);
+                        }
+                    }
+                    break;
+
+                case JsonValueKind.Object:
+                    if (FindProperty(value, "events") is JsonElement nestedEvents)
+                    {
+                        events.AddRange(ParseCaptureBufferValue(nestedEvents));
+                    }
+                    else
+                    {
+                        var evt = DeserializeTopicEvent(value);
+                        if (evt != null)
+                        {
+                            events.Add(evt);
+                        }
+                    }
+                    break;
+
+                case JsonValueKind.String:
+                    var raw = value.GetString();
+                    if (string.IsNullOrWhiteSpace(raw))
+                    {
+                        break;
+                    }
+
+                    try
+                    {
+                        using var nestedDoc = JsonDocument.Parse(raw);
+                        events.AddRange(ParseCaptureBufferValue(nestedDoc.RootElement));
+                    }
+                    catch (JsonException)
+                    {
+                        foreach (var line in raw.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            try
+                            {
+                                using var lineDoc = JsonDocument.Parse(line);
+                                var evt = DeserializeTopicEvent(lineDoc.RootElement);
+                                if (evt != null)
+                                {
+                                    events.Add(evt);
+                                }
+                            }
+                            catch (JsonException)
+                            {
+                                // Ignore malformed capture-buffer fragments.
+                            }
+                        }
+                    }
+                    break;
+            }
+
+            return events;
+        }
+
+        private static TopicEvent DeserializeTopicEvent(JsonElement value)
+        {
+            try
+            {
+                if (value.ValueKind != JsonValueKind.Object)
+                {
+                    return null;
+                }
+
+                if (FindProperty(value, "topic") == null)
+                {
+                    return null;
+                }
+
+                return JsonSerializer.Deserialize<TopicEvent>(value.GetRawText());
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static object ExtractValue(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.Object => element.EnumerateObject()
+                    .ToDictionary(property => property.Name, property => ExtractValue(property.Value), StringComparer.Ordinal),
+                JsonValueKind.Array => element.EnumerateArray().Select(ExtractValue).ToList(),
+                JsonValueKind.String => element.GetString(),
+                JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
+                JsonValueKind.Number => element.GetDouble(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Null => null,
+                _ => element.GetRawText(),
+            };
+        }
+
+        internal sealed class ContractDispatchEnvelope
+        {
+            public bool Success { get; set; }
+
+            public int? StatusCode { get; set; }
+
+            public string Verdict { get; set; }
+
+            public string CorrelationId { get; set; }
+
+            public string Error { get; set; }
+
+            public object Payload { get; set; }
+
+            public List<TopicEvent> CaptureBuffer { get; set; } = new();
+        }
     }
 
     // ──────────────────────────────────────────────

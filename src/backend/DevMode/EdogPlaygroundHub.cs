@@ -2031,7 +2031,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var bumpFailed = sr.Verdict == ScenarioVerdict.Failed
                                      || sr.Verdict == ScenarioVerdict.Partial
                                      || sr.Verdict == ScenarioVerdict.TimedOut
-                                     || sr.Verdict == ScenarioVerdict.Crashed;
+                                     || sr.Verdict == ScenarioVerdict.Crashed
+                                     || sr.Verdict == ScenarioVerdict.Stale
+                                     || sr.Verdict == ScenarioVerdict.Inconclusive;
 
                     completedCount++;
                     if (bumpPassed) passedCount++;
@@ -2062,6 +2064,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                         Category = category,
                         Status = verdictStr,
                         ErrorSummary = sr.ErrorMessage,
+                        Matchers = submitted?.Matchers != null ? new List<Matcher>(submitted.Matchers) : new List<Matcher>(),
+                        CatalogHashes = submitted?.CatalogHashes,
+                        Lifecycle = (submitted?.Lifecycle ?? ScenarioLifecycle.Completed).ToString(),
                     });
 
                     await BroadcastQaEventAsync("QaScenarioCompleted", new

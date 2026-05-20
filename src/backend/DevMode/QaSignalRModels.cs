@@ -125,6 +125,15 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Expectations to evaluate.</summary>
         public List<QaSubmittedExpectation> Expectations { get; set; } = new();
 
+        /// <summary>Typed p10 matchers submitted alongside the legacy expectations.</summary>
+        public List<Matcher> Matchers { get; set; } = new();
+
+        /// <summary>Catalog hash envelope grounding the submitted scenario.</summary>
+        public CatalogHashes CatalogHashes { get; set; }
+
+        /// <summary>Lifecycle state supplied by the curation pipeline.</summary>
+        public ScenarioLifecycle Lifecycle { get; set; } = ScenarioLifecycle.Generated;
+
         /// <summary>Teardown steps.</summary>
         public List<object> Teardown { get; set; } = new();
 
@@ -599,6 +608,12 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Per-scenario summary rows. Sufficient for comparison + dropdown rendering.</summary>
         public List<QaScenarioRecord> Scenarios { get; set; } = new();
+
+        /// <summary>Run-level quarantine reason recorded during p10 migration.</summary>
+        public string QuarantineReason { get; set; }
+
+        /// <summary>Whether the run contains pre-contract-quarantined scenarios.</summary>
+        public bool IsPreContractQuarantined { get; set; }
     }
 
     /// <summary>
@@ -627,6 +642,21 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Short failure summary. Null/empty when the scenario passed.</summary>
         public string ErrorSummary { get; set; }
+
+        /// <summary>Typed matchers captured for p10 replay and migration.</summary>
+        public List<Matcher> Matchers { get; set; } = new();
+
+        /// <summary>CatalogHashes captured alongside the scenario for p10 grounding checks.</summary>
+        public CatalogHashes CatalogHashes { get; set; }
+
+        /// <summary>Lifecycle snapshot captured when the scenario completed.</summary>
+        public string Lifecycle { get; set; }
+
+        /// <summary>Per-scenario quarantine reason set during p10 migration.</summary>
+        public string QuarantineReason { get; set; }
+
+        /// <summary>Whether the scenario was archived as pre-contract-quarantined.</summary>
+        public bool IsPreContractQuarantined { get; set; }
     }
 
     /// <summary>

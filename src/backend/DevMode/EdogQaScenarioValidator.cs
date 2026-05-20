@@ -32,6 +32,9 @@
 // constraints gate present (adopted blocker #6), defer projector + typed
 // payload re-parse to T1c-a-2.
 
+#nullable disable
+#pragma warning disable // DevMode-only file — suppress all warnings
+
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
@@ -68,6 +71,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         public const string CodeFieldOutOfRange            = "FIELD_OUT_OF_RANGE";
         public const string CodeEnumValueInvalid           = "ENUM_VALUE_INVALID";
         public const string CodeExpectationsMissing        = "EXPECTATIONS_MISSING";
+        public const string CodeMatcherValueTypeInvalid    = "MATCHER_VALUE_TYPE_INVALID";
+        public const string CodeGroundingSlotMismatch      = "GROUNDING_SLOT_MISMATCH";
 
         // Gate 3 — valid topics.
         public const string CodeTopicUnknown               = "TOPIC_UNKNOWN";
@@ -396,6 +401,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     }
                 }
 
+                ValidateTypedMatchers(scenario, topicSet, reasons);
+
                 // ── Gate 4: confidence calibration ──────────────────────
                 // Clamp to [0, 1] silently (clamping is mechanical, not a
                 // user-facing fault). Cap at 0.7 if grounding failed; the
@@ -625,6 +632,132 @@ namespace Microsoft.LiveTable.Service.DevMode
                     Message = $"{fieldPath} value {value} is outside the inclusive range [{min}, {max}].",
                     FieldPath = fieldPath,
                 });
+            }
+        }
+
+        private static void ValidateTypedMatchers(
+            EdogQaLlmClient.GeneratedScenario scenario,
+            HashSet<string> topicSet,
+            List<QuarantineReason> sink)
+        {
+            if (scenario?.Matchers == null || scenario.Matchers.Count == 0)
+            {
+                return;
+            }
+
+            var matcherTopicHashes = scenario.CatalogHashes?.MatcherTopicHashes;
+            for (int i = 0; i < scenario.Matchers.Count; i++)
+            {
+                var matcher = scenario.Matchers[i];
+                var pathPrefix = $"matchers[{i}]";
+                if (matcher == null)
+                {
+                    sink.Add(new QuarantineReason
+                    {
+                        Code = CodeFieldEmpty,
+                        Message = "matchers entries must not be null.",
+                        FieldPath = pathPrefix,
+                    });
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(matcher.TopicField))
+                {
+                    sink.Add(new QuarantineReason
+                    {
+                        Code = CodeFieldEmpty,
+                        Message = "matcher.topicField must not be empty.",
+                        FieldPath = $"{pathPrefix}.topicField",
+                    });
+                }
+                else
+                {
+                    var topic = ExtractMatcherTopic(matcher.TopicField);
+                    if (!string.IsNullOrWhiteSpace(topic) && topicSet.Count > 0 && !topicSet.Contains(topic))
+                    {
+                        sink.Add(new QuarantineReason
+                        {
+                            Code = CodeTopicUnknown,
+                            Message = $"Matcher topic '{topic}' is not a registered interceptor topic.",
+                            FieldPath = $"{pathPrefix}.topicField",
+                        });
+                    }
+
+                    if (matcherTopicHashes == null || matcherTopicHashes.Count == 0)
+                    {
+                        sink.Add(new QuarantineReason
+                        {
+                            Code = CodeGroundingSlotMismatch,
+                            Message = "Typed matchers require catalogHashes.matcherTopicHashes so the scenario stays grounded to the active catalog.",
+                            FieldPath = "catalogHashes.matcherTopicHashes",
+                        });
+                    }
+                    else if (!string.IsNullOrWhiteSpace(topic) && !matcherTopicHashes.ContainsKey(topic))
+                    {
+                        sink.Add(new QuarantineReason
+                        {
+                            Code = CodeGroundingSlotMismatch,
+                            Message = $"Matcher topic '{topic}' is not present in catalogHashes.matcherTopicHashes.",
+                            FieldPath = $"{pathPrefix}.topicField",
+                        });
+                    }
+                }
+
+                if (!IsMatcherValueCompatible(matcher.Assertion, matcher.Value))
+                {
+                    sink.Add(new QuarantineReason
+                    {
+                        Code = CodeMatcherValueTypeInvalid,
+                        Message = $"Matcher assertion '{matcher.Assertion}' is incompatible with the supplied typed value payload.",
+                        FieldPath = $"{pathPrefix}.value",
+                    });
+                }
+            }
+        }
+
+        private static string ExtractMatcherTopic(string topicField)
+        {
+            if (string.IsNullOrWhiteSpace(topicField))
+            {
+                return string.Empty;
+            }
+
+            var separator = topicField.IndexOf('.');
+            return separator > 0 ? topicField.Substring(0, separator) : topicField;
+        }
+
+        private static bool IsMatcherValueCompatible(string assertion, JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("type", out var typeElement))
+            {
+                return false;
+            }
+
+            var valueType = typeElement.GetString() ?? string.Empty;
+            switch (assertion ?? string.Empty)
+            {
+                case "Exists":
+                    return string.Equals(valueType, "boolean", StringComparison.OrdinalIgnoreCase)
+                        && value.TryGetProperty("expected", out _);
+                case "InRange":
+                    return string.Equals(valueType, "range", StringComparison.OrdinalIgnoreCase)
+                        && value.TryGetProperty("min", out _)
+                        && value.TryGetProperty("max", out _);
+                case "ContainsAll":
+                case "OneOf":
+                    return string.Equals(valueType, "array", StringComparison.OrdinalIgnoreCase)
+                        && value.TryGetProperty("items", out _);
+                case "Length":
+                    return string.Equals(valueType, "length", StringComparison.OrdinalIgnoreCase)
+                        && (value.TryGetProperty("min", out _) || value.TryGetProperty("max", out _));
+                case "Equals":
+                case "NotEquals":
+                    return string.Equals(valueType, "string", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(valueType, "integer", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(valueType, "datetime", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(valueType, "boolean", StringComparison.OrdinalIgnoreCase);
+                default:
+                    return true;
             }
         }
 

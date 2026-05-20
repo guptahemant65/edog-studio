@@ -84,6 +84,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     ///   <item><term>LNT008_EvidenceConsistency</term><description>If <see cref="GroundingEvidence.InvariantId"/> is set, it must appear in the scenario's <see cref="Scenario.InvariantsAddressed"/>.</description></item>
     ///   <item><term>LNT009_NoDuplicateStimulus</term><description>No two scenarios share the same (method, path, body-hash) tuple.</description></item>
     ///   <item><term>LNT010_TruthTableCells</term><description>When two or more <c>added_parameter</c> invariants exist, the batch must contain at least four scenarios of technique <c>TruthTable</c> covering the 2x2 grid (or 2^N for N=3).</description></item>
+    ///   <item><term>LNT011_MatcherLiteralQuality</term><description>Typed matcher literals should be concrete values, not regex fragments or format-string templates.</description></item>
     /// </list>
     ///
     /// <para>The linter never throws; rule evaluation failures are caught and
@@ -137,6 +138,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             // LNT010 — truth-table cell count
             SafeRun("LNT010", findings, () => CheckTruthTableCells(scenarios, context, findings));
+
+            // LNT011 — matcher literals should be concrete, not regex/templates
+            SafeRun("LNT011", findings, () => CheckMatcherLiteralQuality(scenarios, findings));
 
             // Stable order + cap.
             return findings
@@ -493,6 +497,33 @@ namespace Microsoft.LiveTable.Service.DevMode
             });
         }
 
+        private static void CheckMatcherLiteralQuality(
+            IReadOnlyList<Scenario> scenarios,
+            List<LintFinding> findings)
+        {
+            foreach (var s in scenarios)
+            {
+                if (s?.Matchers == null || s.Matchers.Count == 0) continue;
+                foreach (var matcher in s.Matchers)
+                {
+                    if (matcher?.Value == null) continue;
+                    foreach (var literal in EnumerateMatcherLiterals(matcher.Value))
+                    {
+                        if (string.IsNullOrWhiteSpace(literal)) continue;
+                        if (!LooksRegexLikeLiteral(literal) && !LooksTemplateLiteral(literal)) continue;
+
+                        findings.Add(new LintFinding
+                        {
+                            Code = "LNT011_MatcherLiteralQuality",
+                            Severity = LintSeverity.Warning,
+                            ScenarioId = s.Id,
+                            Message = $"Matcher literal '{literal}' looks like a regex or format template. Use a concrete contract value instead.",
+                        });
+                    }
+                }
+            }
+        }
+
         // ──────────────────────────────────────────────────────────
         // Helpers
         // ──────────────────────────────────────────────────────────
@@ -597,6 +628,46 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return je.ValueKind == JsonValueKind.String ? je.GetString() : je.ToString();
             }
             return v.ToString();
+        }
+
+        private static IEnumerable<string> EnumerateMatcherLiterals(MatcherValue value)
+        {
+            switch (value)
+            {
+                case ScalarMatcherValue scalar when scalar.Value is string s:
+                    yield return s;
+                    yield break;
+                case ArrayMatcherValue array:
+                    foreach (var item in array.Items)
+                    {
+                        if (item is string text)
+                        {
+                            yield return text;
+                        }
+                    }
+                    yield break;
+                default:
+                    yield break;
+            }
+        }
+
+        private static bool LooksRegexLikeLiteral(string literal)
+        {
+            if (string.IsNullOrWhiteSpace(literal)) return false;
+            return literal.Contains(".*", StringComparison.Ordinal)
+                || literal.StartsWith("^", StringComparison.Ordinal)
+                || literal.EndsWith("$", StringComparison.Ordinal)
+                || literal.Contains("[", StringComparison.Ordinal)
+                || literal.Contains("(", StringComparison.Ordinal);
+        }
+
+        private static bool LooksTemplateLiteral(string literal)
+        {
+            if (string.IsNullOrWhiteSpace(literal)) return false;
+            return literal.Contains("{0", StringComparison.Ordinal)
+                || literal.Contains("%s", StringComparison.Ordinal)
+                || literal.Contains("%d", StringComparison.Ordinal)
+                || (literal.Contains("{", StringComparison.Ordinal) && literal.Contains("}", StringComparison.Ordinal) && literal.Contains(":", StringComparison.Ordinal));
         }
 
         /// <summary>

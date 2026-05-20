@@ -17,6 +17,9 @@
 // All projection failures are bound to the scenario that produced them;
 // the Projector does NOT throw. Same inputs ⇒ same output.
 
+#nullable disable
+#pragma warning disable // DevMode-only file — suppress all warnings
+
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
@@ -107,6 +110,39 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             return result;
+        }
+
+
+        internal static Scenario ProjectTyped(Scenario source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new Scenario
+            {
+                Id = source.Id,
+                Title = source.Title,
+                Description = source.Description,
+                Category = source.Category,
+                Priority = source.Priority,
+                ImpactZone = source.ImpactZone,
+                Lifecycle = source.Lifecycle,
+                Setup = source.Setup != null ? new List<SetupStep>(source.Setup) : new List<SetupStep>(),
+                Stimulus = CloneStimulus(source.Stimulus),
+                Expectations = source.Expectations != null ? new List<Expectation>(source.Expectations) : new List<Expectation>(),
+                Matchers = CloneMatchers(source.Matchers),
+                Teardown = source.Teardown != null ? new List<TeardownStep>(source.Teardown) : new List<TeardownStep>(),
+                TimeoutMs = source.TimeoutMs,
+                CatalogHashes = CloneCatalogHashes(source.CatalogHashes),
+                Metadata = CloneMetadata(source.Metadata),
+                Technique = source.Technique,
+                InvariantsAddressed = source.InvariantsAddressed != null
+                    ? new List<string>(source.InvariantsAddressed)
+                    : new List<string>(),
+                GroundingEvidence = CloneGroundingEvidence(source.GroundingEvidence),
+            };
         }
 
         // ──────────────────────────────────────────────────────────────
@@ -214,6 +250,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 });
             }
 
+            var typedMatchers = ProjectTypedMatchers(src.Matchers, reasons);
+
             if (reasons.Count > 0) return null;
 
             // Grounding evidence — resolve refs against Architect plan,
@@ -253,7 +291,9 @@ namespace Microsoft.LiveTable.Service.DevMode
                 Technique = technique,
                 Stimulus = stimulus,
                 Expectations = expectations,
+                Matchers = typedMatchers,
                 TimeoutMs = src.TimeoutMs > 0 ? src.TimeoutMs : 30_000,
+                CatalogHashes = CloneCatalogHashes(src.CatalogHashes),
                 Metadata = new ScenarioMetadata
                 {
                     Confidence = accepted.CalibratedConfidence,
@@ -494,6 +534,269 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             return matcher;
+        }
+
+        private static List<Matcher> ProjectTypedMatchers(
+            IReadOnlyList<EdogQaLlmClient.GeneratedMatcher> source,
+            List<EdogQaScenarioValidator.QuarantineReason> reasons)
+        {
+            var projected = new List<Matcher>();
+            if (source == null || source.Count == 0)
+            {
+                return projected;
+            }
+
+            for (var i = 0; i < source.Count; i++)
+            {
+                var matcher = source[i];
+                if (matcher == null)
+                {
+                    reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{i}]", null, "Typed matcher entry is null."));
+                    continue;
+                }
+
+                if (!Enum.TryParse<MatcherAssertion>(matcher.Assertion, true, out var assertion))
+                {
+                    reasons.Add(MakeReason(CodeEnumParseFailed, $"matchers[{i}].assertion", null,
+                        $"Matcher assertion '{matcher.Assertion}' is not a valid MatcherAssertion enum value."));
+                    continue;
+                }
+
+                var value = ProjectMatcherValue(matcher.Value, assertion, i, reasons);
+                if (value == null)
+                {
+                    continue;
+                }
+
+                projected.Add(new Matcher
+                {
+                    TopicField = matcher.TopicField,
+                    Assertion = assertion,
+                    Value = value,
+                });
+            }
+
+            return projected;
+        }
+
+        private static MatcherValue ProjectMatcherValue(
+            JsonElement root,
+            MatcherAssertion assertion,
+            int index,
+            List<EdogQaScenarioValidator.QuarantineReason> reasons)
+        {
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                reasons.Add(MakeReason(CodeMatcherSpecMalformed, $"matchers[{index}].value", null,
+                    "Typed matcher value payload must be a JSON object."));
+                return null;
+            }
+
+            var type = TryGetString(root, "type", out var typeName) ? typeName : null;
+            switch (assertion)
+            {
+                case MatcherAssertion.Equals:
+                case MatcherAssertion.NotEquals:
+                    if (!root.TryGetProperty("value", out var scalarValue))
+                    {
+                        reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{index}].value.value", null,
+                            "Scalar matcher values require a 'value' field."));
+                        return null;
+                    }
+
+                    return new ScalarMatcherValue { Type = type, Value = ExtractValue(scalarValue) };
+
+                case MatcherAssertion.Exists:
+                    if (!root.TryGetProperty("expected", out var expected)
+                        || (expected.ValueKind != JsonValueKind.True && expected.ValueKind != JsonValueKind.False))
+                    {
+                        reasons.Add(MakeReason(CodeMatcherSpecEmpty, $"matchers[{index}].value.expected", null,
+                            "Exists matcher values require a boolean 'expected' field."));
+                        return null;
+                    }
+
+                    return new BooleanMatcherValue { Type = type, Expected = expected.GetBoolean() };
+
+                case MatcherAssertion.InRange:
+                    return new RangeMatcherValue
+                    {
+                        Type = type,
+                        Min = root.TryGetProperty("min", out var min) && min.ValueKind == JsonValueKind.Number ? min.GetDouble() : null,
+                        Max = root.TryGetProperty("max", out var max) && max.ValueKind == JsonValueKind.Number ? max.GetDouble() : null,
+                        MinInclusive = !root.TryGetProperty("minInclusive", out var minInc) || minInc.ValueKind != JsonValueKind.False,
+                        MaxInclusive = !root.TryGetProperty("maxInclusive", out var maxInc) || maxInc.ValueKind != JsonValueKind.False,
+                    };
+
+                case MatcherAssertion.ContainsAll:
+                case MatcherAssertion.OneOf:
+                    var items = new List<object>();
+                    if (root.TryGetProperty("items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in itemsElement.EnumerateArray())
+                        {
+                            items.Add(ExtractValue(item));
+                        }
+                    }
+
+                    return new ArrayMatcherValue { Type = type, Items = items };
+
+                case MatcherAssertion.Length:
+                    return new LengthMatcherValue
+                    {
+                        Type = type,
+                        Min = root.TryGetProperty("min", out var lenMin) && lenMin.ValueKind == JsonValueKind.Number ? lenMin.GetInt32() : null,
+                        Max = root.TryGetProperty("max", out var lenMax) && lenMax.ValueKind == JsonValueKind.Number ? lenMax.GetInt32() : null,
+                    };
+
+                default:
+                    return null;
+            }
+        }
+
+        private static List<Matcher> CloneMatchers(IReadOnlyList<Matcher> source)
+        {
+            if (source == null || source.Count == 0)
+            {
+                return new List<Matcher>();
+            }
+
+            return source.Select(m => m == null ? null : new Matcher
+            {
+                TopicField = m.TopicField,
+                Assertion = m.Assertion,
+                Value = CloneMatcherValue(m.Value),
+            }).ToList();
+        }
+
+        private static MatcherValue CloneMatcherValue(MatcherValue value)
+        {
+            return value switch
+            {
+                ScalarMatcherValue scalar => new ScalarMatcherValue { Type = scalar.Type, Value = scalar.Value },
+                RangeMatcherValue range => new RangeMatcherValue
+                {
+                    Type = range.Type,
+                    Min = range.Min,
+                    Max = range.Max,
+                    MinInclusive = range.MinInclusive,
+                    MaxInclusive = range.MaxInclusive,
+                },
+                ArrayMatcherValue array => new ArrayMatcherValue
+                {
+                    Type = array.Type,
+                    Items = array.Items != null ? new List<object>(array.Items) : new List<object>(),
+                },
+                BooleanMatcherValue boolean => new BooleanMatcherValue { Type = boolean.Type, Expected = boolean.Expected },
+                LengthMatcherValue length => new LengthMatcherValue { Type = length.Type, Min = length.Min, Max = length.Max },
+                _ => null,
+            };
+        }
+
+        private static CatalogHashes CloneCatalogHashes(CatalogHashes source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new CatalogHashes
+            {
+                StimulusSlotHash = source.StimulusSlotHash,
+                CatalogSnapshotId = source.CatalogSnapshotId,
+                MatcherTopicHashes = source.MatcherTopicHashes != null
+                    ? new Dictionary<string, string>(source.MatcherTopicHashes, StringComparer.Ordinal)
+                    : new Dictionary<string, string>(StringComparer.Ordinal),
+            };
+        }
+
+        private static ScenarioMetadata CloneMetadata(ScenarioMetadata source)
+        {
+            if (source == null)
+            {
+                return new ScenarioMetadata();
+            }
+
+            return new ScenarioMetadata
+            {
+                GeneratedBy = source.GeneratedBy,
+                Confidence = source.Confidence,
+                RelatedPRFiles = source.RelatedPRFiles != null ? new List<string>(source.RelatedPRFiles) : new List<string>(),
+                Tags = source.Tags != null ? new List<string>(source.Tags) : new List<string>(),
+                SchemaVersion = source.SchemaVersion,
+                GeneratedAt = source.GeneratedAt,
+                CuratedBy = source.CuratedBy,
+                CuratedAt = source.CuratedAt,
+            };
+        }
+
+        private static List<GroundingEvidence> CloneGroundingEvidence(IReadOnlyList<GroundingEvidence> source)
+        {
+            if (source == null || source.Count == 0)
+            {
+                return new List<GroundingEvidence>();
+            }
+
+            return source.Select(e => e == null ? null : new GroundingEvidence
+            {
+                File = e.File,
+                StartLine = e.StartLine,
+                EndLine = e.EndLine,
+                Reason = e.Reason,
+                InvariantId = e.InvariantId,
+                SourceEvidenceId = e.SourceEvidenceId,
+            }).ToList();
+        }
+
+        private static Stimulus CloneStimulus(Stimulus source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new Stimulus
+            {
+                Type = source.Type,
+                HttpRequest = source.HttpRequest == null ? null : new HttpRequestSpec
+                {
+                    Method = source.HttpRequest.Method,
+                    Path = source.HttpRequest.Path,
+                    Headers = source.HttpRequest.Headers != null ? new Dictionary<string, string>(source.HttpRequest.Headers, StringComparer.Ordinal) : new Dictionary<string, string>(StringComparer.Ordinal),
+                    Body = source.HttpRequest.Body,
+                    ContentType = source.HttpRequest.ContentType,
+                },
+                SignalRBroadcast = source.SignalRBroadcast == null ? null : new SignalRBroadcastSpec
+                {
+                    Hub = source.SignalRBroadcast.Hub,
+                    Method = source.SignalRBroadcast.Method,
+                    ConnectionId = source.SignalRBroadcast.ConnectionId,
+                    Args = source.SignalRBroadcast.Args != null ? new List<object>(source.SignalRBroadcast.Args) : new List<object>(),
+                },
+                DagTrigger = source.DagTrigger == null ? null : new DagTriggerSpec
+                {
+                    IterationId = source.DagTrigger.IterationId,
+                    NodeFilter = source.DagTrigger.NodeFilter != null ? new List<string>(source.DagTrigger.NodeFilter) : null,
+                },
+                FileEvent = source.FileEvent == null ? null : new FileEventSpec
+                {
+                    Path = source.FileEvent.Path,
+                    Content = source.FileEvent.Content,
+                    Encoding = source.FileEvent.Encoding,
+                    Cleanup = source.FileEvent.Cleanup,
+                },
+                TimerTick = source.TimerTick == null ? null : new TimerTickSpec
+                {
+                    TickSource = source.TimerTick.TickSource,
+                    Topic = source.TimerTick.Topic,
+                    MaxWaitMs = source.TimerTick.MaxWaitMs,
+                },
+                DiInvocation = source.DiInvocation == null ? null : new DiInvocationSpec
+                {
+                    ServiceType = source.DiInvocation.ServiceType,
+                    Method = source.DiInvocation.Method,
+                    Args = source.DiInvocation.Args != null ? new List<object>(source.DiInvocation.Args) : new List<object>(),
+                },
+            };
         }
 
         // ──────────────────────────────────────────────────────────────

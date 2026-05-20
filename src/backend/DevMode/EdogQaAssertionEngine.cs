@@ -1150,6 +1150,247 @@ namespace Microsoft.LiveTable.Service.DevMode
                 state.FailureReason = FailureMessageGenerator.Generate(state, _t0);
             }
         }
+
+        internal IReadOnlyList<ExpectationResult> EvaluateContractMatchers(
+            IReadOnlyList<Matcher> matchers,
+            IReadOnlyList<TopicEvent> capturedEvents)
+        {
+            if (matchers == null || matchers.Count == 0)
+            {
+                return Array.Empty<ExpectationResult>();
+            }
+
+            capturedEvents ??= Array.Empty<TopicEvent>();
+            var results = new List<ExpectationResult>(matchers.Count);
+
+            for (var i = 0; i < matchers.Count; i++)
+            {
+                var matcher = matchers[i];
+                var matcherId = $"matcher-{i + 1}";
+                if (matcher == null)
+                {
+                    results.Add(new ExpectationResult
+                    {
+                        ExpectationId = matcherId,
+                        Description = "Null matcher",
+                        Status = ExpectationStatus.Failed,
+                        FailureReason = "Matcher entry is null.",
+                    });
+                    continue;
+                }
+
+                var topic = ExtractMatcherTopic(matcher.TopicField);
+                var candidates = capturedEvents
+                    .Where(evt => string.Equals(evt?.Topic, topic, StringComparison.Ordinal))
+                    .ToList();
+                var matchedEvent = candidates.FirstOrDefault(evt => EvaluateMatcher(matcher, evt));
+
+                results.Add(new ExpectationResult
+                {
+                    ExpectationId = matcherId,
+                    Description = DescribeContractMatcher(matcher),
+                    Status = matchedEvent != null ? ExpectationStatus.Passed : ExpectationStatus.Failed,
+                    MatchedEvent = matchedEvent,
+                    ClosestMiss = matchedEvent == null ? candidates.FirstOrDefault() : null,
+                    MatchLatencyMs = matchedEvent != null
+                        ? (long)(matchedEvent.Timestamp - _t0).TotalMilliseconds
+                        : 0,
+                    FailureReason = matchedEvent != null
+                        ? null
+                        : BuildContractMatcherFailureReason(matcher, candidates.Count),
+                });
+            }
+
+            return results;
+        }
+
+        private static bool EvaluateMatcher(Matcher matcher, TopicEvent evt)
+        {
+            if (matcher == null || evt == null)
+            {
+                return false;
+            }
+
+            if (!string.Equals(evt.Topic, ExtractMatcherTopic(matcher.TopicField), StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return matcher.Assertion switch
+            {
+                MatcherAssertion.Equals => EvaluateEquals(matcher, evt),
+                MatcherAssertion.NotEquals => EvaluateNotEquals(matcher, evt),
+                MatcherAssertion.Exists => EvaluateExists(matcher, evt),
+                MatcherAssertion.InRange => EvaluateInRange(matcher, evt),
+                MatcherAssertion.ContainsAll => EvaluateContainsAll(matcher, evt),
+                MatcherAssertion.OneOf => EvaluateOneOf(matcher, evt),
+                MatcherAssertion.Length => EvaluateLength(matcher, evt),
+                _ => false,
+            };
+        }
+
+        private static bool EvaluateEquals(Matcher matcher, TopicEvent evt)
+        {
+            return TryResolveContractField(evt, matcher.TopicField, out var actual)
+                && matcher.Value is ScalarMatcherValue scalar
+                && FieldMatcher.ValueEquals(actual, scalar.Value);
+        }
+
+        private static bool EvaluateNotEquals(Matcher matcher, TopicEvent evt)
+        {
+            return TryResolveContractField(evt, matcher.TopicField, out var actual)
+                && matcher.Value is ScalarMatcherValue scalar
+                && !FieldMatcher.ValueEquals(actual, scalar.Value);
+        }
+
+        private static bool EvaluateExists(Matcher matcher, TopicEvent evt)
+        {
+            var exists = TryResolveContractField(evt, matcher.TopicField, out var actual)
+                && actual.ValueKind != JsonValueKind.Null;
+
+            if (matcher.Value is BooleanMatcherValue expected)
+            {
+                return expected.Expected ? exists : !exists;
+            }
+
+            return exists;
+        }
+
+        private static bool EvaluateInRange(Matcher matcher, TopicEvent evt)
+        {
+            if (!TryResolveContractField(evt, matcher.TopicField, out var actual)
+                || matcher.Value is not RangeMatcherValue range
+                || !actual.TryGetDouble(out var numeric))
+            {
+                return false;
+            }
+
+            var lowerOk = !range.Min.HasValue
+                || (range.MinInclusive ? numeric >= range.Min.Value : numeric > range.Min.Value);
+            var upperOk = !range.Max.HasValue
+                || (range.MaxInclusive ? numeric <= range.Max.Value : numeric < range.Max.Value);
+            return lowerOk && upperOk;
+        }
+
+        private static bool EvaluateContainsAll(Matcher matcher, TopicEvent evt)
+        {
+            if (!TryResolveContractField(evt, matcher.TopicField, out var actual)
+                || actual.ValueKind != JsonValueKind.Array
+                || matcher.Value is not ArrayMatcherValue expected)
+            {
+                return false;
+            }
+
+            var actualItems = actual.EnumerateArray().ToList();
+            return expected.Items.All(item => actualItems.Any(candidate => FieldMatcher.ValueEquals(candidate, item)));
+        }
+
+        private static bool EvaluateOneOf(Matcher matcher, TopicEvent evt)
+        {
+            return TryResolveContractField(evt, matcher.TopicField, out var actual)
+                && matcher.Value is ArrayMatcherValue allowed
+                && allowed.Items.Any(item => FieldMatcher.ValueEquals(actual, item));
+        }
+
+        private static bool EvaluateLength(Matcher matcher, TopicEvent evt)
+        {
+            if (!TryResolveContractField(evt, matcher.TopicField, out var actual)
+                || matcher.Value is not LengthMatcherValue length)
+            {
+                return false;
+            }
+
+            int? actualLength = actual.ValueKind switch
+            {
+                JsonValueKind.String => actual.GetString()?.Length,
+                JsonValueKind.Array => actual.GetArrayLength(),
+                _ => null,
+            };
+
+            if (!actualLength.HasValue)
+            {
+                return false;
+            }
+
+            return (!length.Min.HasValue || actualLength.Value >= length.Min.Value)
+                && (!length.Max.HasValue || actualLength.Value <= length.Max.Value);
+        }
+
+        private static bool TryResolveContractField(TopicEvent evt, string topicField, out JsonElement value)
+        {
+            value = default;
+            if (evt?.Data == null)
+            {
+                return false;
+            }
+
+            var root = FieldMatcher.SerializeData(evt.Data);
+            if (root == null)
+            {
+                return false;
+            }
+
+            var fieldPath = ExtractMatcherFieldPath(topicField);
+            if (string.IsNullOrWhiteSpace(fieldPath))
+            {
+                value = root.Value;
+                return true;
+            }
+
+            var resolved = FieldMatcher.ResolveField(root.Value, fieldPath);
+            if (resolved == null)
+            {
+                return false;
+            }
+
+            value = resolved.Value;
+            return true;
+        }
+
+        private static string ExtractMatcherTopic(string topicField)
+        {
+            if (string.IsNullOrWhiteSpace(topicField))
+            {
+                return string.Empty;
+            }
+
+            var separator = topicField.IndexOf('.');
+            return separator > 0 ? topicField.Substring(0, separator) : topicField;
+        }
+
+        private static string ExtractMatcherFieldPath(string topicField)
+        {
+            if (string.IsNullOrWhiteSpace(topicField))
+            {
+                return string.Empty;
+            }
+
+            var separator = topicField.IndexOf('.');
+            return separator >= 0 && separator + 1 < topicField.Length
+                ? topicField.Substring(separator + 1)
+                : string.Empty;
+        }
+
+        private static string DescribeContractMatcher(Matcher matcher)
+        {
+            if (matcher == null)
+            {
+                return "contract matcher";
+            }
+
+            return $"{matcher.TopicField} {matcher.Assertion}";
+        }
+
+        private static string BuildContractMatcherFailureReason(Matcher matcher, int candidateCount)
+        {
+            var topic = ExtractMatcherTopic(matcher?.TopicField);
+            if (candidateCount == 0)
+            {
+                return $"No captured events were observed on topic '{topic}' for matcher '{DescribeContractMatcher(matcher)}'.";
+            }
+
+            return $"{candidateCount} captured events were checked on topic '{topic}', but none satisfied matcher '{DescribeContractMatcher(matcher)}'.";
+        }
     }
 
     // ═════════════════════════════════════════════════════════════════

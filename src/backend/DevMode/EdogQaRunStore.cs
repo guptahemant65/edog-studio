@@ -64,7 +64,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     public static class EdogQaRunStore
     {
         /// <summary>Current schema version. Bump when adding fields that need migration.</summary>
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 10; // p10
 
         /// <summary>Maximum number of runs kept on disk (oldest evicted).</summary>
         public const int MaxRecords = 100;
@@ -151,6 +151,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             if (string.IsNullOrEmpty(record.RunId)) return;
 
             EnsureLoaded();
+            NormalizeRecordForPersistence(record);
 
             lock (_stateLock)
             {
@@ -228,6 +229,43 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <see cref="QaScenarioRecord.ScenarioId"/> and emits a warning.
         /// Unknown runs yield a failed comparison with <c>Error</c> set.
         /// </summary>
+        internal static void MigrateToP10(QaRunRecord record)
+        {
+            if (record == null)
+            {
+                return;
+            }
+
+            record.Scenarios ??= new List<QaScenarioRecord>();
+            var quarantinedAny = false;
+
+            foreach (var scenario in record.Scenarios)
+            {
+                if (scenario == null)
+                {
+                    continue;
+                }
+
+                scenario.Status = NormalizeVerdictStatus(scenario.Status);
+
+                if (scenario.Matchers == null || scenario.Matchers.Count == 0)
+                {
+                    scenario.Lifecycle = ScenarioLifecycle.Archived.ToString();
+                    scenario.IsPreContractQuarantined = true;
+                    scenario.QuarantineReason = "pre-contract-quarantined";
+                    scenario.ErrorSummary ??= "pre-contract-quarantined";
+                    scenario.Status ??= ScenarioVerdict.Inconclusive.ToString();
+                    quarantinedAny = true;
+                }
+            }
+
+            if (quarantinedAny)
+            {
+                record.IsPreContractQuarantined = true;
+                record.QuarantineReason = "p10: pre-contract-quarantined";
+            }
+        }
+
         public static QaRunComparison Compare(string baseRunId, string targetRunId)
         {
             var result = new QaRunComparison
@@ -438,14 +476,65 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             // Older versions: chain forward migrations here as fields are
-            // added in future commits. Today there is nothing to migrate.
+            // added in future commits. p10 archives pre-contract scenarios and
+            // preserves Stale/Inconclusive verdict strings plus CatalogHashes.
             switch (envelope.SchemaVersion)
             {
                 case 0:
-                    envelope.SchemaVersion = 1;
+                case 1:
+                    if (envelope.Runs != null)
+                    {
+                        foreach (var run in envelope.Runs)
+                        {
+                            MigrateToP10(run);
+                        }
+                    }
+
+                    envelope.SchemaVersion = CurrentSchemaVersion;
                     break;
             }
+
             return envelope;
+        }
+
+        private static void NormalizeRecordForPersistence(QaRunRecord record)
+        {
+            if (record == null)
+            {
+                return;
+            }
+
+            record.Scenarios ??= new List<QaScenarioRecord>();
+            foreach (var scenario in record.Scenarios)
+            {
+                if (scenario == null)
+                {
+                    continue;
+                }
+
+                scenario.Status = NormalizeVerdictStatus(scenario.Status);
+                if (scenario.IsPreContractQuarantined)
+                {
+                    scenario.QuarantineReason ??= "pre-contract-quarantined";
+                }
+            }
+
+            if (record.IsPreContractQuarantined)
+            {
+                record.QuarantineReason ??= "p10: pre-contract-quarantined";
+            }
+        }
+
+        private static string NormalizeVerdictStatus(string status)
+        {
+            return status?.Trim() switch
+            {
+                nameof(ScenarioVerdict.Stale) => nameof(ScenarioVerdict.Stale),
+                "stale" => nameof(ScenarioVerdict.Stale),
+                nameof(ScenarioVerdict.Inconclusive) => nameof(ScenarioVerdict.Inconclusive),
+                "inconclusive" => nameof(ScenarioVerdict.Inconclusive),
+                _ => status,
+            };
         }
 
         private static void QuarantineCorruptFile(string path, string reason)

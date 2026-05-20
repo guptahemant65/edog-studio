@@ -368,20 +368,22 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             try
             {
+                var staleResult = TryCreateStaleResult(scenario, result);
+                if (staleResult != null)
+                {
+                    return staleResult;
+                }
+
                 // ── Phase 1: ISOLATE ──
                 _currentPhase = ExecutionPhase.Isolate;
                 _logger.LogDebug("[QA] {Id} Phase 1: ISOLATE", scenario.Id);
 
-                var topics = scenario.Expectations
-                    .Select(e => e.Topic)
-                    .Where(t => !string.IsNullOrEmpty(t))
-                    .Distinct()
-                    .ToArray();
+                var topics = GetCaptureTopics(scenario);
 
                 if (topics.Length == 0)
                 {
                     result.Verdict = ScenarioVerdict.Skipped;
-                    result.ErrorMessage = "No valid topics in expectations";
+                    result.ErrorMessage = "No valid topics in expectations or matchers";
                     result.FailedAtPhase = ExecutionPhase.Isolate;
                     return result;
                 }
@@ -493,34 +495,62 @@ namespace Microsoft.LiveTable.Service.DevMode
                 _currentPhase = ExecutionPhase.Evaluate;
                 _logger.LogDebug("[QA] {Id} Phase 6: EVALUATE", scenario.Id);
 
-                var verdict = assertionEngine.ComputeVerdict();
-                var expectationResults = verdict.ExpectationResults;
                 var allEvents = session.GetAllCapturedEvents();
+                var hasLegacyExpectations = scenario.Expectations != null && scenario.Expectations.Count > 0;
+                var hasContractMatchers = scenario.Matchers != null && scenario.Matchers.Count > 0;
+                var expectationResults = new List<ExpectationResult>();
+                AssertionVerdict verdict = null;
+
+                if (hasLegacyExpectations)
+                {
+                    verdict = assertionEngine.ComputeVerdict();
+                    expectationResults.AddRange(verdict.ExpectationResults);
+                }
+
+                if (hasContractMatchers)
+                {
+                    expectationResults.AddRange(assertionEngine.EvaluateContractMatchers(scenario.Matchers, allEvents));
+                }
 
                 result.Expectations = expectationResults;
                 result.CapturedEvents = allEvents.ToList();
                 result.EventsCaptured = allEvents.Count;
 
+                var allPassed = expectationResults.Count > 0
+                    && expectationResults.All(e => e.Status == ExpectationStatus.Passed);
+                var anyPassed = expectationResults.Any(e => e.Status == ExpectationStatus.Passed);
+                var anyFailed = expectationResults.Any(e => e.Status != ExpectationStatus.Passed);
+                var legacyResultCount = verdict?.ExpectationResults?.Count ?? 0;
+                var contractFailures = hasContractMatchers
+                    && expectationResults.Skip(legacyResultCount)
+                        .Any(e => e.Status != ExpectationStatus.Passed);
+
                 // Determine scenario verdict
-                if (verdict.Passed)
+                if (allPassed)
                 {
                     result.Verdict = ScenarioVerdict.Passed;
                 }
-                else if (captureOutcome == CaptureOutcome.TimedOut && verdict.OnlyTimingFailures)
+                else if (captureOutcome == CaptureOutcome.TimedOut
+                    && hasContractMatchers
+                    && !hasLegacyExpectations)
+                {
+                    result.Verdict = ScenarioVerdict.Inconclusive;
+                }
+                else if (captureOutcome == CaptureOutcome.TimedOut
+                    && hasLegacyExpectations
+                    && verdict.OnlyTimingFailures
+                    && !contractFailures)
                 {
                     result.Verdict = ScenarioVerdict.Partial;
                 }
                 else if (captureOutcome == CaptureOutcome.TimedOut)
                 {
-                    // Check if some expectations passed
-                    bool anyPassed = expectationResults.Any(e => e.Status == ExpectationStatus.Passed);
-                    bool anyFailed = expectationResults.Any(e => e.Status != ExpectationStatus.Passed);
-                    result.Verdict = anyPassed && anyFailed ? ScenarioVerdict.Partial : ScenarioVerdict.TimedOut;
+                    result.Verdict = anyPassed && anyFailed
+                        ? ScenarioVerdict.Partial
+                        : (hasContractMatchers ? ScenarioVerdict.Inconclusive : ScenarioVerdict.TimedOut);
                 }
                 else
                 {
-                    bool anyPassed = expectationResults.Any(e => e.Status == ExpectationStatus.Passed);
-                    bool anyFailed = expectationResults.Any(e => e.Status != ExpectationStatus.Passed);
                     result.Verdict = anyPassed && anyFailed ? ScenarioVerdict.Partial : ScenarioVerdict.Failed;
                 }
 
@@ -568,6 +598,125 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
         }
 
+        private ScenarioResult TryCreateStaleResult(Scenario scenario, ScenarioResult seed)
+        {
+            if (scenario == null || seed == null)
+            {
+                return null;
+            }
+
+            if ((scenario.Matchers?.Count > 0 || scenario.CatalogHashes != null)
+                && !EdogQaCapabilityRegistry.BuildReport().LlmV2Ready)
+            {
+                var detail = EdogQaCapabilityRegistry.BuildReport().LlmV2Reason
+                    ?? "Typed-contract scenario requires LLM V2 capability readiness.";
+                EdogQaTelemetry.EmitContractEvent(
+                    EdogQaTelemetry.EventCapabilityMismatch,
+                    scenario.Id,
+                    "flt_capability_mismatch",
+                    detail);
+                seed.Verdict = ScenarioVerdict.Stale;
+                seed.ErrorMessage = detail;
+                seed.FailedAtPhase = ExecutionPhase.Isolate;
+                return seed;
+            }
+
+            var catalog = _serviceProvider.GetService<EdogQaContractCatalog>();
+            if (catalog == null || scenario.CatalogHashes == null)
+            {
+                return null;
+            }
+
+            CatalogSnapshot snapshot;
+            try
+            {
+                snapshot = catalog.Assemble(scenario.ImpactZone ?? scenario.Id ?? "unknown");
+            }
+            catch
+            {
+                return null;
+            }
+
+            var mismatchDetail = GetCatalogMismatchDetail(scenario, snapshot);
+            if (string.IsNullOrEmpty(mismatchDetail))
+            {
+                return null;
+            }
+
+            EdogQaTelemetry.EmitContractEvent(
+                EdogQaTelemetry.EventHashMismatch,
+                scenario.Id,
+                "catalog_hash_mismatch",
+                mismatchDetail);
+            seed.Verdict = ScenarioVerdict.Stale;
+            seed.ErrorMessage = mismatchDetail;
+            seed.FailedAtPhase = ExecutionPhase.Isolate;
+            return seed;
+        }
+
+        private static string[] GetCaptureTopics(Scenario scenario)
+        {
+            if (scenario == null)
+            {
+                return Array.Empty<string>();
+            }
+
+            var topics = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var expectation in scenario.Expectations ?? new List<Expectation>())
+            {
+                if (!string.IsNullOrWhiteSpace(expectation?.Topic))
+                {
+                    topics.Add(expectation.Topic);
+                }
+            }
+
+            foreach (var matcher in scenario.Matchers ?? new List<Matcher>())
+            {
+                if (string.IsNullOrWhiteSpace(matcher?.TopicField))
+                {
+                    continue;
+                }
+
+                var separator = matcher.TopicField.IndexOf('.');
+                topics.Add(separator > 0 ? matcher.TopicField.Substring(0, separator) : matcher.TopicField);
+            }
+
+            return topics.ToArray();
+        }
+
+        private static string GetCatalogMismatchDetail(Scenario scenario, CatalogSnapshot snapshot)
+        {
+            if (scenario?.CatalogHashes == null || snapshot == null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(scenario.CatalogHashes.StimulusSlotHash)
+                && snapshot.Slots != null
+                && snapshot.Slots.Count > 0
+                && !snapshot.Slots.Any(slot => string.Equals(slot?.SlotHash, scenario.CatalogHashes.StimulusSlotHash, StringComparison.Ordinal)))
+            {
+                return $"Scenario stimulus slot hash '{scenario.CatalogHashes.StimulusSlotHash}' is no longer present in the active catalog.";
+            }
+
+            if (scenario.CatalogHashes.MatcherTopicHashes != null
+                && scenario.CatalogHashes.MatcherTopicHashes.Count > 0
+                && snapshot.TopicFieldHashes != null
+                && snapshot.TopicFieldHashes.Count > 0)
+            {
+                foreach (var kvp in scenario.CatalogHashes.MatcherTopicHashes)
+                {
+                    if (snapshot.TopicFieldHashes.TryGetValue(kvp.Key, out var currentHash)
+                        && !string.Equals(currentHash, kvp.Value, StringComparison.Ordinal))
+                    {
+                        return $"Scenario matcher topic '{kvp.Key}' hash '{kvp.Value}' no longer matches active catalog hash '{currentHash}'.";
+                    }
+                }
+            }
+
+            return string.Empty;
+        }
+
         // ─── Phase 5: Capture Loop ──────────────────────────────────
 
         /// <summary>
@@ -586,6 +735,20 @@ namespace Microsoft.LiveTable.Service.DevMode
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(scenario.TimeoutMs);
+
+            if (scenario.Expectations == null || scenario.Expectations.Count == 0)
+            {
+                try
+                {
+                    await Task.Delay(scenario.TimeoutMs, timeoutCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Observation window closed for typed contract matchers.
+                }
+
+                return CaptureOutcome.TimedOut;
+            }
 
             bool hasAbsenceExpectations = scenario.Expectations
                 .Any(e => e.Type == ExpectationType.EventAbsent);
@@ -870,6 +1033,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 "PARTIAL" => ScenarioVerdict.Partial,
                 "CRASHED" => ScenarioVerdict.Crashed,
                 "SKIPPED" => ScenarioVerdict.Skipped,
+                "STALE" => ScenarioVerdict.Stale,
+                "INCONCLUSIVE" => ScenarioVerdict.Inconclusive,
                 _ => ScenarioVerdict.Crashed,
             };
         }

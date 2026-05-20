@@ -10,6 +10,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.IO;
     using System.Net.Http;
     using System.Text;
     using System.Text.Json;
@@ -94,6 +95,9 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Emitted when the response body is HTTP 200 but not parseable as the expected Responses-API shape.</summary>
         internal const string ErrorCodeResponseUnparseable = "PROBE_RESPONSE_UNPARSEABLE";
+
+        private static readonly TimeSpan ArchitectFirstTokenTimeout = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan ArchitectTotalTimeout = TimeSpan.FromSeconds(60);
 
         // ── Probe inputs ───────────────────────────────────────────────
 
@@ -357,25 +361,47 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             const int RequestedMaxOutputTokens = 2048;
             var url = $"{endpoint.TrimEnd('/')}/openai/responses?api-version={apiVersion}";
-            var requestBody = BuildProbeRequestBody(deployment, RequestedMaxOutputTokens);
+            var requestBody = BuildProbeRequestBody(deployment, RequestedMaxOutputTokens, cfg.Role);
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url);
             request.Headers.Add("api-key", apiKey);
             request.Content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+
+            using var timeoutCts = cfg.Role == ProbeRole.Architect
+                ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+                : null;
+            if (timeoutCts != null)
+            {
+                timeoutCts.CancelAfter(ArchitectTotalTimeout);
+            }
+            var requestToken = timeoutCts?.Token ?? ct;
 
             var sw = Stopwatch.StartNew();
             HttpResponseMessage response;
             string responseBody;
             try
             {
-                response = await httpClient.SendAsync(request, ct).ConfigureAwait(false);
+                var completion = cfg.Role == ProbeRole.Architect
+                    ? HttpCompletionOption.ResponseHeadersRead
+                    : HttpCompletionOption.ResponseContentRead;
+                response = await httpClient.SendAsync(request, completion, requestToken).ConfigureAwait(false);
                 responseBody = response.Content == null
                     ? string.Empty
-                    : await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    : await ReadProbeResponseBodyAsync(response, cfg.Role, requestToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
+            }
+            catch (OperationCanceledException)
+            {
+                sw.Stop();
+                result.ElapsedMilliseconds = sw.ElapsedMilliseconds;
+                var timeoutDetail = cfg.Role == ProbeRole.Architect
+                    ? "Architect probe timed out waiting for first token or total completion."
+                    : "Probe timed out.";
+                result.Errors.Add(ErrorCodeNetworkError + " — " + timeoutDetail);
+                return result;
             }
             catch (Exception ex)
             {
@@ -521,6 +547,17 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
 
             dual.Reason = BuildDualReason(dual);
+            if (dual.Architect?.IsReady != true && dual.Editor?.IsReady == true)
+            {
+                var reasonCode = dual.Architect?.Errors != null && dual.Architect.Errors.Count > 0
+                    ? dual.Architect.Errors[0]
+                    : ErrorCodeReasoningUnsupported;
+                EdogQaTelemetry.EmitContractEvent(
+                    EdogQaTelemetry.EventArchitectFallback,
+                    dual.Architect?.Deployment ?? string.Empty,
+                    reasonCode,
+                    dual.Reason);
+            }
             Volatile.Write(ref _dualCached, dual);
             return dual;
         }
@@ -624,12 +661,13 @@ namespace Microsoft.LiveTable.Service.DevMode
             };
         }
 
-        private static string BuildProbeRequestBody(string deployment, int maxOutputTokens)
+        private static string BuildProbeRequestBody(string deployment, int maxOutputTokens, ProbeRole role)
         {
             // Strict json_schema with a trivial {ok:boolean} contract is
             // the minimum surface that proves all four capabilities work
             // together. The user prompt is deliberately small to keep
             // probe cost negligible (~$0.0005 against gpt-5.4 mini).
+            var reasoningEffort = role == ProbeRole.Architect ? "medium" : "low";
             var payload = new
             {
                 model = deployment,
@@ -641,7 +679,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         content = "You are a deployment probe. Reply with the JSON object that matches the schema. Set ok to true.",
                     },
                 },
-                reasoning = new { effort = "low" },
+                reasoning = new { effort = reasoningEffort },
                 max_output_tokens = maxOutputTokens,
                 text = new
                 {
@@ -665,6 +703,35 @@ namespace Microsoft.LiveTable.Service.DevMode
             };
 
             return JsonSerializer.Serialize(payload);
+        }
+
+        private static async Task<string> ReadProbeResponseBodyAsync(HttpResponseMessage response, ProbeRole role, CancellationToken ct)
+        {
+            if (response?.Content == null)
+            {
+                return string.Empty;
+            }
+
+            if (role != ProbeRole.Architect)
+            {
+                return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            using var firstTokenCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            firstTokenCts.CancelAfter(ArchitectFirstTokenTimeout);
+
+            var prefix = new byte[1];
+            var firstRead = await stream.ReadAsync(prefix.AsMemory(0, 1), firstTokenCts.Token).ConfigureAwait(false);
+            if (firstRead == 0)
+            {
+                return string.Empty;
+            }
+
+            await using var buffer = new MemoryStream();
+            await buffer.WriteAsync(prefix.AsMemory(0, firstRead), ct).ConfigureAwait(false);
+            await stream.CopyToAsync(buffer, ct).ConfigureAwait(false);
+            return Encoding.UTF8.GetString(buffer.ToArray());
         }
 
         private static void ClassifyHttpError(int statusCode, string body, ProbeResult result)
