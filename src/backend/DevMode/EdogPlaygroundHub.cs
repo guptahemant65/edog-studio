@@ -1422,22 +1422,17 @@ namespace Microsoft.LiveTable.Service.DevMode
                             relatedPRFiles = scn.Metadata?.RelatedPRFiles ?? new List<string>(),
                             tags = scn.Metadata?.Tags ?? new List<string>()
                         },
-                        stimulus = scn.Stimulus != null ? new
-                        {
-                            type = scn.Stimulus.Type.ToString().ToLowerInvariant(),
-                            httpRequest = scn.Stimulus.HttpRequest != null ? new
-                            {
-                                method = scn.Stimulus.HttpRequest.Method,
-                                path = scn.Stimulus.HttpRequest.Path
-                            } : null
-                        } : null,
-                        expectations = scn.Expectations?.Select(e => new
-                        {
-                            id = e.Id,
-                            type = ConvertExpectationTypeToSnakeCase(e.Type),
-                            topic = e.Topic,
-                            description = $"{e.Type} on '{e.Topic}'"
-                        }).ToList(),
+                        // F27 wire-projection fix: emit the FULL stimulus
+                        // discriminated union (all six variants) and FULL
+                        // expectation shape (matcher/timeWindow/count/order).
+                        // The legacy hand-projection silently dropped every
+                        // non-HttpRequest stimulus variant and every
+                        // expectation sub-object, breaking end-to-end
+                        // execution for DirectInvoke / SignalrInvoke /
+                        // DagTrigger / FileEvent / TimerTick scenarios.
+                        // See tests/dotnet/EdogQaE2E.Tests/BroadcastProjectionHarness.cs.
+                        stimulus = ProjectStimulusForWire(scn.Stimulus),
+                        expectations = scn.Expectations?.Select(ProjectExpectationForWire).ToList(),
                         // F27 items 3 + 6: test-technique taxonomy and grounding evidence.
                         // Surfaced to the curation UI so reviewers can see what
                         // testing pattern the LLM intended and which diff lines
@@ -2290,6 +2285,16 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         private static Scenario ConvertSubmittedToEngineScenario(QaSubmittedScenario s)
         {
+            return ConvertSubmittedToEngineScenarioInternal(s);
+        }
+
+        // Test-visible seam for the broadcast-projection contract harness
+        // (tests/dotnet/EdogQaE2E.Tests/BroadcastProjectionHarness.cs).
+        // Behaviour is identical to the private wrapper above — splitting
+        // the visibility means a future refactor of the private API does
+        // not break the test, and the test does not have to use reflection.
+        internal static Scenario ConvertSubmittedToEngineScenarioInternal(QaSubmittedScenario s)
+        {
             if (s == null) throw new ArgumentNullException(nameof(s));
 
             return new Scenario
@@ -2494,6 +2499,71 @@ namespace Microsoft.LiveTable.Service.DevMode
                 ExpectationType.Timing => "timing",
                 ExpectationType.FieldMatch => "field_match",
                 _ => t.ToString().ToLowerInvariant()
+            };
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // F27: QA scenario wire-projection helpers.
+        //
+        // These project the typed Stimulus / Expectation models into
+        // the SignalR payload shape consumed by the QA curation panel.
+        // The previous hand-rolled anonymous projection silently
+        // dropped every non-HttpRequest stimulus variant and every
+        // expectation sub-object (matcher / timeWindow / count /
+        // order), which made every DirectInvoke / SignalrInvoke /
+        // DagTrigger / FileEvent / TimerTick scenario fail end-to-end
+        // because the curator could not see — or re-submit — the
+        // payload the LLM had actually generated.
+        //
+        // The helpers below pass the typed nested specs straight
+        // through. The SignalR JSON protocol is already configured
+        // for camelCase + JsonStringEnumConverter (see
+        // EdogLogServer.AddJsonProtocol), so every future field
+        // added to HttpRequestSpec / SignalRInvokeSpec / DagTriggerSpec
+        // / FileEventSpec / TimerTickSpec / DirectInvokeSpec / Matcher
+        // / TimeWindowSpec / CountSpec / OrderSpec flows to the wire
+        // automatically — there is no leaf-level hand-projection to
+        // forget to update.
+        //
+        // The discriminator (`type` for stimulus, snake_case for
+        // expectation.type) is kept on the wire as historically
+        // emitted so the frontend remains backward-compatible.
+        // `internal` so the dotnet contract-test harness can drive
+        // these directly and lock the invariant.
+        // ─────────────────────────────────────────────────────────────
+        internal static object ProjectStimulusForWire(Stimulus s)
+        {
+            if (s == null) return null;
+            return new
+            {
+                type = s.Type.ToString().ToLowerInvariant(),
+                httpRequest = s.HttpRequest,
+                signalrInvoke = s.SignalrInvoke,
+                dagTrigger = s.DagTrigger,
+                fileEvent = s.FileEvent,
+                timerTick = s.TimerTick,
+                directInvoke = s.DirectInvoke,
+            };
+        }
+
+        internal static object ProjectExpectationForWire(Expectation e)
+        {
+            if (e == null) return null;
+            return new
+            {
+                id = e.Id,
+                type = ConvertExpectationTypeToSnakeCase(e.Type),
+                topic = e.Topic,
+                // Preserve the LLM/curator-authored description when
+                // present; fall back to the synthetic legacy string
+                // only when the source description was empty.
+                description = !string.IsNullOrEmpty(e.Description)
+                    ? e.Description
+                    : $"{e.Type} on '{e.Topic}'",
+                matcher = e.Matcher,
+                timeWindow = e.TimeWindow,
+                count = e.Count,
+                order = e.Order,
             };
         }
 

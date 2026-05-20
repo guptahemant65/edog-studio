@@ -59,6 +59,7 @@
     <Compile Include="ProjectorHarness.cs" />
     <Compile Include="OrchestratorHarness.cs" />
     <Compile Include="GoldCorpusBaselineHarness.cs" />
+    <Compile Include="BroadcastProjectionHarness.cs" />
   </ItemGroup>
 
   <!-- Bundle fixture files into the output so the harness can read them at runtime -->
