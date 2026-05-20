@@ -2450,36 +2450,35 @@ class WorkspaceExplorer {
     if (btn) btn.addEventListener('click', () => this.loadWorkspaces());
   }
 
-  /** Bind the "+" button in the tree header to create a new workspace. */
+  /** Bind the "Create Workspace" button in the tree header (right-aligned with full label). */
   _bindTreeHeaderAdd() {
     const header = document.querySelector('.ws-tree-header');
     if (!header) return;
-    // Only add once
     if (header.querySelector('.ws-tree-add')) return;
     const addBtn = document.createElement('button');
     addBtn.className = 'ws-tree-add';
-    addBtn.textContent = '+';
+    addBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Workspace';
     addBtn.title = 'Create workspace';
     addBtn.setAttribute('aria-label', 'Create workspace');
     addBtn.addEventListener('click', () => this._showCreateWorkspaceInput());
     header.appendChild(addBtn);
   }
 
-  /** Bind "New Infra" button in the tree header to open Infra Wizard. */
+  /** Bind "New Infra" button — placed above FAVORITES section. */
   _bindNewEnvironment() {
-    var header = document.querySelector('.ws-tree-header');
-    if (!header) return;
-    if (header.querySelector('.ws-new-env-btn')) return;
+    var favsSection = document.querySelector('.ws-favorites');
+    if (!favsSection) return;
+    if (favsSection.parentNode.querySelector('.ws-new-infra-btn')) return;
 
     var self = this;
     var newEnvBtn = document.createElement('button');
-    newEnvBtn.className = 'ws-toolbar-btn ws-new-env-btn';
+    newEnvBtn.className = 'ws-new-infra-btn';
     newEnvBtn.title = 'Create new infra environment';
-    newEnvBtn.textContent = '+ New Infra';
+    newEnvBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg> New Infrastructure';
     newEnvBtn.addEventListener('click', function() {
       self._ctxNewInfra();
     });
-    header.appendChild(newEnvBtn);
+    favsSection.parentNode.insertBefore(newEnvBtn, favsSection);
   }
 
   /** Listen for post-creation workspace navigation from Infra Wizard. */
