@@ -201,7 +201,7 @@ class TopBar {
   _formatUptime(totalSeconds) {
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
-    return m + 'm' + String(s).padStart(2, '0') + 's';
+    return m + 'm ' + String(s).padStart(2, '0') + 's';
   }
 
   /** T7: Compute remaining seconds and update token display. */
@@ -798,7 +798,7 @@ class TopBar {
       case 'connected':
         this._statusEl.className = 'service-status running';
         this._uptimeStart = Date.now();
-        this._statusTextEl.textContent = 'Connected 0m00s';
+        this._statusTextEl.textContent = 'Connected 0m 00s';
         this._refreshDeployTooltip();
         break;
       case 'failed':
