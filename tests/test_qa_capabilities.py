@@ -455,3 +455,10 @@ def test_pipeline_publishes_chaos_metadata(pipeline_src: str) -> None:
         "No-fault publish path must NOT include a `chaos = ...` property — "
         "keep the wire shape identical to the pre-Stage-2 baseline."
     )
+
+# ─── P10 Contract capability events ────────────────────────────────────
+
+
+def test_capability_mismatch_event_exists() -> None:
+    src = (DEVMODE / "EdogQaTelemetry.cs").read_text(encoding="utf-8")
+    assert "qa.contract.flt.capability_mismatch" in src

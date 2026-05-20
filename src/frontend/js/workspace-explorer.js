@@ -301,6 +301,35 @@ class WorkspaceCreateDialog {
       card.style.animationDelay = ((i + 1) * 60) + 'ms';
       this._capListEl.appendChild(card);
     }
+
+    // "Create New Capacity" card at the end
+    var createCard = document.createElement('div');
+    createCard.className = 'ws-cd-cap-card ws-cd-cap-create';
+    createCard.innerHTML =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+      '<span>Create New Capacity</span>';
+    createCard.addEventListener('click', function() {
+      if (typeof InfraCapacityCreateDialog !== 'undefined') {
+        var dialog = new InfraCapacityCreateDialog({
+          apiClient: self._api,
+          existingCapacities: caps,
+          onSuccess: function(newCap) {
+            // Add new capacity to list and select it
+            var newCard = self._buildCapCard(newCap);
+            self._capListEl.insertBefore(newCard, createCard);
+            // Select the new one
+            self._capListEl.querySelectorAll('.ws-cd-cap-card').forEach(function(c) {
+              c.classList.remove('selected');
+            });
+            newCard.classList.add('selected');
+            self._selectedCapacity = newCap.id;
+            self._updateCreateBtn();
+          }
+        });
+        dialog.open();
+      }
+    });
+    this._capListEl.appendChild(createCard);
   }
 
   _buildCapCard(cap) {

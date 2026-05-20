@@ -201,6 +201,64 @@ def test_chaos_stub_increments(exec_engine_src: str) -> None:
     assert "EdogQaTelemetry.IncrementChaosNoOp()" in exec_engine_src
 
 
+# ─── 8. P10 Contract telemetry redactor surface ────────────────────────────
+
+
+def test_telemetry_redactor_exists() -> None:
+    src = _read(DEVMODE / "EdogQaTelemetryRedactor.cs")
+    assert "internal static class EdogQaTelemetryRedactor" in src
+    assert "Hash16" in src
+    assert "Truncate512" in src
+    assert "ShouldSampleOutcome" in src
+
+
+def test_redactor_exposes_reason_code_and_sampling() -> None:
+    src = _read(DEVMODE / "EdogQaTelemetryRedactor.cs")
+    assert "NormalizeReasonCode" in src
+    assert "ShouldSampleOutcome" in src
+    assert "pass" in src.lower() and "10_000" in src
+
+
+# ─── 9. P10 Contract telemetry event names ─────────────────────────────
+
+
+def test_contract_event_names_exist(telemetry_src: str) -> None:
+    for event_name in (
+        "qa.contract.schema.reject",
+        "qa.contract.schema.reject_persistent",
+        "qa.contract.repair.success",
+        "qa.contract.repair.escalation_attempt3",
+        "qa.contract.lnt.fired",
+        "qa.contract.hash.mismatch",
+        "qa.contract.dispatch.timeout",
+        "qa.contract.dispatch.security_reject",
+        "qa.contract.dispatch.concurrent_cap",
+        "qa.contract.catalog.overflow",
+        "qa.contract.catalog.provider_degraded",
+        "qa.contract.validator.gate_failed",
+        "qa.contract.architect.fallback",
+        "qa.contract.schema.token_estimate",
+        "qa.contract.scenario.outcome",
+        "qa.contract.feature_flag.snapshot",
+    ):
+        assert event_name in telemetry_src, f"missing contract event: {event_name}"
+
+
+def test_contract_events_use_redactor(telemetry_src: str) -> None:
+    assert "EdogQaTelemetryRedactor.Hash16" in telemetry_src
+    assert "EdogQaTelemetryRedactor.Truncate512" in telemetry_src
+    assert "EdogQaTelemetryRedactor.NormalizeReasonCode" in telemetry_src
+
+
+def test_only_pass_outcomes_are_sampled(telemetry_src: str) -> None:
+    assert 'outcome == "pass"' in telemetry_src
+    assert "ShouldSampleOutcome" in telemetry_src
+
+
+def test_capability_mismatch_event_exists(telemetry_src: str) -> None:
+    assert "qa.contract.flt.capability_mismatch" in telemetry_src
+
+
 def test_flag_override_stub_increments(exec_engine_src: str) -> None:
     """FlagOverrideStore.ApplyOverrideAsync still fires the legacy NoOp
     counter on the refusal path (force-OFF in V1). The accepted path now

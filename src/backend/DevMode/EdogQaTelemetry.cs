@@ -133,6 +133,62 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>
         /// Reset every counter to zero. Test-only — not exposed via SignalR.
         /// </summary>
+        // ── F27 P10 contract-health event names ────────────────────────
+        // §7 contract telemetry: 15 events + 1 capability mismatch event.
+
+        internal const string EventSchemaReject = "qa.contract.schema.reject";
+        internal const string EventSchemaRejectPersistent = "qa.contract.schema.reject_persistent";
+        internal const string EventRepairSuccess = "qa.contract.repair.success";
+        internal const string EventRepairEscalation = "qa.contract.repair.escalation_attempt3";
+        internal const string EventLntFired = "qa.contract.lnt.fired";
+        internal const string EventHashMismatch = "qa.contract.hash.mismatch";
+        internal const string EventDispatchTimeout = "qa.contract.dispatch.timeout";
+        internal const string EventDispatchSecurityReject = "qa.contract.dispatch.security_reject";
+        internal const string EventDispatchConcurrentCap = "qa.contract.dispatch.concurrent_cap";
+        internal const string EventCatalogOverflow = "qa.contract.catalog.overflow";
+        internal const string EventCatalogProviderDegraded = "qa.contract.catalog.provider_degraded";
+        internal const string EventValidatorGateFailed = "qa.contract.validator.gate_failed";
+        internal const string EventArchitectFallback = "qa.contract.architect.fallback";
+        internal const string EventSchemaTokenEstimate = "qa.contract.schema.token_estimate";
+        internal const string EventScenarioOutcome = "qa.contract.scenario.outcome";
+        internal const string EventFeatureFlagSnapshot = "qa.contract.feature_flag.snapshot";
+        internal const string EventCapabilityMismatch = "qa.contract.flt.capability_mismatch";
+
+        // ── F27 P10 contract-health emitters (redacted) ────────────────
+
+        private static long _contractOutcomeVolume;
+
+        /// <summary>
+        /// Emits a contract-health event with redacted payload.
+        /// </summary>
+        internal static void EmitContractEvent(string eventName, string slotId, string reasonCode, string detail)
+        {
+            var payload = new
+            {
+                eventName,
+                reasonCode = EdogQaTelemetryRedactor.NormalizeReasonCode(reasonCode),
+                slotIdHash = EdogQaTelemetryRedactor.Hash16(slotId),
+                detail = EdogQaTelemetryRedactor.Truncate512(detail),
+            };
+            // Emit through structured logging (stub — real emit via hub)
+            _ = payload;
+        }
+
+        /// <summary>
+        /// Emits a scenario outcome event with sampling for high-volume pass events.
+        /// </summary>
+        internal static void EmitScenarioOutcome(string outcome, string scenarioId, string detail)
+        {
+            var volume = Interlocked.Increment(ref _contractOutcomeVolume);
+
+            if (outcome == "pass" && !EdogQaTelemetryRedactor.ShouldSampleOutcome(outcome, volume))
+            {
+                return;
+            }
+
+            EmitContractEvent(EventScenarioOutcome, scenarioId, outcome, detail);
+        }
+
         public static void ResetForTesting()
         {
             Interlocked.Exchange(ref _syntheticScenariosFallbackCount, 0);
@@ -154,6 +210,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             Interlocked.Exchange(ref _chaosAppliedCount, 0);
             Interlocked.Exchange(ref _chaosUnavailableCount, 0);
             Interlocked.Exchange(ref _scenariosSkippedForCapabilityCount, 0);
+            Interlocked.Exchange(ref _contractOutcomeVolume, 0);
         }
     }
 }

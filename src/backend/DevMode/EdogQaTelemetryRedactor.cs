@@ -15,54 +15,52 @@ namespace Microsoft.LiveTable.Service.DevMode
     // EdogQaTelemetryRedactor — hashing + truncation + sampling helper
     //
     // Centralizes redaction decisions for the contract telemetry stream.
+    // All methods are static and side-effect-free.
     // ═══════════════════════════════════════════════════════════════════
 
     /// <summary>
     /// Centralizes hashing, truncation, reason-code normalization, and
     /// sampling decisions for the contract telemetry stream.
     /// </summary>
-    internal sealed class EdogQaTelemetryRedactor
+    internal static class EdogQaTelemetryRedactor
     {
-        private const int DefaultMaxLength = 256;
-        private const int HashPrefixLength = 8;
+        /// <summary>
+        /// SHA-256 hash of a value, truncated to 16 hex characters.
+        /// </summary>
+        internal static string Hash16(string value) =>
+            Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(value ?? string.Empty))
+            ).ToLowerInvariant()[..16];
 
         /// <summary>
-        /// Hashes a value using SHA-256 and returns a truncated hex prefix.
+        /// Truncates a value to at most 512 characters.
         /// </summary>
-        public string HashValue(string value)
-        {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
-            return Convert.ToHexString(bytes)[..HashPrefixLength].ToLowerInvariant();
-        }
-
-        /// <summary>
-        /// Truncates a value to the maximum allowed length.
-        /// </summary>
-        public string Truncate(string value, int maxLength = DefaultMaxLength)
-        {
-            if (string.IsNullOrEmpty(value)) return string.Empty;
-            return value.Length <= maxLength ? value : value[..maxLength] + "...";
-        }
+        internal static string Truncate512(string value) =>
+            string.IsNullOrEmpty(value) ? string.Empty : value[..Math.Min(512, value.Length)];
 
         /// <summary>
         /// Normalizes a reason code to a stable telemetry-safe string.
+        /// Unknown/empty codes become "UNKNOWN".
         /// </summary>
-        public string NormalizeReasonCode(string reason)
-        {
-            if (string.IsNullOrEmpty(reason)) return "unknown";
-            return reason.Trim().ToLowerInvariant().Replace(' ', '_');
-        }
+        internal static string NormalizeReasonCode(string reasonCode) =>
+            string.IsNullOrWhiteSpace(reasonCode)
+                ? "UNKNOWN"
+                : Truncate512(reasonCode.Trim().ToUpperInvariant());
 
         /// <summary>
-        /// Determines whether an event should be sampled (emitted) based on
-        /// a sampling rate. Rate of 1.0 means always emit; 0.0 means never.
+        /// Determines whether an outcome event should be sampled (emitted).
+        /// High-volume "pass" outcomes are downsampled 1:10 above 10K daily;
+        /// all other outcomes (stale, quarantined, failed, etc.) always emit.
         /// </summary>
-        public bool ShouldSample(double samplingRate)
+        internal static bool ShouldSampleOutcome(string outcome, long dailyVolume)
         {
-            if (samplingRate >= 1.0) return true;
-            if (samplingRate <= 0.0) return false;
-            return Random.Shared.NextDouble() < samplingRate;
+            if (string.Equals(outcome, "pass", StringComparison.OrdinalIgnoreCase)
+                && dailyVolume > 10_000)
+            {
+                return (dailyVolume % 10) == 0;
+            }
+
+            return true;
         }
     }
 }
