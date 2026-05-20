@@ -177,6 +177,12 @@ class QaResults {
     newPrBtn.className = 'qa-btn primary';
     newPrBtn.textContent = 'New PR \u25B8';
     newPrBtn.addEventListener('click', () => {
+      // Wipe analysis buffer + mint fresh correlation ID before the user
+      // types a new PR — without this, the next analysis's scenarios
+      // pile on top of this run's in the curation list.
+      if (typeof this._panel.startNewAnalysis === 'function') {
+        this._panel.startNewAnalysis();
+      }
       if (this._panel._input) this._panel._input.reset();
       this._panel.goToStage('input');
     });

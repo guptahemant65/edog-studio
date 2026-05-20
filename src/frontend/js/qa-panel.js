@@ -495,6 +495,25 @@ class QaPanel {
   /** Get current correlation ID or create a new one. */
   getCorrelationId() { return this._correlationId || this._newCorrelationId(); }
 
+  /**
+   * Begin a fresh analysis: mint a new correlation ID, clear residual
+   * analysisId/runId, and reset the analysis stage so its `_scenarios`
+   * buffer + DOM scenario-list don't accumulate across runs in the same
+   * session. Must be called by every caller that triggers a new
+   * `QaStartCodeAnalysis` invocation (qa-input.js and the "New PR"
+   * button in qa-results.js). Without this, a second analysis appends
+   * its scenarios on top of the previous run's, causing the curation
+   * stage to render every scenario twice (8 + 8 = 16).
+   */
+  startNewAnalysis() {
+    this._newCorrelationId();
+    this._analysisId = null;
+    this._runId = null;
+    if (this._analysis) this._analysis.reset();
+    this._saveState();
+    return this._correlationId;
+  }
+
   /** Set/get the analysis ID (set by qa-input.js after starting analysis). */
   setAnalysisId(id) { this._analysisId = id; this._saveState(); }
   getAnalysisId() { return this._analysisId; }

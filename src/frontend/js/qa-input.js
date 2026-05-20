@@ -93,7 +93,10 @@ class QaInput {
     this._btn.textContent = 'Analyzing\u2026';
     this._clearError();
 
-    var corrId = this._panel.getCorrelationId();
+    // Reset analysis stage buffer + mint a fresh correlation ID so this
+    // run's scenarios don't pile on top of any previous run's in the
+    // same session. (Without this, curation would render 8 + 8 = 16.)
+    var corrId = this._panel.startNewAnalysis();
     var request = {
       correlationId: corrId,
       prUrl: parsed.prUrl || null,

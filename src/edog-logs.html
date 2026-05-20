@@ -89620,6 +89620,25 @@ class QaPanel {
   /** Get current correlation ID or create a new one. */
   getCorrelationId() { return this._correlationId || this._newCorrelationId(); }
 
+  /**
+   * Begin a fresh analysis: mint a new correlation ID, clear residual
+   * analysisId/runId, and reset the analysis stage so its `_scenarios`
+   * buffer + DOM scenario-list don't accumulate across runs in the same
+   * session. Must be called by every caller that triggers a new
+   * `QaStartCodeAnalysis` invocation (qa-input.js and the "New PR"
+   * button in qa-results.js). Without this, a second analysis appends
+   * its scenarios on top of the previous run's, causing the curation
+   * stage to render every scenario twice (8 + 8 = 16).
+   */
+  startNewAnalysis() {
+    this._newCorrelationId();
+    this._analysisId = null;
+    this._runId = null;
+    if (this._analysis) this._analysis.reset();
+    this._saveState();
+    return this._correlationId;
+  }
+
   /** Set/get the analysis ID (set by qa-input.js after starting analysis). */
   setAnalysisId(id) { this._analysisId = id; this._saveState(); }
   getAnalysisId() { return this._analysisId; }
@@ -89746,7 +89765,10 @@ class QaInput {
     this._btn.textContent = 'Analyzing\u2026';
     this._clearError();
 
-    var corrId = this._panel.getCorrelationId();
+    // Reset analysis stage buffer + mint a fresh correlation ID so this
+    // run's scenarios don't pile on top of any previous run's in the
+    // same session. (Without this, curation would render 8 + 8 = 16.)
+    var corrId = this._panel.startNewAnalysis();
     var request = {
       correlationId: corrId,
       prUrl: parsed.prUrl || null,
@@ -91333,6 +91355,12 @@ class QaResults {
     newPrBtn.className = 'qa-btn primary';
     newPrBtn.textContent = 'New PR \u25B8';
     newPrBtn.addEventListener('click', () => {
+      // Wipe analysis buffer + mint fresh correlation ID before the user
+      // types a new PR — without this, the next analysis's scenarios
+      // pile on top of this run's in the curation list.
+      if (typeof this._panel.startNewAnalysis === 'function') {
+        this._panel.startNewAnalysis();
+      }
       if (this._panel._input) this._panel._input.reset();
       this._panel.goToStage('input');
     });
