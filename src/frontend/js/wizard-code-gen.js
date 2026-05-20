@@ -216,9 +216,9 @@ class CodeGenerationEngine {
       if (node.type === 'sql-table') {
         cell = this._generateTableCell(node, theme);
       } else if (node.type === 'sql-mlv') {
-        cell = this._generateSqlMlvCell(node, parentMap[node.id] || []);
+        cell = this._generateSqlMlvCell(node, parentMap[node.id] || [], theme);
       } else if (node.type === 'pyspark-mlv') {
-        cell = this._generatePysparkMlvCell(node, parentMap[node.id] || []);
+        cell = this._generatePysparkMlvCell(node, parentMap[node.id] || [], theme);
       }
 
       if (cell) {
@@ -409,6 +409,7 @@ class CodeGenerationEngine {
     var schema = node.schema || 'bronze';
 
     var lines = [];
+    lines.push('%%sql');
     lines.push('-- Seed table: ' + schema + '.' + node.name);
     lines.push('CREATE SCHEMA IF NOT EXISTS ' + schema + ';');
     lines.push('');
@@ -450,8 +451,10 @@ class CodeGenerationEngine {
    * @param {Array}  parentNodes DagNodeData[] of parent/source nodes
    * @returns {Object} Cell object
    */
-  _generateSqlMlvCell(node, parentNodes) {
+  _generateSqlMlvCell(node, parentNodes, theme) {
     var schema = node.schema || 'silver';
+    var columns = this._getThemeColumns(theme);
+    var joinCol = (columns && columns[0]) ? columns[0].name : 'id';
     var lines = [];
 
     var parentNames = [];
@@ -461,6 +464,7 @@ class CodeGenerationEngine {
       );
     }
 
+    lines.push('%%sql');
     lines.push('-- Materialized Lake View: ' + schema + '.' + node.name);
     if (parentNames.length > 0) {
       lines.push('-- Sources: ' + parentNames.join(', '));
@@ -484,13 +488,14 @@ class CodeGenerationEngine {
         lines.push('  t' + (m + 1) + '.*' + suffix);
       }
       var first = parentNodes[0];
+      var firstCol = joinCol;
       lines.push('FROM ' + (first.schema || 'bronze') + '.' + first.name + ' t1');
       for (var k = 1; k < parentNodes.length; k++) {
         var jp = parentNodes[k];
         var alias = 't' + (k + 1);
         var term = (k === parentNodes.length - 1) ? ';' : '';
         lines.push('LEFT JOIN ' + (jp.schema || 'bronze') + '.' + jp.name + ' ' + alias +
-                   ' ON t1.id = ' + alias + '.id' + term);
+                   ' ON t1.' + firstCol + ' = ' + alias + '.' + firstCol + term);
       }
     }
 
@@ -512,8 +517,10 @@ class CodeGenerationEngine {
    * @param {Array}  parentNodes DagNodeData[] of parent/source nodes
    * @returns {Object} Cell object
    */
-  _generatePysparkMlvCell(node, parentNodes) {
+  _generatePysparkMlvCell(node, parentNodes, theme) {
     var schema = node.schema || 'silver';
+    var columns = this._getThemeColumns(theme);
+    var joinCol = (columns && columns[0]) ? columns[0].name : 'id';
     var lines = [];
 
     var parentNames = [];
@@ -552,7 +559,7 @@ class CodeGenerationEngine {
         var jp = parentNodes[k];
         var alias = 't' + (k + 1);
         lines.push('LEFT JOIN ' + (jp.schema || 'bronze') + '.' + jp.name + ' ' + alias +
-                   ' ON t1.id = ' + alias + '.id');
+                   ' ON t1.' + joinCol + ' = ' + alias + '.' + joinCol);
       }
     }
 
