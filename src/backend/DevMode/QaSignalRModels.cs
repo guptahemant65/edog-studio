@@ -159,7 +159,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         // real verdicts. Carrying them through verbatim restores fidelity.
 
         /// <summary>Field-level matching predicates (AND logic).</summary>
-        public Matcher Matcher { get; set; }
+        public LegacyMatcher Matcher { get; set; }
 
         /// <summary>Optional time window constraints relative to T0.</summary>
         public TimeWindowSpec TimeWindow { get; set; }
