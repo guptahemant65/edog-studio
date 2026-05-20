@@ -69635,6 +69635,12 @@ class DagCanvas {
 
     // Apply viewport
     this._applyViewportTransform();
+
+    // Ensure all restored nodes are visible and viewport fits content
+    this._updateVisibility();
+    if (stateNodes.length > 0) {
+      this.fitToContent();
+    }
   }
 
   /**
