@@ -133,6 +133,11 @@ DEVMODE_FILES = {
     "EdogQaStimulusDispatcher": SERVICE_PATH / "DevMode/EdogQaStimulusDispatcher.cs",
     "EdogQaTelemetry": SERVICE_PATH / "DevMode/EdogQaTelemetry.cs",
     "QaSignalRModels": SERVICE_PATH / "DevMode/QaSignalRModels.cs",
+    "EdogQaContractCatalog": SERVICE_PATH / "DevMode/EdogQaContractCatalog.cs",
+    "EdogQaDagScanner": SERVICE_PATH / "DevMode/EdogQaDagScanner.cs",
+    "EdogQaFileTimerScanner": SERVICE_PATH / "DevMode/EdogQaFileTimerScanner.cs",
+    "EdogQaTelemetryRedactor": SERVICE_PATH / "DevMode/EdogQaTelemetryRedactor.cs",
+    "IQaContractOptionsProvider": SERVICE_PATH / "DevMode/IQaContractOptionsProvider.cs",
     "EdogLogsHtml": SERVICE_PATH / "DevMode/edog-logs.html",
     "EditorConfig": SERVICE_PATH / "DevMode/.editorconfig",
 }
