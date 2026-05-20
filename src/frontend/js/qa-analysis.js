@@ -143,8 +143,13 @@ class QaAnalysis {
       this._metricsEl.textContent = parts.join(' \u00B7 '); // middle dot separator
     }
 
-    // If complete phase, enable proceed
-    if (data.phase === 'complete') {
+    // If complete phase, enable proceed.
+    // Guarded by !_isComplete because the backend emits a final
+    // phase=complete event per pipeline stage (analyze, lint, finalize),
+    // and without this guard _showProceedButton would stack a button
+    // for every emit — producing the duplicate "Review Scenarios"
+    // buttons users saw in the curation handoff.
+    if (data.phase === 'complete' && !this._isComplete) {
       this._isComplete = true;
       if (this._cancelBtn) this._cancelBtn.style.display = 'none';
       this._showProceedButton();
@@ -377,6 +382,10 @@ class QaAnalysis {
 
   _showProceedButton() {
     if (!this._container) return;
+    // Idempotent — silently bail if a proceed row is already in the DOM.
+    // The container also hosts other stage rows so we use a dedicated
+    // class as the marker.
+    if (this._container.querySelector('.qa-analysis-actions')) return;
     var row = document.createElement('div');
     row.className = 'qa-analysis-actions';
     var btn = document.createElement('button');
