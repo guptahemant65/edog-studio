@@ -933,7 +933,7 @@ class ExecutionPipeline {
     // root inherits `opacity:0; position:absolute; pointer-events:none` from
     // the base `.iw-page` rule and never receives `.active`, leaving the
     // deploy page invisible. Same trap as DagCanvasPage (see wizard-dag-canvas-page.js:26).
-    el.className = 'iw-execution-page';
+    el.className = 'iw-execution-page iw-pipeline';
 
     // Header
     var header = document.createElement('div');

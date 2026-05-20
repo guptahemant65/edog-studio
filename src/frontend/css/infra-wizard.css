@@ -2395,7 +2395,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--s3, #2a2a3a);
+  border-bottom: 1px solid var(--border, rgba(0,0,0,0.06));
   flex-shrink: 0;
 }
 
@@ -2458,7 +2458,7 @@
   top: -2px;
   width: 2px;
   height: calc(100% + 4px);
-  background: var(--s3, #2a2a3a);
+  background: var(--border-bright, rgba(0,0,0,0.12));
   pointer-events: none;
 }
 
@@ -2494,7 +2494,8 @@
   font-size: 14px;
   line-height: 1;
   border-radius: 50%;
-  background: var(--surface, #1e1e2e);
+  background: var(--surface, #ffffff);
+  border: 2px solid var(--border-bright, rgba(0,0,0,0.12));
 }
 
 .iw-step-icon--pending {
@@ -2540,7 +2541,7 @@
   flex: 1 1 auto;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text, #e0e0e0);
+  color: var(--text, #1a1d23);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
