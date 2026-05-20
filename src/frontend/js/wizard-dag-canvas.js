@@ -205,10 +205,17 @@ class DagCanvas {
    */
   addNode(type, position, overrides) {
     var self = this;
+    var count = Object.keys(this._nodeData).length;
 
-    if (Object.keys(this._nodeData).length >= DAG_CANVAS_MAX_NODES) {
-      console.warn('[DagCanvas] Node limit reached (' + DAG_CANVAS_MAX_NODES + ')');
+    if (count >= DAG_CANVAS_MAX_NODES) {
+      if (window.edogToast) window.edogToast('Maximum ' + DAG_CANVAS_MAX_NODES + ' nodes reached', 'error');
       return null;
+    }
+
+    // Warning at 90% capacity
+    if (count === Math.floor(DAG_CANVAS_MAX_NODES * 0.9)) {
+      var remaining = DAG_CANVAS_MAX_NODES - count - 1;
+      if (window.edogToast) window.edogToast(remaining + ' nodes remaining (limit: ' + DAG_CANVAS_MAX_NODES + ')', 'warning');
     }
 
     var id = (overrides && overrides.id) || ('node-' + this._nextNodeId++);
