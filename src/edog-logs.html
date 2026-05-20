@@ -73903,8 +73903,8 @@ var PIPELINE_STEPS = [
     method: 'POST', urlTemplate: '/api/fabric/workspaces/{workspaceId}/items/{notebookId}/jobs/instances?jobType=RunNotebook',
     createsResource: false,
     isLRO: true, lroType: 'jobInstance',
-    timeoutMs: 300000, autoRetries: 1, retryDelayMs: 5000,
-    lroConfig: { pollIntervalMs: 3000, maxPollDurationMs: 300000 }
+    timeoutMs: 600000, autoRetries: 1, retryDelayMs: 5000,
+    lroConfig: { pollIntervalMs: 3000, maxPollDurationMs: 600000 }
   }
 ];
 
