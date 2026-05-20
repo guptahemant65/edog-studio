@@ -74545,6 +74545,7 @@ class DagCanvasPage {
     this._theme = options.theme || 'default';
     this._onStateChange = options.onStateChange || function() {};
     this._destroyed = false;
+    this._firstActivateDone = false;
 
     // Root container
     this._rootEl = document.createElement('div');
@@ -74654,10 +74655,18 @@ class DagCanvasPage {
       this._presets.updateSchemas(this._schemas);
     }
 
-    // Restore canvas state when re-entering or loading a template
-    if (state.nodes && state.nodes.length > 0) {
+    // Only restore canvas state on re-entry (when nodes already exist in state
+    // from a previous visit). On first visit, state.nodes is [] and the preset
+    // overlay should show — don't load empty state which would hide it.
+    if (state.nodes && state.nodes.length > 0 && !this._firstActivateDone) {
       this._canvas.loadState(state);
+    } else if (state.nodes && state.nodes.length > 0 && this._firstActivateDone) {
+      // Re-entry: only reload if canvas is empty (user went back and forward)
+      if (this._canvas.getNodeCount() === 0) {
+        this._canvas.loadState(state);
+      }
     }
+    this._firstActivateDone = true;
 
     this._palette.updateNodeCount(this._canvas.getNodeCount());
 
