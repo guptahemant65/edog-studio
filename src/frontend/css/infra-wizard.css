@@ -64,8 +64,8 @@
 
 /* ─── Dialog ─── */
 .iw-dialog {
-  width: min(1400px, 96vw);
-  height: min(880px, 94vh);
+  width: min(1600px, 96vw);
+  height: min(920px, 94vh);
   min-width: 720px;
   min-height: 520px;
   background: var(--surface, #ffffff);
