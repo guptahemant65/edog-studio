@@ -520,9 +520,26 @@ namespace Microsoft.LiveTable.Service.DevMode
             }
             var aReady = dual.Architect?.IsReady == true;
             var eReady = dual.Editor?.IsReady == true;
-            if (!aReady && !eReady) return "V2 unavailable — both Architect and Editor probes failed (see errors).";
-            if (!aReady) return "V2 unavailable — Architect probe failed (Editor OK).";
-            return "V2 unavailable — Editor probe failed (Architect OK).";
+
+            string Detail(string role, ProbeResult r)
+            {
+                if (r == null) return $"{role}: <no result>";
+                var dep = string.IsNullOrEmpty(r.Deployment) ? "?" : r.Deployment;
+                if (r.Errors != null && r.Errors.Count > 0)
+                {
+                    return $"{role} (deployment={dep}): {string.Join(" | ", r.Errors)}";
+                }
+                return $"{role} (deployment={dep}): unknown failure";
+            }
+
+            if (!aReady && !eReady)
+            {
+                return "V2 unavailable — both probes failed. "
+                    + Detail("ARCHITECT", dual.Architect) + " ;; "
+                    + Detail("EDITOR", dual.Editor);
+            }
+            if (!aReady) return "V2 unavailable — " + Detail("ARCHITECT", dual.Architect) + " (Editor OK).";
+            return "V2 unavailable — " + Detail("EDITOR", dual.Editor) + " (Architect OK).";
         }
 
         private static ProbeConfig ReadArchitectProbeConfigFromEnv()
