@@ -2513,6 +2513,21 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+.ws-cd-cap-create {
+  border-style: dashed;
+  border-color: var(--accent, #6d5cff);
+  color: var(--accent, #6d5cff);
+  justify-content: center;
+  gap: var(--space-2, 8px);
+  font-size: var(--text-sm, 12px);
+  font-weight: 600;
+  opacity: 0.8;
+}
+.ws-cd-cap-create:hover {
+  opacity: 1;
+  background: var(--accent-dim, rgba(109,92,255,0.07));
+  border-style: solid;
+}
 
 /* Capacity shimmer */
 .ws-cd-shimmer {
