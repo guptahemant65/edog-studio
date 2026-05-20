@@ -8,6 +8,8 @@
 namespace Microsoft.LiveTable.Service.DevMode
 {
     using System;
+    using System.Threading;
+    using Microsoft.Extensions.Options;
 
     // ═══════════════════════════════════════════════════════════════════
     // EdogQaFeatureFlags — central registry for QA-pipeline feature flags
@@ -94,5 +96,42 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         /// <summary>Default. Prefer V2 when probe passes; transparent legacy fallback with LEGACY_LLM_FALLBACK warning otherwise.</summary>
         Auto = 3,
+    }
+
+    /// <summary>
+    /// Implementation of <see cref="IQaContractOptionsProvider"/> backed by
+    /// <c>IOptionsMonitor&lt;QaContractOptions&gt;</c> with monotonic revision
+    /// tracking. Replaces the legacy <see cref="EdogQaFeatureFlags"/> Lazy
+    /// pattern for config reads.
+    /// </summary>
+    internal sealed class EdogQaContractOptionsProvider : IQaContractOptionsProvider
+    {
+        private readonly IOptionsMonitor<QaContractOptions> _monitor;
+        private long _revision;
+
+        public EdogQaContractOptionsProvider(IOptionsMonitor<QaContractOptions> monitor)
+        {
+            _monitor = monitor;
+            _revision = 1;
+            _monitor.OnChange(_ => Interlocked.Increment(ref _revision));
+        }
+
+        public QaContractOptions Current
+        {
+            get
+            {
+                var opts = _monitor.CurrentValue;
+                return new QaContractOptions
+                {
+                    Revision = Interlocked.Read(ref _revision),
+                    Enabled = opts.Enabled,
+                    DisabledKinds = opts.DisabledKinds,
+                    FewShotEnabled = opts.FewShotEnabled,
+                    ControlToken = opts.ControlToken,
+                };
+            }
+        }
+
+        public QaContractOptions CaptureSnapshot() => Current;
     }
 }
