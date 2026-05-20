@@ -187,6 +187,7 @@ class DagCanvas {
 
     // Build
     this._buildViewport();
+    this._buildToolbar();
     this._buildZoomControls();
     this._bindEvents();
   }
@@ -976,6 +977,77 @@ class DagCanvas {
 
     this._zoomControlsEl = el;
     this._containerEl.appendChild(el);
+  }
+
+  /**
+   * Build floating canvas toolbar (top-center) — grid toggle + fit to view.
+   * Matches the dag-canvas.html mock's `.tb` component, reusing the
+   * existing `.iw-dag-toolbar` styles.
+   */
+  _buildToolbar() {
+    var self = this;
+    var el = document.createElement('div');
+    el.className = 'iw-dag-toolbar';
+    el.setAttribute('role', 'toolbar');
+    el.setAttribute('aria-label', 'Canvas tools');
+
+    // Grid toggle (starts "on" — grid is visible by default)
+    var gridBtn = this._buildToolbarButton({
+      action: 'toggle-grid',
+      label: 'Toggle Grid',
+      active: true,
+      svg: '<rect x="3" y="3" width="18" height="18" rx="2"/>'
+         + '<line x1="3" y1="9" x2="21" y2="9"/>'
+         + '<line x1="3" y1="15" x2="21" y2="15"/>'
+         + '<line x1="9" y1="3" x2="9" y2="21"/>'
+         + '<line x1="15" y1="3" x2="15" y2="21"/>'
+    });
+
+    // Fit to view
+    var fitBtn = this._buildToolbarButton({
+      action: 'fit',
+      label: 'Fit to View',
+      svg: '<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>'
+    });
+
+    el.appendChild(gridBtn);
+    el.appendChild(fitBtn);
+
+    el.addEventListener('click', function(e) {
+      var btn = e.target.closest('.iw-dag-toolbar-btn');
+      if (!btn) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'toggle-grid') {
+        var off = btn.classList.toggle('active') === false;
+        if (self._gridEl) {
+          self._gridEl.classList.toggle('off', off);
+        }
+      } else if (action === 'fit') {
+        self.fitToContent();
+      }
+    });
+
+    this._toolbarEl = el;
+    this._containerEl.appendChild(el);
+  }
+
+  /**
+   * Build a single toolbar button (icon + tooltip).
+   * @param {{ action:string, label:string, active?:boolean, svg:string }} opts
+   * @returns {HTMLButtonElement}
+   */
+  _buildToolbarButton(opts) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'iw-dag-toolbar-btn' + (opts.active ? ' active' : '');
+    btn.setAttribute('data-action', opts.action);
+    btn.setAttribute('title', opts.label);
+    btn.setAttribute('aria-label', opts.label);
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+      + 'stroke-linecap="round" stroke-linejoin="round">' + opts.svg + '</svg>'
+      + '<span class="iw-dag-toolbar-tooltip">' + opts.label + '</span>';
+    return btn;
   }
 
   /**

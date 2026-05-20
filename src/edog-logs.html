@@ -15245,16 +15245,40 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 .iw-dag-page {
   display: flex;
   flex-direction: row;
-  flex: 1;
+  flex: 1 1 auto;
   overflow: hidden;
   height: 100%;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  background: var(--surface-2, #f8f9fb);
 }
 /* The Build page must not scroll — palette and canvas are fixed panels.
    Only the code preview panel has its own internal overflow-y. Override
    the parent .iw-page overflow-y: auto to prevent the whole page scrolling. */
 .iw-page:has(.iw-dag-page),
 #iw-page-2.iw-page {
-  overflow-y: hidden;
+  overflow: hidden;
+}
+/* The DAG page needs to fill the page-content area with no padding so the
+   palette / canvas / code preview reach the edges. Override the default
+   padded .iw-page-content for page 2 only. */
+#iw-page-2 .iw-page-content {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+/* The three wrapper divs that DagCanvasPage builds (palette-container,
+   canvas-container, code-container) are transparent — let the inner
+   .iw-palette / .iw-dag-viewport / .iw-code-panel become the actual
+   flex children of .iw-dag-page so their fixed widths and flex:1 apply
+   directly without an extra block-level box swallowing layout. */
+.iw-dag-palette-container,
+.iw-dag-code-container {
+  display: contents;
 }
 
 /* ─── DAG Canvas ─── */
@@ -17628,46 +17652,51 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
 }
 .iw-dag-zoom-controls {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: var(--s4, 16px);
+  right: var(--s4, 16px);
   z-index: 40;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   background: var(--surface, #fff);
-  border: 1px solid var(--s3, #e2e5ea);
-  border-radius: var(--r-m, 8px);
-  padding: 3px 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border: 1px solid var(--border-bright, rgba(0,0,0,0.12));
+  border-radius: var(--r-m, 6px);
+  padding: 3px;
+  box-shadow: var(--sh-m, 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04));
   animation: iw-zoom-enter 200ms ease-out 300ms both;
 }
 .iw-dag-zoom-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 30px;
   height: 28px;
   border: none;
   background: none;
   border-radius: var(--r-s, 4px);
-  color: var(--text, #1e2330);
-  font-size: 15px;
+  color: var(--text-dim, #5a6070);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 80ms, color 80ms;
+  transition: background 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+              color 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  font-family: inherit;
 }
 .iw-dag-zoom-btn:hover {
-  background: var(--s1, #f8f9fb);
-  color: var(--accent, #6d5cff);
+  background: var(--surface-2, #f8f9fb);
+  color: var(--text, #1a1d23);
 }
 .iw-dag-zoom-btn:active {
-  background: var(--s2, #f0f1f4);
+  background: var(--surface-3, #ebedf0);
 }
 .iw-dag-zoom-level {
   min-width: 44px;
   text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted, #8e95a5);
+  font-size: var(--xs, 10px);
+  font-weight: 600;
+  font-family: var(--mono, 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace);
+  color: var(--text-dim, #5a6070);
+  padding: 0 4px;
   user-select: none;
 }
 
@@ -69314,6 +69343,7 @@ class DagCanvas {
 
     // Build
     this._buildViewport();
+    this._buildToolbar();
     this._buildZoomControls();
     this._bindEvents();
   }
@@ -70103,6 +70133,77 @@ class DagCanvas {
 
     this._zoomControlsEl = el;
     this._containerEl.appendChild(el);
+  }
+
+  /**
+   * Build floating canvas toolbar (top-center) — grid toggle + fit to view.
+   * Matches the dag-canvas.html mock's `.tb` component, reusing the
+   * existing `.iw-dag-toolbar` styles.
+   */
+  _buildToolbar() {
+    var self = this;
+    var el = document.createElement('div');
+    el.className = 'iw-dag-toolbar';
+    el.setAttribute('role', 'toolbar');
+    el.setAttribute('aria-label', 'Canvas tools');
+
+    // Grid toggle (starts "on" — grid is visible by default)
+    var gridBtn = this._buildToolbarButton({
+      action: 'toggle-grid',
+      label: 'Toggle Grid',
+      active: true,
+      svg: '<rect x="3" y="3" width="18" height="18" rx="2"/>'
+         + '<line x1="3" y1="9" x2="21" y2="9"/>'
+         + '<line x1="3" y1="15" x2="21" y2="15"/>'
+         + '<line x1="9" y1="3" x2="9" y2="21"/>'
+         + '<line x1="15" y1="3" x2="15" y2="21"/>'
+    });
+
+    // Fit to view
+    var fitBtn = this._buildToolbarButton({
+      action: 'fit',
+      label: 'Fit to View',
+      svg: '<path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>'
+    });
+
+    el.appendChild(gridBtn);
+    el.appendChild(fitBtn);
+
+    el.addEventListener('click', function(e) {
+      var btn = e.target.closest('.iw-dag-toolbar-btn');
+      if (!btn) return;
+      var action = btn.getAttribute('data-action');
+      if (action === 'toggle-grid') {
+        var off = btn.classList.toggle('active') === false;
+        if (self._gridEl) {
+          self._gridEl.classList.toggle('off', off);
+        }
+      } else if (action === 'fit') {
+        self.fitToContent();
+      }
+    });
+
+    this._toolbarEl = el;
+    this._containerEl.appendChild(el);
+  }
+
+  /**
+   * Build a single toolbar button (icon + tooltip).
+   * @param {{ action:string, label:string, active?:boolean, svg:string }} opts
+   * @returns {HTMLButtonElement}
+   */
+  _buildToolbarButton(opts) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'iw-dag-toolbar-btn' + (opts.active ? ' active' : '');
+    btn.setAttribute('data-action', opts.action);
+    btn.setAttribute('title', opts.label);
+    btn.setAttribute('aria-label', opts.label);
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+      + 'stroke-linecap="round" stroke-linejoin="round">' + opts.svg + '</svg>'
+      + '<span class="iw-dag-toolbar-tooltip">' + opts.label + '</span>';
+    return btn;
   }
 
   /**

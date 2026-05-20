@@ -830,16 +830,40 @@
 .iw-dag-page {
   display: flex;
   flex-direction: row;
-  flex: 1;
+  flex: 1 1 auto;
   overflow: hidden;
   height: 100%;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  background: var(--surface-2, #f8f9fb);
 }
 /* The Build page must not scroll — palette and canvas are fixed panels.
    Only the code preview panel has its own internal overflow-y. Override
    the parent .iw-page overflow-y: auto to prevent the whole page scrolling. */
 .iw-page:has(.iw-dag-page),
 #iw-page-2.iw-page {
-  overflow-y: hidden;
+  overflow: hidden;
+}
+/* The DAG page needs to fill the page-content area with no padding so the
+   palette / canvas / code preview reach the edges. Override the default
+   padded .iw-page-content for page 2 only. */
+#iw-page-2 .iw-page-content {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+/* The three wrapper divs that DagCanvasPage builds (palette-container,
+   canvas-container, code-container) are transparent — let the inner
+   .iw-palette / .iw-dag-viewport / .iw-code-panel become the actual
+   flex children of .iw-dag-page so their fixed widths and flex:1 apply
+   directly without an extra block-level box swallowing layout. */
+.iw-dag-palette-container,
+.iw-dag-code-container {
+  display: contents;
 }
 
 /* ─── DAG Canvas ─── */
@@ -3213,46 +3237,51 @@
 }
 .iw-dag-zoom-controls {
   position: absolute;
-  bottom: 12px;
-  right: 12px;
+  bottom: var(--s4, 16px);
+  right: var(--s4, 16px);
   z-index: 40;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   background: var(--surface, #fff);
-  border: 1px solid var(--s3, #e2e5ea);
-  border-radius: var(--r-m, 8px);
-  padding: 3px 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border: 1px solid var(--border-bright, rgba(0,0,0,0.12));
+  border-radius: var(--r-m, 6px);
+  padding: 3px;
+  box-shadow: var(--sh-m, 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04));
   animation: iw-zoom-enter 200ms ease-out 300ms both;
 }
 .iw-dag-zoom-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  width: 30px;
   height: 28px;
   border: none;
   background: none;
   border-radius: var(--r-s, 4px);
-  color: var(--text, #1e2330);
-  font-size: 15px;
+  color: var(--text-dim, #5a6070);
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 80ms, color 80ms;
+  transition: background 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1)),
+              color 80ms var(--ease, cubic-bezier(0.4, 0, 0.2, 1));
+  font-family: inherit;
 }
 .iw-dag-zoom-btn:hover {
-  background: var(--s1, #f8f9fb);
-  color: var(--accent, #6d5cff);
+  background: var(--surface-2, #f8f9fb);
+  color: var(--text, #1a1d23);
 }
 .iw-dag-zoom-btn:active {
-  background: var(--s2, #f0f1f4);
+  background: var(--surface-3, #ebedf0);
 }
 .iw-dag-zoom-level {
   min-width: 44px;
   text-align: center;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-muted, #8e95a5);
+  font-size: var(--xs, 10px);
+  font-weight: 600;
+  font-family: var(--mono, 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace);
+  color: var(--text-dim, #5a6070);
+  padding: 0 4px;
   user-select: none;
 }
 
