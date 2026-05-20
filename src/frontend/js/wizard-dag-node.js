@@ -462,14 +462,16 @@ class DagNode {
     this._portIn.addEventListener('mousedown', function(e) {
       e.stopPropagation();
       if (self._onPortMouseDown) {
-        self._onPortMouseDown(self, 'in', e);
+        var pos = self.getInputPortPosition();
+        self._onPortMouseDown({ nodeId: self._data.id, x: pos.x, y: pos.y });
       }
     });
 
     this._portOut.addEventListener('mousedown', function(e) {
       e.stopPropagation();
       if (self._onPortMouseDown) {
-        self._onPortMouseDown(self, 'out', e);
+        var pos = self.getOutputPortPosition();
+        self._onPortMouseDown({ nodeId: self._data.id, x: pos.x, y: pos.y });
       }
     });
 

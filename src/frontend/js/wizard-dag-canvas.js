@@ -251,15 +251,15 @@ class DagCanvas {
         // Only push undo if position actually changed
         if (Math.abs(finalX - oldX) > 0.5 || Math.abs(finalY - oldY) > 0.5) {
           self._undoManager.push({
-            name: 'move-node',
-            undo: function() {
+            type: 'move-node',
+            undoFn: function() {
               node.setPosition(oldX, oldY);
               nodeData.x = oldX;
               nodeData.y = oldY;
               self._connectionMgr.updatePathsForNode(id);
               self._emitStateChanged();
             },
-            redo: function() {
+            doFn: function() {
               node.setPosition(finalX, finalY);
               nodeData.x = finalX;
               nodeData.y = finalY;
@@ -289,12 +289,12 @@ class DagCanvas {
     // Undo: remove node, Redo: re-add node
     var capturedData = this._cloneNodeData(nodeData);
     this._undoManager.push({
-      name: 'add-node',
-      undo: function() {
+      type: 'add-node',
+      undoFn: function() {
         self._removeNodeInternal(id);
         self._emitStateChanged();
       },
-      redo: function() {
+      doFn: function() {
         self.addNode(capturedData.type, { x: capturedData.x, y: capturedData.y }, capturedData);
         self._emitStateChanged();
       }
@@ -338,15 +338,15 @@ class DagCanvas {
 
     // Undo: re-add node and connections
     this._undoManager.push({
-      name: 'remove-node',
-      undo: function() {
+      type: 'remove-node',
+      undoFn: function() {
         self.addNode(capturedData.type, { x: capturedData.x, y: capturedData.y }, capturedData);
         for (var i = 0; i < removedConns.length; i++) {
           self._connectionMgr.addConnection(removedConns[i]);
         }
         self._emitStateChanged();
       },
-      redo: function() {
+      doFn: function() {
         self.removeNode(nodeId);
       }
     });
@@ -492,12 +492,12 @@ class DagCanvas {
     }
 
     this._undoManager.push({
-      name: 'add-connection',
-      undo: function() {
+      type: 'add-connection',
+      undoFn: function() {
         self._connectionMgr.removeConnection(id);
         self._emitStateChanged();
       },
-      redo: function() {
+      doFn: function() {
         self._connectionMgr.addConnection(connData);
         self._emitStateChanged();
       }
@@ -630,13 +630,13 @@ class DagCanvas {
 
     // Push compound undo
     this._undoManager.push({
-      name: 'auto-layout',
-      undo: function() {
+      type: 'auto-layout',
+      undoFn: function() {
         self._applyPositions(oldPositions);
         self._connectionMgr.updateAllPaths();
         self._emitStateChanged();
       },
-      redo: function() {
+      doFn: function() {
         self._applyPositions(newPositions);
         self._connectionMgr.updateAllPaths();
         self._emitStateChanged();
@@ -1304,12 +1304,12 @@ class DagCanvas {
       var self = this;
       var connData = result;
       this._undoManager.push({
-        name: 'connect-via-drag',
-        undo: function() {
+        type: 'connect-via-drag',
+        undoFn: function() {
           self._connectionMgr.removeConnection(connData.id);
           self._emitStateChanged();
         },
-        redo: function() {
+        doFn: function() {
           self._connectionMgr.addConnection(connData);
           self._emitStateChanged();
         }
@@ -1660,15 +1660,15 @@ class DagCanvas {
         var oldY = dragStartPos.y;
         if (Math.abs(finalX - oldX) > 0.5 || Math.abs(finalY - oldY) > 0.5) {
           self._undoManager.push({
-            name: 'move-node',
-            undo: function() {
+            type: 'move-node',
+            undoFn: function() {
               node.setPosition(oldX, oldY);
               nodeData.x = oldX;
               nodeData.y = oldY;
               self._connectionMgr.updatePathsForNode(id);
               self._emitStateChanged();
             },
-            redo: function() {
+            doFn: function() {
               node.setPosition(finalX, finalY);
               nodeData.x = finalX;
               nodeData.y = finalY;
