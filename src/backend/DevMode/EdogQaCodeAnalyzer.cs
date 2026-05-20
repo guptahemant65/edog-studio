@@ -1489,8 +1489,33 @@ namespace Microsoft.LiveTable.Service.DevMode
 
             if (result.BudgetGateTripped)
             {
-                degradationFlags.Add("llm_v2_budget_" + (result.BudgetGateReason ?? "exceeded").ToLowerInvariant());
-                PublishWarning($"LLM_V2 budget tripped: {result.BudgetGateReason} — accepted {result.MergedScenarios.Count} scenario(s), skipped {result.Zones.Count(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.SkippedForBudget)}.");
+                var skippedCount = result.Zones.Count(z => z.Outcome == EdogQaScenarioOrchestrator.ZoneOutcome.SkippedForBudget);
+                if (skippedCount > 0)
+                {
+                    // Real degradation: zones were dropped to stay under budget.
+                    // The reason from the orchestrator is e.g. "BUDGET_EXCEEDED_COST".
+                    // The flag is already prefixed with "llm_v2_budget_", so strip
+                    // the redundant leading "budget_" from the reason before
+                    // appending — otherwise the UI would render the resulting
+                    // QaAnalysisWarning as "Analysis degraded: llm v2 budget
+                    // budget exceeded cost" (double "budget").
+                    var reasonText = (result.BudgetGateReason ?? "exceeded").ToLowerInvariant();
+                    if (reasonText.StartsWith("budget_", StringComparison.Ordinal))
+                    {
+                        reasonText = reasonText.Substring("budget_".Length);
+                    }
+                    degradationFlags.Add("llm_v2_budget_" + reasonText);
+                    PublishWarning($"LLM_V2 budget tripped: {result.BudgetGateReason} — accepted {result.MergedScenarios.Count} scenario(s), {skippedCount} dropped to stay under budget.");
+                }
+                else
+                {
+                    // Gate tripped on the way out but no zones were actually
+                    // skipped (e.g. the cap was reached on the final zone after
+                    // all work had completed). Nothing was lost, so don't add a
+                    // "degraded" flag or scream at the user; just log it so the
+                    // signal is available for operators tuning the cap.
+                    Console.WriteLine($"[EDOG-QA] LLM_V2 budget reached after completing all {result.MergedScenarios.Count} scenarios (reason: {result.BudgetGateReason}). No scenarios dropped.");
+                }
             }
 
             return PostProcessScenarios(result.MergedScenarios.ToList());
