@@ -29,6 +29,12 @@ class QaAnalysis {
     if (!this._container) return;
     this._container.innerHTML = '';
 
+    // ── P10: Catalog-health strip ──
+    this._catalogStrip = document.createElement('div');
+    this._catalogStrip.className = 'qa-analysis-catalog-strip';
+    this._catalogStrip.style.display = 'none';
+    this._container.appendChild(this._catalogStrip);
+
     // ── Progress tracker ──
     var tracker = document.createElement('div');
     tracker.className = 'qa-analysis-tracker';
@@ -433,5 +439,49 @@ class QaAnalysis {
     this._isComplete = false;
     this._isCancelled = false;
     this._render();
+  }
+
+  // ── P10: Catalog-health strip ──────────────────────────────────────
+
+  /**
+   * Render the catalog-health strip with provider status pills.
+   * Called when catalog snapshot data arrives from the backend.
+   *
+   * @param {Object} snapshot — CatalogSnapshot JSON from /api/contract/catalog/{zoneId}
+   */
+  renderCatalogHealth(snapshot) {
+    if (!this._catalogStrip || !snapshot) return;
+    this._catalogStrip.style.display = 'flex';
+    this._catalogStrip.innerHTML = '';
+
+    // Snapshot metadata
+    var meta = document.createElement('span');
+    meta.className = 'catalog-strip-meta';
+    meta.textContent = 'Catalog: ' + (snapshot.snapshotId || '---')
+      + ' \u00B7 ' + (snapshot.slots ? snapshot.slots.length : 0) + ' slots';
+    this._catalogStrip.appendChild(meta);
+
+    // Provider status pills
+    var providers = snapshot.providerStatus || {};
+    var keys = Object.keys(providers);
+    for (var i = 0; i < keys.length; i++) {
+      var pill = document.createElement('span');
+      pill.className = 'provider-status provider-status--' + providers[keys[i]];
+      pill.textContent = keys[i] + ': ' + providers[keys[i]];
+      this._catalogStrip.appendChild(pill);
+    }
+  }
+
+  /**
+   * Fetch the catalog snapshot from the dev-server proxy.
+   *
+   * @param {string} zoneId — impact zone identifier
+   */
+  fetchCatalogHealth(zoneId) {
+    var self = this;
+    fetch('/api/contract/catalog/' + encodeURIComponent(zoneId))
+      .then(function (r) { return r.json(); })
+      .then(function (snapshot) { self.renderCatalogHealth(snapshot); })
+      .catch(function (err) { console.error('[QA] catalog-health fetch failed:', err); });
   }
 }

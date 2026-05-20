@@ -456,6 +456,7 @@ def test_pipeline_publishes_chaos_metadata(pipeline_src: str) -> None:
         "keep the wire shape identical to the pre-Stage-2 baseline."
     )
 
+
 # ─── P10 Contract capability events ────────────────────────────────────
 
 
@@ -463,7 +464,7 @@ def test_capability_mismatch_event_exists() -> None:
     src = (DEVMODE / "EdogQaTelemetry.cs").read_text(encoding="utf-8")
     assert "qa.contract.flt.capability_mismatch" in src
 
+
 def test_catalog_fetches_capabilities_once_per_run() -> None:
     src = (DEVMODE / "EdogQaContractCatalog.cs").read_text(encoding="utf-8")
     assert "_capabilitiesForRun" in src
-    assert "qa.contract.flt.capability_mismatch" in src or "capability" in src

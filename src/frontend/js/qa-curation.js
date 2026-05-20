@@ -62,6 +62,38 @@ class QaCuration {
     if (!this._container) return;
     this._container.innerHTML = '';
 
+    // ── P10: Three-column workbench shell ──
+    this._workbench = document.createElement('div');
+    this._workbench.className = 'qa-workbench-three-col';
+    this._workbench.style.display = 'none';
+
+    // Left column: scenario list with search, badges, quarantine chip
+    this._leftCol = document.createElement('div');
+    this._leftCol.className = 'qa-workbench-left';
+    this._leftCol.innerHTML = '<div class="qa-workbench-search">'
+      + '<input type="text" class="qa-workbench-search-input" placeholder="Filter scenarios...">'
+      + '</div><div class="qa-workbench-scenario-list"></div>';
+
+    // Middle column: slot picker, kind selector, typed parameter forms
+    this._middleCol = document.createElement('div');
+    this._middleCol.className = 'qa-workbench-middle';
+    this._middleCol.innerHTML = '<div class="qa-workbench-slot-picker"></div>'
+      + '<div class="qa-workbench-kind-selector"></div>'
+      + '<div class="qa-workbench-params"></div>';
+
+    // Right column: matcher composer, assertion selector, issues strip, last-run strip
+    this._rightCol = document.createElement('div');
+    this._rightCol.className = 'qa-workbench-right';
+    this._rightCol.innerHTML = '<div class="qa-workbench-matcher-composer"></div>'
+      + '<div class="qa-workbench-assertion-selector"></div>'
+      + '<div class="qa-workbench-issues-strip"></div>'
+      + '<div class="qa-workbench-last-run-strip"></div>';
+
+    this._workbench.appendChild(this._leftCol);
+    this._workbench.appendChild(this._middleCol);
+    this._workbench.appendChild(this._rightCol);
+    this._container.appendChild(this._workbench);
+
     // Header with stats
     var header = document.createElement('div');
     header.className = 'qa-curation-header';
@@ -550,5 +582,264 @@ class QaCuration {
     }
     panel.appendChild(list);
     return panel;
+  }
+
+  // ── P10: Three-column workbench ─────────────────────────────────
+
+  /**
+   * Activate the three-column workbench view. Hides the legacy list
+   * and shows the structured slot/matcher editing surface.
+   *
+   * @param {Object} catalog — CatalogSnapshot from the backend
+   */
+  activateWorkbench(catalog) {
+    if (!this._workbench) return;
+    this._workbench.style.display = 'grid';
+    this._populateLeftColumn(this._scenarios);
+    if (catalog) {
+      this._populateSlotPicker(catalog.slots || []);
+      this._populateKindSelector(catalog.slots || []);
+    }
+  }
+
+  _populateLeftColumn(scenarios) {
+    var list = this._leftCol && this._leftCol.querySelector('.qa-workbench-scenario-list');
+    if (!list) return;
+    list.innerHTML = '';
+    for (var i = 0; i < scenarios.length; i++) {
+      var s = scenarios[i];
+      var item = document.createElement('div');
+      item.className = 'qa-workbench-scenario-item';
+      item.dataset.scenarioId = s.id;
+
+      var badge = document.createElement('span');
+      badge.className = 'qa-workbench-badge qa-workbench-badge--' + (s.category || 'unknown').toLowerCase();
+      badge.textContent = s.category || 'N/A';
+      item.appendChild(badge);
+
+      // Quarantine chip for pre-contract scenarios
+      if (!s.matchers || s.matchers.length === 0) {
+        var chip = document.createElement('span');
+        chip.className = 'qa-workbench-quarantine-chip';
+        chip.textContent = 'PRE-CONTRACT';
+        item.appendChild(chip);
+      }
+
+      var title = document.createElement('span');
+      title.className = 'qa-workbench-scenario-title';
+      title.textContent = s.title || s.id;
+      item.appendChild(title);
+
+      list.appendChild(item);
+    }
+  }
+
+  _populateSlotPicker(slots) {
+    var picker = this._middleCol && this._middleCol.querySelector('.qa-workbench-slot-picker');
+    if (!picker) return;
+    picker.innerHTML = '<label>Stimulus Slot</label>';
+    var select = document.createElement('select');
+    select.className = 'qa-workbench-slot-select';
+    for (var i = 0; i < slots.length; i++) {
+      var opt = document.createElement('option');
+      opt.value = slots[i].slotId || '';
+      opt.textContent = (slots[i].slotId || '') + ' (' + (slots[i].kind || '') + ')';
+      select.appendChild(opt);
+    }
+    picker.appendChild(select);
+  }
+
+  _populateKindSelector(slots) {
+    var selector = this._middleCol && this._middleCol.querySelector('.qa-workbench-kind-selector');
+    if (!selector) return;
+    var kinds = {};
+    for (var i = 0; i < slots.length; i++) {
+      kinds[slots[i].kind || 'Unknown'] = true;
+    }
+    selector.innerHTML = '<label>Stimulus Kind</label>';
+    var kindList = Object.keys(kinds);
+    for (var i = 0; i < kindList.length; i++) {
+      var btn = document.createElement('button');
+      btn.className = 'qa-workbench-kind-btn';
+      btn.textContent = kindList[i];
+      selector.appendChild(btn);
+    }
+  }
+
+  /**
+   * Render typed parameter form for the selected slot.
+   *
+   * @param {Object} slot — QaContractSlot with parameters
+   */
+  renderTypedParams(slot) {
+    var params = this._middleCol && this._middleCol.querySelector('.qa-workbench-params');
+    if (!params || !slot) return;
+    params.innerHTML = '<label>Parameters</label>';
+    var paramKeys = Object.keys(slot.parameters || {});
+    for (var i = 0; i < paramKeys.length; i++) {
+      var p = slot.parameters[paramKeys[i]];
+      var row = document.createElement('div');
+      row.className = 'qa-workbench-param-row';
+
+      var lbl = document.createElement('label');
+      lbl.textContent = (p.name || paramKeys[i]) + (p.required ? ' *' : '');
+      row.appendChild(lbl);
+
+      var input = document.createElement('input');
+      input.type = p.type === 'integer' || p.type === 'number' ? 'number' : 'text';
+      input.className = 'qa-workbench-param-input';
+      input.placeholder = p.description || '';
+      row.appendChild(input);
+
+      params.appendChild(row);
+    }
+  }
+
+  /**
+   * Build the matcher composer with assertion selector and typed value inputs.
+   *
+   * @param {Array} matchers — existing matchers for the selected scenario
+   */
+  renderMatcherComposer(matchers) {
+    var composer = this._rightCol && this._rightCol.querySelector('.qa-workbench-matcher-composer');
+    if (!composer) return;
+    composer.innerHTML = '<label>Matchers</label>';
+
+    var assertions = ['equals', 'notEquals', 'exists', 'inRange', 'containsAll', 'oneOf', 'length'];
+
+    var items = matchers || [];
+    for (var i = 0; i < items.length; i++) {
+      var m = items[i];
+      var row = document.createElement('div');
+      row.className = 'qa-workbench-matcher-row';
+
+      // Topic field input
+      var field = document.createElement('input');
+      field.className = 'qa-workbench-matcher-field';
+      field.value = m.topicField || '';
+      field.placeholder = 'topic.field';
+      row.appendChild(field);
+
+      // Assertion selector
+      var sel = document.createElement('select');
+      sel.className = 'qa-workbench-assertion-select';
+      for (var j = 0; j < assertions.length; j++) {
+        var opt = document.createElement('option');
+        opt.value = assertions[j];
+        opt.textContent = assertions[j];
+        if (assertions[j].toLowerCase() === (m.assertion || '').toLowerCase()) {
+          opt.selected = true;
+        }
+        sel.appendChild(opt);
+      }
+      row.appendChild(sel);
+
+      // Typed value input (varies by assertion type)
+      var valInput = this._createValueInput(m);
+      row.appendChild(valInput);
+
+      composer.appendChild(row);
+    }
+
+    // Add button
+    var addBtn = document.createElement('button');
+    addBtn.className = 'qa-workbench-add-matcher-btn';
+    addBtn.textContent = '+ Add Matcher';
+    composer.appendChild(addBtn);
+  }
+
+  _createValueInput(matcher) {
+    var wrap = document.createElement('div');
+    wrap.className = 'qa-workbench-value-input';
+
+    var assertion = (matcher.assertion || '').toLowerCase();
+    if (assertion === 'inrange') {
+      // Range: min/max inputs
+      var min = document.createElement('input');
+      min.type = 'number';
+      min.placeholder = 'min';
+      min.className = 'qa-workbench-range-min';
+      wrap.appendChild(min);
+      var max = document.createElement('input');
+      max.type = 'number';
+      max.placeholder = 'max';
+      max.className = 'qa-workbench-range-max';
+      wrap.appendChild(max);
+    } else if (assertion === 'containsall' || assertion === 'oneof') {
+      // Array: comma-separated input
+      var arr = document.createElement('input');
+      arr.type = 'text';
+      arr.placeholder = 'value1, value2, ...';
+      arr.className = 'qa-workbench-array-input';
+      wrap.appendChild(arr);
+    } else if (assertion === 'exists') {
+      // Boolean: checkbox
+      var chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.checked = true;
+      chk.className = 'qa-workbench-exists-input';
+      wrap.appendChild(chk);
+    } else if (assertion === 'length') {
+      // Length: min/max inputs
+      var minLen = document.createElement('input');
+      minLen.type = 'number';
+      minLen.placeholder = 'min length';
+      minLen.className = 'qa-workbench-length-min';
+      wrap.appendChild(minLen);
+      var maxLen = document.createElement('input');
+      maxLen.type = 'number';
+      maxLen.placeholder = 'max length';
+      maxLen.className = 'qa-workbench-length-max';
+      wrap.appendChild(maxLen);
+    } else {
+      // Scalar: single text input (equals, notEquals)
+      var scalar = document.createElement('input');
+      scalar.type = 'text';
+      scalar.placeholder = 'expected value';
+      scalar.className = 'qa-workbench-scalar-input';
+      if (matcher.value && matcher.value.value != null) {
+        scalar.value = String(matcher.value.value);
+      }
+      wrap.appendChild(scalar);
+    }
+
+    return wrap;
+  }
+
+  /**
+   * Render the issues strip for the selected scenario.
+   *
+   * @param {Array} issues — validation/lint issues
+   */
+  renderIssuesStrip(issues) {
+    var strip = this._rightCol && this._rightCol.querySelector('.qa-workbench-issues-strip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    if (!issues || issues.length === 0) return;
+    var label = document.createElement('label');
+    label.textContent = 'Issues (' + issues.length + ')';
+    strip.appendChild(label);
+    for (var i = 0; i < issues.length; i++) {
+      var row = document.createElement('div');
+      row.className = 'qa-workbench-issue-row';
+      row.textContent = (issues[i].code || '') + ': ' + (issues[i].message || '');
+      strip.appendChild(row);
+    }
+  }
+
+  /**
+   * Render the last-run result strip for the selected scenario.
+   *
+   * @param {Object} lastRun — last execution result
+   */
+  renderLastRunStrip(lastRun) {
+    var strip = this._rightCol && this._rightCol.querySelector('.qa-workbench-last-run-strip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    if (!lastRun) return;
+    var label = document.createElement('div');
+    label.className = 'qa-workbench-last-run-label';
+    label.textContent = 'Last Run: ' + (lastRun.verdict || 'N/A');
+    strip.appendChild(label);
   }
 }

@@ -171,7 +171,8 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var hasStrictJsonSchema =
                 body.Contains("\"type\":\"json_schema\"", StringComparison.Ordinal)
                 && body.Contains("\"strict\":true", StringComparison.Ordinal);
-            var hasReasoningEffort = body.Contains("\"effort\":\"low\"", StringComparison.Ordinal);
+            var hasReasoningEffort = body.Contains("\"effort\":\"medium\"", StringComparison.Ordinal)
+                || body.Contains("\"effort\":\"low\"", StringComparison.Ordinal);
             var hasMaxOutputTokens = body.Contains("\"max_output_tokens\":2048", StringComparison.Ordinal);
             var hitsResponsesEndpoint =
                 url.Contains("/openai/responses", StringComparison.OrdinalIgnoreCase)

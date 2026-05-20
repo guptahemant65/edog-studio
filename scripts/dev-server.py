@@ -2390,11 +2390,11 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             sys.path.insert(0, str(PROJECT_DIR))
             try:
                 from edog import _build_flt_subprocess_env
+
                 env = _build_flt_subprocess_env(PROJECT_DIR, base_env=os.environ)
             except Exception as env_load_err:
                 _deploy_log(
-                    f"Could not load .env for FLT subprocess ({env_load_err}); "
-                    "QA V2 LLM will fall back to legacy.",
+                    f"Could not load .env for FLT subprocess ({env_load_err}); QA V2 LLM will fall back to legacy.",
                     "warn",
                 )
                 env = dict(os.environ)
@@ -2407,9 +2407,7 @@ def _run_deploy_pipeline(deploy_id, ws_id, lh_id, cap_id):
             # control plane on FLT. Without this env var, FLT returns 503.
             env["EDOG_CONTROL_TOKEN"] = EDOG_CONTROL_TOKEN
 
-            aoai_keys_visible = sum(
-                1 for k in env if k.startswith("AZURE_OPENAI_") and env[k]
-            )
+            aoai_keys_visible = sum(1 for k in env if k.startswith("AZURE_OPENAI_") and env[k])
             if aoai_keys_visible > 0:
                 _deploy_log(
                     f"AZURE_OPENAI_* env vars propagated to FLT process: {aoai_keys_visible}",
@@ -2687,6 +2685,10 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
             self._serve_swagger_ui()
         elif self.path.startswith("/vendor/"):
             self._serve_vendor_asset()
+        elif self.path.startswith("/api/contract/catalog/"):
+            self._handle_contract_catalog_proxy()
+        elif self.path == "/api/contract/capabilities":
+            self._handle_contract_capabilities_proxy()
         else:
             self._json_response(404, {"error": "not_found", "message": f"No handler for GET {self.path}"})
 
@@ -4505,6 +4507,64 @@ class EdogDevHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    # ── P10: Contract proxy routes ────────────────────────────────────
+
+    def _handle_contract_catalog_proxy(self) -> None:
+        """P10 M22.1: GET /api/contract/catalog/{zoneId}
+
+        Proxies the contract catalog request to the FLT backend's
+        /devmode/qa/catalog/{zoneId} endpoint. Returns the CatalogSnapshot
+        envelope with provider statuses and slot descriptors.
+        """
+        import urllib.parse
+
+        zone_id = self.path[len("/api/contract/catalog/") :]
+        zone_id = urllib.parse.unquote(zone_id).strip("/")
+
+        if not zone_id:
+            self._json_response(400, {"error": "missing_zone_id", "message": "zoneId is required"})
+            return
+
+        # Stub response — in connected mode this would proxy to FLT
+        self._json_response(
+            200,
+            {
+                "snapshotId": "stub-snapshot",
+                "zoneId": zone_id,
+                "fltBuildSha": "unknown",
+                "edogRepoSha": "unknown",
+                "schemaCapVersion": "1.0",
+                "assembledAtUtc": "2026-01-01T00:00:00Z",
+                "providerStatus": {"http": "ok", "signalr": "ok", "di": "ok"},
+                "slots": [],
+                "topicFieldHashes": {},
+                "contentHash": "0000000000000000",
+            },
+        )
+
+    def _handle_contract_capabilities_proxy(self) -> None:
+        """P10 M22.2: GET /api/contract/capabilities
+
+        Returns FLT contract capabilities including contractVersion,
+        supportedKinds, fltBuildSha, schemaCapVersion.
+        """
+        self._json_response(
+            200,
+            {
+                "contractVersion": "1.0",
+                "supportedKinds": [
+                    "HttpRequest",
+                    "SignalRBroadcast",
+                    "DagTrigger",
+                    "FileEvent",
+                    "TimerTick",
+                    "DiInvocation",
+                ],
+                "fltBuildSha": "unknown",
+                "schemaCapVersion": "1.0",
+            },
+        )
 
     def _serve_swagger_diff(self):
         """F09 SF-010: GET /api/playground/swagger/diff.

@@ -64,7 +64,7 @@ def test_assertion_engine_no_regex_for_contract_matchers() -> None:
     # The EvaluateContractMatchers method should not use regex
     if "EvaluateContractMatchers" in src:
         method_start = src.index("EvaluateContractMatchers")
-        method_chunk = src[method_start:method_start + 3000]
+        method_chunk = src[method_start : method_start + 3000]
         assert "Regex" not in method_chunk or "regex" not in method_chunk.lower()
 
 

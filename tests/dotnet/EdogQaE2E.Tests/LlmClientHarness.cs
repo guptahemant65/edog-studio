@@ -481,6 +481,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             var refsJson = "[" + string.Join(",", refIds.Select(r => "\"" + r + "\"")) + "]";
             return "{"
+                + "\"plan\":\"Test plan for ISO-8601 date format validation\","
                 + "\"scenarios\":["
                 + "{"
                 + "\"id\":\"scn-happy-1\","
@@ -491,9 +492,12 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 + "\"impactZone\":\"zone-001\","
                 + "\"technique\":\"HappyPath\","
                 + "\"stimulusType\":\"HttpRequest\","
-                + "\"stimulusSpec\":\"{\\\"method\\\":\\\"GET\\\",\\\"path\\\":\\\"/api/insights\\\"}\","
+                + "\"stimulus\":{\"type\":\"HttpRequest\",\"httpRequest\":{\"method\":\"GET\",\"path\":\"/api/insights\"}},"
+                + "\"matchers\":["
+                + "{\"topicField\":\"http.body.date\",\"assertion\":\"Exists\",\"value\":{\"type\":\"boolean\",\"expected\":true}}"
+                + "],"
                 + "\"expectations\":["
-                + "{\"type\":\"FieldMatch\",\"topic\":\"http\",\"matcherSpec\":\"{\\\"path\\\":\\\"$.body.date\\\",\\\"regex\\\":\\\"^\\\\\\\\d{4}-\\\\\\\\d{2}-\\\\\\\\d{2}T.*$\\\"}\",\"rationale\":\"ISO-8601\"}"
+                + "{\"type\":\"FieldMatch\",\"topic\":\"http\",\"matcherSpec\":\"{}\",\"rationale\":\"ISO-8601\"}"
                 + "],"
                 + "\"timeoutMs\":15000,"
                 + "\"groundingEvidenceRefs\":" + refsJson + ","
@@ -516,6 +520,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var titleEscaped = title.Replace("\\", "\\\\").Replace("\"", "\\\"");
             var descEscaped = description.Replace("\\", "\\\\").Replace("\"", "\\\"");
             return "{"
+                + "\"plan\":\"Generated test plan\","
                 + "\"scenarios\":["
                 + "{"
                 + $"\"id\":\"{id}\","
@@ -526,7 +531,10 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 + "\"impactZone\":\"zone-001\","
                 + "\"technique\":\"HappyPath\","
                 + "\"stimulusType\":\"HttpRequest\","
-                + "\"stimulusSpec\":\"{}\","
+                + "\"stimulus\":{\"type\":\"HttpRequest\",\"httpRequest\":{\"method\":\"GET\",\"path\":\"/api/test\"}},"
+                + "\"matchers\":["
+                + "{\"topicField\":\"http.status\",\"assertion\":\"Equals\",\"value\":{\"type\":\"scalar\",\"value\":200}}"
+                + "],"
                 + "\"expectations\":["
                 + "{\"type\":\"EventPresent\",\"topic\":\"http\",\"matcherSpec\":\"{}\",\"rationale\":\"baseline\"}"
                 + "],"

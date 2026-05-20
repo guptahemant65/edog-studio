@@ -276,7 +276,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                         Type = ExpectationType.FieldMatch,
                         Topic = "http",
                         Description = "Status code must be 200 and body must include the requested window.",
-                        Matcher = new Matcher
+                        Matcher = new LegacyMatcher
                         {
                             Exact = new Dictionary<string, object> { ["statusCode"] = 200 },
                             Contains = new Dictionary<string, string> { ["body"] = "summary" },

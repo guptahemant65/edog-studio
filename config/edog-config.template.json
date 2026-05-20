@@ -8,5 +8,13 @@
   "username": "",
   "favorites": [],
   "control_port": 5556,
-  "ui_port": 5555
+  "ui_port": 5555,
+  "qa": {
+    "contract": {
+      "enabled": true,
+      "disabled_kinds": [],
+      "few_shot_enabled": false,
+      "control_token": ""
+    }
+  }
 }

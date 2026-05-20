@@ -203,7 +203,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                             Type = ExpectationType.EventPresent,
                             Topic = "http",
                             Description = "HTTP 200 returned",
-                            Matcher = new Matcher
+                            Matcher = new LegacyMatcher
                             {
                                 Exact = new Dictionary<string, object> { ["statusCode"] = 200 },
                             },
@@ -261,7 +261,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                             Type = ExpectationType.EventPresent,
                             Topic = "http",
                             Description = "HTTP 400 returned with cap message",
-                            Matcher = new Matcher
+                            Matcher = new LegacyMatcher
                             {
                                 Exact = new Dictionary<string, object> { ["statusCode"] = 400 },
                             },
@@ -319,7 +319,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                             Type = ExpectationType.EventPresent,
                             Topic = "http",
                             Description = "HTTP 200 at exact boundary",
-                            Matcher = new Matcher
+                            Matcher = new LegacyMatcher
                             {
                                 Exact = new Dictionary<string, object> { ["statusCode"] = 200 },
                             },
