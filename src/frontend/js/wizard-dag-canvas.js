@@ -728,10 +728,18 @@ class DagCanvas {
     // Apply viewport
     this._applyViewportTransform();
 
-    // Ensure all restored nodes are visible and viewport fits content
-    this._updateVisibility();
+    // Defer visibility + fit until the DOM has been laid out.
+    // During page transitions the container may be hidden (display:none or
+    // opacity:0), causing getBoundingClientRect() to return 0×0 and the
+    // visibility culler to hide every node.
+    var self = this;
     if (stateNodes.length > 0) {
-      this.fitToContent();
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          self._updateVisibility();
+          self.fitToContent();
+        });
+      });
     }
   }
 
