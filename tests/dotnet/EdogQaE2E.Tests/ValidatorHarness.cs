@@ -322,7 +322,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 Priority = 2,
                 ImpactZone = "zone-001",
                 Technique = "EquivalencePartition",
-                StimulusType = "DirectInvoke",
+                StimulusType = "DiInvocation",
                 StimulusSpec = "{\"serviceType\":\"IFoo\",\"method\":\"Baz\",\"args\":[]}",
                 Expectations = new List<EdogQaLlmClient.GeneratedExpectation>
                 {

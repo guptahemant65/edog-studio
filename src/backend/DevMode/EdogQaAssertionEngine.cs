@@ -165,7 +165,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// Evaluates all predicates in <paramref name="matcher"/> against a pre-serialized root.
         /// Returns true only if ALL specified predicates pass (AND logic).
         /// </summary>
-        public static bool Satisfies(JsonElement root, Matcher matcher)
+        public static bool Satisfies(JsonElement root, LegacyMatcher matcher)
         {
             if (matcher == null) return true;
 
@@ -238,7 +238,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// </summary>
         public static bool SatisfiesWithCache(
             JsonElement root,
-            Matcher matcher,
+            LegacyMatcher matcher,
             IReadOnlyDictionary<string, Regex> regexCache)
         {
             if (matcher == null) return true;
@@ -354,7 +354,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// Identify which predicates in a matcher fail for a given event.
         /// Returns an array of human-readable predicate descriptions.
         /// </summary>
-        public static string[] IdentifyFailedPredicates(JsonElement root, Matcher matcher)
+        public static string[] IdentifyFailedPredicates(JsonElement root, LegacyMatcher matcher)
         {
             if (matcher == null) return Array.Empty<string>();
             var failed = new List<string>();
@@ -451,7 +451,7 @@ namespace Microsoft.LiveTable.Service.DevMode
     public static class ConfidenceScorer
     {
         /// <summary>Score an event against an expectation's matcher.</summary>
-        public static double Score(JsonElement root, Matcher matcher)
+        public static double Score(JsonElement root, LegacyMatcher matcher)
         {
             if (matcher == null) return 1.0;
 
@@ -634,7 +634,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         }
 
         /// <summary>Describe a matcher in human-readable form.</summary>
-        public static string DescribeMatcher(Matcher m)
+        public static string DescribeMatcher(LegacyMatcher m)
         {
             if (m == null) return "(any event)";
             var parts = new List<string>();
@@ -662,7 +662,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             return parts.Count > 0 ? string.Join(" AND ", parts) : "(any event)";
         }
 
-        private static string DescribeMatchedFields(TopicEvent evt, Matcher matcher)
+        private static string DescribeMatchedFields(TopicEvent evt, LegacyMatcher matcher)
         {
             if (matcher == null || evt?.Data == null) return "(no data)";
             var root = FieldMatcher.SerializeData(evt.Data);

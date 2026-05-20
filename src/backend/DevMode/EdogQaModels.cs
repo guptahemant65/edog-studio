@@ -83,11 +83,11 @@ namespace Microsoft.LiveTable.Service.DevMode
     public enum StimulusType
     {
         HttpRequest,
-        SignalrInvoke,
+        SignalRBroadcast,
         DagTrigger,
         FileEvent,
         TimerTick,
-        DirectInvoke
+        DiInvocation
     }
 
     /// <summary>
@@ -138,7 +138,9 @@ namespace Microsoft.LiveTable.Service.DevMode
         Partial,
         TimedOut,
         Crashed,
-        Skipped
+        Skipped,
+        Stale,
+        Inconclusive
     }
 
     /// <summary>
@@ -167,6 +169,94 @@ namespace Microsoft.LiveTable.Service.DevMode
         Evaluate,
         Teardown,
         Report
+    }
+
+    /// <summary>
+    /// Assertion type for a matcher in the contract vocabulary.
+    /// Replaces the legacy ExpectationType with a 7-type vocabulary.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public enum MatcherAssertion
+    {
+        Equals,
+        NotEquals,
+        Exists,
+        InRange,
+        ContainsAll,
+        OneOf,
+        Length
+    }
+
+    /// <summary>
+    /// Abstract base for typed matcher values in the contract vocabulary.
+    /// </summary>
+    public abstract class MatcherValue
+    {
+        public string Type { get; set; }
+    }
+
+    /// <summary>
+    /// Scalar matcher value (string, number, boolean).
+    /// </summary>
+    public sealed class ScalarMatcherValue : MatcherValue
+    {
+        public object Value { get; set; }
+    }
+
+    /// <summary>
+    /// Range matcher value with min/max bounds.
+    /// </summary>
+    public sealed class RangeMatcherValue : MatcherValue
+    {
+        public double? Min { get; set; }
+        public double? Max { get; set; }
+        public bool MinInclusive { get; set; } = true;
+        public bool MaxInclusive { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Array matcher value for containsAll/oneOf assertions.
+    /// </summary>
+    public sealed class ArrayMatcherValue : MatcherValue
+    {
+        public List<object> Items { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Boolean matcher value for exists assertions.
+    /// </summary>
+    public sealed class BooleanMatcherValue : MatcherValue
+    {
+        public bool Expected { get; set; }
+    }
+
+    /// <summary>
+    /// Length matcher value for length assertions.
+    /// </summary>
+    public sealed class LengthMatcherValue : MatcherValue
+    {
+        public int? Min { get; set; }
+        public int? Max { get; set; }
+    }
+
+    /// <summary>
+    /// A single matcher in the contract vocabulary.
+    /// </summary>
+    public sealed class Matcher
+    {
+        public string TopicField { get; set; }
+        public MatcherAssertion Assertion { get; set; }
+        public MatcherValue Value { get; set; }
+    }
+
+    /// <summary>
+    /// Per-scenario catalog hash envelope for staleness detection.
+    /// </summary>
+    public sealed class CatalogHashes
+    {
+        public string StimulusSlotHash { get; set; }
+        public Dictionary<string, string> MatcherTopicHashes { get; set; } = new();
+        public string CatalogSnapshotId { get; set; }
     }
 
     // ──────────────────────────────────────────────
@@ -210,11 +300,17 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Expectations evaluated against captured events.</summary>
         public List<Expectation> Expectations { get; set; } = new();
 
+        /// <summary>Contract matchers replacing legacy expectations.</summary>
+        public List<Matcher> Matchers { get; set; } = new();
+
         /// <summary>Ordered teardown steps executed after evaluation.</summary>
         public List<TeardownStep> Teardown { get; set; } = new();
 
         /// <summary>Execution timeout in milliseconds. Default 30s, min 1000, max 60000.</summary>
         public int TimeoutMs { get; set; } = 30_000;
+
+        /// <summary>Catalog hashes for staleness detection.</summary>
+        public CatalogHashes CatalogHashes { get; set; }
 
         /// <summary>Scenario metadata (generation info, tags, schema version).</summary>
         public ScenarioMetadata Metadata { get; set; } = new();
@@ -427,8 +523,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>HTTP request spec (when Type = HttpRequest).</summary>
         public HttpRequestSpec HttpRequest { get; set; }
 
-        /// <summary>SignalR hub invocation spec (when Type = SignalrInvoke).</summary>
-        public SignalRInvokeSpec SignalrInvoke { get; set; }
+        /// <summary>SignalR broadcast spec (when Type = SignalRBroadcast).</summary>
+        public SignalRBroadcastSpec SignalRBroadcast { get; set; }
 
         /// <summary>DAG trigger spec (when Type = DagTrigger).</summary>
         public DagTriggerSpec DagTrigger { get; set; }
@@ -439,8 +535,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Timer tick spec (when Type = TimerTick).</summary>
         public TimerTickSpec TimerTick { get; set; }
 
-        /// <summary>Direct DI service invocation spec (when Type = DirectInvoke).</summary>
-        public DirectInvokeSpec DirectInvoke { get; set; }
+        /// <summary>DI service invocation spec (when Type = DiInvocation).</summary>
+        public DiInvocationSpec DiInvocation { get; set; }
     }
 
     /// <summary>
@@ -465,9 +561,9 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
-    /// SignalR hub invocation stimulus configuration.
+    /// SignalR broadcast stimulus configuration.
     /// </summary>
-    public sealed class SignalRInvokeSpec
+    public sealed class SignalRBroadcastSpec
     {
         /// <summary>Target hub name.</summary>
         public string Hub { get; set; }
@@ -528,9 +624,9 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
-    /// Direct DI service invocation stimulus configuration.
+    /// DI service invocation stimulus configuration.
     /// </summary>
-    public sealed class DirectInvokeSpec
+    public sealed class DiInvocationSpec
     {
         /// <summary>DI service interface type name, e.g. "IOneLakeWriter".</summary>
         public string ServiceType { get; set; }
@@ -561,8 +657,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         /// <summary>Topic to match against: "http", "retry", "cache", "log", etc.</summary>
         public string Topic { get; set; }
 
-        /// <summary>Field-level matching criteria (AND logic).</summary>
-        public Matcher Matcher { get; set; }
+        /// <summary>Field-level matching criteria (AND logic). [LEGACY]</summary>
+        public LegacyMatcher Matcher { get; set; }
 
         /// <summary>Optional time window constraints relative to T0.</summary>
         public TimeWindowSpec TimeWindow { get; set; }
@@ -578,9 +674,10 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     /// <summary>
-    /// Field-level matcher with multiple predicate types. All predicates use AND logic.
+    /// [LEGACY] Field-level matcher with multiple predicate types. Kept for
+    /// backward compatibility with pre-P10 expectation payloads.
     /// </summary>
-    public sealed class Matcher
+    public sealed class LegacyMatcher
     {
         /// <summary>Field→value pairs requiring exact equality. Case-sensitive.</summary>
         public Dictionary<string, object> Exact { get; set; }

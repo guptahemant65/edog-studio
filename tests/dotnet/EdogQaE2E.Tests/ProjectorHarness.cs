@@ -28,11 +28,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var cases = new List<object>
             {
                 RunHappyHttpRequest(),
-                RunHappySignalrInvoke(),
+                RunHappySignalRBroadcast(),
                 RunHappyDagTrigger(),
                 RunHappyFileEvent(),
                 RunHappyTimerTick(),
-                RunHappyDirectInvoke(),
+                RunHappyDiInvocation(),
                 RunStimulusSpecMalformed(),
                 RunStimulusSpecMissingField(),
                 RunMatcherSpecMalformed(),
@@ -58,9 +58,9 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 stimulusSpec: "{\"method\":\"POST\",\"path\":\"/api/insights\",\"contentType\":\"application/json\",\"body\":{\"days\":7},\"headers\":{\"X-Trace\":\"abc\"}}",
                 matcherSpec: "{\"exact\":{\"statusCode\":200}}");
 
-        private static object RunHappySignalrInvoke() =>
-            RunCase("happy_signalr_invoke",
-                stimulusType: "SignalrInvoke",
+        private static object RunHappySignalRBroadcast() =>
+            RunCase("happy_signalr_broadcast",
+                stimulusType: "SignalRBroadcast",
                 stimulusSpec: "{\"hub\":\"playground\",\"method\":\"Ping\",\"args\":[\"hello\",42]}",
                 matcherSpec: "{\"exists\":[\"connectionId\"]}");
 
@@ -82,9 +82,9 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                 stimulusSpec: "{\"tickSource\":\"EvictionManager\",\"topic\":\"perf\",\"maxWaitMs\":15000}",
                 matcherSpec: "{\"range\":{\"latencyMs\":{\"min\":0,\"max\":100}}}");
 
-        private static object RunHappyDirectInvoke() =>
-            RunCase("happy_direct_invoke",
-                stimulusType: "DirectInvoke",
+        private static object RunHappyDiInvocation() =>
+            RunCase("happy_di_invocation",
+                stimulusType: "DiInvocation",
                 stimulusSpec: "{\"serviceType\":\"IOneLakeWriter\",\"method\":\"WriteFileAsync\",\"args\":[\"path\",\"content\"]}",
                 matcherSpec: "{\"exact\":{\"returnedTrue\":true}}");
 
@@ -104,13 +104,13 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
 
         private static object RunMatcherSpecMalformed() =>
             RunCase("matcher_spec_malformed",
-                stimulusType: "DirectInvoke",
+                stimulusType: "DiInvocation",
                 stimulusSpec: "{\"serviceType\":\"IFoo\",\"method\":\"Bar\"}",
                 matcherSpec: "{not even json");
 
         private static object RunMatcherSpecEmpty() =>
             RunCase("matcher_spec_empty",
-                stimulusType: "DirectInvoke",
+                stimulusType: "DiInvocation",
                 stimulusSpec: "{\"serviceType\":\"IFoo\",\"method\":\"Bar\"}",
                 matcherSpec: "{}");
 
@@ -120,7 +120,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             var plan = BuildPlan(
                 Evidence("ev-trail-1", "src/Foo.cs", "right", 12, "added Baz() => 3"));
-            var accepted = BuildAccepted("sk-1", "DirectInvoke",
+            var accepted = BuildAccepted("sk-1", "DiInvocation",
                 "{\"serviceType\":\"IFoo\",\"method\":\"Baz\"}",
                 "{\"exact\":{\"returnedTrue\":true}}",
                 refs: new List<string> { "ev-trail-1" });
@@ -147,7 +147,7 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
         {
             var plan = BuildPlan(
                 Evidence("ev-1", "src/Foo.cs", "right", 12, "valid"));
-            var ok = BuildAccepted("sk-ok", "DirectInvoke",
+            var ok = BuildAccepted("sk-ok", "DiInvocation",
                 "{\"serviceType\":\"IFoo\",\"method\":\"Bar\"}",
                 "{\"exact\":{\"v\":1}}", refs: new List<string> { "ev-1" });
             var bad = BuildAccepted("sk-bad", "HttpRequest",
@@ -193,11 +193,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
                     .OrderBy(s => s, StringComparer.Ordinal).ToList(),
                 projectedStimulusType = projected?.Stimulus?.Type.ToString(),
                 projectedHasHttpPayload = projected?.Stimulus?.HttpRequest != null,
-                projectedHasSignalrPayload = projected?.Stimulus?.SignalrInvoke != null,
+                projectedHasSignalRBroadcastPayload = projected?.Stimulus?.SignalRBroadcast != null,
                 projectedHasDagPayload = projected?.Stimulus?.DagTrigger != null,
                 projectedHasFileEventPayload = projected?.Stimulus?.FileEvent != null,
                 projectedHasTimerTickPayload = projected?.Stimulus?.TimerTick != null,
-                projectedHasDirectInvokePayload = projected?.Stimulus?.DirectInvoke != null,
+                projectedHasDiInvocationPayload = projected?.Stimulus?.DiInvocation != null,
                 projectedExpectationCount = projected?.Expectations?.Count ?? 0,
                 projectedFirstMatcherHasExact = projected?.Expectations?.FirstOrDefault()?.Matcher?.Exact != null,
                 projectedFirstMatcherHasContains = projected?.Expectations?.FirstOrDefault()?.Matcher?.Contains != null,

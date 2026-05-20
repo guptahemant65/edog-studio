@@ -1067,7 +1067,7 @@ def test_validator_enum_vocabularies_are_published(harness_environment, built_ha
     """
     data = _run_harness(harness_environment["dotnet"], built_harness, "validator")
     enum_vocab = data["enumVocabulary"]
-    assert "DirectInvoke" in enum_vocab["stimulusTypes"]
+    assert "DiInvocation" in enum_vocab["stimulusTypes"]
     assert "HttpRequest" in enum_vocab["stimulusTypes"]
     assert len(enum_vocab["stimulusTypes"]) == 6, enum_vocab["stimulusTypes"]
     assert len(enum_vocab["expectationTypes"]) >= 6, enum_vocab["expectationTypes"]
@@ -1111,8 +1111,8 @@ def test_qa_scenario_projector_declares_required_codes() -> None:
 
 
 def test_projector_happy_paths_cover_all_six_stimulus_types(harness_environment, built_harness) -> None:
-    """Every StimulusType discriminator (HttpRequest, SignalrInvoke,
-    DagTrigger, FileEvent, TimerTick, DirectInvoke) must round-trip
+    """Every StimulusType discriminator (HttpRequest, SignalRBroadcast,
+    DagTrigger, FileEvent, TimerTick, DiInvocation) must round-trip
     through the Projector to engine shape with exactly one typed payload
     record non-null. The harness drives one happy-path case per type.
     """
@@ -1122,11 +1122,11 @@ def test_projector_happy_paths_cover_all_six_stimulus_types(harness_environment,
 
     expected = {
         "happy_http_request": ("HttpRequest", "projectedHasHttpPayload"),
-        "happy_signalr_invoke": ("SignalrInvoke", "projectedHasSignalrPayload"),
+        "happy_signalr_broadcast": ("SignalRBroadcast", "projectedHasSignalRBroadcastPayload"),
         "happy_dag_trigger": ("DagTrigger", "projectedHasDagPayload"),
         "happy_file_event": ("FileEvent", "projectedHasFileEventPayload"),
         "happy_timer_tick": ("TimerTick", "projectedHasTimerTickPayload"),
-        "happy_direct_invoke": ("DirectInvoke", "projectedHasDirectInvokePayload"),
+        "happy_di_invocation": ("DiInvocation", "projectedHasDiInvocationPayload"),
     }
     for case_id, (stimulus_type, payload_flag) in expected.items():
         c = cases[case_id]
@@ -1137,11 +1137,11 @@ def test_projector_happy_paths_cover_all_six_stimulus_types(harness_environment,
         # Exactly one payload non-null: the others must all be false.
         for other_flag in (
             "projectedHasHttpPayload",
-            "projectedHasSignalrPayload",
+            "projectedHasSignalRBroadcastPayload",
             "projectedHasDagPayload",
             "projectedHasFileEventPayload",
             "projectedHasTimerTickPayload",
-            "projectedHasDirectInvokePayload",
+            "projectedHasDiInvocationPayload",
         ):
             if other_flag != payload_flag:
                 assert c[other_flag] is False, (case_id, other_flag, c)
@@ -1159,11 +1159,11 @@ def test_projector_matcher_dispatches_all_five_branches(harness_environment, bui
     seen_branches = set()
     for case_id in (
         "happy_http_request",
-        "happy_signalr_invoke",
+        "happy_signalr_broadcast",
         "happy_dag_trigger",
         "happy_file_event",
         "happy_timer_tick",
-        "happy_direct_invoke",
+        "happy_di_invocation",
     ):
         c = cases[case_id]
         for branch in ("Exact", "Contains", "Regex", "Range", "Exists"):
@@ -1711,7 +1711,7 @@ def test_qa_editor_prompt_declares_stimulus_spec_format() -> None:
     # Pin the six StimulusType branches the prompt must describe — drift
     # here means the LLM no longer gets schema instructions for that
     # branch and the projector starts rejecting it.
-    for stim in ("HttpRequest", "SignalrInvoke", "DagTrigger", "FileEvent", "TimerTick", "DirectInvoke"):
+    for stim in ("HttpRequest", "SignalRBroadcast", "DagTrigger", "FileEvent", "TimerTick", "DiInvocation"):
         assert stim in text, f"Editor prompt must describe {stim} stimulusSpec shape"
     # Pin the five matcher branches.
     for matcher in ("exact", "contains", "regex", "range", "exists"):

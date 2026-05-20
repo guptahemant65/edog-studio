@@ -111,8 +111,8 @@ namespace Microsoft.LiveTable.Service.DevMode
 
         internal static readonly HashSet<string> ValidStimulusTypes = new(StringComparer.OrdinalIgnoreCase)
         {
-            "HttpRequest", "SignalrInvoke", "DagTrigger",
-            "FileEvent", "TimerTick", "DirectInvoke",
+            "HttpRequest", "SignalRBroadcast", "DagTrigger",
+            "FileEvent", "TimerTick", "DiInvocation",
         };
 
         internal static readonly HashSet<string> ValidExpectationTypes = new(StringComparer.OrdinalIgnoreCase)

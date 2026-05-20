@@ -9,7 +9,7 @@
 //
 // Defense-in-depth: the Validator (T1c-a-1) treats the spec strings as
 // opaque; the Projector OPENS them and enforces typed-shape invariants
-// (e.g. HttpRequest needs Path; SignalrInvoke needs Hub+Method; Matcher
+// (e.g. HttpRequest needs Path; SignalRBroadcast needs Hub+Method; Matcher
 // must have at least one of Exact/Contains/Regex/Range/Exists). Failures
 // surface as QuarantineReason records using the same shape Validator
 // uses, so the orchestrator can merge both lists into one report.
@@ -160,8 +160,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     case StimulusType.HttpRequest:
                         stimulus.HttpRequest = ProjectHttpRequest(root, reasons);
                         break;
-                    case StimulusType.SignalrInvoke:
-                        stimulus.SignalrInvoke = ProjectSignalrInvoke(root, reasons);
+                    case StimulusType.SignalRBroadcast:
+                        stimulus.SignalRBroadcast = ProjectSignalRBroadcast(root, reasons);
                         break;
                     case StimulusType.DagTrigger:
                         stimulus.DagTrigger = ProjectDagTrigger(root, reasons);
@@ -172,8 +172,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     case StimulusType.TimerTick:
                         stimulus.TimerTick = ProjectTimerTick(root, reasons);
                         break;
-                    case StimulusType.DirectInvoke:
-                        stimulus.DirectInvoke = ProjectDirectInvoke(root, reasons);
+                    case StimulusType.DiInvocation:
+                        stimulus.DiInvocation = ProjectDiInvocation(root, reasons);
                         break;
                 }
             }
@@ -299,21 +299,21 @@ namespace Microsoft.LiveTable.Service.DevMode
             return spec;
         }
 
-        private static SignalRInvokeSpec ProjectSignalrInvoke(
+        private static SignalRBroadcastSpec ProjectSignalRBroadcast(
             JsonElement root,
             List<EdogQaScenarioValidator.QuarantineReason> reasons)
         {
-            var spec = new SignalRInvokeSpec();
+            var spec = new SignalRBroadcastSpec();
             if (!TryGetString(root, "hub", out var hub))
             {
                 reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulusSpec.hub", null,
-                    "SignalrInvoke stimulus requires a 'hub' field."));
+                    "SignalRBroadcast stimulus requires a 'hub' field."));
                 return null;
             }
             if (!TryGetString(root, "method", out var method))
             {
                 reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulusSpec.method", null,
-                    "SignalrInvoke stimulus requires a 'method' field."));
+                    "SignalRBroadcast stimulus requires a 'method' field."));
                 return null;
             }
             spec.Hub = hub;
@@ -385,21 +385,21 @@ namespace Microsoft.LiveTable.Service.DevMode
             return spec;
         }
 
-        private static DirectInvokeSpec ProjectDirectInvoke(
+        private static DiInvocationSpec ProjectDiInvocation(
             JsonElement root,
             List<EdogQaScenarioValidator.QuarantineReason> reasons)
         {
-            var spec = new DirectInvokeSpec();
+            var spec = new DiInvocationSpec();
             if (!TryGetString(root, "serviceType", out var st))
             {
                 reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulusSpec.serviceType", null,
-                    "DirectInvoke stimulus requires a 'serviceType' field."));
+                    "DiInvocation stimulus requires a 'serviceType' field."));
                 return null;
             }
             if (!TryGetString(root, "method", out var method))
             {
                 reasons.Add(MakeReason(CodeStimulusSpecMissingField, "stimulusSpec.method", null,
-                    "DirectInvoke stimulus requires a 'method' field."));
+                    "DiInvocation stimulus requires a 'method' field."));
                 return null;
             }
             spec.ServiceType = st;
@@ -418,7 +418,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         // not on Matcher).
         // ──────────────────────────────────────────────────────────────
 
-        private static Matcher ProjectMatcher(
+        private static LegacyMatcher ProjectMatcher(
             JsonElement root,
             int expIndex,
             List<EdogQaScenarioValidator.QuarantineReason> reasons)
@@ -431,7 +431,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                 return null;
             }
 
-            var matcher = new Matcher();
+            var matcher = new LegacyMatcher();
             var anyBranch = false;
 
             if (root.TryGetProperty("exact", out var exact) && exact.ValueKind == JsonValueKind.Object)

@@ -48,12 +48,12 @@ namespace Microsoft.LiveTable.Service.DevMode
     /// Each handler is stateless — receives spec, returns result.
     ///
     /// Performance targets per stimulus type:
-    ///   - http_request:    &lt; 1s (network round-trip)
-    ///   - signalr_invoke:  &lt; 100ms (in-process)
-    ///   - dag_trigger:     &lt; 30s (DAG execution, async)
-    ///   - file_event:      &lt; 500ms (disk I/O)
-    ///   - timer_tick:      &lt; 10s (wait for scheduled event)
-    ///   - direct_invoke:   &lt; 5s (service method execution)
+    ///   - http_request:       &lt; 1s (network round-trip)
+    ///   - signalr_broadcast:  &lt; 100ms (in-process)
+    ///   - dag_trigger:        &lt; 30s (DAG execution, async)
+    ///   - file_event:         &lt; 500ms (disk I/O)
+    ///   - timer_tick:         &lt; 10s (wait for scheduled event)
+    ///   - di_invocation:      &lt; 5s (service method execution)
     /// </summary>
     public sealed class EdogQaStimulusDispatcher
     {
@@ -74,11 +74,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             var handlers = new IStimulusHandler[]
             {
                 new HttpStimulusHandler(httpClientFactory, fltPort, logger),
-                new SignalRStimulusHandler(serviceProvider, logger),
+                new SignalRBroadcastStimulusHandler(serviceProvider, logger),
                 new DagTriggerStimulusHandler(httpClientFactory, fltPort, logger),
                 new FileEventStimulusHandler(serviceProvider, logger),
                 new TimerTickStimulusHandler(logger),
-                new DirectInvokeStimulusHandler(serviceProvider, logger),
+                new DiInvocationStimulusHandler(serviceProvider, logger),
             };
 
             _handlers = handlers.ToDictionary(h => h.Type);
@@ -249,31 +249,31 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     // ──────────────────────────────────────────────
-    // SignalRStimulusHandler
+    // SignalRBroadcastStimulusHandler
     // ──────────────────────────────────────────────
 
     /// <summary>
-    /// Invokes a hub method on <see cref="EdogPlaygroundHub"/> via <c>IHubContext</c>.
-    /// In-process — bypasses SignalR transport, exercises hub method code directly.
+    /// Broadcasts a hub method on <see cref="EdogPlaygroundHub"/> via <c>IHubContext</c>.
+    /// In-process — bypasses SignalR transport, exercises hub broadcast code directly.
     /// </summary>
-    internal sealed class SignalRStimulusHandler : IStimulusHandler
+    internal sealed class SignalRBroadcastStimulusHandler : IStimulusHandler
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger _logger;
 
-        public SignalRStimulusHandler(IServiceProvider serviceProvider, ILogger logger)
+        public SignalRBroadcastStimulusHandler(IServiceProvider serviceProvider, ILogger logger)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
         }
 
-        public StimulusType Type => StimulusType.SignalrInvoke;
+        public StimulusType Type => StimulusType.SignalRBroadcast;
 
         public async Task<StimulusResult> ExecuteAsync(Stimulus stimulus, CancellationToken ct)
         {
-            var spec = stimulus.SignalrInvoke;
+            var spec = stimulus.SignalRBroadcast;
             if (spec == null)
-                return new StimulusResult { Success = false, Error = "SignalrInvoke spec is null" };
+                return new StimulusResult { Success = false, Error = "SignalRBroadcast spec is null" };
 
             var hubContext = _serviceProvider.GetRequiredService<IHubContext<EdogPlaygroundHub>>();
             var method = spec.Method;
@@ -586,37 +586,37 @@ namespace Microsoft.LiveTable.Service.DevMode
     }
 
     // ──────────────────────────────────────────────
-    // DirectInvokeStimulusHandler
+    // DiInvocationStimulusHandler
     // ──────────────────────────────────────────────
 
     /// <summary>
     /// Resolves a service from <see cref="IServiceProvider"/> and invokes a method via reflection.
     /// The most flexible stimulus — usable when no HTTP/SignalR entry point exists.
     /// </summary>
-    internal sealed class DirectInvokeStimulusHandler : IStimulusHandler
+    internal sealed class DiInvocationStimulusHandler : IStimulusHandler
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger _logger;
 
-        public DirectInvokeStimulusHandler(IServiceProvider serviceProvider, ILogger logger)
+        public DiInvocationStimulusHandler(IServiceProvider serviceProvider, ILogger logger)
         {
             _serviceProvider = serviceProvider;
             _logger = logger;
         }
 
-        public StimulusType Type => StimulusType.DirectInvoke;
+        public StimulusType Type => StimulusType.DiInvocation;
 
         public async Task<StimulusResult> ExecuteAsync(Stimulus stimulus, CancellationToken ct)
         {
-            var spec = stimulus.DirectInvoke;
+            var spec = stimulus.DiInvocation;
             if (spec == null)
-                return new StimulusResult { Success = false, Error = "DirectInvoke spec is null" };
+                return new StimulusResult { Success = false, Error = "DiInvocation spec is null" };
 
             if (string.IsNullOrEmpty(spec.ServiceType))
-                return new StimulusResult { Success = false, Error = "DirectInvoke serviceType is required" };
+                return new StimulusResult { Success = false, Error = "DiInvocation serviceType is required" };
 
             if (string.IsNullOrEmpty(spec.Method))
-                return new StimulusResult { Success = false, Error = "DirectInvoke method is required" };
+                return new StimulusResult { Success = false, Error = "DiInvocation method is required" };
 
             var sw = Stopwatch.StartNew();
             try
@@ -688,7 +688,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 sw.Stop();
                 var inner = ex.InnerException ?? ex;
-                _logger?.LogDebug(inner, "[QA] DirectInvoke failed: {Service}.{Method}", spec.ServiceType, spec.Method);
+                _logger?.LogDebug(inner, "[QA] DiInvocation failed: {Service}.{Method}", spec.ServiceType, spec.Method);
                 return new StimulusResult
                 {
                     Success = false,
@@ -699,7 +699,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 sw.Stop();
-                _logger?.LogDebug(ex, "[QA] DirectInvoke failed: {Service}.{Method}", spec.ServiceType, spec.Method);
+                _logger?.LogDebug(ex, "[QA] DiInvocation failed: {Service}.{Method}", spec.ServiceType, spec.Method);
                 return new StimulusResult
                 {
                     Success = false,

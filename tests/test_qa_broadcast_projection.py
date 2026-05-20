@@ -45,11 +45,11 @@ HARNESS_JSON_END = "---HARNESS-JSON-END---"
 
 EXPECTED_CASES = {
     "http_request",
-    "signalr_invoke",
+    "signalr_broadcast",
     "dag_trigger",
     "file_event",
     "timer_tick",
-    "direct_invoke",
+    "di_invocation",
 }
 
 
@@ -168,8 +168,8 @@ def _diff(case: dict) -> str:
 def test_broadcast_projection_round_trip_preserves_all_stimulus_variants(
     harness_environment, built_harness,
 ) -> None:
-    """Every StimulusType variant (HttpRequest / SignalrInvoke /
-    DagTrigger / FileEvent / TimerTick / DirectInvoke) must survive
+    """Every StimulusType variant (HttpRequest / SignalRBroadcast /
+    DagTrigger / FileEvent / TimerTick / DiInvocation) must survive
     the QaScenarioGenerated → QaSubmitCuratedScenarios → engine round
     trip with canonical-JSON equality on the typed Stimulus.
 
@@ -220,11 +220,11 @@ def test_broadcast_projection_includes_all_union_variants_in_wire_payload(
     data = _run_harness(harness_environment["dotnet"], built_harness, "broadcast-projection")
     union_keys = {
         "httpRequest",
-        "signalrInvoke",
+        "signalRBroadcast",
         "dagTrigger",
         "fileEvent",
         "timerTick",
-        "directInvoke",
+        "diInvocation",
     }
     for case in data["cases"]:
         wire = case["projectedStimulusJson"]

@@ -67,11 +67,11 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             var cases = new List<object>
             {
                 RunCase("http_request", BuildHttpRequestScenario()),
-                RunCase("signalr_invoke", BuildSignalrInvokeScenario()),
+                RunCase("signalr_broadcast", BuildSignalRBroadcastScenario()),
                 RunCase("dag_trigger", BuildDagTriggerScenario()),
                 RunCase("file_event", BuildFileEventScenario()),
                 RunCase("timer_tick", BuildTimerTickScenario()),
-                RunCase("direct_invoke", BuildDirectInvokeScenario()),
+                RunCase("di_invocation", BuildDiInvocationScenario()),
             };
 
             EmitJson(new
@@ -198,10 +198,10 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             },
         });
 
-        private static Scenario BuildSignalrInvokeScenario() => Wrap(new Stimulus
+        private static Scenario BuildSignalRBroadcastScenario() => Wrap(new Stimulus
         {
-            Type = StimulusType.SignalrInvoke,
-            SignalrInvoke = new SignalRInvokeSpec
+            Type = StimulusType.SignalRBroadcast,
+            SignalRBroadcast = new SignalRBroadcastSpec
             {
                 Hub = "/hub/playground",
                 Method = "QaSubmitCuratedScenarios",
@@ -241,10 +241,10 @@ namespace Microsoft.LiveTable.Service.DevMode.E2ETests
             },
         });
 
-        private static Scenario BuildDirectInvokeScenario() => Wrap(new Stimulus
+        private static Scenario BuildDiInvocationScenario() => Wrap(new Stimulus
         {
-            Type = StimulusType.DirectInvoke,
-            DirectInvoke = new DirectInvokeSpec
+            Type = StimulusType.DiInvocation,
+            DiInvocation = new DiInvocationSpec
             {
                 ServiceType = "Microsoft.LiveTable.Service.Insights.IInsightsQueryService",
                 Method = "GetSummaryAsync",

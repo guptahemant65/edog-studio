@@ -10,6 +10,8 @@ self-contained HTML file (Phantom-generated, no external dependencies).
 | `f04-mock-01` through `f04-mock-11` | F04 Enhanced Logs — per-tab mocks | Implemented |
 | `f04-runtime-view-integrated.html` | F04 Runtime View — integrated layout | Implemented |
 | `f26-nexus-dependency-graph.html` | F26 Nexus Dependency Graph | Implemented |
+| `infra-review-v1.html` | F16 Infra Wizard — Page 4 (Review) | In design |
+| `infra-deploy-v1.html` | F16 Infra Wizard — Page 5 (Deploy) · full state matrix | In design |
 
 ## Archived Explorations
 

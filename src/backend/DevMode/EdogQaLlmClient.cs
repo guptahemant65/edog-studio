@@ -603,8 +603,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                                     type = "string",
                                     @enum = new[]
                                     {
-                                        "HttpRequest", "SignalrInvoke", "DagTrigger",
-                                        "FileEvent", "TimerTick", "DirectInvoke",
+                                        "HttpRequest", "SignalRBroadcast", "DagTrigger",
+                                        "FileEvent", "TimerTick", "DiInvocation",
                                     },
                                 },
                                 stimulusSpec = new { type = "string" },
@@ -1169,7 +1169,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "A new behaviour added to an existing function (e.g. adding 400 to an allowlist that already exists) is HappyPath/EdgeCase, NOT Regression — the function existed before, but the behaviour did not. "
             + "CATEGORY PRECEDENCE: specific evidence beats the PR-type default. A test-flip inside a feature PR is still Regression. A restored-invariant inside a feature PR is still Regression. Otherwise, feature additions default to HappyPath/EdgeCase. "
             + "CONTRACT-BEARING COMMENTS: when the diff adds or modifies `<summary>`, `<remarks>`, `<warning>`, `<exception>`, or substantial `///`-prefixed lines that DESCRIBE a contract or scope a function's domain, those lines ARE evidence — always surface them in groundingEvidence with the full comment line range. "
-            + "A sketch anchored on a comment is valid only when (a) the comment adds, removes, or changes a constraint, allowed caller, forbidden caller, error classification, side effect, input domain, output guarantee, or exception behaviour, AND (b) the new contract has a RUNTIME-OBSERVABLE behavioural proxy reachable from one of the harness stimulus types (HttpRequest, SignalrInvoke, DagTrigger, FileEvent, TimerTick, DirectInvoke). When such a proxy exists, the sketch MUST exercise the proxy (call the function, assert the documented behaviour) — NOT assert the comment text. "
+            + "A sketch anchored on a comment is valid only when (a) the comment adds, removes, or changes a constraint, allowed caller, forbidden caller, error classification, side effect, input domain, output guarantee, or exception behaviour, AND (b) the new contract has a RUNTIME-OBSERVABLE behavioural proxy reachable from one of the harness stimulus types (HttpRequest, SignalRBroadcast, DagTrigger, FileEvent, TimerTick, DiInvocation). When such a proxy exists, the sketch MUST exercise the proxy (call the function, assert the documented behaviour) — NOT assert the comment text. "
             + "Do NOT emit comment sketches for: typo fixes, formatting/whitespace, symbol renames without behaviour change, comment wording polish that does not narrow/widen a contract, or comments that merely restate code behaviour. "
             + "NON-RUNTIME-PROBEABLE INVARIANTS (evidence-only, NO sketch): a sketch can only be emitted when the invariant has a runtime-observable signal. The following changes are evidence-only and MUST NOT produce sketches because the harness has no probe for them: "
             + "(a) public method signature shape — presence, absence, or reordering of parameters, return type changes, generic-arity changes; "
@@ -1201,11 +1201,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             + "as a string, NOT a nested object; the projector parses it with JsonDocument.Parse). The required "
             + "field set per stimulusType: "
             + "HttpRequest = {\"method\":\"GET|POST|PUT|DELETE\",\"path\":\"/api/...\",\"contentType\":\"application/json\" (optional),\"body\":<json> (optional),\"headers\":{<string-keyed strings>} (optional)}; "
-            + "SignalrInvoke = {\"hub\":\"<HubName>\",\"method\":\"<MethodName>\",\"args\":[<json values>] (optional)}; "
+            + "SignalRBroadcast = {\"hub\":\"<HubName>\",\"method\":\"<MethodName>\",\"args\":[<json values>] (optional)}; "
             + "DagTrigger = {\"iterationId\":\"<id>\",\"nodeFilter\":\"<filter>\" (optional)}; "
             + "FileEvent = {\"path\":\"<onelake path>\",\"content\":\"<text>\" (optional),\"encoding\":\"utf-8\" (optional)}; "
             + "TimerTick = {\"tickSource\":\"<source>\",\"topic\":\"<topic>\" (optional),\"maxWaitMs\":<int> (optional)}; "
-            + "DirectInvoke = {\"serviceType\":\"<FQN>\",\"method\":\"<MethodName>\",\"args\":[<json values>] (optional)}. "
+            + "DiInvocation = {\"serviceType\":\"<FQN>\",\"method\":\"<MethodName>\",\"args\":[<json values>] (optional)}. "
             + "MATCHER_SPEC FORMAT (the 'matcherSpec' field MUST also be a JSON-encoded string of a single object). "
             + "Use AT LEAST ONE of these five branches (an empty matcher is quarantined): "
             + "{\"exact\":{\"<field>\":<value>}} for exact equality; "

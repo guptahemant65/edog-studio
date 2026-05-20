@@ -1180,13 +1180,13 @@ namespace Microsoft.LiveTable.Service.DevMode
                 }
             }
 
-            // If no entry point found, flag as direct_invoke
+            // If no entry point found, flag as di_invocation
             if (entryPoints.Count == 0 && zone.PrimaryChange != null)
             {
                 entryPoints.Add(new EntryPoint
                 {
                     Node = startNodeId,
-                    StimulusType = StimulusType.DirectInvoke,
+                    StimulusType = StimulusType.DiInvocation,
                     Depth = 0,
                     Path = new List<string> { startNodeId },
                     DirectnessScore = 1.0,
@@ -1216,7 +1216,7 @@ namespace Microsoft.LiveTable.Service.DevMode
             // SignalR hub methods
             if (file.Contains("Hub") || method.Contains("Hub"))
             {
-                return StimulusType.SignalrInvoke;
+                return StimulusType.SignalRBroadcast;
             }
 
             // DAG trigger endpoints
@@ -1890,7 +1890,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                             Type = ExpectationType.EventPresent,
                             Topic = request.Zone.InterceptorTopics?.FirstOrDefault() ?? "log",
                             Description = $"Event observed for {request.Zone.PrimaryChange?.Method ?? "changed code"}.",
-                            Matcher = new Matcher(),
+                            Matcher = new LegacyMatcher(),
                         },
                     },
                     Metadata = new ScenarioMetadata
@@ -1926,10 +1926,10 @@ namespace Microsoft.LiveTable.Service.DevMode
                     Type = StimulusType.DagTrigger,
                     DagTrigger = new DagTriggerSpec { IterationId = "current" },
                 },
-                StimulusType.SignalrInvoke => new Stimulus
+                StimulusType.SignalRBroadcast => new Stimulus
                 {
-                    Type = StimulusType.SignalrInvoke,
-                    SignalrInvoke = new SignalRInvokeSpec
+                    Type = StimulusType.SignalRBroadcast,
+                    SignalRBroadcast = new SignalRBroadcastSpec
                     {
                         Hub = "/hub/playground",
                         Method = entry.Node.Split(':').LastOrDefault() ?? "unknown",
@@ -1937,8 +1937,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 },
                 _ => new Stimulus
                 {
-                    Type = StimulusType.DirectInvoke,
-                    DirectInvoke = new DirectInvokeSpec
+                    Type = StimulusType.DiInvocation,
+                    DiInvocation = new DiInvocationSpec
                     {
                         ServiceType = entry.Node.Split(':').FirstOrDefault() ?? "unknown",
                         Method = entry.Node.Split(':').LastOrDefault() ?? "unknown",

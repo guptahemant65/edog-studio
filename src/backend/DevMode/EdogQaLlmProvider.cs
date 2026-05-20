@@ -191,11 +191,11 @@ Your task is to analyze code changes and generate precise, executable test scena
 
 **Stimulus Types:**
 - HttpRequest: HTTP call to FLT Kestrel API (method, path, headers, body)
-- SignalrInvoke: SignalR hub method invocation (hub, method, args)
+- SignalRBroadcast: SignalR hub broadcast (hub, method, args)
 - DagTrigger: Trigger DAG execution (iterationId, nodeFilter)
 - FileEvent: Create file in OneLake watched path (path, content, encoding)
 - TimerTick: Wait for timer-based event (tickSource, topic, maxWaitMs)
-- DirectInvoke: Invoke DI service method directly (serviceType, method, args)
+- DiInvocation: Invoke DI service method directly (serviceType, method, args)
 
 **Expectation Types:**
 - EventPresent: Event must appear in topic buffer

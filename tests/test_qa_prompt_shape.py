@@ -40,11 +40,11 @@ def test_prompt_declares_stimulus_types():
     src = _read_source()
     for kind in (
         "HttpRequest",
-        "SignalrInvoke",
+        "SignalRBroadcast",
         "DagTrigger",
         "FileEvent",
         "TimerTick",
-        "DirectInvoke",
+        "DiInvocation",
     ):
         assert f"- {kind}:" in src, f"missing stimulus enumeration: {kind}"
 

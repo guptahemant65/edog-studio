@@ -1428,7 +1428,7 @@ namespace Microsoft.LiveTable.Service.DevMode
                         // The legacy hand-projection silently dropped every
                         // non-HttpRequest stimulus variant and every
                         // expectation sub-object, breaking end-to-end
-                        // execution for DirectInvoke / SignalrInvoke /
+                        // execution for DiInvocation / SignalRBroadcast /
                         // DagTrigger / FileEvent / TimerTick scenarios.
                         // See tests/dotnet/EdogQaE2E.Tests/BroadcastProjectionHarness.cs.
                         stimulus = ProjectStimulusForWire(scn.Stimulus),
@@ -2510,7 +2510,7 @@ namespace Microsoft.LiveTable.Service.DevMode
         // The previous hand-rolled anonymous projection silently
         // dropped every non-HttpRequest stimulus variant and every
         // expectation sub-object (matcher / timeWindow / count /
-        // order), which made every DirectInvoke / SignalrInvoke /
+        // order), which made every DiInvocation / SignalRBroadcast /
         // DagTrigger / FileEvent / TimerTick scenario fail end-to-end
         // because the curator could not see — or re-submit — the
         // payload the LLM had actually generated.
@@ -2519,8 +2519,8 @@ namespace Microsoft.LiveTable.Service.DevMode
         // through. The SignalR JSON protocol is already configured
         // for camelCase + JsonStringEnumConverter (see
         // EdogLogServer.AddJsonProtocol), so every future field
-        // added to HttpRequestSpec / SignalRInvokeSpec / DagTriggerSpec
-        // / FileEventSpec / TimerTickSpec / DirectInvokeSpec / Matcher
+        // added to HttpRequestSpec / SignalRBroadcastSpec / DagTriggerSpec
+        // / FileEventSpec / TimerTickSpec / DiInvocationSpec / Matcher
         // / TimeWindowSpec / CountSpec / OrderSpec flows to the wire
         // automatically — there is no leaf-level hand-projection to
         // forget to update.
@@ -2538,11 +2538,11 @@ namespace Microsoft.LiveTable.Service.DevMode
             {
                 type = s.Type.ToString().ToLowerInvariant(),
                 httpRequest = s.HttpRequest,
-                signalrInvoke = s.SignalrInvoke,
+                signalRBroadcast = s.SignalRBroadcast,
                 dagTrigger = s.DagTrigger,
                 fileEvent = s.FileEvent,
                 timerTick = s.TimerTick,
-                directInvoke = s.DirectInvoke,
+                diInvocation = s.DiInvocation,
             };
         }
 

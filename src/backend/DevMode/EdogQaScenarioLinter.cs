@@ -543,8 +543,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                     var http = stim.HttpRequest;
                     if (http?.Path == null) return null;
                     return $"http|{(http.Method ?? "GET").ToUpperInvariant()}|{http.Path}|{ShortHash(JsonSerialize(http.Body))}";
-                case StimulusType.SignalrInvoke:
-                    var sr = stim.SignalrInvoke;
+                case StimulusType.SignalRBroadcast:
+                    var sr = stim.SignalRBroadcast;
                     if (sr?.Method == null) return null;
                     return $"signalr|{sr.Hub}|{sr.Method}|{ShortHash(JsonSerialize(sr.Args))}";
                 case StimulusType.DagTrigger:
@@ -557,8 +557,8 @@ namespace Microsoft.LiveTable.Service.DevMode
                 case StimulusType.TimerTick:
                     var tt = stim.TimerTick;
                     return tt == null ? null : $"timer|{tt.TickSource}|{tt.Topic}";
-                case StimulusType.DirectInvoke:
-                    var di = stim.DirectInvoke;
+                case StimulusType.DiInvocation:
+                    var di = stim.DiInvocation;
                     if (di?.Method == null) return null;
                     return $"direct|{di.ServiceType}|{di.Method}|{ShortHash(JsonSerialize(di.Args))}";
                 default:
