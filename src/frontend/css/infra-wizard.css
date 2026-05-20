@@ -64,8 +64,8 @@
 
 /* ─── Dialog ─── */
 .iw-dialog {
-  width: min(1600px, 96vw);
-  height: min(920px, 94vh);
+  width: 96vw;
+  height: 94vh;
   min-width: 720px;
   min-height: 520px;
   background: var(--surface, #ffffff);
@@ -833,6 +833,12 @@
   flex: 1;
   overflow: hidden;
   height: 100%;
+}
+/* The Build page must not scroll — palette and canvas are fixed panels.
+   Only the code preview panel has its own internal overflow-y. Override
+   the parent .iw-page overflow-y: auto to prevent the whole page scrolling. */
+.iw-page:has(.iw-dag-page) {
+  overflow-y: hidden;
 }
 
 /* ─── DAG Canvas ─── */
