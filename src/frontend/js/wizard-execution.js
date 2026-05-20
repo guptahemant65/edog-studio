@@ -809,15 +809,15 @@ class ExecutionPipeline {
 
     switch (resource.type) {
       case 'notebook':
-        url = '/api/fabric/v1/workspaces/' + encodeURIComponent(wid) +
+        url = '/api/fabric/workspaces/' + encodeURIComponent(wid) +
           '/notebooks/' + encodeURIComponent(resource.id);
         break;
       case 'lakehouse':
-        url = '/api/fabric/v1/workspaces/' + encodeURIComponent(wid) +
+        url = '/api/fabric/workspaces/' + encodeURIComponent(wid) +
           '/lakehouses/' + encodeURIComponent(resource.id);
         break;
       case 'workspace':
-        url = '/api/fabric/v1/workspaces/' + encodeURIComponent(resource.id);
+        url = '/api/fabric/workspaces/' + encodeURIComponent(resource.id);
         break;
       default:
         throw new Error('Unknown resource type: ' + resource.type);
