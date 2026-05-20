@@ -15076,26 +15076,47 @@ table.ff-table tbody tr.overridden:hover { background: rgba(229, 148, 12, 0.10);
   align-items: center;
   gap: 6px;
   margin-top: var(--sp-2, 8px);
-  padding: 4px 10px 4px 8px;
-  background: transparent;
-  border: 1px dashed var(--border, rgba(0,0,0,0.18));
+  padding: 6px 14px 6px 10px;
+  background: linear-gradient(135deg, var(--accent-dim, rgba(109,92,255,0.06)), transparent);
+  border: 1.5px dashed var(--accent, #6d5cff);
   border-radius: var(--r-full, 100px);
   color: var(--accent, #6d5cff);
   font-size: var(--text-xs, 11px);
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background 150ms, border-color 150ms, color 150ms;
+  transition: all 150ms ease-out;
+  position: relative;
+  overflow: hidden;
+}
+.iw-create-cap-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--accent-glow, rgba(109,92,255,0.15)), transparent);
+  transform: translateX(-100%);
+  transition: transform 400ms ease-out;
+}
+.iw-create-cap-btn:hover::before {
+  transform: translateX(100%);
 }
 .iw-create-cap-btn:hover {
   background: var(--accent-dim, rgba(109,92,255,0.08));
-  border-color: var(--accent, #6d5cff);
   border-style: solid;
+  box-shadow: 0 0 0 3px var(--accent-glow, rgba(109,92,255,0.15)),
+              0 2px 8px rgba(109,92,255,0.12);
+  transform: translateY(-1px);
+}
+.iw-create-cap-btn:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 .iw-create-cap-btn:focus-visible {
   outline: 2px solid var(--accent, #6d5cff);
   outline-offset: 2px;
 }
-.iw-create-cap-btn svg { flex-shrink: 0; }
+.iw-create-cap-btn svg { flex-shrink: 0; position: relative; z-index: 1; }
+.iw-create-cap-btn span { position: relative; z-index: 1; }
 
 /* ─── Create Capacity Dialog (mini-modal) ─── */
 .iw-cap-overlay {
