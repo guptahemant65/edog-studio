@@ -669,9 +669,19 @@ class ExecutionPipeline {
         var data = await response.json();
         var status = (data.status || '').toLowerCase();
 
+        // Log status + timing from Fabric on each poll
+        var statusLabel = data.status || 'Unknown';
+        var startTime = data.startTimeUtc ? new Date(data.startTimeUtc).toLocaleTimeString() : null;
+        var statusMsg = 'Status: ' + statusLabel;
+        if (startTime) statusMsg += ' (started ' + startTime + ')';
+        this._log(stepDef.index, 'info', statusMsg);
+
         if (status === 'completed') {
           this._state.artifacts.notebookRunStatus = 'Completed';
-          this._log(stepDef.index, 'info', 'Notebook execution completed');
+          var duration = (data.startTimeUtc && data.endTimeUtc)
+            ? this._formatElapsed(new Date(data.endTimeUtc) - new Date(data.startTimeUtc))
+            : '';
+          this._log(stepDef.index, 'info', 'Notebook execution completed' + (duration ? ' in ' + duration : ''));
           return { success: true, data: data };
         }
 
