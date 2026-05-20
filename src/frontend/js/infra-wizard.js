@@ -398,8 +398,8 @@ class InfraWizardDialog {
     if (!this._dialogEl) return;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var w = Math.min(920, vw * 0.88);
-    var h = Math.min(680, vh * 0.88);
+    var w = Math.min(vw * 0.96, vw - 32);
+    var h = Math.min(vh * 0.94, vh - 32);
     this._dialogEl.style.width = w + 'px';
     this._dialogEl.style.height = h + 'px';
     this._dialogEl.style.left = ((vw - w) / 2) + 'px';

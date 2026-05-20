@@ -837,7 +837,8 @@
 /* The Build page must not scroll — palette and canvas are fixed panels.
    Only the code preview panel has its own internal overflow-y. Override
    the parent .iw-page overflow-y: auto to prevent the whole page scrolling. */
-.iw-page:has(.iw-dag-page) {
+.iw-page:has(.iw-dag-page),
+#iw-page-2.iw-page {
   overflow-y: hidden;
 }
 
