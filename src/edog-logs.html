@@ -76580,7 +76580,7 @@ class ExecutionPipeline {
   }
 
   _formatElapsed(ms) {
-    if (ms == null || ms < 0) return '0.0s';
+    if (ms == null || !Number.isFinite(ms) || ms < 0) return '0.0s';
     var totalSec = ms / 1000;
     if (totalSec < 60) {
       return totalSec.toFixed(1) + 's';
